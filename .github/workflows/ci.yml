@@ -1,15 +1,19 @@
 name: CI
 
-# Two lanes (docs/CI.md):
+# The lanes (docs/CI.md):
 # - The quick lane: a pull request, or a push to main or codex/**, runs the quick checks on Linux only (formatting,
 #   clippy, the production-boundary check, the NSH type check, the Python script tests, legacy-guard). About ten
 #   minutes; this is what `ci-ok`, the one required status, reports.
-# - A draft pull request runs nothing until it is marked ready (`ready_for_review` starts the quick lane). A pull
-#   request that closes or merges runs nothing either; its `closed` run only takes the pull request's concurrency
-#   group, which cancels the runs still queued or running for it.
+# - A draft pull request runs nothing until it is marked ready (`ready_for_review` starts the quick lane), except that
+#   a ci:suite* label is an explicit request and runs even on a draft. A pull request that closes or merges runs
+#   nothing either; its `closed` run only takes the pull request's concurrency group, which cancels the runs still
+#   queued or running for it.
 # - The test lane: a push to test/** (the branch name picks the systems), a manual run, and the nightly run on main
 #   run the test suites. Checks attach to the commit, so pushing a pull request's head to test/... shows the results
 #   on the pull request. `just ci-test [linux|windows|macos|all]` does that push.
+# - The suite lane: a labeled event whose label is ci:suite* runs the quick checks and the test suites on the pull
+#   request itself. Only that event asks for it; a later push plans the quick lane alone. `just ci-suite <pr>` is the
+#   ask. Any other label plans nothing and gets a concurrency group of its own, so it cancels nothing.
 # scripts/ci_plan.py decides what each run does; nsh.yml uses the same script.
 on:
   push:
@@ -17,8 +21,9 @@ on:
   pull_request:
     branches: [ "main", "gol/**", "codex/**", "feat/**" ]
     # `closed` runs nothing (every job's `if` is false for it, see `changes`), but it takes the pull request's
-    # concurrency group below and so cancels its runs still queued or running once it merges or closes.
-    types: [ opened, synchronize, reopened, ready_for_review, closed ]
+    # concurrency group below and so cancels its runs still queued or running once it merges or closes. `labeled`
+    # reaches the planner; only the fixed ci:suite* names plan work.
+    types: [ opened, synchronize, reopened, ready_for_review, closed, labeled ]
   # Nightly safety net: everything, validation audits included, on all three systems. 18:00 UTC is 02:00 in Manila.
   schedule:
     - cron: "0 18 * * *"
@@ -52,12 +57,14 @@ env:
 # One run per pull request or ref: a newer push to the same pull request or test/... branch cancels the older run,
 # whose result nobody reads. A pull request's group is keyed on its number, not on github.ref, so its `closed` run
 # (whatever ref GitHub gives a merged pull request's event) lands in the same group and cancels what is still queued
-# or running for it. main is the exception: every run there gets a group of its own (its run id) and is never
+# or running for it. A ci:suite* labeled event joins that group: it replaces the quick run with quick + suites, and a
+# later push replaces it. A labeled event with any other name plans nothing, so it gets its own group (its run id)
+# and cancels nothing. main is the exception: every run there gets a group of its own (its run id) and is never
 # cancelled. Four merges in three minutes used to cancel each other and leave main with no complete run; now each
 # merge gets its quick run, and a merge can no longer cancel the nightly or a manual complete run either.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all' && github.run_id || github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
+  cancel-in-progress: ${{ (github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all') && (github.event_name == 'pull_request' || github.ref != 'refs/heads/main') }}
 
 jobs:
   # One job for both lanes, so the two never drift apart. In the quick lane it
@@ -563,11 +570,12 @@ jobs:
   # the suites from the files the change touches. nsh.yml's `plan` job runs the
   # same script.
   # A closed pull request and a draft plan nothing (ci_plan.py's first rule),
-  # and this `if` says the same so that no runner is taken for them: every job
-  # below needs this one, and the two that do not (legacy-guard, ci-ok) carry
-  # the same condition. scripts/tests/test_ci_plan.py checks all three.
+  # except that a labeled event reaches the planner: a ci:suite* label is a
+  # draft's explicit request, while any other label plans nothing. Closed
+  # pull requests and drafts without a label event take no runner.
+  # scripts/tests/test_ci_plan.py checks the condition here and below.
   changes:
-    if: ${{ (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
+    if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -592,6 +600,8 @@ jobs:
       env:
         EVENT: ${{ github.event_name }}
         ACTION: ${{ github.event.action }}
+        LABEL: ${{ github.event.label.name }}
+        PR_STATE: ${{ github.event.pull_request.state }}
         DRAFT: ${{ github.event.pull_request.draft }}
         REF: ${{ github.ref }}
         BRANCH: ${{ github.head_ref || github.ref_name }}
@@ -763,11 +773,13 @@ jobs:
   # Always-on guard: the painted desktop crate, the JS-shell crate and the
   # legacy app/ tree were retired, and nothing may bring their names or
   # paths back (not even docs).
-  # No `needs` on purpose: a docs-only PR must still fail if it brings an
-  # old name back. A test/** push skips it: the pull request's run checked the
-  # same commit. So does a closed or draft pull request (see `changes`).
+  # It needs only the planner, never one of the checks: a docs-only PR must
+  # still fail if it brings an old name back. A test/** push skips it: the pull
+  # request's run checked the same commit. A run the planner empties (a closed
+  # or draft pull request, or a non-suite label) skips it too.
   legacy-guard:
-    if: ${{ !startsWith(github.ref, 'refs/heads/test/') && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
+    needs: changes
+    if: ${{ !startsWith(github.ref, 'refs/heads/test/') && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -832,15 +844,66 @@ jobs:
   # `ci-ok` its last real run reported. Marking a draft ready starts the run
   # whose `ci-ok` counts.
   #
-  # Named `ci-ok` in the quick lane only. A test/** push or a manual or nightly
-  # run reports `tests-ok` instead, so a test lane on a pull request's commit
-  # never adds a second `ci-ok` result (green or red) to the one the required
-  # check reads.
+  # Named `ci-ok` on a pull request (including a suite-label run, whose quick
+  # checks are part of its work) and on a non-test push. A test/** push or a
+  # manual or nightly run reports `tests-ok` instead, so a test lane on a pull
+  # request's commit never adds a second `ci-ok` result to the required check.
+  # The separate tests-ok job below is the suite label's proof.
   ci-ok:
     name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok' }}
     needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
+    if: ${{ !cancelled() && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
+    steps:
+    - name: Result
+      shell: bash
+      env:
+        CHANGES: ${{ needs.changes.result }}
+        CHECK: ${{ needs.check.result }}
+        WANT_CHECK: ${{ needs.changes.outputs.check }}
+        NSH_CHECK: ${{ needs.nsh-check.result }}
+        WANT_NSH_CHECK: ${{ needs.changes.outputs.nsh_check }}
+        NSH_AGENT_CHECK: ${{ needs.nsh-agent-check.result }}
+        WANT_NSH_AGENT_CHECK: ${{ needs.changes.outputs.nsh_agent_check }}
+        WINDOWS_SETUP: ${{ needs.windows-setup.result }}
+        WANT_WINDOWS_SETUP: ${{ needs.changes.outputs.installer }}
+        SCRIPTS: ${{ needs.scripts.result }}
+        WANT_SCRIPTS: ${{ needs.changes.outputs.scripts }}
+        V1: ${{ needs.validation-rules-v1.result }}
+        V2: ${{ needs.validation-rules-v2.result }}
+        WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
+        LEGACY_GUARD: ${{ needs.legacy-guard.result }}
+        WANT_LEGACY_GUARD: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
+      run: |
+        set -euo pipefail
+        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
+        fail() { echo "::error::$1"; exit 1; }
+        [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
+        expect() {
+          if [[ "$3" == true ]]; then
+            [[ "$2" == success ]] || fail "$1 was needed and finished: $2"
+          else
+            [[ "$2" == skipped || "$2" == success ]] || fail "$1 was not needed but finished: $2"
+          fi
+        }
+        expect check "$CHECK" "$WANT_CHECK"
+        expect nsh-check "$NSH_CHECK" "$WANT_NSH_CHECK"
+        expect nsh-agent-check "$NSH_AGENT_CHECK" "$WANT_NSH_AGENT_CHECK"
+        expect windows-setup "$WINDOWS_SETUP" "$WANT_WINDOWS_SETUP"
+        expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
+        expect validation-rules-v1 "$V1" "$WANT_VALIDATION"
+        expect validation-rules-v2 "$V2" "$WANT_VALIDATION"
+        expect legacy-guard "$LEGACY_GUARD" "$WANT_LEGACY_GUARD"
+
+  # The suite-label proof the batch gate reads. Unlike ci-ok it uses always(): tests-ok is not the required status,
+  # so a run replaced or cancelled before its suites finished may truthfully report red instead of vanishing.
+  tests-ok:
+    name: tests-ok
+    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
+    if: ${{ always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     steps:
     - name: Result
       shell: bash

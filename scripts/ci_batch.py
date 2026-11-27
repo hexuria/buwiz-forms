@@ -11,7 +11,8 @@
 
 Every pull request's required `ci-ok` must be `success` at its current head; pending, missing or not green refuses,
 and nothing is pushed. When the planner says the pull request's changed files need the app suite, each system the
-batch asks for must have every `NSH app` shard green at that head. `--dry-run` proves the same batch without pushing.
+batch asks for must have every `NSH app` shard green at that head, or both workflows must have a pull_request run
+there with `tests-ok` green. `--dry-run` proves the same batch without pushing.
 `--allow-unchecked <pr>` and `--allow-unsuited <pr>` (repeatable) are the hand-run escape hatches.
 
 The batch is built with git plumbing only (`git merge-tree`, `git commit-tree`) in the checkout's own object store:
@@ -44,6 +45,7 @@ SYSTEMS = ("linux-windows", "linux", "windows", "macos", "all")
 DEFAULT_SYSTEM = "linux-windows"
 CI_WORKFLOW = "CI"
 CI_WORKFLOW_FILE = "ci.yml"
+CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
 SUITE_WORKFLOW = "NSH app"
 SUITE_WORKFLOW_FILE = "nsh.yml"
 SUITE_WORKFLOW_PATH = ".github/workflows/nsh.yml"
@@ -211,12 +213,13 @@ class GitHub:
                                           "?check_name=ci-ok&filter=latest&per_page=100"))
         return data.get("check_runs", [])
 
-    def workflow_runs(self, sha: str) -> List[dict]:
-        """The nsh.yml workflow runs reported for one head sha."""
-        data = json.loads(self._gh("api", f"repos/{self.repo}/actions/workflows/{SUITE_WORKFLOW_FILE}/runs"
+    def workflow_runs(self, sha: str, workflow_file: str = SUITE_WORKFLOW_FILE) -> List[dict]:
+        """The runs of one workflow file reported for one head sha."""
+        path = f".github/workflows/{workflow_file}"
+        data = json.loads(self._gh("api", f"repos/{self.repo}/actions/workflows/{workflow_file}/runs"
                                           f"?head_sha={sha}&per_page=100"))
         return [run for run in data.get("workflow_runs", [])
-                if run.get("path") == SUITE_WORKFLOW_PATH and run.get("head_sha") == sha]
+                if run.get("path") == path and run.get("head_sha") == sha]
 
     def suite_jobs(self, run_id: int) -> List[dict]:
         """Every job of one workflow run, one page at a time."""
@@ -454,6 +457,25 @@ def suite_states(github, pull: Pull, systems: Sequence[str], changed: Sequence[s
     return proofs
 
 
+def pull_request_tests_ok_runs(github, head: str) -> Dict[str, int]:
+    """The pull_request run of each workflow whose tests-ok job is green at this head, keyed by workflow file."""
+    proven: Dict[str, int] = {}
+    for workflow_file, _name in WORKFLOWS:
+        runs = sorted((run for run in github.workflow_runs(head, workflow_file) if isinstance(run.get("id"), int)),
+                      key=lambda run: run["id"], reverse=True)
+        for run in runs:
+            if run.get("event") != "pull_request":
+                continue
+            jobs = github.suite_jobs(run["id"])
+            if any(job.get("name") == "tests-ok" and job.get("status") == "completed"
+                   and job.get("conclusion") == "success" for job in jobs):
+                proven[workflow_file] = run["id"]
+                break
+        if workflow_file not in proven:
+            return {}
+    return proven
+
+
 def enforce_suite(github, pulls: Sequence[Pull], system: str, changed_by_pr: Dict[int, List[str]],
                   allow_unsuited: Sequence[int], say: Callable[[str], None]) -> None:
     unsuited = set(allow_unsuited)
@@ -484,9 +506,14 @@ def enforce_suite(github, pulls: Sequence[Pull], system: str, changed_by_pr: Dic
                     where += f", older green run {proof.older_green}"
             problems.append(f"{name} {proof.state} ({where})")
         if problems:
+            label_proof = pull_request_tests_ok_runs(github, pull.head)
+            if label_proof:
+                pull.suite_runs = sorted(label_proof.values())
+                continue
+            system_arg = "" if system == DEFAULT_SYSTEM else f" {system}"
             refusals.append(f"#{pull.number} at {pull.head}: NSH app suite is not green: "
                             + "; ".join(problems)
-                            + f"; start it with: just ci-test-pr {pull.number} {system}; nothing was pushed")
+                            + f"; start it with: just ci-suite {pull.number}{system_arg}; nothing was pushed")
     if refusals:
         raise BatchError("refused by the NSH app suite gate:\n  " + "\n  ".join(refusals))
 

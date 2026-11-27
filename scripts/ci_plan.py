@@ -2,11 +2,14 @@
 """Decides what a CI run does: the `changes` job of ci.yml and the `plan` job of nsh.yml both run this, so the two
 workflows always agree. docs/CI.md says the same in words.
 
-Five lanes:
-  none     a pull request that closed (or merged), or one that is a draft: nothing. ci.yml's jobs carry the same rule
-           in their `if`, so these events take no runner at all; marking a draft ready starts the quick lane.
+Six lanes:
+  none     a pull request that closed (or merged), one that is a draft (except an explicit suite-label request), or a
+           labeled event whose label is not a suite label: nothing. ci.yml's jobs carry the closed/draft rule in their
+           `if`, so those events take no runner at all; marking a draft ready starts the quick lane.
   quick    a pull request, or a push to main or codex/**: the quick checks on Linux only (ci.yml).
   tests    a push to test/**: the test suites; the branch name picks the systems.
+  suite    a pull_request labeled event whose label is ci:suite*: the quick checks and the test suites; the label
+           picks the systems. Only the labeled event asks for this lane, so a later push plans quick alone.
   manual   workflow_dispatch: the systems, suites, screen-test filter and shard the inputs name.
   nightly  the schedule: everything, on all three systems.
 
@@ -30,6 +33,15 @@ SYSTEMS = ("macos", "linux", "windows")
 SUITES = ("rust", "screens", "build", "installer", "validation")
 # A test/** push and a manual run on a branch split the screen tests over this many runners.
 SHARDS = 3
+
+# The exact pull-request labels that ask for the suites, and the systems each asks for. Anything else plans nothing.
+SUITE_LABEL_SYSTEMS = {
+    "ci:suite": ("linux", "windows"),
+    "ci:suite-linux": ("linux",),
+    "ci:suite-windows": ("windows",),
+    "ci:suite-macos": ("macos",),
+    "ci:suite-all": SYSTEMS,
+}
 
 # The `check` job's runner and toolchain target for each system, in the matrix order ci.yml has always used.
 CHECK_OS = {
@@ -140,11 +152,53 @@ def branch_systems(ref: str) -> list[str]:
     return {"linux": ["linux"], "windows": ["windows"], "macos": ["macos"], "all": list(SYSTEMS)}.get(first, ["linux", "windows"])
 
 
+def plan_quick_checks(plan: dict, *, event: str, branch: str, labels: tuple[str, ...], seen: dict[str, bool],
+                      reasons: list[str]) -> None:
+    """The quick lane's part of a plan."""
+    if not seen["known"]:
+        reasons.append("change range unknown or empty: every quick check")
+    plan["check_systems"] = ["linux"] if seen["app"] else []
+    plan["nsh_check"] = seen["nsh_check"]
+    # Compile-proof the agent plug on pull requests only: the pin must be green before merge, while main and the
+    # test lane already have the complete NSH suite's agent build.
+    plan["nsh_agent_check"] = event == "pull_request" and seen["nsh_agent_check"]
+    # `check` runs the Python script tests itself.
+    plan["scripts"] = not seen["app"] and (seen["other"] or seen["windows_pkg"])
+    # The validation-rules audits: Linux only, and only when asked for by a path, the label or the branch. An
+    # unknown range does not start them (a new branch or a force push must not start six jobs).
+    if seen["validation_paths"]:
+        plan["validation_systems"] = ["linux"]
+        reasons.append("validation-rules audits: validation-rules paths changed")
+    elif event == "pull_request" and "run-validation" in labels:
+        plan["validation_systems"] = ["linux"]
+        reasons.append("validation-rules audits: run-validation label")
+    elif branch.startswith("ebirforms-"):
+        plan["validation_systems"] = ["linux"]
+        reasons.append(f"validation-rules audits: branch {branch}")
+
+
+def plan_test_suites(plan: dict, *, chosen: list[str], seen: dict[str, bool], reasons: list[str], source: str) -> None:
+    """The test suites the changed files ask for on the chosen systems. test/** pushes and suite labels share this."""
+    if not seen["known"]:
+        reasons.append("change range against main unknown or empty: every suite")
+    plan["check_systems"] = chosen if seen["app"] else []
+    plan["check_tests"] = True
+    plan["installer"] = seen["windows_pkg"] and "windows" in chosen
+    plan["screens"] = seen["nsh"]
+    plan["build"] = plan["nsh_rust"] = seen["nsh_beyond_tests"]
+    plan["core_plain"] = seen["core_inputs"] and "linux" in chosen
+    plan["nsh_systems"] = chosen if seen["nsh"] else []
+    plan["shards"], plan["shard_count"] = list(range(SHARDS)), SHARDS
+    reasons.append(f"systems from {source}: {', '.join(chosen)}")
+
+
 def decide(
     *,
     event: str,
     ref: str,
     action: str = "",
+    label: str = "",
+    state: str = "",
     draft: bool = False,
     branch: str = "",
     changed: list[str] | None = None,
@@ -159,10 +213,21 @@ def decide(
     reasons: list[str] = []
     test_push = event == "push" and ref.startswith("refs/heads/test/")
 
-    if event == "pull_request" and (action == "closed" or draft):
+    suite_systems = (SUITE_LABEL_SYSTEMS.get(label)
+                     if event == "pull_request" and action == "labeled" else None)
+    closed = action == "closed" or state.lower() == "closed"
+
+    if event == "pull_request" and closed:
         lane = "none"
-        reasons.append("closed pull request: nothing runs" if action == "closed"
-                       else "draft pull request: nothing runs until it is marked ready")
+        reasons.append("closed pull request: nothing runs")
+    elif event == "pull_request" and action == "labeled" and suite_systems is None:
+        lane = "none"
+        reasons.append("pull request label is not a suite label: nothing runs")
+    elif event == "pull_request" and draft and suite_systems is None:
+        lane = "none"
+        reasons.append("draft pull request: nothing runs until it is marked ready")
+    elif suite_systems is not None:
+        lane = "suite"
     elif event in ("pull_request", "push") and not test_push:
         lane = "quick"
     elif test_push:
@@ -178,44 +243,16 @@ def decide(
                 installer=False, validation_systems=[], nsh_systems=[], screens=False, build=False, nsh_rust=False,
                 core_plain=False, shards=[0], shard_count=1, screens_filter="")
 
-    if lane == "quick":
+    if lane in ("quick", "suite"):
         seen = what_changed(changed)
-        if not seen["known"]:
-            reasons.append("change range unknown or empty: every quick check")
-        plan["check_systems"] = ["linux"] if seen["app"] else []
-        plan["nsh_check"] = seen["nsh_check"]
-        # Compile-proof the agent plug on pull requests only: the pin must be green before merge, while main and the
-        # test lane already have the complete NSH suite's agent build.
-        plan["nsh_agent_check"] = event == "pull_request" and seen["nsh_agent_check"]
-        # `check` runs the Python script tests itself.
-        plan["scripts"] = not seen["app"] and (seen["other"] or seen["windows_pkg"])
-        # The validation-rules audits: Linux only, and only when asked for by a path, the label or the branch. An
-        # unknown range does not start them (a new branch or a force push must not start six jobs).
-        if seen["validation_paths"]:
-            plan["validation_systems"] = ["linux"]
-            reasons.append("validation-rules audits: validation-rules paths changed")
-        elif event == "pull_request" and "run-validation" in labels:
-            plan["validation_systems"] = ["linux"]
-            reasons.append("validation-rules audits: run-validation label")
-        elif branch.startswith("ebirforms-"):
-            plan["validation_systems"] = ["linux"]
-            reasons.append(f"validation-rules audits: branch {branch}")
+        plan_quick_checks(plan, event=event, branch=branch, labels=labels, seen=seen, reasons=reasons)
 
-    elif lane == "tests":
+    if lane == "tests":
         chosen = branch_systems(ref)
-        seen = what_changed(changed)
-        if not seen["known"]:
-            reasons.append("change range against main unknown or empty: every suite")
-        plan["check_systems"] = chosen if seen["app"] else []
-        plan["check_tests"] = True
-        plan["installer"] = seen["windows_pkg"] and "windows" in chosen
-        plan["screens"] = seen["nsh"]
-        plan["build"] = plan["nsh_rust"] = seen["nsh_beyond_tests"]
-        plan["core_plain"] = seen["core_inputs"] and "linux" in chosen
-        plan["nsh_systems"] = chosen if seen["nsh"] else []
-        plan["shards"], plan["shard_count"] = list(range(SHARDS)), SHARDS
-        reasons.append(f"systems from the branch name: {', '.join(chosen)}")
-
+        plan_test_suites(plan, chosen=chosen, seen=what_changed(changed), reasons=reasons, source="the branch name")
+    elif lane == "suite":
+        chosen = list(suite_systems)
+        plan_test_suites(plan, chosen=chosen, seen=seen, reasons=reasons, source="the label")
     elif lane == "manual":
         chosen = parse_names(systems, SYSTEMS, "linux,windows", "system")
         wanted = parse_names(suites, SUITES, "all", "suite")
@@ -329,6 +366,8 @@ def main() -> int:
             event=env.get("EVENT", ""),
             ref=env.get("REF", ""),
             action=env.get("ACTION", ""),
+            label=env.get("LABEL", ""),
+            state=env.get("PR_STATE", ""),
             draft=env.get("DRAFT", "") == "true",
             branch=env.get("BRANCH", ""),
             changed=changed_files(env) if env.get("EVENT") in ("pull_request", "push") else None,

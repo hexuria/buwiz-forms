@@ -197,6 +197,26 @@ unused:
 test:
     cargo test --locked --workspace
 
+# Ask for the test suites on the pull request itself: remove the ci:suite* label if present, then add it again.
+# No system: Linux and Windows. Prints the pull request's checks page.
+# Ask GitHub for the test suites on a pull request: `just ci-suite <pr> [linux|windows|macos|all]`
+[unix]
+ci-suite number system="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    number="{{number}}"
+    case "{{system}}" in
+        "") suffix="" ;;
+        linux|windows|macos|all) suffix="-{{system}}" ;;
+        *) echo "ci-suite: system is linux, windows, macos or all (none: Linux and Windows)" >&2; exit 1 ;;
+    esac
+    [[ "$number" =~ ^[0-9]+$ ]] || { echo "ci-suite: not a pull request number: $number" >&2; exit 1; }
+    label="ci:suite$suffix"
+    gh label create "$label" --repo hexuria/buwiz-forms --force
+    gh pr edit "$number" --repo hexuria/buwiz-forms --remove-label "$label" >/dev/null 2>&1 || true
+    gh pr edit "$number" --repo hexuria/buwiz-forms --add-label "$label"
+    echo "https://github.com/hexuria/buwiz-forms/pull/$number/checks"
+
 # Pull requests run only the quick checks; the test suites run on a push to test/** (docs/CI.md). Pushes HEAD to
 # test/<system>/<branch>, so the results show on the pull request of that commit; a newer push replaces the older run.
 # No system: Linux and Windows. Remote: $CI_TEST_REMOTE, else origin (it must be allowed to push workflow files).

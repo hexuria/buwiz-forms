@@ -57,9 +57,10 @@ class FakeGitHub(ci_batch.GitHub):
         if len(args) >= 2 and args[0] == "api":
             endpoint = args[1]
             self.api_reads.append(endpoint)
-            runs_prefix = f"repos/{self.repo}/actions/workflows/nsh.yml/runs?head_sha="
-            if endpoint.startswith(runs_prefix) and endpoint.endswith("&per_page=100"):
-                sha = endpoint[len(runs_prefix):-len("&per_page=100")]
+            runs = re.fullmatch(rf"repos/{re.escape(self.repo)}/actions/workflows/([^/]+)/runs"
+                                rf"\?head_sha=([0-9a-f]{{40}})&per_page=100", endpoint)
+            if runs:
+                sha = runs.group(2)
                 return json.dumps({"workflow_runs": self.workflow_runs_by_sha.get(sha, [])})
             jobs = re.fullmatch(rf"repos/{re.escape(self.repo)}/actions/runs/(\d+)/jobs\?per_page=100&page=(\d+)",
                                 endpoint)
@@ -247,6 +248,15 @@ class BuildTests(BatchTestCase):
             self.github.job_logs[run_id * 1000 + 999] = log
         return run
 
+    def add_tests_ok_run(self, head: str, run_id: int, workflow_file: str, *, event: str = "pull_request",
+                         job_conclusion: str = "success"):
+        path = f".github/workflows/{workflow_file}"
+        run = self.suite_run(head, run_id, event=event, branch="feat/change", path=path)
+        self.github.workflow_runs_by_sha.setdefault(head, []).append(run)
+        self.github.job_lists[run_id] = [dict(id=run_id * 1000 + 1, name="tests-ok", status="completed",
+                                              conclusion=job_conclusion, steps=[])]
+        return run
+
     def manual_log(self, systems=("linux", "windows"), suites: str = "all", screens: str = "",
                    shard: str = "all") -> str:
         """The plan job's real log shape: its summary lines, without the workflow's inputs."""
@@ -341,7 +351,46 @@ class BuildTests(BatchTestCase):
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
         self.assertIn(f"#35      {head}  suite 456  Change 35", output)
 
-    def test_suite_missing_refuses_with_the_ci_test_pr_command(self):
+    def test_pull_request_tests_ok_in_both_workflows_counts_as_suite_proof(self):
+        head = self.repos.pull_request(80, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_tests_ok_run(head, 80, "ci.yml")
+        self.add_tests_ok_run(head, 81, "nsh.yml")
+
+        code, output = self.main("build", "--dry-run", "80")
+
+        self.assertEqual(code, 0)
+        self.assertIn(f"#80      {head}  suite 80,81  Change 80", output)
+        self.assertIn(f"repos/hexuria/buwiz-forms/actions/workflows/ci.yml/runs?head_sha={head}&per_page=100",
+                      self.github.api_reads)
+        self.assertIn(f"repos/hexuria/buwiz-forms/actions/workflows/nsh.yml/runs?head_sha={head}&per_page=100",
+                      self.github.api_reads)
+
+    def test_tests_ok_in_only_one_workflow_refuses_and_prints_ci_suite(self):
+        head = self.repos.pull_request(81, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_tests_ok_run(head, 82, "nsh.yml")
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(81)
+
+        text = str(caught.exception)
+        self.assertIn(f"#81 at {head}", text)
+        self.assertIn("just ci-suite 81", text)
+        self.assertNotIn("just ci-test-pr 81", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_tests_ok_must_be_successful_pull_request_jobs_at_the_head(self):
+        head = self.repos.pull_request(82, self.base, {"nsh/src/app.tsx": "app\n"})
+        for run_id, workflow_file in ((83, "ci.yml"), (84, "nsh.yml")):
+            self.add_tests_ok_run(head, run_id, workflow_file, event="push")
+        self.add_tests_ok_run(head, 85, "ci.yml", job_conclusion="failure")
+        self.add_tests_ok_run(head, 86, "nsh.yml", job_conclusion="cancelled")
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(82)
+
+        self.assertIn("just ci-suite 82", str(caught.exception))
+
+    def test_suite_missing_refuses_with_the_ci_suite_command(self):
         head = self.repos.pull_request(36, self.base, {"nsh/src/app.tsx": "app\n"})
 
         with self.assertRaises(ci_batch.BatchError) as caught:
@@ -352,7 +401,7 @@ class BuildTests(BatchTestCase):
         self.assertIn(f"#36 at {head}", text)
         self.assertIn("linux missing (no run)", text)
         self.assertIn("windows missing (no run)", text)
-        self.assertIn("start it with: just ci-test-pr 36 linux-windows", text)
+        self.assertIn("start it with: just ci-suite 36", text)
         self.assertIn("nothing was pushed", text)
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
@@ -430,8 +479,8 @@ class BuildTests(BatchTestCase):
         self.assertIn(f"#45 at {failed}", text)
         self.assertIn("missing", text)
         self.assertIn("failed", text)
-        self.assertIn("just ci-test-pr 44 linux-windows", text)
-        self.assertIn("just ci-test-pr 45 linux-windows", text)
+        self.assertIn("just ci-suite 44", text)
+        self.assertIn("just ci-suite 45", text)
 
     def test_a_newer_other_system_run_does_not_hide_a_red_needed_system(self):
         head = self.repos.pull_request(60, self.base, {"nsh/src/app.tsx": "app\n"})
@@ -905,6 +954,17 @@ class AfterTheBuildTests(BatchTestCase):
 
 
 class JustfileTests(unittest.TestCase):
+    def test_ci_suite_recipe_recreates_the_label_and_prints_the_checks_link(self):
+        justfile = (ROOT / "justfile").read_text(encoding="utf-8")
+        recipe = re.search(r"(?ms)^ci-suite number system=\"\":\n(.*?)(?=^\S|\Z)", justfile)
+        self.assertIsNotNone(recipe)
+        text = recipe.group(0)
+        self.assertIn('label="ci:suite$suffix"', text)
+        self.assertIn('gh label create "$label" --repo hexuria/buwiz-forms --force', text)
+        self.assertIn('gh pr edit "$number" --repo hexuria/buwiz-forms --remove-label "$label"', text)
+        self.assertIn('gh pr edit "$number" --repo hexuria/buwiz-forms --add-label "$label"', text)
+        self.assertIn('https://github.com/hexuria/buwiz-forms/pull/$number/checks', text)
+
     def test_recipes_call_the_script(self):
         justfile = (ROOT / "justfile").read_text(encoding="utf-8")
         for recipe, command in (("ci-batch *args", "build"), ("ci-batch-status branch", "status"),
@@ -917,9 +977,13 @@ class JustfileTests(unittest.TestCase):
 class BatchDocsTests(unittest.TestCase):
     def test_the_batch_docs_list_both_gates_and_both_escape_hatches(self):
         docs = (ROOT / "docs/CI.md").read_text(encoding="utf-8")
+        self.assertIn("## Asking for the suites on a pull request", docs)
+        for wording in ("ci:suite-linux", "ci:suite-windows", "ci:suite-macos", "ci:suite-all", "just ci-suite",
+                        "a new push needs a new ask", "exact head"):
+            self.assertIn(wording, docs)
         self.assertIn("### What a pull request needs before a batch", docs)
         section = docs.split("### What a pull request needs before a batch", 1)[1].split("\n## ", 1)[0]
-        for wording in ("ci-ok", "NSH app", "just ci-test-pr", "--allow-unchecked", "--allow-unsuited",
+        for wording in ("ci-ok", "NSH app", "just ci-suite", "--allow-unchecked", "--allow-unsuited",
                         "per system", "every shard"):
             self.assertIn(wording, section)
 

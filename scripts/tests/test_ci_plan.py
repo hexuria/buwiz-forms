@@ -42,9 +42,11 @@ def manual(ref: str = "refs/heads/feat/x", **inputs):
     return ci_plan.decide(event="workflow_dispatch", ref=ref, **inputs)
 
 
-# The condition ci.yml's entry jobs carry: a closed or draft pull request takes no runner.
-NOT_CLOSED_OR_DRAFT = ("(github.event_name != 'pull_request' || (github.event.action != 'closed' "
-                       "&& !github.event.pull_request.draft))")
+# The condition ci.yml's entry jobs carry: a closed or draft pull request takes no runner, except that a labeled
+# event reaches the planner (a ci:suite* label is a draft's explicit request; any other label plans nothing there).
+NOT_CLOSED_OR_DRAFT = ("(github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' "
+                       "&& github.event.action != 'closed' && (!github.event.pull_request.draft || "
+                       "github.event.action == 'labeled')))")
 
 NOTHING_HEAVY = dict(check_tests=False, installer=False, screens=False, build=False, nsh_rust=False, core_plain=False,
                      nsh_systems=[], nsh_agent_check=False)
@@ -205,6 +207,70 @@ class ClosedAndDraftTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     values = dict(line.split("=", 1) for line in out.read_text().splitlines())
                     self.assertEqual(values["lane"], lane)
+
+
+class SuiteLabelTests(unittest.TestCase):
+    def labeled(self, label: str, *changed: str, **kw):
+        return pr(*changed, action="labeled", label=label, **kw)
+
+    def assert_nothing(self, plan):
+        self.assertEqual(plan["lane"], "none")
+        self.assertEqual((plan["check_systems"], plan["nsh_systems"], plan["validation_systems"]), ([], [], []))
+        self.assertFalse(plan["check_tests"] or plan["nsh_check"] or plan["scripts"] or plan["installer"]
+                         or plan["screens"] or plan["build"] or plan["nsh_rust"] or plan["core_plain"])
+
+    def test_ci_suite_plans_the_quick_checks_and_the_linux_and_windows_suites(self):
+        plan = self.labeled("ci:suite", "crates/bir-core/src/lib.rs")
+
+        self.assertEqual(plan["lane"], "suite")
+        self.assertEqual(plan["check_systems"], ["linux", "windows"])
+        self.assertTrue(plan["check_tests"])
+        self.assertEqual(plan["nsh_systems"], ["linux", "windows"])
+        self.assertTrue(plan["nsh_check"])
+        self.assertTrue(plan["screens"] and plan["build"] and plan["nsh_rust"] and plan["core_plain"])
+        out = ci_plan.outputs(plan)
+        self.assertEqual(json.loads(out["check_matrix"])["include"], [
+            {"os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu", "tests": True},
+            {"os": "windows-latest", "target": "x86_64-pc-windows-msvc", "tests": True},
+        ])
+
+    def test_one_system_and_all_system_labels_pick_their_systems(self):
+        windows = self.labeled("ci:suite-windows", "nsh/screens/form/Form.tsx")
+        self.assertEqual(windows["lane"], "suite")
+        self.assertEqual(windows["check_systems"], [])
+        self.assertEqual(windows["nsh_systems"], ["windows"])
+        self.assertTrue(windows["nsh_check"])
+        self.assertFalse(windows["core_plain"])
+
+        every = self.labeled("ci:suite-all", "crates/bir-core/src/lib.rs")
+        self.assertEqual(every["check_systems"], ["macos", "linux", "windows"])
+        self.assertEqual(every["nsh_systems"], ["macos", "linux", "windows"])
+
+    def test_ci_suite_linux_and_macos_pick_their_systems(self):
+        self.assertEqual(self.labeled("ci:suite-linux", "crates/bir-core/src/lib.rs")["check_systems"], ["linux"])
+        self.assertEqual(self.labeled("ci:suite-macos", "crates/bir-core/src/lib.rs")["check_systems"], ["macos"])
+
+    def test_any_other_label_plans_nothing_even_when_it_starts_with_ci_suite(self):
+        for label in ("bug", "ci:suiteful", ""):
+            with self.subTest(label=label):
+                self.assert_nothing(self.labeled(label, "crates/bir-core/src/lib.rs"))
+
+    def test_a_push_to_a_pull_request_carrying_the_label_still_plans_only_the_quick_checks(self):
+        plan = pr("crates/bir-core/src/lib.rs", action="synchronize", labels=("ci:suite",))
+
+        self.assertEqual(plan["lane"], "quick")
+        self.assertEqual(plan["check_systems"], ["linux"])
+        self.assertFalse(plan["check_tests"])
+        self.assertEqual(plan["nsh_systems"], [])
+
+    def test_a_suite_label_on_a_draft_is_an_explicit_request_and_runs(self):
+        plan = self.labeled("ci:suite", "crates/bir-core/src/lib.rs", draft=True)
+
+        self.assertEqual(plan["lane"], "suite")
+        self.assertEqual(plan["nsh_systems"], ["linux", "windows"])
+
+    def test_a_closed_pull_request_with_a_label_event_plans_nothing(self):
+        self.assert_nothing(self.labeled("ci:suite", "crates/bir-core/src/lib.rs", state="closed"))
 
 
 class TestLaneTests(unittest.TestCase):
@@ -391,18 +457,27 @@ class OutputTests(unittest.TestCase):
 
 class WorkflowTests(unittest.TestCase):
     def test_both_workflows_plan_with_the_same_script_and_concurrency(self):
-        # nsh.yml has no pull_request event, so the pull-request number in ci.yml's group is the only difference:
-        # on every other event the two groups are the same.
-        concurrency = {
-            CI: ("  group: ${{ github.workflow }}-${{ github.event.pull_request.number || "
-                 "(github.ref == 'refs/heads/main' && github.run_id) || github.ref }}\n"
-                 "  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}\n"),
-            NSH: ("  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}\n"
-                  "  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}\n"),
-        }
+        # A non-suite labeled event gets its own group (its run id) and cancels nothing: it must not cancel the pull
+        # request's quick run. A ci:suite* labeled event stays in the pull request's group, so it replaces that quick
+        # run with quick + suites, and a later push replaces it in turn. The main and test/** rules are unchanged.
+        non_suite_label = ("github.event_name == 'pull_request' && github.event.action == 'labeled' "
+                           "&& github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' "
+                           "&& github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' "
+                           "&& github.event.label.name != 'ci:suite-all'")
+        suite_label_or_other_event = ("github.event_name != 'pull_request' || github.event.action != 'labeled' "
+                                      "|| github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' "
+                                      "|| github.event.label.name == 'ci:suite-windows' "
+                                      "|| github.event.label.name == 'ci:suite-macos' "
+                                      "|| github.event.label.name == 'ci:suite-all'")
+        concurrency = (
+            "  group: ${{ github.workflow }}-${{ " + non_suite_label + " && github.run_id || github.event.pull_request.number || "
+            "(github.ref == 'refs/heads/main' && github.run_id) || github.ref }}\n"
+            "  cancel-in-progress: ${{ (" + suite_label_or_other_event + ") && "
+            "(github.event_name == 'pull_request' || github.ref != 'refs/heads/main') }}\n"
+        )
         for workflow in (CI, NSH):
             self.assertIn("run: python3 -I scripts/ci_plan.py", workflow)
-            self.assertIn(concurrency[workflow], workflow)
+            self.assertIn(concurrency, workflow)
             self.assertIn('cron: "0 18 * * *"', workflow)
             for name in ("systems", "suites", "screens", "shard"):
                 self.assertRegex(workflow, rf"(?m)^      {name}:\n        description:")
@@ -410,12 +485,28 @@ class WorkflowTests(unittest.TestCase):
     def test_triggers(self):
         self.assertIn('    branches: [ "main", "codex/**", "test/**" ]\n  pull_request:\n', CI)
         # `closed` is there to cancel the pull request's runs; the plan and the jobs' `if` make it run nothing.
-        self.assertIn("    types: [ opened, synchronize, reopened, ready_for_review, closed ]\n", CI)
-        self.assertIn("        ACTION: ${{ github.event.action }}\n        DRAFT: ${{ github.event.pull_request.draft }}\n",
+        # `labeled` is the suite request; ci_plan.py decides which label names count.
+        self.assertIn("    types: [ opened, synchronize, reopened, ready_for_review, closed, labeled ]\n", CI)
+        self.assertIn("        ACTION: ${{ github.event.action }}\n        LABEL: ${{ github.event.label.name }}\n",
                       job(CI, "changes"))
-        self.assertIn('  push:\n    branches: [ "test/**" ]\n  schedule:\n', NSH)
-        self.assertNotIn("pull_request", NSH)
+        self.assertIn('  push:\n    branches: [ "test/**" ]\n  pull_request:\n', NSH)
+        self.assertIn('  pull_request:\n    branches: [ "main", "gol/**", "codex/**", "feat/**" ]\n', NSH)
+        self.assertIn('    types: [ labeled ]\n', NSH)
         self.assertNotIn("paths:", NSH)
+
+    def test_both_workflows_pass_the_label_event_to_the_planner_only_through_env(self):
+        for workflow, job_name in ((CI, "changes"), (NSH, "plan")):
+            with self.subTest(workflow=job_name):
+                text = job(workflow, job_name)
+                decide = text.split("      run: python3 -I scripts/ci_plan.py", 1)[0]
+                self.assertIn("ACTION: ${{ github.event.action }}\n", decide)
+                self.assertIn("LABEL: ${{ github.event.label.name }}\n", decide)
+                self.assertIn("PR_STATE: ${{ github.event.pull_request.state }}\n", decide)
+                self.assertIn("DRAFT: ${{ github.event.pull_request.draft }}\n", decide)
+                self.assertIn("PR_BASE: ${{ github.event.pull_request.base.sha }}\n", decide)
+                self.assertIn("PR_HEAD: ${{ github.event.pull_request.head.sha }}\n", decide)
+                run_script = text.split("      run: python3 -I scripts/ci_plan.py", 1)[1]
+                self.assertNotIn("github.event", run_script)
 
     def test_check_job_serves_both_lanes(self):
         check = job(CI, "check")
@@ -439,7 +530,8 @@ class WorkflowTests(unittest.TestCase):
         gate = job(CI, "ci-ok")
         # Not always(): in a run being cancelled (a newer push, or the pull request closing) it would run and report a
         # red ci-ok on the commit.
-        self.assertIn(f"    if: ${{{{ !cancelled() && {NOT_CLOSED_OR_DRAFT} }}}}\n", gate)
+        self.assertIn(f"    if: ${{{{ !cancelled() && needs.changes.outputs.lane != 'none' && {NOT_CLOSED_OR_DRAFT} }}}}\n",
+                      gate)
         needs = re.search(r"(?m)^    needs: \[(.*)\]\s*$", gate)
         assert needs is not None
         self.assertEqual([name.strip() for name in needs.group(1).split(",")],
@@ -453,6 +545,24 @@ class WorkflowTests(unittest.TestCase):
         # Folded into ci-ok; nothing waits for a runner just to read two results.
         self.assertNotIn("\n  validation-rules:\n", CI)
 
+    def test_tests_ok_gates_suite_label_runs_in_both_workflows(self):
+        ci_gate = job(CI, "tests-ok")
+        self.assertIn("    name: tests-ok\n", ci_gate)
+        self.assertIn("always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite'", ci_gate)
+        self.assertIn("needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, "
+                      "validation-rules-v2, legacy-guard ]", ci_gate)
+        for name in ("check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1",
+                     "validation-rules-v2", "legacy-guard"):
+            self.assertIn(f"expect {name} ", ci_gate)
+
+        self.assertIn("lane: ${{ steps.decide.outputs.lane }}", job(NSH, "plan"))
+        nsh_gate = job(NSH, "tests-ok")
+        self.assertIn("    name: tests-ok\n", nsh_gate)
+        self.assertIn("always() && github.event_name == 'pull_request' && needs.plan.outputs.lane == 'suite'", nsh_gate)
+        self.assertIn("needs: [ plan, nsh-macos, nsh-linux, nsh-windows, core-plain-test, linux-packages ]", nsh_gate)
+        for name in ("nsh-macos", "nsh-linux", "nsh-windows", "core-plain-test", "linux-packages"):
+            self.assertIn(f"expect {name} ", nsh_gate)
+
     def test_every_heavy_job_waits_for_the_plan(self):
         for name, flag in (("windows-setup", "installer"), ("nsh-check", "nsh_check"),
                            ("nsh-agent-check", "nsh_agent_check"), ("scripts", "scripts"),
@@ -463,8 +573,9 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn(f"    needs: plan\n    if: needs.plan.outputs.{flag} == 'true'\n", job(NSH, name))
 
     def test_a_closed_or_draft_pull_request_takes_no_runner(self):
-        """Every job's `if` is false for a closed or draft pull request: it carries the condition itself, or needs a
-        job that does (with no status function in its `if`), or runs only for a push or the schedule."""
+        """Every job's `if` is false for a closed or draft pull request: it carries the condition itself, needs a job
+        that does (with no status function in its `if`), runs only for a push or the schedule, or is the suite-label
+        gate. That gate may run for a draft only when the planner has already decided the label is a suite label."""
         names = re.findall(r"(?m)^  ([a-z][a-z0-9-]*):\n", CI.split("\njobs:\n", 1)[1])
         self.assertIn("ci-ok", names)
         guarded: set[str] = set()
@@ -477,7 +588,9 @@ class WorkflowTests(unittest.TestCase):
                 if (NOT_CLOSED_OR_DRAFT in condition
                         or (needed and not re.search(r"\b(always|cancelled|failure)\(\)", condition)
                             and set(needed) <= guarded)
-                        or "(github.event_name == 'schedule' || github.event_name == 'push')" in condition):
+                        or "(github.event_name == 'schedule' || github.event_name == 'push')" in condition
+                        or ("needs.changes.outputs.lane == 'suite'" in condition
+                            and "github.event_name == 'pull_request'" in condition)):
                     guarded.add(name)
         self.assertEqual(sorted(set(names) - guarded), [])
         for name in ("changes", "legacy-guard", "ci-ok"):
