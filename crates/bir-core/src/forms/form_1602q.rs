@@ -1417,6 +1417,44 @@ mod tests {
     }
 
     #[test]
+    fn item_twenty_survives_amended_yes_then_no() {
+        let mut draft = sample();
+        draft.is_amended = Some(true);
+        draft.tax_remitted_previous = 500.0;
+        draft.recompute();
+        draft.is_amended = Some(false);
+        draft.recompute();
+        assert_eq!(draft.tax_remitted_previous, 500.0);
+        assert_eq!(draft.item22, 4_000.51);
+    }
+
+    #[test]
+    fn item_twenty_can_make_item_twentyeight_negative_and_keep_its_choice() {
+        let mut draft = sample();
+        draft.tax_remitted_previous = 500_000.0;
+        draft.recompute();
+        assert!(draft.item28 < 0.0);
+        assert_eq!(draft.item28, cents(draft.item23 + draft.item27));
+        draft.over_remittance = Form1602QOverRemittance::CarriedOver;
+        draft.recompute();
+        assert_eq!(draft.over_remittance, Form1602QOverRemittance::CarriedOver);
+        assert_eq!(draft.to_bir_field_map()["frm1602Q:OverRemittance3"], "true");
+    }
+
+    #[test]
+    fn item_twenty_is_part_of_the_basic_tax_due_before_penalties() {
+        let mut draft = sample();
+        draft.tax_remitted_previous = 500.0;
+        draft.surcharge = 25.5;
+        draft.interest_penalty = 10.0;
+        draft.keep_entered_penalties();
+        draft.recompute();
+        assert_eq!(draft.item22, 4_000.51);
+        assert_eq!(draft.item27, 35.5);
+        assert_eq!(draft.item28, 193_013.14);
+    }
+
+    #[test]
     fn item_fifteen_is_refused() {
         let mut draft = sample();
         draft.schedule1_amount[14] = 100.0;

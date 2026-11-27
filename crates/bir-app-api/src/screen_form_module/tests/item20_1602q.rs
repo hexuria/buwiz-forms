@@ -53,3 +53,21 @@ fn item_twenty_is_kept_through_fill_save_and_reopen() {
         );
     }
 }
+
+#[test]
+fn item_twenty_survives_amended_yes_then_no_on_the_page() {
+    setup();
+    let opened = open("1602Q", 3);
+    let yes = fill(
+        "1602Q",
+        &opened["draft"],
+        json!({"frm1602Q:AmendedRtn1": "true", "frm1602Q:txt20": "500"}),
+    );
+    let no = fill(
+        "1602Q",
+        &yes["draft"],
+        json!({"frm1602Q:AmendedRtn2": "true", "frm1602Q:AmendedRtn1": "false"}),
+    );
+    assert_eq!(no["draft"]["tax_remitted_previous"], 500.0);
+    assert_eq!(no["values"]["frm1602Q:txt20"], "500.00");
+}
