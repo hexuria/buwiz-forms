@@ -509,7 +509,7 @@ fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
 /// A crash between 1 and 2 leaves the disk signed out — the safe direction — and I1 holds on
 /// the cache throughout. cloud_account's sign_out_with routes here.
 pub fn sign_out() {
-    sign_out_inner(Box::new(bir_core::cloud_account::BlockingHttp::new()));
+    let _ = sign_out_inner(Box::new(bir_core::cloud_account::BlockingHttp::new()));
 }
 
 /// The sign-out with its logout transport chosen — production's BlockingHttp by sign_out, the
@@ -518,7 +518,7 @@ pub fn sign_out() {
 /// real path.
 pub(crate) fn sign_out_inner(
     logout_http: Box<dyn bir_core::cloud_account::Http + Send>,
-) {
+) -> Result<(), bir_core::cloud_account::CloudError> {
     crate::cloud_email::cancel();
     bir_core::background_cron::set_submission_paused(true);
     // Step 1: the persisted sign-in goes, outside SESSION.
@@ -546,9 +546,13 @@ pub(crate) fn sign_out_inner(
     if let Some((server_url, access_token)) = logout {
         crate::cloud_account::logout_soon(logout_http, server_url, access_token);
     }
-    if let Err(error) = removed {
+    if let Err(error) = &removed {
         tracing::warn!("sign-out left the saved sign-in on this device: {error}");
     }
+    // The removal's failure is the caller's answer, not a swallowed log line: a sign-in this
+    // device could not remove means the relaunch signs it back in, so the page must hear an
+    // error — never "signed out" — while the gate is locked and the logout still went out.
+    removed
 }
 
 /// server_ended (§4, F8', revision 5's A): the sign-in of `owner` ended at the server in the

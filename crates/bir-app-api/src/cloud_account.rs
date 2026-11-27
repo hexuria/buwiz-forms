@@ -259,10 +259,16 @@ fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
     // D1: the end is the machine's one section — the disk first, the cache and the close inside
     // SESSION, the logout after. Nothing here writes anything itself anymore. The logout carries
     // the transport the caller chose: production's BlockingHttp, the tests' fake.
-    crate::session::sign_out_inner(http);
+    let removed = crate::session::sign_out_inner(http);
     crate::hooks::hooks().refresh_menu();
+    removed.map_err(|_| HostError::new(SIGN_OUT_INCOMPLETE))?;
     status_now()
 }
+
+/// The page's answer when this device could not remove the saved sign-in: the logout has still
+/// gone out and the gate is locked, but a relaunch would sign the account back in, so the
+/// sign-out must never answer "signed out".
+const SIGN_OUT_INCOMPLETE: &str = "Sign-out did not finish: this computer could not remove the saved sign-in. Try Sign out again.";
 
 /// Sends the logout on a thread of its own, without the account-session lock, so a new sign-in never waits on
 /// it. It carries the old sign-in's access token, which cannot end a newer sign-in, and nothing else of it. The
