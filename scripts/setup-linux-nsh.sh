@@ -17,7 +17,8 @@
 #     the API 35 x86_64 image for the emulator, an AVD
 #     named "buwiz", the Rust Android targets and NSH's Android dev and release runtimes
 #     (copies, each with the NSH commit it was built from in nsh-ref)
-#   - ~/BuwizNsh/nsh2404.sh <cmd>: runs <cmd> in the image from nsh/ (with the release profile
+#   - ~/BuwizNsh/nsh2404.sh <cmd> (beside the tools folder: <NSH_TOOLS>/../nsh2404.sh for a folder of
+#     its own): runs <cmd> in the image from nsh/ (with the release profile
 #     `just play-bundle` sets, so a store bundle built through it is optimised as on a Mac) with
 #     $DISPLAY (default :0), host networking (`just mock-account` on 127.0.0.1:3008) and
 #     the local-test safety variables (baked into Android dev builds)
@@ -42,7 +43,7 @@ for arg in "$@"; do
         --check)      CHECK_ONLY=1 ;;
         --no-android) WITH_ANDROID=0 ;;
         -h|--help)
-            sed -n '2,34p' "$0"
+            sed -n '2,35p' "$0"
             exit 0
             ;;
         *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
@@ -154,15 +155,18 @@ DOCKER_EOF
 }
 
 write_wrapper() {
-    cat > "$WORK/nsh2404.sh" <<'NSH_EOF'
+    # Beside the tools folder it serves: ~/BuwizNsh/nsh2404.sh for the shared tools, its own for NSH_TOOLS=<folder>.
+    local out; out="$(dirname "$TOOLS")/nsh2404.sh"
+    mkdir -p "$(dirname "$out")"
+    cat > "$out" <<'NSH_EOF'
 #!/usr/bin/env bash
 # Runs a command in the buwiz-nsh-2404 image from nsh/, with the host display.
 # Written by scripts/setup-linux-nsh.sh.
 set -euo pipefail
 NSH_EOF
     printf 'app_dir=%q\nandroid_home=%q\nndk_version=%q\ntools=%q\n' \
-        "$REPO/nsh" "$ANDROID_HOME" "$NDK_VERSION" "$TOOLS" >> "$WORK/nsh2404.sh"
-    cat >> "$WORK/nsh2404.sh" <<'NSH_EOF'
+        "$REPO/nsh" "$ANDROID_HOME" "$NDK_VERSION" "$TOOLS" >> "$out"
+    cat >> "$out" <<'NSH_EOF'
 cd "$app_dir"
 display="${DISPLAY:-:0}"
 DISPLAY="$display" xhost +SI:localuser:"$(id -un)" >/dev/null 2>&1 || true
@@ -234,8 +238,8 @@ NSH_EOF
     local mounts=("${MOUNTS[@]}") sdk
     # Kept on --no-android runs too, so they don't break an existing Android setup.
     mapfile -t sdk < <(sdk_mount); mounts+=("${sdk[@]}")
-    printf 'mounts=(%s)\n' "$(printf '%q ' "${mounts[@]}")" >> "$WORK/nsh2404.sh"
-    cat >> "$WORK/nsh2404.sh" <<'NSH_EOF'
+    printf 'mounts=(%s)\n' "$(printf '%q ' "${mounts[@]}")" >> "$out"
+    cat >> "$out" <<'NSH_EOF'
 exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
   -e HOME="$HOME" \
   -e PATH="${NSH_TOOLS:-$tools}/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
@@ -257,7 +261,7 @@ exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network ho
   -w "$app_dir" \
   buwiz-nsh-2404 "$@"
 NSH_EOF
-    chmod +x "$WORK/nsh2404.sh"
+    chmod +x "$out"
 }
 
 install_nsh_cli() {
@@ -368,6 +372,7 @@ install_android_runtime() {
 
 check() {
     local ok=1
+    local wrapper; wrapper="$(dirname "$TOOLS")/nsh2404.sh"
     report() { printf '  %-22s %s\n' "$1" "$2"; [ "$3" -eq 1 ] || ok=0; }
     if docker info >/dev/null 2>&1; then report docker "$(docker --version)" 1
     else report docker "MISSING or not usable without sudo" 0; fi
@@ -378,12 +383,12 @@ check() {
     if nsh_cli_current; then report "nsh CLI" "${REF:0:7}" 1
     else report "nsh CLI" "MISSING or not at ${REF:0:7}" 0; fi
     # The wrapper embeds the checkout and SDK paths; a move makes it stale.
-    if [ -x "$WORK/nsh2404.sh" ] &&
-        grep -qxF "$(printf 'app_dir=%q' "$REPO/nsh")" "$WORK/nsh2404.sh" &&
+    if [ -x "$wrapper" ] &&
+        grep -qxF "$(printf 'app_dir=%q' "$REPO/nsh")" "$wrapper" &&
         { [ "$WITH_ANDROID" -eq 0 ] ||
-            { grep -qxF "$(printf 'android_home=%q' "$ANDROID_HOME")" "$WORK/nsh2404.sh" &&
-              grep -qxF "$(printf 'ndk_version=%q' "$NDK_VERSION")" "$WORK/nsh2404.sh"; }; } &&
-        grep -qxF "$(printf 'tools=%q' "$TOOLS")" "$WORK/nsh2404.sh"; then
+            { grep -qxF "$(printf 'android_home=%q' "$ANDROID_HOME")" "$wrapper" &&
+              grep -qxF "$(printf 'ndk_version=%q' "$NDK_VERSION")" "$wrapper"; }; } &&
+        grep -qxF "$(printf 'tools=%q' "$TOOLS")" "$wrapper"; then
         report "nsh2404.sh wrapper" present 1
     else report "nsh2404.sh wrapper" "MISSING or stale" 0; fi
     if [ "$WITH_ANDROID" -eq 1 ]; then

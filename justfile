@@ -738,22 +738,21 @@ _package-mac-appstore args="": build-frozen-html-identity
 # next, as `just app` uses, or the number given: `just play-bundle 28`). Needs no secret: the bundle comes out UNSIGNED, and the owner signs it with the
 # upload key (`just play-sign`). nsh package always signs, with the debug key here; `android_bundle.py prepare` takes that
 # signature off with the updater's source (Google Play updates the app; the updater never starts on a phone).
+[unix]
 play-bundle *args:
     #!/usr/bin/env bash
     set -euo pipefail
     umask 022
     root="$(pwd)"
-    # A build number, --allow-dotenv, or both: `just play-bundle 28`, `just play-bundle --allow-dotenv`.
-    BUILD="" DOTENV=()
-    for arg in {{args}}; do
-        case "$arg" in
-            --allow-dotenv) DOTENV=(--allow-dotenv) ;;
-            ''|*[!0-9]*) echo "Unknown argument: $arg (a build number, or --allow-dotenv)" >&2; exit 2 ;;
-            *) [ -z "$BUILD" ] || { echo "Two build numbers: $BUILD and $arg" >&2; exit 2; }; BUILD="$arg" ;;
-        esac
-    done
-    # `just` has loaded any .env into this recipe (`set dotenv-load`), and the app bakes some variables in at compile
-    # time: a store build takes one only when the caller says it is meant (scripts/play_bundle_guard.py).
+    # A build number (1 to 2100000000), --allow-dotenv, or both: `just play-bundle 28 --allow-dotenv`. Read without
+    # word splitting or globbing, and checked by scripts/play_bundle_guard.py.
+    read -ra ARGV <<< {{quote(args)}}
+    PARSED="$({{PYTHON}} scripts/play_bundle_guard.py args -- ${ARGV[@]+"${ARGV[@]}"})"
+    BUILD="${PARSED% *}"; [ "$BUILD" != - ] || BUILD=""
+    DOTENV=(); [ "${PARSED##* }" != 1 ] || DOTENV=(--allow-dotenv)
+    # `just` has loaded any .env into this recipe (`set dotenv-load`). A store build bakes nothing from it: the server
+    # addresses are unset below, and so is the Google client unless STORE_GMAIL=1 (Gmail Connect, which needs Google's
+    # verification of the app). The guard prints which names it reads, never their values.
     {{PYTHON}} scripts/play_bundle_guard.py dotenv "$root" ${DOTENV[@]+"${DOTENV[@]}"}
     if [ -z "$BUILD" ]; then
         [ -f .env ] || { echo "❌ App Store Connect's next build number needs .env: give the number (just play-bundle 28)" >&2; exit 1; }
@@ -774,7 +773,8 @@ play-bundle *args:
     # scripts/setup-linux-nsh.sh writes; inside the image already (/.dockerenv), or on a Mac, it runs as it is.
     NSH_RUN=()
     if [ "$(uname -s)" = Linux ] && [ ! -f /.dockerenv ]; then
-        WRAPPER="${NSH_WRAPPER:-$HOME/BuwizNsh/nsh2404.sh}"
+        # setup-linux-nsh.sh writes the wrapper beside the tools folder it serves (~/BuwizNsh/nsh2404.sh by default).
+        WRAPPER="${NSH_WRAPPER:-$(dirname "$TOOLS")/nsh2404.sh}"
         [ -x "$WRAPPER" ] || { echo "❌ No $WRAPPER: run scripts/setup-linux-nsh.sh (NSH_TOOLS=<folder> for a fresh one)." >&2; exit 1; }
         {{PYTHON}} scripts/play_bundle_guard.py wrapper "$WRAPPER" "$root/nsh" "$TOOLS" "$HOME"
         export NSH_TOOLS="$TOOLS"
@@ -810,13 +810,20 @@ play-bundle *args:
     # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one;
     # nor does a server address, which the app would bake in (option_env!): a release build uses Buwiz's own.
     unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV BUWIZ_SERVER_URL BUWIZ_ACCOUNT_URL
+    # Gmail Connect needs Google's verification of the app first: store builds leave the Google client out unless the
+    # owner turns it on, and the bundle check then wants it in.
+    GMAIL=()
+    if [ "${STORE_GMAIL:-}" = 1 ]; then GMAIL=(--gmail); else unset GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; fi
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
     # applies there, and Cargo's defaults make a 116 MB library. These make it 84 MB (24 MB to download) on arm64.
     # Not opt-level z and not panic=abort until such a build has been used on a real phone (docs/platforms/android.md).
     export CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_OPT_LEVEL=s
-    # What the build will see, read where it runs (inside the container through the wrapper): the profile above, and
-    # nothing that would make the store binary a development one or bake a server address in.
-    ${NSH_RUN[@]+"${NSH_RUN[@]}"} env | {{PYTHON}} scripts/play_bundle_guard.py container-env
+    # Early refusals, before half an hour of build (the proof is the bundle check at the end): the environment where the
+    # build runs (inside the container through the wrapper) has the profile above and nothing that changes what a
+    # release becomes, and no Cargo configuration file sets what `env` cannot show.
+    BUILD_ENV="$(${NSH_RUN[@]+"${NSH_RUN[@]}"} env)" || { echo "❌ Could not read the build's environment (the error above)." >&2; exit 1; }
+    printf '%s\n' "$BUILD_ENV" | {{PYTHON}} scripts/play_bundle_guard.py container-env
+    {{PYTHON}} scripts/play_bundle_guard.py cargo-config "$root/nsh" "$CARGO_TARGET_DIR"
     OUT="$root/{{RELEASE_DIR}}/android"
     AAB="$root/{{RELEASE_DIR}}/{{APP_NAME}}-Android-{{VERSION}}-$BUILD.aab"
     rm -rf "$OUT" "$AAB"
@@ -824,8 +831,14 @@ play-bundle *args:
     (cd nsh && ${NSH_RUN[@]+"${NSH_RUN[@]}"} nsh package --target android --format aab --abi arm64-v8a,armeabi-v7a --id com.buwiz.ebirforms \
         --build "$BUILD" --app-version "{{VERSION}}" -o "$OUT")
     {{PYTHON}} scripts/android_bundle.py prepare "$OUT/{{APP_NAME}}.aab" "$AAB"
-    {{PYTHON}} scripts/android_bundle.py check "$AAB" --package com.buwiz.ebirforms --version-code "$BUILD" --target-sdk "$TARGET_SDK"
+    # The proof: the bundle's own library is a release build with the production addresses, under its size ceiling, and
+    # carries the Google client exactly when STORE_GMAIL=1.
+    {{PYTHON}} scripts/android_bundle.py check "$AAB" --package com.buwiz.ebirforms --version-code "$BUILD" --target-sdk "$TARGET_SDK" ${GMAIL[@]+"${GMAIL[@]}"}
     echo "✅ $AAB ({{VERSION}}, versionCode $BUILD, unsigned): the owner signs it with just play-sign"
+
+[windows]
+play-bundle *args:
+    @Write-Error "just play-bundle runs on a Mac (the owner's store build) or on Linux (a verification build), not on Windows."; exit 1
 
 # Once, by the owner: the Google Play upload key (docs/platforms/android.md, "The upload key"). keytool asks for the
 # password on the keyboard; it goes into the password manager with the file, and nowhere else.

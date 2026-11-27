@@ -50,15 +50,27 @@ the same computer; it never sends or registers through production (`nsh/src/guar
 
 Three steps on the owner's Mac. The first needs no secret; the second is the only one that touches the upload key.
 
-1. **Build** (`just play-bundle --allow-dotenv` for App Store Connect's next number, which it reads with `.env`, or
-   `just play-bundle 28` to choose the number). `just` loads a `.env` into every recipe and the app bakes some variables
-   in at compile time, so the recipe refuses to build while a `.env` is in the checkout or a folder above it unless
-   `--allow-dotenv` says it is meant; it never passes a server address (`BUWIZ_SERVER_URL`, `BUWIZ_ACCOUNT_URL`) or a
-   development switch to the build (`scripts/play_bundle_guard.py`). It builds the bundle, removes
-   the debug signature `nsh package` puts on it and the updater's source, and checks the result: package
-   `com.buwiz.ebirforms`, the expected `versionCode`, `targetSdkVersion` from `nsh.json`, backup off, not debuggable,
-   phone ABIs only, and no permission beyond those the store listing declares (`STORE_PERMISSIONS`: `INTERNET`,
-   `POST_NOTIFICATIONS`) (`scripts/android_bundle.py check`). It builds in the checkout's own `target/play-bundle` unless
+1. **Build**: `just play-bundle <n> --allow-dotenv` on the owner's Mac, whose checkout has a `.env` by design (`<n>` is
+   the build number; without it the recipe asks App Store Connect for its next one, reading `.env`). `just` loads a
+   `.env` into every recipe, so the recipe refuses to build while one is in the checkout or a folder above it unless
+   `--allow-dotenv` says it is meant. **What `--allow-dotenv` lets into the bundle: nothing by default.** The app bakes
+   in only the server addresses (`BUWIZ_SERVER_URL`, `BUWIZ_ACCOUNT_URL`), which the recipe unsets, so a store build
+   uses Buwiz's own; and the Google client (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`), which it also unsets unless
+   `STORE_GMAIL=1`: Gmail Connect asks for Google's restricted mail scope, which needs Google's verification of the
+   app, so store builds ship without it until the owner turns it on. The recipe prints the names it read from `.env`,
+   never their values (`scripts/play_bundle_guard.py`).
+   It builds the bundle, removes the debug signature `nsh package` puts on it and the updater's source, and checks the
+   result (`scripts/android_bundle.py check`): package `com.buwiz.ebirforms`, the expected `versionCode`,
+   `targetSdkVersion` from `nsh.json`, backup off, not debuggable, phone ABIs only, no permission beyond those the store
+   listing declares (`STORE_PERMISSIONS`: `INTERNET`, `POST_NOTIFICATIONS`), and, read from the bytes of each ABI's
+   `libnsh.so`, the proof of what the build became: the production addresses present; no development server, baked
+   test list, overflow checks or standard-library precondition checks (what debug assertions switch on); no Google
+   client id unless `STORE_GMAIL=1` (then one is required); and the library under its size ceiling (100 MB arm64,
+   88 MB armeabi-v7a: Cargo's default profile makes 123 MB and 99 MB). Before the half hour of build the recipe also
+   refuses early what it can see: a build environment (read with `env` where the build runs) without its release
+   profile or with any other `CARGO_PROFILE_RELEASE_*` or `RUSTFLAGS` form, and a Cargo configuration file with a
+   `[profile.release]` setting, rustflags, or an `[env]` entry for a variable the app bakes in. Those are early
+   refusals; the bundle check is the proof. It builds in the checkout's own `target/play-bundle` unless
    `CARGO_TARGET_DIR` is set, so a bundle never links crates compiled from another worktree. It writes
    `target/release-artifacts/eBIRForms-Android-<version>-<build>.aab`, unsigned.
 2. **Sign** (`just play-sign`): the owner types the upload key's password when `jarsigner` asks. It writes
@@ -85,7 +97,7 @@ Mac the shared tool stays as other work needs it, and the pinned store tool live
 ```sh
 export NSH_TOOLS=~/BuwizNsh/store-tools
 scripts/setup-android-macos.sh   # once, and again when the pin moves
-just play-bundle --allow-dotenv  # App Store Connect's next number; or: just play-bundle 28 (with no .env present)
+just play-bundle 28 --allow-dotenv   # bakes nothing from .env (the Google client only with STORE_GMAIL=1)
 ```
 
 The app's Rust toolchain (`rust-toolchain.toml`) needs both Android targets; the setup script names the
@@ -106,21 +118,22 @@ that `nsh package` makes on its own, and a Linux machine may build the unsigned 
 ### On Linux, a verification build
 
 The same recipe runs on Linux. The pinned `nsh` is built in the Ubuntu 24.04 image (GTK 4), so the recipe runs it
-through `~/BuwizNsh/nsh2404.sh` (or `$NSH_WRAPPER`), which `scripts/setup-linux-nsh.sh` writes for one checkout.
-Before building, the recipe refuses a wrapper written for another checkout, NSH tools the container cannot see, and a
-container that did not get the release profile (`CARGO_PROFILE_RELEASE_LTO`, `_CODEGEN_UNITS`, `_OPT_LEVEL`, read with
-`env` inside it): without the profile Cargo builds its defaults silently, a 123 MB arm64 library instead of 88 MB.
+through the `nsh2404.sh` that `scripts/setup-linux-nsh.sh` writes beside the tools folder it serves (or `$NSH_WRAPPER`).
+Before building, it refuses a wrapper written for another checkout and NSH tools the container cannot see, as well as
+the early refusals above, read inside the container. The bundle check at the end is the same proof as on a Mac.
 
 ```sh
 NSH_TOOLS=~/store-tools scripts/setup-linux-nsh.sh   # the CLI and runtimes in a folder of their own, at the pin
-NSH_TOOLS=~/store-tools just play-bundle 1           # a number, so .env is not needed
+NSH_TOOLS=~/store-tools just play-bundle 1           # a number, so no .env is needed
 ```
 
-The setup installs the Android platform `nsh/nsh.json` targets (`android.targetSdk`). A run on a Linux machine, 28
-November 2026, app `50798351`, NSH `8c78cfd`: package `com.buwiz.ebirforms`, versionCode 1, versionName `0.2.1`,
-minSdk 26, targetSdk 36, not debuggable, `allowBackup` false, `INTERNET` and `POST_NOTIFICATIONS` only, `arm64-v8a`
-and `armeabi-v7a` only, no updater asset, unsigned; `libnsh.so` 88.4 MB (arm64) and 76.1 MB (armeabi-v7a); 166.0 MB
-in all (bundletool 1.18.3 and aapt2 36.0.0 read it independently).
+The setup installs the Android platform `nsh/nsh.json` targets (`android.targetSdk`). By default a Linux bundle and the
+owner's have the same content (no Google client in either); compare the checked facts, not the SHA-256, which differs
+with every build and with signing. A run on a Linux machine, 28 November 2026, app `50798351`, NSH `8c78cfd`: package
+`com.buwiz.ebirforms`, versionCode 1, versionName `0.2.1`, minSdk 26, targetSdk 36, not debuggable, `allowBackup`
+false, `INTERNET` and `POST_NOTIFICATIONS` only, `arm64-v8a` and `armeabi-v7a` only, no updater asset, unsigned;
+`libnsh.so` 88.4 MB (arm64) and 76.1 MB (armeabi-v7a); 166.0 MB in all (bundletool 1.18.3 and aapt2 36.0.0 read it
+independently).
 
 ### The upload key
 

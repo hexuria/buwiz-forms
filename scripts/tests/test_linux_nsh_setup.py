@@ -130,6 +130,28 @@ install_android_runtime
                 self.assertTrue((root / "fresh-tools/runtime/android" / variant / "nsh-ref").is_file(), variant)
             self.assertFalse((root / "work/tools").exists())
 
+    def test_the_wrapper_is_written_beside_the_tools_folder_it_serves(self):
+        # One shared ~/BuwizNsh/nsh2404.sh would be rewritten for every checkout and tools folder.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "repo/nsh").mkdir(parents=True)
+            result = self.run_shell(
+                "\n".join(function(name) for name in ("outside_home", "sdk_mount", "write_wrapper")) + r'''
+export HOME="$PWD/home"
+REPO="$PWD/repo"
+ANDROID_HOME="$PWD/sdk"
+NDK_VERSION=27
+WORK="$PWD/work"
+TOOLS="$PWD/store/tools"
+MOUNTS=(-v "$HOME:$HOME")
+write_wrapper
+''', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            wrapper = root / "store/nsh2404.sh"
+            self.assertTrue(wrapper.is_file())
+            self.assertIn(f"tools={root}/store/tools", wrapper.read_text())
+            self.assertFalse((root / "work/nsh2404.sh").exists())
+
     def test_the_sdk_platform_is_the_one_nsh_json_targets(self):
         for target, ok in (("36", True), ('"thirty-six"', False), (None, False)):
             with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
