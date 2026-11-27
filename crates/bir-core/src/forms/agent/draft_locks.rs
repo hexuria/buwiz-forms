@@ -28,6 +28,8 @@
 //!    app holds, locked to that Q1's answer.
 //! 7. [`item16_2551q`]: 2551Q Item 16 is shut unless Amended Return is Yes
 //!    without the 8% option.
+//! 8. [`installment_1606`]: 1606's installment-sale boxes, shut unless
+//!    Item 20 is an installment sale.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -76,7 +78,7 @@ pub fn draft_lock(
     locks.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-/// The six layers; `only` limits the penalty layer to that key's group.
+/// The seven layers; `only` limits the penalty layer to that key's group.
 fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, only: Option<&str>) {
     dst_pt_vat::relock(kind, draft, locks);
     annual_corporate::relock(kind, draft, locks);
@@ -92,6 +94,8 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     item_13::relock(kind, draft, locks);
     // 2551Q Item 16 follows Amended Return and the 8% option.
     item16_2551q::relock(kind, draft, locks);
+    // 1606's installment-sale boxes follow Item 20.
+    installment_1606::relock(kind, draft, locks);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -103,6 +107,7 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut relocks = annual_corporate::live_locks(kind, draft);
     relocks.extend(excise::live_locks(kind, draft));
     relocks.extend(item16_2551q::live_locks(kind, draft));
+    relocks.extend(installment_1606::live_locks(kind, draft));
     relocks
 }
 
@@ -1337,6 +1342,93 @@ pub mod item16_2551q {
     }
 }
 
+pub mod installment_1606 {
+    //! 1606 Items 21 to 26 are installment-sale entries. The official page
+    //! opens them only for Item 20's installment-sale choice
+    //! (`rules/forms/1606-v2018/fixtures/validation-function-inventory-v796.json`,
+    //! `enableInstallment`: L3230-L3266) and keeps them disabled at load
+    //! (`runtime-control-inventory-v796.json`).
+    //!
+    //! Item 21 is a copy of Item 28A's gross selling price, so its amount is
+    //! never a separate stored installment value; the lock stops writes into
+    //! the copy while it is shut. Items 22 to 26 are installment-only model
+    //! amounts and are cleared by `Form1606Draft::recompute` while shut.
+
+    use serde_json::{Map, Value, json};
+
+    use crate::forms::agent::AgentFormKind;
+
+    pub const KEYS: [&str; 6] = [
+        "frm1606:txtSelling",
+        "frm1606:txtCost",
+        "frm1606:txtMortgage",
+        "frm1606:txtTotalP",
+        "frm1606:txtAmount",
+        "frm1606:txtTotalN",
+    ];
+    pub const LOCK: &str = "Items 21 to 26 apply only to an installment sale.";
+    pub const LOCK_NOTE: &str = "Items 21 to 26 apply only to an installment sale. Leave them blank unless Item 20 is Installment Sale.";
+    pub const CLEARED_NOTE: &str =
+        "Items 21 to 26 were cleared: they apply only to an installment sale.";
+    pub const AMOUNT_FIELDS: [&str; 5] = [
+        "cost_and_expenses",
+        "mortgage_assumed",
+        "initial_year_payments",
+        "installment_this_month",
+        "number_of_installments",
+    ];
+
+    /// Whether installment-only amounts lie dormant on a draft whose gate is shut.
+    pub fn dormant_amounts(draft: &Value) -> bool {
+        lock_reason(draft).is_some()
+            && AMOUNT_FIELDS
+                .iter()
+                .any(|field| draft[field].as_f64().unwrap_or(0.0).abs() >= 0.005)
+    }
+
+    /// The reason the boxes are shut on `draft`, or `None` for an installment sale.
+    pub fn lock_reason(draft: &Value) -> Option<&'static str> {
+        if draft["transaction"] == "installment_sale" {
+            None
+        } else {
+            Some(LOCK)
+        }
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        if kind.form_code() != "1606" {
+            return;
+        }
+        match lock_reason(draft) {
+            Some(reason) => {
+                for key in KEYS {
+                    locks.insert(key.to_string(), json!(reason));
+                }
+            }
+            None => {
+                for key in KEYS {
+                    locks.remove(key);
+                }
+            }
+        }
+    }
+
+    /// The boxes' locks as a fill leaves them (`null` opens them), so the
+    /// page follows Item 20 as soon as its choice changes.
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if kind.form_code() == "1606" {
+            for key in KEYS {
+                locks.insert(
+                    key.to_string(),
+                    lock_reason(draft).map_or(Value::Null, |reason| json!(reason)),
+                );
+            }
+        }
+        locks
+    }
+}
+
 pub mod item_13 {
     //! 2551Q Item 13, the income-tax-rate election, is answered once a year,
     //! on the initial quarter. A later quarter (Q2-Q4) of a TIN whose Q1 of
@@ -2009,7 +2101,12 @@ pub mod pending_notices {
     /// path opened or imported the return. Gate and text are owned strings so
     /// a row-keyed gate (1601FQ Schedule 1, for example) can name its row.
     pub fn clearance(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
-        collect_clearances(kind, before, after, &[item16_2551q_clearance])
+        collect_clearances(
+            kind,
+            before,
+            after,
+            &[item16_2551q_clearance, installment_1606_clearance],
+        )
     }
 
     type ClearanceCheck = fn(AgentFormKind, &Value, &Value) -> Vec<(String, String)>;
@@ -2037,6 +2134,28 @@ pub mod pending_notices {
             && let Some(text) = super::item16_2551q::cleared_note(after)
         {
             return vec![("2551q_item16".to_string(), text.to_string())];
+        }
+        Vec::new()
+    }
+
+    fn installment_1606_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        if kind.form_code() == "1606"
+            && super::installment_1606::AMOUNT_FIELDS
+                .iter()
+                .any(|field| before[field].as_f64().unwrap_or(0.0).abs() >= 0.005)
+            && super::installment_1606::AMOUNT_FIELDS
+                .iter()
+                .all(|field| after[field].as_f64().unwrap_or(0.0).abs() < 0.005)
+            && super::installment_1606::lock_reason(after).is_some()
+        {
+            return vec![(
+                "1606_installment".to_string(),
+                super::installment_1606::CLEARED_NOTE.to_string(),
+            )];
         }
         Vec::new()
     }

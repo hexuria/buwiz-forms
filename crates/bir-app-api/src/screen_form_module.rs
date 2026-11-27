@@ -3807,6 +3807,11 @@ fn lock_note(reason: &str) -> &'static str {
     if let Some((_, _, note)) = KEPT_NOTES.iter().find(|(_, kept, _)| *kept == reason) {
         return note;
     }
+    // 1606's installment gate's lock is short; its note says what the filer
+    // is to do.
+    if reason == bir_core::forms::agent::draft_locks::installment_1606::LOCK {
+        return bir_core::forms::agent::draft_locks::installment_1606::LOCK_NOTE;
+    }
     // 2551Q's 8% penalty reasons are already the filer's words.
     if reason == penalties::KEPT_ON_EIGHT_PERCENT {
         return penalties::KEPT_ON_EIGHT_PERCENT;
@@ -5053,6 +5058,28 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             relock_notes.insert(item16.to_string(), json!(note));
         }
     }
+    // When 1606's installment gate closes with installment-only values
+    // typed, this one fill says that they were cleared. Item 21 is not in
+    // the check: it is Item 28A's gross selling price, not a separate
+    // installment amount.
+    if kind.form_code() == "1606" {
+        let cleared = bir_core::forms::agent::draft_locks::installment_1606::AMOUNT_FIELDS
+            .iter()
+            .any(|field| {
+                before[field].as_f64().unwrap_or(0.0).abs() >= 0.005
+                    && draft[field].as_f64().unwrap_or(0.0).abs() < 0.005
+            });
+        if cleared
+            && bir_core::forms::agent::draft_locks::installment_1606::lock_reason(&draft).is_some()
+        {
+            for key in bir_core::forms::agent::draft_locks::installment_1606::KEYS {
+                relock_notes.insert(
+                    key.to_string(),
+                    json!(bir_core::forms::agent::draft_locks::installment_1606::CLEARED_NOTE),
+                );
+            }
+        }
+    }
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -5095,23 +5122,40 @@ pub(crate) fn removes(
 
 /// The reviewed reason a person sees on the form page when `key` is gated
 /// shut on `draft` (corpus `enabled_when` conditions and host module gates).
-/// Blank and untick writes are clears and are never refused by a gate.
+/// Blank and untick writes are clears and are never refused by a gate,
+/// except shut Item 21 of a 1606 (it writes Item 28A through their shared amount).
 pub(crate) fn page_gate_refusal(
     kind: AgentFormKind,
     draft: &Value,
     key: &str,
     value: &Value,
 ) -> Option<String> {
+    let code = kind.form_code();
+    // Item 21 is a copy of Item 28A's gross selling price: even a blank
+    // write into the shut copy would clear the real 28A amount.
+    if kind.form_code() == "1606"
+        && key == "frm1606:txtSelling"
+        && let Some(reason) =
+            bir_core::forms::agent::draft_locks::installment_1606::lock_reason(draft)
+    {
+        return Some(reason.to_string());
+    }
     if value.is_null()
         || value.as_str().is_some_and(agent::carry::is_blank_value)
         || is_unticked(value)
     {
         return None;
     }
-    let code = kind.form_code();
     if kind == AgentFormKind::Form2551Q
         && key == bir_core::forms::agent::draft_locks::item16_2551q::KEY
         && let Some(reason) = bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
+    {
+        return Some(reason.to_string());
+    }
+    if kind.form_code() == "1606"
+        && bir_core::forms::agent::draft_locks::installment_1606::KEYS.contains(&key)
+        && let Some(reason) =
+            bir_core::forms::agent::draft_locks::installment_1606::lock_reason(draft)
     {
         return Some(reason.to_string());
     }
@@ -5385,6 +5429,24 @@ fn apply_screen_edits_here(
         }
         if !editable {
             rejected.insert(key.clone(), json!("this return is no longer a draft"));
+            continue;
+        }
+        // 1606 Items 21 to 26 are shut unless Item 20 is an installment
+        // sale. Item 21 copies Item 28A's gross selling price, so even a
+        // blank write into the shut copy is refused; blanks to the other
+        // installment-only boxes remain clears.
+        if kind.form_code() == "1606"
+            && bir_core::forms::agent::draft_locks::installment_1606::KEYS.contains(&key.as_str())
+            && let Some(value) = sent.get(&key)
+            && (key == "frm1606:txtSelling"
+                || (!value.is_null()
+                    && value
+                        .as_str()
+                        .is_none_or(|text| !agent::carry::is_blank_value(text))))
+            && let Some(reason) =
+                bir_core::forms::agent::draft_locks::installment_1606::lock_reason(draft)
+        {
+            rejected.insert(key.clone(), json!(reason));
             continue;
         }
         // 2551Q's Item 13 on a later quarter whose filed Q1 is in this app
@@ -16685,6 +16747,8 @@ mod tests {
     /// each with the form group that fixes it (`CODE key: reason | PR n`).
     const LOCKED_AND_BLANK_NOT_YET_FIXED: &str =
         include_str!("screen_form_module/locked_and_blank.txt");
+    const LOCKED_AND_BLANK_INTENTIONAL: &str =
+        include_str!("screen_form_module/locked_and_blank_intentional.txt");
 
     /// Every on-screen box with its schema type and computed flag.
     fn screen_fields(code: &str) -> Vec<(String, String, bool)> {
@@ -16972,6 +17036,7 @@ mod tests {
         let found: Vec<String> = found.into_iter().collect();
         let mut expected: Vec<String> = LOCKED_AND_BLANK_NOT_YET_FIXED
             .lines()
+            .chain(LOCKED_AND_BLANK_INTENTIONAL.lines())
             .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
             .map(|line| {
                 line.rsplit_once(" | ")
