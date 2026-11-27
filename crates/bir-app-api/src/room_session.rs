@@ -748,7 +748,8 @@ mod a3a_tests {
             refused.is_err(),
             "serve opened a room whose claim is cut at Copied: {refused:?}"
         );
-        // Once the record is moved the same path answers the room file.
+        // The widened guard (the orchestrator's ruling): at Moved but not yet HashChecked step 7's
+        // evidence is still at stake, so the room is still refused.
         let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
         let value: String = conn
             .query_row(
@@ -765,9 +766,31 @@ mod a3a_tests {
         )
         .unwrap();
         drop(conn);
+        let still_refused = crate::agent::headless::signed_in_room_database(&scratch.layout, Some(&a));
+        assert!(
+            still_refused.is_err(),
+            "serve opened a room whose claim is at Moved with no hash check: {still_refused:?}"
+        );
+        // Once the record is hash-checked the same path answers the room file.
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        let value: String = conn
+            .query_row(
+                "SELECT value FROM migration WHERE key = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let mut record: bir_core::legacy_claim::Record = serde_json::from_str(&value).unwrap();
+        record.step = bir_core::legacy_claim::Step::HashChecked;
+        conn.execute(
+            "UPDATE migration SET value = ?1 WHERE key = 'legacy'",
+            [serde_json::to_string(&record).unwrap()],
+        )
+        .unwrap();
+        drop(conn);
         let answered = crate::agent::headless::signed_in_room_database(&scratch.layout, Some(&a));
         assert_eq!(
-            answered.expect("the room answers once the record is moved"),
+            answered.expect("the room answers once the record is hash-checked"),
             scratch.layout.room_database(&room)
         );
     }

@@ -187,15 +187,18 @@ pub(crate) fn signed_in_room_database(
         Ok(bir_core::rooms::RoomLookup::Known(room)) => {
             let path = layout.room_database(&room.room_id);
             // R1(c): serve is a separate process that never runs the claim's start(). While the
-            // record is at Copied — the move unfinished — opening the room file would migrate its
-            // bytes and close the move unfinished, so the room does not answer here. The smaller
-            // fix of the two the reviewer offered: refuse, rather than running start() in serve.
+            // record is at Copied or past it but not yet HashChecked — the move's hash evidence
+            // still at stake (the orchestrator's widened ruling) — opening the room file would
+            // migrate its bytes and close the move unfinished, so the room does not answer here.
+            // The smaller fix of the two the reviewer offered: refuse, rather than running start()
+            // in serve.
             if let Ok(claim) = bir_core::legacy_claim::LegacyClaim::at(layout.clone())
                 && let Ok(Some(record)) = claim.record()
-                && record.step == bir_core::legacy_claim::Step::Copied
+                && record.step >= bir_core::legacy_claim::Step::Copied
+                && record.step < bir_core::legacy_claim::Step::HashChecked
             {
                 return Err(
-                    "the legacy claim's move is unfinished on this device (the record is at Copied);                      serve refuses the room until the app finishes it"
+                    "the legacy claim's move is unfinished on this device (the record is not yet hash-checked);                      serve refuses the room until the app finishes it"
                         .to_owned(),
                 );
             }

@@ -688,8 +688,11 @@ impl LegacyClaim {
         // open room would migrate its bytes, and the next start() would close the move unfinished. A permanent
         // failure is definitive: the claim is over, and the account opens its empty room.
         let definitive = match &inner {
+            // The ruling's item 6: a finish that lands on a transient after the move (the record at
+            // Moved or RoomRow) is no definitive answer either — the move is still unfinished, and
+            // the guards' step check is what stands between it and a room open.
+            Ok(Start::Finished(Outcome::Transient(_))) | Err(Failure::Transient(_)) => false,
             Ok(_) | Err(Failure::Permanent(_)) => true,
-            Err(Failure::Transient(_)) => false,
         };
         if definitive {
             started_insert(self.layout.device_dir());

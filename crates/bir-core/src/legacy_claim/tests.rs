@@ -2081,3 +2081,55 @@ fn the_apps_real_open_path_is_refused_before_start() {
     crate::db::set_open_room_database(None);
     after.expect("the room opens through the app's real path once the claim ran");
 }
+
+/// The widened guard (the orchestrator's ruling): a record at Moved but not yet HashChecked — step 7's
+/// hash evidence is still at stake — refuses the room open through the app's real path, even though
+/// start() ran to a definitive answer in this session.
+#[test]
+fn a_room_cut_at_moved_refuses_the_open_through_the_apps_path() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    claim_cut_at(&install, &a, Cut::AfterMoveRecorded);
+    let record = claim.record().unwrap().expect("a record");
+    assert_eq!(record.step, Step::Moved, "the cut did not land at Moved");
+    // The started guard passes: start() answered Ready — definitive — in this session.
+    assert!(crate::legacy_claim::claim_started_this_session(
+        install.layout.device_dir()
+    ));
+    crate::db::set_open_room_database(Some(install.room_file(&room)));
+    let refused = std::panic::catch_unwind(crate::db::open_live_database);
+    crate::db::set_open_room_database(None);
+    match refused {
+        Ok(result) => assert!(
+            result.is_err(),
+            "the room opened while the record is at Moved with no hash check"
+        ),
+        Err(_) => {} // the debug_assert fired: refused either way
+    }
+}
+
+/// Item 6 (the ruling): a start() that finishes into a transient outcome after the move is not a
+/// definitive answer — the folder must not open rooms on its word alone.
+#[test]
+fn a_transient_finish_after_the_move_does_not_fill_the_started_set() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterMoveRecorded);
+    // The resume is a new session (the cut was the kill): nothing answered yet.
+    crate::legacy_claim::clear_started_for_test(install.layout.device_dir());
+    let claim = install.claim();
+    INJECT_AT.with(|at| at.set(Some(Inject::DeviceRows)));
+    let resumed = claim.start(&a);
+    assert!(
+        matches!(resumed, Start::Finished(Outcome::Transient(_))),
+        "not a transient finish: {resumed:?}"
+    );
+    assert!(
+        !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
+        "a transient finish after the move must not fill the set"
+    );
+}
