@@ -77,6 +77,10 @@ badges *args:
 help:
     @just --list
 
+# The launch crew runner: `just crew doctor`, `just crew run ...`.
+crew *args:
+    {{PYTHON}} crew/bin/crew {{args}}
+
 # `just run` is the NSH app (nsh-run, a macOS dev window); the old gpui-shell host is gone.
 [macos]
 run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (nsh-run db args)

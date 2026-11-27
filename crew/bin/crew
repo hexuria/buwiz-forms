@@ -1,0 +1,1201 @@
+#!/usr/bin/env python3
+"""The launch crew's portable runner.
+
+Python 3.9 to 3.13, standard library only. The program is intentionally one file: a fresh
+contributor can run it before any package or virtual environment exists.
+"""
+
+import argparse
+import configparser
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.parse
+from datetime import datetime
+from dataclasses import dataclass
+from pathlib import Path
+
+
+class CrewError(Exception):
+    pass
+
+
+@dataclass
+class Role:
+    name: str
+    title: str
+    engine: str
+    model: str
+    needs: list
+    repos: list
+    body: str
+    values: dict
+    path: Path
+
+
+@dataclass
+class Settings:
+    state_dir: Path
+    state_remote: str
+    state_branch: str
+    holder: str
+    engine: str
+    devin_command: str
+    devin_model: str
+    devin_config: Path
+    claude_command: str
+    claude_model: str
+    fleet_command: str
+
+
+CLAUDE_ALLOWED_TOOLS = (
+    "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(python3:*),"
+    "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr checks:*),"
+    "Bash(gh pr diff:*),Bash(gh pr create:*),Bash(gh run view:*),"
+    "Bash(gh run list:*),Bash(gh issue list:*),Bash(gh issue view:*),"
+    "Bash(gh issue create:*)"
+)
+
+
+def repo_root():
+    return Path(__file__).resolve().parents[2]
+
+
+def comma_list(value):
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def parse_role(path):
+    path = Path(path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CrewError("cannot read role file {0}: {1}".format(path, exc))
+    lines = text.splitlines(True)
+    if not lines or lines[0].strip() != "---":
+        raise CrewError("missing frontmatter in role file {0}".format(path))
+    end = None
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            end = index
+            break
+    if end is None:
+        raise CrewError("missing closing frontmatter line in role file {0}".format(path))
+    values = {}
+    for line in lines[1:end]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if ":" not in stripped:
+            raise CrewError("bad frontmatter line in {0}: {1}".format(path, stripped))
+        key, value = stripped.split(":", 1)
+        values[key.strip()] = value.strip()
+    body = "".join(lines[end + 1:]).lstrip("\n")
+    name = values.get("name") or path.stem
+    return Role(
+        name=name,
+        title=values.get("title", ""),
+        engine=values.get("engine", ""),
+        model=values.get("model", ""),
+        needs=comma_list(values.get("needs", "")),
+        repos=comma_list(values.get("repos", "")),
+        body=body,
+        values=values,
+        path=path,
+    )
+
+
+def expand_path(value, root):
+    expanded = os.path.expanduser(value)
+    path = Path(expanded)
+    if not path.is_absolute():
+        path = Path(root) / path
+    return path
+
+
+def load_settings(root):
+    root = Path(root)
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(str(root / "crew.local.ini"))
+
+    def value(section, key, default=""):
+        if parser.has_section(section) and parser.has_option(section, key):
+            return parser.get(section, key).strip()
+        return default
+
+    state_value = os.environ.get("CREW_STATE_DIR") or value("crew", "state_dir", ".crew/state")
+    engine = os.environ.get("CREW_ENGINE") or value("crew", "engine", "")
+    if not engine:
+        # Detection is deliberately simple here; doctor reports the details.
+        import shutil
+        for candidate in ("claude", "devin"):
+            if shutil.which(candidate):
+                engine = candidate
+                break
+    return Settings(
+        state_dir=expand_path(state_value, root),
+        state_remote=value("crew", "state_remote", ""),
+        state_branch=value("crew", "state_branch", "crew/state") or "crew/state",
+        holder=value("crew", "holder", "conductor") or "conductor",
+        engine=engine,
+        devin_command=value("engine.devin", "command", "devin") or "devin",
+        devin_model=value("engine.devin", "model", "swe-2-1-max"),
+        devin_config=expand_path(value("engine.devin", "config", "~/.config/devin/config.json"), root),
+        claude_command=value("engine.claude", "command", "claude") or "claude",
+        claude_model=value("engine.claude", "model", ""),
+        fleet_command=value("fleet", "command", ""),
+    )
+
+
+def read_required(path, label):
+    path = Path(path)
+    if not path.exists():
+        raise CrewError("missing {0}: {1}".format(label, path))
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CrewError("cannot read {0} {1}: {2}".format(label, path, exc))
+
+
+def split_command(command):
+    """Split a settings-file command line without throwing away Windows backslashes."""
+    if os.name == "nt":
+        parts = shlex.split(command, posix=False)
+        return [part[1:-1] if len(part) >= 2 and part[0] == part[-1] and part[0] in "\"'" else part
+                for part in parts]
+    return shlex.split(command)
+
+
+def command_line(argv):
+    return shlex.join([str(part) for part in argv])
+
+
+def compose_prompt(root, settings, role_name, task_text=""):
+    root = Path(root)
+    role_path = root / "crew" / "roles" / (role_name + ".md")
+    if not role_path.exists():
+        raise CrewError("missing role file: {0}".format(role_path))
+    role = parse_role(role_path)
+    rules_path = root / "crew" / "RULES.md"
+    rules = read_required(rules_path, "crew/RULES.md")
+    state_role = settings.state_dir / "roles" / role.name
+    header = "\n".join([
+        "You are the '{0}' worker of the launch crew.".format(role.name),
+        "Repository root: {0}".format(root),
+        "State folder: {0}".format(state_role),
+    ])
+    parts = [header, rules.rstrip("\n"), role.body.rstrip("\n")]
+    state_file = state_role / "STATE.md"
+    if state_file.exists():
+        parts.append(state_file.read_text(encoding="utf-8").rstrip("\n"))
+    if task_text:
+        parts.append(task_text.rstrip("\n"))
+    return "\n\n".join(part for part in parts if part) + "\n"
+
+
+def cmd_prompt(args):
+    root = repo_root()
+    settings = load_settings(root)
+    task = ""
+    if args.task_file:
+        task = read_required(args.task_file, "task file")
+    sys.stdout.write(compose_prompt(root, settings, args.role, task))
+    return 0
+
+
+def executable_for(command):
+    parts = split_command(command)
+    if not parts:
+        return None, []
+    first = parts[0]
+    if os.path.sep in first or (os.path.altsep and os.path.altsep in first):
+        path = first if os.path.exists(first) else None
+    else:
+        path = shutil.which(first)
+    return path, parts
+
+
+def version_line(command):
+    path, parts = executable_for(command)
+    if not path:
+        return None, ""
+    argv = parts + ["--version"]
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=5, check=False)
+        text = (result.stdout or result.stderr).strip().splitlines()
+        return path, (text[0].strip() if text else "version not reported")
+    except (OSError, subprocess.SubprocessError):
+        return path, "version unavailable"
+
+
+def cmd_doctor(args):
+    root = repo_root()
+    settings = load_settings(root)
+    found = {}
+    for name, command in (("claude", settings.claude_command), ("devin", settings.devin_command)):
+        path, version = version_line(command)
+        if path:
+            found[name] = path
+            print("engine {0}: {1} ({2})".format(name, path, version))
+        else:
+            print("engine {0}: not found".format(name))
+    gh = shutil.which("gh")
+    if not gh:
+        print("gh: not found")
+    else:
+        result = subprocess.run([gh, "auth", "status"], capture_output=True, text=True, check=False)
+        print("gh: {0}".format("signed in" if result.returncode == 0 else "not signed in"))
+    print("fleet: {0}".format("set" if settings.fleet_command else "not set"))
+    print("sbx: {0}".format("found" if shutil.which("sbx") else "not found"))
+    print("state: {0} ({1})".format(settings.state_dir, "exists" if settings.state_dir.exists() else "missing"))
+    if found and settings.fleet_command:
+        tier = "fleet"
+    elif "devin" in found:
+        tier = "workers"
+    elif found:
+        tier = "solo"
+    else:
+        tier = "none"
+    print("tier: {0}".format(tier))
+    return 0 if found else 1
+
+
+def role_from_repo(root, role_name):
+    path = Path(root) / "crew" / "roles" / (role_name + ".md")
+    if not path.exists():
+        raise CrewError("missing role file: {0}".format(path))
+    return parse_role(path)
+
+
+def user_path(value, base):
+    path = Path(os.path.expanduser(str(value)))
+    if not path.is_absolute():
+        path = Path(base) / path
+    return path.resolve()
+
+
+def task_name(path):
+    name = Path(path).name
+    return name[:-3] if name.endswith(".md") else name
+
+
+def run_logged(argv, cwd, log_path, env=None, input_text=None):
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(str(log_path), "w", encoding="utf-8", errors="replace") as log:
+        try:
+            result = subprocess.run(argv, cwd=str(cwd), env=env, input=input_text, stdout=log,
+                                    stderr=subprocess.STDOUT, text=True, check=False)
+            code = result.returncode
+        except OSError as exc:
+            log.write("crew: could not start {0}: {1}\n".format(argv[0], exc))
+            code = 127
+    with open(str(log_path), "a", encoding="utf-8") as log:
+        log.write("exit {0}\n".format(code))
+    return code
+
+
+def git_common_dir(tree):
+    result = subprocess.run(["git", "-C", str(tree), "rev-parse", "--git-common-dir"],
+                            capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise CrewError("not a git worktree: {0}".format(tree))
+    value = result.stdout.strip()
+    path = Path(value)
+    if not path.is_absolute():
+        path = Path(tree) / path
+    return path.resolve()
+
+
+def devin_permissions(tree, role_dir, gitdir):
+    return {
+        "allow": [
+            "Write({0})".format(tree), "Write({0})".format(role_dir), "Write({0})".format(gitdir),
+            "Exec(git)", "Exec(python3)", "Exec(grep)", "Exec(sed)", "Exec(ls)", "Exec(cat)", "Exec(head)",
+            "Exec(tail)", "Exec(wc)", "Exec(find)", "Exec(diff)", "Exec(sort)", "Exec(uniq)", "Exec(mkdir)",
+            "Exec(date)", "Exec(gh pr view)", "Exec(gh pr list)", "Exec(gh pr checks)", "Exec(gh pr diff)",
+            "Exec(gh pr create)", "Exec(gh run view)", "Exec(gh run list)", "Exec(gh issue list)",
+            "Exec(gh issue view)", "Exec(gh issue create)",
+        ],
+        "deny": [
+            "Exec(gh pr merge)", "Exec(gh pr close)", "Exec(gh run cancel)", "Exec(gh release)",
+            "Exec(gh secret)", "Exec(gh auth)", "Exec(cargo)", "Exec(nsh)", "Exec(rm -rf)",
+            "Exec(git push --force)", "Exec(git tag)",
+        ],
+    }
+
+
+def temporary_text_file(prefix, text):
+    fd, name = tempfile.mkstemp(prefix=prefix)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    return name
+
+
+def write_devin_config(settings, tree, role_dir):
+    data = {}
+    source = settings.devin_config
+    if source.exists():
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise CrewError("cannot read Devin config {0}: {1}".format(source, exc))
+    data["permissions"] = devin_permissions(str(tree), str(role_dir), str(git_common_dir(tree)))
+    fd, name = tempfile.mkstemp(prefix="crew-devin-")
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(data, handle)
+    return name
+
+
+def worker_choices(root, settings, role_name, args):
+    role = role_from_repo(root, role_name)
+    engine = args.engine or role.engine or settings.engine
+    if engine not in ("claude", "devin"):
+        raise CrewError("unknown engine for role {0}: {1}".format(role_name, engine or "(none)"))
+    default_model = settings.devin_model if engine == "devin" else settings.claude_model
+    model = args.model or role.model or default_model
+    return role, engine, model
+
+
+def sandbox_commands(role_name, name, tree, model, prompt_file):
+    sandbox = "crew-{0}-{1}".format(role_name, name)
+    exec_argv = ["sbx", "exec", sandbox, "--", "devin", "-p"]
+    if model:
+        exec_argv += ["--model", model]
+    exec_argv += ["--prompt-file", str(prompt_file)]
+    return [
+        ["sbx", "create", "--name", sandbox, "--clone", "devin", str(tree)],
+        exec_argv,
+        ["git", "-C", str(tree), "fetch", "sandbox-" + sandbox],
+        ["sbx", "rm", "--force", sandbox],
+    ]
+
+
+def run_sandbox(args, role, model, tree, name, prompt, log):
+    prompt_file = tree / (".crew-prompt-" + name + ".md")
+    commands = sandbox_commands(role.name, name, tree, model, prompt_file)
+    if args.print_command:
+        for argv in commands:
+            print(command_line(argv))
+        return 0
+    if not shutil.which("sbx"):
+        raise CrewError("sbx not found on PATH; see crew/playbooks/sandbox.md")
+    code = 0
+    try:
+        prompt_file.write_text(prompt, encoding="utf-8")
+        create = subprocess.run(commands[0], capture_output=True, text=True, check=False)
+        if create.returncode != 0:
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text((create.stdout or "") + (create.stderr or ""), encoding="utf-8")
+            code = create.returncode
+        else:
+            code = run_logged(commands[1], tree, log)
+            if code == 0:
+                fetch = subprocess.run(commands[2], capture_output=True, text=True, check=False)
+                if fetch.returncode != 0:
+                    with open(str(log), "a", encoding="utf-8") as handle:
+                        handle.write((fetch.stdout or "") + (fetch.stderr or ""))
+                    code = fetch.returncode
+    finally:
+        remove = subprocess.run(commands[3], capture_output=True, text=True, check=False)
+        if code == 0 and remove.returncode != 0:
+            code = remove.returncode
+        try:
+            prompt_file.unlink()
+        except OSError:
+            pass
+    print("crew: {0} finished {1} in the sandbox (exit {2}); log {3}".format(role.name, name, code, log))
+    return code
+
+
+def cmd_run(args):
+    root = repo_root()
+    settings = load_settings(root)
+    role, engine, model = worker_choices(root, settings, args.role, args)
+    tree = user_path(args.worktree, os.getcwd()) if args.worktree else root
+    task_path = user_path(args.task_file, os.getcwd())
+    task_text = read_required(task_path, "task file")
+    name = task_name(task_path)
+    role_dir = settings.state_dir / "roles" / role.name
+    inbox = role_dir / "inbox"
+    outbox = role_dir / "outbox"
+    inbox.mkdir(parents=True, exist_ok=True)
+    outbox.mkdir(parents=True, exist_ok=True)
+    log = outbox / (name + ".run.log")
+    prompt = compose_prompt(root, settings, role.name, task_text)
+    if args.sandbox:
+        if engine != "devin":
+            raise CrewError("the sandbox worker is devin engine only")
+        return run_sandbox(args, role, model, tree, name, prompt, log)
+    if engine == "devin":
+        config = write_devin_config(settings, tree, role_dir.resolve())
+        prompt_file = temporary_text_file("crew-prompt-", prompt)
+        try:
+            argv = engine_command(settings, engine) + ["-p"]
+            if model:
+                argv += ["--model", model]
+            argv += ["--config", config, "--permission-mode", "accept-edits",
+                     "--respect-workspace-trust", "false", "--prompt-file", prompt_file]
+            env = os.environ.copy()
+            env["GIT_LFS_SKIP_PUSH"] = "1"
+            code = run_logged(argv, tree, log, env=env)
+        finally:
+            for path in (config, prompt_file):
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+    else:
+        argv = engine_command(settings, engine) + ["-p"]
+        if model:
+            argv += ["--model", model]
+        argv += ["--permission-mode", "acceptEdits", "--allowedTools", CLAUDE_ALLOWED_TOOLS]
+        code = run_logged(argv, tree, log, input_text=prompt)
+    print("crew: {0} finished {1} (exit {2}); log {3}".format(role.name, name, code, log))
+    return code
+
+
+def engine_command(settings, engine):
+    if engine == "claude":
+        return split_command(settings.claude_command)
+    if engine == "devin":
+        return split_command(settings.devin_command)
+    raise CrewError("unknown engine: {0}".format(engine or "(none)"))
+
+
+def cmd_start(args):
+    root = repo_root()
+    settings = load_settings(root)
+    engine = args.engine or settings.engine
+    if not engine:
+        raise CrewError("no engine found on PATH (looked for claude, then devin)")
+    command = engine_command(settings, engine)
+    task = "Re-instate from files: follow crew/playbooks/restart.md."
+    prompt = compose_prompt(root, settings, args.role, task)
+    prompt_file = None
+    if engine == "claude":
+        argv = command + [prompt]
+    else:
+        handle = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="crew-prompt-", delete=False)
+        with handle:
+            handle.write(prompt)
+        prompt_file = handle.name
+        argv = command + ["--prompt-file", prompt_file]
+    if args.print_command:
+        print(command_line(argv))
+        return 0
+    try:
+        return subprocess.call(argv, cwd=str(root))
+    finally:
+        if prompt_file:
+            try:
+                os.unlink(prompt_file)
+            except OSError:
+                pass
+
+
+def pr_check_rows(gh, number, repo):
+    result = subprocess.run([gh, "pr", "checks", str(number), "--repo", repo], capture_output=True, text=True,
+                            check=False)
+    if result.returncode != 0:
+        return []
+    rows = []
+    for line in result.stdout.splitlines():
+        parts = line.split("\t") if "\t" in line else line.split()
+        if len(parts) >= 2:
+            rows.append((parts[0], parts[1], line))
+    return rows
+
+
+def cmd_automerge(args):
+    root = repo_root()
+    repo = args.repo or infer_repo(root)
+    gh = shutil.which("gh")
+    if not gh:
+        raise CrewError("gh not found on PATH")
+    if not repo:
+        raise CrewError("pass --repo owner/name or set an origin remote")
+    for _attempt in range(90):
+        data = gh_json([gh, "pr", "view", str(args.pr), "--repo", repo, "--json",
+                        "headRefOid,mergeStateStatus,state,mergeCommit"])
+        if not data:
+            time.sleep(args.interval)
+            continue
+        state = data.get("state", "")
+        if state != "OPEN":
+            print("#{0} is {1}".format(args.pr, state))
+            return 0
+        head = data.get("headRefOid", "")
+        if head != args.sha:
+            print("#{0} head moved to {1}; not merging".format(args.pr, head))
+            return 2
+        rows = pr_check_rows(gh, args.pr, repo)
+        failing = [row for row in rows if row[1] == "fail"]
+        pending = [row for row in rows if row[1] == "pending"]
+        passing = [row for row in rows if row[1] == "pass"]
+        if failing:
+            print("#{0} has {1} failing checks; not merging".format(args.pr, len(failing)))
+            for _name, _state, line in failing:
+                print(line)
+            return 3
+        # GitHub can call a pull request clean before any check reports; no pass means no proof.
+        if not pending and passing and data.get("mergeStateStatus") == "CLEAN":
+            body = "Merged by the orchestrator: reviewed, GitHub clean and green at this head."
+            merge = capture_combined([gh, "pr", "merge", str(args.pr), "--repo", repo, "--squash",
+                                      "--match-head-commit", args.sha, "--body", body], root)
+            print_lines(last_lines(merge.stdout or "", 1))
+            if merge.returncode != 0:
+                return merge.returncode
+            after = gh_json([gh, "pr", "view", str(args.pr), "--repo", repo, "--json", "state,mergeCommit"]) or {}
+            commit = after.get("mergeCommit") or {}
+            print("#{0} {1} {2}".format(args.pr, after.get("state", ""), commit.get("oid", "")))
+            return 0
+        time.sleep(args.interval)
+    print("#{0} timed out waiting".format(args.pr))
+    return 4
+
+
+def capture_combined(argv, cwd, env=None):
+    try:
+        return subprocess.run(argv, cwd=str(cwd), env=env, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True, check=False)
+    except OSError as exc:
+        raise CrewError("could not start {0}: {1}".format(argv[0], exc))
+
+
+def last_lines(text, count):
+    lines = text.splitlines()
+    return lines[-count:] if lines else []
+
+
+def print_lines(lines):
+    for line in lines:
+        print(line)
+
+
+def batch_status(root, branch):
+    just = shutil.which("just") or "just"
+    output = ""
+    for _attempt in range(150):
+        result = capture_combined([just, "ci-batch-status", branch], root)
+        output = result.stdout or ""
+        if "batch: running" in output:
+            time.sleep(120)
+            continue
+        if re.search(r"batch: (green|red)", output):
+            return output
+        time.sleep(60)
+    raise CrewError("batch {0} did not settle".format(branch))
+
+
+def merge_commands(text):
+    commands = []
+    for line in text.splitlines():
+        if line.startswith("gh pr merge"):
+            try:
+                commands.append(shlex.split(line))
+            except ValueError:
+                continue
+    return commands
+
+
+def cmd_batchwatch(args):
+    root = repo_root()
+    output = batch_status(root, args.branch)
+    print(datetime.utcnow().strftime("%H:%M UTC"))
+    print_lines(last_lines(output, 8))
+    if re.search(r"batch: red", output):
+        for line in output.splitlines():
+            if "failed job:" in line:
+                print(line.strip())
+        return 1
+    if not re.search(r"batch: green", output):
+        return 1
+    if args.no_merge:
+        print("green")
+        return 0
+
+    just = shutil.which("just") or "just"
+    env = os.environ.copy()
+    env["GIT_LFS_SKIP_PUSH"] = "1"
+    merge_out = capture_combined([just, "ci-batch-merge", args.branch], root, env=env).stdout or ""
+    print_lines(last_lines(merge_out, 5))
+    commands = merge_commands(merge_out)
+    body = "Merged by the orchestrator: reviewed; proven with main in one batch ({0}).".format(args.branch)
+    for index, argv in enumerate(commands):
+        argv = argv + ["--body", body]
+        result = capture_combined(argv, root)
+        print_lines(last_lines(result.stdout or "", 1))
+        if result.returncode != 0:
+            return result.returncode
+        if index + 1 < len(commands):
+            time.sleep(8)
+
+    repo = infer_repo(root)
+    gh = shutil.which("gh")
+    if gh and repo:
+        for number in args.prs:
+            data = gh_json([gh, "pr", "view", str(number), "--repo", repo, "--json", "state,mergeCommit"])
+            if data:
+                commit = data.get("mergeCommit") or {}
+                print("#{0} {1} {2}".format(number, data.get("state", ""), commit.get("oid", "")))
+    verify = capture_combined([just, "ci-batch-verify", args.branch], root)
+    print_lines(last_lines(verify.stdout or "", 2))
+    return verify.returncode
+
+
+def markdown_files(folder):
+    if not folder.is_dir():
+        return []
+    return [path for path in folder.glob("*.md") if path.is_file()]
+
+
+def cmd_status(args):
+    root = repo_root()
+    settings = load_settings(root)
+    names = set()
+    state_roles = settings.state_dir / "roles"
+    if state_roles.is_dir():
+        names.update(path.name for path in state_roles.iterdir() if path.is_dir())
+    repo_roles = root / "crew" / "roles"
+    if repo_roles.is_dir():
+        names.update(path.stem for path in repo_roles.glob("*.md"))
+    for name in sorted(names):
+        role_dir = state_roles / name
+        inbox = markdown_files(role_dir / "inbox")
+        outbox = markdown_files(role_dir / "outbox")
+        newest = max(outbox, key=lambda path: path.stat().st_mtime).name if outbox else "-"
+        state_file = role_dir / "STATE.md"
+        first = "-"
+        if state_file.exists():
+            lines = state_file.read_text(encoding="utf-8", errors="replace").splitlines()
+            first = lines[0] if lines else "-"
+        print("{0:<14} tasks {1:<3} results {2:<3} last: {3} state: {4}".format(
+            name, len(inbox), len(outbox), newest, first))
+    return 0
+
+
+def infer_repo(root):
+    result = git_text_optional(Path(root), ["remote", "get-url", "origin"])
+    if result is None:
+        return ""
+    url = result.strip()
+    match = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", url)
+    return match.group(1) if match else ""
+
+
+def git_text_optional(cwd, argv):
+    try:
+        result = subprocess.run(["git"] + argv, cwd=str(cwd), capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def seen_keys(path):
+    try:
+        return set(Path(path).read_text(encoding="utf-8").splitlines())
+    except OSError:
+        return set()
+
+
+def remember_key(path, key):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(str(path), "a", encoding="utf-8") as handle:
+        handle.write(key + "\n")
+
+
+def fleet_watch_events(settings, holder):
+    if not settings.fleet_command:
+        return []
+    try:
+        result = subprocess.run(split_command(settings.fleet_command), capture_output=True, text=True,
+                                timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    events = []
+    for line in result.stdout.splitlines():
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) >= 5 and parts[4] == holder and not parts[2].startswith("working"):
+            events.append("machine " + line)
+    return events
+
+
+def queue_waiting(state_dir):
+    try:
+        data = json.loads((Path(state_dir) / "queue.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    waiting = data.get("waiting", [])
+    return waiting if isinstance(waiting, list) else []
+
+
+def gh_json(argv):
+    result = subprocess.run(argv, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        return None
+
+
+def ci_ok_state(gh, number, repo):
+    result = subprocess.run([gh, "pr", "checks", str(number), "--repo", repo], capture_output=True, text=True,
+                            check=False)
+    if result.returncode != 0:
+        return ""
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == "ci-ok":
+            return parts[1]
+    return ""
+
+
+def pr_watch_events(settings, repo, seen, seen_path):
+    events = []
+    waiting = queue_waiting(settings.state_dir)
+    if not waiting or not repo:
+        return events
+    gh = shutil.which("gh")
+    if not gh:
+        return events
+    for number in waiting:
+        data = gh_json([gh, "pr", "view", str(number), "--repo", repo, "--json", "headRefOid,isDraft,state"])
+        if not data:
+            continue
+        ci = ci_ok_state(gh, number, repo)
+        if ci not in ("pass", "fail"):
+            continue
+        head = str(data.get("headRefOid", ""))
+        key = "pr:{0}:{1}:{2}".format(number, head, ci)
+        if key in seen:
+            continue
+        draft = "true" if data.get("isDraft") else "false"
+        events.append("pull request #{0} {1} ci-ok {2} (draft: {3}, state: {4})".format(
+            number, head, ci, draft, data.get("state", "")))
+        remember_key(seen_path, key)
+        seen.add(key)
+    return events
+
+
+def worker_watch_events(settings, seen, seen_path):
+    events = []
+    pattern = str(settings.state_dir / "roles" / "*" / "outbox" / "*.run.log")
+    import glob
+    for name in sorted(glob.glob(pattern)):
+        log = Path(name)
+        try:
+            lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        if not lines or not lines[-1].startswith("exit "):
+            continue
+        key = "run:" + str(log)
+        if key in seen:
+            continue
+        suffix = ".run.log"
+        result = log
+        if log.name.endswith(suffix):
+            candidate = log.with_name(log.name[:-len(suffix)] + ".md")
+            if candidate.exists():
+                result = candidate
+        events.append("result {0}".format(result))
+        remember_key(seen_path, key)
+        seen.add(key)
+    return events
+
+
+def watch_once(settings, holder, repo):
+    seen_path = settings.state_dir / ".watch-seen"
+    seen_path.parent.mkdir(parents=True, exist_ok=True)
+    if not seen_path.exists():
+        seen_path.write_text("", encoding="utf-8")
+    seen = seen_keys(seen_path)
+    events = []
+    events.extend(fleet_watch_events(settings, holder))
+    events.extend(pr_watch_events(settings, repo, seen, seen_path))
+    events.extend(worker_watch_events(settings, seen, seen_path))
+    return events
+
+
+def print_watch_events(events):
+    print(datetime.utcnow().strftime("%H:%M UTC"))
+    for event in events:
+        print(event)
+
+
+def cmd_watch(args):
+    root = repo_root()
+    settings = load_settings(root)
+    holder = args.holder or settings.holder
+    repo = args.repo or infer_repo(root)
+    while True:
+        events = watch_once(settings, holder, repo)
+        if events:
+            print_watch_events(events)
+            return 0
+        if args.once:
+            return 0
+        time.sleep(args.interval)
+
+
+SECRET_MARKERS = [
+    "ch" + "an_",
+    "gh" + "p_",
+    "github" + "_pat_",
+    "s" + "k-",
+    "x-access" + "-token",
+]
+
+HOME_PREFIXES = [
+    "/" + "Volumes/",
+    "/" + "Users/",
+    "/" + "home/",
+    "C:" + "\\Users\\",
+]
+
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+URL_RE = re.compile(r"https?://[^\s)\]>\"']+")
+DEVIN_HEX_RE = re.compile("devin" + r"-[0-9a-fA-F]{20,}")
+DIGIT_RUN_RE = re.compile(r"\d{4,}")
+
+
+def privacy_reasons(line):
+    reasons = []
+    for match in EMAIL_RE.finditer(line):
+        address = match.group(0)
+        if address.lower() != "support@buwiz.com" and not address.lower().endswith("@users.noreply.github.com"):
+            reasons.append("e-mail address")
+            break
+    for prefix in HOME_PREFIXES:
+        if re.search(r"(^|[\s\"'(=])" + re.escape(prefix), line, re.IGNORECASE):
+            reasons.append("absolute home path")
+            break
+    for match in URL_RE.finditer(line):
+        host = urllib.parse.urlparse(match.group(0)).netloc.lower().split(":", 1)[0]
+        if host == "app.devin.ai" or host == "claude.ai" or host.endswith(".claude.ai"):
+            reasons.append("Devin or Claude URL")
+            break
+    lowered = line.lower()
+    if any(marker in lowered for marker in SECRET_MARKERS) or DEVIN_HEX_RE.search(line):
+        reasons.append("secret marker")
+    if any(word in lowered for word in ("password", "passcode", "sign-in code")) and DIGIT_RUN_RE.search(line):
+        reasons.append("password or sign-in code with digits")
+    return reasons
+
+
+def lint_candidate_files(root):
+    root = Path(root)
+    files = []
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        path = root / name
+        if path.is_file():
+            files.append(path)
+    for folder in (root / "crew", root / ".claude" / "agents", root / ".claude" / "skills",
+                   root / ".devin" / "agents"):
+        if folder.is_file():
+            files.append(folder)
+        elif folder.is_dir():
+            for base, _dirs, names in os.walk(str(folder)):
+                for name in names:
+                    files.append(Path(base) / name)
+    unique = []
+    seen = set()
+    for path in files:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return sorted(unique)
+
+
+def lint_tree(root):
+    findings = []
+    root = Path(root)
+    for path in lint_candidate_files(root):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for number, line in enumerate(lines, 1):
+            for reason in privacy_reasons(line):
+                findings.append((path, number, reason))
+    return findings
+
+
+def cmd_lint(args):
+    root = repo_root()
+    findings = lint_tree(root)
+    for path, number, reason in findings:
+        try:
+            shown = path.relative_to(root).as_posix()
+        except ValueError:
+            shown = str(path)
+        print("{0}:{1}: {2}".format(shown, number, reason))
+    return 1 if findings else 0
+
+
+def agent_body(role):
+    return "\n".join([
+        "Before any work, read crew/RULES.md.",
+        "Before any work, read crew/roles/{0}.md.".format(role.name),
+        "Before any work, run `python3 crew/bin/crew state path` and read `<state>/roles/{0}/STATE.md` there.".format(role.name),
+        "Follow those files in that order before any work.",
+        "Before you stop, write `<state>/roles/{0}/STATE.md` with what is open and what comes next.".format(role.name),
+    ]) + "\n"
+
+
+def agent_file_text(role, devin=False):
+    lines = ["---", "name: {0}".format(role.name), "description: {0}".format(role.title)]
+    if devin and role.engine == "devin":
+        lines.append("model: {0}".format(role.model or "swe-2-1-max"))
+    lines.extend(["---", "", agent_body(role).rstrip("\n")])
+    return "\n".join(lines) + "\n"
+
+
+def sync_targets(root):
+    roles_dir = Path(root) / "crew" / "roles"
+    roles = [parse_role(path) for path in sorted(roles_dir.glob("*.md"))] if roles_dir.is_dir() else []
+    targets = {}
+    for role in roles:
+        targets[Path(".claude") / "agents" / (role.name + ".md")] = agent_file_text(role, devin=False)
+        targets[Path(".devin") / "agents" / (role.name + ".md")] = agent_file_text(role, devin=True)
+    return targets
+
+
+def cmd_sync(args):
+    root = repo_root()
+    targets = sync_targets(root)
+    different = []
+    for relative, text in targets.items():
+        path = root / relative
+        if not path.exists() or path.read_text(encoding="utf-8") != text:
+            different.append(relative)
+    if args.check:
+        for relative in different:
+            print(relative.as_posix())
+        return 1 if different else 0
+    for relative, text in targets.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    print("synced {0} agent files".format(len(targets)))
+    return 0
+
+
+def git_text(cwd, argv, check=True):
+    result = subprocess.run(["git"] + argv, cwd=str(cwd) if cwd else None, capture_output=True, text=True,
+                            check=False)
+    if check and result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        detail = re.sub(r"(https?://)[^/@\s]+@", r"\1<credentials>@", detail)
+        raise CrewError("git {0} failed{1}".format(" ".join(argv[:2]), ": " + detail if detail else ""))
+    return result
+
+
+def resolve_state_remote(root, remote):
+    # A simple word may be a remote name in the repository; anything else is already a URL or path.
+    if re.match(r"^[A-Za-z0-9_.-]+$", remote):
+        result = git_text(root, ["remote", "get-url", remote], check=False)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    return remote
+
+
+def ensure_state_checkout(root, settings):
+    state = settings.state_dir
+    if (state / ".git").exists():
+        return
+    if state.exists() and any(state.iterdir()):
+        raise CrewError("state folder exists but is not a git checkout: {0}".format(state))
+    remote = resolve_state_remote(root, settings.state_remote)
+    branch = settings.state_branch
+    probe = subprocess.run(["git", "ls-remote", "--heads", remote, branch], capture_output=True, text=True,
+                           check=False)
+    if probe.returncode != 0:
+        raise CrewError("cannot read state remote {0}".format(settings.state_remote))
+    state.parent.mkdir(parents=True, exist_ok=True)
+    if probe.stdout.strip():
+        result = subprocess.run(["git", "clone", "--branch", branch, "--single-branch", remote, str(state)],
+                                capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise CrewError("cannot clone the crew state branch {0}".format(branch))
+        return
+    state.mkdir(parents=True, exist_ok=True)
+    git_text(state, ["init", "-q"])
+    git_text(state, ["remote", "add", "origin", remote])
+    git_text(state, ["checkout", "-q", "--orphan", branch])
+    readme = state / "README.md"
+    if not readme.exists():
+        readme.write_text("# crew state\n", encoding="utf-8")
+    git_text(state, ["add", "README.md"])
+    git_text(state, ["-c", "user.name=hexuria", "-c",
+                     "user.email=295542929+hexuria@users.noreply.github.com", "commit", "-q", "-m",
+                     "Start crew state"])
+
+
+def write_once(path, text):
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+
+def init_state(root, settings):
+    if settings.state_remote:
+        ensure_state_checkout(root, settings)
+    state = settings.state_dir
+    (state / "roles").mkdir(parents=True, exist_ok=True)
+    roles_dir = Path(root) / "crew" / "roles"
+    if roles_dir.is_dir():
+        for path in sorted(roles_dir.glob("*.md")):
+            role = parse_role(path)
+            role_dir = state / "roles" / role.name
+            (role_dir / "inbox").mkdir(parents=True, exist_ok=True)
+            (role_dir / "outbox").mkdir(parents=True, exist_ok=True)
+            write_once(role_dir / "STATE.md", "# {0} state\n\nNothing open.\n".format(role.name))
+    write_once(state / "queue.json", '{"waiting": [], "batch": null}\n')
+    write_once(state / "LOG.md", "# crew log\n")
+    write_once(state / "HELD.md", "# held machines\n")
+    write_once(state / ".watch-seen", "")
+
+
+def require_state_checkout(settings):
+    state = settings.state_dir
+    if not (state / ".git").exists():
+        raise CrewError("state folder is not a git checkout: {0}".format(state))
+    return state
+
+
+def state_push(settings):
+    if not settings.state_remote:
+        raise CrewError("state push needs state_remote in crew.local.ini")
+    state = require_state_checkout(settings)
+    email = git_text(state, ["config", "user.email"], check=False)
+    address = email.stdout.strip() if email.returncode == 0 else ""
+    if not address.endswith("users.noreply.github.com"):
+        raise CrewError("state push refuses: git user.email in {0} is not a users.noreply.github.com address".format(state))
+    branch = settings.state_branch
+    git_text(state, ["add", "-A"])
+    diff = git_text(state, ["diff", "--cached", "--quiet"], check=False)
+    if diff.returncode == 1:
+        git_text(state, ["-c", "user.name=hexuria", "-c",
+                         "user.email=295542929+hexuria@users.noreply.github.com", "commit", "-q", "-m",
+                         "crew state"])
+    elif diff.returncode != 0:
+        raise CrewError("git diff failed in the state checkout")
+    push = git_text(state, ["push", "origin", branch], check=False)
+    if push.returncode != 0:
+        detail = (push.stderr or push.stdout).lower()
+        if "rejected" in detail or "non-fast-forward" in detail or "fetch first" in detail:
+            git_text(state, ["pull", "--rebase", "origin", branch])
+            git_text(state, ["push", "origin", branch])
+        else:
+            detail_text = re.sub(r"(https?://)[^/@\s]+@", r"\1<credentials>@", (push.stderr or push.stdout).strip())
+            raise CrewError("git push failed{0}".format(": " + detail_text if detail_text else ""))
+
+
+def state_pull(settings):
+    if not settings.state_remote:
+        raise CrewError("state pull needs state_remote in crew.local.ini")
+    state = require_state_checkout(settings)
+    git_text(state, ["pull", "--rebase", "origin", settings.state_branch])
+
+
+def cmd_state(args):
+    root = repo_root()
+    settings = load_settings(root)
+    if args.state_command == "path":
+        print(settings.state_dir)
+        return 0
+    if args.state_command == "init":
+        init_state(root, settings)
+        print("state {0}".format(settings.state_dir))
+        return 0
+    if args.state_command == "pull":
+        state_pull(settings)
+        print("state pulled {0}".format(settings.state_dir))
+        return 0
+    if args.state_command == "push":
+        state_push(settings)
+        print("state pushed {0}".format(settings.state_dir))
+        return 0
+    raise CrewError("unknown state command: {0}".format(args.state_command))
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog="crew", description="run and inspect the launch crew")
+    sub = parser.add_subparsers(dest="command")
+    prompt = sub.add_parser("prompt", help="print a worker prompt")
+    prompt.add_argument("role")
+    prompt.add_argument("task_file", nargs="?")
+    prompt.set_defaults(func=cmd_prompt)
+    sub.add_parser("doctor", help="report what this checkout can do").set_defaults(func=cmd_doctor)
+    sub.add_parser("status", help="summarize role inboxes, outboxes and state").set_defaults(func=cmd_status)
+    start = sub.add_parser("start", help="start an interactive crew session")
+    start.add_argument("--engine", choices=["claude", "devin"])
+    start.add_argument("--role", default="conductor")
+    start.add_argument("--print", dest="print_command", action="store_true",
+                       help="print the command line without starting it")
+    start.set_defaults(func=cmd_start)
+    run = sub.add_parser("run", help="run one headless worker")
+    run.add_argument("role")
+    run.add_argument("task_file")
+    run.add_argument("--engine", choices=["claude", "devin"])
+    run.add_argument("--model")
+    run.add_argument("--worktree")
+    run.add_argument("--sandbox", action="store_true", help="run the worker inside an sbx Docker sandbox")
+    run.add_argument("--print", dest="print_command", action="store_true",
+                     help="with --sandbox, print the sandbox commands without running them")
+    run.set_defaults(func=cmd_run)
+    sync = sub.add_parser("sync", help="write Claude Code and Devin CLI agent files for the roles")
+    sync.add_argument("--check", action="store_true", help="exit 1 when a generated file differs or is missing")
+    sync.set_defaults(func=cmd_sync)
+    sub.add_parser("lint", help="check committed crew files for private data").set_defaults(func=cmd_lint)
+    watch = sub.add_parser("watch", help="print the next event needing the conductor")
+    watch.add_argument("--holder")
+    watch.add_argument("--repo")
+    watch.add_argument("--interval", type=float, default=120.0)
+    watch.add_argument("--once", action="store_true")
+    watch.set_defaults(func=cmd_watch)
+    batchwatch = sub.add_parser("batchwatch", help="wait for a ci-batch branch, then merge and verify it")
+    batchwatch.add_argument("branch")
+    batchwatch.add_argument("prs", nargs="+")
+    batchwatch.add_argument("--no-merge", action="store_true")
+    batchwatch.set_defaults(func=cmd_batchwatch)
+    automerge = sub.add_parser("automerge", help="merge one pull request once GitHub is clean and green at a head")
+    automerge.add_argument("pr")
+    automerge.add_argument("sha")
+    automerge.add_argument("--repo")
+    automerge.add_argument("--interval", type=float, default=120.0)
+    automerge.set_defaults(func=cmd_automerge)
+    state = sub.add_parser("state", help="inspect or maintain the crew state folder")
+    state_sub = state.add_subparsers(dest="state_command")
+    state_sub.add_parser("path", help="print the state folder").set_defaults(func=cmd_state)
+    state_sub.add_parser("init", help="create the state folder layout").set_defaults(func=cmd_state)
+    state_sub.add_parser("pull", help="pull the shared state branch").set_defaults(func=cmd_state)
+    state_sub.add_parser("push", help="commit and push the shared state branch").set_defaults(func=cmd_state)
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not hasattr(args, "func"):
+        parser.print_help()
+        return 2
+    try:
+        return args.func(args)
+    except CrewError as exc:
+        print("crew: {0}".format(exc), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
