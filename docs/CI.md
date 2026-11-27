@@ -152,8 +152,17 @@ Pull requests that touch the same files merge one at a time, and each is proven 
 in: about half a day per merge. A batch (a rollup, as in bors or a GitLab merge train) proves several of them in one
 complete run, on exactly the tree `main` will have once they are all merged, and then they merge in that order.
 
-Use it for a queue of pull requests that are each reviewed and ready: not drafts, based on `main`, quick checks green.
-Leave out a pull request you still expect to push to: any push to it voids the batch.
+### What a pull request needs before a batch
+
+- Its `ci-ok` check is green at its exact head. `--allow-unchecked <pr>` skips this gate only when the conductor
+  means it.
+- If it changes `nsh/` or `crates/`, or the top-level `Cargo.toml`, `Cargo.lock` or `justfile`, the newest
+  `NSH app` workflow run at its exact head is green, whatever branch or event started it (a skipped or cancelled
+  newest run is no proof). `just ci-test` from the pull request's checkout starts that run. `--allow-unsuited <pr>`
+  skips this gate only when the conductor means it, and its use is written in the batch's record.
+
+Use it for a queue of pull requests that are each reviewed and ready: not drafts, based on `main`, with both gates
+green. Leave out a pull request you still expect to push to: any push to it voids the batch.
 
 ```sh
 just ci-batch 412 415 418           # Linux and Windows; or: just ci-batch all 412 415 418

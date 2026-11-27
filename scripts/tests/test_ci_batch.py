@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -26,20 +28,45 @@ sys.modules["ci_batch"] = ci_batch  # dataclasses look their module up here
 spec.loader.exec_module(ci_batch)
 
 
-class FakeGitHub:
+class FakeGitHub(ci_batch.GitHub):
     repo = "hexuria/buwiz-forms"
 
     def __init__(self, origin: Path):
+        super().__init__(self.repo)
         self.origin = origin
         self.overrides: dict = {}
         self.run_list: list = []
         self.job_lists: dict = {}
         self.check_runs_by_sha: dict = {}
         self.check_run_reads: list = []
+        self.workflow_runs_by_sha: dict = {}
+        self.files_by_pr: dict = {}
+        self.files_pages_by_pr: dict = {}
+        self.api_reads: list = []
 
     def sha(self, ref: str) -> str:
         return subprocess.run(["git", "rev-parse", ref], cwd=self.origin, capture_output=True, text=True,
                               check=True).stdout.strip()
+
+    def _gh(self, *args: str) -> str:
+        if len(args) >= 2 and args[0] == "api":
+            endpoint = args[1]
+            self.api_reads.append(endpoint)
+            runs_prefix = f"repos/{self.repo}/actions/runs?head_sha="
+            if endpoint.startswith(runs_prefix) and endpoint.endswith("&per_page=100"):
+                sha = endpoint[len(runs_prefix):-len("&per_page=100")]
+                return json.dumps({"workflow_runs": self.workflow_runs_by_sha.get(sha, [])})
+            files = re.fullmatch(rf"repos/{re.escape(self.repo)}/pulls/(\d+)/files\?per_page=100&page=(\d+)",
+                                 endpoint)
+            if files:
+                number, page = int(files.group(1)), int(files.group(2))
+                if number in self.files_pages_by_pr:
+                    pages = self.files_pages_by_pr[number]
+                else:
+                    pages = [self.files_by_pr.get(number, [])]
+                entries = pages[page - 1] if page <= len(pages) else []
+                return json.dumps([entry if isinstance(entry, dict) else {"filename": entry} for entry in entries])
+        raise AssertionError(f"the fake GitHub does not know: {' '.join(args)}")
 
     def pull(self, number: int) -> dict:
         data = dict(number=number, headRefOid=self.sha(f"refs/pull/{number}/head"), baseRefName="main",
@@ -158,6 +185,177 @@ class BatchTestCase(unittest.TestCase):
 
 
 class BuildTests(BatchTestCase):
+    def suite_run(self, head: str, run_id: int, status: str = "completed", conclusion: str = "success",
+                  name: str = "NSH app", event: str = "push", branch: str = "test/linux-windows/change"):
+        return dict(id=run_id, name=name, head_sha=head, status=status, conclusion=conclusion, event=event,
+                    head_branch=branch)
+
+    def test_workflow_runs_reads_the_runs_for_the_exact_head_sha(self):
+        head = self.repos.pull_request(30, self.base, {"nsh/src/app.tsx": "app\n"})
+        run = self.suite_run(head, 456)
+        self.github.workflow_runs_by_sha[head] = [run]
+
+        self.assertEqual(self.github.workflow_runs(head), [run])
+        self.assertIn(f"repos/hexuria/buwiz-forms/actions/runs?head_sha={head}&per_page=100",
+                      self.github.api_reads)
+
+    def test_suite_state_uses_the_newest_exactly_named_run_at_the_head(self):
+        head = "a" * 40
+        older = self.suite_run(head, 10, conclusion="success", event="pull_request", branch="main")
+        newer = self.suite_run(head, 11, conclusion="failure", event="workflow_dispatch", branch="any-branch")
+        wrong_name = self.suite_run(head, 12, conclusion="success", name="CI")
+        other_head = self.suite_run("b" * 40, 13, conclusion="success")
+        self.github.workflow_runs_by_sha[head] = [older, newer, wrong_name, other_head]
+
+        self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(31, head)), ("failure", 11))
+
+    def test_suite_state_running_missing_and_skipped_or_cancelled(self):
+        for conclusion in ("skipped", "cancelled"):
+            with self.subTest(conclusion=conclusion):
+                head = "c" * 40
+                self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 19, conclusion="success"),
+                                                          self.suite_run(head, 20, conclusion=conclusion)]
+                self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(32, head)), ("missing", 20))
+        head = "d" * 40
+        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 21, status="in_progress", conclusion=None)]
+        self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(33, head)), ("running", 21))
+        self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(34, "e" * 40)), ("missing", None))
+
+    def test_needs_suite_path_rules(self):
+        cases = [
+            (["nsh/src/app.tsx"], True),
+            (["crates/bir-core/src/lib.rs"], True),
+            (["Cargo.toml"], True),
+            (["Cargo.lock"], True),
+            (["justfile"], True),
+            (["scripts/ci_batch.py"], False),
+            (["agent-recipes/smoke.json"], False),
+            (["docs/CI.md"], False),
+            (["x/Cargo.toml"], False),
+            (["xnsh/src/app.tsx"], False),
+        ]
+        for index, (files, expected) in enumerate(cases):
+            with self.subTest(files=files):
+                number = 100 + index
+                self.github.files_by_pr[number] = files
+                self.assertIs(ci_batch.needs_suite(self.github, ci_batch.Pull(number, "f" * 40)), expected)
+
+    def test_suite_green_at_the_head_passes_and_the_dry_run_prints_the_run_id(self):
+        head = self.repos.pull_request(35, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.github.files_by_pr[35] = ["nsh/src/app.tsx"]
+        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 456)]
+
+        code, output = self.main("build", "--dry-run", "35")
+
+        self.assertEqual(code, 0)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+        self.assertIn(f"#35      {head}  suite 456  Change 35", output)
+
+    def test_suite_missing_refuses_with_the_ci_test_command(self):
+        head = self.repos.pull_request(36, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.github.files_by_pr[36] = ["nsh/src/app.tsx"]
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(36)
+
+        text = str(caught.exception)
+        self.assertIn("refused by the NSH app suite gate", text)
+        self.assertIn(f"#36 at {head}", text)
+        self.assertIn("missing", text)
+        self.assertIn("start it with: just ci-test", text)
+        self.assertIn("nothing was pushed", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_suite_newest_failed_while_an_older_one_passed_refuses(self):
+        head = self.repos.pull_request(37, self.base, {"crates/bir-core/src/lib.rs": "core\n"})
+        self.github.files_by_pr[37] = ["crates/bir-core/src/lib.rs"]
+        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 10, conclusion="success"),
+                                                  self.suite_run(head, 11, conclusion="failure")]
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(37)
+
+        text = str(caught.exception)
+        self.assertIn("#37", text)
+        self.assertIn("failure", text)
+        self.assertIn("run 11", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_suite_in_progress_refuses_as_running(self):
+        head = self.repos.pull_request(38, self.base, {"Cargo.toml": "[workspace]\n"})
+        self.github.files_by_pr[38] = ["Cargo.toml"]
+        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 12, status="in_progress", conclusion=None)]
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(38)
+
+        self.assertIn("running", str(caught.exception))
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_only_scripts_changed_passes_with_no_suite_run(self):
+        head = self.repos.pull_request(39, self.base, {"scripts/ci_batch.py": "# batch\n"})
+
+        code, output = self.main("build", "--dry-run", "39")
+
+        self.assertEqual(code, 0)
+        self.assertIn(f"#39      {head}  Change 39", output)
+        self.assertNotIn("suite", output)
+        self.assertFalse(any("/actions/runs?" in endpoint for endpoint in self.github.api_reads))
+
+    def test_allow_unsuited_lets_one_through_prints_it_and_records_it(self):
+        head = self.repos.pull_request(40, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.github.files_by_pr[40] = ["nsh/src/app.tsx"]
+
+        code, output = self.main("build", "40", "--allow-unsuited", "40")
+
+        branch = "test/linux-windows/batch-40"
+        pushed = git(self.repos.origin, "rev-parse", f"refs/heads/{branch}")
+        self.assertEqual(code, 0)
+        self.assertRegex(pushed, r"^[0-9a-f]{40}$")
+        self.assertIn(f"*** ALLOW-UNSUITED: #40 at {head}; skipping the NSH app suite gate ***", output)
+        message = git(self.repos.work, "log", "-1", "--format=%B", pushed)
+        self.assertIn(f"Batch-Allow-Unsuited: 40 {head}", message)
+        self.assertFalse(any("/actions/runs?" in endpoint for endpoint in self.github.api_reads))
+
+    def test_allow_unsuited_outside_the_batch_warns_and_the_build_goes_on(self):
+        self.repos.pull_request(41, self.base, {"scripts/ci_batch.py": "# batch\n"})
+
+        code, output = self.main("build", "41", "--allow-unsuited", "42")
+
+        self.assertEqual(code, 0)
+        self.assertIn("*** WARNING: --allow-unsuited #42 is not in the batch; the build goes on ***", output)
+
+    def test_suite_files_are_read_past_the_first_page(self):
+        head = self.repos.pull_request(43, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.github.files_pages_by_pr[43] = [[f"scripts/file{i}.py" for i in range(100)], ["nsh/src/app.tsx"]]
+        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 678)]
+
+        code, output = self.main("build", "--dry-run", "43")
+
+        first = "repos/hexuria/buwiz-forms/pulls/43/files?per_page=100&page=1"
+        second = "repos/hexuria/buwiz-forms/pulls/43/files?per_page=100&page=2"
+        self.assertEqual(code, 0)
+        self.assertIn(first, self.github.api_reads)
+        self.assertIn(second, self.github.api_reads)
+        self.assertIn(f"#43      {head}  suite 678  Change 43", output)
+
+    def test_suite_refusals_name_every_pull_request_in_one_message(self):
+        missing = self.repos.pull_request(44, self.base, {"nsh/src/app.tsx": "app\n"})
+        failed = self.repos.pull_request(45, self.base, {"justfile": "# just\n"})
+        self.github.files_by_pr[44] = ["nsh/src/app.tsx"]
+        self.github.files_by_pr[45] = ["justfile"]
+        self.github.workflow_runs_by_sha[failed] = [self.suite_run(failed, 99, conclusion="failure")]
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(44, 45)
+
+        text = str(caught.exception)
+        self.assertEqual(text.count("refused by the NSH app suite gate"), 1)
+        self.assertIn(f"#44 at {missing}", text)
+        self.assertIn(f"#45 at {failed}", text)
+        self.assertIn("missing", text)
+        self.assertIn("failure", text)
+
     def test_clean_batch_is_the_tree_the_squash_merges_give(self):
         # #1 edits a.txt in two commits; #2 started before main moved and edits another line of a.txt and adds a
         # file; main moved after both started.
@@ -353,19 +551,22 @@ class BuildTests(BatchTestCase):
             self.build(13)
 
     def test_arguments(self):
-        self.assertEqual(ci_batch.parse_build_args(["12", "#34"]), ("linux-windows", [12, 34], False, []))
-        self.assertEqual(ci_batch.parse_build_args(["all", "12"]), ("all", [12], False, []))
+        self.assertEqual(ci_batch.parse_build_args(["12", "#34"]), ("linux-windows", [12, 34], False, [], []))
+        self.assertEqual(ci_batch.parse_build_args(["all", "12"]), ("all", [12], False, [], []))
         self.assertEqual(ci_batch.parse_build_args(["--dry-run", "all", "12", "34", "--allow-unchecked", "12",
-                                                    "--allow-unchecked", "#34"]),
-                         ("all", [12, 34], True, [12, 34]))
+                                                    "--allow-unchecked", "#34", "--allow-unsuited", "12",
+                                                    "--allow-unsuited=#34"]),
+                         ("all", [12, 34], True, [12, 34], [12, 34]))
         for bad in ([], ["linux"], ["12", "12"], ["mac", "12"], ["12", "x"], ["12", "--allow-unchecked"],
-                    ["12", "--allow-unchecked", "x"], ["12", "--what"]):
+                    ["12", "--allow-unchecked", "x"], ["12", "--allow-unsuited"],
+                    ["12", "--allow-unsuited", "x"], ["12", "--allow-unsuited="], ["12", "--what"]):
             with self.subTest(bad=bad), self.assertRaises(ci_batch.BatchError):
                 ci_batch.parse_build_args(bad)
 
     def test_record_round_trips(self):
         record = ci_batch.Record("a" * 40, [ci_batch.Pull(1, "b" * 40), ci_batch.Pull(22, "c" * 40)], "d" * 40,
-                                 "linux-windows")
+                                 "linux-windows", allow_unsuited=[22])
+        self.assertIn(f"Batch-Allow-Unsuited: 22 {'c' * 40}", ci_batch.format_record(record))
         self.assertEqual(ci_batch.parse_record(ci_batch.format_record(record)), record)
         with self.assertRaises(ci_batch.BatchError):
             ci_batch.parse_record("just a commit\n")
@@ -473,6 +674,15 @@ class JustfileTests(unittest.TestCase):
                                 ("ci-batch-merge branch", "merge"), ("ci-batch-verify branch", "verify")):
             with self.subTest(recipe=recipe):
                 self.assertIn(f"\n{recipe}:\n    {{{{PYTHON}}}} scripts/ci_batch.py {command} ", justfile)
+
+
+class BatchDocsTests(unittest.TestCase):
+    def test_the_batch_docs_list_both_gates_and_both_escape_hatches(self):
+        docs = (ROOT / "docs/CI.md").read_text(encoding="utf-8")
+        self.assertIn("### What a pull request needs before a batch", docs)
+        section = docs.split("### What a pull request needs before a batch", 1)[1].split("\n## ", 1)[0]
+        for wording in ("ci-ok", "NSH app", "just ci-test", "--allow-unchecked", "--allow-unsuited"):
+            self.assertIn(wording, section)
 
 
 if __name__ == "__main__":

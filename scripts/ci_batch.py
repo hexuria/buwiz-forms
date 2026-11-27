@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Proves several pull requests together (docs/CI.md, "Proving several pull requests together").
 
-  build  [system] [--dry-run] [--allow-unchecked <pr>] <pr> <pr> ...
+  build  [system] [--dry-run] [--allow-unchecked <pr>] [--allow-unsuited <pr>] <pr> <pr> ...
                                   main plus the squash of each pull request, in that order, pushed to
                                   test/<system>/batch-<pr>-<pr>... (default system linux-windows)
   status <branch>                 green or red per workflow run of the batch; for red, the failed jobs and a bisect
@@ -9,8 +9,9 @@
   verify <branch>                 after the merges: is main's tree the batch's tree?
 
 Every pull request's required `ci-ok` must be `success` at its current head; pending, missing or not green refuses,
-and nothing is pushed. `--dry-run` proves the same batch without pushing. `--allow-unchecked <pr>` (repeatable) is
-the hand-run escape hatch.
+and nothing is pushed. A pull request that changes `nsh/`, `crates/`, top-level `Cargo.toml`, `Cargo.lock` or
+`justfile` must also have a green `NSH app` run at that head. `--dry-run` proves the same batch without pushing.
+`--allow-unchecked <pr>` and `--allow-unsuited <pr>` (repeatable) are the hand-run escape hatches.
 
 The batch is built with git plumbing only (`git merge-tree`, `git commit-tree`) in the checkout's own object store:
 no working tree, index or local branch is touched and nothing is written outside the repository. Each step merges a
@@ -28,18 +29,21 @@ import os
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 REPO = "hexuria/buwiz-forms"
 SYSTEMS = ("linux-windows", "linux", "windows", "macos", "all")
 DEFAULT_SYSTEM = "linux-windows"
+SUITE_WORKFLOW = "NSH app"
 # The workflows a push to test/** starts (ci.yml and nsh.yml).
-WORKFLOWS = ("CI", "NSH app")
+WORKFLOWS = ("CI", SUITE_WORKFLOW)
 SHA = re.compile(r"^[0-9a-f]{40}$")
 FAILED = ("failure", "timed_out", "cancelled", "startup_failure", "action_required", "stale")
 # Where a batch's record commit is also kept locally, in case its branch was deleted (`just ci-test-clean`).
 LOCAL_REF = "refs/ci-batch/"
+SUITE_TOP_LEVEL = {"Cargo.toml", "Cargo.lock", "justfile"}
+SUITE_PREFIXES = ("nsh/", "crates/")
 
 
 class BatchError(Exception):
@@ -51,6 +55,7 @@ class Pull:
     number: int
     head: str
     title: str = ""
+    suite_run: Optional[int] = field(default=None, compare=False)
 
 
 @dataclass
@@ -59,6 +64,7 @@ class Record:
     pulls: List[Pull]
     tree: str
     system: str
+    allow_unsuited: List[int] = field(default_factory=list)
 
     def numbers(self) -> List[int]:
         return [pull.number for pull in self.pulls]
@@ -74,6 +80,8 @@ def format_record(record: Record) -> str:
     lines.append("")
     lines.append(f"Batch-Main: {record.main}")
     lines += [f"Batch-PR: {pull.number} {pull.head}" for pull in record.pulls]
+    lines += [f"Batch-Allow-Unsuited: {pull.number} {pull.head}" for pull in record.pulls
+              if pull.number in record.allow_unsuited]
     lines.append(f"Batch-Tree: {record.tree}")
     lines.append(f"Batch-Systems: {record.system}")
     return "\n".join(lines) + "\n"
@@ -82,6 +90,7 @@ def format_record(record: Record) -> str:
 def parse_record(message: str) -> Record:
     main = tree = system = ""
     pulls: List[Pull] = []
+    unsuited: List[Tuple[int, str]] = []
     for line in message.splitlines():
         key, _, value = line.partition(": ")
         value = value.strip()
@@ -91,22 +100,29 @@ def parse_record(message: str) -> Record:
             tree = value
         elif key == "Batch-Systems":
             system = value
-        elif key == "Batch-PR":
+        elif key in ("Batch-PR", "Batch-Allow-Unsuited"):
             number, _, head = value.partition(" ")
             if not number.isdigit() or not SHA.match(head):
-                raise BatchError(f"bad Batch-PR line in the record: {line}")
-            pulls.append(Pull(int(number), head))
+                raise BatchError(f"bad {key} line in the record: {line}")
+            if key == "Batch-PR":
+                pulls.append(Pull(int(number), head))
+            else:
+                unsuited.append((int(number), head))
     if not SHA.match(main) or not SHA.match(tree) or not pulls or system not in SYSTEMS:
         raise BatchError("this commit carries no complete ci-batch record (Batch-Main, Batch-PR, Batch-Tree, "
                          "Batch-Systems)")
-    return Record(main, pulls, tree, system)
+    heads = {pull.number: pull.head for pull in pulls}
+    numbers = [number for number, _ in unsuited]
+    if len(set(numbers)) != len(numbers) or any(heads.get(number) != head for number, head in unsuited):
+        raise BatchError("bad Batch-Allow-Unsuited line in the record: it does not match a Batch-PR line")
+    return Record(main, pulls, tree, system, numbers)
 
 
 def branch_name(system: str, numbers: Sequence[int]) -> str:
     return f"test/{system}/batch-" + "-".join(str(n) for n in numbers)
 
 
-def parse_build_args(args: Sequence[str]) -> Tuple[str, List[int], bool, List[int]]:
+def parse_build_args(args: Sequence[str]) -> Tuple[str, List[int], bool, List[int], List[int]]:
     def number(arg: str, label: str) -> int:
         value = arg.lstrip("#")
         if not value.isdigit():
@@ -115,6 +131,7 @@ def parse_build_args(args: Sequence[str]) -> Tuple[str, List[int], bool, List[in
 
     positional: List[str] = []
     allow_unchecked: List[int] = []
+    allow_unsuited: List[int] = []
     dry_run = False
     args = list(args)
     i = 0
@@ -122,16 +139,19 @@ def parse_build_args(args: Sequence[str]) -> Tuple[str, List[int], bool, List[in
         arg = args[i]
         if arg == "--dry-run":
             dry_run = True
-        elif arg == "--allow-unchecked":
+        elif arg in ("--allow-unchecked", "--allow-unsuited"):
+            flag = arg[2:]
             i += 1
             if i == len(args):
-                raise BatchError("--allow-unchecked takes a pull request number")
-            allow_unchecked.append(number(args[i], "pull request number after --allow-unchecked"))
-        elif arg.startswith("--allow-unchecked="):
-            value = arg.partition("=")[2]
+                raise BatchError(f"{arg} takes a pull request number")
+            target = allow_unchecked if flag == "allow-unchecked" else allow_unsuited
+            target.append(number(args[i], f"pull request number after {arg}"))
+        elif arg.startswith("--allow-unchecked=") or arg.startswith("--allow-unsuited="):
+            flag, _, value = arg.partition("=")
             if not value:
-                raise BatchError("--allow-unchecked takes a pull request number")
-            allow_unchecked.append(number(value, "pull request number after --allow-unchecked"))
+                raise BatchError(f"{flag} takes a pull request number")
+            target = allow_unchecked if flag == "--allow-unchecked" else allow_unsuited
+            target.append(number(value, f"pull request number after {flag}"))
         else:
             positional.append(arg)
         i += 1
@@ -147,7 +167,7 @@ def parse_build_args(args: Sequence[str]) -> Tuple[str, List[int], bool, List[in
         numbers.append(value)
     if not numbers:
         raise BatchError("name at least one pull request: just ci-batch [system] <pr> <pr> ...")
-    return system, numbers, dry_run, allow_unchecked
+    return system, numbers, dry_run, allow_unchecked, allow_unsuited
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -173,6 +193,23 @@ class GitHub:
         data = json.loads(self._gh("api", f"repos/{self.repo}/commits/{sha}/check-runs"
                                           "?check_name=ci-ok&filter=latest&per_page=100"))
         return data.get("check_runs", [])
+
+    def workflow_runs(self, sha: str) -> List[dict]:
+        """The workflow runs reported for one head sha."""
+        data = json.loads(self._gh("api", f"repos/{self.repo}/actions/runs?head_sha={sha}&per_page=100"))
+        return data.get("workflow_runs", [])
+
+    def pull_files(self, number: int) -> List[dict]:
+        """Every changed file of one pull request, one page at a time."""
+        files: List[dict] = []
+        page = 1
+        while True:
+            data = json.loads(self._gh("api", f"repos/{self.repo}/pulls/{number}/files"
+                                              f"?per_page=100&page={page}"))
+            files.extend(data)
+            if len(data) < 100:
+                return files
+            page += 1
 
     def main(self) -> Tuple[str, str]:
         """main's commit sha and tree hash, in one read."""
@@ -234,6 +271,63 @@ def enforce_ci_ok(github, pulls: Sequence[Pull], allow_unchecked: Sequence[int],
         raise BatchError("refused by the ci-ok gate:\n  " + "\n  ".join(refusals))
 
 
+def suite_path(path: str) -> bool:
+    return path.startswith(SUITE_PREFIXES) or path in SUITE_TOP_LEVEL
+
+
+def needs_suite(github, pull: Pull) -> bool:
+    """True when the pull request changes something the NSH app suite proves."""
+    for entry in github.pull_files(pull.number):
+        names = [entry.get("filename") or ""]
+        if entry.get("previous_filename"):
+            names.append(entry["previous_filename"])
+        if any(suite_path(name) for name in names):
+            return True
+    return False
+
+
+def suite_state(github, pull: Pull) -> Tuple[str, Optional[int]]:
+    """(success, failure, running or missing, run id) of the newest NSH app run at the pull request's head."""
+    runs = [run for run in github.workflow_runs(pull.head)
+            if run.get("name") == SUITE_WORKFLOW and run.get("head_sha") == pull.head]
+    if not runs:
+        return "missing", None
+    run = max(runs, key=lambda r: r.get("id") or 0)
+    run_id = run.get("id")
+    if run.get("status") != "completed":
+        return "running", run_id
+    conclusion = run.get("conclusion")
+    if conclusion == "success":
+        return "success", run_id
+    if conclusion in ("skipped", "cancelled"):
+        return "missing", run_id
+    return "failure", run_id
+
+
+def enforce_suite(github, pulls: Sequence[Pull], allow_unsuited: Sequence[int],
+                  say: Callable[[str], None]) -> None:
+    unsuited = set(allow_unsuited)
+    batched = {pull.number for pull in pulls}
+    for number in sorted(unsuited - batched):
+        say(f"*** WARNING: --allow-unsuited #{number} is not in the batch; the build goes on ***")
+    refusals = []
+    for pull in pulls:
+        pull.suite_run = None
+        if pull.number in unsuited:
+            say(f"*** ALLOW-UNSUITED: #{pull.number} at {pull.head}; skipping the NSH app suite gate ***")
+            continue
+        if not needs_suite(github, pull):
+            continue
+        state, run_id = suite_state(github, pull)
+        pull.suite_run = run_id
+        if state != "success":
+            run = f" (run {run_id})" if run_id is not None else ""
+            refusals.append(f"#{pull.number} at {pull.head}: NSH app suite is {state}{run}; "
+                            "start it with: just ci-test; nothing was pushed")
+    if refusals:
+        raise BatchError("refused by the NSH app suite gate:\n  " + "\n  ".join(refusals))
+
+
 def read_pulls(github, numbers: Sequence[int]) -> List[Pull]:
     pulls, refusals = [], []
     for number in numbers:
@@ -292,13 +386,15 @@ class Git:
 # The four commands.
 
 def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool = True,
-          allow_unchecked: Sequence[int] = (), say: Callable[[str], None] = print) -> Tuple[str, str, Record]:
+          allow_unchecked: Sequence[int] = (), allow_unsuited: Sequence[int] = (),
+          say: Callable[[str], None] = print) -> Tuple[str, str, Record]:
     """Returns (branch, record commit sha, record)."""
     main_sha, _ = github.main()
     if not SHA.match(main_sha):
         raise BatchError(f"GitHub gave no full sha for main ({main_sha!r})")
     pulls = read_pulls(github, numbers)
     enforce_ci_ok(github, pulls, allow_unchecked, say)
+    enforce_suite(github, pulls, allow_unsuited, say)
 
     # What the remote serves must be what GitHub just said; otherwise something moved between the two reads.
     refs = ["refs/heads/main", *[f"refs/pull/{pull.number}/head" for pull in pulls]]
@@ -327,7 +423,8 @@ def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool =
                              "have it rebased.")
         title = pull.title or f"Pull request {pull.number}"
         tip = git.commit(tree, tip, f"{title} (#{pull.number})\n\nci-batch squash of {pull.head}\n")
-    record = Record(main_sha, pulls, git.out("rev-parse", f"{tip}^{{tree}}"), system)
+    record = Record(main_sha, pulls, git.out("rev-parse", f"{tip}^{{tree}}"), system,
+                    [pull.number for pull in pulls if pull.number in set(allow_unsuited)])
     sha = git.commit(record.tree, tip, format_record(record))
     branch = branch_name(system, numbers)
     if push:
@@ -338,7 +435,10 @@ def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool =
         say("dry-run: nothing was pushed")
     say(f"main     {main_sha}")
     for pull in pulls:
-        say(f"#{pull.number:<7} {pull.head}  {pull.title}")
+        line = f"#{pull.number:<7} {pull.head}"
+        if pull.suite_run is not None:
+            line += f"  suite {pull.suite_run}"
+        say(f"{line}  {pull.title}")
     say(f"tree     {record.tree}")
     if push:
         say(f"runs     https://github.com/{getattr(github, 'repo', REPO)}/actions?query=branch%3A"
@@ -465,8 +565,9 @@ def main(argv: Sequence[str]) -> int:
     github = GitHub(REPO)
     try:
         if command == "build":
-            system, numbers, dry_run, allow_unchecked = parse_build_args(args)
-            build(git, github, system, numbers, push=not dry_run, allow_unchecked=allow_unchecked)
+            system, numbers, dry_run, allow_unchecked, allow_unsuited = parse_build_args(args)
+            build(git, github, system, numbers, push=not dry_run, allow_unchecked=allow_unchecked,
+                  allow_unsuited=allow_unsuited)
             return 0
         if len(args) != 1:
             raise BatchError(f"{command} takes the batch branch, test/<system>/batch-...")
