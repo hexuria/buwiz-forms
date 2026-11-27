@@ -280,6 +280,7 @@ dependencies = [
  "blake2",
  "cpufeatures 0.3.1",
  "password-hash",
+ "zeroize",
 ]
 
 [[package]]
@@ -581,6 +582,7 @@ dependencies = [
  "aes-gcm 0.10.3",
  "ammonia",
  "anyhow",
+ "argon2",
  "bir-rules",
  "bir-submit",
  "block2 0.6.2",
@@ -628,6 +630,7 @@ dependencies = [
  "tracing-subscriber",
  "urlencoding",
  "uuid",
+ "windows-sys 0.61.2",
  "zeroize",
  "zip 2.6.1",
 ]

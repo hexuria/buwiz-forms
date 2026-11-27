@@ -104,7 +104,14 @@ Before the first run, know what the copy holds:
   filing anyway, see below).
 - Do not set `EBIR_TEST_ENV`: it forces a dry run (nothing reaches the mock).
 
-### Installed app (recommended)
+### Installed app (refused since accounts-and-lock A1)
+
+**`just mock-bir-app` refuses to run.** Since accounts-and-lock A1 a release
+build ignores `BIR_DATABASE_PATH` (single-room mode exists only in debug
+builds and test environments), so the installed app would open the live data
+folder, not the copy, against the mock. The recipe needs rework; the
+`LSEnvironment` route below has the same problem and must not be used either.
+What follows describes the recipe as it was.
 
 With the mock running in one terminal:
 
@@ -140,7 +147,10 @@ There is no `nsh-run` form of this test. `just nsh-run` deliberately exports
 transport's dry run even when a loopback `BIR_SFTP_HOST` is set. Use
 `just mock-bir-app` for an end-to-end mock submission with the database copy.
 
-### Installed app opened from Finder (`LSEnvironment`)
+### Installed app opened from Finder (`LSEnvironment`, do not use since A1)
+
+A release build ignores `LSEnvironment:BIR_DATABASE_PATH` too, so this opens
+the live data folder. Kept for the record only.
 
 Possible, but riskier: if Launch Services does not apply the values, a
 release build with no `BIR_SFTP_HOST` sends queued returns to the **real
