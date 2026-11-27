@@ -1,8 +1,8 @@
 # README showcase
 
-`assets/readme/showcase.png` shows the app on three devices: iPhone (sign-in), Mac (home), and iPad (BIR Form 2551Q). The devices are drawn in `showcase.html` around real screenshots of the app:
+`assets/readme/showcase.png` shows the app on three devices: iPhone (home), Mac (home), and iPad (BIR Form 2551Q). The devices are drawn in `showcase.html` around real screenshots of the app:
 
-- `iphone.jpg`: iPhone 16 Pro Simulator, the sign-in page after signing out.
+- `iphone.jpg`: iPhone 17 Pro Simulator (iOS 26.5, 1206 × 2622), home after signing in, status bar set to 9:41.
 - `desktop.jpg`: the macOS window at 1440 × 900, home with sample taxpayers.
 - `ipad.jpg`: iPad Pro 13" Simulator, from the App Store set, 2551Q Part II.
 
