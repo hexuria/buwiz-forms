@@ -5133,6 +5133,12 @@ pub(crate) fn page_gate_refusal(
     {
         return Some(reason.to_string());
     }
+    if kind.form_code() == "1601FQ"
+        && bir_core::forms::agent::draft_locks::schedule1_1601fq::is_key(key)
+        && bir_core::forms::agent::draft_locks::schedule1_1601fq::lock_reason(draft).is_some()
+    {
+        return Some(bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK.to_string());
+    }
     if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
         .map(str::to_string)
         .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
