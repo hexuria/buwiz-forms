@@ -1723,6 +1723,12 @@ mod tests {
             .queue(crate::filing_queue::QueueAuthSource::Gui)
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
+        draft.property_class_other = "LEGACY DETAIL".to_string();
+        assert!(
+            draft.revalidate_queued_before_submission().is_ok(),
+            "queue revalidation recomputes legacy gated detail before validating"
+        );
+        assert!(draft.property_class_other.is_empty());
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
