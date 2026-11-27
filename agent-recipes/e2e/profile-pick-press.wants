@@ -7,6 +7,9 @@ click panel-open-profile
 wait_until tp-sec-branch-edit --timeout-ms 5000
 click tp-sec-branch-edit
 wait_until tp-branch-rdo_code-search --timeout-ms 5000 --screenshot
+# sign-up's "added" toast shows at the bottom for 4 s and, in the macOS window, covers this editor's RDO box (gpui-agent
+# refuses the press: occluded_by): a person waits for it to go. So does every round after a Save ("Changes saved").
+wait_until toast --absent --timeout-ms 8000
 # Row press 1/5: 047.
 click tp-branch-rdo_code-search
 key tp-branch-rdo_code-search mod+a
@@ -109,6 +112,7 @@ wait_until tp-branch-rdo_code-nothing --timeout-ms 3000
 click tp-branch-name
 click tp-branch-save --screenshot
 wait_until tp-branch-save --absent --timeout-ms 5000 --screenshot
+wait_until toast --absent --timeout-ms 8000
 # What was saved: 047 kept, "zzzz" not taken.
 click tp-sec-branch-edit
 wait_until tp-branch-rdo_code-search --timeout-ms 5000
@@ -218,6 +222,7 @@ type tp-address-zip_code-search zzzz --key-delay-ms 80
 wait_until tp-address-zip_code-nothing --timeout-ms 3000
 click tp-address-save --screenshot
 wait_until tp-address-save --absent --timeout-ms 5000 --screenshot
+wait_until toast --absent --timeout-ms 8000
 # What was saved: 1200 kept, "zzzz" not taken.
 click tp-sec-address-edit
 wait_until tp-address-zip_code-search --timeout-ms 5000
