@@ -205,7 +205,7 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
             </ChoiceRow>
           </If>
         )}
-        empty={() => <Text variant="meta" tone="fg3" class="px-1 py-3">{NOTHING}</Text>}
+        empty={() => <Text testID={`${p.testID}-nothing`} variant="meta" tone="fg3" class="px-1 py-3">{NOTHING}</Text>}
       >
         {(item) => (
           // A recycled cell draws its new item anew (keyed by value), so a row's testID and check follow the item.
@@ -571,7 +571,7 @@ function FieldPick(props: { p: SearchPickProps }) {
           <View class="rounded-(--radius-card) border border-border bg-raised p-1 shadow-lg" style={{ width: Math.max(width(), 380) }}>
             <If
               when={rows().length > 0 || showClear()}
-              else={<Text variant="meta" tone="fg3" class="px-2 py-1.5">{NOTHING}</Text>}
+              else={<Text testID={`${p.testID}-nothing`} variant="meta" tone="fg3" class="px-2 py-1.5">{NOTHING}</Text>}
             >
               <FieldList
                 p={p}

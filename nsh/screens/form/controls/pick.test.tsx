@@ -221,6 +221,24 @@ test("desktop: the chevron opens the whole list and closes it again; nothing mat
   await app.waitFor("id:pp-rdo-list", { state: "gone" });
   await app.type("id:pp-rdo-search", "zzz");
   await app.waitFor("text:Nothing matches. Try a code or other words.");
+  // The sentence has an id of its own (the list is not drawn when nothing matches), for recipes that wait on it.
+  await app.waitFor("id:pp-rdo-nothing");
+  expect(app.shows("id:pp-rdo-list")).toBe(false);
+});
+
+test("desktop: the focus leaves the RDO box and the ZIP chevron is pressed at once: the press reaches ZIP, not the RDO list", async () => {
+  // The cause of a batch's flake (KNOWN-FLAKES.md, setup.test.tsx): a leaving that kept the list open for a moment (#425's 250 ms
+  // grace) left it over the next box, so a press there right after landed on the RDO list. The blur now settles at once.
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.keyboard.press("tab");
+  await app.press("id:pp-zip-trigger");
+  await app.waitFor("id:pp-zip-list");
+  expect(app.shows("id:pp-rdo-list")).toBe(false);
+  expect(line(app, "zip")).toBe("zip:  | picks: 0 | opens: 1");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
 });
 
 test("desktop: Up and Down move the highlight, Enter picks the lit row", async () => {
