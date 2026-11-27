@@ -3,9 +3,12 @@
 //!
 //! The sheet's drawing is its SVG layer: black rules (`layer-structural`,
 //! `layer-band`) and the grey and white fills (`layer-decorative`,
-//! `layer-knockout`) whose edges outline boxes and comb slots. A value cell
-//! (`data-cell-kind="field"`, a drawn `<div>` with its own `id`, outside any
-//! `<template>`) passes when
+//! `layer-knockout`) whose edges outline boxes and comb slots. Hand
+//! corrections draw some boxes in the cells themselves: a cell with a fill
+//! and an inset border (the TIN rows of 0605, 1600WP, 2550M and 2553), and a
+//! slot with a gradient tick at its right; those count as drawing too. A
+//! value cell (`data-cell-kind="field"` with an input, a drawn `<div>` with
+//! its own `id`, outside any `<template>`) passes when
 //!
 //! - each of its four edges lies within [`TOL`] of a drawn edge running along
 //!   at least half of that side, and
@@ -13,9 +16,8 @@
 //!   on a drawn vertical edge (a tick or a fill's side) beside the cell.
 //!
 //! A hand-placed cell a few points off its box fails both. [`KNOWN`] lists
-//! the cells other sheets already have off their boxes (to be fixed sheet by
-//! sheet); the test fails on any other cell, and on a listed cell that now
-//! passes, so the list stays exact.
+//! the cells off their boxes that print nothing; the test fails on any other
+//! cell, and on a listed cell that now passes, so the list stays exact.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -23,40 +25,19 @@ use std::path::PathBuf;
 const TOL: f64 = 2.0;
 const TICKS: f64 = 0.6;
 
-/// Cells found off their drawn boxes on sheets other than 2200T, by sheet:
-/// the MM/DD/YYYY combs of 0605, 1600WP, 2550M and 2553 drift 4 to 15 pt past
-/// their drawn dividers, and a few thin strips sit 3 to 9 pt below the line
-/// above them.
+/// Value cells off their drawn boxes that print nothing today, so no filer
+/// sees them: no writer-cells join, no name stamp and no Rust-side join fills
+/// them. Each with how far its edges are from the drawing (pt).
 const KNOWN: &[(&str, &str)] = &[
-    ("0605-1999", "p1c23"),
-    ("0605-1999", "p1c25"),
-    ("0605-1999", "p1c27"),
-    ("0605-1999", "p1c29"),
-    ("1600wp-2010", "p1c10"),
-    ("1600wp-2010", "p1c12"),
-    ("1600wp-2010", "p1c14"),
-    ("1600wp-2010", "p1c16"),
-    ("1600wp-2010", "p1c70"),
-    ("1600wp-2010", "p1c72"),
+    // Text strip 6.44 pt tall: top 4.5 pt below the rule above, bottom 0.5.
     ("1604f-2018", "p1c160"),
-    ("1701a-2018", "p1c227"),
-    ("1701a-2018", "p2c208"),
+    // Sliver 1.27 pt wide, 10.05 tall: top 1.8 pt, bottom 11.8 pt off.
     ("1701ms-2024", "p1c51"),
+    // Text cell 19.54 pt tall: top 9.3 pt below the rule above.
     ("1701ms-2024", "p1c286"),
+    // Schedule 3 Taxable Base line (not_joined_cells: no layout key): top
+    // 6.6 pt below the rule above, bottom 0.6.
     ("1706-2018", "p2c183"),
-    ("1800-2018", "p1c187"),
-    ("2550m-2007", "p1c127"),
-    ("2550m-2007", "p1c9"),
-    ("2550m-2007", "p1c11"),
-    ("2550m-2007", "p1c13"),
-    ("2551q-2018", "p1c170"),
-    ("2553-1999", "p1c18"),
-    ("2553-1999", "p1c19"),
-    ("2553-1999", "p1c20"),
-    ("2553-1999", "p1c21"),
-    ("2553-1999", "p1c22"),
-    ("2553-1999", "p1c23"),
-    ("2553-1999", "p1c24"),
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -224,17 +205,23 @@ fn page(body: &str) -> (Vec<Edge>, Vec<Edge>, Vec<Cell>) {
                 if let Some(left) = pt(style, "left") {
                     let cell = &mut cells[index];
                     cell.slot_lefts.push(cell.rect.x + left);
+                    // A slot that draws its own tick (a gradient at its right).
+                    if let (true, Some(width)) = (
+                        style.contains("linear-gradient") && style.contains("right"),
+                        pt(style, "width"),
+                    ) {
+                        down.push(Edge {
+                            at: cell.rect.x + left + width,
+                            half: 0.0,
+                            from: cell.rect.y,
+                            to: cell.rect.y + cell.rect.h,
+                        });
+                    }
                 }
             }
             continue;
         }
         comb = None;
-        if attr(tag, "data-cell-kind") != Some("field") {
-            continue;
-        }
-        let Some(id) = attr(tag, "id") else {
-            continue;
-        };
         let Some(style) = attr(tag, "style") else {
             continue;
         };
@@ -246,6 +233,38 @@ fn page(body: &str) -> (Vec<Edge>, Vec<Edge>, Vec<Cell>) {
         ) else {
             continue;
         };
+        // A cell that draws its own box (a fill with an inset border, the
+        // sheets' hand corrections of a TIN row) is part of the drawing.
+        if style.contains("background:") && style.contains("box-shadow:inset") {
+            for at in [y, y + h] {
+                across.push(Edge {
+                    at,
+                    half: 0.0,
+                    from: x,
+                    to: x + w,
+                });
+            }
+            for at in [x, x + w] {
+                down.push(Edge {
+                    at,
+                    half: 0.0,
+                    from: y,
+                    to: y + h,
+                });
+            }
+        }
+        if attr(tag, "data-cell-kind") != Some("field") {
+            continue;
+        }
+        let Some(id) = attr(tag, "id") else {
+            continue;
+        };
+        // A field cell with no input prints nothing: it is no value cell.
+        let rest = &body[from..];
+        let own = rest.find("data-cell-kind=").unwrap_or(rest.len());
+        if !rest[..own].contains("<input") {
+            continue;
+        }
         let is_comb = attr(tag, "data-field-kind") == Some("comb");
         if is_comb {
             comb = Some(cells.len());
