@@ -568,10 +568,20 @@ pub fn device_setting(key: &str) -> Option<String> {
 
 /// Write a device-wide setting: to `device_settings` from A1 on. Refused
 /// while the account gate is locked, as the database write it replaces was.
+/// A device store that cannot be used (lost, unreadable, newer) never makes
+/// the write fail (A2, #423's review item 5): it then goes to the same key in
+/// the open database, which every reader falls back to (O1).
 fn set_device_setting(key: &str, value: &str) -> Result<(), HostError> {
     crate::account_gate::ensure_unlocked()?;
-    bir_core::rooms::set_device_setting(key, value)
-        .map_err(|error| HostError::new(error.to_string()))
+    match bir_core::rooms::set_device_setting(key, value) {
+        Ok(()) => Ok(()),
+        Err(error) if error.is_unusable() => with_database(|db| {
+            bir_core::rooms::set_device_setting_or(key, value, Some(db))
+                .map(|_| ())
+                .map_err(|error| HostError::new(error.to_string()))
+        }),
+        Err(error) => Err(HostError::new(error.to_string())),
+    }
 }
 
 /// Whether no database handle of this process is open any more: true once
@@ -973,12 +983,14 @@ fn forms_catalog() -> HostResult {
 
 /// The only settings the page may use through `get_setting`, `set_setting`
 /// and `delete_setting`: its theme toggle's (`THEME_PREF_KEY`,
-/// `nsh/shell/theme.ts`) and the accounts already welcomed after their first
-/// sign-in on this device (`WELCOMED_KEY`, `nsh/screens/auth/welcome.tsx`).
-/// Every other setting is host state, such as the access mode, the admin's
-/// TIN root, PIN hash and authenticator secret, and the recovery key's hash;
-/// host code reads and writes those through `Database` directly.
-const PAGE_SETTING_KEYS: [&str; 2] = ["theme_preference", "welcomed_accounts"];
+/// `nsh/shell/theme.ts`). Every other setting is host state, such as the
+/// access mode, the admin's TIN root, PIN hash and authenticator secret, the
+/// recovery key's hash, and the welcome's keyed hashes of the accounts
+/// welcomed on this device (`bir_core::welcome`, accounts-and-lock W3: the
+/// page asks `welcome_first_time` and never reads which accounts use this
+/// device); host code reads and writes those through `Database` or the
+/// device store directly.
+const PAGE_SETTING_KEYS: [&str; 1] = ["theme_preference"];
 
 /// The key a page setting verb names, when it is in [`PAGE_SETTING_KEYS`].
 /// Any other key is refused before the database is opened, with an error
@@ -5504,22 +5516,252 @@ mod tests {
         bir_core::log_files::remember_retention(bir_core::log_files::DEFAULT_RETENTION_DAYS);
     }
 
-    /// The accounts welcomed on this device round-trip through the page
-    /// verbs too, and live in the device store (A1), not the room's file.
+    // ---------- W3: the welcome names no account to the page ----------
+
+    const WELCOME_SERVER: &str = "http://127.0.0.1:9";
+    const A_ID: &str = "user-a-31c9";
+    const A_EMAIL: &str = "Alma.Reyes@Example.test";
+    const B_ID: &str = "user-b-77d2";
+    const B_EMAIL: &str = "bayani@example.test";
+
+    /// `body` with `user_id` (and `email`) as the host's saved sign-in, in a scratch file (keychain off).
+    fn signed_in_as<R>(user_id: &str, email: &str, body: impl FnOnce() -> R) -> R {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("account.json");
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                ("BUWIZ_SERVER_URL", Some(WELCOME_SERVER)),
+                (
+                    bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                    Some(file.to_str().unwrap()),
+                ),
+            ],
+            || {
+                bir_core::cloud_account::save_stored_account(
+                    &bir_core::cloud_account::StoredAccount {
+                        server_url: WELCOME_SERVER.into(),
+                        access_token: "access".into(),
+                        refresh_token: "refresh".into(),
+                        access_expires_at_unix: i64::MAX / 2,
+                        user_id: user_id.into(),
+                        email: Some(email.into()),
+                        offline: false,
+                        last_refresh_unix: 1_000,
+                        practice: false,
+                    },
+                )
+                .unwrap();
+                body()
+            },
+        )
+    }
+
+    /// `body` with no saved sign-in.
+    fn signed_out<R>(body: impl FnOnce() -> R) -> R {
+        let dir = tempfile::tempdir().unwrap();
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                ("BUWIZ_SERVER_URL", Some(WELCOME_SERVER)),
+                (
+                    bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                    Some(dir.path().join("account.json").to_str().unwrap()),
+                ),
+            ],
+            body,
+        )
+    }
+
+    fn welcome() -> bool {
+        truthy(crate::cloud_account::welcome_first_time())
+    }
+
+    /// No trace of A: neither the id nor the address, in any case.
+    fn assert_no_trace_of_a(what: &str, text: &str) {
+        let text = text.to_lowercase();
+        for trace in [A_ID, A_EMAIL] {
+            assert!(
+                !text.contains(&trace.to_lowercase()),
+                "{what} holds a trace of account A"
+            );
+        }
+    }
+
+    /// The device settings W3 keeps, and the list #417 kept: none of them the page's.
+    const WELCOME_KEYS: [&str; 3] = [
+        bir_core::welcome::OLD_WELCOMED_SETTING,
+        bir_core::welcome::WELCOMED_HASHES_SETTING,
+        bir_core::welcome::WELCOME_KEY_SETTING,
+    ];
+
+    /// W3: after A was welcomed, a page signed in as B reads nothing of A: every page setting's answer is free of
+    /// A's id and address, and the welcome's own settings are refused, as the admin's secret is.
     #[test]
-    fn the_welcomed_accounts_round_trip_through_the_page_verbs() {
-        setup();
-        let key = || s("welcomed_accounts");
-        assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
-        set_setting(&args(vec![key(), s("[\"demo\"]")])).unwrap();
+    fn a_page_signed_in_as_b_learns_nothing_about_a_from_any_page_readable_setting() {
+        use_ephemeral_database();
+        signed_in_as(A_ID, A_EMAIL, || assert!(welcome(), "A's first sign-in"));
+        signed_in_as(B_ID, B_EMAIL, || {
+            assert!(welcome(), "B's first sign-in");
+            for key in PAGE_SETTING_KEYS {
+                let answer = get_setting(&args(vec![s(key)]));
+                assert_no_trace_of_a(key, &format!("{answer:?}"));
+            }
+            for key in WELCOME_KEYS {
+                assert!(!PAGE_SETTING_KEYS.contains(&key), "{key} is the page's");
+                let answer = get_setting(&args(vec![s(key)]));
+                assert_no_trace_of_a(key, &format!("{answer:?}"));
+                assert_refused(answer, "get_setting", key);
+                assert_refused(
+                    set_setting(&args(vec![s(key), s("[]")])),
+                    "set_setting",
+                    key,
+                );
+                assert_refused(delete_setting(&args(vec![s(key)])), "delete_setting", key);
+            }
+            // The verb answers B's own first time and nothing about anyone else.
+            assert_eq!(
+                crate::cloud_account::welcome_first_time().unwrap(),
+                HostValue::Bool(false)
+            );
+        });
+    }
+
+    /// W3: true the first time an account signs in on this device, false after; another account has its own first
+    /// time; with no account signed in, false and nothing recorded.
+    #[test]
+    fn welcome_first_time_answers_once_per_account() {
+        use_ephemeral_database();
+        signed_out(|| assert!(!welcome(), "no account signed in"));
         assert_eq!(
-            bir_core::rooms::device_setting("welcomed_accounts").as_deref(),
-            Some("[\"demo\"]")
+            bir_core::rooms::device_setting(bir_core::welcome::WELCOMED_HASHES_SETTING),
+            None,
+            "nothing recorded with no account signed in"
         );
-        assert_eq!(stored_setting("welcomed_accounts"), None, "not the room's");
-        assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("[\"demo\"]"));
-        delete_setting(&args(vec![key()])).unwrap();
-        assert_eq!(bir_core::rooms::device_setting("welcomed_accounts"), None);
+        signed_in_as(A_ID, A_EMAIL, || {
+            assert!(welcome());
+            assert!(!welcome());
+        });
+        signed_in_as(B_ID, B_EMAIL, || {
+            assert!(welcome());
+            assert!(!welcome());
+        });
+        signed_in_as(A_ID, A_EMAIL, || assert!(!welcome(), "A again"));
+        // An account without a user id is known by its address, trimmed and in lower case.
+        signed_in_as("", " Carmen@Example.test ", || assert!(welcome()));
+        signed_in_as("", "carmen@example.test", || assert!(!welcome()));
+    }
+
+    /// W3 upgrade: #417's list of ids and addresses is dropped from `device_settings` and from the open
+    /// database's settings, by the welcome check and by the launch.
+    #[test]
+    fn the_old_welcomed_list_is_dropped_from_both_stores() {
+        use_ephemeral_database();
+        let old = bir_core::welcome::OLD_WELCOMED_SETTING;
+        let plant = || {
+            let list = format!("[\"{A_ID}\",\"{}\"]", A_EMAIL.to_lowercase());
+            bir_core::rooms::set_device_setting(old, &list).unwrap();
+            with_database(|db| db.set_setting(old, &list).map_err(db_error)).unwrap();
+            assert!(bir_core::rooms::device_setting(old).is_some());
+            assert!(stored_setting(old).is_some());
+        };
+        plant();
+        signed_in_as(B_ID, B_EMAIL, || assert!(welcome()));
+        assert_eq!(
+            bir_core::rooms::device_setting(old),
+            None,
+            "device_settings"
+        );
+        assert_eq!(stored_setting(old), None, "the open database");
+        // The launch drops it too (prepare_launch), signed in or not.
+        plant();
+        crate::cloud_account::drop_old_welcomed_list();
+        assert_eq!(
+            bir_core::rooms::device_setting(old),
+            None,
+            "device_settings"
+        );
+        assert_eq!(stored_setting(old), None, "the open database");
+    }
+
+    /// W3: what the device keeps is HMAC-SHA256 of the account's key under this device's own random key: no id,
+    /// no address, and another device's hash of the same account differs.
+    #[test]
+    fn the_stored_value_is_a_keyed_hash_not_the_id_or_email() {
+        use_ephemeral_database();
+        signed_in_as(A_ID, A_EMAIL, || assert!(welcome()));
+        signed_in_as("", A_EMAIL, || assert!(welcome()));
+        let read = |key| bir_core::rooms::device_setting(key).unwrap();
+        let stored = read(bir_core::welcome::WELCOMED_HASHES_SETTING);
+        assert_no_trace_of_a("the stored hashes", &stored);
+        let device_key = hex_decode(&read(bir_core::welcome::WELCOME_KEY_SETTING));
+        assert_eq!(device_key.len(), 32, "a 32-byte device key");
+        let hashes: Vec<String> = serde_json::from_str(&stored).unwrap();
+        assert_eq!(
+            hashes,
+            [
+                bir_core::welcome::keyed_hash(&device_key, A_ID),
+                bir_core::welcome::keyed_hash(&device_key, &A_EMAIL.to_lowercase()),
+            ]
+        );
+        // Another device (its own store, so its own key) keeps another hash of A.
+        use_ephemeral_database();
+        signed_in_as(A_ID, A_EMAIL, || assert!(welcome()));
+        let other: Vec<String> =
+            serde_json::from_str(&read(bir_core::welcome::WELCOMED_HASHES_SETTING)).unwrap();
+        assert_ne!(other[0], hashes[0], "the hash is keyed by the device");
+    }
+
+    fn hex_decode(text: &str) -> Vec<u8> {
+        (0..text.len())
+            .step_by(2)
+            .map(|at| u8::from_str_radix(&text[at..at + 2], 16).unwrap())
+            .collect()
+    }
+
+    /// A2 (#423's review, item 5): with `rooms/` on disk and `device.db`
+    /// unreadable, the page's theme and the other device-setting writes still
+    /// succeed (into the open database), and read back; the store is left as it
+    /// was.
+    #[test]
+    fn setting_writes_go_through_when_the_device_store_is_unusable() {
+        setup();
+        bir_core::rooms::forget_ephemeral_device_store();
+        let folder = tempfile::tempdir().unwrap();
+        db::set_database_path_override(Some(folder.path().join("bir_data.db")));
+        std::fs::create_dir_all(folder.path().join("rooms").join("x")).unwrap();
+        let garbage = b"not a device store, and long enough to be read".to_vec();
+        std::fs::write(folder.path().join("device.db"), &garbage).unwrap();
+
+        set_setting(&args(vec![s("theme_preference"), s("Dark")])).unwrap();
+        set_global_hotkey(&args(vec![s("control+alt+E")])).unwrap();
+        // (Log retention's verb also prunes the log folder, which is not this test's: its write is the same call.)
+        set_auto_update_download(&args(vec![HostValue::Bool(false)])).unwrap();
+        assert_eq!(
+            get_setting(&args(vec![s("theme_preference")])).unwrap(),
+            s("Dark")
+        );
+        assert_eq!(stored_setting("theme_preference").as_deref(), Some("Dark"));
+        assert_eq!(
+            stored_setting("global_hotkey_key").as_deref(),
+            Some("control+alt+E")
+        );
+        assert_eq!(
+            device_setting(crate::hooks::AUTO_DOWNLOAD_SETTING).as_deref(),
+            Some("0")
+        );
+        delete_setting(&args(vec![s("theme_preference")])).unwrap();
+        assert_eq!(
+            get_setting(&args(vec![s("theme_preference")])).unwrap(),
+            HostValue::Null
+        );
+        assert_eq!(
+            std::fs::read(folder.path().join("device.db")).unwrap(),
+            garbage
+        );
+
+        db::set_database_path_override(None);
+        bir_core::rooms::use_ephemeral_device_store();
     }
 
     /// (b) The help desk admin's authenticator secret stays host-side: the

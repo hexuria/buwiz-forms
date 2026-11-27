@@ -1,0 +1,15 @@
+# scripts/a2_old_release_restore.sh v0.2.0 target-clean/a2-zips target-clean/tags (2026-11-26 22:41 UTC)
+A2 restore: shape-001.zip by bir-core 0.2.0: raw SHA-256 equal (62ebb49fcd01), opens with 4 profiles
+A2 restore: shape-002.zip by bir-core 0.2.0: raw SHA-256 equal (5156ea319832), opens with 6 profiles
+A2 restore: shape-003.zip by bir-core 0.2.0: raw SHA-256 equal (5156ea319832), opens with 6 profiles
+A2 restore: shape-004.zip by bir-core 0.2.0: raw SHA-256 equal (da549eeb18f0), opens with 3 profiles
+A2 restore: shape-006.zip by bir-core 0.2.0: raw SHA-256 equal (ac527764c595), opens with 6 profiles
+A2 restore: shape-007.zip by bir-core 0.2.0: raw SHA-256 equal (6f0398be5ad6), opens with 3 profiles
+A2 restore: shape-008.zip by bir-core 0.2.0: raw SHA-256 equal (0c43109a9383), opens with 3 profiles
+A2 restore: shape-010.zip by bir-core 0.2.0: raw SHA-256 equal (104ca070f144), opens with 3 profiles
+A2 restore: shape-012.zip by bir-core 0.2.0: raw SHA-256 equal (4f2d7401f390), opens with 1 profiles
+A2 restore: shape-013.zip by bir-core 0.2.0: raw SHA-256 equal (9f0a49f4be0e), opens with 1 profiles
+A2 restore: shape-09a.zip by bir-core 0.2.0: raw SHA-256 equal (93b9967e9676), opens with 1 profiles
+A2 restore: shape-09b.zip by bir-core 0.2.0: raw SHA-256 equal (e16daa5eb556), opens with 3 profiles
+A2 restore: shape-11a.zip by bir-core 0.2.0: raw SHA-256 equal (65d9d2d9841f), opens with 1 profiles
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
