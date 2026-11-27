@@ -4978,6 +4978,7 @@ pub(crate) fn removes(
 /// The reviewed reason a person sees on the form page when `key` is gated
 /// shut on `draft` (corpus `enabled_when` conditions and host module gates).
 /// Blank and untick writes are clears and are never refused by a gate.
+#[cfg(feature = "agent")]
 pub(crate) fn page_gate_refusal(
     kind: AgentFormKind,
     draft: &Value,

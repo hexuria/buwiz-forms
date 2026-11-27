@@ -89,6 +89,13 @@ fn open_own_room(
         .create_room_dir(&room_id)
         .map_err(|error| error.to_string())?;
     open_room::open_room(layout, room_id.clone(), user_id.to_owned(), origin.to_owned())?;
+    // F13: the zip rule's room-opened check never fired for want of this call — the opened room
+    // is the claim's evidence that the move's data is in use, so count it now.
+    if let Ok(claim) = LegacyClaim::at(layout.clone())
+        && let Err(error) = claim.note_room_opened(&room_id)
+    {
+        tracing::warn!("room-opened not counted toward the zip rule: {error}");
+    }
     // The path the screens keep their values under (I4): the open room's file, on this thread.
     bir_core::db::set_open_room_database(Some(layout.room_database(&room_id)));
     Ok(SessionRoom::Room { room_id })

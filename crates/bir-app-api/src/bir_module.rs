@@ -3117,9 +3117,20 @@ fn prune_safety_copies(folder: &std::path::Path) {
                 .collect()
         })
         .unwrap_or_default();
-    copies.sort();
+    // F14: by the stamp's number, not the string — string order breaks across digit lengths.
+    copies.sort_by_key(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .and_then(|name| {
+                name.strip_prefix("bir_data.safety-")
+                    .and_then(|rest| rest.strip_suffix(".db"))
+                    .and_then(|stamp| stamp.parse::<u64>().ok())
+            })
+            .unwrap_or(0)
+    });
     while copies.len() > 3 {
         let eldest = copies.remove(0);
+        // F13: a failed remove is warned, never recorded as deleted — the copy is still there.
         if let Err(error) = std::fs::remove_file(&eldest) {
             tracing::warn!(?eldest, "old import safety copy not pruned: {error}");
         }

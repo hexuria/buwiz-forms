@@ -1381,6 +1381,7 @@ fn refuse_if_room_changed(generation: Option<u64>) -> Result<(), HostError> {
 
 /// Persist a grant returned by `start_oauth_flow` — split out so tests drive
 /// it with canned tokens (the browser leg cannot run headlessly).
+#[cfg(test)]
 fn persist_oauth_grant(
     db: &std::sync::Arc<std::sync::Mutex<Database>>,
     tin: &str,
