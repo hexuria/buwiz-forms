@@ -107,7 +107,8 @@
    "file": "queue.wants",
    "windows": "queue-windows.wants",
    "precondition": "Stops before the Queue control after validating the return. The runner treats fp-queue itself as a send control, so the confirm-dialog send rehearsal is the separate queue-send recipe outside this suite.",
-   "desktop": "queue-desktop.json"
+   "desktop": "queue-desktop.json",
+   "phone": "queue-phone.json"
   },
   {
    "name": "birth-date",

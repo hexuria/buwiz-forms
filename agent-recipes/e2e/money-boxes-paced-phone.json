@@ -9,16 +9,16 @@
  ],
  "steps": [
   {
-   "id": "s1",
-   "op": "click",
-   "target": "fp-frm2551Qv2018:amendedRtn_1",
-   "screenshot": true
-  },
-  {
    "id": "s1a",
    "op": "scroll",
    "target": "form-scroll",
    "dy": 300
+  },
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:amendedRtn_1",
+   "screenshot": true
   },
   {
    "id": "s1b",
