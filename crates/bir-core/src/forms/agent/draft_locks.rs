@@ -2594,10 +2594,15 @@ pub mod pending_notices {
             && (super::previous_payment::lock_reason(spec, after).is_some()
                 || super::previous_payment::lock_reason(spec, before).is_some())
         {
-            return vec![(
-                super::previous_payment::gate_key(spec),
-                spec.cleared.to_string(),
-            )];
+            let text = if super::previous_payment::lock_reason(spec, after).is_none() {
+                format!(
+                    "The filed return's Item {} was not carried over.",
+                    spec.item
+                )
+            } else {
+                spec.cleared.to_string()
+            };
+            return vec![(super::previous_payment::gate_key(spec), text)];
         }
         Vec::new()
     }
@@ -2797,7 +2802,10 @@ pub mod pending_notices {
             let original = clearance(kind, &dormant_original, &amended_cleared);
             assert_eq!(
                 original,
-                vec![("1600pt_item19".to_string(), spec.cleared.to_string())]
+                vec![(
+                    "1600pt_item19".to_string(),
+                    "The filed return's Item 19 was not carried over.".to_string(),
+                )]
             );
 
             let manual_clear_while_open = clearance(kind, &yes_with_amount, &amended_cleared);

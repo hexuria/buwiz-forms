@@ -3045,8 +3045,8 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
-    // The upload omits a shut previous-payment box; the page still draws it
-    // at its cleared zero with the gate's sentence.
+    // The upload writes a shut previous-payment box as zero through the
+    // model's map; the page draws the same zero with the gate's sentence.
     if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
         && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
     {
@@ -3399,7 +3399,7 @@ fn put_sample_mark(draft: &mut Value, mark: Option<&SampleMark>) {
 // and clears any report its closed predecessor never saved.
 thread_local! {
     static INLINE_CLEARANCE_REPORTS: RefCell<BTreeMap<i64, BTreeSet<String>>> =
-        RefCell::new(BTreeMap::new());
+        const { RefCell::new(BTreeMap::new()) };
 }
 
 fn remember_inline_clearances(id: Option<i64>, gates: &BTreeSet<String>) {

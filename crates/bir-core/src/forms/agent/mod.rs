@@ -404,13 +404,14 @@ pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, S
 pub fn field_map(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
     let mut fields = with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))?;
     // A previous-payment amount belongs only to an amended return. While the
-    // gate is closed the map omits the box even if a corrupt draft reaches
-    // this map without a recompute; an XML writer that emits the layout's
-    // box anyway writes its empty zero rather than the dormant amount.
+    // gate is closed the map writes the box's empty zero even if a corrupt
+    // draft reaches this map without a recompute: the upload never carries
+    // the dormant amount, and the assistant's form card still shows the box
+    // at the zero the return holds.
     if let Some(spec) = draft_locks::previous_payment::spec(kind)
         && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
     {
-        fields.remove(spec.key);
+        fields.insert(spec.key.to_string(), "0.00".to_string());
     }
     Ok(fields)
 }

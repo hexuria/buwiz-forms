@@ -30,11 +30,10 @@ fn gate_flow(spec: &Spec) {
         opened["values"][spec.key], "0.00",
         "{code}: fresh opening value"
     );
-    assert!(
-        !agent::field_map(kind, &opened["draft"])
-            .unwrap()
-            .contains_key(spec.key),
-        "{code}: unamended field map omits the previous-payment box"
+    assert_eq!(
+        agent::field_map(kind, &opened["draft"]).unwrap()[spec.key],
+        "0.00",
+        "{code}: unamended field map carries the shut box as zero"
     );
 
     let refused = fill(code, &opened["draft"], json!({spec.key: "42"}));
@@ -100,11 +99,10 @@ fn gate_flow(spec: &Spec) {
         no["relock_notes"][spec.key], spec.cleared,
         "{code}: closing the gate says what was cleared inline"
     );
-    assert!(
-        !agent::field_map(kind, &no["draft"])
-            .unwrap()
-            .contains_key(spec.key),
-        "{code}: closing the gate omits the field map entry"
+    assert_eq!(
+        agent::field_map(kind, &no["draft"]).unwrap()[spec.key],
+        "0.00",
+        "{code}: closing the gate leaves zero in the field map"
     );
 
     let yes_again = fill(code, &no["draft"], json!({spec.yes_key: "true"}));
@@ -155,11 +153,10 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
         assert_eq!(first["values"][spec.key], "0.00");
         assert_eq!(first["locks"][spec.key], spec.lock);
         let kind = kind_of(code).unwrap();
-        assert!(
-            !agent::field_map(kind, &first["draft"])
-                .unwrap()
-                .contains_key(spec.key),
-            "{code}: opened legacy draft's field map omits the box"
+        assert_eq!(
+            agent::field_map(kind, &first["draft"]).unwrap()[spec.key],
+            "0.00",
+            "{code}: opened legacy draft's field map carries the shut box as zero"
         );
         let gate = gate_key(spec);
         let notes = first["notes"].as_array().unwrap();
@@ -375,5 +372,27 @@ fn previous_payment_zeroed_by_the_filer_before_closing_records_no_clearing_notic
         )),
         0,
         "a filer-cleared amount records no clearing event"
+    );
+}
+
+#[test]
+fn previous_payment_amendment_carryover_notice_names_the_filed_return() {
+    let spec = previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.form_code == "1600PT")
+        .unwrap();
+    let before = json!({"is_amended": false, spec.path: 42.0});
+    let after = json!({"is_amended": true, spec.path: 0.0});
+    let clearances = bir_core::forms::agent::draft_locks::pending_notices::clearance(
+        kind_of("1600PT").unwrap(),
+        &before,
+        &after,
+    );
+    assert_eq!(
+        clearances,
+        vec![(
+            gate_key(spec),
+            "The filed return's Item 19 was not carried over.".to_string()
+        )]
     );
 }
