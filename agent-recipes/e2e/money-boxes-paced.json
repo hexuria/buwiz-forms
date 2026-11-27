@@ -82,18 +82,6 @@
    "screenshot": true
   },
   {
-   "id": "s12a",
-   "op": "set_value",
-   "target": "fp-frm2551Qv2018:txt15",
-   "value": "0"
-  },
-  {
-   "id": "s12b",
-   "op": "set_value",
-   "target": "fp-frm2551Qv2018:txt16",
-   "value": "0"
-  },
-  {
    "id": "s13",
    "op": "click",
    "target": "fp-frm2551Qv2018:txt15"
@@ -110,6 +98,18 @@
    "op": "click",
    "target": "fp-frm2551Qv2018:amendedRtn_2",
    "screenshot": true
+  },
+  {
+   "id": "s12a",
+   "op": "set_value",
+   "target": "fp-frm2551Qv2018:txt15",
+   "value": "0"
+  },
+  {
+   "id": "s12b",
+   "op": "set_value",
+   "target": "fp-frm2551Qv2018:txt16",
+   "value": "0"
   }
  ]
 }
