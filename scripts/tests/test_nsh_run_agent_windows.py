@@ -176,6 +176,10 @@ sys.exit(subprocess.call(sys.argv[1:]))
 TWO_DEVICES = 'emulator-5554\toffline\nemulator-5556\tdevice\nR58M123ABC\tdevice'
 
 
+# Quarantined on GitHub's Windows runners only (issue #480): since 2026-11-27 one to three of these tests time out
+# in most runs there, a different one each time, with nothing changed in the recipe, the test or the runner image.
+# The class still runs on every other Windows machine. Remove this line in the pull request that fixes the cause.
+@unittest.skipIf(os.environ.get('GITHUB_ACTIONS') == 'true', 'flaky on GitHub Windows runners: issue #480')
 @unittest.skipUnless(os.name == 'nt' and shutil.which('pwsh') and shutil.which('just') and shutil.which('rustc'),
                      'Windows, pwsh, just and rustc required')
 class NshRunAgentWindowsTests(unittest.TestCase):
