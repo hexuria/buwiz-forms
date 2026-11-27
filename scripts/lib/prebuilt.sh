@@ -1,7 +1,8 @@
 # Shared pinned-tool installer for the Bash setup scripts. Sourced, not run:
 # gpui-agent-cli and impeccable may be downloaded from their own hexuria GitHub
-# release archives after a sha256 check; everything else and every failure is a
-# pinned cargo install from source.
+# release archives after a sha256 check against the digest pinned in this
+# repository; everything else and every failure is a pinned cargo install from
+# source.
 
 PREBUILT_PIN_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/impeccable.pin"
 
@@ -217,8 +218,8 @@ prebuilt_cargo_source_install() {  # prebuilt_cargo_source_install <crate> <vers
 # failed step; every temporary file or directory has already been removed.
 prebuilt_direct_install() {  # prebuilt_direct_install <crate> <version> <binary>
     local crate="$1" version="$2" binary="$3"
-    local repo target archive url digest_url tmp downloaded digest_file extract
-    local expected actual binary_path source bin
+    local repo target archive url tmp downloaded extract
+    local tool_key target_key version_pin digest_generation expected actual binary_path source bin
     PREBUILT_FAILED_STEP=""
 
     repo="$(prebuilt_release_repo "$crate")" || {
@@ -233,14 +234,25 @@ prebuilt_direct_install() {  # prebuilt_direct_install <crate> <version> <binary
         PREBUILT_FAILED_STEP="archive lookup"
         return 1
     }
+    tool_key="$(printf '%s\n' "$crate" | tr 'a-z-' 'A-Z_')"
+    version_pin="$(prebuilt_pin "${tool_key}_VERSION")"
+    digest_generation="$(prebuilt_pin "${tool_key}_SHA256_FOR")"
+    if [ "$digest_generation" != "$version_pin" ] || [ "$version" != "$version_pin" ]; then
+        PREBUILT_FAILED_STEP="pin version"
+        return 1
+    fi
+    target_key="${target//-/_}"
+    expected="$(prebuilt_pin "${tool_key}_SHA256_${target_key}")"
+    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+        PREBUILT_FAILED_STEP="digest pin"
+        return 1
+    fi
     url="https://github.com/$repo/releases/download/v$version/$archive"
-    digest_url="$url.sha256"
     tmp="$(mktemp -d "${TMPDIR:-/tmp}/buwiz-prebuilt.XXXXXX")" || {
         PREBUILT_FAILED_STEP="temporary directory"
         return 1
     }
     downloaded="$tmp/$archive"
-    digest_file="$downloaded.sha256"
     extract="$tmp/extract"
 
     if ! prebuilt_download "$url" "$downloaded"; then
@@ -248,14 +260,8 @@ prebuilt_direct_install() {  # prebuilt_direct_install <crate> <version> <binary
         PREBUILT_FAILED_STEP="archive download"
         return 1
     fi
-    if ! prebuilt_download "$digest_url" "$digest_file"; then
-        rm -rf "$tmp"
-        PREBUILT_FAILED_STEP="digest download"
-        return 1
-    fi
-    expected="$(sed -n '1s/^[[:space:]]*\([^[:space:]]*\).*/\1/p' "$digest_file" 2>/dev/null | tr 'A-F' 'a-f')"
     actual="$(prebuilt_sha256_file "$downloaded" 2>/dev/null || true)"
-    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]] || [ "$expected" != "$actual" ]; then
+    if [ "$actual" != "$expected" ]; then
         rm -rf "$tmp"
         PREBUILT_FAILED_STEP="digest check"
         return 1

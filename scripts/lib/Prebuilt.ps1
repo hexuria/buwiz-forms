@@ -1,8 +1,9 @@
 # Shared pinned-tool installer for the Windows setup script. Dot-sourced, not run:
 # gpui-agent-cli and impeccable may be downloaded from their own hexuria GitHub
-# release archives after a sha256 check; everything else and every failure is a
-# pinned cargo install from source. Install-PinnedTool returns one Boolean and
-# sends tool output to the host, never to the success output stream.
+# release archives after a sha256 check against the digest pinned in this
+# repository; everything else and every failure is a pinned cargo install from
+# source. Install-PinnedTool returns one Boolean and sends tool output to the
+# host, never to the success output stream.
 
 $script:PrebuiltScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 $script:PrebuiltPinFile = Join-Path (Split-Path $script:PrebuiltScriptDir -Parent) 'impeccable.pin'
@@ -249,26 +250,31 @@ function Try-InstallPrebuilt([string]$Crate, [string]$Version, [string]$Binary) 
         return $false
     }
     $archive = Get-PrebuiltArchiveName $Crate $target $Version
+    $toolKey = $Crate.ToUpperInvariant().Replace('-', '_')
+    $versionPin = Read-PrebuiltPin "${toolKey}_VERSION"
+    $digestGeneration = Read-PrebuiltPin "${toolKey}_SHA256_FOR"
+    if ($digestGeneration -ne $versionPin -or $Version -ne $versionPin) {
+        $script:PrebuiltFailedStep = 'pin version'
+        return $false
+    }
+    $targetKey = $target.Replace('-', '_')
+    $expected = Read-PrebuiltPin "${toolKey}_SHA256_$targetKey"
+    if (-not $expected -or $expected -notmatch '^[0-9a-f]{64}$') {
+        $script:PrebuiltFailedStep = 'digest pin'
+        return $false
+    }
     $repo = $script:PrebuiltReleaseTable[$Crate].Repo
     $url = "https://github.com/$repo/releases/download/v$Version/$archive"
-    $digestUrl = "$url.sha256"
     $temp = Join-Path ([IO.Path]::GetTempPath()) ("buwiz-prebuilt-" + [guid]::NewGuid().ToString('N'))
     try {
         New-Item -ItemType Directory -Force -Path $temp -ErrorAction Stop | Out-Null
         $downloaded = Join-Path $temp $archive
-        $digestFile = "$downloaded.sha256"
         if (-not (Invoke-PrebuiltDownload $url $downloaded)) {
             $script:PrebuiltFailedStep = 'archive download'
             return $false
         }
-        if (-not (Invoke-PrebuiltDownload $digestUrl $digestFile)) {
-            $script:PrebuiltFailedStep = 'digest download'
-            return $false
-        }
-        $expectedLine = Get-Content -LiteralPath $digestFile -TotalCount 1 -ErrorAction Stop
-        $expected = ("$expectedLine" -split '\s+')[0].ToLowerInvariant()
         $actual = Get-PrebuiltSha256 $downloaded
-        if ($expected -notmatch '^[0-9a-f]{64}$' -or $expected -ne $actual) {
+        if ($actual -ne $expected) {
             $script:PrebuiltFailedStep = 'digest check'
             return $false
         }
