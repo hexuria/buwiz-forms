@@ -1,0 +1,44 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "sign-out",
+  "fingerprint": "fnv1a64:428b300b70275597",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 494
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 150
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1333
+    },
+    {
+      "id": "s4",
+      "ok": false,
+      "error": "wait_until timed out: node `locked-screen` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 10166,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/10-sign-out/004-s4.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-234011/10-sign-out/004-s4.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 12145
+}
