@@ -7,7 +7,7 @@
 //! the desktop assistant read one implementation: the page draws them and
 //! [`super::fill`] refuses them.
 //!
-//! [`draft_locks`] applies seven layers, in this order, each named after the
+//! [`draft_locks`] applies eight layers, in this order, each named after the
 //! page's row module it came from (the last after the rule it carries):
 //!
 //! 1. [`dst_pt_vat`] (PR 4): 2000's 15B and 15C, computed; 2553's
@@ -28,7 +28,7 @@
 //!    app holds, locked to that Q1's answer.
 //! 7. [`item16_2551q`]: 2551Q Item 16 is shut unless Amended Return is Yes
 //!    without the 8% option.
-//! 7. [`previous_payment`]: the previous-payment box of an unamended
+//! 8. [`previous_payment`]: the previous-payment box of an unamended
 //!    return, shut with its item's amended-return reason.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
@@ -48,7 +48,7 @@ use serde_json::{Map, Value};
 use super::AgentFormKind;
 
 /// Lay the draft-dependent locks over `locks`, the base map
-/// ([`super::locks`]), the way the page's open does: the six layers of this
+/// ([`super::locks`]), the way the page's open does: the eight layers of this
 /// module's note, in that order, with their own reasons. A layer may replace
 /// a base reason with an exact one (2000's 15B, which the probe calls
 /// derived, is computed), and the last one takes 1701Q's spouse penalty
@@ -78,7 +78,7 @@ pub fn draft_lock(
     locks.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-/// The six layers; `only` limits the penalty layer to that key's group.
+/// The eight layers; `only` limits the penalty layer to that key's group.
 fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, only: Option<&str>) {
     dst_pt_vat::relock(kind, draft, locks);
     annual_corporate::relock(kind, draft, locks);
@@ -100,9 +100,10 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
 /// the page to apply at once (`screen_form_fill`'s `relocks`): 1702RT's
-/// folded (Add more...) items and items 42, 40 and 57 (PR 8), then an
-/// excise, 1800 or 1801 return's penalty groups (PR 11). Empty for every
-/// other form.
+/// folded (Add more...) items and items 42, 40 and 57 (PR 8), an excise,
+/// 1800 or 1801 return's penalty groups (PR 11), and the amended-return
+/// amount gates whose answers can change in the fill. Empty for every other
+/// form.
 pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut relocks = annual_corporate::live_locks(kind, draft);
     relocks.extend(excise::live_locks(kind, draft));
@@ -1344,10 +1345,10 @@ pub mod item16_2551q {
 
 pub mod previous_payment {
     //! Previous-payment boxes the official pages open only for an amended
-    //! return. One table serves the forms whose captured lock rules name the
-    //! box's amended-Yes control; 1602Q is deliberately absent because its
-    //! captured page leaves item 20 enabled on a new return.
-    //!
+    //! return. One table serves the forms whose in-repository runtime-control
+    //! inventory records the box disabled at load; 0619E, 0619F, 2550M and
+    //! 1602Q are deliberately absent because their captured pages leave the
+    //! surveyed box enabled on a new return.
 
     use serde_json::{Map, Value, json};
 
@@ -1364,27 +1365,7 @@ pub mod previous_payment {
         pub cleared: &'static str,
     }
 
-    pub const SPECS: [Spec; 9] = [
-        Spec {
-            form_code: "0619E",
-            key: "frm0619E:txtTax15",
-            item: "15",
-            path: "item_15_amount_remitted_previously",
-            yes_key: "frm0619E:optAmend:Y",
-            no_key: "frm0619E:optAmend:N",
-            lock: "Item 15 applies only to an amended return.",
-            cleared: "Item 15 was cleared: it applies only to an amended return.",
-        },
-        Spec {
-            form_code: "0619F",
-            key: "frm0619F:txtTax16",
-            item: "16",
-            path: "item_16_remitted_previously",
-            yes_key: "frm0619F:optAmend:Y",
-            no_key: "frm0619F:optAmend:N",
-            lock: "Item 16 applies only to an amended return.",
-            cleared: "Item 16 was cleared: it applies only to an amended return.",
-        },
+    pub const SPECS: [Spec; 6] = [
         Spec {
             form_code: "1600PT",
             key: "frm1600PT:txtPg1P2I19TaxRemittedInRtrn",
@@ -1445,16 +1426,6 @@ pub mod previous_payment {
             lock: "Item 33 applies only to an amended return.",
             cleared: "Item 33 was cleared: it applies only to an amended return.",
         },
-        Spec {
-            form_code: "2550M",
-            key: "frm2550m:txtTax23D",
-            item: "23D",
-            path: "vat_paid_previous",
-            yes_key: "frm2550m:OptAmendedYN1",
-            no_key: "frm2550m:OptAmendedYN2",
-            lock: "Item 23D applies only to an amended return.",
-            cleared: "Item 23D was cleared: it applies only to an amended return.",
-        },
     ];
 
     pub fn spec(kind: AgentFormKind) -> Option<&'static Spec> {
@@ -1476,10 +1447,36 @@ pub mod previous_payment {
 
     /// A zero write is the box's already-empty state, so it is accepted as a no-op.
     pub fn zero_write(value: &Value) -> bool {
-        value
-            .as_str()
-            .and_then(|text| text.replace(',', "").trim().parse::<f64>().ok())
-            .is_some_and(|amount| amount.abs() < 0.005)
+        value.as_f64() == Some(0.0)
+            || value
+                .as_str()
+                .is_some_and(|text| crate::forms::agent::parse_amount(text) == Some(0.0))
+    }
+
+    /// The stable key this gate's pending notice uses.
+    pub fn gate_key(spec: &Spec) -> String {
+        format!(
+            "{}_item{}",
+            spec.form_code.to_lowercase(),
+            spec.item.to_lowercase()
+        )
+    }
+
+    /// A filed original whose box was shut must not revive its dormant amount
+    /// when an amendment turns the copy's Amended answer to Yes.
+    pub fn clear_dormant_amendment_copy(
+        kind: AgentFormKind,
+        original: &Value,
+        amended: &mut Value,
+    ) {
+        let Some(spec) = spec(kind) else {
+            return;
+        };
+        if dormant_amount(spec, original)
+            && let Value::Object(object) = amended
+        {
+            object.insert(spec.path.to_string(), json!(0.0));
+        }
     }
 
     /// Whether a closed draft still holds a dormant previous-payment amount.
@@ -2233,16 +2230,15 @@ pub mod pending_notices {
         let Some(spec) = super::previous_payment::spec(kind) else {
             return Vec::new();
         };
-        if super::previous_payment::dormant_amount(spec, before)
+        if before[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005
             && after[spec.path].as_f64().unwrap_or(0.0).abs() < 0.005
-            && super::previous_payment::lock_reason(spec, after).is_some()
+            && (super::previous_payment::lock_reason(spec, after).is_some()
+                || super::previous_payment::lock_reason(spec, before).is_some())
         {
-            let gate = format!(
-                "{}_item{}",
-                spec.form_code.to_lowercase(),
-                spec.item.to_lowercase()
-            );
-            return vec![(gate, spec.cleared.to_string())];
+            return vec![(
+                super::previous_payment::gate_key(spec),
+                spec.cleared.to_string(),
+            )];
         }
         Vec::new()
     }
@@ -2377,6 +2373,37 @@ pub mod pending_notices {
                 super::pending_event_for_seen(&seen),
                 Some((super::pending_key("schedule1:row:7", 9), "E1".to_string()))
             );
+        }
+
+        #[test]
+        fn previous_payment_clearance_covers_active_close_and_dormant_original() {
+            use crate::forms::agent::draft_locks::previous_payment;
+            use crate::forms::queueable::QueueableKind;
+
+            let kind = AgentFormKind::Queueable(QueueableKind::Form1600PT);
+            let spec = previous_payment::spec(kind).unwrap();
+            let mut yes_with_amount = json!({"is_amended": true});
+            yes_with_amount[spec.path] = json!(42.0);
+            let mut no_without_amount = json!({"is_amended": false});
+            no_without_amount[spec.path] = json!(0.0);
+            let active = clearance(kind, &yes_with_amount, &no_without_amount);
+            assert_eq!(
+                active,
+                vec![("1600pt_item19".to_string(), spec.cleared.to_string())]
+            );
+
+            let mut dormant_original = json!({"is_amended": false});
+            dormant_original[spec.path] = json!(42.0);
+            let mut amended_cleared = json!({"is_amended": true});
+            amended_cleared[spec.path] = json!(0.0);
+            let original = clearance(kind, &dormant_original, &amended_cleared);
+            assert_eq!(
+                original,
+                vec![("1600pt_item19".to_string(), spec.cleared.to_string())]
+            );
+
+            let manual_clear_while_open = clearance(kind, &yes_with_amount, &amended_cleared);
+            assert_eq!(manual_clear_while_open, Vec::new());
         }
     }
 }

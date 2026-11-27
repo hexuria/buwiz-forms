@@ -19,6 +19,7 @@ interface Case {
   yesKey: string;
   noKey: string;
   sentence: string;
+  cleared: string;
 }
 
 async function openForm(c: Case, setup?: ({ pick: string } | { edits: Record<string, string> })[]): Promise<App> {
@@ -63,21 +64,20 @@ async function exercise(c: Case): Promise<void> {
     { pick: c.noKey },
   ]);
   await reach(closed, box);
-  await closed.waitUntil(() => closed.texts().includes(c.sentence), { timeout: 10_000 });
+  await closed.waitUntil(() => closed.texts().includes(c.cleared), { timeout: 10_000 });
   await closed.waitUntil(() => closed.texts().includes("0.00"), { timeout: 10_000 });
   expect(closed.texts()).not.toContain("42.00");
-  // TODO(#416 shared pending-notice helper): the clearing notice is asserted here
-  // once the shared helper's name and calling convention land.
 }
 
-test("0619E item 15 and 1600PT item 19 are shut until Amended Yes and clear when it closes", async () => {
+test("1600WP item 13 and 1600PT item 19 are shut until Amended Yes and clear when it closes", async () => {
   await exercise({
-    code: "0619E",
-    title: "BIR Form 0619E",
-    boxKey: "frm0619E:txtTax15",
-    yesKey: "frm0619E:optAmend:Y",
-    noKey: "frm0619E:optAmend:N",
-    sentence: "Item 15 applies only to an amended return.",
+    code: "1600WP",
+    title: "BIR Form 1600WP",
+    boxKey: "frm1600WP:txtTax13",
+    yesKey: "frm1600WP:AmendedReturn_1",
+    noKey: "frm1600WP:AmendedReturn_2",
+    sentence: "Item 13 applies only to an amended return.",
+    cleared: "Item 13 was cleared: it applies only to an amended return.",
   });
   await exercise({
     code: "1600PT",
@@ -86,5 +86,6 @@ test("0619E item 15 and 1600PT item 19 are shut until Amended Yes and clear when
     yesKey: "frm1600PT:rdoPg1I2AmendedYes",
     noKey: "frm1600PT:rdoPg1I2AmendedNo",
     sentence: "Item 19 applies only to an amended return.",
+    cleared: "Item 19 was cleared: it applies only to an amended return.",
   });
 }, 120_000);

@@ -1,9 +1,18 @@
-//! The amended-return previous-payment gates. Each form's official captured
-//! lock rule opens its previous-payment box only at Amended Yes; 1602Q is
-//! excluded because its official page leaves item 20 enabled on a new return.
+//! The amended-return previous-payment gates. Each kept form's in-repository
+//! runtime-control inventory records its box disabled at load; 0619E, 0619F,
+//! 2550M and 1602Q are excluded because their captured pages leave the
+//! surveyed box enabled on a new return.
 
 use super::*;
 use bir_core::forms::agent::draft_locks::previous_payment::{self, Spec};
+
+fn gate_key(spec: &Spec) -> String {
+    format!(
+        "{}_item{}",
+        spec.form_code.to_lowercase(),
+        spec.item.to_lowercase()
+    )
+}
 
 fn gate_flow(spec: &Spec) {
     let code = spec.form_code;
@@ -41,6 +50,14 @@ fn gate_flow(spec: &Spec) {
 
     let zero = fill(code, &refused["draft"], json!({spec.key: "0"}));
     assert_eq!(zero["rejected"], json!({}), "{code}: zero write is a no-op");
+    for value in [json!("₱0.00"), json!("(0.00)"), json!(0)] {
+        let zero = fill(code, &zero["draft"], json!({spec.key: value}));
+        assert_eq!(
+            zero["rejected"],
+            json!({}),
+            "{code}: zero spelling {value} is a no-op"
+        );
+    }
 
     let yes = fill(code, &zero["draft"], json!({spec.yes_key: "true"}));
     assert_eq!(
@@ -78,6 +95,10 @@ fn gate_flow(spec: &Spec) {
     assert_eq!(
         no["relocks"][spec.key], spec.lock,
         "{code}: closing the gate shuts the box"
+    );
+    assert_eq!(
+        no["relock_notes"][spec.key], spec.cleared,
+        "{code}: closing the gate says what was cleared inline"
     );
     assert!(
         !agent::field_map(kind, &no["draft"])
@@ -140,11 +161,7 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
                 .contains_key(spec.key),
             "{code}: opened legacy draft's field map omits the box"
         );
-        let gate = format!(
-            "{}_item{}",
-            spec.form_code.to_lowercase(),
-            spec.item.to_lowercase()
-        );
+        let gate = gate_key(spec);
         let notes = first["notes"].as_array().unwrap();
         assert_eq!(notes.len(), 1, "{code}: one pending clearing notice");
         assert_eq!(notes[0]["text"], spec.cleared, "{code}: pending note text");
@@ -161,4 +178,160 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
         );
         assert_eq!(second["notes"][0]["key"], key);
     }
+}
+
+#[test]
+fn amended_return_previous_payment_yes_to_no_save_records_the_clearing() {
+    setup();
+    for spec in &previous_payment::SPECS {
+        let code = spec.form_code;
+        let yes = fill(code, &open(code, 1)["draft"], json!({spec.yes_key: "true"}));
+        let typed = fill(code, &yes["draft"], json!({spec.key: "42"}));
+        let saved = save(code, &typed["draft"]);
+        let id = stored_id(&saved);
+        let no = fill(code, &saved["draft"], json!({spec.no_key: "true"}));
+        assert_eq!(no["relock_notes"][spec.key], spec.cleared);
+        save(code, &no["draft"]);
+
+        // The inline note was shown, so the transactional pending notice is
+        // immediately acknowledged and removed; its seen key is the evidence
+        // that the save recorded the clearing event.
+        let gate = gate_key(spec);
+        assert_eq!(
+            raw_count(&format!(
+                "SELECT count(*) FROM settings WHERE key LIKE 'notice_seen:{gate}:{id}:%'"
+            )),
+            1,
+            "{code}: Yes-to-No save records the clearing event"
+        );
+        assert_eq!(
+            raw_count(&format!(
+                "SELECT count(*) FROM settings WHERE key = 'notice_pending:{gate}:{id}'"
+            )),
+            0,
+            "{code}: the inline-shown pending notice is acknowledged"
+        );
+    }
+}
+
+#[test]
+fn amended_return_previous_payment_unreported_yes_to_no_save_leaves_the_notice_pending() {
+    setup();
+    let spec = previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.form_code == "1600PT")
+        .unwrap();
+    let yes = fill(
+        "1600PT",
+        &open("1600PT", 1)["draft"],
+        json!({spec.yes_key: "true"}),
+    );
+    let typed = fill("1600PT", &yes["draft"], json!({spec.key: "42"}));
+    let saved = save("1600PT", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    // A Yes-to-No transition saved without the page's inline-clearing report
+    // (for example after an open migration could not save) must stay pending
+    // for a later open rather than being marked unseen-and-seen by the save.
+    let mut closed = saved["draft"].clone();
+    closed["is_amended"] = json!(false);
+    closed[spec.path] = json!(0.0);
+    save("1600PT", &closed);
+    let gate = gate_key(spec);
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key = 'notice_pending:{gate}:{id}'"
+        )),
+        1,
+        "an unreported clearing remains pending"
+    );
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key LIKE 'notice_seen:{gate}:{id}:%'"
+        )),
+        0,
+        "an unreported clearing is not marked seen"
+    );
+}
+
+#[test]
+fn amended_return_previous_payment_save_amendment_records_yes_to_no() {
+    setup();
+    let spec = previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.form_code == "1600PT")
+        .unwrap();
+    let yes = fill(
+        "1600PT",
+        &open("1600PT", 1)["draft"],
+        json!({spec.yes_key: "true"}),
+    );
+    let typed = fill("1600PT", &yes["draft"], json!({spec.key: "42"}));
+    let saved = save("1600PT", &typed["draft"]);
+    let id = stored_id(&saved);
+    let filed = with_status(&serde_json::from_str(&raw_row(id).1).unwrap(), "Submitted");
+    raw_exec(
+        "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&filed).unwrap(), &id.to_string()],
+    );
+
+    let amended = call_async(
+        "screen_form_amend",
+        vec![TIN.into(), "1600PT".into(), YEAR.into(), 1.into()],
+    )
+    .unwrap_or_else(|error| panic!("1600PT amendment opens: {error}"));
+    let no = fill("1600PT", &amended["draft"], json!({spec.no_key: "true"}));
+    assert_eq!(no["relock_notes"][spec.key], spec.cleared);
+    save("1600PT", &no["draft"]);
+    let gate = gate_key(spec);
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key LIKE 'notice_seen:{gate}:{id}:%'"
+        )),
+        1,
+        "save_amendment records the clearing event"
+    );
+}
+
+#[test]
+fn amended_return_previous_payment_a_dormant_filed_original_is_not_revived_by_amending() {
+    setup();
+    let spec = previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.form_code == "1600PT")
+        .unwrap();
+    let yes = fill(
+        "1600PT",
+        &open("1600PT", 1)["draft"],
+        json!({spec.yes_key: "true"}),
+    );
+    let typed = fill("1600PT", &yes["draft"], json!({spec.key: "42"}));
+    let saved = save("1600PT", &typed["draft"]);
+    let id = stored_id(&saved);
+    let mut filed: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    filed = with_status(&filed, "Submitted");
+    filed["is_amended"] = json!(false);
+    raw_exec(
+        "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&filed).unwrap(), &id.to_string()],
+    );
+
+    let amended = call_async(
+        "screen_form_amend",
+        vec![TIN.into(), "1600PT".into(), YEAR.into(), 1.into()],
+    )
+    .unwrap_or_else(|error| panic!("1600PT amendment opens: {error}"));
+    assert_eq!(amended["draft"]["is_amended"], true);
+    assert_eq!(amended["draft"][spec.path].as_f64().unwrap_or(0.0), 0.0);
+    assert_eq!(amended["values"][spec.key], "0.00");
+
+    save("1600PT", &amended["draft"]);
+    let gate = gate_key(spec);
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key = 'notice_pending:{gate}:{id}'"
+        )),
+        1,
+        "the amendment save records the dormant original's clearing"
+    );
 }
