@@ -50,10 +50,15 @@ the same computer; it never sends or registers through production (`nsh/src/guar
 
 Three steps on the owner's Mac. The first needs no secret; the second is the only one that touches the upload key.
 
-1. **Build** (`just play-bundle`, or `just play-bundle 28` to choose the number). It builds the bundle, removes
+1. **Build** (`just play-bundle --allow-dotenv` for App Store Connect's next number, which it reads with `.env`, or
+   `just play-bundle 28` to choose the number). `just` loads a `.env` into every recipe and the app bakes some variables
+   in at compile time, so the recipe refuses to build while a `.env` is in the checkout or a folder above it unless
+   `--allow-dotenv` says it is meant; it never passes a server address (`BUWIZ_SERVER_URL`, `BUWIZ_ACCOUNT_URL`) or a
+   development switch to the build (`scripts/play_bundle_guard.py`). It builds the bundle, removes
    the debug signature `nsh package` puts on it and the updater's source, and checks the result: package
    `com.buwiz.ebirforms`, the expected `versionCode`, `targetSdkVersion` from `nsh.json`, backup off, not debuggable,
-   phone ABIs only (`scripts/android_bundle.py check`). It builds in the checkout's own `target/play-bundle` unless
+   phone ABIs only, and no permission beyond those the store listing declares (`STORE_PERMISSIONS`: `INTERNET`,
+   `POST_NOTIFICATIONS`) (`scripts/android_bundle.py check`). It builds in the checkout's own `target/play-bundle` unless
    `CARGO_TARGET_DIR` is set, so a bundle never links crates compiled from another worktree. It writes
    `target/release-artifacts/eBIRForms-Android-<version>-<build>.aab`, unsigned.
 2. **Sign** (`just play-sign`): the owner types the upload key's password when `jarsigner` asks. It writes
@@ -80,7 +85,7 @@ Mac the shared tool stays as other work needs it, and the pinned store tool live
 ```sh
 export NSH_TOOLS=~/BuwizNsh/store-tools
 scripts/setup-android-macos.sh   # once, and again when the pin moves
-just play-bundle
+just play-bundle --allow-dotenv  # App Store Connect's next number; or: just play-bundle 28 (with no .env present)
 ```
 
 The app's Rust toolchain (`rust-toolchain.toml`) needs both Android targets; the setup script names the
@@ -94,8 +99,28 @@ bytes inside the bundle. The unsigned bundle (build 27, never uploaded) was 162.
 and 74.6 MB on armeabi-v7a; the bundle stores them uncompressed. At `nice 15` the setup's runtime took about 40 minutes
 and the bundle's two libraries 16 and 11 minutes.
 
-Machines never build or sign the store bundle. They build development and test packages with the Android debug key
-that `nsh package` makes on its own.
+Machines never sign or upload the store bundle. They build development and test packages with the Android debug key
+that `nsh package` makes on its own, and a Linux machine may build the unsigned store bundle as a verification build
+(below): the bundle that goes to Google Play is still the one built and signed on the owner's Mac.
+
+### On Linux, a verification build
+
+The same recipe runs on Linux. The pinned `nsh` is built in the Ubuntu 24.04 image (GTK 4), so the recipe runs it
+through `~/BuwizNsh/nsh2404.sh` (or `$NSH_WRAPPER`), which `scripts/setup-linux-nsh.sh` writes for one checkout.
+Before building, the recipe refuses a wrapper written for another checkout, NSH tools the container cannot see, and a
+container that did not get the release profile (`CARGO_PROFILE_RELEASE_LTO`, `_CODEGEN_UNITS`, `_OPT_LEVEL`, read with
+`env` inside it): without the profile Cargo builds its defaults silently, a 123 MB arm64 library instead of 88 MB.
+
+```sh
+NSH_TOOLS=~/store-tools scripts/setup-linux-nsh.sh   # the CLI and runtimes in a folder of their own, at the pin
+NSH_TOOLS=~/store-tools just play-bundle 1           # a number, so .env is not needed
+```
+
+The setup installs the Android platform `nsh/nsh.json` targets (`android.targetSdk`). A run on a Linux machine, 28
+November 2026, app `50798351`, NSH `8c78cfd`: package `com.buwiz.ebirforms`, versionCode 1, versionName `0.2.1`,
+minSdk 26, targetSdk 36, not debuggable, `allowBackup` false, `INTERNET` and `POST_NOTIFICATIONS` only, `arm64-v8a`
+and `armeabi-v7a` only, no updater asset, unsigned; `libnsh.so` 88.4 MB (arm64) and 76.1 MB (armeabi-v7a); 166.0 MB
+in all (bundletool 1.18.3 and aapt2 36.0.0 read it independently).
 
 ### The upload key
 

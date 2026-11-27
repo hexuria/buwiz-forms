@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -44,6 +45,7 @@ class LinuxNshSetupTests(unittest.TestCase):
                     result = self.run_shell(function("android_runtime_stamp") + "\n" +
                                             function("nsh_android_runtime_current") + f'''
 WORK="$PWD"
+TOOLS="$WORK/tools"
 REF=current
 NDK_VERSION=27
 ANDROID_RUNTIME_DEBUG=0
@@ -68,6 +70,7 @@ nsh_android_runtime_current {variant}
                                     function("nsh_android_runtime_current") + "\n" +
                                     function("install_android_runtime") + r'''
 WORK="$PWD"
+TOOLS="$WORK/tools"
 NSH="$PWD/nsh"
 REF=current
 ANDROID_HOME="$PWD/sdk"
@@ -92,6 +95,57 @@ install_android_runtime
                 self.assertEqual((dest / "nsh-build").read_text(), "current\n27\n0\n")
                 self.assertEqual((dest / "nsh-ref").read_text(), "current\n")
                 self.assertEqual((dest / "classes.dex").read_text(), built)
+
+    def test_tools_folder_of_its_own_takes_the_cli_and_runtimes(self):
+        # NSH_TOOLS: a fresh folder for the CLI and both runtimes, outside ~/BuwizNsh.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for built in ("debug-dev", "release"):
+                for artifact in ("classes.dex", "lib/arm64-v8a/libnsh.so",
+                                 "lib/armeabi-v7a/libnsh.so", "lib/x86_64/libnsh.so"):
+                    file = root / "nsh/target/android" / built / artifact
+                    file.parent.mkdir(parents=True, exist_ok=True)
+                    file.write_text(built)
+            result = self.run_shell("\n".join(function(name) for name in (
+                "android_runtime_stamp", "nsh_android_runtime_current", "install_android_runtime",
+                "install_nsh_cli")) + r'''
+WORK="$PWD/work"
+TOOLS="$PWD/fresh-tools"
+NSH="$PWD/nsh"
+REF=current
+ANDROID_HOME="$PWD/sdk"
+NDK_VERSION=27
+ANDROID_RUNTIME_DEBUG=0
+log() { :; }
+die() { echo "$*" >&2; exit 1; }
+sdk_mount() { :; }
+nsh_cli_current() { return 1; }
+in_image() { echo "$*" >> calls; }
+install_nsh_cli
+install_android_runtime
+''', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"--root {root}/fresh-tools", (root / "calls").read_text())
+            for variant in ("dev", "release"):
+                self.assertTrue((root / "fresh-tools/runtime/android" / variant / "nsh-ref").is_file(), variant)
+            self.assertFalse((root / "work/tools").exists())
+
+    def test_the_sdk_platform_is_the_one_nsh_json_targets(self):
+        for target, ok in (("36", True), ('"thirty-six"', False), (None, False)):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                nsh = Path(tmp) / "repo/nsh"
+                nsh.mkdir(parents=True)
+                android = {} if target is None else {"targetSdk": "__T__"}
+                text = '{"android": ' + json.dumps(android).replace('"__T__"', target or "") + "}"
+                (nsh / "nsh.json").write_text(text)
+                result = self.run_shell(function("android_api") + r'''
+REPO="$PWD/repo"
+die() { echo "$*" >&2; exit 1; }
+android_api
+''', tmp)
+                self.assertEqual(result.returncode == 0, ok, result.stderr)
+                if ok:
+                    self.assertEqual(result.stdout.strip(), "36")
 
     def test_checkout_accepts_git_directory_or_worktree_file(self):
         for linked in (False, True):
@@ -136,6 +190,7 @@ REPO="$1"
 ANDROID_HOME="$2"
 NDK_VERSION=27
 WORK="$PWD"
+TOOLS="$WORK/tools"
 MOUNTS=(-v "$HOME:$HOME")
 write_wrapper
 bash -n "$WORK/nsh2404.sh"
@@ -151,6 +206,13 @@ bash "$WORK/nsh2404.sh" nsh run --target android
             self.assertIn(f"ANDROID_NDK_HOME={sdk}/ndk/27", args)
             self.assertIn("BUWIZ_ANDROID_DEV_ENV=EBIR_TEST_ENV=1;"
                           "BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1", args)
+            # The release profile `just play-bundle` sets reaches the container (without it Cargo silently builds
+            # its default release: a 123 MB library instead of 88 MB).
+            for name in ("CARGO_PROFILE_RELEASE_LTO", "CARGO_PROFILE_RELEASE_CODEGEN_UNITS",
+                         "CARGO_PROFILE_RELEASE_OPT_LEVEL"):
+                self.assertEqual(args[args.index(name) - 1], "-e", name)
+            # The tools folder setup used is the one on the container's PATH.
+            self.assertTrue(any(a.startswith(f"PATH={root}/tools/bin:") for a in args), args)
 
     def test_wrapper_bakes_only_safe_test_settings_and_local_addresses(self):
         # Review of #452 (W1, W2b): a caller's address or Android test settings reach the build only when they keep it
@@ -188,6 +250,7 @@ REPO="$PWD/repo"
 ANDROID_HOME="$PWD/sdk"
 NDK_VERSION=27
 WORK="$PWD"
+TOOLS="$WORK/tools"
 MOUNTS=(-v "$HOME:$HOME")
 write_wrapper
 export BUWIZ_ANDROID_DEV_ENV="$(printf '%b' "$1")"
@@ -227,7 +290,7 @@ bash "$WORK/nsh2404.sh" nsh run --target android
                               ("outside_home", "sdk_mount", "write_wrapper", "in_image")) + r'''
 unset GIT_CONFIG_GLOBAL
 export HOME="$PWD/home" XDG_CONFIG_HOME="$PWD/xdg" PATH="$PWD/bin:$PATH"
-REPO="$PWD/repo" ANDROID_HOME="$PWD/sdk" NDK_VERSION=27 WORK="$PWD" IMAGE=buwiz-nsh-2404
+REPO="$PWD/repo" ANDROID_HOME="$PWD/sdk" NDK_VERSION=27 WORK="$PWD" TOOLS="$PWD/tools" IMAGE=buwiz-nsh-2404
 MOUNTS=(-v "$HOME:$HOME")
 write_wrapper
 bash "$WORK/nsh2404.sh" nsh check
