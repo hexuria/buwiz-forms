@@ -49,6 +49,7 @@ function FormView(props: { target: FormTarget }) {
 export function renderView(route: Route): JSX.Element {
   switch (route.view) {
     case "lockdebug":
+      if (process.env.NODE_ENV === "production") return null;
       return (
         <DebugLockPages
           page={String(route.params.page ?? "lock")}

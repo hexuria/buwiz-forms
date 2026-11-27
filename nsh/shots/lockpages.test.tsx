@@ -16,14 +16,14 @@ for (const look of LOOKS) {
 
   test(`lock empty, ${look.name}`, async () => {
     const app = await open("../screens/auth/LockPagesDemo.tsx", { ...opts, host: { params: { page: "lock", biometric: "face_id" } } });
-    expect(app.texts()).toContain("ju•••@buwiz.com");
+    expect(app.texts()).toContain("an•••@example.com");
     await shoot(app, `lockpages-${look.name}-empty`);
   });
 
   test(`lock wrong, ${look.name}`, async () => {
     const app = await open("../screens/auth/LockPagesDemo.tsx", { ...opts, host: { params: { page: "lock", wrong: true, biometric: "touch_id" } } });
     await app.type("id:owner-lock-pin", "0000");
-    await app.waitFor("text:Wrong PIN. 2 tries left.");
+    await app.waitFor("text:Wrong PIN.");
     await shoot(app, `lockpages-${look.name}-wrong`);
   });
 
@@ -35,7 +35,7 @@ for (const look of LOOKS) {
 
   test(`lock lost, ${look.name}`, async () => {
     const app = await open("../screens/auth/LockPagesDemo.tsx", { ...opts, host: { params: { page: "lock", lost: true, biometric: "windows_hello" } } });
-    await app.waitFor("text:This device lost its lock store. Contact support.");
+    await app.waitFor("text:This device's lock can't be read. Sign out and sign in again, or write to support@buwiz.com.");
     await shoot(app, `lockpages-${look.name}-lost`);
   });
 

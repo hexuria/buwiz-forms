@@ -972,6 +972,16 @@ nsh-build *args="":
     cd nsh
     exec nsh build {{args}}
 
+# NSH release proof: the lock-pages debug route's Rust entry is absent from the release host artifact cargo itself reports.
+# Too expensive for the PR quick lane: it is a release build, not a type check.
+[unix]
+nsh-release-no-lockdebug:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    bash nsh/scripts/test-release-no-lockdebug.sh
+
 # Windows: the same command in PowerShell.
 [windows]
 nsh-build *args="":

@@ -13,7 +13,7 @@
 //                while a return is Queued the lists are read every 3 s for about 30 s after the Queued set last changed (startQueuedWatch,
 //                also in the dev environment; it and the library warm-up wait for the frame to be shown: nothing is read behind a lock)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, effect, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
+import { batch, computed, effect, host, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
 import { Application, isAvailable } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
@@ -33,7 +33,8 @@ import { nextThemePreference, parseThemePreference, storedThemePreference, THEME
 
 /** A dev route needs the test environment; the lock debug route additionally needs its debug-only Rust entry point. */
 function devRouteAllowed(view: ViewName): boolean {
-  return doorStatus().testEnvironment && (view !== "lockdebug" || lockPagesDebugCompiled());
+  const testEnvironment = (host.params as { testEnvironment?: boolean } | undefined)?.testEnvironment === false ? false : doorStatus().testEnvironment;
+  return testEnvironment && (view !== "lockdebug" || lockPagesDebugCompiled());
 }
 
 // ---------------------------------------------------------------- types
