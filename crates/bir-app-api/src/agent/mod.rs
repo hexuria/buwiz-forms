@@ -415,9 +415,130 @@ fn canonical(path: &Path) -> PathBuf {
     }
 }
 
+/// Publish a host's discovery record, retrying when the final rename is
+/// refused because another process holds the record file open without delete
+/// sharing (Windows: ERROR_SHARING_VIOLATION 32, ERROR_ACCESS_DENIED 5, both
+/// surfacing as [`ErrorKind::PermissionDenied`]). A reader that keeps the file
+/// open for a moment must not cost the host its record: the rename is tried
+/// again up to five times with 50 ms between tries. Every other error fails
+/// at once, exactly as `gpui_agent::discovery::publish_record` does.
+pub fn publish_record_retrying(
+    root: &Path,
+    record: &discovery::HostRecord,
+) -> std::io::Result<discovery::PublishedHost> {
+    const RETRIES: u32 = 5;
+    const BETWEEN: Duration = Duration::from_millis(50);
+    let mut attempt = 0;
+    loop {
+        match discovery::publish_record(root, record) {
+            Ok(published) => return Ok(published),
+            Err(error) if attempt < RETRIES && publish_sharing_error(&error) => {
+                attempt += 1;
+                std::thread::sleep(BETWEEN);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// Whether a publish failure is the sharing class a retry can outlast.
+fn publish_sharing_error(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    #[cfg(windows)]
+    if matches!(error.raw_os_error(), Some(32) | Some(5)) {
+        return true;
+    }
+    let _ = error;
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    fn publish_test_record(port: u16) -> discovery::HostRecord {
+        discovery::HostRecord {
+            addr: format!("127.0.0.1:{port}"),
+            pid: std::process::id(),
+            app: "bir-shell".to_owned(),
+            executable: "bir".to_owned(),
+            bundle_id: None,
+            connect_id: None,
+        }
+    }
+
+    /// Windows: a reader holding the record file open without delete sharing
+    /// for ~120 ms must not cost the host its record — the retry outlasts it.
+    #[cfg(windows)]
+    #[test]
+    fn a_sharing_reader_is_outlasted_by_the_publish_retry() {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_DELETE: u32 = 0x00000004;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let record = publish_test_record(48901);
+        let first = publish_record_retrying(root, &record).expect("first publish");
+        let path = first.path().to_path_buf();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0x00000001 | 0x00000002 & !FILE_SHARE_DELETE)
+            .open(&path)
+            .expect("open without delete sharing");
+        let released = std::sync::Arc::new(std::sync::Mutex::new(Some(held)));
+        let thread_release = released.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(120));
+            thread_release.lock().expect("lock").take();
+        });
+        let mut rewritten = record.clone();
+        rewritten.app = "bir-shell-retried".to_owned();
+        let published =
+            publish_record_retrying(root, &rewritten).expect("publish retried past the reader");
+        let body = std::fs::read_to_string(published.path()).expect("read record");
+        assert!(
+            body.contains("bir-shell-retried"),
+            "the record holds the new publish: {body}"
+        );
+    }
+
+    /// Windows: a reader holding the file open for two full seconds outlasts
+    /// the retries — the publish fails instead of hanging.
+    #[cfg(windows)]
+    #[test]
+    fn a_held_reader_fails_the_publish_after_the_retries() {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_DELETE: u32 = 0x00000004;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let record = publish_test_record(48902);
+        let first = publish_record_retrying(root, &record).expect("first publish");
+        let path = first.path().to_path_buf();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0x00000001 | 0x00000002 & !FILE_SHARE_DELETE)
+            .open(&path)
+            .expect("open without delete sharing");
+        let released = std::sync::Arc::new(std::sync::Mutex::new(Some(held)));
+        let thread_release = released.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(2));
+            thread_release.lock().expect("lock").take();
+        });
+        let started = std::time::Instant::now();
+        let result = publish_record_retrying(root, &record);
+        assert!(
+            result.is_err(),
+            "the publish gives up while the file is held"
+        );
+        assert!(
+            started.elapsed() < Duration::from_millis(1500),
+            "no hang: gave up in {:?}",
+            started.elapsed()
+        );
+    }
 
     #[test]
     fn debug_tree_ids_become_nodes_with_zero_bounds() {

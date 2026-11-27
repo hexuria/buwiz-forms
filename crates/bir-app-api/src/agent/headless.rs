@@ -463,7 +463,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             connect_id: identity.connect_id,
         };
         let root = gpui_agent::discovery::runtime_root();
-        let _discovery_guard = match gpui_agent::discovery::publish_record(&root, &record) {
+        let _discovery_guard = match crate::agent::publish_record_retrying(&root, &record) {
             Ok(published) => Some(published),
             Err(error) => {
                 eprintln!("gpui-agent discovery record not written: {error}");

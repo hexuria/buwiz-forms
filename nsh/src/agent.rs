@@ -450,7 +450,7 @@ mod live {
             bundle_id: identity.bundle_id,
             connect_id: identity.connect_id,
         };
-        let published = match discovery::publish_record(&discovery::runtime_root(), &record) {
+        let published = match bir_app_api::agent::publish_record_retrying(&discovery::runtime_root(), &record) {
             Ok(published) => Some(published),
             Err(error) => {
                 tracing::warn!(%error, "gpui-agent discovery record not written");
