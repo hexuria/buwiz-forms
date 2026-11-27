@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "diag-prep",
+  "fingerprint": "fnv1a64:f26e916ffd802aad",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 18
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 463
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 528
+    }
+  ],
+  "elapsed_ms": 1011
+}

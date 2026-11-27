@@ -52,8 +52,8 @@ def analyze_run(path):
     tag = "J57STOCK" if field == "stock" else "J57OURS"
     logcat = path / "logcat-j57.txt"
     lines = logcat.read_text(errors="replace").splitlines() if logcat.exists() else []
-    own = [line for line in lines if tag + ":" in line]
-    sels = [(int(a), int(b)) for a, b in SEL.findall("\n".join(own))]
+    own = [line for line in lines if re.search(r"\b" + tag + r"\s*:", line)]
+    sels = [(int(a), int(b)) for _, a, b in SEL.findall("\n".join(own))]
     touches = [(int(a), float(x), float(y)) for t, a, x, y in TOUCH.findall("\n".join(own)) if t == tag]
     ams = []
     for line in own:
@@ -68,6 +68,23 @@ def analyze_run(path):
         menu = {"kind": created["kind"], "items": (prepared or created)["items"] or "none-logged"}
     else:
         menu = {"kind": "none", "items": ""}
+    touch_positions = []
+    for index, line in enumerate(lines):
+        match = re.search(r"\b" + tag + r"\s*: touch (?:edit=[0-9a-f]+ )?action=(\d+)", line)
+        if match:
+            touch_positions.append((index, int(match.group(1))))
+    hold_start = None
+    hold_end = None
+    for pos in range(len(touch_positions) - 1, -1, -1):
+        index, action = touch_positions[pos]
+        if action == 0 and any(a == 1 for _, a in touch_positions[pos + 1:]):
+            previous = touch_positions[pos - 1][0] + 1 if pos else 0
+            hold_start = previous
+            hold_end = next(i for i, a in touch_positions[pos + 1:] if a == 1)
+            break
+    window = lines[hold_start:hold_end + 1] if hold_start is not None else []
+    intercepts = [line.split("J57INTERCEPT:", 1)[-1].strip() for line in window if "J57INTERCEPT" in line]
+    cancel = any(re.search(r"\b" + tag + r"\s*: cancel ", line) for line in window)
     hold_dir = next(iter(sorted(path.glob(f"*-hold-{field}-{point}"))), None)
     facts = tree_facts(hold_dir / "post-wait-tree.json") if hold_dir else {}
     report = {}
@@ -85,6 +102,8 @@ def analyze_run(path):
         "selection_log": f"{sels[-1][0]}-{sels[-1][1]}" if sels else "none-logged",
         "selection_events": [f"{a}-{b}" for a, b in sels],
         "touch_count": len(touches),
+        "cancel": cancel,
+        "intercepts": intercepts,
         "touch_actions": [a for a, _, _ in touches],
         "menu": menu,
         "tree": facts,
@@ -103,8 +122,8 @@ def props(root):
         lines = path.read_text(errors="replace").splitlines()
         out = {}
         for tag in ("J57STOCK", "J57OURS"):
-            props_line = next((line.split(":", 5)[-1].strip() for line in lines if re.search(tag + r"\s*: edit=[0-9a-f]+ props ", line)), None)
-            parents_line = next((line.split(":", 5)[-1].strip() for line in lines if re.search(tag + r"\s*: edit=[0-9a-f]+ parents ", line)), None)
+            props_line = next((line.split(":", 5)[-1].strip() for line in lines if re.search(tag + r"\s*: (?:edit=[0-9a-f]+ )?props ", line)), None)
+            parents_line = next((line.split(":", 5)[-1].strip() for line in lines if re.search(tag + r"\s*: (?:edit=[0-9a-f]+ )?parents ", line)), None)
             if props_line or parents_line:
                 out[tag] = {"props": props_line, "parents": parents_line}
         if len(out) == 2:

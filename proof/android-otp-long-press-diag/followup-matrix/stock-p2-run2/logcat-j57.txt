@@ -1,0 +1,206 @@
+11-27 22:28:01.088 26026 26026 I J57STOCK: sel 0-0
+11-27 22:28:01.089 26026 26026 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:01.095 26026 26026 I J57STOCK: sel 0-0
+11-27 22:28:01.095 26026 26026 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=9
+11-27 22:28:01.096 26026 26026 I J57STOCK: sel 0-0
+11-27 22:28:01.096 26026 26026 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=9
+11-27 22:28:01.096 26026 26026 I J57STOCK: sel 0-0
+11-27 22:28:01.096 26026 26026 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=9
+11-27 22:28:01.942 26062 26062 I J57STOCK: sel 0-0
+11-27 22:28:01.942 26062 26062 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:01.954 26062 26062 I J57STOCK: sel 0-0
+11-27 22:28:01.955 26062 26062 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=9
+11-27 22:28:01.955 26062 26062 I J57STOCK: sel 0-0
+11-27 22:28:01.955 26062 26062 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=9
+11-27 22:28:01.958 26062 26062 I J57STOCK: sel 0-0
+11-27 22:28:01.958 26062 26062 I J57STOCK: layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=9
+11-27 22:28:02.061 26062 26062 I J57STOCK: layout layout rect=141,84,939,202 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=0.0 glyph4=104.0 glyph9=234.0 textLength=9
+11-27 22:28:02.062 26062 26062 I J57STOCK: props longClickable=true textSelectable=false focusable=true focusableInTouchMode=true movement=android.text.method.ArrowKeyMovementMethod edit.longClickListener=false touchListener=false
+11-27 22:28:02.062 26062 26062 I J57STOCK: parents edit > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.LinearLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.android.internal.policy.DecorView[intercept=com.android.internal.policy.DecorView,longClickListener=false touchListener=false] > android.view.ViewRootImpl
+11-27 22:28:05.870 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.870 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.870 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.870 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: ScrollBox$VScroll class=com.longbridge.nsh.ScrollBox$VScroll action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.ScrollBox$Content action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.871 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: ScrollBox$VScroll class=com.longbridge.nsh.ScrollBox$VScroll action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.ScrollBox$Content action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:05.935 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:06.041 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.041 26062 26062 I J57OURS : layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.046 26062 26062 I J57OURS : layout layout rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.046 26062 26062 I J57OURS : props longClickable=true textSelectable=false focusable=true focusableInTouchMode=true movement=android.text.method.ArrowKeyMovementMethod edit.longClickListener=false touchListener=false
+11-27 22:28:06.047 26062 26062 I J57OURS : parents edit > com.longbridge.nsh.InputBox[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$Content[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$VScroll[intercept=com.longbridge.nsh.ScrollBox$VScroll,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox[intercept=com.longbridge.nsh.ScrollBox,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.NshView[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.LinearLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.android.internal.policy.DecorView[intercept=com.android.internal.policy.DecorView,longClickListener=false touchListener=false] > android.view.ViewRootImpl
+11-27 22:28:06.048 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.048 26062 26062 I J57OURS : layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.049 26062 26062 I J57OURS : layout layout rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.049 26062 26062 I J57OURS : props longClickable=true textSelectable=false focusable=true focusableInTouchMode=true movement=android.text.method.ArrowKeyMovementMethod edit.longClickListener=false touchListener=false
+11-27 22:28:06.049 26062 26062 I J57OURS : parents edit > com.longbridge.nsh.InputBox[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$Content[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$VScroll[intercept=com.longbridge.nsh.ScrollBox$VScroll,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox[intercept=com.longbridge.nsh.ScrollBox,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.NshView[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.LinearLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.android.internal.policy.DecorView[intercept=com.android.internal.policy.DecorView,longClickListener=false touchListener=false] > android.view.ViewRootImpl
+11-27 22:28:06.052 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.052 26062 26062 I J57OURS : layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.052 26062 26062 I J57OURS : layout layout rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.052 26062 26062 I J57OURS : props longClickable=true textSelectable=false focusable=true focusableInTouchMode=true movement=android.text.method.ArrowKeyMovementMethod edit.longClickListener=false touchListener=false
+11-27 22:28:06.053 26062 26062 I J57OURS : parents edit > com.longbridge.nsh.InputBox[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$Content[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$VScroll[intercept=com.longbridge.nsh.ScrollBox$VScroll,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox[intercept=com.longbridge.nsh.ScrollBox,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.NshView[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.LinearLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.android.internal.policy.DecorView[intercept=com.android.internal.policy.DecorView,longClickListener=false touchListener=false] > android.view.ViewRootImpl
+11-27 22:28:06.054 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.054 26062 26062 I J57OURS : layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.054 26062 26062 I J57OURS : layout layout rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.054 26062 26062 I J57OURS : props longClickable=true textSelectable=false focusable=true focusableInTouchMode=true movement=android.text.method.ArrowKeyMovementMethod edit.longClickListener=false touchListener=false
+11-27 22:28:06.055 26062 26062 I J57OURS : parents edit > com.longbridge.nsh.InputBox[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$Content[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$VScroll[intercept=com.longbridge.nsh.ScrollBox$VScroll,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox[intercept=com.longbridge.nsh.ScrollBox,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.NshView[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.LinearLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.android.internal.policy.DecorView[intercept=com.android.internal.policy.DecorView,longClickListener=false touchListener=false] > android.view.ViewRootImpl
+11-27 22:28:06.056 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.056 26062 26062 I J57OURS : layout selection rect=0,0,0,0 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.057 26062 26062 I J57OURS : layout layout rect=0,262,0,262 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.057 26062 26062 I J57OURS : props longClickable=true textSelectable=false focusable=true focusableInTouchMode=true movement=android.text.method.ArrowKeyMovementMethod edit.longClickListener=false touchListener=false
+11-27 22:28:06.057 26062 26062 I J57OURS : parents edit > com.longbridge.nsh.InputBox[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$Content[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox$VScroll[intercept=com.longbridge.nsh.ScrollBox$VScroll,longClickListener=false touchListener=false] > com.longbridge.nsh.ScrollBox[intercept=com.longbridge.nsh.ScrollBox,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.Box[intercept=com.longbridge.nsh.Box,longClickListener=false touchListener=false] > com.longbridge.nsh.NshView[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.FrameLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > android.widget.LinearLayout[intercept=android.view.ViewGroup,longClickListener=false touchListener=false] > com.android.internal.policy.DecorView[intercept=com.android.internal.policy.DecorView,longClickListener=false touchListener=false] > android.view.ViewRootImpl
+11-27 22:28:06.059 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.059 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.062 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.062 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.063 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.063 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.063 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.063 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.064 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.064 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.065 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.065 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.066 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.066 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.066 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.066 26062 26062 I J57OURS : layout selection rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.067 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.067 26062 26062 I J57OURS : layout selection rect=0,262,0,262 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.068 26062 26062 I J57OURS : sel 0-0
+11-27 22:28:06.068 26062 26062 I J57OURS : layout selection rect=0,262,0,262 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=? glyph4=? glyph9=? textLength=0
+11-27 22:28:06.070 26062 26062 I J57OURS : layout layout rect=0,325,0,325 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.070 26062 26062 I J57OURS : layout layout rect=0,388,0,388 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.071 26062 26062 I J57OURS : layout layout rect=0,388,0,388 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.071 26062 26062 I J57OURS : layout layout rect=0,388,0,388 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.072 26062 26062 I J57OURS : layout layout rect=0,388,0,388 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.073 26062 26062 I J57OURS : layout layout rect=45,717,843,832 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.074 26062 26062 I J57OURS : layout layout rect=74,1171,923,1292 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.076 26062 26062 I J57OURS : layout layout rect=116,1947,965,2067 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.077 26062 26062 I J57OURS : layout layout rect=116,2640,965,2760 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:06.078 26062 26062 I J57OURS : layout layout rect=116,2871,965,2991 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:09.007 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.007 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.007 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.007 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.007 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.007 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.007 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.008 26062 26062 I J57INTERCEPT: ScrollBox$VScroll class=com.longbridge.nsh.ScrollBox$VScroll action=0 return=false
+11-27 22:28:09.008 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.ScrollBox$Content action=0 return=false
+11-27 22:28:09.008 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.008 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.009 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:09.010 26062 26062 I J57OURS : touch edit=cd2b5de action=0 x=399.0 y=57.5
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: ScrollBox$VScroll class=com.longbridge.nsh.ScrollBox$VScroll action=1 return=false
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.ScrollBox$Content action=1 return=false
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.074 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.075 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.075 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.075 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.075 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.075 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:09.075 26062 26062 I J57OURS : touch edit=cd2b5de action=1 x=399.0 y=57.5
+11-27 22:28:09.126 26062 26062 I J57OURS : sel 1-1
+11-27 22:28:09.126 26062 26062 I J57OURS : layout selection rect=87,969,885,1084 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=1
+11-27 22:28:09.322 26062 26062 I J57OURS : layout layout rect=116,1389,965,1509 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:09.333 26062 26062 I J57OURS : layout layout rect=87,934,885,1050 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=1
+11-27 22:28:09.333 26062 26062 I J57OURS : layout layout rect=116,1912,965,2033 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:09.333 26062 26062 I J57OURS : layout layout rect=116,2605,965,2726 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:09.335 26062 26062 I J57OURS : layout layout rect=116,2836,965,2957 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:10.239 26062 26062 I J57OURS : sel 2-2
+11-27 22:28:10.240 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=2
+11-27 22:28:10.924 26062 26062 I J57OURS : sel 3-3
+11-27 22:28:10.924 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=3
+11-27 22:28:11.622 26062 26062 I J57OURS : sel 4-4
+11-27 22:28:11.622 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=82.0 glyph9=err:IndexOutOfBoundsException textLength=4
+11-27 22:28:12.379 26062 26062 I J57OURS : sel 5-5
+11-27 22:28:12.380 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=82.0 glyph9=err:IndexOutOfBoundsException textLength=5
+11-27 22:28:13.068 26062 26062 I J57OURS : sel 6-6
+11-27 22:28:13.068 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=82.0 glyph9=err:IndexOutOfBoundsException textLength=6
+11-27 22:28:13.778 26062 26062 I J57OURS : sel 7-7
+11-27 22:28:13.778 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=82.0 glyph9=err:IndexOutOfBoundsException textLength=7
+11-27 22:28:14.461 26062 26062 I J57OURS : sel 8-8
+11-27 22:28:14.461 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=82.0 glyph9=err:IndexOutOfBoundsException textLength=8
+11-27 22:28:15.150 26062 26062 I J57OURS : sel 9-9
+11-27 22:28:15.150 26062 26062 I J57OURS : layout selection rect=87,916,885,1032 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=82.0 glyph9=188.49219 textLength=9
+11-27 22:28:15.792 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: ScrollBox$VScroll class=com.longbridge.nsh.ScrollBox$VScroll action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.ScrollBox$Content action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.793 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=0 return=false
+11-27 22:28:15.794 26062 26062 I J57OURS : touch edit=7adb01d action=0 x=424.5 y=60.0
+11-27 22:28:15.854 26062 26062 I J57INTERCEPT: ScrollBox$VScroll class=com.longbridge.nsh.ScrollBox$VScroll action=1 return=false
+11-27 22:28:15.854 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.ScrollBox$Content action=1 return=false
+11-27 22:28:15.854 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57INTERCEPT: Box class=com.longbridge.nsh.Box action=1 return=false
+11-27 22:28:15.855 26062 26062 I J57OURS : touch edit=7adb01d action=1 x=424.5 y=60.0
+11-27 22:28:19.228 26062 26062 I J57STOCK: touch edit=c0fda6e action=0 x=289.00098 y=59.009766
+11-27 22:28:19.633 26062 26062 I J57STOCK: sel 9-9
+11-27 22:28:19.633 26062 26062 I J57STOCK: layout selection rect=141,84,939,202 padding=10,26,10,29 compoundPadding=10,26,10,29 scroll=0,0 glyph0=0.0 glyph4=104.0 glyph9=234.0 textLength=9
+11-27 22:28:20.331 26062 26062 I J57STOCK: touch edit=c0fda6e action=1 x=289.00098 y=59.009766
+11-27 22:28:20.362 26062 26062 I J57STOCK: am create kind=insertion keep=true items=[16908319:Select all:enabled:visible,16908355:Autofill:enabled:visible]
+11-27 22:28:20.362 26062 26062 I J57STOCK: am prepare kind=insertion keep=true items=[16908319:Select all:enabled:visible,16908355:Autofill:enabled:visible]
+11-27 22:28:20.393 26062 26062 I J57OURS : layout layout rect=116,1950,965,2070 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:20.394 26062 26062 I J57OURS : layout layout rect=116,2643,965,2763 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0
+11-27 22:28:20.394 26062 26062 I J57OURS : layout layout rect=116,2874,965,2994 padding=0,0,0,0 compoundPadding=0,0,0,0 scroll=0,0 glyph0=0.0 glyph4=err:IndexOutOfBoundsException glyph9=err:IndexOutOfBoundsException textLength=0

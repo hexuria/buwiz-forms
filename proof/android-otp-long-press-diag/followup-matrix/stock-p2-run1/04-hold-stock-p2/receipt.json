@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "diag-hold-stock-p2",
+  "fingerprint": "fnv1a64:3b45b42de8183fb7",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "h1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2669,
+      "screenshot": {
+        "path": "/home/ubuntu/j57/diag-evidence/stock-p2-run1/04-hold-stock-p2/001-h1.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j57/diag-evidence/stock-p2-run1/04-hold-stock-p2/001-h1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2669
+}

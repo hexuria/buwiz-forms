@@ -1,0 +1,61 @@
+{
+ "suite": "otp-diag",
+ "target": "android",
+ "started": "20261127-222954",
+ "out": "/home/ubuntu/j57/diag-evidence/ours-p1-run3",
+ "cli_version": "0.4.1",
+ "app_commit": "c21de7ef",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3051,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-prep.json",
+   "video": "/home/ubuntu/j57/diag-evidence/ours-p1-run3/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/diag-evidence/ours-p1-run3/01-prep/post-tree.json"
+  },
+  {
+   "name": "type",
+   "status": "pass",
+   "ms": 10416,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-type.json",
+   "video": "/home/ubuntu/j57/diag-evidence/ours-p1-run3/02-type/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/diag-evidence/ours-p1-run3/02-type/post-tree.json"
+  },
+  {
+   "name": "hold-ours-p1",
+   "status": "pass",
+   "ms": 5726,
+   "note": null,
+   "file": "agent-recipes/e2e/diag-hold-ours-p1.json",
+   "video": "/home/ubuntu/j57/diag-evidence/ours-p1-run3/05-hold-ours-p1/recording.mp4",
+   "post_wait_screenshot": "/home/ubuntu/j57/diag-evidence/ours-p1-run3/05-hold-ours-p1/post-wait.png",
+   "post_wait_tree": "/home/ubuntu/j57/diag-evidence/ours-p1-run3/05-hold-ours-p1/post-wait-tree.json"
+  }
+ ]
+}

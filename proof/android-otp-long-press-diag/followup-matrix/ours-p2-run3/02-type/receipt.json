@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "diag-type",
+  "fingerprint": "fnv1a64:e49156a483ddcb0c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 7226
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1059,
+      "screenshot": {
+        "path": "/home/ubuntu/j57/diag-evidence/ours-p2-run3/02-type/002-s5.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j57/diag-evidence/ours-p2-run3/02-type/002-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8286
+}

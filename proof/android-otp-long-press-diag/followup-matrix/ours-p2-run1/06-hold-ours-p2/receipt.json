@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "diag-hold-ours-p2",
+  "fingerprint": "fnv1a64:0ee0e1ca9a68db7c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "h1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2337,
+      "screenshot": {
+        "path": "/home/ubuntu/j57/diag-evidence/ours-p2-run1/06-hold-ours-p2/001-h1.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j57/diag-evidence/ours-p2-run1/06-hold-ours-p2/001-h1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2337
+}
