@@ -910,6 +910,53 @@ mod a3a_tests {
         }
     }
 
+    /// F1: an import in rooms mode reopens the room on the restored file — the slot never serves
+    /// the ephemeral placeholder past the install.
+    #[test]
+    fn an_import_in_rooms_mode_reopens_the_room_on_the_restored_file() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        crate::account_gate::set_unlocked(true);
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        // The archive: one taxpayer, "Restored Holdings Inc".
+        let source = Database::open(scratch.layout.device_dir().join("source.db")).unwrap();
+        source
+            .create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+                tin_root: "987654320".into(),
+                name: "Restored Holdings Inc".into(),
+                taxpayer_type: bir_core::profile::TaxpayerType::Corporation,
+                birth_date: None,
+                head_office: bir_core::tax_profile::BranchFacts {
+                    rdo_code: "040".into(),
+                    registered_address: "1 Example Street, Pasig".into(),
+                    zip_code: "1600".into(),
+                    phone: "0280000000".into(),
+                    email: "office@example.com".into(),
+                },
+            })
+            .unwrap();
+        source.checkpoint().unwrap();
+        let archive = scratch.layout.device_dir().join("backup.zip");
+        bir_core::export::export_database_zip(&source, &archive).unwrap();
+        drop(source);
+        crate::bir_module::restore_database_archive(&archive, 7).expect("the import runs");
+        // The room the screens read now is the restored file — its taxpayer is there.
+        let (handle, _) = crate::open_room::current().expect("a room is open");
+        let guard = bir_core::lock_timing::lock(&handle).unwrap();
+        let names: Vec<String> = guard
+            .list_profiles()
+            .unwrap()
+            .iter()
+            .map(|profile| profile.full_name.clone())
+            .collect();
+        assert!(
+            names.iter().any(|name| name == "Restored Holdings Inc"),
+            "the room does not serve the restored file (the placeholder is still served): {names:?}"
+        );
+    }
+
     /// X1: the room path is process-wide, never per-thread. A second engine thread (the print
     /// preview's) reads the open room's id and path; after B signs in it reads B's, never A's.
     #[test]

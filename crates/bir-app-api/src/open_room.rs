@@ -134,6 +134,23 @@ fn open_path(
     Ok((handle, generation))
 }
 
+/// Reopen `path` fresh — a new connection, a new Arc, a new generation — never the registry's reuse.
+/// For the restore (F1): the shared Arc's contents were swapped for the ephemeral placeholder, so the
+/// reuse would serve it again. The stale entry goes first: its owner lock with it, since the swap
+/// already dropped the old file's connection. Sends still in flight hold their own Arc and finish
+/// against it, as ever.
+pub(crate) fn reopen_fresh(
+    path: &std::path::Path,
+    room_id: Option<RoomId>,
+    user_id: String,
+) -> Result<(Arc<Mutex<Database>>, u64), String> {
+    {
+        let mut registry = lock(&REGISTRY);
+        registry.remove(path);
+    }
+    open_path(path, room_id, user_id)
+}
+
 /// Open the account's room as the one slot. The open goes through [`bir_core::rooms::open_room_guarded`]
 /// in the end — R1: never before the claim's `start()` ran in this session. Until the guard's inner
 /// open is wired here, the path open above is the same file.

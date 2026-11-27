@@ -3068,7 +3068,7 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
 /// 3. drop the cached connection (it holds the owner lock and an open handle
 ///    on the file being replaced) and put the checked file in its place; if
 ///    that fails, the connection is reopened on the file that is still there.
-fn restore_database_archive(archive: &std::path::Path, stamp: u64) -> HostResult {
+pub(crate) fn restore_database_archive(archive: &std::path::Path, stamp: u64) -> HostResult {
     let db_path = db::app_database_path();
     let staged = bir_core::import::stage_database_zip(archive, &db_path)
         .map_err(|error| HostError::new(error.to_string()))?;
@@ -3169,7 +3169,22 @@ fn restore_staged_database(
         reset_database()?;
     }
     match staged.install() {
-        Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
+        Ok(()) => {
+            // F1: in rooms mode nothing may serve the ephemeral placeholder past the install —
+            // the room reopens on the restored file at once, a new Arc and a new generation.
+            if let Some(user_id) = crate::open_room::user_id() {
+                let room_id = crate::open_room::room_id();
+                let path = if crate::open_room::legacy_mode() {
+                    bir_core::rooms::Layout::here().legacy_database()
+                } else {
+                    db_path.to_path_buf()
+                };
+                if let Err(error) = crate::open_room::reopen_fresh(&path, room_id, user_id) {
+                    tracing::warn!("the room did not reopen on the restored file: {error}");
+                }
+            }
+            Ok(HostObject::new().field("kind", "database").into())
+        }
         Err(error) => {
             // Back on the file that is still there, now rather than at the next call.
             let _ = open_database_slot();
