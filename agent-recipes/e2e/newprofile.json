@@ -1,0 +1,43 @@
+{
+ "v": 1,
+ "description": "New tax profile always there: first-run opens the bare page, the entry is always in the sidebar or picker, and the empty Home's one clear button opens the page. Run with `just e2e <target> newprofile`; see docs/proof/E2E.md.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E PROFILE PROOF",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none"
+ },
+ "recipes": [
+  {
+   "name": "newprofile-first",
+   "desktop": "newprofile-first-desktop.wants",
+   "linux": "newprofile-first-desktop.wants",
+   "phone": "newprofile-first-phone.json",
+   "required": true,
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "newprofile-entry",
+   "desktop": "newprofile-entry-desktop.wants",
+   "linux": "newprofile-entry-desktop.wants",
+   "phone": "newprofile-entry-phone.wants",
+   "required": true
+  },
+  {
+   "name": "newprofile-empty",
+   "desktop": "newprofile-empty-desktop.json",
+   "linux": "newprofile-empty-desktop.json",
+   "phone": "newprofile-empty-phone.json"
+  }
+ ]
+}

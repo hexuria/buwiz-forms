@@ -1,0 +1,7 @@
+# New tax profile proof, phone 2/3: the picker's add row always shows New tax profile; it opens the page.
+wait_until nb-search --timeout-ms 10000
+click nb-search
+wait_until palette-input --timeout-ms 5000 --screenshot
+click text:New tax profile
+wait_until new-tp-name --timeout-ms 8000 --screenshot
+click new-tp-cancel
