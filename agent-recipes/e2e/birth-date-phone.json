@@ -1,0 +1,109 @@
+{
+ "v": 1,
+ "name": "e2e-birth-date-phone",
+ "app": "bir-shell",
+ "params": [
+  "birth"
+ ],
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "nb-search"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "palette-input",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s3",
+   "op": "set_value",
+   "target": "palette-input",
+   "value": "E2E"
+  },
+  {
+   "id": "s4",
+   "op": "key",
+   "target": "palette-input",
+   "key": "Enter"
+  },
+  {
+   "id": "s5",
+   "op": "wait_until",
+   "target": "tp-tabs-profile",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s6",
+   "op": "click",
+   "target": "tp-tabs-profile"
+  },
+  {
+   "id": "s7",
+   "op": "wait_until",
+   "target": "tp-sec-taxpayer-edit",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s8",
+   "op": "click",
+   "target": "tp-sec-taxpayer-edit"
+  },
+  {
+   "id": "s9",
+   "op": "wait_until",
+   "target": "tp-taxpayer-birth_date",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s10",
+   "op": "click",
+   "target": "tp-taxpayer-birth_date"
+  },
+  {
+   "id": "s11",
+   "op": "wait_until",
+   "target": "tp-taxpayer-birth_date-sheet-input",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s12",
+   "op": "wait",
+   "timeout_ms": 800
+  },
+  {
+   "id": "s13",
+   "op": "set_value",
+   "target": "tp-taxpayer-birth_date-sheet-input",
+   "value": "$birth"
+  },
+  {
+   "id": "s14",
+   "op": "click",
+   "target": "tp-taxpayer-birth_date-sheet-done"
+  },
+  {
+   "id": "s15",
+   "op": "wait_until",
+   "target": "tp-taxpayer-birth_date-sheet-input",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "s16",
+   "op": "click",
+   "target": "tp-taxpayer-save"
+  },
+  {
+   "id": "s17",
+   "op": "wait_until",
+   "target": "tp-taxpayer-save",
+   "timeout_ms": 5000,
+   "screenshot": true,
+   "exists": false
+  }
+ ]
+}

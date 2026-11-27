@@ -1,0 +1,54 @@
+{
+ "v": 1,
+ "name": "probe-d",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "new-tp-start-trigger"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "new-tp-start-opt-none",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "new-tp-start-opt-none"
+  },
+  {
+   "id": "s4",
+   "op": "type",
+   "target": "new-tp-name",
+   "text": "$name"
+  },
+  {
+   "id": "s5",
+   "op": "assert",
+   "target": "new-tp-name",
+   "value": "$name"
+  },
+  {
+   "id": "s6",
+   "op": "snapshot"
+  },
+  {
+   "id": "s7",
+   "op": "type",
+   "target": "$tin_field",
+   "text": "$tin"
+  },
+  {
+   "id": "s8",
+   "op": "snapshot"
+  }
+ ],
+ "params": [
+  "tin",
+  "name",
+  "tin_field"
+ ],
+ "app": "bir-shell"
+}

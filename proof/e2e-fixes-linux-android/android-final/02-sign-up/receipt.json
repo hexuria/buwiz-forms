@@ -1,0 +1,100 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "ui-sign-up-phone",
+  "fingerprint": "fnv1a64:a5aae5114ddd2291",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 772
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 30
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 621
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1086
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1577
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 840
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2638,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/009-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 589
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 412
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 175,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/013-s13.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/009-s9.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/013-s13.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8821
+}

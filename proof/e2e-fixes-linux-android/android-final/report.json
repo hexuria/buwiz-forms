@@ -1,0 +1,131 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261127-085515",
+ "out": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515",
+ "cli_version": "0.4.1",
+ "app_commit": "85dd0097",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3076,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 11016,
+   "note": null,
+   "file": "agent-recipes/ui/ui-sign-up-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 5798,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/03-navigate/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 14351,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/04-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes",
+   "status": "fail",
+   "ms": 3962,
+   "note": "fallback: needs an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+   "file": "agent-recipes/e2e/money-boxes.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/05-money-boxes/recording.mp4",
+   "step": "s2",
+   "error": "target_gone: fp-frm2551Qv2018:txt16",
+   "error_code": "target_gone",
+   "line": "type fp-frm2551Qv2018:txt16 $prior",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/05-money-boxes/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/05-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 62,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 15554,
+   "note": "precondition: Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/recording.mp4",
+   "step": "s2",
+   "error": "wait_until timed out: node `queue-continue` not found",
+   "error_code": "timeout",
+   "line": "wait_until queue-continue --timeout-ms 10000 --screenshot",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/failure-tree.json"
+  },
+  {
+   "name": "birth-date",
+   "status": "known gap",
+   "ms": 12200,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/08-birth-date/recording.mp4",
+   "step": "s14",
+   "error": "`node 8258` is offscreen",
+   "error_code": "host_error",
+   "line": "click tp-taxpayer-birth_date-sheet-done",
+   "known_gap": "gap 1: the date is set in a date sheet",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/08-birth-date/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/08-birth-date/failure-tree.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 2401,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/09-sign-out/recording.mp4",
+   "step": "s1",
+   "error": "occluded_by: 583",
+   "error_code": "host_error",
+   "line": "click nb-avatar",
+   "known_gap": "gap 1: Log out is inside the tax profile sheet on a phone",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/09-sign-out/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/09-sign-out/failure-tree.json"
+  }
+ ]
+}
