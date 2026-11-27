@@ -2292,7 +2292,11 @@ mod tests {
         };
         d.recompute();
         let tp = &d.taxpayer;
-        assert_eq!(tp.deduction, Form1701MsDeduction::Itemized);
+        assert_eq!(
+            tp.deduction,
+            Form1701MsDeduction::Osd,
+            "the disabled Item 17 answer is left as it was, not picked"
+        );
         assert_eq!(tp.gross_income, 1_500_000.0);
         assert_eq!(tp.special_tax_due, 75_000.0);
         assert_eq!(tp.income_tax_due, 75_000.0);
