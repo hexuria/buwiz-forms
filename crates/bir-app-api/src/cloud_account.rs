@@ -256,10 +256,10 @@ fn sign_out(
 /// relaunch, and the page shows the gate without waiting for the server. A sign-in this device could not
 /// remove is an error the page shows, never "signed out"; the gate locks and the logout goes out either way.
 fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
-    let _ = http;
     // D1: the end is the machine's one section — the disk first, the cache and the close inside
-    // SESSION, the logout after. Nothing here writes anything itself anymore.
-    crate::session::sign_out();
+    // SESSION, the logout after. Nothing here writes anything itself anymore. The logout carries
+    // the transport the caller chose: production's BlockingHttp, the tests' fake.
+    crate::session::sign_out_inner(http);
     crate::hooks::hooks().refresh_menu();
     status_now()
 }

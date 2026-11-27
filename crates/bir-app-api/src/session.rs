@@ -506,6 +506,16 @@ fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
 /// A crash between 1 and 2 leaves the disk signed out — the safe direction — and I1 holds on
 /// the cache throughout. cloud_account's sign_out_with routes here.
 pub fn sign_out() {
+    sign_out_inner(Box::new(bir_core::cloud_account::BlockingHttp::new()));
+}
+
+/// The sign-out with its logout transport chosen — production's BlockingHttp by sign_out, the
+/// tests' fake through cloud_account's sign_out_with. The flow is the machine's either way; the
+/// injected transport only hears the logout, so the contract the sign-out tests exercise IS the
+/// real path.
+pub(crate) fn sign_out_inner(
+    logout_http: Box<dyn bir_core::cloud_account::Http + Send>,
+) {
     crate::cloud_email::cancel();
     bir_core::background_cron::set_submission_paused(true);
     // Step 1: the persisted sign-in goes, outside SESSION.
@@ -531,11 +541,7 @@ pub fn sign_out() {
     drop(outcome.dropped);
     report_invariants();
     if let Some((server_url, access_token)) = logout {
-        crate::cloud_account::logout_soon(
-            Box::new(bir_core::cloud_account::BlockingHttp::new()),
-            server_url,
-            access_token,
-        );
+        crate::cloud_account::logout_soon(logout_http, server_url, access_token);
     }
     if let Err(error) = removed {
         tracing::warn!("sign-out left the saved sign-in on this device: {error}");
