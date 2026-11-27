@@ -1834,7 +1834,8 @@ pub(crate) enum Inject {
     Link,
     /// Step 6: this build's open of the room.
     Open,
-    /// Step 6: the room file's transaction.
+    /// Step 6: the room file's transaction (made as SQLite's own `SQLITE_FULL`, only in tests).
+    #[cfg_attr(not(test), allow(dead_code))]
     Fixups,
     /// Step 6: the device store's rows.
     DeviceRows,

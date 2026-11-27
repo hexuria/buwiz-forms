@@ -1,6 +1,6 @@
 # A2 rehearsal: per-table content digests (M5)
 
-Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 22:41 UTC. Digests by `scripts/a2_table_digests.py` (Python 3.9.6, its own sqlite3). Fixtures made by this build's own code (schema 24, v0.2.0's), in temporary folders.
+Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-27 09:04 UTC. Digests by `scripts/a2_table_digests.py` (Python 3.9.6, its own sqlite3). Fixtures made by this build's own code (schema 24, v0.2.0's), in temporary folders.
 
 ## Shape 1: solo (owner PIN, four forms, filed + receipt, eBIRForms BLOB, year facts, overrides, dark theme) (PASS)
 
@@ -11,13 +11,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | 54785329cc6b | 54785329cc6b | yes |
+| form_drafts | 684641f2d7cf | 684641f2d7cf | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
 | inbox_oauth_tokens | 7f4940e4ddf3 | 7f4940e4ddf3 | yes |
 | job_queue | e07a995eaae8 | e07a995eaae8 | yes |
-| legacy_filed_returns | 8bd39a286a9d | 8bd39a286a9d | yes |
+| legacy_filed_returns | 6b65e6b00577 | 6b65e6b00577 | yes |
 | penalties_cache | 852eb072a4da | 852eb072a4da | yes |
 | per_year_forms | b47abbfb21c1 | b47abbfb21c1 | yes |
 | profile_calendar_events | 8243106005ad | 8243106005ad | yes |
@@ -26,16 +26,16 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | settings | be61f81d6b06 | be61f81d6b06 | yes |
 | setups | b80526df3635 | b80526df3635 | yes |
 | sqlite_sequence | d0b76930ef76 | d0b76930ef76 | yes |
-| submission_receipts | 39c131c9379a | 39c131c9379a | yes |
-| submissions | 8fecab395f0d | 8fecab395f0d | yes |
+| submission_receipts | f541f8afc04c | f541f8afc04c | yes |
+| submissions | cf2af87d7e4f | cf2af87d7e4f | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 371f88377ff9 | 371f88377ff9 | yes |
-| year_facts | 76ecbded9a53 | 76ecbded9a53 | yes |
+| taxpayers | b62eea3ead91 | b62eea3ead91 | yes |
+| year_facts | 12e0a9598066 | 12e0a9598066 | yes |
 
-- before: integrity_check "ok", user_version 24, rows 27, raw SHA-256 62ebb49fcd01
-- after: integrity_check "ok", user_version 24, rows 27, raw SHA-256 0538de14fb43
+- before: integrity_check "ok", user_version 24, rows 27, raw SHA-256 9ff581725d46
+- after: integrity_check "ok", user_version 24, rows 27, raw SHA-256 2c64214187c5
 - step-6 keys, before: {"buwiz_server_url":"https://old.example"}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 62ebb49fcd01 equal
+- restored by this build's Import: raw SHA-256 9ff581725d46 equal
 
 ## Shape 2: help desk (admin PIN, authenticator, recovery key, six clients) (PASS)
 
@@ -46,7 +46,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | ca9812947930 | ca9812947930 | yes |
+| form_drafts | beaa09515fca | beaa09515fca | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -64,13 +64,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 2e2058220aad | 2e2058220aad | yes |
+| taxpayers | 714944960451 | 714944960451 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 25, raw SHA-256 5156ea319832
-- after: integrity_check "ok", user_version 24, rows 25, raw SHA-256 68d41fdd3ad9
+- before: integrity_check "ok", user_version 24, rows 25, raw SHA-256 056aa16564f7
+- after: integrity_check "ok", user_version 24, rows 25, raw SHA-256 ce4fde2f54c3
 - step-6 keys, before: {}, after: {"hand_to_clients":"on"}
-- restored by this build's Import: raw SHA-256 5156ea319832 equal
+- restored by this build's Import: raw SHA-256 056aa16564f7 equal
 
 ## Shape 3: no saved sign-in, then A (Not mine) and B (admin PIN) (PASS)
 
@@ -81,7 +81,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | ca9812947930 | ca9812947930 | yes |
+| form_drafts | 2396e55d75fa | 2396e55d75fa | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -99,13 +99,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 2e2058220aad | 2e2058220aad | yes |
+| taxpayers | e14fac49d4d5 | e14fac49d4d5 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 25, raw SHA-256 5156ea319832
-- after: integrity_check "ok", user_version 24, rows 25, raw SHA-256 68d41fdd3ad9
+- before: integrity_check "ok", user_version 24, rows 25, raw SHA-256 ada68c0233b8
+- after: integrity_check "ok", user_version 24, rows 25, raw SHA-256 61ec3191d2a0
 - step-6 keys, before: {}, after: {"hand_to_clients":"on"}
-- restored by this build's Import: raw SHA-256 5156ea319832 equal
+- restored by this build's Import: raw SHA-256 ada68c0233b8 equal
 
 ## Shape 4: queued returns (three Queued, one Submitted awaiting its email) (PASS)
 
@@ -116,7 +116,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | 5eb5bded2709 | 5eb5bded2709 | yes |
+| form_drafts | f0a0588ef07b | f0a0588ef07b | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -134,13 +134,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | cb7ba165a3ee | cb7ba165a3ee | yes |
+| taxpayers | 44a0c18ffd43 | 44a0c18ffd43 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 18, raw SHA-256 da549eeb18f0
-- after: integrity_check "ok", user_version 24, rows 18, raw SHA-256 89bf519f11ad
+- before: integrity_check "ok", user_version 24, rows 18, raw SHA-256 49ec31b0681f
+- after: integrity_check "ok", user_version 24, rows 18, raw SHA-256 6863dcc64366
 - step-6 keys, before: {"buwiz_server_url":"https://old.example"}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 da549eeb18f0 equal
+- restored by this build's Import: raw SHA-256 49ec31b0681f equal
 
 ## Shape 6: practice account first, then a real account opens the old lock (PASS)
 
@@ -151,7 +151,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | 3b1f84c89fbd | 3b1f84c89fbd | yes |
+| form_drafts | f9357273f227 | f9357273f227 | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -169,13 +169,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 65d97ab030ba | 65d97ab030ba | yes |
+| taxpayers | a4b0cf645d18 | a4b0cf645d18 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 25, raw SHA-256 ac527764c595
-- after: integrity_check "ok", user_version 24, rows 25, raw SHA-256 f97a97faceb2
+- before: integrity_check "ok", user_version 24, rows 25, raw SHA-256 6ba35b06f75e
+- after: integrity_check "ok", user_version 24, rows 25, raw SHA-256 4c0a96f11b54
 - step-6 keys, before: {}, after: {"hand_to_clients":"on"}
-- restored by this build's Import: raw SHA-256 ac527764c595 equal
+- restored by this build's Import: raw SHA-256 6ba35b06f75e equal
 
 ## Shape 7: a v22-shaped file (this build's file with the v23/v24 tables dropped and user_version 22) (PASS)
 
@@ -186,7 +186,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | ac8c96217df9 | ac8c96217df9 | yes |
+| form_drafts | 5338efe0d0f5 | 5338efe0d0f5 | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -204,13 +204,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 2d7ebc755181 | 2d7ebc755181 | yes |
+| taxpayers | f3fa86a98c53 | f3fa86a98c53 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 14, raw SHA-256 d63d256fcbf0
-- after: integrity_check "ok", user_version 24, rows 14, raw SHA-256 323b45ca82c7
+- before: integrity_check "ok", user_version 24, rows 14, raw SHA-256 270263502772
+- after: integrity_check "ok", user_version 24, rows 14, raw SHA-256 7064fed849ac
 - step-6 keys, before: {"buwiz_server_url":"https://old.example"}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 6f0398be5ad6 equal
+- restored by this build's Import: raw SHA-256 d5fb6daeb0b6 equal
 
 ## Shape 8: solo with an authenticator and no PIN (PASS)
 
@@ -221,7 +221,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | bcd849fdc83e | bcd849fdc83e | yes |
+| form_drafts | 94b88d162e4a | 94b88d162e4a | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -239,13 +239,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 2f98cb3e69f5 | 2f98cb3e69f5 | yes |
+| taxpayers | 83bd306db52e | 83bd306db52e | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 14, raw SHA-256 0c43109a9383
-- after: integrity_check "ok", user_version 24, rows 14, raw SHA-256 248925f5912f
+- before: integrity_check "ok", user_version 24, rows 14, raw SHA-256 c7214aabde8c
+- after: integrity_check "ok", user_version 24, rows 14, raw SHA-256 743500bb8f72
 - step-6 keys, before: {"buwiz_server_url":"https://old.example"}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 0c43109a9383 equal
+- restored by this build's Import: raw SHA-256 c7214aabde8c equal
 
 ## Shape 9a: a taxpayer with no access_mode (PASS)
 
@@ -256,7 +256,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | 42447be65f62 | 42447be65f62 | yes |
+| form_drafts | 7379dd1763c0 | 7379dd1763c0 | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -274,13 +274,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | a7487891c108 | a7487891c108 | yes |
+| taxpayers | e3ed051f7fc7 | e3ed051f7fc7 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 93b9967e9676
-- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 27f8834208c8
+- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 f07fa9c5f366
+- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 ae7602229995
 - step-6 keys, before: {}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 93b9967e9676 equal
+- restored by this build's Import: raw SHA-256 f07fa9c5f366 equal
 
 ## Shape 9b: solo with no admin_tin_root (PASS)
 
@@ -291,7 +291,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | 7b6873763464 | 7b6873763464 | yes |
+| form_drafts | 3a196cbec889 | 3a196cbec889 | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -309,13 +309,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 6dd88dac75ce | 6dd88dac75ce | yes |
+| taxpayers | 7df6b40c3723 | 7df6b40c3723 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 13, raw SHA-256 e16daa5eb556
-- after: integrity_check "ok", user_version 24, rows 13, raw SHA-256 a5f46b760c9e
+- before: integrity_check "ok", user_version 24, rows 13, raw SHA-256 196f1f6e85e7
+- after: integrity_check "ok", user_version 24, rows 13, raw SHA-256 f6c86d3c76d4
 - step-6 keys, before: {"buwiz_server_url":"https://old.example"}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 e16daa5eb556 equal
+- restored by this build's Import: raw SHA-256 196f1f6e85e7 equal
 
 ## Shape 10: a file from an archive restore (foreign help-desk mode and PINs) with two safety files beside it (PASS)
 
@@ -326,7 +326,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | 9dcfd1b16f53 | 9dcfd1b16f53 | yes |
+| form_drafts | 7eb8466bc39c | 7eb8466bc39c | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -344,13 +344,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | da3c7d51a378 | da3c7d51a378 | yes |
+| taxpayers | c512729479d1 | c512729479d1 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 15, raw SHA-256 104ca070f144
-- after: integrity_check "ok", user_version 24, rows 15, raw SHA-256 ae2e2f0266e9
+- before: integrity_check "ok", user_version 24, rows 15, raw SHA-256 d941c41fbad0
+- after: integrity_check "ok", user_version 24, rows 15, raw SHA-256 50dd8ae2a99d
 - step-6 keys, before: {}, after: {"hand_to_clients":"on"}
-- restored by this build's Import: raw SHA-256 104ca070f144 equal
+- restored by this build's Import: raw SHA-256 d941c41fbad0 equal
 
 ## Shape 11a: an unversioned painted-era file (user_version 0) (PASS)
 
@@ -361,7 +361,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | adc01401d2ba | adc01401d2ba | yes |
+| form_drafts | 1815cc15cd46 | 1815cc15cd46 | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -379,13 +379,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 0dd35f2f76be | 0dd35f2f76be | yes |
+| taxpayers | 0f59ffa06240 | 0f59ffa06240 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 19613c722276
-- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 3d63b6e21945
+- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 59c1e544de25
+- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 e56b557f1c56
 - step-6 keys, before: {}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 65d9d2d9841f equal
+- restored by this build's Import: raw SHA-256 d27c98930d47 equal
 
 ## Shape 12: a crash -wal with real commits in it (PASS)
 
@@ -396,7 +396,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | 914ecba007d2 | 914ecba007d2 | yes |
+| form_drafts | 9a976b96ad6f | 9a976b96ad6f | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -414,13 +414,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 0d2c45e86af7 | 0d2c45e86af7 | yes |
+| taxpayers | 43ff99cac893 | 43ff99cac893 | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 4f2d7401f390
-- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 41fef03199fb
+- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 15ad3f5a5afa
+- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 b6d2b1b7bfca
 - step-6 keys, before: {}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 4f2d7401f390 equal
+- restored by this build's Import: raw SHA-256 15ad3f5a5afa equal
 
 ## Shape 13: a debug build's bir_data.dev.db beside the real file (PASS)
 
@@ -431,7 +431,7 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | app_alerts | 95b16f9829d1 | 95b16f9829d1 | yes |
 | bir_notices | f270695fd7ad | f270695fd7ad | yes |
 | data_providers | 1bd377fa1d64 | 1bd377fa1d64 | yes |
-| form_drafts | a1b2caa6e76f | a1b2caa6e76f | yes |
+| form_drafts | b60c51846f2d | b60c51846f2d | yes |
 | form_finalizations | 3a602e34dbc1 | 3a602e34dbc1 | yes |
 | form_rule_migrations | 41aaf465e125 | 41aaf465e125 | yes |
 | form_templates | e36a8ea30504 | e36a8ea30504 | yes |
@@ -449,13 +449,13 @@ Made by `cargo test -p bir-core --lib a2_rehearsal -- --ignored` at 2026-11-26 2
 | submission_receipts | 415ce7fc6a03 | 415ce7fc6a03 | yes |
 | submissions | bcfd1aa11be6 | bcfd1aa11be6 | yes |
 | tax_deadlines | f78246c53fc6 | f78246c53fc6 | yes |
-| taxpayers | 69c6348e67a8 | 69c6348e67a8 | yes |
+| taxpayers | 68ab208b36ba | 68ab208b36ba | yes |
 | year_facts | 9156dfb8d7ed | 9156dfb8d7ed | yes |
 
-- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 9f0a49f4be0e
-- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 450fdb9d248f
+- before: integrity_check "ok", user_version 24, rows 6, raw SHA-256 2c274a795e34
+- after: integrity_check "ok", user_version 24, rows 6, raw SHA-256 fcbb21a610ad
 - step-6 keys, before: {}, after: {"hand_to_clients":"off"}
-- restored by this build's Import: raw SHA-256 9f0a49f4be0e equal
+- restored by this build's Import: raw SHA-256 2c274a795e34 equal
 
 ## Shape 11b: an encrypted painted-era file (PASS)
 
