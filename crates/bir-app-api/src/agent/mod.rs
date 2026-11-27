@@ -476,7 +476,8 @@ mod tests {
     #[test]
     fn a_sharing_reader_is_outlasted_by_the_publish_retry() {
         use std::os::windows::fs::OpenOptionsExt;
-        const FILE_SHARE_DELETE: u32 = 0x00000004;
+        const FILE_SHARE_READ: u32 = 0x00000001;
+        const FILE_SHARE_WRITE: u32 = 0x00000002;
         let dir = tempfile::tempdir().expect("tempdir");
         let root = dir.path();
         let record = publish_test_record(48901);
@@ -484,7 +485,9 @@ mod tests {
         let path = first.path().to_path_buf();
         let held = std::fs::OpenOptions::new()
             .read(true)
-            .share_mode(0x00000001 | 0x00000002 & !FILE_SHARE_DELETE)
+            // Read and write sharing only: no FILE_SHARE_DELETE (0x4), so the
+            // publish's rename over this file is refused while it is open.
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
             .open(&path)
             .expect("open without delete sharing");
         let released = std::sync::Arc::new(std::sync::Mutex::new(Some(held)));
@@ -510,7 +513,8 @@ mod tests {
     #[test]
     fn a_held_reader_fails_the_publish_after_the_retries() {
         use std::os::windows::fs::OpenOptionsExt;
-        const FILE_SHARE_DELETE: u32 = 0x00000004;
+        const FILE_SHARE_READ: u32 = 0x00000001;
+        const FILE_SHARE_WRITE: u32 = 0x00000002;
         let dir = tempfile::tempdir().expect("tempdir");
         let root = dir.path();
         let record = publish_test_record(48902);
@@ -518,7 +522,9 @@ mod tests {
         let path = first.path().to_path_buf();
         let held = std::fs::OpenOptions::new()
             .read(true)
-            .share_mode(0x00000001 | 0x00000002 & !FILE_SHARE_DELETE)
+            // Read and write sharing only: no FILE_SHARE_DELETE (0x4), so the
+            // publish's rename over this file is refused while it is open.
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
             .open(&path)
             .expect("open without delete sharing");
         let released = std::sync::Arc::new(std::sync::Mutex::new(Some(held)));
