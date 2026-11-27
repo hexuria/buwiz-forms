@@ -349,6 +349,34 @@ fn upload_keys(pages: &str) -> BTreeMap<String, String> {
     out
 }
 
+/// The original cell a continuation clone copies: `cont_<schedule>_<page>_
+/// <band>_<row>_<cell>` (a cloned row) or `cont_tot_<schedule>_<cell>` (the
+/// cloned TOTAL row) -> `(clone prefix, original cell id)`.
+fn clone_origin(cell: &str) -> (&str, &str) {
+    match cell.rfind("_p") {
+        Some(at) => (&cell[..=at], &cell[at + 1..]),
+        None => ("", cell),
+    }
+}
+
+/// The continuation clones among `cells` that carry no `data-upload-key`:
+/// every cloned cell except a centavo half (`cents`, the cent cells of the
+/// sheet's money joins, read with their peso cell) must name the upload key
+/// it prints, so it is compared with the upload, never with itself.
+fn clones_without_upload_key<'a>(
+    cells: impl IntoIterator<Item = &'a String>,
+    upload_keys: &BTreeMap<String, String>,
+    cents: &BTreeSet<String>,
+) -> Vec<String> {
+    cells
+        .into_iter()
+        .filter(|cell| cell.starts_with("cont_"))
+        .filter(|cell| !cents.contains(clone_origin(cell).1))
+        .filter(|cell| !upload_keys.contains_key(cell.as_str()))
+        .cloned()
+        .collect()
+}
+
 /// The additional sheet's schedule tables: (schedule heading, row number)
 /// -> the row's cells in column order.
 fn plain_table_rows(plain: &str) -> BTreeMap<(String, usize), Vec<String>> {
@@ -1176,8 +1204,9 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
 
         // 8. Continuation pages: every cloned cell prints the upload's value
         //    for the control it holds (`data-upload-key`: the cloned row's
-        //    own key, or the TOTAL row's total); a cell with no key of its
-        //    own (a row number, a centavo half) prints what it was given.
+        //    own key, or the TOTAL row's total). Every clone but a centavo
+        //    half (read with its peso cell) must carry that key: a clone
+        //    without one fails, by sheet and cell.
         let mut cent_of: BTreeMap<String, String> = BTreeMap::new();
         let mut decimal_cells: BTreeSet<String> = BTreeSet::new();
         for row in rows("money_joins") {
@@ -1187,16 +1216,20 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
             decimal_cells.extend(ids(&row, "decimal_html_id", "decimal_html_ids"));
         }
         let upload_keys = upload_keys(&band);
-        for (cell, writer) in &band_printed.writers {
+        let cents: BTreeSet<String> = cent_of.values().cloned().collect();
+        let cloned = band_printed.writers.iter().map(|(cell, _)| cell);
+        for cell in clones_without_upload_key(cloned, &upload_keys, &cents) {
+            check.failures.push(format!(
+                "{stem} ({slug}) continuation clone {cell} carries no data-upload-key"
+            ));
+        }
+        for (cell, _) in &band_printed.writers {
             if !cell.starts_with("cont_") {
                 continue;
             }
             // `cont_<schedule>_<page>_<band>_<row>_<cell>` (a cloned row) or
             // `cont_tot_<schedule>_<cell>` (the cloned TOTAL row).
-            let (prefix, orig) = match cell.rfind("_p") {
-                Some(at) => (&cell[..=at], &cell[at + 1..]),
-                None => ("", cell.as_str()),
-            };
+            let (prefix, orig) = clone_origin(cell);
             let shown = if let Some(cent) = cent_of.get(orig) {
                 let peso_cell = band_printed.cell(cell);
                 let cent_cell = band_printed.cell(&format!("{prefix}{cent}"));
@@ -1229,25 +1262,15 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
                     Kind::Text,
                 );
             }
-            match upload_keys.get(cell) {
-                Some(key) => {
-                    let off = get(key);
-                    check.compare(
-                        &format!("continuation -> {cell}"),
-                        key,
-                        off,
-                        &shown,
-                        kind_of(key, off, &amounts),
-                    );
-                }
-                None => {
-                    let kind = if norm_numeric(writer).is_some() {
-                        Kind::Amount
-                    } else {
-                        Kind::Text
-                    };
-                    check.compare("continuation (no key)", cell, writer, &shown, kind);
-                }
+            if let Some(key) = upload_keys.get(cell) {
+                let off = get(key);
+                check.compare(
+                    &format!("continuation -> {cell}"),
+                    key,
+                    off,
+                    &shown,
+                    kind_of(key, off, &amounts),
+                );
             }
         }
 
@@ -1432,6 +1455,37 @@ const DONOR_ESTATE: &[(&str, &str, &[&str], &str)] = &[
 /// `txt42A=-1,000.51`, which the official page shows; the sheet's Item 42
 /// box is a whole-peso comb with no centavo boxes (a writer-cells
 /// `peso_joins` row, p2c34). Before, the print rounded it to `-1001`.
+/// A continuation clone that lost its `data-upload-key` is reported by sheet
+/// and cell; a centavo half without one is not (it is read with its peso
+/// cell), and a clone with its key passes.
+#[test]
+fn a_continuation_clone_without_its_upload_key_fails() {
+    let clones: Vec<String> = [
+        "cont_s1_2_0_1_p2c40",
+        "cont_s1_2_0_1_p2c41",
+        "cont_tot_s1_p2c60",
+        "p2c40",
+    ]
+    .iter()
+    .map(|c| c.to_string())
+    .collect();
+    let mut keys = BTreeMap::new();
+    keys.insert("cont_s1_2_0_1_p2c40".to_string(), "frm:txtAmt1".to_string());
+    keys.insert("cont_tot_s1_p2c60".to_string(), "frm:txtTotal".to_string());
+    let cents: BTreeSet<String> = ["p2c41".to_string()].into_iter().collect();
+    assert!(clones_without_upload_key(&clones, &keys, &cents).is_empty());
+    keys.remove("cont_tot_s1_p2c60");
+    assert_eq!(
+        clones_without_upload_key(&clones, &keys, &cents),
+        ["cont_tot_s1_p2c60"]
+    );
+    let no_cents = BTreeSet::new();
+    assert_eq!(
+        clones_without_upload_key(&clones, &keys, &no_cents),
+        ["cont_s1_2_0_1_p2c41", "cont_tot_s1_p2c60"]
+    );
+}
+
 #[test]
 fn form_1701q_item_42_prints_the_uploads_centavos() {
     use bir_core::forms::queueable::QueueableForm as _;
