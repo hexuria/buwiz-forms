@@ -5,6 +5,12 @@
 import { Door } from "ebirforms/native";
 import type * as Host from "./types";
 
+export const account_tins = (...args: Parameters<typeof Host.account_tins>): ReturnType<typeof Host.account_tins> =>
+  Door.callAsync("account_tins", args) as ReturnType<typeof Host.account_tins>;
+
+export const activate_tin = (...args: Parameters<typeof Host.activate_tin>): ReturnType<typeof Host.activate_tin> =>
+  Door.callAsync("activate_tin", args) as ReturnType<typeof Host.activate_tin>;
+
 export const add_tax_year = (...args: Parameters<typeof Host.add_tax_year>): ReturnType<typeof Host.add_tax_year> =>
   Door.call("add_tax_year", args) as ReturnType<typeof Host.add_tax_year>;
 
@@ -438,6 +444,9 @@ export type {
   InboxVerifyResult,
   InboxCheckResult,
   SendGrant,
+  TinState,
+  TinStatusRow,
+  TinStatusList,
   ScreenFormIndexEntry,
   ScreenFormError,
   ScreenFormStatus,
@@ -468,6 +477,8 @@ export type {
 
 /** Every wrapper above, for bir.system_info()-style calls. */
 export const bir = {
+  account_tins,
+  activate_tin,
   add_tax_year,
   agent_take,
   annual_return_conflicts,
@@ -600,6 +611,8 @@ export const bir = {
 
 /** The names of the wrapped functions, with their kind, for tests. */
 export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
+  { name: "account_tins", kind: "async" },
+  { name: "activate_tin", kind: "async" },
   { name: "add_tax_year", kind: "sync" },
   { name: "agent_take", kind: "sync" },
   { name: "annual_return_conflicts", kind: "sync" },

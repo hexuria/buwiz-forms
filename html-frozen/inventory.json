@@ -277,7 +277,7 @@
         "provenance.json"
       ],
       "serialized_key_count": 177,
-      "index_sha256": "c5078cd95a7e8a826a7e69c8a4ae8b117272761d3c0a7b6e5659426b36ae8fbc"
+      "index_sha256": "a308982ffbff928f0fd0a6c33f5460355d4268f00bc667e034eebf88d5942662"
     },
     {
       "form_id": "1801-v2018",
@@ -291,7 +291,7 @@
         "provenance.json"
       ],
       "serialized_key_count": 175,
-      "index_sha256": "1c58c7554700052cad4c78a0583b88828a6308c5c5e45cd7424e35e796392046"
+      "index_sha256": "710972d606e753dea85cc2a6064ed8eec0abdcab96738f6def1fdc0c81888973"
     },
     {
       "form_id": "2000ot-v2018",
@@ -495,7 +495,7 @@
         "provenance.json"
       ],
       "serialized_key_count": 126,
-      "index_sha256": "d9834f66b3a08e153f9ffc98086025952f4bd754f8ef87dda6ce5de729076fc0"
+      "index_sha256": "b1f5d6c79885762407f6684c9013c3d4cc2a8d51eeba6b384c1295210ed41229"
     },
     {
       "form_id": "2200t-v2020",

@@ -8004,11 +8004,11 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "dda1fda9077c316a860b747d983c65b499cd7da40ffe7727588cc6737e9c0d16",
+                "2a923d5d5eed26eb27aa41dc90805f12695240ae5e56827dae49496c332e60b2",
             ),
             (
                 "1800-2018",
-                "1ee1587dbacf834418c9004661fd10f45eddf11116d0800905f3c1c374e1b50b",
+                "6f94fcb15159f146d9a7b49f685bc36e6245b96418ad0c302d78eee576fa4377",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();

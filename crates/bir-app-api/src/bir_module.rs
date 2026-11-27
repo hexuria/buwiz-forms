@@ -961,11 +961,12 @@ fn forms_catalog() -> HostResult {
 
 /// The only settings the page may use through `get_setting`, `set_setting`
 /// and `delete_setting`: its theme toggle's (`THEME_PREF_KEY`,
-/// `nsh/shell/theme.ts`). Every other setting is host state, such as the
-/// access mode, the admin's TIN root, PIN hash and authenticator secret, and
-/// the recovery key's hash; host code reads and writes those through
-/// `Database` directly.
-const PAGE_SETTING_KEYS: [&str; 1] = ["theme_preference"];
+/// `nsh/shell/theme.ts`) and the accounts already welcomed after their first
+/// sign-in on this device (`WELCOMED_KEY`, `nsh/screens/auth/welcome.tsx`).
+/// Every other setting is host state, such as the access mode, the admin's
+/// TIN root, PIN hash and authenticator secret, and the recovery key's hash;
+/// host code reads and writes those through `Database` directly.
+const PAGE_SETTING_KEYS: [&str; 2] = ["theme_preference", "welcomed_accounts"];
 
 /// The key a page setting verb names, when it is in [`PAGE_SETTING_KEYS`].
 /// Any other key is refused before the database is opened, with an error
@@ -5048,6 +5049,21 @@ mod tests {
         assert_eq!(delete_setting(&args(vec![key()])).unwrap(), HostValue::Null);
         assert_eq!(stored_setting("theme_preference"), None);
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+    }
+
+    /// The accounts welcomed on this device round-trip through the page
+    /// verbs too.
+    #[test]
+    fn the_welcomed_accounts_round_trip_through_the_page_verbs() {
+        setup();
+        let key = || s("welcomed_accounts");
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+        set_setting(&args(vec![key(), s("[\"demo\"]")])).unwrap();
+        assert_eq!(
+            stored_setting("welcomed_accounts").as_deref(),
+            Some("[\"demo\"]")
+        );
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("[\"demo\"]"));
     }
 
     /// (b) The help desk admin's authenticator secret stays host-side: the

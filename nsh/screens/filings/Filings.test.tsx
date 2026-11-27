@@ -239,7 +239,7 @@ test("desktop: no returns yet says so, and the filters stay", async () => {
   expect(app.shows("id:filings-clear")).toBe(false);
 });
 
-test("desktop: a Home tile's preset (statuses, updatedMonth) replaces every filter, once", async () => {
+test("desktop: a navigation preset (statuses, updatedMonth) replaces every filter, once", async () => {
   // Drafts.
   let app = await board({ go: { statuses: ["Draft"] } });
   await app.waitFor(count("3 returns"));
@@ -254,7 +254,7 @@ test("desktop: a Home tile's preset (statuses, updatedMonth) replaces every filt
   await app.waitFor(count("1 return"));
   expect(seen(app, IDS.queued)).toBe(true);
 
-  // Filed this month: Submitted, Confirmed and Paid, changed in this month.
+  // Filed in this month: Submitted, Confirmed and Paid, changed in this month.
   const month = thisMonth();
   app = await board({ go: { statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: month } });
   await app.waitFor(count("3 returns"));
@@ -362,6 +362,40 @@ test("phone: a tab keeps the returns of its status; Confirmed holds Paid", async
   await app.waitFor(count("7 returns"));
 });
 
+test("phone: unticking a status hides its tab, ticking it again shows it, and a hidden current tab returns to All", async () => {
+  const app = await list();
+  await app.press(tab("Draft"));
+  await app.waitFor(count("3 returns"));
+
+  await app.press("id:filings-filters-open");
+  await app.waitFor("id:filings-sheet-done");
+  await app.press("id:filings-statuses-trigger");
+  await app.waitFor("id:filings-statuses-opt-Draft");
+  await app.press("id:filings-statuses-opt-Draft");
+  await app.waitFor("text:Show 4 returns");
+  await app.press("id:filings-sheet-done");
+  await app.waitFor("id:filings-sheet-done", { state: "gone" });
+
+  expect(app.shows(tab("Draft"))).toBe(false);
+  for (const name of ["All", "Queued", "Submitted", "Confirmed"]) expect(app.shows(tab(name))).toBe(true);
+  expect(app.shows(count("4 returns"))).toBe(true);
+  expect(seen(app, IDS.queued, IDS.submitted, IDS.confirmed, IDS.paid)).toBe(true);
+  expect(unseen(app, IDS.draft, IDS.cebu, IDS.second)).toBe(true);
+
+  await app.press("id:filings-filters-open");
+  await app.waitFor("id:filings-sheet-done");
+  await app.press("id:filings-statuses-trigger");
+  await app.waitFor("id:filings-statuses-opt-Draft");
+  await app.press("id:filings-statuses-opt-Draft");
+  await app.waitFor("text:Show 7 returns");
+  await app.press("id:filings-sheet-done");
+  await app.waitFor("id:filings-sheet-done", { state: "gone" });
+
+  expect(app.shows(tab("Draft"))).toBe(true);
+  expect(app.shows(count("7 returns"))).toBe(true);
+  expect(seen(app, IDS.draft, IDS.cebu, IDS.second)).toBe(true);
+});
+
 test("phone: search stays on the page and works inside a tab", async () => {
   const app = await list();
   await app.press(tab("Draft"));
@@ -442,7 +476,7 @@ test("phone: a row opens its return; Cancel queue turns a queued one back into a
   expect(app.shows("id:tab-bar")).toBe(true);
 });
 
-test("phone: a Home tile's preset shows its month and counts it on the Filters button", async () => {
+test("phone: a navigation preset shows its month and counts it on the Filters button", async () => {
   const app = await list({ go: { statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: thisMonth() } });
   await app.waitFor(count("3 returns"));
   expect(seen(app, IDS.submitted, IDS.confirmed, IDS.paid)).toBe(true);

@@ -1,8 +1,9 @@
 //! In-memory account server for development. Uses the same small Tokio HTTP stack as the mock relay.
 //!
 //! It speaks the device flow (`/auth/device/*`), the email-and-code sign-in (`/auth/email/start`, `/resend`, `/verify`),
-//! the refresh, `/me`, logout, and the device registration (`POST /api/devices`). Every answer is the contract's;
-//! nothing is stored once it exits.
+//! the refresh, `/me`, logout, the device registration (`POST /api/devices`), and the account's TINs
+//! (`GET /api/tax-profiles` with its `include` modes and per-sign-in limit, and the app's `POST /api/tax-profiles`, as
+//! TRACK-D-CONTRACT.md has them). Every answer is the contract's; nothing is stored once it exits.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -35,6 +36,20 @@ pub const VERIFY_PER_NETWORK_HOURLY: usize = 300;
 /// The clients the email sign-in serves (a `CLIENTS` entry with scope `app`): the contract's, and the one this app sends.
 const APP_CLIENTS: [&str; 2] = ["buwiz-ebirforms", "buwiz-desktop"];
 const PLATFORMS: [&str; 6] = ["ios", "ipados", "android", "macos", "windows", "linux"];
+/// `GET /api/tax-profiles` calls one sign-in (grant) may make in [`PROFILE_READS_WINDOW`], every mode together.
+pub const PROFILE_READS_PER_SIGN_IN: usize = 120;
+const PROFILE_READS_WINDOW: Duration = Duration::from_secs(600);
+/// `POST /api/tax-profiles` tries one sign-in may make in [`PROFILE_ADDS_WINDOW`], whatever comes of them.
+pub const PROFILE_ADDS_PER_SIGN_IN: usize = 10;
+const PROFILE_ADDS_WINDOW: Duration = Duration::from_secs(3600);
+/// The unverified TINs an account may hold before `too_many_unverified`.
+pub const MAX_UNVERIFIED: usize = 20;
+/// The longest registered or trade name, in bytes after trimming.
+const MAX_NAME_BYTES: usize = 200;
+/// Test TIN roots: listed with `test_only`, never added from the app.
+pub const TEST_ROOTS: [&str; 2] = ["000000000", "111111114"];
+/// The scope of the BIR app's token: the only one that sees full TINs and may add one.
+const SCOPE_APP: &str = "app";
 
 /// How the mock answers the email sign-in.
 #[derive(Clone, Debug)]
@@ -67,6 +82,13 @@ pub struct MockOptions {
     pub verify_per_network: usize,
     /// `/auth/email/verify` answers 503 `busy` (the server's waiting places are full), with `Retry-After`.
     pub busy_verify: bool,
+    /// `GET /api/tax-profiles` calls per sign-in in 10 minutes ([`PROFILE_READS_PER_SIGN_IN`]); a test sets it low to
+    /// see the `429` with `Retry-After`.
+    pub tax_profile_reads: usize,
+    /// `POST /api/tax-profiles` tries per sign-in in an hour ([`PROFILE_ADDS_PER_SIGN_IN`]).
+    pub tax_profile_adds: usize,
+    /// The account site the rows' `action` links point at; `None`: this mock's own address.
+    pub account_origin: Option<String>,
 }
 
 impl Default for MockOptions {
@@ -85,8 +107,29 @@ impl Default for MockOptions {
             start_per_network: START_PER_NETWORK_HOURLY,
             verify_per_network: VERIFY_PER_NETWORK_HOURLY,
             busy_verify: false,
+            tax_profile_reads: PROFILE_READS_PER_SIGN_IN,
+            tax_profile_adds: PROFILE_ADDS_PER_SIGN_IN,
+            account_origin: None,
         }
     }
+}
+
+/// Where a TIN stands on a mock account (a live claim; ended ones are not kept).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TinState {
+    /// Approved and not paused: it sends.
+    Approved,
+    /// Approved, paused by staff.
+    Paused,
+    /// Papers in review.
+    Pending,
+    /// Added without papers (the site's "add papers later", or the app's add).
+    Unverified,
+    /// Sent back for a fix: `(code, sentence)` per reason, and staff's note.
+    NeedsFix {
+        reasons: Vec<(String, String)>,
+        note: Option<String>,
+    },
 }
 
 #[derive(Clone)]
@@ -111,6 +154,22 @@ struct Grant {
     access_expires: Instant,
     refresh: String,
     refresh_expires: Instant,
+    /// `app` for every sign-in the mock makes; another scope only through [`MockAccount::token_with_scope`].
+    scope: String,
+}
+/// One live TIN claim of an account.
+struct Claim {
+    id: String,
+    /// The account's user id.
+    account: String,
+    /// `personal` or `business`.
+    kind: String,
+    root: String,
+    branch: String,
+    registered_name: String,
+    state: TinState,
+    /// When it became active (seconds since the epoch), for `activated_at`.
+    activated_at: Option<i64>,
 }
 /// One email sign-in request: its secret's hash, its current code and link, and when they stop working.
 struct EmailRequest {
@@ -152,6 +211,13 @@ struct State {
     registered: HashMap<(String, String), DeviceRow>,
     /// The sign-ins (grant sessions) that have registered their device: one each.
     registered_sessions: std::collections::HashSet<String>,
+    /// Every account's live TIN claims, oldest first.
+    claims: Vec<Claim>,
+    /// `GET` and `POST /api/tax-profiles` calls per sign-in (grant session), for their limits.
+    profile_reads: HashMap<String, Vec<Instant>>,
+    profile_adds: HashMap<String, Vec<Instant>>,
+    /// Every `POST /api/tax-profiles` request, answered or refused.
+    profile_posts: usize,
 }
 
 /// A running account server. Dropping it closes the listener.
@@ -247,6 +313,74 @@ impl MockAccount {
             .iter()
             .find(|((_, install), _)| install == install_id)
             .map(|(_, row)| (row.id.clone(), row.platform.clone(), row.name.clone()))
+    }
+    /// A new sign-in of `email` (its account made on first use), as the BIR app's sign-in gets it: its access token.
+    pub fn app_token(&self, email: &str) -> String {
+        self.token_with_scope(email, SCOPE_APP)
+    }
+    /// A new sign-in of `email` with `scope` (another app's token, such as Books): its access token.
+    pub fn token_with_scope(&self, email: &str, scope: &str) -> String {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let u = user(&mut state, &email.to_ascii_lowercase());
+        let response = issue(&mut state, u, None, None);
+        if let Some(grant) = state.grants.last_mut() {
+            grant.scope = scope.to_owned();
+        }
+        let tokens: Value = serde_json::from_str(&response.body).unwrap_or_default();
+        tokens["access_token"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned()
+    }
+    /// Put `tin` (9, 12 or 14 digits, dashes allowed) on `email`'s account in `state`, as staff or the site would; a
+    /// test TIN root too. Its claim id. Panics on a TIN of another shape: a test's mistake.
+    pub fn add_tin(&self, email: &str, tin: &str, state_of_tin: TinState) -> String {
+        let (root, branch) = parse_combined_tin(tin).expect("a TIN of 9, 12 or 14 digits");
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let account = user(&mut state, &email.to_ascii_lowercase()).id;
+        state.claims.retain(|claim| {
+            !(claim.account == account && claim.root == root && claim.branch == branch)
+        });
+        let id = token();
+        let active = matches!(state_of_tin, TinState::Approved | TinState::Paused);
+        state.claims.push(Claim {
+            id: id.clone(),
+            account,
+            kind: "personal".into(),
+            root,
+            branch,
+            registered_name: "SYNTHETIC TAXPAYER".into(),
+            state: state_of_tin,
+            activated_at: active.then(unix_now),
+        });
+        id
+    }
+    /// How many `POST /api/tax-profiles` requests came in, refused or not.
+    pub fn tax_profile_posts(&self) -> usize {
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .profile_posts
+    }
+    /// The kind, TIN (`123-456-789-00000`), registered name and state of each claim on `email`'s account, oldest first.
+    pub fn tins_of(&self, email: &str) -> Vec<(String, String, String, TinState)> {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(account) = state.users.get(&email.to_ascii_lowercase()) else {
+            return Vec::new();
+        };
+        state
+            .claims
+            .iter()
+            .filter(|claim| claim.account == account.id)
+            .map(|claim| {
+                (
+                    claim.kind.clone(),
+                    dashed_tin(&claim.root, &claim.branch),
+                    claim.registered_name.clone(),
+                    claim.state.clone(),
+                )
+            })
+            .collect()
     }
 }
 impl Drop for MockAccount {
@@ -352,6 +486,7 @@ impl Response {
             303 => "See Other",
             400 => "Bad Request",
             401 => "Unauthorized",
+            201 => "Created",
             403 => "Forbidden",
             404 => "Not Found",
             409 => "Conflict",
@@ -463,6 +598,7 @@ fn issue(
         access_expires: Instant::now() + TTL,
         refresh: refresh.clone(),
         refresh_expires: Instant::now() + Duration::from_secs(90 * 86400),
+        scope: SCOPE_APP.to_owned(),
     });
     json_response(
         200,
@@ -587,7 +723,12 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
                 return oauth(400, "invalid_grant", "invalid refresh token");
             };
             let old = state.grants.remove(i);
-            issue(state, old.user, Some(old.session), old.install)
+            let scope = old.scope.clone();
+            let response = issue(state, old.user, Some(old.session), old.install);
+            if let Some(grant) = state.grants.last_mut() {
+                grant.scope = scope;
+            }
+            response
         }
         ("GET", "/login" | "/signup") => {
             let next = safe_next(query.get("next").map(String::as_str).unwrap_or("/device"));
@@ -710,6 +851,8 @@ fn dispatch(r: &Request, state: &mut State) -> Response {
             email_verify(state, &value)
         }
         ("POST", "/api/devices") => register_device(r, state, &value),
+        ("GET", "/api/tax-profiles") => tax_profiles(r, state, &query),
+        ("POST", "/api/tax-profiles") => add_tax_profile(r, state),
         _ => oauth(404, "not_found", "no such endpoint"),
     }
 }
@@ -1156,6 +1299,407 @@ fn register_device(r: &Request, state: &mut State, value: &Value) -> Response {
         },
     );
     json_response(200, json!({"id": id}))
+}
+
+// ------------------------------------------------------------------ the account's TINs (TRACK-D-CONTRACT.md)
+
+const PROFILE_PERMISSIONS: [&str; 3] = ["profile.view", "filing.prepare", "filing.submit"];
+const OPEN_PERMISSIONS: [&str; 2] = ["profile.view", "filing.prepare"];
+const VIEW_PERMISSIONS: [&str; 1] = ["profile.view"];
+const PAUSED_MESSAGE: &str = "Sending is paused for this TIN. Write to support@buwiz.com.";
+const NEEDS_FIX_PREFIX: &str = "Sent back for a fix: ";
+const NEEDS_FIX_NO_REASON: &str =
+    "Sent back for a fix. See what to change on My TINs at account.buwiz.com.";
+const TEST_TIN_MESSAGE: &str = "A test TIN: a send for it ends as a dry run, with a signed receipt. Buwiz never sends it to the BIR.";
+const TEST_TIN_REFUSED: &str = "This TIN is reserved for testing: only Buwiz staff add test TINs. If it is yours, write to support@buwiz.com.";
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs() as i64)
+}
+
+/// The API's error: `{"error": {"code": …, "message": …}}` (the account and filing API's shape, not the sign-in's).
+fn api_error(status: u16, code: &str, message: &str) -> Response {
+    json_response(status, json!({"error": {"code": code, "message": message}}))
+}
+
+/// A TIN with its branch in one field, as the account site reads it: 9 digits for head office, 12 or 14 with the
+/// branch; anything between the digits ignored. `(root, 5-digit branch)`.
+fn parse_combined_tin(raw: &str) -> Option<(String, String)> {
+    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
+    let branch = match digits.len() {
+        9 => "00000".to_owned(),
+        12 => format!("00{}", &digits[9..]),
+        14 => digits[9..].to_owned(),
+        _ => return None,
+    };
+    Some((digits[..9].to_owned(), branch))
+}
+
+fn dashed_tin(root: &str, branch: &str) -> String {
+    format!("{}-{}-{}-{branch}", &root[..3], &root[3..6], &root[6..])
+}
+
+/// The grant a request's bearer token names: `(session, account, scope)`; `401 invalid_token` otherwise.
+fn api_bearer(r: &Request, state: &State) -> Result<(String, String, String), Response> {
+    let bearer = r
+        .headers
+        .get("authorization")
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .unwrap_or_default();
+    state
+        .grants
+        .iter()
+        .find(|g| !bearer.is_empty() && g.access == bearer && g.access_expires > Instant::now())
+        .map(|g| (g.session.clone(), g.user.id.clone(), g.scope.clone()))
+        .ok_or_else(|| api_error(401, "invalid_token", "sign in again"))
+}
+
+/// One limit per sign-in: `limit` calls in `window`; past it `429 rate_limited` with `Retry-After` (whole seconds
+/// until the oldest call leaves the window, at least one) and the server's words. A refused call is not counted.
+fn per_sign_in(
+    calls: &mut HashMap<String, Vec<Instant>>,
+    session: &str,
+    limit: usize,
+    window: Duration,
+) -> Option<Response> {
+    let made = calls.entry(session.to_owned()).or_default();
+    made.retain(|at| at.elapsed() < window);
+    if made.len() >= limit {
+        let oldest = made.iter().min().copied().unwrap_or_else(Instant::now);
+        let seconds = seconds_until(oldest + window).max(1);
+        let minutes = seconds.div_ceil(60);
+        let unit = if minutes == 1 { "minute" } else { "minutes" };
+        let mut refused = api_error(
+            429,
+            "rate_limited",
+            &format!("Too many requests. Try again in {minutes} {unit}."),
+        );
+        refused.headers.push(("retry-after", seconds.to_string()));
+        return Some(refused);
+    }
+    made.push(Instant::now());
+    None
+}
+
+/// The account site the rows link to: the option's, else this mock's own address.
+fn account_origin(r: &Request, state: &State) -> String {
+    state.options.account_origin.clone().unwrap_or_else(|| {
+        let host = r
+            .headers
+            .get("host")
+            .map(String::as_str)
+            .unwrap_or("localhost:3008");
+        format!("http://{host}")
+    })
+}
+
+/// One claim as `include=all` lists it (the server's `listed_json`): `next` from the same standing as `status`, so
+/// `next == "fix"` exactly when the BIR app's row has an `action` and `next == "send"` exactly when `can_send`. Only
+/// the BIR app (`full`) sees the TIN, the filing permissions, the links and the note.
+fn listed_row(claim: &Claim, full: bool, origin: &str) -> Value {
+    let (status, can_send, next, message) = match &claim.state {
+        TinState::Approved => (
+            "approved",
+            true,
+            "send",
+            "Active. You can send returns for this TIN.".to_owned(),
+        ),
+        TinState::Paused => ("paused", false, "wait", PAUSED_MESSAGE.to_owned()),
+        TinState::Pending => (
+            "pending",
+            false,
+            "wait",
+            "Waiting for review, usually within one business day.".to_owned(),
+        ),
+        TinState::Unverified => (
+            "unverified",
+            false,
+            "fix",
+            "Not verified. Verify it with its papers to send returns.".to_owned(),
+        ),
+        TinState::NeedsFix { reasons, .. } if reasons.is_empty() => {
+            ("needs_fix", false, "fix", NEEDS_FIX_NO_REASON.to_owned())
+        }
+        TinState::NeedsFix { reasons, .. } => (
+            "needs_fix",
+            false,
+            "fix",
+            format!(
+                "{NEEDS_FIX_PREFIX}{}",
+                reasons
+                    .iter()
+                    .map(|(_, sentence)| sentence.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+        ),
+    };
+    let action = match &claim.state {
+        TinState::Unverified => Some(("Verify to send", "verify")),
+        TinState::NeedsFix { .. } => Some(("Fix and send again", "fix")),
+        _ => None,
+    };
+    let permissions: &[&str] = match (full, can_send) {
+        (true, true) => &PROFILE_PERMISSIONS,
+        (true, false) => &OPEN_PERMISSIONS,
+        (false, _) => &VIEW_PERMISSIONS,
+    };
+    let mut row = json!({
+        "id": claim.id,
+        "tin_masked": format!("***-***-{}-{}", &claim.root[6..], claim.branch),
+        "registered_name": claim.registered_name,
+        "activated_at": claim.activated_at.filter(|_| matches!(claim.state, TinState::Approved | TinState::Paused)),
+        "permissions": permissions,
+        "status": status,
+        "can_send": can_send,
+        "next": next,
+        "message": message,
+        "action": match action {
+            Some((label, page)) if full => json!({"label": label, "url": format!("{origin}/tins/claims/{}/{page}", claim.id)}),
+            _ => Value::Null,
+        },
+    });
+    if full {
+        row["tin"] = json!(dashed_tin(&claim.root, &claim.branch));
+    }
+    if TEST_ROOTS.contains(&claim.root.as_str()) {
+        row["test_only"] = json!(true);
+        if can_send {
+            row["message"] = json!(TEST_TIN_MESSAGE);
+        }
+    }
+    if let TinState::NeedsFix { reasons, note } = &claim.state {
+        row["reasons"] = json!(
+            reasons
+                .iter()
+                .map(|(_, sentence)| sentence)
+                .collect::<Vec<_>>()
+        );
+        row["reason_codes"] = json!(reasons.iter().map(|(code, _)| code).collect::<Vec<_>>());
+        row["note"] = json!(note.as_deref().filter(|_| full));
+    }
+    row
+}
+
+/// `GET /api/tax-profiles`. `include=all` (also `all,pending`, as shipped apps ask): every live claim with `next`,
+/// those that send first, then paused ones, then the rest, oldest first, with `"include":"all"`. `include=pending`:
+/// the ones that send, then the open ones, each with `status`. No include: the ones that send. Every mode counts
+/// toward one limit per sign-in ([`MockOptions::tax_profile_reads`] in 10 minutes).
+fn tax_profiles(r: &Request, state: &mut State, query: &HashMap<String, String>) -> Response {
+    let (session, account, scope) = match api_bearer(r, state) {
+        Ok(grant) => grant,
+        Err(refused) => return refused,
+    };
+    let limit = state.options.tax_profile_reads;
+    if let Some(refused) = per_sign_in(
+        &mut state.profile_reads,
+        &session,
+        limit,
+        PROFILE_READS_WINDOW,
+    ) {
+        return refused;
+    }
+    let full = scope == SCOPE_APP;
+    let origin = account_origin(r, state);
+    let include: Vec<&str> = query
+        .get("include")
+        .map(|include| include.split(',').map(str::trim).collect())
+        .unwrap_or_default();
+    let mine: Vec<&Claim> = state
+        .claims
+        .iter()
+        .filter(|claim| claim.account == account)
+        .collect();
+    let group = |claim: &&Claim| match claim.state {
+        TinState::Approved => 0,
+        TinState::Paused => 1,
+        _ => 2,
+    };
+    if include.contains(&"all") {
+        let mut listed = mine;
+        listed.sort_by_key(group);
+        let profiles: Vec<Value> = listed
+            .into_iter()
+            .map(|claim| listed_row(claim, full, &origin))
+            .collect();
+        return json_response(200, json!({"include": "all", "profiles": profiles}));
+    }
+    let older = |claim: &Claim, status: Option<&str>| {
+        let mut row = json!({
+            "id": claim.id,
+            "tin_masked": format!("***-***-{}-{}", &claim.root[6..], claim.branch),
+            "registered_name": claim.registered_name,
+            "activated_at": claim.activated_at,
+            "permissions": if full { &PROFILE_PERMISSIONS[..] } else { &VIEW_PERMISSIONS[..] },
+        });
+        if full {
+            row["tin"] = json!(dashed_tin(&claim.root, &claim.branch));
+        }
+        if let Some(status) = status {
+            row["status"] = json!(status);
+        }
+        if TEST_ROOTS.contains(&claim.root.as_str()) {
+            row["test_only"] = json!(true);
+        }
+        row
+    };
+    let pending = include.contains(&"pending");
+    let mut profiles: Vec<Value> = mine
+        .iter()
+        .filter(|claim| claim.state == TinState::Approved)
+        .map(|claim| older(claim, pending.then_some("approved")))
+        .collect();
+    if pending {
+        profiles.extend(mine.iter().filter_map(|claim| {
+            let status = match claim.state {
+                TinState::Pending => "pending",
+                TinState::NeedsFix { .. } => "needs_fix",
+                TinState::Unverified => "unverified",
+                _ => return None,
+            };
+            Some(older(claim, Some(status)))
+        }));
+    }
+    json_response(200, json!({"profiles": profiles}))
+}
+
+/// `POST /api/tax-profiles`, the server's checks in its order: the BIR app's token only (`403 insufficient_scope`),
+/// then the per-sign-in limit (`429 rate_limited`), the JSON and its `kind` (`bad_request`), the TIN (`bad_tin`), a test
+/// root (`test_tin`), the names (`name_missing` for an empty registered name, `name_too_long` past 200 bytes), what this
+/// account already holds (`409 tin_already_active`, `tin_already_added`, `claim_already_pending`) and the cap of
+/// unverified TINs (`409 too_many_unverified`). Then the row is saved as not verified: `201 {"profile": row}`.
+fn add_tax_profile(r: &Request, state: &mut State) -> Response {
+    state.profile_posts += 1;
+    let (session, account, scope) = match api_bearer(r, state) {
+        Ok(grant) => grant,
+        Err(refused) => return refused,
+    };
+    if scope != SCOPE_APP {
+        return api_error(
+            403,
+            "insufficient_scope",
+            "only the Buwiz BIR app can file returns",
+        );
+    }
+    let limit = state.options.tax_profile_adds;
+    if let Some(refused) = per_sign_in(
+        &mut state.profile_adds,
+        &session,
+        limit,
+        PROFILE_ADDS_WINDOW,
+    ) {
+        return refused;
+    }
+    let bad = || {
+        api_error(
+            400,
+            "bad_request",
+            "Send a JSON object with kind, tin and registered_name.",
+        )
+    };
+    let Ok(Value::Object(add)) = serde_json::from_slice::<Value>(&r.body) else {
+        return bad();
+    };
+    let text = |key: &str| match add.get(key) {
+        Some(Value::String(text)) => Some(Some(text.as_str())),
+        None | Some(Value::Null) => Some(None),
+        Some(_) => None,
+    };
+    let (Some(Some(kind)), Some(Some(tin)), Some(Some(registered_name)), Some(trade_name)) = (
+        text("kind"),
+        text("tin"),
+        text("registered_name"),
+        text("trade_name"),
+    ) else {
+        return bad();
+    };
+    if !matches!(kind, "personal" | "business") {
+        return api_error(
+            400,
+            "bad_request",
+            "Choose whether this is a personal or a business TIN.",
+        );
+    }
+    let Some((root, branch)) = parse_combined_tin(tin) else {
+        return api_error(400, "bad_tin", "The TIN must have 9 digits.");
+    };
+    if TEST_ROOTS.contains(&root.as_str()) {
+        return api_error(400, "test_tin", TEST_TIN_REFUSED);
+    }
+    let registered_name = registered_name.trim();
+    let trade_name = trade_name.unwrap_or_default().trim();
+    if registered_name.is_empty() {
+        return api_error(
+            400,
+            "name_missing",
+            "Enter the registered name exactly as it appears on your document.",
+        );
+    }
+    if registered_name.len() > MAX_NAME_BYTES || trade_name.len() > MAX_NAME_BYTES {
+        return api_error(
+            400,
+            "name_too_long",
+            "The registered name and the trade name can each be 200 bytes at most.",
+        );
+    }
+    let held = state
+        .claims
+        .iter()
+        .find(|claim| claim.account == account && claim.root == root && claim.branch == branch);
+    match held.map(|claim| &claim.state) {
+        Some(TinState::Approved | TinState::Paused) => {
+            return api_error(
+                409,
+                "tin_already_active",
+                "This TIN is already active on your account.",
+            );
+        }
+        Some(TinState::Unverified) => {
+            return api_error(
+                409,
+                "tin_already_added",
+                "This TIN is already on My TINs. Verify it there to send returns.",
+            );
+        }
+        Some(_) => {
+            return api_error(
+                409,
+                "claim_already_pending",
+                "You already have a claim for this TIN waiting for review.",
+            );
+        }
+        None => {}
+    }
+    let waiting = state
+        .claims
+        .iter()
+        .filter(|claim| claim.account == account && claim.state == TinState::Unverified)
+        .count();
+    if waiting >= MAX_UNVERIFIED {
+        return api_error(
+            409,
+            "too_many_unverified",
+            &format!(
+                "You have {MAX_UNVERIFIED} TINs waiting to be verified. Verify or remove some first."
+            ),
+        );
+    }
+    let claim = Claim {
+        id: token(),
+        account,
+        kind: kind.to_owned(),
+        root,
+        branch,
+        registered_name: registered_name.to_owned(),
+        state: TinState::Unverified,
+        activated_at: None,
+    };
+    let origin = account_origin(r, state);
+    let profile = listed_row(&claim, true, &origin);
+    state.claims.push(claim);
+    json_response(201, json!({"profile": profile}))
 }
 
 #[cfg(test)]
@@ -2390,5 +2934,424 @@ mod tests {
         );
         assert_eq!(decode_b64("e30="), Some(b"{}".to_vec()));
         assert_eq!(decode_b64("!"), None);
+    }
+
+    /// The account's TINs (TRACK-D-CONTRACT.md) through the app's own client, `bir_submit::Submitter`.
+    mod tax_profiles {
+        use std::sync::Arc;
+
+        use bir_submit::{AddTinError, Next, SubmitConfig, Submitter, TinKey, TinKind, TinsError};
+
+        use super::*;
+
+        const EMAIL: &str = "filer@example.test";
+
+        /// A fixed access token, as the host's sign-in would give it.
+        struct Fixed(String);
+        impl bir_submit::TokenSource for Fixed {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<
+                    dyn std::future::Future<Output = Result<String, bir_submit::ClientError>>
+                        + Send
+                        + '_,
+                >,
+            > {
+                let token = self.0.clone();
+                Box::pin(async move { Ok(token) })
+            }
+            fn login(&self) -> Option<String> {
+                Some(EMAIL.into())
+            }
+            fn session_ended(&self) {}
+        }
+
+        fn client(url: &str, token: &str) -> Submitter {
+            Submitter::new(
+                SubmitConfig::new(url).unwrap(),
+                Box::new(bir_submit::secrets::MemoryStore::default()),
+                Arc::new(Fixed(token.to_owned())),
+            )
+        }
+
+        /// A mock whose rows link to the app's account site, so their links survive `pinned_account_url`.
+        async fn server(options: MockOptions) -> MockAccount {
+            mock(MockOptions {
+                account_origin: Some(bir_submit::tins::account_site()),
+                ..options
+            })
+            .await
+        }
+
+        async fn raw(
+            method: reqwest::Method,
+            url: &str,
+            token: &str,
+            body: Option<Value>,
+        ) -> (u16, Option<String>, Value) {
+            let mut request = reqwest::Client::new()
+                .request(method, url)
+                .bearer_auth(token);
+            if let Some(body) = body {
+                request = request.json(&body);
+            }
+            let response = request.send().await.unwrap();
+            let retry_after = response
+                .headers()
+                .get("retry-after")
+                .map(|value| value.to_str().unwrap().to_owned());
+            (
+                response.status().as_u16(),
+                retry_after,
+                response.json().await.unwrap_or_default(),
+            )
+        }
+
+        fn key(tin: &str) -> TinKey {
+            TinKey::parse(tin).unwrap()
+        }
+
+        /// One TIN in every state, and two test TINs. Each row's `next` agrees with `action` and `can_send` (the
+        /// contract's invariants), on the raw answer and as the client reads it; test TINs read with `test_only`.
+        /// Another app's token gets the same `next` and never an action link.
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn next_invariants_hold_on_the_mock() {
+            let server = server(MockOptions::default()).await;
+            let fix = vec![(
+                "blurry".to_owned(),
+                "A photo is too blurry to read.".to_owned(),
+            )];
+            for (tin, state) in [
+                ("000-123-453-00000", TinState::Approved),
+                ("000-123-454-00000", TinState::Paused),
+                ("000-123-455-00000", TinState::Unverified),
+                ("000-123-456-00000", TinState::Pending),
+                (
+                    "000-123-457-00000",
+                    TinState::NeedsFix {
+                        reasons: fix.clone(),
+                        note: Some("Retake it in daylight.".into()),
+                    },
+                ),
+                (
+                    "000-123-457-00000",
+                    TinState::NeedsFix {
+                        reasons: fix,
+                        note: None,
+                    },
+                ),
+                ("000-000-000-00000", TinState::Approved),
+                ("111-111-114-00001", TinState::Pending),
+            ] {
+                server.add_tin(EMAIL, tin, state);
+            }
+            let token = server.app_token(EMAIL);
+            let url = format!("{}/api/tax-profiles?include=all", server.url());
+            let (status, _, body) = raw(reqwest::Method::GET, &url, &token, None).await;
+            assert_eq!(status, 200);
+            assert_eq!(body["include"], "all");
+            let rows = body["profiles"].as_array().unwrap();
+            assert_eq!(rows.len(), 7);
+            for row in rows {
+                let next = row["next"].as_str().unwrap();
+                assert_eq!(next == "fix", !row["action"].is_null(), "{row}");
+                assert_eq!(next == "send", row["can_send"] == true, "{row}");
+                let test = ["000-000-000", "111-111-114"]
+                    .iter()
+                    .any(|root| row["tin"].as_str().unwrap().starts_with(root));
+                assert_eq!(row["test_only"] == true, test, "{row}");
+            }
+            // Those that send first, then paused, then the rest oldest first.
+            let statuses: Vec<&str> = rows
+                .iter()
+                .map(|row| row["status"].as_str().unwrap())
+                .collect();
+            assert_eq!(
+                statuses,
+                [
+                    "approved",
+                    "approved",
+                    "paused",
+                    "unverified",
+                    "pending",
+                    "needs_fix",
+                    "pending"
+                ]
+            );
+
+            let list = client(&server.url(), &token).account_tins(0).await.unwrap();
+            assert!(list.complete && !list.stale);
+            assert_eq!(list.rows.len(), 7);
+            for row in &list.rows {
+                assert_eq!(row.next == Next::Fix, row.action_url.is_some(), "{row:?}");
+                assert_eq!(row.next == Next::Send, row.can_send, "{row:?}");
+                assert!(row.message.is_some(), "{row:?}");
+            }
+            let test = list.find(&key("000000000")).unwrap();
+            assert!(test.test_only && test.can_send && test.next == Next::Send);
+            assert!(list.find(&key("111-111-114-001")).unwrap().test_only);
+            let fixing = list.find(&key("000123457")).unwrap();
+            assert_eq!(fixing.reasons, ["A photo is too blurry to read."]);
+            assert_eq!(fixing.note, None, "the later claim replaced the first");
+            assert!(fixing.action_url.as_deref().unwrap().ends_with("/fix"));
+            assert!(
+                list.find(&key("000123455"))
+                    .unwrap()
+                    .action_url
+                    .as_deref()
+                    .unwrap()
+                    .ends_with("/verify")
+            );
+
+            let books = server.token_with_scope(EMAIL, "books");
+            let (_, _, other) = raw(reqwest::Method::GET, &url, &books, None).await;
+            for (row, app) in other["profiles"].as_array().unwrap().iter().zip(rows) {
+                assert_eq!(row["next"], app["next"]);
+                assert!(row["action"].is_null() && row.get("tin").is_none(), "{row}");
+            }
+            // The older modes have no next.
+            for older in ["", "?include=pending"] {
+                let (_, _, body) = raw(
+                    reqwest::Method::GET,
+                    &format!("{}/api/tax-profiles{older}", server.url()),
+                    &token,
+                    None,
+                )
+                .await;
+                let rows = body["profiles"].as_array().unwrap();
+                assert!(!rows.is_empty() && rows.iter().all(|row| row.get("next").is_none()));
+            }
+        }
+
+        /// Past the read limit the mock answers `429 rate_limited` with `Retry-After`; the client keeps its list and
+        /// asks nothing more until then. Another sign-in has its own limit.
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn the_read_limit_answers_429_and_the_client_keeps_its_list() {
+            let server = server(MockOptions {
+                tax_profile_reads: 2,
+                ..MockOptions::default()
+            })
+            .await;
+            server.add_tin(EMAIL, "000123453", TinState::Approved);
+            let token = server.app_token(EMAIL);
+            let app = client(&server.url(), &token);
+            let first = app.account_tins(0).await.unwrap();
+            let url = format!("{}/api/tax-profiles", server.url());
+            let (status, retry_after, body) = raw(reqwest::Method::GET, &url, &token, None).await;
+            assert_eq!(status, 200, "{body}");
+            let (status, retry_after_2, body) = raw(reqwest::Method::GET, &url, &token, None).await;
+            assert_eq!(retry_after, None);
+            assert_eq!(status, 429);
+            assert_eq!(body["error"]["code"], "rate_limited");
+            assert_eq!(
+                body["error"]["message"],
+                "Too many requests. Try again in 10 minutes."
+            );
+            let seconds: u64 = retry_after_2.unwrap().parse().unwrap();
+            assert!((590..=600).contains(&seconds), "{seconds}");
+
+            let kept = app.account_tins(0).await.unwrap();
+            assert!(kept.stale);
+            assert_eq!(kept.rows, first.rows);
+            assert!(app.account_tins(0).await.unwrap().stale);
+            app.invalidate_account_tins();
+            assert!(matches!(
+                app.account_tins(0).await,
+                Err(TinsError::RateLimited { .. })
+            ));
+
+            let again = server.app_token(EMAIL);
+            let (status, _, _) = raw(reqwest::Method::GET, &url, &again, None).await;
+            assert_eq!(status, 200, "a sign-in of its own");
+        }
+
+        /// What the app adds is saved as not verified, under its kind and 14-digit TIN, and lists as Fix with its
+        /// Verify link.
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn an_add_from_the_app_lists_as_fix() {
+            let server = server(MockOptions::default()).await;
+            let app = client(&server.url(), &server.app_token(EMAIL));
+            let added = app
+                .add_account_tin(
+                    TinKind::NonIndividual,
+                    &key("000123453002"),
+                    " Dela Cruz Corp ",
+                    None,
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(added.next, Next::Fix);
+            assert!(added.action_url.as_deref().unwrap().ends_with("/verify"));
+            app.add_account_tin(
+                TinKind::Individual,
+                &key("000123460"),
+                "Dela Cruz Juan",
+                Some("Juan's"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                server.tins_of(EMAIL),
+                [
+                    (
+                        "business".to_owned(),
+                        "000-123-453-00002".to_owned(),
+                        "Dela Cruz Corp".to_owned(),
+                        TinState::Unverified
+                    ),
+                    (
+                        "personal".to_owned(),
+                        "000-123-460-00000".to_owned(),
+                        "Dela Cruz Juan".to_owned(),
+                        TinState::Unverified
+                    ),
+                ]
+            );
+            let list = app.account_tins(60).await.unwrap();
+            assert_eq!(list.find(&key("000123453002")).unwrap().next, Next::Fix);
+            assert_eq!(server.tax_profile_posts(), 2);
+        }
+
+        /// Every refusal of `POST /api/tax-profiles`, each set up on the mock, reaches the app as its own case.
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn the_mock_refuses_each_add_with_its_code() {
+            let server = server(MockOptions {
+                tax_profile_adds: 100,
+                ..MockOptions::default()
+            })
+            .await;
+            server.add_tin(EMAIL, "000123453", TinState::Approved);
+            server.add_tin(EMAIL, "000123454", TinState::Paused);
+            server.add_tin(EMAIL, "000123455", TinState::Unverified);
+            server.add_tin(EMAIL, "000123456", TinState::Pending);
+            server.add_tin(
+                EMAIL,
+                "000123457",
+                TinState::NeedsFix {
+                    reasons: Vec::new(),
+                    note: None,
+                },
+            );
+            let token = server.app_token(EMAIL);
+            let app = client(&server.url(), &token);
+            let add = |tin: &'static str| {
+                let app = &app;
+                async move {
+                    app.add_account_tin(TinKind::Individual, &key(tin), "Dela Cruz Juan", None)
+                        .await
+                }
+            };
+            assert_eq!(add("000123453").await, Err(AddTinError::TinAlreadyActive));
+            assert_eq!(add("000123454").await, Err(AddTinError::TinAlreadyActive));
+            assert_eq!(add("000123455").await, Err(AddTinError::TinAlreadyAdded));
+            assert_eq!(
+                add("000123456").await,
+                Err(AddTinError::ClaimAlreadyPending)
+            );
+            assert_eq!(
+                add("000123457").await,
+                Err(AddTinError::ClaimAlreadyPending)
+            );
+            assert_eq!(add("000000000").await, Err(AddTinError::TestTin));
+            assert_eq!(add("111111114").await, Err(AddTinError::TestTin));
+            // Another account's TIN reads like a free one.
+            server.add_tin("other@example.test", "000123458", TinState::Approved);
+            assert!(add("000123458").await.is_ok());
+
+            // What the client never sends: the server's own checks.
+            let url = format!("{}/api/tax-profiles", server.url());
+            let post = |body: Value| raw(reqwest::Method::POST, &url, &token, Some(body));
+            let named = "Ñ".repeat(150);
+            for (body, code) in [
+                (
+                    json!({"kind":"personal","tin":"000-123-46","registered_name":"X"}),
+                    "bad_tin",
+                ),
+                (
+                    json!({"kind":"personal","tin":"000123461","registered_name":"  "}),
+                    "name_missing",
+                ),
+                (
+                    json!({"kind":"personal","tin":"000123461","registered_name":named}),
+                    "name_too_long",
+                ),
+                (
+                    json!({"kind":"personal","tin":"000123461","registered_name":"X","trade_name":named}),
+                    "name_too_long",
+                ),
+                (
+                    json!({"kind":"partnership","tin":"000123461","registered_name":"X"}),
+                    "bad_request",
+                ),
+                (
+                    json!({"tin":"000123461","registered_name":"X"}),
+                    "bad_request",
+                ),
+                (json!(["not", "an", "object"]), "bad_request"),
+            ] {
+                let (status, _, answer) = post(body.clone()).await;
+                assert_eq!(
+                    (status, answer["error"]["code"].as_str()),
+                    (400, Some(code)),
+                    "{body}"
+                );
+            }
+
+            // Another app's token: 403, as `require_app` answers.
+            let books = client(&server.url(), &server.token_with_scope(EMAIL, "books"));
+            assert_eq!(
+                books
+                    .add_account_tin(TinKind::Individual, &key("000123462"), "X", None)
+                    .await,
+                Err(AddTinError::Forbidden)
+            );
+
+            // The cap of unverified TINs.
+            let crowded = "crowded@example.test";
+            for n in 0..MAX_UNVERIFIED {
+                server.add_tin(crowded, &format!("000200{n:03}"), TinState::Unverified);
+            }
+            let full = client(&server.url(), &server.app_token(crowded));
+            let refused = full
+                .add_account_tin(TinKind::Individual, &key("000300000"), "X", None)
+                .await
+                .unwrap_err();
+            assert_eq!(refused, AddTinError::TooManyUnverified);
+            assert_eq!(
+                refused.to_string(),
+                "Your account has 20 TINs waiting to be verified. Verify or remove one on your account first."
+            );
+        }
+
+        /// Past 10 adds a sign-in is refused `429 rate_limited` with `Retry-After`, whatever came of the tries.
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn the_add_limit_answers_429_with_retry_after() {
+            let server = server(MockOptions::default()).await;
+            server.add_tin(EMAIL, "000123453", TinState::Approved);
+            let app = client(&server.url(), &server.app_token(EMAIL));
+            for _ in 0..PROFILE_ADDS_PER_SIGN_IN {
+                assert_eq!(
+                    app.add_account_tin(TinKind::Individual, &key("000123453"), "X", None)
+                        .await,
+                    Err(AddTinError::TinAlreadyActive)
+                );
+            }
+            let refused = app
+                .add_account_tin(TinKind::Individual, &key("000123460"), "X", None)
+                .await
+                .unwrap_err();
+            let AddTinError::RateLimited { retry_after } = refused else {
+                panic!("{refused:?}");
+            };
+            assert!((3590..=3600).contains(&retry_after), "{retry_after}");
+            assert_eq!(
+                refused.to_string(),
+                "Too many tries. Try again in 60 minutes."
+            );
+            assert!(server.tins_of(EMAIL).len() == 1, "nothing was added");
+        }
     }
 }

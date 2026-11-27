@@ -1058,7 +1058,12 @@ nsh-test *args="":
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    # The provenance line is information, never a reason to stop: without git on the PATH (a source copy, or a
+    # caller's own narrow PATH) it says so instead of ending the recipe under ErrorActionPreference Stop (#412).
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    $app = if ($git) { (git rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $kit = if ($git) { (git -C ..\nsh rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
     Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
@@ -1285,7 +1290,16 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     export GPUI_AGENT=1 GPUI_AGENT_ADDR="${GPUI_AGENT_ADDR:-127.0.0.1:17421}"
-    unset BIR_SFTP_LIVE
+    # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
+    unset BIR_SFTP_LIVE BIR_SFTP_HOST BIR_SFTP_PORT BIR_SFTP_USERNAME BIR_SFTP_PASSWORD BIR_SFTP_ACCEPT_ANY_HOST_KEY \
+        BIR_RELAY_URL BUWIZ_RELAY_SEND
+    # An account server that is not on this machine neither: a debug build then talks to the local mock.
+    for name in BUWIZ_SERVER_URL BUWIZ_ACCOUNT_URL; do
+        case "${!name:-}" in
+            ""|http://localhost|http://localhost[:/]*|http://127.0.0.1|http://127.0.0.1[:/]*|http://\[::1\]*) ;;
+            *) unset "$name" ;;
+        esac
+    done
     # The guard read a relative path from here, and the app starts in nsh/: hand it the same file, as an absolute path.
     db={{quote(db)}}
     if [ -n "$db" ]; then
@@ -1368,12 +1382,25 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
-    $app = git rev-parse --short=8 HEAD; $kit = git -C ..\nsh rev-parse --short=8 HEAD; $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    # The provenance line is information, never a reason to stop: without git on the PATH (a source copy, or a
+    # caller's own narrow PATH) it says so instead of ending the recipe under ErrorActionPreference Stop (#412).
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    $app = if ($git) { (git rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $kit = if ($git) { (git -C ..\nsh rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
+    $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
-    Remove-Item Env:BIR_SFTP_LIVE -ErrorAction SilentlyContinue
+    # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
+    foreach ($name in 'BIR_SFTP_LIVE', 'BIR_SFTP_HOST', 'BIR_SFTP_PORT', 'BIR_SFTP_USERNAME', 'BIR_SFTP_PASSWORD', 'BIR_SFTP_ACCEPT_ANY_HOST_KEY', 'BIR_RELAY_URL', 'BUWIZ_RELAY_SEND') {
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+    # An account server that is not on this machine neither: a debug build then talks to the local mock.
+    foreach ($name in 'BUWIZ_SERVER_URL', 'BUWIZ_ACCOUNT_URL') {
+        $value = [Environment]::GetEnvironmentVariable($name)
+        if ($value -and $value -notmatch '^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)') { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
+    }
     $env:GPUI_AGENT = '1'
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }
     $writer = $null
@@ -1530,6 +1557,15 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         }
     }
     exit $code
+
+# Starts the app with nsh-run-agent on a new scratch database (a debug build, dry run), waits for gpui-agent, runs a
+# suite of recipes (agent-recipes/e2e/<suite>.json) and writes report.md, report.json and run.log to
+# ~/BuwizNsh/evidence/e2e/<target>-<time>/. target is macos, linux, windows, ios or android; `just e2e check smoke`
+# checks a suite with no app. Everything goes through gpui-agent: no OS input, no fixed coordinates. A recipe marked
+# send (Queue) runs only with --allow-send under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1. See docs/proof/E2E.md.
+# End to end: run a suite of gpui-agent recipes against the real app (just e2e <target> [suite] [--allow-send])
+e2e target="check" suite="smoke" *args="":
+    {{PYTHON}} scripts/e2e {{quote(target)}} {{quote(suite)}} {{args}}
 
 # NSH: the Android device choice and token hand-off of nsh-run-agent, against a stand-in adb (no device needed).
 [unix]

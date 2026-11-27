@@ -1,0 +1,76 @@
+{
+ "v": 1,
+ "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, every screen, the birth date, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), a schedule row deleted, Queue in the dry-run test build, Log out. Run with `just e2e <target> smoke --allow-send` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "birth": "01/15/1990",
+  "prior": "500.25",
+  "amount": "1234.56",
+  "amount_shown": "1,234.56"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "phone": "../ui/ui-sign-up-phone.wants",
+   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits"}},
+   "required": true,
+   "known_gap": {"phone": "gap 1: the ZIP and RDO pickers are sheets on a phone, and gpui-agent presses inside sheets did not land in this week's rounds"}
+  },
+  {
+   "name": "navigate",
+   "desktop": "../ui/ui-navigate-app.wants",
+   "phone": "navigate-phone.wants"
+  },
+  {
+   "name": "birth-date",
+   "desktop": "birth-date.wants",
+   "phone": "birth-date-phone.wants",
+   "known_gap": {"phone": "gap 1: the date is set in a date sheet"}
+  },
+  {
+   "name": "open-2551q",
+   "desktop": "open-2551q.wants",
+   "phone": "open-2551q-phone.wants",
+   "required": true
+  },
+  {
+   "name": "money-boxes",
+   "desktop": "money-boxes-paced.json",
+   "phone": "money-boxes-paced-phone.json",
+   "needs_cli": "0.4.1",
+   "needs_feature": {"phone": "software_keyboard"},
+   "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+   "fallback": "money-boxes.wants",
+   "known_gap": {"macos": "gap 2: under the old in-process macOS listener the money box refused agent text; this branch moves macOS to the strict adapter, not yet proven on a Mac"}
+  },
+  {
+   "name": "delete-row",
+   "file": "delete-row.wants",
+   "resolve": {"table": {"id_regex": "^(fp-table-.+)-add$", "group": 1}},
+   "known_gap": {"phone": "gap 1: the row drawer is a sheet on a phone"}
+  },
+  {
+   "name": "queue",
+   "file": "queue.wants",
+   "send": true,
+   "precondition": "Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog"
+  },
+  {
+   "name": "sign-out",
+   "desktop": "sign-out.wants",
+   "phone": "sign-out-phone.wants",
+   "known_gap": {"phone": "gap 1: Log out is inside the tax profile sheet on a phone"}
+  }
+ ]
+}

@@ -3,20 +3,22 @@
 // authenticator, Forgot PIN? for a taxpayer and for the admin, Open without signing in). Light and dark, wide and narrow.
 // `just nsh-shots auth` saves ~/BuwizNsh/evidence/auth/*.png. Headless (plain nsh test) it takes no pictures and passes.
 import { open, test } from "nsh/test";
-import { clearCells, LOOKS, shoot } from "./shoot";
+import { AUTH_LOOKS, clearCells, shoot } from "./shoot";
 
 const ENTRY = "../AuthDemo.tsx";
 
-for (const look of LOOKS) {
+for (const look of AUTH_LOOKS) {
   const size = { width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme };
   const at = (params: Record<string, unknown>) => open(ENTRY, { ...size, host: { params } });
   const name = (step: string) => `auth-${look.name}-${step}`;
 
   test(`account gate, ${look.name}`, async () => {
     const app = await at({ gate: true, email: "offline" });
-    await app.waitFor("id:gate-card");
+    await app.waitFor("id:gate-start");
     await app.wait(400);
     await shoot(app, name("gate"));
+    await app.press("id:gate-start-continue");
+    await app.waitFor("id:gate-email-page");
     await app.type("id:gate-email", "juana@example.com");
     await app.press("id:gate-continue");
     await app.waitFor("text:No connection. Check your internet and try again.");

@@ -1,14 +1,15 @@
 // What the number boxes do with the selection, in the window a person uses. Emptying a box (Cmd+A and Backspace or Delete, a
 // selected range and Backspace, a typed digit over a selection) reaches the page as one edit and reports "" for an empty box; a
-// box of zero is selected as a click gives it the keys, so the first digit replaces it; Tab and the box's own focus() select the
-// whole text whatever it holds. Selections and a real caret exist only in a real window, so this file is in the shots lane:
+// box of zero is already empty with its zero as the placeholder, so the first digit starts it; Tab and the box's own focus() select the
+// whole text whatever it holds. Focused money text is not grouped; grouping returns when the box is left. Selections and a real caret exist only in a real window, so this file is in the shots lane:
 // `just nsh-shots select` (nsh test --target macos). A headless run of it checks nothing, as every shots file's does; what a
 // headless box can do (the clear gesture, typing) is in ui/fields.select.test.tsx.
 import { expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { openKit, readout, SIZES } from "../ui/harness";
 
-const WIDE = { width: 800, height: 600, platform: "macos" as const };
+// Tall enough for every box of the fixture (s-tin and s-kept are its last rows): a box below the window cannot be typed into.
+const WIDE = { width: 800, height: 1000, platform: "macos" as const };
 const KIT = SIZES[1].options;
 const FIXTURE = "../ui/select.fixture.tsx";
 
@@ -53,7 +54,7 @@ test("a real window: Cmd+A and Backspace, Cmd+A and Delete, Cmd+A and a digit, e
   expect(read(app, "Some:")).toBe("Some: empty");
   // A digit over the whole selection.
   await fill(app, "id:s-some", "1234");
-  expect(app.value("id:s-some")).toBe("1,234");
+  expect(app.value("id:s-some")).toBe("1234");
   await app.keyboard.press("mod+a");
   await app.keyboard.press("7");
   expect(app.value("id:s-some")).toBe("7");
@@ -82,38 +83,43 @@ test("a real window: a selected range that holds a separator, deleted or typed o
     for (let i = 0; i < from; i++) await app.keyboard.press("right");
     for (let i = 0; i < count; i++) await app.keyboard.press("shift+right");
   };
-  // "1,250,000": the first three characters are "1,2".
-  await fill(app, "id:s-some", "1250000");
-  expect(app.value("id:s-some")).toBe("1,250,000");
+  // The filled amount keeps its grouped text on focus: the first three characters of "1,250.00" are "1,2".
+  await app.type("id:s-some", "");
+  expect(app.value("id:s-some")).toBe("1,250.00");
   await select(0, 3);
   await app.keyboard.press("backspace");
-  expect(app.value("id:s-some")).toBe("50,000");
-  expect(read(app, "Some:")).toBe("Some: 50000");
-  // The same range typed over by a digit.
+  expect(app.value("id:s-some")).toBe("50.00");
+  expect(read(app, "Some:")).toBe("Some: 50.00");
+  // The same range typed over by a digit, in an amount grouped on its last leaving.
   await fill(app, "id:s-some", "1250000");
+  await app.type("id:s-free", "");
+  await app.type("id:s-some", "");
+  expect(app.value("id:s-some")).toBe("1,250,000.00");
   await select(0, 3);
   await app.keyboard.press("9");
-  expect(app.value("id:s-some")).toBe("950,000");
-  expect(read(app, "Some:")).toBe("Some: 950000");
-  // A range at the end, with its separator, deleted forward.
+  expect(app.value("id:s-some")).toBe("950,000.00");
+  expect(read(app, "Some:")).toBe("Some: 950000.00");
+  // A range at the end that holds its separator, deleted forward.
   await fill(app, "id:s-some", "1250000");
+  await app.type("id:s-free", "");
+  await app.type("id:s-some", "");
   await app.keyboard.press("mod+right");
-  for (let i = 0; i < 4; i++) await app.keyboard.press("shift+left");
+  for (let i = 0; i < 7; i++) await app.keyboard.press("shift+left");
   await app.keyboard.press("delete");
   expect(app.value("id:s-some")).toBe("1,250");
   expect(read(app, "Some:")).toBe("Some: 1250");
-  // The caret stays where the range was: the digit typed next goes in there ("1,2|50" + 9).
+  // The caret stays where the range was: the digit typed next goes in there, with no live regrouping.
   await fill(app, "id:s-some", "1250");
   await app.keyboard.press("left");
   await app.keyboard.press("left");
   await app.keyboard.press("9");
-  expect(app.value("id:s-some")).toBe("12,950");
+  expect(app.value("id:s-some")).toBe("12950");
 }, 120_000);
 
-test("a real window: a click into a box of zero selects it, so the first digit replaces the zeros", async () => {
+test("a real window: a box of zero is empty when a click gives it the keys, so the first digit starts it", async () => {
   const app = await open(FIXTURE, WIDE);
   if (!(await real(app))) return;
-  expect(app.value("id:s-zero")).toBe("0.00");
+  expect(app.value("id:s-zero")).toBe("");
   await app.type("id:s-zero", "100");
   expect(app.value("id:s-zero")).toBe("100");
   expect(read(app, "Zero:")).toBe("Zero: 100");
@@ -156,34 +162,38 @@ test("a real window: a click into an amount puts the caret where it landed; Tab 
 test("a real window: after Tab, a caret the user moves later is not turned back into a selection", async () => {
   const app = await open(FIXTURE, WIDE);
   if (!(await real(app))) return;
-  await app.type("id:s-some", "");
-  await app.keyboard.press("tab"); // into the box of zero
+  await fill(app, "id:s-some", "1250");
+  await app.type("id:s-free", "");
+  await app.keyboard.press("tab"); // into the filled amount, selected whole
   await app.wait(900);
-  await app.keyboard.press("left"); // the user moves the caret: to the start of "0.00"
-  await app.wait(300);
-  await app.keyboard.press("5");
-  expect(app.value("id:s-zero")).toBe("50.00");
+  await app.keyboard.press("right"); // one arrow key collapses the selection at the end; End does not in a single-line macOS box
+  await app.keyboard.press("9");
+  expect(app.value("id:s-some")).toBe("1,250.009");
+  expect(read(app, "Some:")).toBe("Some: 1250.009");
 }, 120_000);
 
-test("a real window: a box emptied and refilled from outside shows the old amount selected, so the digits typed next replace it", async () => {
+test("a real window: an outside refill waits for the box to be left, and typing supersedes it", async () => {
   const app = await open(FIXTURE, WIDE);
   if (!(await real(app))) return;
   await app.type("id:s-kept", "");
   await app.keyboard.press("mod+a");
   await app.keyboard.press("backspace");
   expect(app.value("id:s-kept")).toBe("");
-  expect(read(app, "Kept:")).toBe("Kept: empty");
-  await app.waitUntil(() => app.value("id:s-kept") === "1,250", { timeout: 3000 }); // the page's answer, as a box with the keys shows it
+  await app.wait(700); // the page put 1,250 back outside, but focused text is never rewritten
+  expect(app.value("id:s-kept")).toBe("");
+  await app.type("id:s-free", "");
+  expect(app.value("id:s-kept")).toBe("1,250.00");
   expect(read(app, "Kept:")).toBe("Kept: 1250");
-  for (const ch of "250") await app.keyboard.press(ch);
-  expect(app.value("id:s-kept")).toBe("250"); // was "1,250250": appended to the old amount
-  expect(read(app, "Kept:")).toBe("Kept: 250");
-  // Typed in time, nothing comes back.
-  await app.keyboard.press("mod+a");
-  await app.keyboard.press("backspace");
-  await app.keyboard.press("7");
-  await app.wait(800);
-  expect(app.value("id:s-kept")).toBe("7");
+
+  const typed = await open(FIXTURE, WIDE);
+  if (!(await real(typed))) return;
+  await typed.type("id:s-kept", "");
+  await typed.keyboard.press("mod+a");
+  await typed.keyboard.press("backspace");
+  await typed.keyboard.press("7");
+  await typed.wait(800);
+  expect(typed.value("id:s-kept")).toBe("7");
+  expect(read(typed, "Kept:")).toBe("Kept: 7");
 }, 120_000);
 
 test("a real window on the kit gallery: a date and the kit's amounts empty and refill", async () => {

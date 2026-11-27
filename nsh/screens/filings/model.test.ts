@@ -1,10 +1,10 @@
 // Filings' pure rules, without a window: how a return is named, dated and grouped, what the search and filters keep, and what
-// a Home tile's preset sets. Rows are generated (the demo taxpayer's name and TIN, a Cebu branch, a second generated taxpayer).
+// a navigation preset sets. Rows are generated (the demo taxpayer's name and TIN, a Cebu branch, a second generated taxpayer).
 import { expect, test } from "nsh/test";
 import type { ReturnRow, SendState } from "../../bir";
 import {
   cardLabel, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
-  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, whoLine,
+  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, visibleColumns, whoLine,
 } from "./model";
 
 const INDEX = [
@@ -135,7 +135,7 @@ test("Filed only keeps what counts as filed: a real send, a relay send, Confirme
   ];
   expect(ids(filterRows(rows, INDEX, { ...ALL, filedOnly: true }))).toEqual([12, 13, 14, 15]);
   expect(ids(filterRows(rows, INDEX, ALL))).toEqual([11, 12, 13, 14, 15, 16, 17]);
-  // Home's "Filed this month" asks for it; a preset carries it only when set.
+  // A navigation preset carries filedOnly only when set.
   expect(presetOf({ statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11", filedOnly: true })).toEqual({
     statuses: ["Submitted", "Confirmed", "Paid"],
     updatedMonth: "2026-11",
@@ -152,13 +152,24 @@ test("the board's columns hold every status once, with Paid in Confirmed", () =>
   expect(COLUMNS[3].statuses).toEqual(["Confirmed", "Paid"]);
 });
 
+test("the statuses filter names the visible columns: null is all, empty is none, and Paid keeps Confirmed visible", () => {
+  const ids = (statuses: ReadonlySet<string> | null) => visibleColumns(statuses).map((c) => c.id);
+  expect(ids(null)).toEqual(["draft", "queued", "submitted", "confirmed"]);
+  expect(ids(new Set())).toEqual([]);
+  expect(ids(new Set(["Draft"]))).toEqual(["draft"]);
+  expect(ids(new Set(["Queued", "Submitted"]))).toEqual(["queued", "submitted"]);
+  expect(ids(new Set(["Paid"]))).toEqual(["confirmed"]);
+  expect(ids(new Set(["Confirmed"]))).toEqual(["confirmed"]);
+  expect(ids(new Set(["Draft", "Confirmed", "Paid"]))).toEqual(["draft", "confirmed"]);
+});
+
 test("plural", () => {
   expect(plural(0, "return")).toBe("0 returns");
   expect(plural(1, "return")).toBe("1 return");
   expect(plural(7, "return")).toBe("7 returns");
 });
 
-test("a Home tile's preset: the old names, flat or inside preset", () => {
+test("a navigation preset: the old names, flat or inside preset", () => {
   expect(presetOf({ statuses: ["Draft"] })).toEqual({ statuses: ["Draft"], updatedMonth: undefined });
   expect(presetOf({ statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11" })).toEqual({
     statuses: ["Submitted", "Confirmed", "Paid"],
