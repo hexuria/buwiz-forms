@@ -152,6 +152,18 @@ pub fn install_device_key_gate() {
 }
 
 /// The client for the configured Buwiz server, made once per server.
+/// The already-constructed submitter for the configured server, if one exists — a PEEK that
+/// never constructs (N3): under SESSION a construction would read the install id, the platform
+/// store and the DEVICE_KEY gate, so the owner-ending close invalidates only what exists.
+pub fn peek_submitter() -> Option<Arc<Submitter>> {
+    let server = crate::cloud_account::configured_server().ok()?;
+    let slot = SUBMITTER.lock().ok()?;
+    match slot.as_ref() {
+        Some((url, submitter)) if *url == server.url => Some(submitter.clone()),
+        _ => None,
+    }
+}
+
 pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
     install_device_key_gate();
     let server = crate::cloud_account::configured_server()

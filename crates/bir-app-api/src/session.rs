@@ -307,7 +307,10 @@ fn close_locked(
     };
     if owner_ended {
         bir_core::email::cancel_oauth_listeners();
-        if let Ok(submitter) = bir_core::relay::submitter() {
+        // N3: invalidate only an EXISTING submitter — constructing one here, under SESSION,
+        // would read the install id, the platform store and the device-key gate inside the
+        // machine's lock. No submitter built means no TIN cache exists to invalidate.
+        if let Some(submitter) = bir_core::relay::peek_submitter() {
             submitter.invalidate_account_tins();
         }
     }
@@ -579,6 +582,60 @@ pub(crate) fn sign_out_inner(
     // device could not remove means the relaunch signs it back in, so the page must hear an
     // error — never "signed out" — while the gate is locked and the logout still went out.
     removed
+}
+
+/// The changed-server ending (safety table row 2): the stored sign-in belongs to another
+/// deployment, so NO logout is ever sent — a dev build must never post a logout to a production
+/// server it is not signed in to. The shape is the sign-out's without the logout: the disk
+/// outside SESSION, then the cache None and the close in the one SESSION section, then the
+/// real path's close after it.
+pub fn end_changed_server() {
+    {
+        let _account = bir_core::account_session::lock();
+        if let Err(error) = bir_core::account_session::forget_stored() {
+            tracing::warn!(
+                "the changed-server ending left the saved sign-in on this device: {error}"
+            );
+        }
+    }
+    let outcome = {
+        let mut session = locked();
+        let cache_key = bir_core::account_session::stored_owner();
+        bir_core::account_session::cache_owner(None);
+        close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
+    };
+    crate::room_session::close_session();
+    crate::hooks::hooks().refresh_menu();
+    crate::open_room::sweep_registry();
+    finish_close(&outcome, ForgetMode::Backgrounded);
+    drop(outcome.dropped);
+    report_invariants();
+}
+
+/// The owner-change close (N2, row 3): another process wrote the disk's sign-in — the cache's
+/// owner is not the disk's `disk_owner`. The re-check is UNDER SESSION: a signed_in landing
+/// between the caller's disk read and this close sets the cache in its own SESSION section, so
+/// either it is inside already (the cache matches the disk and nothing closes) or it queues
+/// behind this close. The interim shape is server_ended's: the cache None inside SESSION, then
+/// the old slot's close and the menu after it.
+pub fn close_signed_in_elsewhere(disk_owner: &bir_core::account_session::OwnerKey) -> bool {
+    let outcome = {
+        let mut session = locked();
+        let cache_key = bir_core::account_session::stored_owner();
+        if cache_key.as_ref() == Some(disk_owner) {
+            // A signed_in for the disk's owner landed in between: nothing is wrong any more.
+            return false;
+        }
+        bir_core::account_session::cache_owner(None);
+        close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
+    };
+    crate::room_session::close_session();
+    crate::hooks::hooks().refresh_menu();
+    crate::open_room::sweep_registry();
+    finish_close(&outcome, ForgetMode::Backgrounded);
+    drop(outcome.dropped);
+    report_invariants();
+    true
 }
 
 /// server_ended (§4, F8', revision 5's A): the sign-in of `owner` ended at the server in the
@@ -2415,6 +2472,11 @@ mod tests {
             .unwrap()
             .expect("B's stored sign-in is untouched");
         assert_eq!(disk.user_id, "user-b");
+        assert_eq!(
+            bir_core::account_session::stored_owner(),
+            None,
+            "the stale cache was never cleared — it would re-close B on every refresh"
+        );
     }
 
     /// The writer guards' scanner (F14): every `.rs` file under the root, walked RECURSIVELY,

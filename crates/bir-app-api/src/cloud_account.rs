@@ -185,6 +185,7 @@ fn refresh_http() -> Box<dyn cloud_account::Http + Send> {
 }
 
 /// What a verb's refresh learned, for its own answer shape.
+#[derive(Debug)]
 enum VerbRefresh {
     /// The profile was confirmed or refreshed; the save ran. Carries the practice flag.
     Online { practice: bool },
@@ -254,8 +255,13 @@ fn verb_refresh(
         }
     }
     // The rotation through the keyed flight — never a refresh_tokens of the verb's own.
-    match bir_core::account_session::access_token_with_credential(http, now, false, owner) {
-        Ok((access, _credential)) => {
+    // N1: reaching here with a token still valid by the local clock means the profile-only arm's
+    // /me REJECTED that access token — a fast-path answer would be the same rejected token, so
+    // the rotation is FORCED. (With an expired token the force changes nothing: the fast path
+    // could never have answered it.)
+    let force = stored.access_expires_at_unix > now.saturating_add(30);
+    match bir_core::account_session::access_token_with_credential(http, now, force, owner) {
+        Ok((access, credential)) => {
             let fresh = {
                 let _one = bir_core::account_session::lock();
                 match load_stored()? {
@@ -291,11 +297,10 @@ fn verb_refresh(
                 Err(CloudError::Network(_)) => Ok(VerbRefresh::Offline),
                 Err(CloudError::InvalidGrant) => {
                     // The just-refreshed access token rejected at once: the sign-in is ended.
-                    crate::session::server_ended(
-                        owner.clone(),
-                        epoch,
-                        stored.refresh_token.clone(),
-                    );
+                    // N5: the credential is the rotation's OWN — the refresh token now stored —
+                    // never the pre-rotation one, which matches nothing and would answer Ended
+                    // while the sign-in stays stored.
+                    crate::session::server_ended(owner.clone(), epoch, credential);
                     Ok(VerbRefresh::Ended)
                 }
                 Err(error) => Err(host_error(error)),
@@ -332,8 +337,7 @@ fn close_if_disk_owner_changed(stored: &StoredAccount) -> bool {
     tracing::info!(
         "the stored sign-in's owner changed outside the app: closing as signed in elsewhere"
     );
-    crate::session::close(crate::session::Reason::SignedInElsewhere);
-    true
+    crate::session::close_signed_in_elsewhere(&disk)
 }
 
 pub(crate) fn refresh_account(
@@ -365,7 +369,7 @@ pub(crate) fn refresh_account(
             // The stored sign-in belongs to another server deployment: it ends here, through the
             // machine — the disk outside SESSION, the cache and the close inside it. The lock is
             // released: sign_out's own steps take it.
-            crate::session::sign_out();
+            crate::session::end_changed_server();
             return status_now();
         };
         if close_if_disk_owner_changed(&stored) {
@@ -415,11 +419,18 @@ const SIGN_OUT_INCOMPLETE: &str = "Sign-out did not finish: this computer could 
 /// Sends the logout on a thread of its own, without the account-session lock, so a new sign-in never waits on
 /// it. It carries the old sign-in's access token, which cannot end a newer sign-in, and nothing else of it. The
 /// answer changes nothing here (the sign-in is already gone on this device); it is logged, without the token.
+/// Test instrumentation: how many logouts this process sent, so the changed-server row proves
+/// none ever left.
+#[cfg(any(test, feature = "test-support"))]
+pub static LOGOUTS_SENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub(crate) fn logout_soon(
     mut http: Box<dyn cloud_account::Http + Send>,
     server_url: String,
     access_token: String,
 ) {
+    #[cfg(any(test, feature = "test-support"))]
+    LOGOUTS_SENT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let started = std::thread::Builder::new()
         .name("buwiz-account-logout".into())
         .spawn(move || {
@@ -983,6 +994,559 @@ mod tests {
             (server, parked_rx, gate_tx)
         }
 
+        /// The scripted server of the safety-table rows: /me and /oauth/token answers scripted
+        /// per call, the bearer of each /me recorded, logouts counted. A `Some` answer is the
+        /// response; a `None` pops nothing and errors — a call the row never scripted.
+        #[derive(Default)]
+        struct ScriptServer {
+            mes: std::sync::Mutex<std::collections::VecDeque<(String, u16)>>,
+            tokens: std::sync::Mutex<std::collections::VecDeque<(u16, String)>>,
+            me_bearers: std::sync::Mutex<Vec<String>>,
+            logouts: std::sync::atomic::AtomicU64,
+            parked: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>>,
+            gate: std::sync::Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+        }
+
+        struct ScriptHttp(std::sync::Arc<ScriptServer>);
+
+        impl ScriptServer {
+            /// (required bearer or "*" for any, status). 401 answers any other bearer too when
+            /// the required one is not met — the row's rejection is the point.
+            fn me(&self, answers: &[(&str, u16)]) -> std::sync::Arc<ScriptServer> {
+                let server = std::sync::Arc::new(ScriptServer::default());
+                *server.mes.lock().unwrap() = answers
+                    .iter()
+                    .map(|(bearer, status)| (bearer.to_string(), *status))
+                    .collect();
+                server
+            }
+        }
+
+        impl cloud_account::Http for ScriptHttp {
+            fn exchange(&mut self, request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                let server = &self.0;
+                if request.url.ends_with("/oauth/token") {
+                    let park = server.parked.lock().unwrap().take();
+                    let gate = server.gate.lock().unwrap().take();
+                    if let (Some(parked), Some(gate)) = (park, gate) {
+                        let _ = parked.send(());
+                        let _ = gate.recv();
+                    }
+                    let Some((status, body)) = server.tokens.lock().unwrap().pop_front() else {
+                        return Err(CloudError::Unexpected("unscripted token call".into()));
+                    };
+                    return Ok(HttpResponse { status, body });
+                }
+                if request.url.ends_with("/me") {
+                    let bearer = request.bearer.clone().unwrap_or_default();
+                    server.me_bearers.lock().unwrap().push(bearer.clone());
+                    let Some((required, status)) = server.mes.lock().unwrap().pop_front() else {
+                        return Err(CloudError::Unexpected("unscripted /me call".into()));
+                    };
+                    if required != "*" && required != bearer {
+                        return Ok(HttpResponse {
+                            status: 401,
+                            body: r#"{"error":"invalid_token"}"#.into(),
+                        });
+                    }
+                    return Ok(HttpResponse {
+                        status,
+                        body: r#"{"user_id":"u1","email":"filer@example.test","practice":false}"#
+                            .into(),
+                    });
+                }
+                if request.url.ends_with("/logout") {
+                    server
+                        .logouts
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    return Ok(HttpResponse {
+                        status: 200,
+                        body: "{}".into(),
+                    });
+                }
+                Err(CloudError::Unexpected(format!(
+                    "unexpected request: {}",
+                    request.url
+                )))
+            }
+        }
+
+        fn scripted() -> (std::sync::Arc<ScriptServer>, ScriptHttp) {
+            let server = std::sync::Arc::new(ScriptServer::default());
+            (server.clone(), ScriptHttp(server))
+        }
+
+        /// N1 (row 4): /me rejects the access token although it is valid by the clock — the
+        /// rotation is FORCED, never the fast path's same rejected token — and the verb stays
+        /// Online on the rotated sign-in.
+        #[test]
+        fn row4_a_rejected_access_token_forces_the_rotation_and_stays_online() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let current = stored("access-r1", "refresh-r1");
+                save_stored(&current).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&current).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (server, mut http) = scripted();
+                // /me answers 200 only for the rotated access token: the same-token fast path
+                // is answered 401 again — exactly the bug's loop.
+                *server.mes.lock().unwrap() = [
+                    ("access-r2".to_string(), 200u16),
+                    ("access-r2".to_string(), 200u16),
+                    ("access-r2".to_string(), 200u16),
+                ]
+                .into_iter()
+                .collect();
+                server.tokens.lock().unwrap().push_back((
+                    200,
+                    r#"{"access_token":"access-r2","refresh_token":"refresh-r2","expires_in":3600}"#
+                        .into(),
+                ));
+                let outcome = verb_refresh(&mut http, &current, &owner, epoch, now)
+                    .expect("the verb errored");
+                assert!(
+                    matches!(outcome, VerbRefresh::Online { .. }),
+                    "a rejected access token signed the user out although the refresh token was valid: {outcome:?}"
+                );
+                let on_disk = bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .expect("the sign-in was cleared");
+                assert_eq!(
+                    on_disk.refresh_token, "refresh-r2",
+                    "the rotation did not land"
+                );
+                let bearers = server.me_bearers.lock().unwrap();
+                assert!(
+                    bearers.iter().any(|bearer| bearer == "access-r2"),
+                    "no /me ever carried the rotated token — the rotation was never forced: {bearers:?}"
+                );
+            });
+        }
+
+        /// N5 (row 6): after the forced rotation /me rejects the NEW token too — the ending is
+        /// matched on the ROTATED credential, so the stored sign-in really is cleared.
+        #[test]
+        fn row6_a_rejected_new_token_signs_out_on_the_rotated_credential() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let current = stored("access-r1", "refresh-r1");
+                save_stored(&current).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&current).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (server, mut http) = scripted();
+                // Every /me rejects whatever it sees.
+                *server.mes.lock().unwrap() = [
+                    ("*".to_string(), 401u16),
+                    ("*".to_string(), 401u16),
+                    ("*".to_string(), 401u16),
+                ]
+                .into_iter()
+                .collect();
+                server.tokens.lock().unwrap().push_back((
+                    200,
+                    r#"{"access_token":"access-r2","refresh_token":"refresh-r2","expires_in":3600}"#
+                        .into(),
+                ));
+                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                let outcome = verb_refresh(&mut http, &current, &owner, epoch, now)
+                    .expect("the verb errored");
+                assert!(matches!(outcome, VerbRefresh::Ended), "{outcome:?}");
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .is_none(),
+                    "the sign-in stayed stored: the ending was matched on the OLD credential"
+                );
+            });
+        }
+
+        /// Row 5: the rotation's own refresh token rejected — InvalidGrant — clears and closes
+        /// everything. The flight's hook runs the credential-matched ending.
+        #[test]
+        fn row5_an_invalid_grant_of_the_rotation_clears_and_closes() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1;
+                save_stored(&expired).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (_server, mut http) = scripted();
+                _server
+                    .tokens
+                    .lock()
+                    .unwrap()
+                    .push_back((400, r#"{"error":"invalid_grant"}"#.into()));
+                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                let outcome = verb_refresh(&mut http, &expired, &owner, epoch, now)
+                    .expect("the verb errored");
+                assert!(matches!(outcome, VerbRefresh::Ended), "{outcome:?}");
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .is_none(),
+                    "the InvalidGrant of the current credential did not clear the sign-in"
+                );
+            });
+        }
+
+        /// Row 5's composition: the flight rotates R1→R2 on one path; a verb whose refresh of
+        /// the spent R1 is still in flight meets the server's InvalidGrant — the ending names
+        /// R1, the disk holds R2, and NOTHING is cleared: the newer sign-in stays whole.
+        #[test]
+        fn the_flight_composition_a_verb_holding_the_spent_token_ends_nothing() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1;
+                save_stored(&expired).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                // The cache names the owner, as the machine's sign-in sets it.
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &expired,
+                ));
+                let (server, _) = scripted();
+                let (parked_tx, parked_rx) = std::sync::mpsc::channel();
+                let (gate_tx, gate_rx) = std::sync::mpsc::channel();
+                *server.parked.lock().unwrap() = Some(parked_tx);
+                *server.gate.lock().unwrap() = Some(gate_rx);
+                server
+                    .tokens
+                    .lock()
+                    .unwrap()
+                    .push_back((400, r#"{"error":"invalid_grant"}"#.into()));
+                // The verb leads the R1 flight, parked inside the token call.
+                let verb_server = std::sync::Arc::clone(&server);
+                let verb_stored = expired.clone();
+                let verb_owner = owner.clone();
+                let verb = std::thread::spawn(move || {
+                    let mut http = ScriptHttp(verb_server);
+                    verb_refresh(&mut http, &verb_stored, &verb_owner, epoch, now).ok()
+                });
+                parked_rx
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("the verb never reached the token refresh");
+                // Mid-flight, the rotation lands on another path: the disk holds R2.
+                let mut rotated = stored("access-r2", "refresh-r2");
+                rotated.user_id = "u1".into();
+                {
+                    let _one = bir_core::account_session::lock();
+                    save_stored(&rotated).unwrap();
+                }
+                let _ = gate_tx.send(());
+                verb.join().expect("the verb thread panicked");
+                let on_disk = bir_core::cloud_account::load_stored_account().unwrap();
+                assert!(
+                    on_disk.as_ref().map(|stored| stored.refresh_token.as_str())
+                        == Some("refresh-r2"),
+                    "the late verb's ending cleared the newer sign-in: {on_disk:?}"
+                );
+                assert_eq!(
+                    bir_core::account_session::stored_owner().map(|key| key.user_id),
+                    Some("u1".to_string()),
+                    "the owner cache was cleared by the spent token's InvalidGrant"
+                );
+            });
+        }
+
+        /// Row 2: the changed-server ending sends NO logout — the fake records every logout
+        /// call, and this arm must produce none — while the disk is cleared.
+        #[test]
+        fn row2_the_changed_server_ending_sends_no_logout() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut moved = stored("old-access", "old-refresh");
+                moved.server_url = "https://elsewhere.example.test".into();
+                save_stored(&moved).unwrap();
+                let logouts_before =
+                    crate::cloud_account::LOGOUTS_SENT.load(std::sync::atomic::Ordering::SeqCst);
+                let verb =
+                    crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+                        .expect("the verb spawns");
+                futures::executor::block_on(verb);
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .is_none(),
+                    "the changed-server sign-in is still on disk"
+                );
+                assert_eq!(
+                    crate::cloud_account::LOGOUTS_SENT.load(std::sync::atomic::Ordering::SeqCst),
+                    logouts_before,
+                    "a logout went to the other deployment's server"
+                );
+            });
+        }
+
+        /// Row 7: a network error keeps the sign-in, offline — nothing is cleared or closed.
+        #[test]
+        fn row7_a_network_error_keeps_the_sign_in() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let current = stored("access-valid", "refresh-r1");
+                save_stored(&current).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&current).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                struct Down;
+                impl cloud_account::Http for Down {
+                    fn exchange(
+                        &mut self,
+                        _request: &HttpRequest,
+                    ) -> Result<HttpResponse, CloudError> {
+                        Err(CloudError::Network("connection refused".into()))
+                    }
+                }
+                let mut http = Down;
+                let outcome = verb_refresh(&mut http, &current, &owner, epoch, now)
+                    .expect("the verb errored");
+                assert!(matches!(outcome, VerbRefresh::Offline), "{outcome:?}");
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .is_some(),
+                    "a network error cleared the sign-in"
+                );
+            });
+        }
+
+        /// Row 8: the restore with a stored server ≠ the configured one leaves the disk
+        /// UNTOUCHED — the gate stays closed and the sign-in stays, as main does.
+        #[test]
+        fn row8_the_restore_with_a_changed_server_leaves_the_disk_untouched() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut moved = stored("old-access", "old-refresh");
+                moved.server_url = "https://elsewhere.example.test".into();
+                save_stored(&moved).unwrap();
+                struct Down;
+                impl cloud_account::Http for Down {
+                    fn exchange(
+                        &mut self,
+                        _request: &HttpRequest,
+                    ) -> Result<HttpResponse, CloudError> {
+                        Err(CloudError::Network("never reached".into()))
+                    }
+                }
+                let mut http = Down;
+                let _ = crate::cloud_account::restore_saved_session_with(&mut http);
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .is_some(),
+                    "the restore with a changed server cleared the disk — main leaves it"
+                );
+            });
+        }
+
+        /// Row 9: the token fetch itself, InvalidGrant on the credential it used — the real
+        /// access_token_with_credential path a send takes — clears and closes everything.
+        #[test]
+        fn row9_the_token_fetchs_invalid_grant_clears_and_closes() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1;
+                save_stored(&expired).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &expired,
+                ));
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                let now = cloud_account::unix_now();
+                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                let (server, _) = scripted();
+                server
+                    .tokens
+                    .lock()
+                    .unwrap()
+                    .push_back((400, r#"{"error":"invalid_grant"}"#.into()));
+                let mut http = ScriptHttp(server);
+                let answer = bir_core::account_session::access_token_with_credential(
+                    &mut http, now, true, &owner,
+                );
+                assert!(
+                    matches!(
+                        answer,
+                        Err(bir_core::account_session::TokenError::SignedOut)
+                    ),
+                    "{answer:?}"
+                );
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .is_none(),
+                    "the token fetch's InvalidGrant did not clear the sign-in"
+                );
+                assert_eq!(
+                    bir_core::account_session::stored_owner(),
+                    None,
+                    "the cache still names the ended owner"
+                );
+            });
+        }
+
+        /// N3: a sign-out with no submitter ever built constructs none — the TIN invalidation
+        /// peeks, and the peek never constructs the relay client under SESSION.
+        #[test]
+        fn n3_a_sign_out_with_no_submitter_built_constructs_none() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                assert!(
+                    bir_core::relay::peek_submitter().is_none(),
+                    "a submitter exists before the sign-out — the test is vacuous"
+                );
+                crate::session::sign_out();
+                crate::session::join_device_forget_threads();
+                assert!(
+                    bir_core::relay::peek_submitter().is_none(),
+                    "the sign-out CONSTRUCTED a submitter under SESSION — the N3 hole"
+                );
+            });
+        }
+
+        /// Row 12: the page's close verb locks the gate and refreshes the menu but does NOT
+        /// close the room — as main, until commit 3.
+        #[test]
+        fn row12_the_pages_close_leaves_the_room_open() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::open_room::reset_for_tests();
+            crate::room_session::reset_for_tests();
+            bir_core::db::set_open_room_database(None);
+            let device = tempfile::tempdir().unwrap();
+            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
+            signed_in(|_file| {
+                let stored = stored("access-a", "refresh-a");
+                save_stored(&stored).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored,
+                ));
+                let opened = crate::room_session::open_session_room(&stored);
+                assert!(
+                    crate::open_room::current().is_some(),
+                    "the real path opened no room ({opened:?})"
+                );
+                crate::account_gate::set_unlocked(true);
+                session_closed().expect("the page verb answers");
+                assert!(
+                    crate::open_room::current().is_some(),
+                    "the page's close closed the room — main does not"
+                );
+                assert!(
+                    !crate::account_gate::unlocked_flag(),
+                    "the gate is still open after the page's close"
+                );
+            });
+        }
+
+        /// Row 11: a 401 of the account GET or the TIN-list POST — a non-send caller with no
+        /// send context — logs only: NOTHING ends, as main does.
+        #[test]
+        fn row11_a_non_sends_401_ends_nothing() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let current = stored("access-a", "refresh-a");
+                save_stored(&current).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &current,
+                ));
+                bir_core::account_session::on_session_ended(crate::session::server_ended);
+                // The non-send caller's session_ended: no send context anywhere.
+                bir_core::bir_submit::TokenSource::session_ended(
+                    &bir_core::account_session::AccountTokens,
+                );
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .is_some(),
+                    "a non-send 401 cleared the sign-in — main logs only"
+                );
+                assert!(
+                    bir_core::account_session::stored_owner().is_some(),
+                    "a non-send 401 cleared the cache"
+                );
+            });
+        }
+
+        /// Row 3's other half: a signed_in landing between the disk read and the close is NOT
+        /// closed — the re-check under SESSION sees the cache already matches the disk.
+        #[test]
+        fn row3_a_signed_in_landing_before_the_close_is_not_closed() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                // bir-mcp's write of B, as row 3 — then a signed_in of B lands BEFORE the
+                // close's SESSION section: the cache now matches the disk, nothing closes.
+                let stored_b = stored("access-b", "refresh-b");
+                let mut stored_b = stored_b.clone();
+                stored_b.user_id = "user-b".into();
+                std::fs::write(
+                    bir_core::platform::device_dir().join("buwiz-cloud-account.json"),
+                    stored_b.encode().unwrap(),
+                )
+                .unwrap();
+                let owner_b = bir_core::account_session::OwnerKey::of(&stored_b).unwrap();
+                // The sign-in lands first: the cache moves to B.
+                bir_core::account_session::cache_owner(Some(owner_b.clone()));
+                // The close re-checks under SESSION: the cache matches the disk — no close.
+                let closed = crate::session::close_signed_in_elsewhere(&owner_b);
+                assert!(
+                    !closed,
+                    "the signed_in that landed in between was closed anyway"
+                );
+                assert_eq!(
+                    bir_core::account_session::stored_owner(),
+                    Some(owner_b),
+                    "B's cache entry did not survive"
+                );
+            });
+        }
+
+        /// Row 13: a second engine's launch restore concurrent with the first is exactly ONE
+        /// network refresh — the two restores share the credential's keyed flight.
+        #[test]
+        fn row13_a_second_engines_restore_shares_one_network_refresh() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1;
+                save_stored(&expired).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &expired,
+                ));
+                let (server, parked, gate) = flight_server(false);
+                // The first engine's restore leads, parked in the token refresh.
+                let first_server = std::sync::Arc::clone(&server);
+                let first = std::thread::spawn(move || {
+                    let mut http = FlightHttp(first_server);
+                    crate::cloud_account::restore_saved_session_with(&mut http)
+                });
+                parked
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("the first restore never reached the token refresh");
+                let second_server = std::sync::Arc::clone(&server);
+                let second = std::thread::spawn(move || {
+                    let mut http = FlightHttp(second_server);
+                    crate::cloud_account::restore_saved_session_with(&mut http)
+                });
+                std::thread::yield_now();
+                let _ = gate.send(());
+                let first_answer = first.join().expect("the first restore panicked");
+                let second_answer = second.join().expect("the second restore panicked");
+                assert_eq!(
+                    server.refreshes.load(std::sync::atomic::Ordering::SeqCst),
+                    1,
+                    "two engines' restores burned the rotation twice"
+                );
+                assert!(first_answer.0, "the first restore stayed locked");
+                assert!(second_answer.0, "the second restore stayed locked");
+            });
+        }
+
         /// F3: a verb's refresh concurrent with a send's flight is ONE network refresh — the
         /// verb joins the credential's keyed flight rather than burning the rotation again.
         #[test]
@@ -1124,6 +1688,9 @@ mod tests {
                     bir_core::relay::device_key_owner().is_some(),
                     "the seeded owner record does not read back"
                 );
+                // The submitter exists, as it does on any real path that has sent or listed
+                // TINs — N3 invalidates only an existing one's cache, never constructs one.
+                bir_core::relay::submitter().expect("the test environment builds the submitter");
                 let invalidations_before = bir_core::bir_submit::tins::INVALIDATIONS
                     .load(std::sync::atomic::Ordering::SeqCst);
                 let (seen_tx, seen_rx) = mpsc::channel::<Seen>();
