@@ -103,7 +103,7 @@ function ProfileSummary(props: { tp: Taxpayer }) {
         <Code tone="fg2">{b()?.tin_display ?? props.tp.tin_display}</Code>
         <If when={b()}>
           <View class="items-center">
-            <TinChip testID="panel-tin-status" tinRoot={props.tp.tin_root} branch={b()!.code} tinFull={b()!.tin} />
+            <TinChip testID="panel-tin-status" tinRoot={props.tp.tin_root} branch={b()!.code} tinFull={`${props.tp.tin_root}${b()!.code}`} />
           </View>
         </If>
       </View>
@@ -162,7 +162,7 @@ function ProfileLists(props: { tp: Taxpayer }) {
             current={br().code === app.branch()?.code}
             trailing={
               <View class="flex-row items-center gap-1">
-                <TinChip compact testID={`panel-branch-tin-${br().code}`} tinRoot={props.tp.tin_root} branch={br().code} tinFull={br().tin} />
+                <TinChip compact testID={`panel-branch-tin-${br().code}`} tinRoot={props.tp.tin_root} branch={br().code} tinFull={`${props.tp.tin_root}${br().code}`} />
                 <If when={br().code === app.branch()?.code}>
                   <Icon name="check" tone="fg3" />
                 </If>
@@ -191,7 +191,7 @@ function ProfileLists(props: { tp: Taxpayer }) {
                     testID={`panel-tp-tin-${x().tin_root}`}
                     tinRoot={x().tin_root}
                     branch={x().branches.find((br) => br.is_head_office)!.code}
-                    tinFull={x().branches.find((br) => br.is_head_office)!.tin}
+                    tinFull={`${x().tin_root}${x().branches.find((br) => br.is_head_office)!.code}`}
                   />
                 </If>
               }

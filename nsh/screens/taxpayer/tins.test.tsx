@@ -43,8 +43,9 @@ test("desktop: a fix row shows the message and its action, which opens the accou
   expect(app.texts()).toContain("The registered name does not match. Check it on your account.");
   expect(app.shows("id:tp-tin-status-action")).toBe(true);
   await app.press("id:tp-tin-status-action");
-  // The return from the account site asks again at the server.
-  await app.waitUntil(() => tinsCalls(app).filter((c) => c === "account_tins(0)").length >= 2, { timeout: 10000 });
+  // Opening the link itself asks nothing: the account is asked again when the app becomes active on the return.
+  await app.wait(1200);
+  expect(tinsCalls(app).filter((c) => c === "account_tins(0)").length).toBe(1);
 });
 
 test("phone: a not-activated TIN shows the Activate button, which activates and refreshes", async () => {
@@ -71,23 +72,41 @@ test("desktop: a stale row says when it was checked", async () => {
   expect(app.texts().some((t) => /^Checked \d{4}-\d{2}-\d{2}$/.test(t) || t.startsWith("Checked "))).toBe(true);
 });
 
-test("phone: each refusal shows the host's own sentence and nothing is reworded", async () => {
-  const cases = [
-    ["bad_tin", "This TIN is not valid."],
-    ["name_missing", "Add the registered name first."],
-    ["tin_already_added", "This TIN is already on your account, waiting to be verified."],
-    ["too_many_unverified", "Your account has 20 TINs waiting to be verified. Verify or remove one on your account first."],
-    ["rate_limited", "Too many tries. Try again in 12 minutes."],
-    ["other", "The Buwiz server could not add this TIN (fizzy)."],
-  ] as const;
-  for (const [kind, sentence] of cases) {
-    const app = await phone({ tins: "not_activated", activate: kind });
-    await app.waitFor("id:tp-tin-status-activate");
-    await app.press("id:tp-tin-status-activate");
-    await app.waitFor("id:tp-tin-status-refusal");
-    expect(app.texts()).toContain(sentence);
-  }
-});
+const REFUSAL_CASES_A = [
+  ["bad_tin", "This TIN is not valid."],
+  ["name_missing", "Add the registered name first."],
+  ["tin_already_added", "This TIN is already on your account, waiting to be verified."],
+] as const;
+const REFUSAL_CASES_B = [
+  ["too_many_unverified", "Your account has 20 TINs waiting to be verified. Verify or remove one on your account first."],
+  ["rate_limited", "Too many tries. Try again in 12 minutes."],
+  ["other", "The Buwiz server could not add this TIN (fizzy)."],
+] as const;
+
+async function refusalShows(kind: string, sentence: string): Promise<void> {
+  const app = await phone({ tins: "not_activated", activate: kind });
+  await app.waitFor("id:tp-tin-status-activate");
+  await app.press("id:tp-tin-status-activate");
+  await app.waitFor("id:tp-tin-status-refusal");
+  expect(app.texts()).toContain(sentence);
+}
+
+test("phone: each refusal shows the host's own sentence, first half", async () => {
+  for (const [kind, sentence] of REFUSAL_CASES_A) await refusalShows(kind, sentence);
+}, 60_000);
+
+test("phone: each refusal shows the host's own sentence, second half", async () => {
+  for (const [kind, sentence] of REFUSAL_CASES_B) await refusalShows(kind, sentence);
+}, 60_000);
+
+test("phone: a refusal the fixture makes up passes through word for word (nothing is reworded or mapped)", async () => {
+  const sentence = "Zebra crossing ahead, exactly as the host worded it.";
+  const app = await phone({ tins: "not_activated", refusalText: sentence });
+  await app.waitFor("id:tp-tin-status-activate");
+  await app.press("id:tp-tin-status-activate");
+  await app.waitFor("id:tp-tin-status-refusal");
+  expect(app.texts()).toContain(sentence);
+}, 30_000);
 
 test("desktop: the picker rows carry the chip: the demo taxpayer activated, the peer pending", async () => {
   const app = await desk({ tins: "multi", peer: true });
@@ -106,3 +125,33 @@ test("phone: when the list cannot be read no chip shows and nothing breaks", asy
   await new Promise((r) => setTimeout(r, 1500));
   expect(app.shows("id:tp-tin-status")).toBe(false);
 });
+
+test("desktop: a good list then a failed refresh keeps the list but marks it stale for the chips", async () => {
+  // The start read answers (the fix row shows); the re-read the action would have triggered is forced here by the
+  // erroring second read: the chips keep the last list but must say when it was checked, never pass it as fresh.
+  const app = await desk({ tins: "fix", tinsErrorAfter: 1 });
+  await app.waitFor("id:tp-tin-status-state");
+  await app.waitUntil(() => tinsCalls(app).length >= 1, { timeout: 8000 });
+  // Force another read: the account-tins mount read of a second surface. Activate is not there (a fix row), so
+  // use the panel's open-close cycle, which mounts its chip and reads with max_age 60 — unless the erroring read
+  // already happened. The readout decides: after two reads the second one threw.
+  await app.press("id:context-pill");
+  await app.waitFor("id:panel-tin-status-state", { timeout: 8000 }).catch(() => {});
+  await app.waitUntil(() => tinsCalls(app).length >= 2, { timeout: 10000 });
+  await app.waitFor("id:tp-tin-status-stale", { timeout: 10000 });
+  expect(app.texts().some((t) => t.startsWith("Checked "))).toBe(true);
+  // The state line still shows the kept row: it is stale, not gone.
+  expect(app.shows("id:tp-tin-status-state")).toBe(true);
+}, 40_000);
+
+test("desktop: when the signed-in owner changes a failing read clears the old owner's chips", async () => {
+  // Owner A's list was read at start; the owner flips and B's read fails: nothing of A's may show for B.
+  const app = await desk({ tins: "activated", tinsErrorAfter: 1, tinsOwnerFlipAfter: 1 });
+  await app.waitFor("id:tp-tin-status-state");
+  await app.waitUntil(() => tinsCalls(app).length >= 1, { timeout: 8000 });
+  await app.press("id:context-pill");
+  await app.waitUntil(() => tinsCalls(app).length >= 2, { timeout: 10000 });
+  // B's read failed and A's list is not B's: no chip state anywhere.
+  await app.waitUntil(() => !app.shows("id:tp-tin-status-state"), { timeout: 10000 });
+  expect(app.shows("id:panel-tin-status-state")).toBe(false);
+}, 40_000);

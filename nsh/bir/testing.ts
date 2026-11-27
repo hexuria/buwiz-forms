@@ -83,6 +83,7 @@ export function installFakeTins(
   kind: FakeTinsKind,
   activateKind: FakeActivateKind | undefined,
   readout: (line: string) => void,
+  opts: { errorAfter?: number; ownerFlipAfter?: number; refusalText?: string } = {},
 ): void {
   const now = Math.floor(Date.now() / 1000);
   const root = DEMO.tinRoot.replaceAll("-", "");
@@ -100,14 +101,32 @@ export function installFakeTins(
     if (kind === "stale") return [{ ...base, state: "activated", message: null, stale: true, fetched_at: now - 86400 * 3 }];
     return [];
   };
+  // The sign-in the list belongs to: owner A, or owner B once ownerFlipAfter reads are behind (the account-switch test).
+  // Both are signed in: the chips only make sense signed in, and the switch is what must clear the kept list.
+  let reads = 0;
+  const ownerId = () => (opts.ownerFlipAfter !== undefined && reads > opts.ownerFlipAfter ? "owner-b" : "owner-a");
+  bir.cloud_account_status = () => ({
+    server_url: "http://localhost:3008",
+    server_url_source: "build",
+    account_url: "",
+    signed_in: true,
+    email: `${ownerId()}@example.com`,
+    user_id: ownerId(),
+    offline: false,
+    practice: false,
+    detail: "",
+  });
   bir.account_tins = async (maxAge: number) => {
     readout(`account_tins(${maxAge})`);
-    if (kind === "error") throw new Error("Sign in to Buwiz to see your TINs.");
-    if (kind === "incomplete") return { rows: [], complete: false, stale: false, fetched_at: now };
+    reads += 1;
+    if (kind === "error" || (opts.errorAfter !== undefined && reads > opts.errorAfter)) throw new Error("Sign in to Buwiz to see your TINs.");
+    // An incomplete list still carries the rows it has: completeness is its own fact, and the gate must read it.
+    if (kind === "incomplete") return { rows: [{ ...base, state: "not_activated", message: null }], complete: false, stale: false, fetched_at: now };
     return { rows: rows(), complete: true, stale: kind === "stale", fetched_at: now };
   };
   bir.activate_tin = async (tinFull: string) => {
     readout(`activate_tin(${tinFull})`);
+    if (opts.refusalText) throw new Error(opts.refusalText);
     if (activateKind && activateKind !== "ok") throw new Error(FAKE_REFUSALS[activateKind]);
     return { ...base, tin_root: tinFull.slice(0, 9), branch: tinFull.slice(9), state: "pending", message: "Buwiz is verifying this TIN." };
   };

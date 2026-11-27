@@ -41,6 +41,12 @@ interface Params {
   tins?: "activated" | "pending" | "fix" | "not_activated" | "test" | "stale" | "multi" | "incomplete" | "error";
   /** The refusal activate_tin throws (the host's own sentence), or "ok" for the added row. */
   activate?: FakeActivateKind;
+  /** After this many account_tins reads the fake throws (the good-list-then-error tests). */
+  tinsErrorAfter?: number;
+  /** After this many reads the fake's sign-in becomes owner B (the account-switch test). */
+  tinsOwnerFlipAfter?: number;
+  /** An arbitrary refusal sentence activate_tin throws verbatim (the pass-through test). */
+  refusalText?: string;
 }
 
 if (/form=/.test(String((host.params as Params)?.start ?? ""))) warmForms();
@@ -81,8 +87,12 @@ function fixGoogle(available: boolean) {
   table.inbox_state = (tin: string) => ({ ...real(tin), google_available: available });
 }
 
-function fakeTins(kind: NonNullable<Params["tins"]>, activateKind: Params["activate"], readout: (line: string) => void): void {
-  installFakeTins(bir as unknown as Record<string, unknown>, kind, activateKind, readout);
+function fakeTins(kind: NonNullable<Params["tins"]>, p: Params, readout: (line: string) => void): void {
+  installFakeTins(bir as unknown as Record<string, unknown>, kind, p.activate, readout, {
+    errorAfter: p.tinsErrorAfter,
+    ownerFlipAfter: p.tinsOwnerFlipAfter,
+    refusalText: p.refusalText,
+  });
 }
 
 function Demo() {
@@ -91,7 +101,7 @@ function Demo() {
   if (p.sent) show1601CAsSent(p.sent === "dry");
   if (typeof p.google === "boolean") fixGoogle(p.google);
   const tinsCalls = signal<string[]>([]);
-  if (p.tins) fakeTins(p.tins, p.activate, (line) => tinsCalls.set([...tinsCalls(), line]));
+  if (p.tins) fakeTins(p.tins, p, (line) => tinsCalls.set([...tinsCalls(), line]));
   const ready = signal(!p.savedReturn);
   if (p.savedReturn) {
     const target = p.savedReturn;

@@ -98,7 +98,7 @@ function TaxpayerRead(props: { s: PageState }) {
         </If>
       </FieldGrid>
       <If when={t() && app.branch()}>
-        <TinChip testID="tp-tin-status" tinRoot={t()!.tin_root} branch={app.branch()!.code} tinFull={app.branch()!.tin} />
+        <TinChip testID="tp-tin-status" tinRoot={t()!.tin_root} branch={app.branch()!.code} tinFull={`${t()!.tin_root}${app.branch()!.code}`} />
       </If>
     </View>
   );

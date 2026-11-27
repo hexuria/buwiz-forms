@@ -47,7 +47,6 @@ import {
   dismissToast as kitDismissToast,
 } from "../../ui";
 import { app, store } from "../../shell";
-import { returnedFromAccountSite } from "../taxpayer/tins";
 import { DRY_RUN_WORD } from "../../lib/statusWord";
 import { ItemRow, ProfileFold } from "./rows";
 import { ACCOUNT_FIX, existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, profileChangedNote, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
@@ -416,7 +415,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
               }
               onPress={() => s.check()}
             />
-            <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
+            <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading || s.queueBusy()} onPress={() => s.queue()} />
           </If>
           <If when={h().status === "Queued" && !h().sample && !h().canResolve && !h().checkingSend}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
@@ -1020,8 +1019,8 @@ function Dialogs(props: { s: FormSession }) {
                   block
                   label="Fix on your account"
                   onPress={() => {
+                    // The list is asked again when the app becomes active on the filer's return, not at open.
                     void openUrl(row().action_url!);
-                    void returnedFromAccountSite();
                   }}
                 />
               </If>

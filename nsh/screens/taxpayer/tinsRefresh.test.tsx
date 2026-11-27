@@ -53,10 +53,14 @@ test("desktop: after Activate the account is asked again at the server", async (
   expect(tinsCalls(app).some((c) => c.startsWith("activate_tin(00012345300000)"))).toBe(true);
 }, 30_000);
 
-test("desktop: opening the Fix action is a return from the account site: the account is asked again at the server", async () => {
+test("desktop: opening the Fix action does not itself re-read the account (nothing has changed yet; the return does)", async () => {
+  // The read after a visit to the account site happens when the app becomes active on the filer's return (the shell's
+  // listener), never when the link opens: at open nothing on the account has changed yet, so no read is asked here.
   const app = (await open(ENTRY, { ...WIDE, ...asking({ tins: "fix" }) })) as unknown as App;
   await app.waitFor("id:tp-tin-status-action");
   await app.waitUntil(() => tinsCalls(app).filter((c) => c === "account_tins(0)").length === 1, { timeout: 8000 });
+  const standing = tinsCalls(app).filter((c) => c === "account_tins(0)").length;
   await app.press("id:tp-tin-status-action");
-  await app.waitUntil(() => tinsCalls(app).filter((c) => c === "account_tins(0)").length >= 2, { timeout: 10000 });
+  await app.wait(1500);
+  expect(tinsCalls(app).filter((c) => c === "account_tins(0)").length).toBe(standing);
 }, 30_000);

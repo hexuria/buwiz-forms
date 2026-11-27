@@ -35,7 +35,7 @@ import {
   type ScreenFormStatus,
   type SendState,
 } from "../../bir";
-import { refreshTins, returnedFromAccountSite, tinRow } from "../taxpayer/tins";
+import { refreshTins, tinKeyParts } from "../taxpayer/tins";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
 import { statusWord } from "../../lib/statusWord";
@@ -3906,6 +3906,11 @@ export class FormSession {
     this.publish();
   }
 
+  /** True while the account read on the way to Queue runs: the Queue button shows busy and a second press is not a second queue. */
+  queueBusy(): boolean {
+    return this.queueGateBusy;
+  }
+
   /** Closes the TIN-status sheet Queue stopped on; nothing was queued. */
   dismissTinBlocked() {
     if (this.st.overlay?.kind !== "tin-blocked") return;
@@ -3913,23 +3918,38 @@ export class FormSession {
     this.publish();
   }
 
+  /** One account read on the way to Queue at a time: a second press inside the round trip is not a second queue. */
+  private queueGateBusy = false;
+
   private queueNow() {
-    const s = this.st;
     // D2: Queue asks the account first (max_age 0). A fresh, complete list naming this TIN and branch as not activated
-    // stops Queue on a sheet and queues nothing; a stale, incomplete or unreadable list goes ahead as today.
-    const tinText = String(s.target.tin).replace(/\D/g, "");
+    // stops Queue on a sheet and queues nothing; a stale, incomplete or unreadable list (the read threw included) goes
+    // ahead as today. The read is this call's own answer, never a kept one.
+    if (this.queueGateBusy || this.disposed) return;
+    this.queueGateBusy = true;
+    this.publish();
+    const [tinRoot, branch] = tinKeyParts(this.st.target.tin);
     void (async () => {
-      const list = await refreshTins(0);
-      if (list && !list.stale && list.complete) {
-        const row = tinRow(tinText.slice(0, 9), tinText.slice(9));
-        if (row && row.state !== "activated") {
-          if (this.st !== s) return;
-          s.overlay = { kind: "tin-blocked", row };
-          this.publish();
-          return;
+      let blocked: { state: string; message: string | null; action_url: string | null; test_only: boolean; stale: boolean; fetched_at: number } | null = null;
+      try {
+        const answer = await refreshTins(0);
+        if (answer && !answer.stale && answer.complete) {
+          const row = answer.rows.find((r) => r.tin_root === tinRoot && r.branch === branch);
+          if (row && row.state !== "activated") blocked = row;
         }
+      } finally {
+        this.queueGateBusy = false;
       }
-      if (this.st === s) this.queueNowHost(s);
+      // After the wait the page may be gone, or the filer may have typed on: nothing stale decides. The queue itself
+      // reads the draft as it NOW is (this.st), so what was typed during the wait is checked with the rest.
+      if (this.disposed) return;
+      const now = this.st;
+      if (blocked) {
+        now.overlay = { kind: "tin-blocked", row: blocked };
+        this.publish();
+        return;
+      }
+      this.queueNowHost(now);
     })();
   }
 

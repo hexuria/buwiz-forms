@@ -277,9 +277,17 @@ export function Shell(props: ShellProps) {
   // D2: the account's TINs are asked at start and when the app becomes active (never on a timer).
   void refreshTins(0);
   let tinWasFocused = untracked(() => focusedWindow() !== null);
+  let lastFocusRead = 0;
   effect(() => {
     const focused = focusedWindow() !== null;
-    if (focused && !tinWasFocused) void refreshTins(0);
+    // A focus flicker is not a return from the account site: at most one read a minute, or the cache answers.
+    if (focused && !tinWasFocused) {
+      const now = Date.now();
+      if (now - lastFocusRead >= 60_000) {
+        lastFocusRead = now;
+        void refreshTins(0);
+      } else void refreshTins(60);
+    }
     tinWasFocused = focused;
   });
   // The app draws its own 40-point title bar where the platform has windows (the traffic lights and caption buttons stay).

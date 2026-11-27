@@ -29,8 +29,14 @@ interface Params {
   openParts?: number[] | "all";
   /** A form key whose host-held value the fixture republishes as `probe <value>`. */
   probeKey?: string;
+  /** The TIN the page runs on (default the demo taxpayer's); tests pass a legacy 12-digit row through this. */
+  tin?: string;
   /** The account's TIN list faked for the queue gate (D2); the calls are published as `tinscalls ...` lines. */
   tins?: FakeTinsKind;
+  /** After this many account_tins reads the fake throws. */
+  tinsErrorAfter?: number;
+  /** After this many reads the fake's sign-in becomes owner B. */
+  tinsOwnerFlipAfter?: number;
   /** The refusal activate_tin throws. */
   activate?: FakeActivateKind;
   /** Year facts set for the demo taxpayer before the page opens (e.g. the EOPT tier a queue needs answered). */
@@ -59,9 +65,9 @@ function Fixture() {
   watchBoxFrames(true);
   createDemoTaxpayer();
   const p = (host.params || {}) as Params;
-  if (p.tins) installFakeTins(bir as unknown as Record<string, unknown>, p.tins, p.activate, (line) => tinsCalls.set([...tinsCalls(), line]));
+  if (p.tins) installFakeTins(bir as unknown as Record<string, unknown>, p.tins, p.activate, (line) => tinsCalls.set([...tinsCalls(), line]), { errorAfter: p.tinsErrorAfter, ownerFlipAfter: p.tinsOwnerFlipAfter });
+  const tin = typeof p.tin === "string" ? p.tin : DEMO.tin;
   if (p.facts) {
-    const tin = DEMO.tin;
     const year = p.year ?? 2025;
     if (!bir.list_tax_years(tin).includes(year)) bir.add_tax_year(tin, year, false);
     bir.set_year_facts(tin, year, p.facts as never);
@@ -72,12 +78,12 @@ function Fixture() {
   });
   if (p.compact) app.setPref("compactFormNav", true);
   const seeded = signal(!p.seed);
-  if (p.seed) void seedParity(DEMO.tin).then(() => seeded.set(true));
+  if (p.seed) void seedParity(tin).then(() => seeded.set(true));
   return (
     <View class="flex-1 bg-background">
       <If when={seeded()}>
         <FormPage
-          tin={DEMO.tin}
+          tin={tin}
           formCode={p.formCode ?? "2551Q"}
           year={p.year ?? 2025}
           period={p.period ?? 1}
