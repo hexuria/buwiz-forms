@@ -552,23 +552,16 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
 pub fn lock_note(form: &str, key: &str, reason: &str) -> Option<&'static str> {
     let gate = gate_of(form, key)?;
     if gate.gate == G1701_SPOUSE_NAME.gate {
-        if ![
-            C1701_EMPLOYER_OWNER,
-            C1701_EMPLOYER_TAXPAYER,
-            C1701_EMPLOYER_SPOUSE,
-            C1701_EMPLOYER_COMPENSATION,
-        ]
-        .contains(&reason)
-        {
-            return None;
-        }
-        if reason == C1701_EMPLOYER_OWNER {
-            return Some("Schedule 1 needs the row marked for the taxpayer or the spouse.");
-        }
-        if key.contains("TPName") {
-            return Some("Schedule 1 is for compensation income of the taxpayer.");
-        }
-        return Some(gate.note);
+        return match reason {
+            C1701_EMPLOYER_OWNER => {
+                Some("Schedule 1 needs the row marked for the taxpayer or the spouse.")
+            }
+            C1701_EMPLOYER_TAXPAYER => {
+                Some("Schedule 1 is for compensation income of the taxpayer.")
+            }
+            C1701_EMPLOYER_SPOUSE | C1701_EMPLOYER_COMPENSATION => Some(gate.note),
+            _ => None,
+        };
     }
     // Reasons are shared across forms and layers. A note belongs to this
     // gate only when this gate itself produced that reason; another lock on
@@ -631,8 +624,11 @@ fn row_line(form: &str, key: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
-fn row_cleared_text(gate: Gate, line: &str) -> String {
+fn row_cleared_text(gate: Gate, line: &str, owner: Option<Form1701Party>) -> String {
     match gate.gate {
+        "1701_spouse_employer_name" if owner == Some(Form1701Party::Taxpayer) => format!(
+            "Employer row {line} was cleared: Schedule 1 applies only to compensation income of the taxpayer."
+        ),
         "1701_spouse_employer_name" => format!(
             "Employer row {line} was cleared: Schedule 1 applies only to compensation income on a joint return."
         ),
@@ -680,6 +676,14 @@ fn employer_row(draft: &Value, index: usize) -> Option<&Value> {
     draft.get("employers")?.as_array()?.get(index)
 }
 
+fn employer_row_owner(draft: &Value, index: usize) -> Option<Form1701Party> {
+    match employer_row(draft, index)?.get("owner")?.as_str()? {
+        "Taxpayer" => Some(Form1701Party::Taxpayer),
+        "Spouse" => Some(Form1701Party::Spouse),
+        _ => None,
+    }
+}
+
 /// Registered clearings whose target paths went from held content to blank
 /// or zero while their gate is shut after the write. A schedule row is a
 /// clearance unit of its own, keyed by its stable printed-line id; scalar
@@ -712,7 +716,8 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
                     && let Some(index) = employer_row_index(key)
                 {
                     let held = employer_row(before, index).is_some_and(employer_row_content);
-                    let gone = employer_row(after, index).is_none_or(|row| !employer_row_content(row));
+                    let gone =
+                        employer_row(after, index).is_none_or(|row| !employer_row_content(row));
                     return held && gone && lock_reason(kind, after, key).is_some();
                 }
                 let Some(bound) = kind.definition().bindings.get(*key) else {
@@ -733,7 +738,13 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
         if !cleared_keys.is_empty() {
             let text = line.map_or_else(
                 || gate.cleared.to_string(),
-                |(_, printed_line)| row_cleared_text(gate, printed_line),
+                |(_, printed_line)| {
+                    let owner = keys
+                        .first()
+                        .and_then(|key| employer_row_index(key))
+                        .and_then(|index| employer_row_owner(before, index));
+                    row_cleared_text(gate, printed_line, owner)
+                },
             );
             cleared.push(Clearance {
                 gate: unit_gate,

@@ -365,7 +365,10 @@ fn form_1701_employer_amounts_typed_before_the_owner_tick_survive() {
         &opened["draft"],
         json!({ income: "1000", withheld: "100" }),
     );
-    assert_eq!(typed["draft"]["employers"][0]["compensation_income"], 1000.0);
+    assert_eq!(
+        typed["draft"]["employers"][0]["compensation_income"],
+        1000.0
+    );
     assert_eq!(typed["draft"]["employers"][0]["tax_withheld"], 100.0);
 
     let compensation = fill(
@@ -374,8 +377,7 @@ fn form_1701_employer_amounts_typed_before_the_owner_tick_survive() {
         json!({"frm1701:rdoPg1I7ATC_II013": "true"}),
     );
     assert_eq!(
-        compensation["draft"]["employers"][0]["compensation_income"],
-        1000.0,
+        compensation["draft"]["employers"][0]["compensation_income"], 1000.0,
         "answering Item 7 after the amounts does not wipe them"
     );
     let owned = fill(
@@ -384,7 +386,10 @@ fn form_1701_employer_amounts_typed_before_the_owner_tick_survive() {
         json!({"frm1701:chkPg2IShed1a_1Taxpayer": "true"}),
     );
     assert_eq!(owned["draft"]["employers"][0]["owner"], "Taxpayer");
-    assert_eq!(owned["draft"]["employers"][0]["compensation_income"], 1000.0);
+    assert_eq!(
+        owned["draft"]["employers"][0]["compensation_income"],
+        1000.0
+    );
     assert_eq!(owned["draft"]["employers"][0]["tax_withheld"], 100.0);
 }
 
@@ -409,10 +414,15 @@ fn form_1701_employer_row_notice_covers_content_without_a_name_and_names_the_own
         &compensation["draft"],
         json!({"frm1701:rdoPg1I7ATC_II012": "true"}),
     );
-    assert_eq!(closed["draft"]["employers"][0]["compensation_income"], serde_json::Value::Null);
+    assert_eq!(
+        closed["draft"]["employers"][0]["compensation_income"],
+        serde_json::Value::Null
+    );
     assert_eq!(
         closed["relock_notes"][taxpayer_name],
-        json!("Employer row 1 was cleared: Schedule 1 applies only to compensation income of the taxpayer."),
+        json!(
+            "Employer row 1 was cleared: Schedule 1 applies only to compensation income of the taxpayer."
+        ),
         "a row with no name but typed amounts is still reported, in the taxpayer's words"
     );
 }
@@ -941,14 +951,41 @@ fn form_1701ms_special_rate_business_keeps_cost_of_sales() {
     // ticks Itemized before disabling Item 17, so the payload and print must
     // keep that tick even though the filer cannot change the locked radio.
     for (column, yes, no) in [
-        ("taxpayer", "frm1701MS:txtTaxpayerNo17a", "frm1701MS:txtTaxpayerNo17b"),
-        ("spouse", "frm1701MS:txtSpouseNo17a", "frm1701MS:txtSpouseNo17b"),
+        (
+            "taxpayer",
+            "frm1701MS:txtTaxpayerNo17a",
+            "frm1701MS:txtTaxpayerNo17b",
+        ),
+        (
+            "spouse",
+            "frm1701MS:txtSpouseNo17a",
+            "frm1701MS:txtSpouseNo17b",
+        ),
     ] {
-        assert_eq!(special["draft"][column]["deduction"], "itemized", "{column}");
-        assert_eq!(payload_map("1701MS", &special["draft"])[yes], "true", "{yes}");
-        assert_eq!(payload_map("1701MS", &special["draft"])[no], "false", "{no}");
-        assert_eq!(printed_map("1701MS", &special["draft"])[yes], "true", "print {yes}");
-        assert_eq!(printed_map("1701MS", &special["draft"])[no], "false", "print {no}");
+        assert_eq!(
+            special["draft"][column]["deduction"], "itemized",
+            "{column}"
+        );
+        assert_eq!(
+            payload_map("1701MS", &special["draft"])[yes],
+            "true",
+            "{yes}"
+        );
+        assert_eq!(
+            payload_map("1701MS", &special["draft"])[no],
+            "false",
+            "{no}"
+        );
+        assert_eq!(
+            printed_map("1701MS", &special["draft"])[yes],
+            "true",
+            "print {yes}"
+        );
+        assert_eq!(
+            printed_map("1701MS", &special["draft"])[no],
+            "false",
+            "print {no}"
+        );
     }
     let with_sales = fill("1701MS", &special["draft"], json!({ sales: "1000" }));
     let typed = fill("1701MS", &with_sales["draft"], json!({ cost: "400" }));

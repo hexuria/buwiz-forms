@@ -380,9 +380,7 @@ impl Form1701Draft {
             // whose handler clears the whole row.
             let disable_clear = match row.owner {
                 None => false,
-                Some(Form1701Party::Taxpayer) => {
-                    taxpayer_atc_answered && !taxpayer_name_allowed
-                }
+                Some(Form1701Party::Taxpayer) => taxpayer_atc_answered && !taxpayer_name_allowed,
                 Some(Form1701Party::Spouse) => {
                     if spouse_column_active {
                         spouse_atc_answered && !spouse_name_allowed
@@ -2347,9 +2345,8 @@ pub(crate) mod tests {
         assert_eq!(row.tax_withheld, Some(25_000.0));
         let messages = messages(&d);
         assert!(
-            messages
-                .iter()
-                .any(|message| message == "Mark whether Schedule 1 row is for the taxpayer or the spouse."),
+            messages.iter().any(|message| message
+                == "Mark whether Schedule 1 row is for the taxpayer or the spouse."),
             "owner-required validation stays live: {messages:?}"
         );
     }
