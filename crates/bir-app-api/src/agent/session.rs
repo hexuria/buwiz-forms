@@ -4116,9 +4116,9 @@ mod tests {
             .unwrap();
         assert_eq!(pending.len(), 1, "{pending:?}");
         assert!(
-            pending[0]
-                .0
-                .starts_with("notice_pending:1601fq_schedule1:row-00000000000000000001,row-00000000000000000002:"),
+            pending[0].0.starts_with(
+                "notice_pending:1601fq_schedule1:row-00000000000000000001,row-00000000000000000002:"
+            ),
             "{pending:?}"
         );
         assert!(
