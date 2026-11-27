@@ -17,10 +17,11 @@ Read `crew/RULES.md`, this file and your `STATE.md` first.
 - The Play release: packaging (`just play-bundle`), signing steps the maintainer runs (`just play-sign`, `just play-upload-key`), the Play Console setup, a listing written fresh for Android, Google's forms (data safety, content rating, the government and financial declarations, app access), and testing on the emulator.
 - The app id on Google Play, `com.buwiz.ebirforms` (`docs/platforms/android.md`); other systems keep `dev.goldcoders.bir`.
 - The move of the app's NSH pin that Android's release needs. The 1.0.0 cut stays on the current pin.
-- Kit pull requests on hexuria/nsh, opened from `buwiz-next`. The conductor merges them when reviewed and green.
+- Kit pull requests on hexuria/nsh, opened from `buwiz-next`. The conductor merges them when ready (`crew/RULES.md`).
 
 ## How to work
 
+- **Who runs what.** As a worker you run git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. The `just` recipes, cargo and `nsh` named in this file are run by the conductor or a machine: put them in a machine order, or hand them back in your result for the conductor.
 - The upload key stays with the maintainer. No key on any machine. The maintainer signs the bundle and uploads it.
 - In the Play Console use only your own tab: no dialogs, never a review or release button, never a password or code.
 - The listing never claims or implies BIR affiliation: say "not affiliated with the Bureau of Internal Revenue", forms from bir.gov.ph.

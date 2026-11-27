@@ -22,6 +22,7 @@ Read `crew/RULES.md`, this file and your `STATE.md` first.
 
 ## How to work
 
+- **Who runs what.** As a worker you run git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. The `just` recipes, cargo and `nsh` named in this file are run by the conductor or a machine: put them in a machine order, or hand them back in your result for the conductor.
 - Every gate is checked against the official form's own code as recorded in the repository: the per-form corpus in `rules/forms/<form>/` (`evidence.md`, `validations.json`, `workflow.json`), and the official samples in `crates/bir-core/tests/sample-payloads/`. A gate without evidence there comes out.
 - A fault is found by a test, a machine run or a review, then checked against the official form before anyone fixes it.
 - Each fix has a test that fails first, written before the code.
@@ -37,6 +38,7 @@ Read `crew/RULES.md`, this file and your `STATE.md` first.
 - `solo`: the Rust and screen tests for the form (`just nsh-test <file>`, the bir-core tests) through `just ci-test`, read at the head.
 - `workers`: the same; a worker writes tests and fixes in scripts and Rust, and the suites run on GitHub.
 - `fleet`: a machine runs the gates at the exact head, and renders before and after print sheets as pictures through the app's print path. Screen changes add a `just e2e` recipe run (`crew/playbooks/ui-proof.md`).
+- A change to printing or filing is cleared only by the reviewer role run on Claude (an Opus-class or stronger model) in a session that did not write it. A worker-model review clears scripts, tests, docs and recipes only.
 
 ## Without a fleet
 

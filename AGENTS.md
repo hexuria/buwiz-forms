@@ -33,7 +33,7 @@ just e2e check smoke                               # checks the e2e suite's reci
 
 Everything else may build the app: read `docs/DEVELOPMENT.md` and `CONTRIBUTING.md` first.
 
-## Safety: every run of the app
+## Safety: every run of the app by an agent
 
 Set all four, every time:
 
@@ -49,9 +49,8 @@ One change per pull request, from `main`. Pull requests run quick checks only (`
 
 ## Commit identity
 
-Contributors commit with their own identity.
-Crew members (the agents described in `crew/`) commit as `hexuria <295542929+hexuria@users.noreply.github.com>` and check `git log -1 --format='%an <%ae> | %cn <%ce>'` before every push.
+Commit with your own identity, as any contributor does. A session that was started as a crew role uses the identity its `crew.local.ini` sets instead (`crew/RULES.md`).
 
 ## The crew
 
-To run or continue the crew, read `crew/README.md`.
+The files in `crew/` and the crew settings apply only when you were started as a crew role (by `/crew`, `just crew start` or `crew run`). Any other session works as an ordinary contributor: it does not take a crew role, merge, tag, or follow the crew's playbooks unless the person asks for that. To run or continue the crew, read `crew/README.md`.

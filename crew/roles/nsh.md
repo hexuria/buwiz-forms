@@ -20,6 +20,7 @@ Read `crew/RULES.md`, this file, your `STATE.md`, `nsh/AGENTS.md` and `docs/plat
 
 ## How to work
 
+- **Who runs what.** As a worker you run git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. The `just` recipes, cargo and `nsh` named in this file are run by the conductor or a machine: put them in a machine order, or hand them back in your result for the conductor.
 - The app never patches NSH to fit itself, and nobody edits the sibling NSH checkout an app build reads. A fault in NSH is fixed in a kit pull request.
 - Never run `nsh update`: it installs the upstream release over the fork.
 - The kit's CI runs only on pull requests. After every push, check within minutes that a run exists (`gh run list --repo hexuria/nsh --branch <branch>`). A clean pull request with no run is not green; tell the conductor at once.

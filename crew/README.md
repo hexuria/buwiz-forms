@@ -19,13 +19,25 @@ Both engines read the root `AGENTS.md` (Claude Code through `CLAUDE.md`) and the
 
 ## Three tiers
 
-Pick the tier that matches what you have. Set it in `crew.local.ini` (git-ignored, your own settings).
+Pick the tier that matches what you have. Set it in `crew.local.ini` (git-ignored, your own settings; `crew/local.example.ini` lists the keys).
 
 | Tier | What you have | What it can prove | What it cannot prove |
 | --- | --- | --- | --- |
-| `solo` | One agent session. No workers. | Code and script tests; the quick checks (`ci-ok`) and the Linux and Windows test suites on GitHub (`just ci-test`). | Anything on a screen of a platform you do not have; macOS suites (GitHub's Mac runners wait hours). |
-| `workers` | The conductor plus headless local workers (`crew run`). | The same as `solo`, with tracks moving in parallel. Workers write scripts, tests, docs and small code, and read diffs. | Builds and app runs: a worker's allow-list refuses cargo and `nsh`. |
+| `solo` | One agent session. No workers. | Code and script tests; the quick checks (`ci-ok`) and the Linux and Windows test suites on GitHub (`just ci-test`, a Unix-only recipe). It opens pull requests and stops: it never merges into the default branch without a human review. | Anything on a screen of a platform you do not have; macOS suites (GitHub's Mac runners wait hours). |
+| `workers` | The conductor plus headless local workers (`crew run`). | The same as `solo`, with tracks moving in parallel. Workers write scripts, tests, docs and small code, and read diffs. | Builds and app runs: a worker does not run cargo, `nsh` or `just` recipes; those go to the conductor or a machine. |
 | `fleet` | Workers plus cloud machines per platform (Linux, macOS, Windows). | Builds and full suites at a pull request's exact head, on-screen proof through `just e2e` with pictures and a recording, the iOS Simulator, the Android emulator, store packages. | Nothing a person must do: a store's Submit, a password, a signing key. |
+
+## Who may do what
+
+The maintainer is the person named in the repository's ownership. For this repository that is the owner of the hexuria organisation. A person who starts the crew on their own fork is the maintainer of that fork's crew only.
+
+| Who | Merge | Tag (publishes) | Deploy to production | Push |
+| --- | --- | --- | --- | --- |
+| The maintainer | yes | yes | yes | yes |
+| A conductor with `[crew] merge = yes` | yes, when ready (`crew/RULES.md`) and a MERGE verdict file matches the head | only with `[crew] tag = yes`, the tag listed in its `STATE.md` first | no | its own branches |
+| A conductor without `merge = yes` | no: the launcher prints the merge commands | only with `[crew] tag = yes`, the tag listed in its `STATE.md` first | no | its own branches |
+| A worker | no | no | no | its own branch, through `python3 crew/bin/crew push` only |
+| A contributor's own crew on a fork | only in the fork | only in the fork | no | the fork; pull requests to this repository like any contributor |
 
 ## One turn
 
@@ -66,6 +78,7 @@ HELD.md                    what is waiting for the maintainer; never re-sent
 ```
 
 It is not on `main` because it changes every few minutes, and `main` changes only by reviewed pull request.
+A state remote must be a different repository from the code, and its branch name starts with `crew-state`.
 `crew state pull` and `crew state push` move it to and from a separate remote, if you set one.
 `crew/playbooks/state.md` says what each file holds.
 

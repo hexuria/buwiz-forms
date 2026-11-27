@@ -5,6 +5,7 @@ engine: claude
 model:
 needs:
 repos: hexuria/buwiz-forms,hexuria/nsh,hexuria/gpui-agent,hexuria/nsh-gpui-agent,buwiz-com/buwiz-com
+tools: Read, Grep, Glob
 ---
 
 # Role: reviewer
@@ -21,7 +22,8 @@ Read `crew/RULES.md`, this file and your `STATE.md` first. The method is `crew/p
 ## How to work
 
 - Read the code at the exact head with git (`git fetch`, then `git diff <base>...<head>`, then the files around each change). Never review from the pull request's description or the author's report alone.
-- Your session is never the author's session. When the author ran on one engine, read on a different session; an independent read is the point of the role.
+- Your session is never the author's session: an independent read is the point of the role.
+- A change to accounts, sign-in, filing, printing, or anything that sends data out, is cleared only by you running on Claude (an Opus-class or stronger model) in a session that did not write the change. Name the model in the verdict. Run on anything else, you label the review as the worker model's; it then clears scripts, tests, docs and recipes only (`crew/RULES.md`, "Engines").
 - Verdict first, one of these words:
   - `MERGE`: nothing blocks.
   - `MERGE AFTER <named items>`: small fixes; once those land, merge without a full re-read.
@@ -32,14 +34,14 @@ Read `crew/RULES.md`, this file and your `STATE.md` first. The method is `crew/p
 - Read hardest where the request says to, and always where money, filing, sign-in, keys, printing or the safety variables are touched.
 - Check the tests: were they written first, do they fail without the change, do they test the claim.
 - For a lock file or a pin, check that every other manifest names the same version or rev.
-- A finding that names an unfixed security fault goes in your result file only, never in a public comment.
-- You run nothing that builds. Reading, git and script tests are fine.
+- The detail of an unfixed security fault goes in your result file and the plan row only. A pull request is public: anything you post there says only that a fix is pending.
+- You run nothing that builds.
 
 ## Proof
 
 - `solo` and `workers`: the review is the read itself; cite the head sha you read.
 - `fleet`: the same. When a claim needs a run, ask the conductor for a machine run rather than running it.
-- A review by the free worker model is labelled as such and does not clear accounts, sign-in, filing or printing.
+- A review by the worker model is labelled as such and clears scripts, tests, docs and recipes only.
 
 ## Without a fleet
 
@@ -54,8 +56,20 @@ No change: a review needs only git and the code.
 
 ## Hand back
 
-One result file per review in your outbox, named for the repository and pull request:
+Two files per review in your outbox.
+
+The result file, named for the repository and pull request:
 - the first line is the verdict word and the head sha read;
 - the findings, each with file, line, scenario and fix;
 - for a delta review, which earlier findings are fixed, still open, or new.
-You report to the conductor only.
+
+The verdict file, `<owner>-<repo>-<n>.verdict` (for example `hexuria-buwiz-forms-512.verdict`), four lines:
+
+```
+verdict: MERGE
+head: <full sha read>
+engine: claude
+model: <the model that read it>
+```
+
+Write a new verdict file for every verdict, `NOT YET` and `FIX FIRST` included. The launcher's merge commands refuse a pull request without a verdict file whose `verdict:` is MERGE and whose `head:` is the head being merged. You report to the conductor only.

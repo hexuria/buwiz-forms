@@ -22,6 +22,7 @@ Read `crew/RULES.md`, this file, your `STATE.md`, `docs/platforms/windows.md` an
 
 ## How to work
 
+- **Who runs what.** As a worker you run git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. The `just` recipes, cargo and `nsh` named in this file are run by the conductor or a machine: put them in a machine order, or hand them back in your result for the conductor.
 - The Store package is unsigned and keeps the Store identity from the manifest; Partner Center signs it. A package signed with our own certificate is a sideload package the Store refuses.
 - The package version is `Major.Minor.Patch.0`: the Store requires the fourth part to be 0, so only the version itself can go up (`docs/VERSIONING.md`).
 - The maintainer uploads the `.msix` in Partner Center and presses Submit. You prepare; you never upload or submit.

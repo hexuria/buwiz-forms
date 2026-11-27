@@ -23,12 +23,13 @@ Read `crew/RULES.md`, this file, your `STATE.md` and `docs/CI.md` first.
 
 ## How to work
 
+- **Who runs what.** As a worker you run git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. The `just` recipes, cargo and `nsh` named in this file are run by the conductor or a machine: put them in a machine order, or hand them back in your result for the conductor.
 - Each change starts with a test that fails, written first and seen failing. Then the fix.
 - Run the script tests you touched, then the whole script suite: `python3 -m unittest discover -s scripts/tests -v`.
 - Keep the batch gate strict: a tool that refuses wrongly is a bug to fix; a tool that passes wrongly is worse.
 - The safety checks in `scripts/e2e/runner.py` only grow stricter. A change that loosens one needs the reviewer's MERGE and the conductor's ruling.
 - Write commands plainly, with no environment variable in front, so the allow-list matches them.
-- Push to the task's branch only. Never open, merge or close a pull request unless the task says so.
+- Push with `python3 crew/bin/crew push`, which pushes the task's own branch only. Never open, merge or close a pull request unless the task says so.
 - A flake you are asked to fix gets a reproducing loop first, then the cause, then the fix.
 
 ## Proof

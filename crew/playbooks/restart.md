@@ -27,7 +27,7 @@ python3 crew/bin/crew state pull
 The files say what was true when they were written. GitHub says what is true now. Where they differ, GitHub wins; correct the file.
 
 - Open pull requests on each repository in `crew/REPOS.md`, with each one's head sha and its checks (`gh pr list`, then `gh pr checks <n>`).
-- The running batch, if `queue.json` names one: `just ci-batch-status <branch>`. A green batch not yet merged goes to `crew/playbooks/batch.md` step 6.
+- The running batch, if `queue.json` names one: `just ci-batch-status <branch>`. A green batch not yet merged goes to `crew/playbooks/batch.md` step 5: read every job before any merge.
 - Each role's newest result in `roles/<role>/outbox/`, and its `STATE.md`. A result newer than the role's state is read first.
 - The heads of `main` (and `buwiz-next` on hexuria/nsh), read by full sha.
 

@@ -23,6 +23,7 @@ Read `crew/RULES.md`, this file and your `STATE.md` first.
 
 ## How to work
 
+- **Who runs what.** As a worker you run git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. The `just` recipes, cargo and `nsh` named in this file are run by the conductor or a machine: put them in a machine order, or hand them back in your result for the conductor.
 - App Store Connect is read-only for you. Never press Submit, never upload a build, never create or change certificates, profiles, identifiers or app records, never accept agreements. Prepare everything, then the conductor asks the maintainer.
 - Packaging and upload run only on the maintainer's computer with the maintainer's keychain. Never on a cloud machine.
 - Real-device checks go through TestFlight internal testing on the maintainer's phone. Never ask for a development certificate, profile or device.

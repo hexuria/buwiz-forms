@@ -23,11 +23,13 @@ A pin move:
 
 | Tag | Where | What it does | Who cuts it |
 | --- | --- | --- | --- |
-| `vX.Y.Z` | hexuria/gpui-agent `main` | publishes the driver's crates (`publish.yml` there) | the conductor, after the release pull request merges |
+| `vX.Y.Z` | hexuria/gpui-agent `main` | publishes the driver's crates to crates.io (`publish.yml` there); cannot be undone | the conductor, only with `[crew] tag = yes` and the tag listed in its `STATE.md` first; otherwise the maintainer |
 | `vX.Y.Z` | hexuria/buwiz-forms `main` | builds, signs and publishes the downloads, and builds the unsigned `.msix` | the maintainer |
 | `bir-vX.Y.Z` | hexuria/buwiz-forms `main` | archives the headless `bir` command | the maintainer |
 
-A tag on this repository publishes to every user, so it stays with the maintainer. Workers never push tags; the allow-list refuses them.
+A tag on this repository publishes to every user, so it stays with the maintainer. A tag that publishes, anywhere, needs `[crew] tag = yes` in the conductor's `crew.local.ini`, and the conductor writes the tag (repository, name, commit) into its `STATE.md` before it cuts it. A crew run on a fork never tags this project's repositories.
+
+Workers never tag. The allow-list asks them not to, but it is not a fence (python3 and git reach past it); the fence is that a worker's token cannot push tags or bypass branch protection (`[worker] gh_token_env`).
 
 ## The app release, in order
 

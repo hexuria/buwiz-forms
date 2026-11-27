@@ -1,6 +1,6 @@
 # Playbook: the state folder
 
-The live state is a folder of files, `.crew/state` by default (`crew state path` prints it). It is not on `main`: it changes every few minutes, and `main` changes only by reviewed pull request. `crew state pull` and `crew state push` move it to and from a separate remote, if `crew.local.ini` names one.
+The live state is a folder of files, `.crew/state` by default (`crew state path` prints it). It is not on `main`: it changes every few minutes, and `main` changes only by reviewed pull request. `crew state pull` and `crew state push` move it to and from a separate remote, if `crew.local.ini` names one. That remote must be a different repository from the code, and its branch name starts with `crew-state`: the state never goes into the code repository, and never onto a default branch.
 
 ```
 roles/<role>/STATE.md      what the role has open and what comes next

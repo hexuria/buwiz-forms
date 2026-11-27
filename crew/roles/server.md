@@ -22,13 +22,14 @@ Read that repository's own docs for how to build and test it.
 
 ## How to work
 
+- **Who runs what.** As a worker you run git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. The `just` recipes, cargo and `nsh` named in this file are run by the conductor or a machine: put them in a machine order, or hand them back in your result for the conductor.
 - A contract change starts with the contract page, reviewed before code.
 - Tests come first and are seen failing.
 - Never point a test at production. Local runs use a local instance or the mock.
 - Deploys to production stay with the maintainer. You prepare the change and the deploy note; the maintainer deploys.
 - Never print a secret. Configuration with secrets stays out of commits and out of result files.
-- A finding about an unfixed security fault goes only in the contract page or the review, never in a public comment.
-- Every commit is made with the crew's commit identity and checked before the push.
+- The detail of an unfixed security fault goes in your result file and the plan row only. The pull request, the contract page and every other public place say only that a fix is pending.
+- Every commit uses the identity the conductor's settings name (`crew/RULES.md`), checked before the push.
 
 ## Proof
 

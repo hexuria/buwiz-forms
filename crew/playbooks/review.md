@@ -22,11 +22,24 @@ The conductor writes it as a task file in `roles/reviewer/inbox/NNN-<repo>-<n>.m
 | Word | Meaning | What follows |
 | --- | --- | --- |
 | `MERGE` | Nothing blocks. | It may enter a batch once its checks pass. |
-| `MERGE AFTER <items>` | Small named fixes. | It enters a batch once each named item has landed; no full re-read. |
+| `MERGE AFTER <items>` | Small named fixes. | Once each named item has landed, the reviewer reads only those items at the new head and writes a MERGE verdict file there. |
 | `FIX FIRST` | A fault that must be fixed, then read again. | The author fixes; a delta review follows. |
 | `NOT YET` | The approach is wrong or the change is incomplete. | Back to the author's role; the conductor may rule on the approach. |
 
 The verdict is the first line of the result. Each finding follows with its file and line, a scenario that shows the fault, a fix, and a label (high, medium, low).
+
+## The verdict file
+
+Every verdict is also written as a file the launcher reads: `<state>/roles/reviewer/outbox/<owner>-<repo>-<n>.verdict`, for example `hexuria-buwiz-forms-512.verdict`:
+
+```
+verdict: MERGE
+head: <full sha read>
+engine: claude
+model: <the model that read it>
+```
+
+The launcher's merge commands refuse a pull request without a verdict file whose `verdict:` is MERGE and whose `head:` is the exact head being merged. A push after the verdict makes it stale: a delta review writes a new file.
 
 ## Delta reviews
 
@@ -34,9 +47,10 @@ When the author pushes fixes, the next request names the old head and the new on
 
 ## An independent read
 
-- The reviewer is never the author's engine session. A pull request written in one session is read in another. When both engines are available, the reviewer runs on the engine the author did not use.
+- The reviewer is never the session that wrote the change. A pull request written in one session is read in another.
 - The reviewer reads the code with git, never from the description or the author's report alone.
-- A review by the free worker model is labelled as such in its result. It does not clear a change to accounts, sign-in, filing or printing.
+- A review by the worker model (Devin's `swe-2-1` family) is labelled as such and clears scripts, tests, docs and recipes only.
+- A change to accounts, sign-in, filing, printing, or anything that sends data out, is cleared only by the reviewer role run on Claude (an Opus-class or stronger model, named in the verdict) in a session that did not write the change. When no such review is available, the change waits.
 - The reviewer runs nothing that builds. When a claim needs a run, the reviewer asks for one through the conductor.
 
 ## After the verdict
