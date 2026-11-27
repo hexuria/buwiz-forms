@@ -13,6 +13,7 @@ The maintainer is the person who started the conductor.
   2. Something only a person may do: a store's Submit, a password or sign-in code, a secret or a signing key.
   3. Something the maintainer asked for.
 - Workers write to their outbox and never to the maintainer. The conductor decides what, if anything, reaches them.
+- Report a refusal so it can be acted on in one read: whose check refused (your own session's permission check, a cloud machine, GitHub, a store), the exact command or tool call, the refusal text, what it is not, and the one action that clears it. A machine that cannot push is reported with the git error text and the cause; the usual cause is that the session has no GitHub token in its environment.
 - A refusal, once reported, waits for the maintainer. Do not retry it reworded and do not reach the same end by another route: the refusal is the maintainer's decision until they change it. Record it in `HELD.md` and go on with other work.
 
 ## Hard limits (whoever asks)
