@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Proves several pull requests together (docs/CI.md, "Proving several pull requests together").
 
-  build  [system] <pr> <pr> ...   main plus the squash of each pull request, in that order, pushed to
+  build  [system] [--dry-run] [--allow-unchecked <pr>] <pr> <pr> ...
+                                  main plus the squash of each pull request, in that order, pushed to
                                   test/<system>/batch-<pr>-<pr>... (default system linux-windows)
   status <branch>                 green or red per workflow run of the batch; for red, the failed jobs and a bisect
   merge  <branch>                 prints (never runs) the merge commands, after checking nothing moved
   verify <branch>                 after the merges: is main's tree the batch's tree?
+
+Every pull request's required `ci-ok` must be `success` at its current head; pending, missing or not green refuses,
+and nothing is pushed. `--dry-run` proves the same batch without pushing. `--allow-unchecked <pr>` (repeatable) is
+the hand-run escape hatch.
 
 The batch is built with git plumbing only (`git merge-tree`, `git commit-tree`) in the checkout's own object store:
 no working tree, index or local branch is touched and nothing is written outside the repository. Each step merges a
@@ -101,22 +106,48 @@ def branch_name(system: str, numbers: Sequence[int]) -> str:
     return f"test/{system}/batch-" + "-".join(str(n) for n in numbers)
 
 
-def parse_build_args(args: Sequence[str]) -> Tuple[str, List[int]]:
-    args = list(args)
-    system = DEFAULT_SYSTEM
-    if args and args[0] in SYSTEMS:
-        system = args.pop(0)
-    numbers: List[int] = []
-    for arg in args:
+def parse_build_args(args: Sequence[str]) -> Tuple[str, List[int], bool, List[int]]:
+    def number(arg: str, label: str) -> int:
         value = arg.lstrip("#")
         if not value.isdigit():
-            raise BatchError(f"not a pull request number: {arg} (systems: {', '.join(SYSTEMS)}, given first)")
-        if int(value) in numbers:
+            raise BatchError(f"not a {label}: {arg} (systems: {', '.join(SYSTEMS)}, given first)")
+        return int(value)
+
+    positional: List[str] = []
+    allow_unchecked: List[int] = []
+    dry_run = False
+    args = list(args)
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--dry-run":
+            dry_run = True
+        elif arg == "--allow-unchecked":
+            i += 1
+            if i == len(args):
+                raise BatchError("--allow-unchecked takes a pull request number")
+            allow_unchecked.append(number(args[i], "pull request number after --allow-unchecked"))
+        elif arg.startswith("--allow-unchecked="):
+            value = arg.partition("=")[2]
+            if not value:
+                raise BatchError("--allow-unchecked takes a pull request number")
+            allow_unchecked.append(number(value, "pull request number after --allow-unchecked"))
+        else:
+            positional.append(arg)
+        i += 1
+
+    system = DEFAULT_SYSTEM
+    if positional and positional[0] in SYSTEMS:
+        system = positional.pop(0)
+    numbers: List[int] = []
+    for arg in positional:
+        value = number(arg, "pull request number")
+        if value in numbers:
             raise BatchError(f"#{value} is listed twice")
-        numbers.append(int(value))
+        numbers.append(value)
     if not numbers:
         raise BatchError("name at least one pull request: just ci-batch [system] <pr> <pr> ...")
-    return system, numbers
+    return system, numbers, dry_run, allow_unchecked
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -136,6 +167,12 @@ class GitHub:
         """One read per pull request, so the head, base, draft flag and state belong together."""
         return json.loads(self._gh("pr", "view", str(number), "--repo", self.repo, "--json",
                                    "number,headRefOid,baseRefName,isDraft,state,title"))
+
+    def check_runs(self, sha: str) -> List[dict]:
+        """The check runs reported on one commit."""
+        data = json.loads(self._gh("api", f"repos/{self.repo}/commits/{sha}/check-runs"
+                                          "?check_name=ci-ok&filter=latest&per_page=100"))
+        return data.get("check_runs", [])
 
     def main(self) -> Tuple[str, str]:
         """main's commit sha and tree hash, in one read."""
@@ -164,6 +201,32 @@ def checked_pull(number: int, data: dict) -> Tuple[Optional[Pull], Optional[str]
     if not SHA.match(head):
         return None, f"#{number}: GitHub gave no full head sha ({head!r})"
     return Pull(number, head, data.get("title") or ""), None
+
+
+def ci_ok_state(check_runs: Sequence[dict], head: str) -> str:
+    """The state of the newest ci-ok check run at exactly this head."""
+    at_head = [run for run in check_runs if run.get("name") == "ci-ok" and run.get("head_sha") == head]
+    if not at_head:
+        return "missing"
+    run = max(at_head, key=lambda r: (r.get("started_at") or "", r.get("completed_at") or "", r.get("id") or 0))
+    if run.get("status") != "completed":
+        return "pending"
+    return str(run.get("conclusion") or "no conclusion")
+
+
+def enforce_ci_ok(github, pulls: Sequence[Pull], allow_unchecked: Sequence[int],
+                  say: Callable[[str], None]) -> None:
+    unchecked = set(allow_unchecked)
+    refusals = []
+    for pull in pulls:
+        if pull.number in unchecked:
+            say(f"*** ALLOW-UNCHECKED: #{pull.number} at {pull.head}; skipping the ci-ok gate ***")
+            continue
+        state = ci_ok_state(github.check_runs(pull.head), pull.head)
+        if state != "success":
+            refusals.append(f"#{pull.number} at {pull.head}: ci-ok is {state}; nothing was pushed")
+    if refusals:
+        raise BatchError("refused by the ci-ok gate:\n  " + "\n  ".join(refusals))
 
 
 def read_pulls(github, numbers: Sequence[int]) -> List[Pull]:
@@ -224,12 +287,13 @@ class Git:
 # The four commands.
 
 def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool = True,
-          say: Callable[[str], None] = print) -> Tuple[str, str, Record]:
+          allow_unchecked: Sequence[int] = (), say: Callable[[str], None] = print) -> Tuple[str, str, Record]:
     """Returns (branch, record commit sha, record)."""
     main_sha, _ = github.main()
     if not SHA.match(main_sha):
         raise BatchError(f"GitHub gave no full sha for main ({main_sha!r})")
     pulls = read_pulls(github, numbers)
+    enforce_ci_ok(github, pulls, allow_unchecked, say)
 
     # What the remote serves must be what GitHub just said; otherwise something moved between the two reads.
     refs = ["refs/heads/main", *[f"refs/pull/{pull.number}/head" for pull in pulls]]
@@ -265,6 +329,8 @@ def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool =
         git.run("push", "--force", "--quiet", git.remote, f"{sha}:refs/heads/{branch}")
         git.run("update-ref", LOCAL_REF + branch, sha)
         say(f"pushed {sha} to {branch}")
+    else:
+        say("dry-run: nothing was pushed")
     say(f"main     {main_sha}")
     for pull in pulls:
         say(f"#{pull.number:<7} {pull.head}  {pull.title}")
@@ -394,8 +460,8 @@ def main(argv: Sequence[str]) -> int:
     github = GitHub(REPO)
     try:
         if command == "build":
-            system, numbers = parse_build_args(args)
-            build(git, github, system, numbers)
+            system, numbers, dry_run, allow_unchecked = parse_build_args(args)
+            build(git, github, system, numbers, push=not dry_run, allow_unchecked=allow_unchecked)
             return 0
         if len(args) != 1:
             raise BatchError(f"{command} takes the batch branch, test/<system>/batch-...")

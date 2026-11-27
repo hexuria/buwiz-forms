@@ -7,11 +7,13 @@ GitHub is a fake that returns the JSON shapes `gh` returns.
 from __future__ import annotations
 
 import importlib.util
+import io
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -32,6 +34,8 @@ class FakeGitHub:
         self.overrides: dict = {}
         self.run_list: list = []
         self.job_lists: dict = {}
+        self.check_runs_by_sha: dict = {}
+        self.check_run_reads: list = []
 
     def sha(self, ref: str) -> str:
         return subprocess.run(["git", "rev-parse", ref], cwd=self.origin, capture_output=True, text=True,
@@ -42,6 +46,13 @@ class FakeGitHub:
                     isDraft=False, state="OPEN", title=f"Change {number}")
         data.update(self.overrides.get(number, {}))
         return data
+
+    def check_runs(self, sha: str):
+        self.check_run_reads.append(sha)
+        if sha in self.check_runs_by_sha:
+            return self.check_runs_by_sha[sha]
+        return [dict(name="ci-ok", head_sha=sha, status="completed", conclusion="success", id=1,
+                     started_at="2026-11-27T10:00:00Z")]
 
     def main(self):
         return self.sha("refs/heads/main"), self.sha("refs/heads/main^{tree}")
@@ -121,6 +132,18 @@ class BatchTestCase(unittest.TestCase):
     def build(self, *numbers: int, system: str = "linux-windows"):
         return ci_batch.build(self.git, self.github, system, list(numbers), say=self.lines.append)
 
+    def main(self, *args: str) -> tuple[int, str]:
+        output = io.StringIO()
+        cwd = os.getcwd()
+        os.chdir(self.repos.work)
+        try:
+            with mock.patch.object(ci_batch, "GitHub", return_value=self.github), \
+                    mock.patch.dict(os.environ, {"CI_TEST_REMOTE": "origin"}), redirect_stdout(output):
+                code = ci_batch.main(list(args))
+        finally:
+            os.chdir(cwd)
+        return code, output.getvalue()
+
     def github_squashes(self, *heads: str) -> str:
         """What merging each pull request with `gh pr merge --squash` in turn gives, by porcelain: `git merge
         --squash` takes the same merge base (the head's and the current main's), then one commit on main."""
@@ -161,6 +184,85 @@ class BuildTests(BatchTestCase):
         # The checkout itself is untouched.
         self.assertEqual(git(self.repos.work, "status", "--porcelain"), "")
         self.assertEqual(git(self.repos.work, "rev-parse", "HEAD"), self.base)
+
+    def test_green_ci_ok_at_the_head_passes_and_is_the_check_the_build_reads(self):
+        head = self.repos.pull_request(14, self.base, {"x.txt": "x\n"})
+
+        self.build(14)
+
+        self.assertEqual(self.github.check_run_reads, [head])
+
+    def assert_ci_ok_refused(self, number: int, check_runs: list, state: str):
+        head = self.repos.pull_request(number, self.base, {f"n{number}.txt": "x\n"})
+        self.github.check_runs_by_sha[head] = [dict(run, head_sha=head) for run in check_runs]
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(number)
+
+        text = str(caught.exception)
+        self.assertIn(f"#{number}", text)
+        self.assertIn(head, text)
+        self.assertIn(f"ci-ok is {state}", text)
+        self.assertIn("nothing was pushed", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_pending_ci_ok_refuses_and_pushes_nothing(self):
+        self.assert_ci_ok_refused(15, [dict(name="ci-ok", status="in_progress", conclusion=None)], "pending")
+
+    def test_failed_ci_ok_refuses_and_pushes_nothing(self):
+        self.assert_ci_ok_refused(16, [dict(name="ci-ok", status="completed", conclusion="failure")], "failure")
+
+    def test_cancelled_ci_ok_refuses_and_pushes_nothing(self):
+        self.assert_ci_ok_refused(17, [dict(name="ci-ok", status="completed", conclusion="cancelled")], "cancelled")
+
+    def test_skipped_ci_ok_refuses_and_pushes_nothing(self):
+        self.assert_ci_ok_refused(18, [dict(name="ci-ok", status="completed", conclusion="skipped")], "skipped")
+
+    def test_missing_ci_ok_refuses_and_pushes_nothing(self):
+        self.assert_ci_ok_refused(19, [], "missing")
+
+    def test_green_ci_ok_at_an_older_commit_refuses(self):
+        old = self.repos.pull_request(20, self.base, {"n20.txt": "old\n"})
+        head = self.repos.pull_request(20, old, {"n20.txt": "new\n"})
+        self.github.check_runs_by_sha[head] = [dict(name="ci-ok", head_sha=old, status="completed",
+                                                    conclusion="success")]
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(20)
+
+        text = str(caught.exception)
+        self.assertIn("#20", text)
+        self.assertIn(head, text)
+        self.assertIn("ci-ok is missing", text)
+        self.assertIn("nothing was pushed", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_dry_run_prints_the_table_and_pushes_nothing(self):
+        head = self.repos.pull_request(21, self.base, {"n21.txt": "x\n"})
+
+        code, output = self.main("build", "--dry-run", "21")
+
+        self.assertEqual(code, 0)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+        self.assertEqual(git(self.repos.work, "for-each-ref", "refs/ci-batch"), "")
+        self.assertIn(f"main     {self.base}", output)
+        self.assertIn(f"#21      {head}  Change 21", output)
+        self.assertIn("\ntree     ", "\n" + output)
+        self.assertIn("dry-run: nothing was pushed", output)
+        self.assertNotIn("https://github.com/hexuria/buwiz-forms/actions", output)
+
+    def test_allow_unchecked_lets_one_through_and_prints_the_line(self):
+        head = self.repos.pull_request(22, self.base, {"n22.txt": "x\n"})
+        self.github.check_runs_by_sha[head] = [dict(name="ci-ok", head_sha=head, status="completed",
+                                                    conclusion="failure")]
+
+        code, output = self.main("build", "22", "--allow-unchecked", "22")
+
+        branch = "test/linux-windows/batch-22"
+        pushed = git(self.repos.origin, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}")
+        self.assertEqual(code, 0)
+        self.assertRegex(pushed, r"^[0-9a-f]{40}$")
+        self.assertIn(f"*** ALLOW-UNCHECKED: #22 at {head}; skipping the ci-ok gate ***", output)
 
     def test_order_matters_and_is_kept(self):
         self.repos.pull_request(3, self.base, {"b.txt": "three\n"})
@@ -208,9 +310,13 @@ class BuildTests(BatchTestCase):
             self.build(13)
 
     def test_arguments(self):
-        self.assertEqual(ci_batch.parse_build_args(["12", "#34"]), ("linux-windows", [12, 34]))
-        self.assertEqual(ci_batch.parse_build_args(["all", "12"]), ("all", [12]))
-        for bad in ([], ["linux"], ["12", "12"], ["mac", "12"], ["12", "x"]):
+        self.assertEqual(ci_batch.parse_build_args(["12", "#34"]), ("linux-windows", [12, 34], False, []))
+        self.assertEqual(ci_batch.parse_build_args(["all", "12"]), ("all", [12], False, []))
+        self.assertEqual(ci_batch.parse_build_args(["--dry-run", "all", "12", "34", "--allow-unchecked", "12",
+                                                    "--allow-unchecked", "#34"]),
+                         ("all", [12, 34], True, [12, 34]))
+        for bad in ([], ["linux"], ["12", "12"], ["mac", "12"], ["12", "x"], ["12", "--allow-unchecked"],
+                    ["12", "--allow-unchecked", "x"], ["12", "--what"]):
             with self.subTest(bad=bad), self.assertRaises(ci_batch.BatchError):
                 ci_batch.parse_build_args(bad)
 
