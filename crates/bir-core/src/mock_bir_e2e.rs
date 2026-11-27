@@ -203,7 +203,11 @@ async fn run_worker(
         }
         run_queue_tick(db.clone()).await;
         let deadline = std::time::Instant::now() + Duration::from_secs(60);
-        while get_active_jobs().lock().unwrap().contains(job_key) {
+        let active_key = crate::background_cron::room_job_key(
+            &crate::background_cron::fixed_room_key(),
+            job_key,
+        );
+        while get_active_jobs().lock().unwrap().contains(&active_key) {
             assert!(
                 std::time::Instant::now() < deadline,
                 "worker job did not finish; mock events {:?}",

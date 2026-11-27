@@ -222,6 +222,34 @@ pub fn current_generation() -> Option<u64> {
 /// Close the room (§A.5 step 6): the slot's Arc and generation go. Sends already in flight finish
 /// against their own Arc; the registry reopens the same connection if the room is opened again
 /// before they finish. The room's file and its PIN stay.
+/// Whether the registry holds a live connection for `path` (F8): a send's or screen's Arc of the
+/// legacy file outliving its close means the file is still being read and written — a claim that
+/// copies and moves it now would race those writes.
+pub(crate) fn live_entry_for(path: &std::path::Path) -> bool {
+    let mut registry = lock(&REGISTRY);
+    registry.retain(|_, (weak, _)| weak.strong_count() > 0);
+    registry
+        .get(path)
+        .and_then(|(weak, _)| Weak::upgrade(weak))
+        .is_some()
+}
+
+/// The key this room's worker jobs file under (F6): the room's id in rooms mode, the fixed
+/// key in single-room mode, "legacy" for the legacy file in place. The worker's source and every
+/// reader asking after the open room's jobs build it here, so the two cannot drift.
+pub fn job_key_prefix() -> String {
+    if bir_core::db::single_room_database().is_some() {
+        return bir_core::background_cron::fixed_room_key();
+    }
+    match lock(&SLOT).as_ref() {
+        Some(open) => match &open.room_id {
+            Some(room) => format!("room:{}", room.as_str()),
+            None => "legacy".to_owned(),
+        },
+        None => bir_core::background_cron::fixed_room_key(),
+    }
+}
+
 pub fn close_room() {
     // F4: a consent started in this room must not complete into whatever signs in next — its
     // loopback listener answers Err and accepts nothing more.

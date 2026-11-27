@@ -170,6 +170,16 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
             return open_lookup_room(&layout, stored);
         }
     };
+    // F8: a live connection to the legacy file — a screen's or send's Arc that outlived the close —
+    // means the file is still written. The claim must not copy and move it under those writes, so
+    // Ready is refused while one lives: the answer is transient, and the next sign-in or retry asks
+    // again when the connection is gone.
+    if crate::open_room::live_entry_for(&layout.legacy_database()) {
+        return SessionRoom::BlockedTransient {
+            copy_saved: false,
+            detail: "the earlier database is still in use; try again in a moment".into(),
+        };
+    }
     let started = claim.start(&who);
     // §A.3.8, wired at launch: count today toward the zip's launch days, then delete the pre-rooms
     // zip when the rule says it goes (30 days, 5 distinct launch days, both checks, no failure
@@ -645,6 +655,31 @@ mod a3a_tests {
         format!("{:x}", hash.finalize())
     }
 
+    /// F8: a live connection to the legacy file (a send's Arc outliving the close) refuses Ready —
+    /// the claim answers transient and never copies the file out from under the writer.
+    #[test]
+    fn a_live_connection_to_the_legacy_file_refuses_the_claims_ready() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        // The legacy file exists, and a connection to it outlives the close (a send's held Arc).
+        Database::open(&scratch.layout.legacy_database()).unwrap().close().unwrap();
+        let (handle, _) = crate::open_room::open_legacy_in_place(
+            &scratch.layout,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        crate::open_room::close_room();
+        let a = stored("user-a");
+        let session = open_session_room(&a);
+        assert!(
+            matches!(session, SessionRoom::BlockedTransient { .. }),
+            "the claim ran Ready with a live connection to the legacy file: {session:?}"
+        );
+        drop(handle);
+    }
+
     /// F11: device.db unreadable (lost, or written by a newer build) — the fallback is the
     /// account's empty room, not a permanent refusal of every sign-in.
     #[test]
@@ -936,8 +971,12 @@ mod a3a_tests {
                 .unwrap();
         }
         let jobs = bir_core::background_cron::get_active_jobs();
+        let inner = bir_core::background_cron::submission_job_key("1701Q", "12345678900000", 2026, None, Some(3));
         jobs.lock().unwrap().insert(
-            bir_core::background_cron::submission_job_key("1701Q", "12345678900000", 2026, None, Some(3)),
+            bir_core::background_cron::room_job_key(
+                &format!("room:{}", room_id.as_str()),
+                &inner,
+            ),
         );
         let refused = crate::bir_module::restore_database_archive(&archive, 7);
         assert!(
@@ -991,6 +1030,15 @@ mod a3a_tests {
         // The key has cleared: the send's writes are already in the real file, so receipt-pending
         // is restore semantics (the backup simply does not hold them) — the import runs.
         crate::bir_module::restore_database_archive(&archive, 7).expect("the import runs once the send finished");
+
+        // F6's narrowing: a job of ANOTHER room writes into that room's own file, so this room's
+        // import is not refused for it.
+        jobs.lock().unwrap().insert(
+            bir_core::background_cron::room_job_key("room:another-room-entirely", &inner),
+        );
+        crate::bir_module::restore_database_archive(&archive, 7)
+            .expect("another room's send in flight must not refuse this room's import");
+        jobs.lock().unwrap().clear();
     }
 
     /// §A.8, the launch call site: a claim cut mid-move resumes at launch — open_session_room with
@@ -1597,9 +1645,14 @@ fn returns_waiting_count() -> HostResult {
                 Err(_) => return Ok(HostValue::Null),
             };
             let queued = guard.count_queued_drafts().unwrap_or(0);
+            let open_prefix = crate::open_room::job_key_prefix();
             let sending = bir_core::background_cron::get_active_jobs()
                 .lock()
-                .map(|jobs| jobs.len() as i64)
+                .map(|jobs| {
+                    jobs.iter()
+                        .filter(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
+                        .count() as i64
+                })
                 .unwrap_or(0);
             queued + sending
         }
@@ -1619,6 +1672,13 @@ fn safety_copy_status() -> HostResult {
         Ok(Some(record)) => record,
         _ => return Ok(HostObject::new().field("kind", "none").into()),
     };
+    // X5: the record is the device's one claim, but the row belongs in this account's row only
+    // while the move it names IS this room — otherwise the person reads "safety copy kept" for
+    // another account's move.
+    let open_room = crate::open_room::room_id().map(|room| room.as_str().to_owned());
+    if record.room.as_deref() != open_room.as_deref() {
+        return Ok(HostObject::new().field("kind", "none").into());
+    }
     let Some(zip) = &record.zip else {
         return Ok(HostObject::new().field("kind", "none").into());
     };

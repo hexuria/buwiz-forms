@@ -345,7 +345,15 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     let source: bir_core::background_cron::RoomSource = if bir_core::db::single_room_database().is_some() {
         bir_core::background_cron::fixed_room_source(db)
     } else {
-        std::sync::Arc::new(|| crate::open_room::current().map(|(handle, _generation)| handle))
+        std::sync::Arc::new(|| {
+            crate::open_room::snapshot().map(|(handle, _generation, room_id, _user)| {
+                let key = match room_id {
+                    Some(room) => format!("room:{}", room.as_str()),
+                    None => "legacy".to_owned(),
+                };
+                (handle, key)
+            })
+        })
     };
     let cron = bir_core::background_cron::run_cron_jobs(source, stop.clone());
     runtime.spawn(async move {
@@ -3151,11 +3159,18 @@ fn restore_staged_database(
     // under it, its receipt and status would land in the placeholder and be lost. The pause lifts
     // on every exit, the refusal's included: a failed import never leaves sending paused.
     let _unpause = UnpauseOnDrop::new();
-    if !bir_core::background_cron::get_active_jobs()
+    // Narrowed to the open room's jobs once keys carry the room (F6): another account's send in
+    // flight writes into its own room's file, never into the one this import replaces.
+    let open_prefix = crate::open_room::job_key_prefix();
+    let room_busy = bir_core::background_cron::get_active_jobs()
         .lock()
-        .map(|jobs| jobs.is_empty())
-        .unwrap_or(false)
-    {
+        .map(|jobs| {
+            jobs.iter().any(|key| {
+                bir_core::background_cron::room_of_job_key(key) == open_prefix
+            })
+        })
+        .unwrap_or(false);
+    if room_busy {
         return Err(HostError::new(
             "A return is being sent. Try the import again when it has finished.",
         ));

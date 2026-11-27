@@ -186,12 +186,35 @@ impl Drop for WakeInstalled {
 /// The source is asked again every tick, and everything the tick runs uses that tick's answer: the
 /// queue, the email poll, the generic jobs, the calendar sync. Tasks spawned for a tick keep the tick's
 /// handle, so a send in flight finishes against its own room after the room changes.
-pub type RoomSource = Arc<dyn Fn() -> Option<Arc<Mutex<Database>>> + Send + Sync>;
+/// Each tick's answer: the open room's handle and the key the room's jobs are filed under
+/// (F6) — the room's id in rooms mode, a stable label where the source never changes rooms.
+/// Keys differ between rooms, so one account's job can never block or masquerade as another's.
+pub type RoomSource = Arc<dyn Fn() -> Option<(Arc<Mutex<Database>>, String)> + Send + Sync>;
 
 /// A source that always answers the one handle: tests, `bir-headless serve` (its process never
 /// changes rooms), and single-room mode.
 pub fn fixed_room_source(db: Arc<Mutex<Database>>) -> RoomSource {
-    Arc::new(move || Some(db.clone()))
+    Arc::new(move || Some((db.clone(), FIXED_ROOM_KEY.to_owned())))
+}
+
+/// The key a fixed source files under (tests, serve, single-room mode — a source whose room
+/// never changes). Readers in those modes build the same key with [`crate::background_cron::fixed_room_key`].
+pub const FIXED_ROOM_KEY: &str = "fixed";
+
+/// The key a fixed source files under, for readers asking after the one room's jobs.
+pub fn fixed_room_key() -> String {
+    FIXED_ROOM_KEY.to_owned()
+}
+
+/// A job key in ACTIVE_JOBS is the room's key, a `|`, then the inner key (`form:…` or `job:N`):
+/// the same inner key in two rooms never collides (F6).
+pub fn room_job_key(room_key: &str, inner: &str) -> String {
+    format!("{room_key}|{inner}")
+}
+
+/// The room key a full job key belongs to (the part before the first `|`).
+pub fn room_of_job_key(key: &str) -> &str {
+    key.split('|').next().unwrap_or(key)
 }
 
 /// The queue worker loop until [`request_shutdown`] (the `bir` command line, `bir serve`).
@@ -218,7 +241,7 @@ async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
     let _wake = WakeInstalled::new(tx);
     // Crash recovery (jobs left Running) runs once per distinct room, the first time the worker
     // opens it: never again while a send of an earlier sign-in could still be in flight against it.
-    let mut requeued: Vec<usize> = Vec::new();
+    let mut requeued: Vec<String> = Vec::new();
 
     loop {
         if stopping() {
@@ -227,13 +250,14 @@ async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
         // Each tick asks the source for the open room. None — no room open, or submissions paused —
         // skips the tick, as submission_paused skipped it before.
         let room = if submission_paused() { None } else { source() };
-        if let Some(db) = room {
-            let key = Arc::as_ptr(&db) as usize;
-            if !requeued.contains(&key) {
+        if let Some((db, room_key)) = room {
+            // F5: keyed by the room, never the Arc's address — a later sign-in's Arc can reuse
+            // the address of a dropped one, and then the new room's cut-off jobs never requeue.
+            if !requeued.contains(&room_key) {
                 requeue_jobs_left_running(&db);
-                requeued.push(key);
+                requeued.push(room_key.clone());
             }
-            run_queue_tick_until(db.clone(), &stop).await;
+            run_queue_tick_until(db.clone(), &stop, &room_key).await;
         }
         if stopping() {
             break;
@@ -254,11 +278,11 @@ async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
 /// Extracted from `start_cron_jobs` to allow deterministic unit testing
 /// without being blocked by an infinite loop or thread sleep.
 pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
-    run_queue_tick_until(db, &CronStop::new()).await;
+    run_queue_tick_until(db, &CronStop::new(), FIXED_ROOM_KEY).await;
 }
 
 /// One tick whose blocking work (the calendar sync, an inbox poll) checks `stop` between its items and ends early.
-async fn run_queue_tick_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
+async fn run_queue_tick_until(db: Arc<Mutex<Database>>, stop: &CronStop, room_key: &str) {
     // Heartbeat log removed to prevent log spam. Job specific logs are emitted when jobs run.
 
     // Ensure we don't hold the DB lock across async network calls.
@@ -307,12 +331,12 @@ async fn run_queue_tick_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
     if global_cron_enabled {
         for profile in profiles {
             // Task A: Form Submission Retries
-            process_submission_queue(&profile, db.clone()).await;
+            process_submission_queue(&profile, db.clone(), room_key).await;
         }
     }
 
     // Task C: Generic Job Queue (Custom Cron & One-off commands)
-    process_generic_jobs_until(db.clone(), stop).await;
+    process_generic_jobs_until(db.clone(), stop, room_key).await;
 
     process_google_calendar_sync(db.clone(), stop).await;
 
@@ -2220,7 +2244,7 @@ fn give_back_queueable<F: QueueableForm>(
     }
 }
 
-async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
+async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>, room_key: &str) {
     // A build with nowhere to send leaves every queued return as it is: no
     // attempt is counted and none goes back to Draft.
     if crate::transport::sending_unavailable() {
@@ -2248,12 +2272,15 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         .filter(|s| s.status == FilingStatus::Queued)
         .filter(|s| crate::forms::can_queue_for_submission(&s.form_code))
     {
-        let job_key = submission_job_key(
-            &summary.form_code,
-            &profile.tin.full(),
-            summary.taxable_year,
-            summary.month,
-            summary.quarter,
+        let job_key = room_job_key(
+            room_key,
+            &submission_job_key(
+                &summary.form_code,
+                &profile.tin.full(),
+                summary.taxable_year,
+                summary.month,
+                summary.quarter,
+            ),
         );
 
         let active_jobs = get_active_jobs();
@@ -2269,11 +2296,27 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
         let profile_clone = profile.clone();
         let db_clone = db.clone();
         let cleanup = JobCleanup {
-            key: job_key,
+            key: job_key.clone(),
             active_jobs: active_jobs.clone(),
         };
+        // F7: the account this tick sends under is captured now, not read at transmit time — after
+        // a sign-out and a switch, the send must not complete under whoever signed in since.
+        let user_at_spawn = crate::cloud_account::load_stored_account()
+            .ok()
+            .flatten()
+            .map(|account| account.user_id);
 
         spawn_job(cleanup, async move {
+            let user_now = crate::cloud_account::load_stored_account()
+                .ok()
+                .flatten()
+                .map(|account| account.user_id);
+            if user_now != user_at_spawn {
+                warn!(
+                    "Cron: the account changed since this send was queued; the return stays queued                      for its own account's next tick"
+                );
+                return;
+            }
             if summary.form_code == "2551Q" {
                 process_queued_2551q(&summary, &profile_clone, db_clone.clone()).await;
                 return;
@@ -2805,10 +2848,10 @@ fn mark_shell_job_unavailable(job: &mut crate::db::Job) -> bool {
 
 #[cfg(all(test, feature = "mas_build"))]
 async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
-    process_generic_jobs_until(db, &CronStop::new()).await;
+    process_generic_jobs_until(db, &CronStop::new(), FIXED_ROOM_KEY).await;
 }
 
-async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
+async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop, room_key: &str) {
     let jobs = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
@@ -2892,7 +2935,7 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
             let _ = db_guard.save_job(job.clone());
         }
 
-        let job_key = format!("job:{}", job.id.unwrap_or(0));
+        let job_key = room_job_key(room_key, &format!("job:{}", job.id.unwrap_or(0)));
         let active_jobs = get_active_jobs();
         {
             let mut active = active_jobs
@@ -3086,6 +3129,18 @@ impl Drop for JobCleanup {
 
 #[cfg(test)]
 mod tests {
+    /// F6: a job key carries its room, so the same return or job id in two rooms never collides,
+    /// and a reader can tell which room a key belongs to.
+    #[test]
+    fn a_job_key_carries_its_room() {
+        let inner = submission_job_key("1701Q", "12345678900000", 2026, None, Some(3));
+        let a = room_job_key("room:aaaa", &inner);
+        let b = room_job_key("room:bbbb", &inner);
+        assert_ne!(a, b, "two rooms' keys collide");
+        assert_eq!(room_of_job_key(&a), "room:aaaa");
+        assert!(a.contains(&inner), "the inner key is lost");
+    }
+
     fn shell_job(command: &str) -> crate::db::Job {
         crate::db::Job {
             id: None,
@@ -4409,7 +4464,7 @@ mod tests {
                 assert!(crate::transport::sending_unavailable());
                 let waiting = db.lock().unwrap().list_all_queued_submissions().unwrap();
                 assert_eq!(waiting.len(), 1, "the return is in the queue");
-                process_submission_queue(&profile, db.clone()).await;
+                process_submission_queue(&profile, db.clone(), FIXED_ROOM_KEY).await;
             },
         )
         .await;

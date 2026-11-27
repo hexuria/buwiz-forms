@@ -268,6 +268,7 @@ pub fn in_flight(summary: &FormDraftSummary) -> bool {
         summary.month,
         summary.quarter,
     );
+    let key = bir_core::background_cron::room_job_key(&crate::open_room::job_key_prefix(), &key);
     bir_core::background_cron::get_active_jobs()
         .lock()
         .map(|jobs| jobs.contains(&key))
