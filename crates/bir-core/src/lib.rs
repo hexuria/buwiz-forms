@@ -75,6 +75,7 @@ pub mod time_utils;
 pub mod transport;
 pub mod validation;
 pub mod validation_summary;
+pub mod welcome;
 
 /// Local mock of the BIR SFTP endpoint. Tests and the `mock-bir` feature
 /// only; the shipped app never enables it.
