@@ -1,0 +1,9 @@
+2026-11-27T16:13:10.107Z	wait	window plane	ready	2032ms
+2026-11-27T16:13:10.130Z	wait	data plane	ready	23ms
+2026-11-27T16:13:10.179Z	app.info	database	test	46ms
+2026-11-27T16:13:10.926Z	recipe	setup-start	pass	747ms
+2026-11-27T16:13:47.846Z	recipe	rdo-row-press	pass	36920ms
+2026-11-27T16:13:47.895Z	resolve	$tin_field	n11	48ms
+2026-11-27T16:13:56.172Z	recipe	sign-up	pass	8326ms
+2026-11-27T16:14:42.674Z	recipe	profile-pick-press	fail at s90: occluded_by: 13320	46234ms
+e2e rdo-row-press on windows: 1 fail, 3 pass. Report: C:\Users\Administrator\repos\rdo-row-press-458b\evidence\1\report.md

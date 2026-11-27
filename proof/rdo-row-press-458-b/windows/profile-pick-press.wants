@@ -1,0 +1,208 @@
+# Desktop, the tax profile panel after sign-up.wants saved the taxpayer: the same rounds on the profile's RDO (branch
+# section) and ZIP (address section), each ending with the error-line round: text that fits nothing, then a press on the
+# section's Save below the box, which must save on the first click (#458 review P1-5). Starts and ends with the panel closed.
+click tb-panel
+wait_until panel-open-profile --timeout-ms 5000
+click panel-open-profile
+wait_until tp-sec-branch-edit --timeout-ms 5000
+click tp-sec-branch-edit
+wait_until tp-branch-rdo_code-search --timeout-ms 5000 --screenshot
+# Row press 1/5: 047.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-opt-047 --timeout-ms 5000
+click tp-branch-rdo_code-opt-047 --screenshot
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
+# Row press 2/5: 048.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-opt-048 --timeout-ms 5000
+click tp-branch-rdo_code-opt-048
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="048 — West Makati"
+wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
+# Row press 3/5: 049.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-opt-049 --timeout-ms 5000
+click tp-branch-rdo_code-opt-049
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="049 — North Makati"
+wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
+# Row press 4/5: 050.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-opt-050 --timeout-ms 5000
+click tp-branch-rdo_code-opt-050
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="050 — South Makati"
+wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
+# Row press 5/5: 047.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-opt-047 --timeout-ms 5000
+click tp-branch-rdo_code-opt-047 --screenshot
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
+# Chevron 1/3: opens the whole list, closes it again; the box keeps 047.
+click tp-branch-rdo_code-trigger
+wait_until tp-branch-rdo_code-list --timeout-ms 3000
+click tp-branch-rdo_code-trigger
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+# Chevron 2/3: opens the whole list, closes it again; the box keeps 047.
+click tp-branch-rdo_code-trigger
+wait_until tp-branch-rdo_code-list --timeout-ms 3000
+click tp-branch-rdo_code-trigger
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+# Chevron 3/3: opens the whole list, closes it again; the box keeps 047.
+click tp-branch-rdo_code-trigger
+wait_until tp-branch-rdo_code-list --timeout-ms 3000
+click tp-branch-rdo_code-trigger --screenshot
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+# Click away 1/3: "makati" fits several choices; a press on another box closes the list, the box keeps 047 and says so.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-list --timeout-ms 3000
+click tp-branch-name
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+wait_until tp-branch-rdo_code-note --timeout-ms 2000
+# Click away 2/3: "makati" fits several choices; a press on another box closes the list, the box keeps 047 and says so.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-list --timeout-ms 3000
+click tp-branch-name
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+wait_until tp-branch-rdo_code-note --timeout-ms 2000
+# Click away 3/3: "makati" fits several choices; a press on another box closes the list, the box keeps 047 and says so.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search makati --key-delay-ms 80
+wait_until tp-branch-rdo_code-list --timeout-ms 3000
+click tp-branch-name
+wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+wait_until tp-branch-rdo_code-note --timeout-ms 2000 --screenshot
+# Error line under the box: text that fits nothing (the list then shows only its "Nothing matches" line, <box>-nothing), then a press on Save below it. The blur adds the box's
+# not-taken line during that press; the press must still save (the section closes) on the first click.
+click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
+type tp-branch-rdo_code-search zzzz --key-delay-ms 80
+wait_until tp-branch-rdo_code-nothing --timeout-ms 3000
+click tp-branch-save --screenshot
+wait_until tp-branch-save --absent --timeout-ms 5000 --screenshot
+click tp-sec-address-edit
+wait_until tp-address-zip_code-search --timeout-ms 5000
+# Row press 1/5: 1200.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-opt-1200 --timeout-ms 5000
+click tp-address-zip_code-opt-1200 --screenshot
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+wait_until tp-address-zip_code-note --absent --timeout-ms 2000
+# Row press 2/5: 1224.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-opt-1224 --timeout-ms 5000
+click tp-address-zip_code-opt-1224
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1224 — Makati Commercial Ctr."
+wait_until tp-address-zip_code-note --absent --timeout-ms 2000
+# Row press 3/5: 1200.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-opt-1200 --timeout-ms 5000
+click tp-address-zip_code-opt-1200
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+wait_until tp-address-zip_code-note --absent --timeout-ms 2000
+# Row press 4/5: 1224.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-opt-1224 --timeout-ms 5000
+click tp-address-zip_code-opt-1224
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1224 — Makati Commercial Ctr."
+wait_until tp-address-zip_code-note --absent --timeout-ms 2000
+# Row press 5/5: 1200.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-opt-1200 --timeout-ms 5000
+click tp-address-zip_code-opt-1200 --screenshot
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+wait_until tp-address-zip_code-note --absent --timeout-ms 2000
+# Chevron 1/3: opens the whole list, closes it again; the box keeps 1200.
+click tp-address-zip_code-trigger
+wait_until tp-address-zip_code-list --timeout-ms 3000
+click tp-address-zip_code-trigger
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+# Chevron 2/3: opens the whole list, closes it again; the box keeps 1200.
+click tp-address-zip_code-trigger
+wait_until tp-address-zip_code-list --timeout-ms 3000
+click tp-address-zip_code-trigger
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+# Chevron 3/3: opens the whole list, closes it again; the box keeps 1200.
+click tp-address-zip_code-trigger
+wait_until tp-address-zip_code-list --timeout-ms 3000
+click tp-address-zip_code-trigger --screenshot
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+# Click away 1/3: "makati" fits several choices; a press on another box closes the list, the box keeps 1200 and says so.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-list --timeout-ms 3000
+click tp-address-phone
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+wait_until tp-address-zip_code-note --timeout-ms 2000
+# Click away 2/3: "makati" fits several choices; a press on another box closes the list, the box keeps 1200 and says so.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-list --timeout-ms 3000
+click tp-address-phone
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+wait_until tp-address-zip_code-note --timeout-ms 2000
+# Click away 3/3: "makati" fits several choices; a press on another box closes the list, the box keeps 1200 and says so.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search makati --key-delay-ms 80
+wait_until tp-address-zip_code-list --timeout-ms 3000
+click tp-address-phone
+wait_until tp-address-zip_code-list --absent --timeout-ms 3000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+wait_until tp-address-zip_code-note --timeout-ms 2000 --screenshot
+# Error line, ZIP: text that fits nothing, then Save below it, on the first click.
+click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
+type tp-address-zip_code-search zzzz --key-delay-ms 80
+wait_until tp-address-zip_code-nothing --timeout-ms 3000
+click tp-address-save --screenshot
+wait_until tp-address-save --absent --timeout-ms 5000 --screenshot
+click tb-panel
+wait_until panel-open-profile --absent --timeout-ms 5000

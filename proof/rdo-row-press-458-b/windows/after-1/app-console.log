@@ -1,0 +1,5 @@
+build: app f73376e4, nsh 8c78cfd6 beside it, tool nsh 0.6.1 (8c78cfd), cargo 1.99.0 (5f94df478 2026-08-27), folder C:\Users\Administrator\repos\rdo-row-press-458b\after\target-f73376e4
+✓ built the Rust crate nsh-app-ebirforms (2.5s)
+✓ built App.tsx (1.5 MB js, 5.5 MB bytecode, 403ms)
+✓ built the development host for Windows (2.2s)
+• Windows (DEVINBOX) connected, build 1

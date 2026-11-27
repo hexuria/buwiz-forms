@@ -1,0 +1,157 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "sign-up",
+  "fingerprint": "fnv1a64:669208db8f599f05",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 398
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 35
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 440
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 473
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 420
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 425
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 520
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 458
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 39
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 407
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 34
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 563,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1458
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 45
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1361
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 601,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 542,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\018-s18.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 174,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\020-s20.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\018-s18.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458b\\evidence\\2\\03-sign-up\\020-s20.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8474
+}

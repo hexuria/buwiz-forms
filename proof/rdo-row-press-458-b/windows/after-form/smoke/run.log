@@ -1,0 +1,8 @@
+2026-11-27T16:18:01.325Z	wait	window plane	ready	17ms
+2026-11-27T16:18:01.370Z	wait	data plane	ready	44ms
+2026-11-27T16:18:01.418Z	app.info	database	test	47ms
+2026-11-27T16:18:02.118Z	recipe	setup-start	pass	699ms
+2026-11-27T16:18:02.170Z	resolve	$tin_field	n11	50ms
+2026-11-27T16:18:08.758Z	recipe	sign-up	pass	6640ms
+2026-11-27T16:18:12.794Z	recipe	tax-year	pass	4035ms
+2026-11-27T16:18:22.124Z	recipe	open-2551q	pass	9329ms

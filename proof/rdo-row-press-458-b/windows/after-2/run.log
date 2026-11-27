@@ -1,0 +1,8 @@
+2026-11-27T16:14:56.976Z	wait	window plane	ready	2039ms
+2026-11-27T16:14:57.039Z	wait	data plane	ready	62ms
+2026-11-27T16:14:57.087Z	app.info	database	test	47ms
+2026-11-27T16:14:57.762Z	recipe	setup-start	pass	675ms
+2026-11-27T16:15:34.643Z	recipe	rdo-row-press	pass	36880ms
+2026-11-27T16:15:34.691Z	resolve	$tin_field	n11	48ms
+2026-11-27T16:15:43.194Z	recipe	sign-up	pass	8551ms
+2026-11-27T16:16:29.927Z	recipe	profile-pick-press	fail at s90: occluded_by: 13672	46472ms

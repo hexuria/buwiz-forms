@@ -1,0 +1,5 @@
+# known_gap: not a runnable recipe.
+# The corrected smoke subset opened 2551Q successfully, but the gpui-agent snapshot of the form page
+# contains no control base id with both `<id>-search` and `<id>-trigger` (searchpick_count: 0).
+# Therefore no true form SearchPick row ids/values were available to copy into a row-press/click-away recipe.
+# No OS input was used to force navigation or infer hidden controls.
