@@ -63,14 +63,22 @@ fn every_inventory_digest_is_its_sheet_without_the_page_layout() {
         }
     }
     if std::env::var_os("BIR_PRINT_BLESS_INVENTORY").is_some() {
+        // Blessing only ever rewrites; it never passes: a run that inherits the switch (in CI or
+        // anywhere) must not count as proof that the inventory was right.
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "BIR_PRINT_BLESS_INVENTORY is refused under CI: it rewrites inventory.json instead of checking it"
+        );
         let mut blessed = text.clone();
         for (slug, recorded, now) in &stale {
             assert_eq!(blessed.matches(recorded.as_str()).count(), 1, "{slug}");
             blessed = blessed.replace(recorded.as_str(), now);
         }
         std::fs::write(&path, blessed).unwrap();
-        eprintln!("inventory digests rewritten: {}", stale.len());
-        return;
+        panic!(
+            "inventory digests rewritten ({}): re-run without BIR_PRINT_BLESS_INVENTORY to check them",
+            stale.len()
+        );
     }
     assert!(
         stale.is_empty(),
