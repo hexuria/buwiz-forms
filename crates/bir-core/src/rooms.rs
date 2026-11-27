@@ -1486,6 +1486,7 @@ mod tests {
                 let layout = Layout::here();
                 let room = room_id_for("https://api.buwiz.com", "user-1");
                 layout.create_room_dir(&room).unwrap();
+                let _turn = crate::db::room_path_test_turn();
                 crate::db::set_open_room_database(Some(layout.room_database(&room)));
                 let opened = Database::open(crate::db::app_database_path()).unwrap();
                 let during = files();

@@ -3363,6 +3363,17 @@ impl Database {
         )?)
     }
 
+    /// F1': returns this database must not be replaced under — queued (the worker can pick one up
+    /// mid-import) or sent with the receipt still pending (Submitted: a restore would not know the
+    /// return already went, and a later queue could file it twice).
+    pub fn count_drafts_in_flight(&self) -> Result<i64, DbError> {
+        Ok(self.conn.query_row(
+            "SELECT COUNT(*) FROM form_drafts WHERE status IN ('Queued', 'Submitted')",
+            [],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn list_draft_summaries_all_years(
         &self,
         tin: &str,

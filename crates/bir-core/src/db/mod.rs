@@ -687,6 +687,20 @@ pub fn single_room_database() -> Option<PathBuf> {
     None
 }
 
+#[cfg(test)]
+static ROOM_PATH_TEST_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// One turn for every test touching the process-wide open-room path: the tests run in parallel in
+/// one process, and the path is process-wide in production now — never per-thread — so a test that
+/// sets it holds this turn and resets the path before letting go. This is the whole mechanism: no
+/// test reads a per-thread shadow of the slot, so a thread-local regression cannot hide (X1).
+#[cfg(test)]
+pub(crate) fn room_path_test_turn() -> std::sync::MutexGuard<'static, ()> {
+    ROOM_PATH_TEST_TURN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// The open room's database file, once a room is open (PLAN §A.4): process-wide, never per-thread.
 /// The slot is one room for the whole process, so every engine thread — the print preview's included —
 /// reads the same room, and a sign-out written on any thread (the account thread's) clears it for all.
@@ -698,24 +712,10 @@ static OPEN_ROOM_DATABASE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex:
 pub fn set_open_room_database(path: Option<PathBuf>) {
     *OPEN_ROOM_DATABASE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path.clone();
-    #[cfg(test)]
-    TEST_OPEN_ROOM_DATABASE.with(|slot| *slot.borrow_mut() = path);
-}
-
-#[cfg(test)]
-thread_local! {
-    // Tests run in parallel in one process and each names its own room file, so the
-    // process-wide slot would cross them. Production never uses this slot: the
-    // process-wide value above is the only one written outside cfg(test).
-    static TEST_OPEN_ROOM_DATABASE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path;
 }
 
 fn open_room_database() -> Option<PathBuf> {
-    #[cfg(test)]
-    if let Some(path) = TEST_OPEN_ROOM_DATABASE.with(|slot| slot.borrow().clone()) {
-        return Some(path);
-    }
     OPEN_ROOM_DATABASE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -2443,6 +2443,7 @@ mod tests {
     /// legacy file back.
     #[test]
     fn an_open_room_answers_the_database_path_until_it_closes() {
+        let _turn = room_path_test_turn();
         let folder = tempfile::tempdir().expect("temporary directory");
         let room = folder.path().join("rooms").join("a").join("bir_data.db");
         let named = folder.path().join("named.db");

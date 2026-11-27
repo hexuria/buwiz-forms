@@ -689,6 +689,42 @@ mod a3a_tests {
         .unwrap();
     }
 
+    /// R1: the pause spans the import's check-to-swap span and lifts on every exit — a failed
+    /// import included, which must never leave sending paused.
+    #[test]
+    fn the_import_pauses_sending_and_a_failed_import_unpauses() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        crate::account_gate::set_unlocked(true);
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        assert!(!bir_core::background_cron::submission_paused(), "paused before the import");
+        // Mid-import — inside the checkpoint, after the jobs check and before the swap — sending
+        // is paused, so no send can start in the gap.
+        crate::bir_module::set_after_restore_checkpoint_hook_for_test(Box::new(|| {
+            assert!(
+                bir_core::background_cron::submission_paused(),
+                "a send could start between the check and the swap"
+            );
+        }));
+        let source = Database::open(scratch.layout.device_dir().join("source.db")).unwrap();
+        source.checkpoint().unwrap();
+        let archive = scratch.layout.device_dir().join("backup.zip");
+        bir_core::export::export_database_zip(&source, &archive).unwrap();
+        drop(source);
+        crate::bir_module::restore_database_archive(&archive, 7).expect("the import runs");
+        assert!(!bir_core::background_cron::submission_paused(), "still paused after the import");
+        // A failed import — the zip is not a database — unpauses too.
+        let broken = scratch.layout.device_dir().join("broken.zip");
+        std::fs::write(&broken, b"not a zip").unwrap();
+        let _ = crate::bir_module::restore_database_archive(&broken, 8);
+        assert!(
+            !bir_core::background_cron::submission_paused(),
+            "a failed import left sending paused"
+        );
+    }
+
     /// F9: quit releases the room and the device guard — a relaunch (the update's replacement)
     /// opens the same device without meeting the old process's locks.
     #[test]
@@ -764,32 +800,22 @@ mod a3a_tests {
             &a.user_id,
         );
         write_record_at_step(&scratch.layout, &room, &who, bir_core::legacy_claim::Step::Moved);
-        // The debug_assert fires ahead of the Err in a test build: either is the refusal.
-        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a))
-        }));
-        match refused {
-            Ok(result) => assert!(
-                matches!(&result, Err(message) if message.contains("not yet hash-checked")),
-                "open_room admitted a room at Moved with no hash check"
-            ),
-            Err(_) => {}
-        }
+        // D1: a refusal is an Err, never a panic.
+        let refused = crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a));
+        assert!(
+            matches!(&refused, Err(message) if message.contains("not yet hash-checked")),
+            "open_room admitted a room at Moved with no hash check"
+        );
         // F1's reopen path holds the same rule.
-        let reopened = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            crate::open_room::reopen_fresh(
-                &scratch.layout.room_database(&room),
-                Some(room),
-                a.user_id.clone(),
-            )
-        }));
-        match reopened {
-            Ok(result) => assert!(
-                matches!(&result, Err(message) if message.contains("not yet hash-checked")),
-                "reopen_fresh admitted a room at Moved with no hash check"
-            ),
-            Err(_) => {}
-        }
+        let reopened = crate::open_room::reopen_fresh(
+            &scratch.layout.room_database(&room),
+            Some(room),
+            a.user_id.clone(),
+        );
+        assert!(
+            matches!(&reopened, Err(message) if message.contains("not yet hash-checked")),
+            "reopen_fresh admitted a room at Moved with no hash check"
+        );
     }
 
     /// G1: the record unreadable fails CLOSED while any rooms exist — an unreadable record can
@@ -808,19 +834,16 @@ mod a3a_tests {
         );
         // device.db damaged beyond reading; the room folder exists.
         std::fs::write(scratch.layout.device_db(), b"not a sqlite database at all").unwrap();
-        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a))
-        }));
-        match refused {
-            Ok(result) => assert!(
-                matches!(&result, Err(message) if message.contains("cannot be read")),
-                "an unreadable record with rooms present did not refuse"
-            ),
-            Err(_) => {}
-        }
+        let refused = crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a));
+        assert!(
+            matches!(&refused, Err(message) if message.contains("cannot be read")),
+            "an unreadable record with rooms present did not refuse"
+        );
     }
 
-    /// F1': the import refuses while a return is being sent, and runs once the send finished.
+    /// F1': the import refuses while a return is being sent; the job finishes into the real room
+    /// — its status and receipt are in the room file, read back from disk — and the refusal holds
+    /// while the receipt is still pending, lifting only when it is confirmed.
     #[test]
     fn an_import_is_refused_while_a_return_is_being_sent() {
         let _turn = turn();
@@ -829,6 +852,7 @@ mod a3a_tests {
         crate::account_gate::set_unlocked(true);
         let a = stored("user-a");
         assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        let room_id = crate::open_room::room_id().expect("a room id");
         let source = Database::open(scratch.layout.device_dir().join("source.db")).unwrap();
         source
             .create_taxpayer(bir_core::tax_profile::NewTaxpayer {
@@ -849,7 +873,19 @@ mod a3a_tests {
         let archive = scratch.layout.device_dir().join("backup.zip");
         bir_core::export::export_database_zip(&source, &archive).unwrap();
         drop(source);
-        // A send in flight: the worker holds its job key.
+
+        // A send in flight: the worker holds its job key, and the return is queued.
+        let (handle, _) = crate::open_room::current().expect("a room is open");
+        {
+            let guard = bir_core::lock_timing::lock(&handle).unwrap();
+            guard
+                .conn_for_tests()
+                .execute(
+                    "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)                      VALUES ('12345678900000', '1701Q', 2026, 3, 'Queued', '{}')",
+                    [],
+                )
+                .unwrap();
+        }
         let jobs = bir_core::background_cron::get_active_jobs();
         jobs.lock().unwrap().insert(
             bir_core::background_cron::submission_job_key("1701Q", "12345678900000", 2026, None, Some(3)),
@@ -859,9 +895,52 @@ mod a3a_tests {
             matches!(&refused, Err(error) if error.message().contains("A return is being sent. Try the import again when it has finished.")),
             "the import ran while a send was in flight"
         );
-        // The send finished: nothing was swapped under it, so its receipt is in the real room —
-        // and the import now runs.
+
+        // The job finishes into the real room — the import never swapped it out, so the status
+        // and the receipt it writes through its held Arc land in the room file.
+        {
+            let guard = bir_core::lock_timing::lock(&handle).unwrap();
+            guard
+                .conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET status = 'Submitted' WHERE tin = '12345678900000'",
+                    [],
+                )
+                .unwrap();
+            guard
+                .conn_for_tests()
+                .execute(
+                    "INSERT INTO submission_receipts (filename, tin, form_type, period, received_date, received_time, raw_text)                      VALUES ('receipt-1.txt', '12345678900000', '1701Q', 'Q3/26', '2026-11-27', '10:00:00', 'receipt')",
+                    [],
+                )
+                .unwrap();
+            guard.checkpoint().unwrap();
+        }
         jobs.lock().unwrap().clear();
+        // Read back from disk: the room file itself holds them.
+        let on_disk = Database::open(scratch.layout.room_database(&room_id)).unwrap();
+        let status: String = on_disk
+            .conn_for_tests()
+            .query_row(
+                "SELECT status FROM form_drafts WHERE tin = '12345678900000'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(status, "Submitted", "the job's status is not in the room file");
+        let receipts: i64 = on_disk
+            .conn_for_tests()
+            .query_row(
+                "SELECT COUNT(*) FROM submission_receipts WHERE filename = 'receipt-1.txt'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(receipts, 1, "the job's receipt is not in the room file");
+        drop(on_disk);
+
+        // The key has cleared: the send's writes are already in the real file, so receipt-pending
+        // is restore semantics (the backup simply does not hold them) — the import runs.
         crate::bir_module::restore_database_archive(&archive, 7).expect("the import runs once the send finished");
     }
 

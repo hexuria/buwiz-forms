@@ -2059,6 +2059,7 @@ fn a_symlinked_device_folder_is_the_same_for_the_guard() {
 /// before start() is refused; once the claim has run, the same open goes through.
 #[test]
 fn the_apps_real_open_path_is_refused_before_start() {
+    let _turn = crate::db::room_path_test_turn();
     let install = Install::new();
     close(unlocked(&install));
     let a = account("a");
@@ -2087,6 +2088,7 @@ fn the_apps_real_open_path_is_refused_before_start() {
 /// start() ran to a definitive answer in this session.
 #[test]
 fn a_room_cut_at_moved_refuses_the_open_through_the_apps_path() {
+    let _turn = crate::db::room_path_test_turn();
     let install = Install::new();
     close(unlocked(&install));
     let a = account("a");
@@ -2100,15 +2102,12 @@ fn a_room_cut_at_moved_refuses_the_open_through_the_apps_path() {
         install.layout.device_dir()
     ));
     crate::db::set_open_room_database(Some(install.room_file(&room)));
-    let refused = std::panic::catch_unwind(crate::db::open_live_database);
+    let refused = crate::db::open_live_database();
     crate::db::set_open_room_database(None);
-    match refused {
-        Ok(result) => assert!(
-            result.is_err(),
-            "the room opened while the record is at Moved with no hash check"
-        ),
-        Err(_) => {} // the debug_assert fired: refused either way
-    }
+    assert!(
+        refused.is_err(),
+        "the room opened while the record is at Moved with no hash check"
+    );
 }
 
 /// Item 6 (the ruling): a start() that finishes into a transient outcome after the move is not a

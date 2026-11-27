@@ -3086,6 +3086,13 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// Give the restoring thread's mid-import hook (R1's pause test): runs between the checkpoint and
+/// the safety copy, inside the span the pause must cover.
+#[cfg(test)]
+pub(crate) fn set_after_restore_checkpoint_hook_for_test(hook: Box<dyn FnOnce()>) {
+    AFTER_RESTORE_CHECKPOINT.with(|slot| *slot.borrow_mut() = Some(hook));
+}
+
 /// §A.3.8: the newest 3 import safety copies per room are kept; the older ones go. The copies are
 /// `bir_data.safety-<stamp>.db` of the one folder — the room's own in rooms mode — so pruning the
 /// folder is pruning the room.
@@ -3111,6 +3118,27 @@ fn prune_safety_copies(folder: &std::path::Path) {
     }
 }
 
+/// R1: sending pauses for the import's check-to-swap span and unpauses on every exit — success,
+/// refusal or failure — restoring the state it found (the sign-in flow pauses too, and that one
+/// is not this one's to lift).
+struct UnpauseOnDrop {
+    was_paused: bool,
+}
+
+impl UnpauseOnDrop {
+    fn new() -> Self {
+        let was_paused = bir_core::background_cron::submission_paused();
+        bir_core::background_cron::set_submission_paused(true);
+        Self { was_paused }
+    }
+}
+
+impl Drop for UnpauseOnDrop {
+    fn drop(&mut self) {
+        bir_core::background_cron::set_submission_paused(self.was_paused);
+    }
+}
+
 /// Steps 2 and 3 of [`restore_database_archive`] for a database already
 /// staged and checked. The staged file is removed on every path out.
 fn restore_staged_database(
@@ -3118,9 +3146,11 @@ fn restore_staged_database(
     db_path: &std::path::Path,
     stamp: u64,
 ) -> HostResult {
-    // F1': never replace the room's file while a return is being sent. The send holds the old Arc
-    // and finishes into it; were the install to swap the file under it, its receipt and status
-    // would land in the placeholder and be lost — a return the BIR accepted could be resent.
+    // F1' + R1: pause first, so no send can start in the gap between the check and the swap; then
+    // refuse while a send is in flight — it holds the old Arc, and were the install to swap the file
+    // under it, its receipt and status would land in the placeholder and be lost. The pause lifts
+    // on every exit, the refusal's included: a failed import never leaves sending paused.
+    let _unpause = UnpauseOnDrop::new();
     if !bir_core::background_cron::get_active_jobs()
         .lock()
         .map(|jobs| jobs.is_empty())

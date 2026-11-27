@@ -133,10 +133,6 @@ pub fn room_move_evidence_clear(
             && record.step < Step::HashChecked
             && record.room.as_deref() == Some(room_id.as_str())
     });
-    debug_assert!(
-        !pending,
-        "a room's database opened while the claim's move evidence is unchecked (Copied..HashChecked)"
-    );
     if pending {
         return Err(
             "the legacy claim's move is unfinished on this device (the record is not yet hash-checked); the room does not open until the claim finishes it"
@@ -154,10 +150,6 @@ pub fn room_open_allowed(
     room_id: &crate::rooms::RoomId,
 ) -> Result<(), String> {
     if !claim_started_this_session(layout.device_dir()) {
-        debug_assert!(
-            false,
-            "a room's database opened before the claim's start() ran in this session (R1)"
-        );
         return Err(
             "the legacy claim's start() has not run for this device folder in this session; a room's database is never opened before it (R1)"
                 .into(),
