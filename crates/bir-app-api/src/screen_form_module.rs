@@ -3772,6 +3772,10 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     if rows_withholding::preprinted(code, key) {
         return rows_withholding::PREPRINTED;
     }
+    // 1601FQ's Schedule 1 gate explains why even its computed column is shut.
+    if reason == bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK {
+        return bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK;
+    }
     // A column or box the schema marks computed (the overrides carry each
     // marking's evidence) never "can't be filled yet": it is the form's own.
     if schema_computed(code, key) {
@@ -3806,6 +3810,10 @@ fn lock_note(reason: &str) -> &'static str {
     use bir_core::forms::agent::Lock;
     if let Some((_, _, note)) = KEPT_NOTES.iter().find(|(_, kept, _)| *kept == reason) {
         return note;
+    }
+    // 1601FQ's Schedule 1 gate uses the official page's words as its lock.
+    if reason == bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK {
+        return bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK;
     }
     // 2551Q's 8% penalty reasons are already the filer's words.
     if reason == penalties::KEPT_ON_EIGHT_PERCENT {
@@ -5051,6 +5059,16 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
                 bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(&draft)
         {
             relock_notes.insert(item16.to_string(), json!(note));
+        }
+    }
+    if kind.form_code() == "1601FQ" {
+        use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+        for clearance in gate::row_clearances(kind, &before, &draft) {
+            if let Some(row) = gate::row_index(&before, &clearance.id) {
+                for key in gate::keys_for_row(row) {
+                    relock_notes.insert(key, json!(clearance.text.clone()));
+                }
+            }
         }
     }
     put_sample_mark(&mut draft, sample.as_ref());
@@ -11943,7 +11961,7 @@ mod tests {
         let early = fill("1601FQ", &opened["draft"], json!({"drpATCCode0": "WI330"}));
         assert_eq!(
             early["rejected"]["drpATCCode0"],
-            rows_withholding::ANSWER_13_FIRST
+            bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK
         );
         let wrong = fill("1601FQ", &yes["draft"], json!({"drpATCCode0": "ZZ999"}));
         assert!(wrong["rejected"].get("drpATCCode0").is_some());

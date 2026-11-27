@@ -3423,3 +3423,147 @@ fn agent_fill_2552_writes_item_12_total_shares_and_part_iv_amounts() {
     assert_eq!(map["frm2552:txtPg2P4I4Amount"], "450.50");
     assert_eq!(map["frm2552:txtPg2P4I5Amount"], "550.75");
 }
+
+#[test]
+fn v2018_1601fq_schedule_1_is_shut_and_refuses_writes_until_item_13_yes() {
+    setup();
+    use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+    let opened = open("1601FQ", 1);
+    for key in gate::keys() {
+        assert_eq!(opened["locks"][&key], gate::LOCK, "{key}");
+        assert_eq!(opened["lock_notes"][&key], gate::LOCK, "{key}");
+    }
+    for key in gate::keys() {
+        let refused = fill("1601FQ", &opened["draft"], json!({key.clone(): "42"}));
+        assert_eq!(refused["rejected"][key.clone()], gate::LOCK, "{key}");
+    }
+    assert_eq!(opened["draft"]["schedule1"], json!([]));
+
+    let no = fill(
+        "1601FQ",
+        &opened["draft"],
+        json!({"frm1601FQ:SpecialTax_2": "true"}),
+    );
+    for key in gate::keys() {
+        assert_eq!(no["relocks"][&key], gate::LOCK, "{key}");
+    }
+    let refused = fill("1601FQ", &no["draft"], json!({"txtAmtIncomePay0": "42"}));
+    assert_eq!(refused["rejected"]["txtAmtIncomePay0"], gate::LOCK);
+
+    let yes = fill(
+        "1601FQ",
+        &no["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    for key in gate::keys() {
+        let expected = if key.starts_with("txtNatIncPayment") || key.starts_with("txtReqWithheld") {
+            json!("computed by BIR's own formulas")
+        } else {
+            Value::Null
+        };
+        assert_eq!(yes["relocks"][&key], expected, "{key}");
+    }
+    assert_eq!(yes["draft"]["schedule1"].as_array().unwrap().len(), 5);
+    assert_eq!(yes["draft"]["schedule1"][0]["income_payment"], 0.0);
+    let typed = fill(
+        "1601FQ",
+        &yes["draft"],
+        json!({"txtAmtIncomePay0": "42", "txtRate0": "10"}),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    assert_eq!(typed["draft"]["schedule1"][0]["income_payment"], 42.0);
+    assert_eq!(typed["draft"]["schedule1"][0]["tax_rate"], 10.0);
+}
+
+#[test]
+fn v2018_1601fq_schedule_1_clears_once_when_item_13_closes() {
+    setup();
+    use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+    let yes = fill(
+        "1601FQ",
+        &open("1601FQ", 1)["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    let typed = fill(
+        "1601FQ",
+        &yes["draft"],
+        json!({"txtAmtIncomePay0": "42", "txtRate0": "10"}),
+    );
+    let no = fill(
+        "1601FQ",
+        &typed["draft"],
+        json!({"frm1601FQ:SpecialTax_2": "true"}),
+    );
+    assert_eq!(no["draft"]["schedule1"], json!([]));
+    let row_id = typed["draft"]["schedule1"][0]["instance_id"]
+        .as_str()
+        .expect("a stable row id");
+    let cleared =
+        format!("Schedule 1 row {row_id} was cleared: it applies only when item 13 is Yes.");
+    for key in gate::keys() {
+        assert_eq!(no["relocks"][&key], gate::LOCK, "{key}");
+        let expected = if gate::keys_for_row(0).contains(&key) {
+            cleared.as_str()
+        } else {
+            gate::LOCK
+        };
+        assert_eq!(no["relock_notes"][&key], expected, "{key}");
+    }
+    let yes_again = fill(
+        "1601FQ",
+        &no["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    assert_eq!(yes_again["draft"]["schedule1"].as_array().unwrap().len(), 5);
+    assert_eq!(yes_again["draft"]["schedule1"][0]["income_payment"], 0.0);
+    assert_eq!(yes_again["draft"]["schedule1"][0]["tax_rate"], 0.0);
+}
+
+#[test]
+fn v2018_1601fq_legacy_dormant_schedule_1_is_cleared_on_open_and_said_once() {
+    setup();
+    use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+    let yes = fill(
+        "1601FQ",
+        &open("1601FQ", 1)["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    let typed = fill(
+        "1601FQ",
+        &yes["draft"],
+        json!({"txtAmtIncomePay0": "42", "txtRate0": "10"}),
+    );
+    let saved = save("1601FQ", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["tax_relief"] = Value::Null;
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+    let first = open("1601FQ", 1);
+    assert_eq!(first["draft"]["schedule1"], json!([]));
+    for key in gate::keys() {
+        assert_eq!(first["locks"][&key], gate::LOCK, "{key}");
+    }
+    let notes = first["notes"].as_array().unwrap();
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    let key = notes[0]["key"].as_str().unwrap().to_string();
+    assert!(
+        key.starts_with(&format!(
+            "notice_seen:1601fq_schedule1:row-00000000000000000001:{id}:"
+        )),
+        "{key}"
+    );
+    assert_eq!(
+        notes[0]["text"],
+        "Schedule 1 row row-00000000000000000001 was cleared: it applies only when item 13 is Yes."
+    );
+    assert_eq!(open("1601FQ", 1)["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        call("screen_form_notes_seen", vec![json(json!([key.clone()]))]).unwrap(),
+        json!([key])
+    );
+    assert_eq!(open("1601FQ", 1)["notes"], json!([]));
+}

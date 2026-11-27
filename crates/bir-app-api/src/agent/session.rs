@@ -3975,6 +3975,75 @@ mod tests {
     }
 
     #[test]
+    fn form_open_records_a_dormant_1601fq_schedule1_clearing_by_stable_row() {
+        use bir_core::forms::form_1601fq::{Form1601FqDraft, Form1601FqTaxRelief};
+
+        let mut session = session();
+        call(
+            &mut session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        let id;
+        {
+            let db = session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form1601FqDraft::new_from_profile(&profile, 2026, 1);
+            draft.set_tax_relief(Some(Form1601FqTaxRelief::SpecialRate));
+            draft.schedule1[0].income_payment = 42.0;
+            draft.schedule1[0].tax_rate = 10.0;
+            draft.recompute();
+            id = db.save_queueable_draft(&draft).unwrap();
+
+            // A pre-gate row: Item 13 is shut while its typed Schedule 1 row
+            // is still in the stored bytes. The save path itself would clear
+            // it, so this legacy state is written as bytes.
+            let stored: String = db
+                .conn_for_tests()
+                .query_row(
+                    "SELECT data_json FROM form_drafts WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let mut legacy: Value = serde_json::from_str(&stored).unwrap();
+            legacy["tax_relief"] = Value::Null;
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+                    (serde_json::to_string(&legacy).unwrap(), id),
+                )
+                .unwrap();
+        }
+
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1601FQ", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        assert_eq!(session.open.as_ref().unwrap().draft["schedule1"], json!([]));
+        let db = session.lock_db().unwrap();
+        let pending = db
+            .settings_with_prefix("notice_pending:1601fq_schedule1:")
+            .unwrap();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        assert!(
+            pending[0]
+                .0
+                .starts_with("notice_pending:1601fq_schedule1:row-00000000000000000001:"),
+            "{pending:?}"
+        );
+        assert!(
+            pending[0].1.contains("row-00000000000000000001"),
+            "{pending:?}"
+        );
+    }
+
+    #[test]
     fn form_fill_records_an_assistant_recompute_clearing_from_the_stored_row() {
         let mut session = session();
         call(
