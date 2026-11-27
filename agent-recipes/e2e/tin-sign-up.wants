@@ -1,0 +1,23 @@
+# Tin-status 2: the first taxpayer on the New taxpayer form, as smoke sign-up but typing the 9-digit TIN
+# root (the segmented control takes 9 digits; the 14-digit param never validates). $tin_field resolves to its text box.
+# does not move the keyboard focus on the macOS strict adapter (the type lands nowhere, reproducibly). $tin_field is the TIN's text box, whose id NSH generates: the runner reads it from a snapshot first.
+click new-tp-start-trigger
+wait_until $start_option --timeout-ms 5000
+click $start_option
+type $tin_field $tin_root
+click new-tp-name
+type new-tp-name $name
+type new-tp-registered_address $address
+click new-tp-zip_code-trigger
+wait_until new-tp-zip_code-search --timeout-ms 5000
+type new-tp-zip_code-search $zip
+wait_until new-tp-zip_code-opt-$zip --timeout-ms 5000
+click new-tp-zip_code-opt-$zip --screenshot
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-search --timeout-ms 5000
+type new-tp-rdo_code-search $rdo
+wait_until new-tp-rdo_code-opt-$rdo --timeout-ms 5000
+click new-tp-rdo_code-opt-$rdo --screenshot
+click new-tp-save --screenshot
+wait_until nav-home --timeout-ms 10000
+assert context-pill name="Tax profile: $name" --screenshot

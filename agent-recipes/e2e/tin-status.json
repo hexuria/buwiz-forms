@@ -1,0 +1,56 @@
+{
+ "v": 1,
+ "description": "D2 proof: the TIN status chips, the Activate flow, and the Queue sheet, against the mock account server.",
+ "params": {
+  "tin": "00012345300000",
+  "tin_root": "000123453",
+  "branch": "00000",
+  "name": "Juana Santos",
+  "email": "juana@example.com",
+  "year": "2024",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "birth": "01/15/1990",
+  "bstart": "01/01/2020"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "file": "tin-sign-up.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "buwiz-sign-in",
+   "file": "buwiz-sign-in.wants",
+   "required": true,
+   "sign_in": true
+  },
+  {
+   "name": "tin-chips",
+   "file": "tin-chips.wants",
+   "required": true
+  },
+  {
+   "name": "tin-queue-sheet",
+   "file": "tin-queue-sheet.wants",
+   "required": true,
+   "send": true
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+# Tin-status 3: the chips on the tax-profile page for a TIN the account does not have: Not activated and the
+# Activate button, on the panel too, in light and dark (tb-theme toggles the window's theme). Pressing Activate
+# adds the TIN at the mock and the chips refresh to the new state.
+click nav-home
+wait_until context-pill --timeout-ms 8000
+click context-pill
+wait_until panel-tin-status-state --timeout-ms 10000 --screenshot
+click context-pill
+wait_until tp-copy-tin --timeout-ms 8000
+wait_until tp-tin-status-state --timeout-ms 10000
+assert tp-tin-status-state --screenshot
+click tb-theme
+wait_until tp-tin-status-activate --timeout-ms 5000 --screenshot
+click tb-theme
+click tp-tin-status-activate
+wait_until tp-tin-status-state --timeout-ms 10000 --screenshot

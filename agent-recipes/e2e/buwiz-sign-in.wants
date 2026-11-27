@@ -1,0 +1,19 @@
+# Tin-status 2: sign in to Buwiz against the local mock (the dev build's account server is localhost:3008).
+# The gate opens from Settings > Account's Sign in. The mock accepts any email; its code is always 246810.
+click account-row
+wait_until menu-account --timeout-ms 5000
+click menu-account
+wait_until settings-nav-account --timeout-ms 10000
+click settings-nav-account
+wait_until settings-account-sign-in --timeout-ms 8000
+click settings-account-sign-in
+wait_until gate-start-continue --timeout-ms 8000 --screenshot
+click gate-start-continue
+wait_until gate-email --timeout-ms 5000
+click gate-email
+type gate-email juana@example.com
+click gate-continue
+wait_until gate-code-boxes --timeout-ms 10000 --screenshot
+click gate-code-boxes
+key gate-code-page 246810
+wait_until gate-code-boxes --timeout-ms 15000 --absent

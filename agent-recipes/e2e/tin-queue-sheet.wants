@@ -1,0 +1,20 @@
+# Tin-status 4: the Queue sheet. The signed-in account does not have this TIN activated, so queue_form_draft's
+# screen path asks account_tins(0), the list is fresh and complete, and Queue stops on the sheet without queueing.
+# (The profile prerequisites for 2551Q are set first, as in queue.wants.)
+click recent-tin-00012345300000-form-2551q-year-2024-period-1
+wait_until fp-queue --timeout-ms 20000
+click fp-set-profile-business_start_date
+wait_until fp-set-business_start_date-value-1991-01-01 --timeout-ms 5000
+click fp-set-business_start_date-value-1991-01-01
+click fp-set-profile-income_tax_election
+wait_until fp-set-income_tax_election-value-itemized --timeout-ms 5000
+click fp-set-income_tax_election-value-itemized
+wait_until fp-queue --timeout-ms 20000
+click fp-queue
+wait_until tin-queue-blocked --timeout-ms 15000 --screenshot
+assert tin-blocked-close
+click tb-theme
+assert tin-blocked-close --screenshot
+click tb-theme
+click tin-blocked-close
+wait_until tin-queue-blocked --absent --timeout-ms 5000
