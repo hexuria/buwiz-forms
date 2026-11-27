@@ -798,17 +798,17 @@ impl Form1601FqDraft {
         let ordinal = |id: &StableInstanceId| id.as_str().strip_prefix("row-")?.parse::<u64>().ok();
         let mut used = BTreeSet::new();
         let mut next = self.schedule1_next_row_ordinal.max(1);
-        for row in &self.schedule1 {
+        for row in &mut self.schedule1 {
             if let Some(id) = row.instance_id.as_ref() {
-                used.insert(id.clone());
                 if let Some(ordinal) = ordinal(id) {
                     next = next.max(ordinal + 1);
                 }
-            }
-        }
-        for row in &mut self.schedule1 {
-            if row.instance_id.is_some() {
-                continue;
+                if used.insert(id.clone()) {
+                    continue;
+                }
+                // A duplicated imported id cannot name a row: the first row
+                // keeps it and this row receives a fresh one below.
+                row.instance_id = None;
             }
             loop {
                 let id =
@@ -2049,6 +2049,23 @@ mod tests {
             "a three-decimal amount must still be refused"
         );
     }
+    #[test]
+    fn duplicate_schedule_1_instance_ids_are_not_kept() {
+        let mut draft = sample();
+        let duplicate = StableInstanceId::parse("row-00000000000000000001").unwrap();
+        draft.schedule1[0].instance_id = Some(duplicate.clone());
+        draft.schedule1[1].instance_id = Some(duplicate.clone());
+        draft.ensure_schedule1_row_ids();
+        assert_eq!(draft.schedule1[0].instance_id.as_ref(), Some(&duplicate));
+        assert_ne!(draft.schedule1[1].instance_id.as_ref(), Some(&duplicate));
+        let ids: BTreeSet<_> = draft
+            .schedule1
+            .iter()
+            .filter_map(|row| row.instance_id.clone())
+            .collect();
+        assert_eq!(ids.len(), FORM_1601FQ_SCHEDULE1_ROWS);
+    }
+
     #[test]
     fn schedule_1_never_keeps_rows_while_item_13_is_not_yes() {
         let mut draft = sample();

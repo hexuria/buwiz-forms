@@ -410,7 +410,9 @@ fn write(cell: Cell, draft: &mut Value, value: &Value) -> Result<(), String> {
             form.set_schedule1_atc(row, &code);
             store(draft, &form)
         }
-        Cell::Q2Gated | Cell::FqTax25 | Cell::FqSched1Input | Cell::FqSched1Computed => Ok(()),
+        Cell::Q2Gated | Cell::FqTax25 | Cell::FqSched1Input | Cell::FqSched1Computed => {
+            unreachable!("the gate cells are handled before the ordinary row write")
+        }
     }
 }
 
@@ -555,12 +557,7 @@ fn rows<'a>(draft: &'a Value, list: &str) -> Vec<&'a Value> {
 fn typed_schedule_1(draft: &Value) -> usize {
     rows(draft, "schedule1")
         .into_iter()
-        .filter(|row| {
-            row["treaty_code"] != "NA"
-                || row["atc_code"] != "NA"
-                || amount_of(row, "income_payment") != 0.0
-                || amount_of(row, "tax_rate") != 0.0
-        })
+        .filter(|row| bir_core::forms::agent::draft_locks::schedule1_1601fq::typed_row(row))
         .count()
 }
 
