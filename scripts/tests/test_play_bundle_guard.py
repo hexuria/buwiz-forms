@@ -1,9 +1,15 @@
 """scripts/play_bundle_guard.py: the checks `just play-bundle` makes before it builds a store bundle."""
 
+import contextlib
+import io
+import os
+import re
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import play_bundle_guard as guard  # noqa: E402
@@ -108,6 +114,132 @@ class ContainerEnvTests(unittest.TestCase):
                 self.assertIn(key, problems[0])
         # Set but empty is nothing to bake.
         self.assertEqual(guard.container_env_refusals(dump({**PROFILE, "BUWIZ_SERVER_URL": ""}), PROFILE), [])
+
+
+class ArgsTests(unittest.TestCase):
+    def test_a_number_and_the_flag_in_any_order(self):
+        self.assertEqual(guard.parse_args([]), (None, False))
+        self.assertEqual(guard.parse_args(["28"]), ("28", False))
+        self.assertEqual(guard.parse_args(["--allow-dotenv", "28"]), ("28", True))
+        self.assertEqual(guard.parse_args(["2100000000"]), ("2100000000", False))
+
+    def test_anything_else_is_refused(self):
+        for args in (["0"], ["028"], ["2100000001"], ["28", "29"], ["-1"], ["1e3"], ["28;rm"], ["*"], ["--allow"],
+                     [""], ["28 29"]):
+            with self.subTest(args=args), self.assertRaises(guard.Refusal):
+                guard.parse_args(args)
+
+    def test_the_recipe_reads_one_line(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(guard.main(["args", "--", "28", "--allow-dotenv"]), 0)
+        self.assertEqual(out.getvalue(), "28 1\n")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(guard.main(["args"]), 0)
+        self.assertEqual(out.getvalue(), "- 0\n")
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(guard.main(["args", "--", "$(touch x)"]), 1)
+
+    def test_the_recipe_passes_its_arguments_without_word_splitting_or_globbing(self):
+        recipe = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        body = recipe[recipe.index("play-bundle *args:"):]
+        body = body[:body.index("\n\n")]
+        self.assertIn("read -ra ARGV <<< {{quote(args)}}", body)
+        self.assertNotIn("for arg in {{args}}", body)
+
+
+class DotenvReportTests(unittest.TestCase):
+    def test_names_only_and_the_google_client_only_with_store_gmail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".env").write_text("GOOGLE_CLIENT_ID=secret-id\nexport GOOGLE_CLIENT_SECRET=value-of-the-secret\n"
+                                            "BUWIZ_SERVER_URL=http://x\nOTHER=1\n")
+            with mock.patch.dict(os.environ, {"STORE_GMAIL": ""}):
+                report = guard.dotenv_report(Path(tmp))
+            self.assertIn("bakes in: nothing", report)
+            self.assertIn("GOOGLE_CLIENT_ID", report)
+            self.assertNotIn("secret-id", report)
+            with mock.patch.dict(os.environ, {"STORE_GMAIL": "1"}):
+                report = guard.dotenv_report(Path(tmp))
+            self.assertIn("bakes in: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET", report)
+            self.assertNotIn("value-of-the-secret", report)
+
+
+class MoreContainerEnvTests(unittest.TestCase):
+    def test_another_release_profile_setting_or_rustflags_is_refused(self):
+        for key, value in (("CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS", "true"),
+                           ("CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS", "true"),
+                           ("RUSTFLAGS", "-C debug-assertions"),
+                           ("CARGO_ENCODED_RUSTFLAGS", "-Cdebug-assertions"),
+                           ("CARGO_BUILD_RUSTFLAGS", "-C opt-level=0"),
+                           ("CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS", "-C debug-assertions")):
+            with self.subTest(key=key):
+                problems = guard.container_env_refusals(dump({**PROFILE, key: value}), PROFILE)
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn(key, problems[0])
+
+    def test_an_unreadable_environment_is_one_clear_line(self):
+        self.assertEqual(guard.container_env_refusals("", PROFILE),
+                         ["the build environment could not be read (see the error above)"])
+
+    def test_the_google_client_only_with_store_gmail(self):
+        values = dump({**PROFILE, "GOOGLE_CLIENT_ID": "x", "GOOGLE_CLIENT_SECRET": "y"})
+        with mock.patch.dict(os.environ, {"STORE_GMAIL": ""}):
+            self.assertEqual(len(guard.container_env_refusals(values, PROFILE)), 2)
+        with mock.patch.dict(os.environ, {"STORE_GMAIL": "1"}):
+            self.assertEqual(guard.container_env_refusals(values, PROFILE), [])
+
+
+class CargoConfigTests(unittest.TestCase):
+    def refusals(self, text):
+        return guard.cargo_config_refusals(Path("config.toml"), text)
+
+    def test_what_env_cannot_show_is_refused(self):
+        for text in ('[profile.release]\ndebug-assertions = true\n',
+                     '[profile.release.package."*"]\nopt-level = 0\n',
+                     'profile.release.lto = false\n',
+                     '[profile]\nrelease = { debug-assertions = true }\n',
+                     '[build]\nrustflags = ["-C", "debug-assertions"]\n',
+                     'build.rustflags = ["-C", "opt-level=0"]\n',
+                     "[target.'cfg(target_os = \"android\")']\nrustflags = [\"-Cdebug-assertions\"]\n",
+                     '[target.aarch64-linux-android]\nrustflags = ["-Cdebug-assertions"]\n',
+                     '[env]\nBUWIZ_SERVER_URL = "http://localhost:3008"\n',
+                     '[env]\nGOOGLE_CLIENT_ID = { value = "x", force = true }\n',
+                     'env.BUWIZ_ANDROID_DEV = "1"\n'):
+            with self.subTest(text=text):
+                self.assertTrue(self.refusals(text), text)
+
+    def test_ordinary_settings_pass(self):
+        text = ('[build]\njobs = 4\n[net]\ngit-fetch-with-cli = true\n[env]\nOPENSSL_STATIC = "1"\n'
+                '[target.aarch64-linux-android]\nlinker = "clang"\n[profile.dev]\ndebug = 0\n# [profile.release]\n')
+        self.assertEqual(self.refusals(text), [])
+
+    def test_the_files_cargo_reads_are_the_folders_above_and_cargo_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".cargo").mkdir()
+            (root / ".cargo/config.toml").write_text("[profile.release]\nlto = false\n")
+            (root / "home").mkdir()
+            (root / "home/config").write_text("[env]\nBUWIZ_ACCOUNT_URL = \"x\"\n")
+            build = root / "work/app/nsh"
+            build.mkdir(parents=True)
+            files = guard.cargo_config_files([build], root / "home")
+            self.assertEqual(files, [(root / ".cargo/config.toml").resolve(), root / "home/config"])
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(guard.main(["cargo-config", str(build), "--cargo-home", str(root / "home")]), 1)
+            self.assertIn(".cargo/config.toml:1: [profile.release]", err.getvalue())
+            self.assertIn("home/config:2: [env] BUWIZ_ACCOUNT_URL", err.getvalue())
+
+
+class CompileTimeNamesTests(unittest.TestCase):
+    def test_the_list_holds_every_variable_the_sources_bake_in(self):
+        root = Path(__file__).resolve().parents[2]
+        found = set()
+        for folder in (root / "crates", root / "nsh/src"):
+            for path in folder.rglob("*.rs"):
+                found |= set(re.findall(r'option_env!\("([A-Z0-9_]+)"\)', path.read_text(encoding="utf-8")))
+        self.assertTrue(found)
+        self.assertEqual(found - set(guard.COMPILE_TIME), set())
 
 
 if __name__ == "__main__":
