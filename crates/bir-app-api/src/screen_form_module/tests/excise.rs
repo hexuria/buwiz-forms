@@ -18,7 +18,7 @@ const FORMS: &[(&str, &str, &str)] = &[
     ("2200M", "2200m-2018", "2200m-v2018"),
     ("2200P", "2200p-2020", "2200p-v2020"),
     ("2200S", "2200s-2018", "2200s-v2018"),
-    ("2200T", "2200t-2022", "2200t-v2020"),
+    ("2200T", "2200t-2020", "2200t-v2020"),
 ];
 
 fn repo_file(path: &str) -> String {
@@ -469,7 +469,7 @@ fn pr11_2200a_and_2200t_part_iv_rows_take_and_file_their_details() {
         }
         // 2200T's printed captions agree (writer-cells.json joins them).
         if code == "2200T" {
-            let captions = printed_captions("2200t-2022");
+            let captions = printed_captions("2200t-2020");
             assert_eq!(
                 captions[&format!("{p}cashBank")],
                 "25 Cash/Bank Debit Memo: Drawee Bank/Agency"
@@ -713,15 +713,15 @@ fn form_2200a_others_due_is_editable_and_reproduces_official_sample() {
 }
 
 /// 2200T R3.3, preview.0, manual-0, manual-1: Schedule 1 is Part V with
-/// the rows the August 2022 sheet prints (the ones writer-cells.json joins),
-/// by ATC, the Tobacco Inspection Fees and the Others rows at its end; the
-/// v2020 program's 2020 and 2021 rows, which the sheet does not print, are
-/// under Not on the printed sheet. No part is named Page 3.
+/// every fixed row the January 2020 sheet prints (the ones writer-cells.json
+/// joins), by ATC, including the 2020-2023 rate rows, the item 6 vapor
+/// brackets, the Tobacco Inspection Fees and the Others rows at its end. No
+/// part is named Page 3.
 #[test]
-fn pr11_2200t_schedule_1_prints_the_2022_rows_and_keeps_the_older_ones_apart() {
+fn pr11_2200t_schedule_1_prints_every_fixed_row_on_the_january_2020_sheet() {
     let p = "frm2200Tv2020:";
     let boxes = drawn("2200T");
-    let captions = printed_captions("2200t-2022");
+    let captions = printed_captions("2200t-2020");
     let mut printed_rows = 0;
     for (key, atc, _product, period, rate) in fixed_rows("2200T") {
         let cell = format!("{p}txtSched1_{key}_Export");
@@ -729,20 +729,13 @@ fn pr11_2200t_schedule_1_prints_the_2022_rows_and_keeps_the_older_ones_apart() {
             .iter()
             .find(|d| d.key == cell)
             .unwrap_or_else(|| panic!("{cell}"));
-        if captions.contains_key(&cell) {
-            printed_rows += 1;
-            assert!(
-                at.part.starts_with("Part V · Schedule 1"),
-                "{cell}: {}",
-                at.part
-            );
-        } else {
-            assert_eq!(at.part, "Not on the printed sheet", "{cell}");
-            assert!(
-                key.contains("2020") || key.contains("2021") || key.starts_with("6_"),
-                "{key}"
-            );
-        }
+        assert!(captions.contains_key(&cell), "{cell}");
+        printed_rows += 1;
+        assert!(
+            at.part.starts_with("Part V · Schedule 1"),
+            "{cell}: {}",
+            at.part
+        );
         assert!(
             at.item.contains(&atc) || at.row_label.contains(&atc),
             "{cell}: {}",
@@ -753,7 +746,7 @@ fn pr11_2200t_schedule_1_prints_the_2022_rows_and_keeps_the_older_ones_apart() {
             assert!(at.row_label.starts_with(&period), "{cell}");
         }
     }
-    assert_eq!(printed_rows, 30, "22 dated rows and 8 inspection fees");
+    assert_eq!(printed_rows, 59, "51 product rows and 8 inspection fees");
     let others = placed("2200T", &format!("{p}txtSched1_xt_others1_Export"));
     assert!(others.part.starts_with("Part V · Schedule 1"));
     assert_eq!(others.item, "Others (specify)");
@@ -1111,7 +1104,7 @@ fn pr11_part_ii_is_one_tick_box_per_printed_item() {
         ),
         (
             "2200T",
-            "2200t-2022",
+            "2200t-2020",
             ["optPayment_1", "optPayment_2", "optPayment_3"],
             "frm2200Tv2020:paymentOther",
         ),
@@ -1266,7 +1259,7 @@ fn pr11_labels_read_as_printed() {
         ),
         (
             "2200T",
-            "2200t-2022",
+            "2200t-2020",
             [
                 "frm2200Tv2020:txtDateMonth",
                 "frm2200Tv2020:txtDateDay",
@@ -1304,7 +1297,7 @@ fn pr11_labels_read_as_printed() {
             "2200m-2018",
             "frm2200M:txtPg1Pt1I7RegisteredAddress",
         ),
-        ("2200T", "2200t-2022", "frm2200Tv2020:registeredAddress"),
+        ("2200T", "2200t-2020", "frm2200Tv2020:registeredAddress"),
     ] {
         let at = placed(code, key);
         assert_eq!(at.no, "7");
@@ -1335,7 +1328,7 @@ fn pr11_labels_read_as_printed() {
         "Contact Number (Landline/Cellphone No.)"
     );
     assert_eq!(t("cashDate").label, "Date (MM/DD/YYYY)");
-    let captions = printed_captions("2200t-2022");
+    let captions = printed_captions("2200t-2020");
     assert_eq!(
         captions["frm2200Tv2020:phoneNumber"],
         "8 Contact Number (Landline/Cellphone No.)"
