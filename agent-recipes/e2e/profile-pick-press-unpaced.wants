@@ -7,6 +7,7 @@ wait_until tp-sec-branch-edit --timeout-ms 5000
 click tp-sec-branch-edit
 wait_until tp-branch-rdo_code-search --timeout-ms 5000 --screenshot
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-opt-047 --timeout-ms 5000
 click tp-branch-rdo_code-opt-047 --screenshot
@@ -14,6 +15,7 @@ wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="047 — East Makati"
 wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-opt-048 --timeout-ms 5000
 click tp-branch-rdo_code-opt-048
@@ -21,6 +23,7 @@ wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="048 — West Makati"
 wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-opt-049 --timeout-ms 5000
 click tp-branch-rdo_code-opt-049
@@ -28,6 +31,7 @@ wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="049 — North Makati"
 wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-opt-050 --timeout-ms 5000
 click tp-branch-rdo_code-opt-050
@@ -35,6 +39,7 @@ wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="050 — South Makati"
 wait_until tp-branch-rdo_code-note --absent --timeout-ms 2000
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-opt-047 --timeout-ms 5000
 click tp-branch-rdo_code-opt-047 --screenshot
@@ -57,6 +62,7 @@ click tp-branch-rdo_code-trigger --screenshot
 wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="047 — East Makati"
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-list --timeout-ms 3000
 click tp-branch-name
@@ -64,6 +70,7 @@ wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="047 — East Makati"
 wait_until tp-branch-rdo_code-note --timeout-ms 2000
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-list --timeout-ms 3000
 click tp-branch-name
@@ -71,6 +78,7 @@ wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="047 — East Makati"
 wait_until tp-branch-rdo_code-note --timeout-ms 2000
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search makati
 wait_until tp-branch-rdo_code-list --timeout-ms 3000
 click tp-branch-name
@@ -78,6 +86,7 @@ wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="047 — East Makati"
 wait_until tp-branch-rdo_code-note --timeout-ms 2000 --screenshot
 click tp-branch-rdo_code-search
+key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search zzzz
 wait_until tp-branch-rdo_code-list --timeout-ms 3000
 click tp-branch-save --screenshot
@@ -85,6 +94,7 @@ wait_until tp-branch-save --absent --timeout-ms 5000 --screenshot
 click tp-sec-address-edit
 wait_until tp-address-zip_code-search --timeout-ms 5000
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-opt-1200 --timeout-ms 5000
 click tp-address-zip_code-opt-1200 --screenshot
@@ -92,6 +102,7 @@ wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --absent --timeout-ms 2000
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-opt-1224 --timeout-ms 5000
 click tp-address-zip_code-opt-1224
@@ -99,6 +110,7 @@ wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1224 — Makati Commercial Ctr."
 wait_until tp-address-zip_code-note --absent --timeout-ms 2000
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-opt-1200 --timeout-ms 5000
 click tp-address-zip_code-opt-1200
@@ -106,6 +118,7 @@ wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --absent --timeout-ms 2000
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-opt-1224 --timeout-ms 5000
 click tp-address-zip_code-opt-1224
@@ -113,6 +126,7 @@ wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1224 — Makati Commercial Ctr."
 wait_until tp-address-zip_code-note --absent --timeout-ms 2000
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-opt-1200 --timeout-ms 5000
 click tp-address-zip_code-opt-1200 --screenshot
@@ -135,6 +149,7 @@ click tp-address-zip_code-trigger --screenshot
 wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-list --timeout-ms 3000
 click tp-address-phone
@@ -142,6 +157,7 @@ wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --timeout-ms 2000
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-list --timeout-ms 3000
 click tp-address-phone
@@ -149,6 +165,7 @@ wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --timeout-ms 2000
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati
 wait_until tp-address-zip_code-list --timeout-ms 3000
 click tp-address-phone
@@ -156,6 +173,7 @@ wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --timeout-ms 2000 --screenshot
 click tp-address-zip_code-search
+key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search zzzz
 wait_until tp-address-zip_code-list --timeout-ms 3000
 click tp-address-save --screenshot
