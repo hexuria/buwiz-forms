@@ -5008,6 +5008,84 @@ fn claim_input_group<'a>(
     }
 }
 
+fn claim_writer_key_inputs<'a>(
+    tags: &[InputTag],
+    grouped: &BTreeMap<&str, Vec<usize>>,
+    cells: &WriterCells,
+    key: &'a str,
+    xbox_active: bool,
+    claims: &mut BTreeMap<usize, Vec<(&'a str, bool)>>,
+) {
+    for (writer, ids) in &cells.joins {
+        if writer == key {
+            for id in ids {
+                claim_input_group(grouped, claims, key, true, id);
+            }
+        }
+    }
+    for join in &cells.money_joins {
+        if join.writer_key == key {
+            for pair in &join.cells {
+                claim_input_group(grouped, claims, key, true, &pair.peso_html_id);
+                if let Some(cent) = &pair.cent_html_id {
+                    claim_input_group(grouped, claims, key, true, cent);
+                }
+            }
+        }
+    }
+    for join in &cells.peso_joins {
+        if join.writer_key == key {
+            for id in &join.html_ids {
+                claim_input_group(grouped, claims, key, true, id);
+            }
+        }
+    }
+    for join in &cells.date_joins {
+        if join.writer_key == key {
+            claim_input_group(grouped, claims, key, true, &join.mm_html_id);
+            if let Some(dd) = &join.dd_html_id {
+                claim_input_group(grouped, claims, key, true, dd);
+            }
+            claim_input_group(grouped, claims, key, true, &join.yyyy_html_id);
+        }
+    }
+    if xbox_active {
+        for join in &cells.xbox_joins {
+            if join.writer_key != key {
+                continue;
+            }
+            for id in &join.html_ids {
+                if let Some(index) = xbox_input(tags, grouped, id) {
+                    claims.entry(index).or_default().push((key, true));
+                }
+            }
+        }
+    }
+}
+
+/// Inputs claimed by more than one writer key in a print map. Xbox claims
+/// are topological here: a map that puts two writer keys on one box is
+/// conflicting even when a particular draft checks only one of them.
+#[cfg(test)]
+fn writer_input_claim_conflicts<'a>(
+    html: &str,
+    cells: &'a WriterCells,
+) -> Vec<(usize, BTreeSet<&'a str>)> {
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut claims: BTreeMap<usize, Vec<(&str, bool)>> = BTreeMap::new();
+    for key in cells.joined_keys() {
+        claim_writer_key_inputs(&tags, &grouped, cells, key, true, &mut claims);
+    }
+    claims
+        .into_iter()
+        .filter_map(|(index, claims)| {
+            let keys: BTreeSet<&str> = claims.into_iter().map(|(key, _)| key).collect();
+            (keys.len() > 1).then_some((index, keys))
+        })
+        .collect()
+}
+
 /// Resolve field keys whose writes target the same input before any byte
 /// replacement is made. A writer key wins over raw cell-id addressing of
 /// the same input; two writer keys for one input are refused. This is the
@@ -5033,55 +5111,12 @@ fn resolve_overlapping_input_writes(
         // A writer key that is itself a stamped input name takes the direct
         // write path, not a writer-cell join path.
         claim_input_group(&grouped, &mut claims, key, true, key);
-        for (writer, ids) in &cells.joins {
-            if writer == key {
-                for id in ids {
-                    claim_input_group(&grouped, &mut claims, key, true, id);
-                }
-            }
-        }
-        for join in &cells.money_joins {
-            if join.writer_key == key {
-                for pair in &join.cells {
-                    claim_input_group(&grouped, &mut claims, key, true, &pair.peso_html_id);
-                    if let Some(cent) = &pair.cent_html_id {
-                        claim_input_group(&grouped, &mut claims, key, true, cent);
-                    }
-                }
-            }
-        }
-        for join in &cells.peso_joins {
-            if join.writer_key == key {
-                for id in &join.html_ids {
-                    claim_input_group(&grouped, &mut claims, key, true, id);
-                }
-            }
-        }
-        for join in &cells.date_joins {
-            if join.writer_key == key {
-                claim_input_group(&grouped, &mut claims, key, true, &join.mm_html_id);
-                if let Some(dd) = &join.dd_html_id {
-                    claim_input_group(&grouped, &mut claims, key, true, dd);
-                }
-                claim_input_group(&grouped, &mut claims, key, true, &join.yyyy_html_id);
-            }
-        }
-        for join in &cells.xbox_joins {
-            // A radio's Yes and No keys may share one cell without writing
-            // together: only a checked xbox key makes its mark.
-            if join.writer_key != key
-                || !fields
-                    .get(key)
-                    .is_some_and(|value| writer_is_checked(value))
-            {
-                continue;
-            }
-            for id in &join.html_ids {
-                if let Some(index) = xbox_input(&tags, &grouped, id) {
-                    claims.entry(index).or_default().push((key, true));
-                }
-            }
-        }
+        // At print time only a checked xbox key makes its mark; the static
+        // writer-map invariant treats the same targets as conflicting claims.
+        let xbox_active = fields
+            .get(key)
+            .is_some_and(|value| writer_is_checked(value));
+        claim_writer_key_inputs(&tags, &grouped, cells, key, xbox_active, &mut claims);
     }
     let mut resolved = fields.clone();
     for (index, claims) in claims {
@@ -13314,6 +13349,55 @@ mod donor_estate_print_tests {
                 && html.contains("text-align:right;justify-content:flex-end"),
             "13-digit 1702Q Part II amount must print as right-aligned comma-formatted whole-peso plain rectangle"
         );
+    }
+
+    #[test]
+    fn no_frozen_sheet_input_is_claimed_by_two_writer_keys() {
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let mut slugs: Vec<String> = std::fs::read_dir(root)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                entry
+                    .path()
+                    .join("writer-cells.json")
+                    .exists()
+                    .then(|| entry.file_name().to_string_lossy().into_owned())
+            })
+            .collect();
+        slugs.sort();
+        assert_eq!(slugs.len(), 43);
+        for slug in slugs {
+            let html = bundle(&slug).unwrap().html;
+            let cells = writer_cells(&slug).unwrap();
+            let conflicts = writer_input_claim_conflicts(html, &cells);
+            if let Some((index, keys)) = conflicts.first() {
+                let mut keys = keys.iter();
+                let first = keys.next().unwrap();
+                let second = keys.next().unwrap();
+                panic!(
+                    "{slug}: input {} is claimed by writer keys {first} and {second}",
+                    input_tags(html)[*index].name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn two_writer_keys_claiming_one_input_are_found_in_the_map_scan() {
+        let html = r#"<input type="text" id="p1c1-i" name="p1c1">"#;
+        let mut cells = WriterCells::empty();
+        cells
+            .joins
+            .insert("writer.one".to_string(), vec!["p1c1".to_string()]);
+        cells
+            .joins
+            .insert("writer.two".to_string(), vec!["p1c1".to_string()]);
+        let conflicts = writer_input_claim_conflicts(html, &cells);
+        let (index, keys) = conflicts.first().expect("one conflicting input");
+        assert_eq!(input_tags(html)[*index].name, "p1c1");
+        assert!(keys.contains("writer.one"));
+        assert!(keys.contains("writer.two"));
     }
 
     #[test]
