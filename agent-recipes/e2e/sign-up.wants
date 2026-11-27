@@ -1,9 +1,11 @@
 # Smoke 2, desktop: the first taxpayer on the New taxpayer form (setup-start.wants opened it), with the ZIP and RDO
-# pickers. $tin_field is the TIN's text box, whose id NSH generates: the runner reads it from a snapshot first.
+# pickers. The name box is clicked before typing: after the segmented TIN control a bare type
+# does not move the keyboard focus on the macOS strict adapter (the type lands nowhere, reproducibly). $tin_field is the TIN's text box, whose id NSH generates: the runner reads it from a snapshot first.
 click new-tp-start-trigger
 wait_until $start_option --timeout-ms 5000
 click $start_option
 type $tin_field $tin
+click new-tp-name
 type new-tp-name $name
 type new-tp-registered_address $address
 click new-tp-zip_code-trigger

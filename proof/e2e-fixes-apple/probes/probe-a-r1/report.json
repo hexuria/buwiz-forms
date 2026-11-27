@@ -1,0 +1,47 @@
+{
+ "suite": "probe-mac-a",
+ "target": "macos",
+ "started": "20261126-231357",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-231357",
+ "cli_version": "0.4.1",
+ "app_commit": "8aa31f3c",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 658,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "probe-a",
+   "status": "fail",
+   "ms": 2236,
+   "note": null,
+   "file": "agent-recipes/e2e/probe-a.json",
+   "step": "s8",
+   "error": "node `new-tp-name` value: expected \"E2E SMOKE TAXPAYER\", got Some(\"\")",
+   "error_code": "assert_failed",
+   "line": null,
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-231357/02-probe-a/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261126-231357/02-probe-a/failure-tree.json"
+  }
+ ]
+}

@@ -18,6 +18,7 @@ pub mod hooks;
 pub mod hotkey_combo;
 pub mod legacy_import_module;
 pub mod logging;
+pub mod owner_lock_module;
 pub mod packaged;
 pub mod print_sheet;
 pub mod screen_form_module;

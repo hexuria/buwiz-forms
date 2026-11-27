@@ -64,6 +64,8 @@ impl Harness {
             .env("GPUI_AGENT_ADDR", &self.addr)
             .env("BIR_DATABASE_PATH", &self.db)
             .env("EBIR_TEST_ENV", "1")
+            // The keychain is off for the child whatever features its build has.
+            .env("BUWIZ_NO_KEYCHAIN", "1")
             .env("BIR_HEADLESS_LOG", &self.log)
             .env("BIR_HEADLESS_PID", &self.pid)
             .env("GPUI_AGENT_LOG_REQUESTS", "1")

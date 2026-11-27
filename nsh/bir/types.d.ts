@@ -951,3 +951,28 @@ export interface LegacyFiledReturn {
 }
 /** The returns imported from the old program for one branch's TIN (12 to 14 digits, dashes allowed), oldest import first; none for a TIN the import never named. */
 export function list_legacy_filed_returns(tin: string): LegacyFiledReturn[];
+
+export interface OwnerLockState {
+    /** An account's room is open on this device. */
+    room_open: boolean;
+    /** This device's lock store was lost (device.db missing or made again): never unlocked, and no PIN may be set until the emailed reset. */
+    store_lost: boolean;
+    /** The room has an owner PIN. */
+    has_pin: boolean;
+    /** When the owner PIN was set (RFC 3339), or null. */
+    set_at: string | null;
+    /** This app's own check unlocked the room since its last lock, or the room has no PIN (nothing to unlock). */
+    unlocked: boolean;
+    /** Wrong owner PINs in a row. */
+    failures: number;
+    /** Seconds left of the owner's current wait; 0 when none. */
+    wait_secs: number;
+}
+/** The owner lock of the open room; reads the device store only. */
+export function owner_lock_state(): OwnerLockState;
+/** Set the owner PIN (exactly 4 digits) of the open room: one with no PIN yet, or one unlocked with its current PIN; refused while the store is lost. Hashed off the engine thread. */
+export function set_owner_pin(pin: string): Promise<null>;
+/** Check the owner PIN under the persisted limit, hashed off the engine thread: true on a match, false on a miss; a running wait (or the miss that starts one) is an error that says how long. */
+export function verify_owner_pin(pin: string): Promise<boolean>;
+/** Lock the open room now. False, and nothing done, in a room with no owner PIN. */
+export function lock_now(): boolean;
