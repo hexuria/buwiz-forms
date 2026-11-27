@@ -8,7 +8,16 @@ need gpui-agent "run the setup script: it installs gpui-agent-cli at the version
 need python3 "install Python 3"
 echo "app $(git rev-parse --short=8 HEAD), $(cargo install --list 2>/dev/null | grep '^gpui-agent-cli' || echo 'gpui-agent-cli: version unknown')"
 just e2e check smoke
+just e2e check rdo-row-press
 smoke() {
     # A dry-run test build only: the runner refuses the Queue recipe without these and --allow-send.
     EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BIR_SFTP_LIVE= just e2e "$1" smoke --allow-send "${@:2}"
+}
+# A desktop machine's default run: smoke, then rdo-row-press (the SearchPick combobox under a person's presses, the
+# #425 Windows case and #458). Both run; the run fails if either does.
+desktop_suites() {
+    local status=0
+    smoke "$@" || status=$?
+    just e2e "$1" rdo-row-press "${@:2}" || status=$?
+    return "$status"
 }

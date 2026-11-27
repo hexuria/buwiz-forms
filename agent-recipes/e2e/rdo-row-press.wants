@@ -96,3 +96,7 @@ click new-tp-name
 wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
 assert new-tp-rdo_code-search value="047 — East Makati"
 wait_until new-tp-rdo_code-note --timeout-ms 2000 --screenshot
+# Leave the form as sign-up expects it: a press back in the RDO box clears its note (the box's focus clears it), with
+# nothing typed, so the next press elsewhere only closes.
+click new-tp-rdo_code-search
+wait_until new-tp-rdo_code-note --absent --timeout-ms 2000

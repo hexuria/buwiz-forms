@@ -97,17 +97,24 @@ click tp-branch-name
 wait_until tp-branch-rdo_code-list --absent --timeout-ms 3000
 assert tp-branch-rdo_code-search value="047 — East Makati"
 wait_until tp-branch-rdo_code-note --timeout-ms 2000 --screenshot
-# Error line under the box: text that fits nothing (the list then shows only its "Nothing matches" line, <box>-nothing), then a press on Save below it. The blur adds the box's
-# not-taken line during that press; the press must still save (the section closes) on the first click.
+# Error line, RDO: text that fits nothing (the list then shows only its "Nothing matches" line, <box>-nothing). In the
+# branch section that line covers Save, as any open dropdown covers what is under it (gpui-agent refuses the press:
+# occluded_by), so a person leaves the box first and presses Save at once. The leaving settles at once (#458): the
+# list is gone and that press reaches Save on the first click. (The ZIP round below has Save clear of its list: there
+# the Save press is itself the blur.)
 click tp-branch-rdo_code-search
 key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search zzzz --key-delay-ms 80
 wait_until tp-branch-rdo_code-nothing --timeout-ms 3000
-# The open list (here only its "Nothing matches" line) covers Save, as any open dropdown does: leave the box first,
-# then press Save at once. The leaving settles at once (#458): the list is gone and the press reaches Save.
 click tp-branch-name
 click tp-branch-save --screenshot
 wait_until tp-branch-save --absent --timeout-ms 5000 --screenshot
+# What was saved: 047 kept, "zzzz" not taken.
+click tp-sec-branch-edit
+wait_until tp-branch-rdo_code-search --timeout-ms 5000
+assert tp-branch-rdo_code-search value="047 — East Makati"
+click tp-branch-cancel
+wait_until tp-branch-cancel --absent --timeout-ms 5000
 click tp-sec-address-edit
 wait_until tp-address-zip_code-search --timeout-ms 5000
 # Row press 1/5: 1200.
@@ -200,15 +207,22 @@ click tp-address-phone
 wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --timeout-ms 2000 --screenshot
-# Error line, ZIP: text that fits nothing, then Save below it, on the first click.
+# Error line, ZIP, the Save press is itself the blur (#458 review P1-5): text that fits nothing, then a press straight
+# on Save. In the address section the "Nothing matches" line covers the Phone box under ZIP, not Save (Email lies
+# between), so the press lands on Save; that press blurs the box, which settles (the not-taken line) during it, and
+# the press must still save on the first click. gpui-agent refuses an occluded target, so a layout that moved Save
+# under the list fails here rather than passing.
 click tp-address-zip_code-search
 key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search zzzz --key-delay-ms 80
 wait_until tp-address-zip_code-nothing --timeout-ms 3000
-# The open list (here only its "Nothing matches" line) covers Save, as any open dropdown does: leave the box first,
-# then press Save at once. The leaving settles at once (#458): the list is gone and the press reaches Save.
-click tp-address-phone
 click tp-address-save --screenshot
 wait_until tp-address-save --absent --timeout-ms 5000 --screenshot
+# What was saved: 1200 kept, "zzzz" not taken.
+click tp-sec-address-edit
+wait_until tp-address-zip_code-search --timeout-ms 5000
+assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+click tp-address-cancel
+wait_until tp-address-cancel --absent --timeout-ms 5000
 click tb-panel
 wait_until panel-open-profile --absent --timeout-ms 5000
