@@ -282,6 +282,9 @@ fn close_locked(session: &mut Session, kind: &CloseKind) -> CloseOutcome {
     };
     // The room path cache reads None once nothing is open (X1).
     bir_core::db::set_open_room_database(None);
+    // A held legacy scan is room-scoped state: no close — sign-out, server-ended, replacement —
+    // may leave one behind for the next session to import from.
+    crate::legacy_import_module::forget_scan();
     let owner_ended = match (&previous, kind) {
         (None, _) => false,
         (Some(_), CloseKind::OwnerEnds) => true,
