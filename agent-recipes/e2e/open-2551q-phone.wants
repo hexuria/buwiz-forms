@@ -12,6 +12,8 @@ wait_until tp-add-year-add --timeout-ms 5000
 click tp-add-year-add
 wait_until tp-forms-edit --timeout-ms 5000
 click tp-forms-edit
+wait_until tp-forms-search --timeout-ms 5000
+set_value tp-forms-search 2551
 wait_until tp-form-2551Q --timeout-ms 5000
 click tp-form-2551Q
 click tp-forms-save
