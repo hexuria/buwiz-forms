@@ -1,0 +1,157 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "sign-up",
+  "fingerprint": "fnv1a64:669208db8f599f05",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1315
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 425
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 773
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 494
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 924
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 419
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 461
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 38
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 446
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 748,
+      "screenshot": {
+        "path": "C:\\sheetpress\\repro-before\\02-sign-up\\012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 436
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 39
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 350
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 717,
+      "screenshot": {
+        "path": "C:\\sheetpress\\repro-before\\02-sign-up\\017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 700,
+      "screenshot": {
+        "path": "C:\\sheetpress\\repro-before\\02-sign-up\\018-s18.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 443,
+      "screenshot": {
+        "path": "C:\\sheetpress\\repro-before\\02-sign-up\\020-s20.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\sheetpress\\repro-before\\02-sign-up\\012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\sheetpress\\repro-before\\02-sign-up\\017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\sheetpress\\repro-before\\02-sign-up\\018-s18.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\sheetpress\\repro-before\\02-sign-up\\020-s20.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8853
+}

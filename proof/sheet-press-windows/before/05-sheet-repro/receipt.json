@@ -1,0 +1,75 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "sheet-repro",
+  "fingerprint": "fnv1a64:f7b6ea740f72e348",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1508
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 428
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1532
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 61
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 624
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 237,
+      "screenshot": {
+        "path": "C:\\sheetpress\\repro-before\\05-sheet-repro\\006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 82
+    },
+    {
+      "id": "s8",
+      "ok": false,
+      "error": "`node 9322` is offscreen",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 379,
+      "screenshot": {
+        "path": "C:\\sheetpress\\repro-before\\05-sheet-repro\\008-s8.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\sheetpress\\repro-before\\05-sheet-repro\\006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\sheetpress\\repro-before\\05-sheet-repro\\008-s8.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 4855
+}

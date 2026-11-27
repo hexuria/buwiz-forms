@@ -1,0 +1,68 @@
+{
+ "suite": "sheet-repro-suite",
+ "target": "windows",
+ "started": "20261127-140748",
+ "out": "C:\\sheetpress\\repro-before",
+ "cli_version": "0.4.1",
+ "app_commit": "43defa62",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 2081,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 8926,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 4108,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tax-year.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 9392,
+   "note": null,
+   "file": "agent-recipes\\e2e\\open-2551q-windows.wants"
+  },
+  {
+   "name": "sheet-repro",
+   "status": "fail",
+   "ms": 4980,
+   "note": null,
+   "file": "C:\\sheetpress\\sheet-repro.json",
+   "step": "s8",
+   "error": "`node 9322` is offscreen",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "C:\\sheetpress\\repro-before\\05-sheet-repro\\failure.png",
+   "tree": "C:\\sheetpress\\repro-before\\05-sheet-repro\\failure-tree.json"
+  }
+ ]
+}

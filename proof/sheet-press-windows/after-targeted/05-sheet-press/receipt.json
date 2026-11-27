@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-sheet-press",
+  "fingerprint": "fnv1a64:e281f71e13c21dbb",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1622
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 430
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1605
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 62
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 587
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 220,
+      "screenshot": {
+        "path": "C:\\sheetpress\\proof-after\\05-sheet-press\\006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 70
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 428
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1881
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 667,
+      "screenshot": {
+        "path": "C:\\sheetpress\\proof-after\\05-sheet-press\\010-s10.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 217,
+      "screenshot": {
+        "path": "C:\\sheetpress\\proof-after\\05-sheet-press\\011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 216
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\sheetpress\\proof-after\\05-sheet-press\\006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\sheetpress\\proof-after\\05-sheet-press\\010-s10.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\sheetpress\\proof-after\\05-sheet-press\\011-s11.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8010
+}

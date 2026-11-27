@@ -1,0 +1,69 @@
+{
+ "suite": "sheet-proof-suite",
+ "target": "windows",
+ "started": "20261127-142217",
+ "out": "C:\\sheetpress\\proof-after",
+ "cli_version": "0.4.1",
+ "app_commit": "43defa62",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 626,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 6703,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 4005,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tax-year.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 9479,
+   "note": null,
+   "file": "agent-recipes\\e2e\\open-2551q-windows.wants"
+  },
+  {
+   "name": "sheet-press",
+   "status": "pass",
+   "ms": 8027,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sheet-press.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "pass",
+   "ms": 2383,
+   "note": null,
+   "file": "agent-recipes\\e2e\\delete-row.wants"
+  }
+ ]
+}
