@@ -38,9 +38,9 @@ pub fn pid_path() -> PathBuf {
     if let Some(path) = env_path(PID_ENV) {
         return path;
     }
-    match std::env::var_os("BIR_DATABASE_PATH") {
-        Some(db) if !db.is_empty() => {
-            let db_path = PathBuf::from(db);
+    // Beside the named database only where single-room mode obeys it (accounts-and-lock I3); else the device folder.
+    match bir_core::db::single_room_database() {
+        Some(db_path) => {
             let mut name = db_path
                 .file_name()
                 .unwrap_or_else(|| std::ffi::OsStr::new("bir_data.db"))
@@ -48,20 +48,13 @@ pub fn pid_path() -> PathBuf {
             name.push(".headless.pid");
             db_path.with_file_name(name)
         }
-        _ => bir_core::platform::data_dir().join("bir-headless.pid"),
+        None => bir_core::platform::device_dir().join("bir-headless.pid"),
     }
 }
 
 fn default_log_dir() -> PathBuf {
-    match std::env::var_os("BIR_DATABASE_PATH") {
-        Some(db) if !db.is_empty() => PathBuf::from(db)
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("logs"),
-        _ => bir_core::platform::data_dir().join("logs"),
-    }
+    // The device folder is the named database's folder in single-room mode, else the data folder.
+    bir_core::platform::device_dir().join("logs")
 }
 
 fn env_path(name: &str) -> Option<PathBuf> {

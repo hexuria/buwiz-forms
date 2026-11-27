@@ -11,46 +11,39 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 ///
 /// Uses `%LOCALAPPDATA%\Taxman\eBIRForms` following Windows conventions.
 #[cfg(feature = "sqlcipher")]
-pub fn data_dir() -> PathBuf {
+pub(super) fn data_dir_path() -> Option<PathBuf> {
     if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-        let dir = PathBuf::from(local_app_data)
-            .join("Taxman")
-            .join("eBIRForms");
-        let _ = std::fs::create_dir_all(&dir);
-        return dir;
+        return Some(
+            PathBuf::from(local_app_data)
+                .join("Taxman")
+                .join("eBIRForms"),
+        );
     }
 
     // Fallback
-    if let Some(home) = std::env::var_os("USERPROFILE") {
-        let dir = PathBuf::from(home).join(".taxman-ebir");
-        let _ = std::fs::create_dir_all(&dir);
-        return dir;
-    }
-
-    PathBuf::from(".taxman-ebir")
+    std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join(".taxman-ebir"))
 }
 
 /// Returns the Windows application data directory of the plain-SQLite (NSH)
 /// build: `%LOCALAPPDATA%\dev.goldcoders.bir`.
 #[cfg(not(feature = "sqlcipher"))]
-pub fn data_dir() -> PathBuf {
+pub(super) fn data_dir_path() -> Option<PathBuf> {
     if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-        let dir = PathBuf::from(local_app_data).join(super::NSH_APP_ID);
-        let _ = std::fs::create_dir_all(&dir);
-        return dir;
+        return Some(PathBuf::from(local_app_data).join(super::NSH_APP_ID));
     }
 
     // Fallback
-    if let Some(home) = std::env::var_os("USERPROFILE") {
-        let dir = PathBuf::from(home)
+    std::env::var_os("USERPROFILE").map(|home| {
+        PathBuf::from(home)
             .join("AppData")
             .join("Local")
-            .join(super::NSH_APP_ID);
-        let _ = std::fs::create_dir_all(&dir);
-        return dir;
-    }
+            .join(super::NSH_APP_ID)
+    })
+}
 
-    PathBuf::from(".taxman-ebir")
+/// [`data_dir_path`], created if missing. Without either folder: `.taxman-ebir`, not created.
+pub fn data_dir() -> PathBuf {
+    super::create_data_dir(data_dir_path())
 }
 
 /// Returns the temporary directory.
