@@ -1,7 +1,11 @@
 # Smoke 5, phone (and any narrow window): the taxpayer files nothing yet (sign-up started from "Nothing yet"), so first a
 # tax year, then 2551Q ticked in Edit forms, then New return > 2551Q, the default period, opened. The narrow palette
 # searches tax profiles only (never forms), so the flow starts from the header's New return, not from Search.
-click home-tp-$tin_root
+click nb-search
+wait_until palette-input --timeout-ms 5000
+set_value palette-input E2E
+key palette-input Enter
+wait_until tp-tabs-forms --timeout-ms 8000
 wait_until tp-tabs-forms --timeout-ms 5000
 click tp-tabs-forms
 wait_until tp-add-year-open --timeout-ms 5000
