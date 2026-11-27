@@ -80,7 +80,6 @@
   },
   {
    "name": "sheet-press",
-   "desktop": "sheet-press.json",
    "windows": "sheet-press.json",
    "needs_cli": "0.4.1"
   },
