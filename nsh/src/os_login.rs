@@ -17,6 +17,11 @@
 #[cfg(any(windows, test))]
 mod windows;
 
+// The same for the Apple half: its LAError mapping is tested on every OS; its OS calls are macOS and iOS only, the
+// targets that link objc2-local-authentication.
+#[cfg(any(target_os = "macos", target_os = "ios", test))]
+mod apple;
+
 /// The app's main window title: nsh/nsh.json `window.title`, the value the kit gives the window, set by the build
 /// script (build.rs), which stops the build unless it is a non-empty, one-line string. Never a second copy of the
 /// string (PLAN W4). A3a-2 passes it to `prove_owner`, so the sheet belongs to the main window and never to a print
@@ -106,13 +111,24 @@ fn platform_prove_owner(reason: &str, window_title: &str) -> OwnerCheckResult {
     self::windows::prove_owner(reason, window_title)
 }
 
-// Every other target, until its half lands (Apple: ios-submission's `apple.rs`).
-#[cfg(not(windows))]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn platform_owner_check() -> OwnerCheck {
+    self::apple::owner_check()
+}
+
+// The sheet is the system's own on Apple: it needs no window of ours.
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn platform_prove_owner(reason: &str, _window_title: &str) -> OwnerCheckResult {
+    self::apple::prove_owner(reason)
+}
+
+// Every other target: Linux, Android (until its kit route).
+#[cfg(not(any(windows, target_os = "macos", target_os = "ios")))]
 fn platform_owner_check() -> OwnerCheck {
     OwnerCheck::None
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos", target_os = "ios")))]
 fn platform_prove_owner(_reason: &str, _window_title: &str) -> OwnerCheckResult {
     OwnerCheckResult::Unavailable
 }
@@ -209,10 +225,14 @@ mod tests {
             // WinRT's own user name and password prompt, in the same Security_Credentials_UI feature as Hello.
             ["Credential", "Picker"].concat(),
             ["Cred", "Pack"].concat(),
+            // Apple: only `.deviceOwnerAuthentication`, never a biometrics-only or companion policy here (E1 adds its
+            // own functions in its own PR). AppKit's and UIKit's password fields are caught by "TextField" above.
+            ["DeviceOwnerAuthentication", "With"].concat(),
         ];
         for source in [
             include_str!("os_login.rs"),
             include_str!("os_login/windows.rs"),
+            include_str!("os_login/apple.rs"),
         ] {
             for line in source
                 .lines()

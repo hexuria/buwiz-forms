@@ -95,9 +95,12 @@ robius-authentication = { version = "0.1.1", features = ["async"] }
 # UIPrintInteractionController (iOS) prints it.
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 objc2 = "0.6.5"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSData", "NSArray", "NSGeometry"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSData", "NSArray", "NSGeometry", "NSError"] }
 block2 = "0.6.2"
 dispatch2 = "0.3.1"
+# The device owner check, `.deviceOwnerAuthentication` in the system's own sheet (src/os_login/apple.rs): LAContext
+# and LAError only. robius-authentication's 0.2 copy goes when B3 removes `mac_login`.
+objc2-local-authentication = { version = "0.3.2", default-features = false, features = ["std", "LAContext", "LAError", "block2"] }
 
 # CGRect for the hidden web view on iOS (objc2-foundation names it NSRect on macOS only). Already in the lock.
 [target.'cfg(target_os = "ios")'.dependencies]
