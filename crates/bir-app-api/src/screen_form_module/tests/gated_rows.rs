@@ -33,6 +33,31 @@ fn note_keys(opened: &Value) -> Vec<String> {
 }
 
 #[test]
+fn gated_row_lock_notes_are_looked_up_by_form_and_key() {
+    setup();
+    let rt = open("1702RT", 0);
+    assert_eq!(
+        rt["lock_notes"]["frm1702RT:txtPg2Pt4I51TaxPaidInReturn"],
+        json!("Item 51 is for an amended return.")
+    );
+    let mx = open("1702MX", 0);
+    assert_eq!(
+        mx["lock_notes"]["frm1702MX:txtPg2Sc3It27A"],
+        json!("Schedule 3 item 27 is for an amended return.")
+    );
+    let dst = open("2000", 6);
+    assert_eq!(
+        dst["lock_notes"]["frm2000:txtTax15A"],
+        json!("Item 15A is for an amended return.")
+    );
+    let annual_a = open("1701A", 0);
+    assert_eq!(
+        annual_a["lock_notes"]["frm1701A:txt23B"],
+        json!("Column B is for a joint return.")
+    );
+}
+
+#[test]
 fn form_2552_tax_relief_specification_is_gated_and_said_once() {
     setup();
     let spec = "frm2552:txtPg1Pt1I10TaxReliefSpec";

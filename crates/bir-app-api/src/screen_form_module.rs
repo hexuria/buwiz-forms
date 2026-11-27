@@ -3780,7 +3780,7 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     if let Some(note) = rows_annual_corporate::live_lock_note(reason) {
         return note;
     }
-    if let Some(note) = bir_core::forms::agent::gated_rows::lock_note(reason) {
+    if let Some(note) = bir_core::forms::agent::gated_rows::lock_note(code, key) {
         return note;
     }
     match lock_note(reason) {

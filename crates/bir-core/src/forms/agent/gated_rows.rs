@@ -534,40 +534,11 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     locks
 }
 
-/// The longer sentence drawn under a locked box.
-pub fn lock_note(reason: &str) -> Option<&'static str> {
-    [
-        G1701_SPOUSE_NAME,
-        G1701_ITEM27_DESC,
-        G1701_FOREIGN,
-        G1701_SCHED5_A,
-        G1701_SCHED5_B,
-        G1701A_JOINT,
-        G1701A_JOINT_AMENDED,
-        G1701A_JOINT_FOREIGN,
-        G1701A_GRADUATED,
-        G1701A_EIGHT,
-        G1701A_FOREIGN,
-        G1701MS_COMPENSATION,
-        G1701MS_B1,
-        G1701MS_ITEMIZED,
-        G1701MS_RELIEF,
-        G1701MS_EIGHT,
-        G1701MS_PREVIOUS,
-        G1706_CLASS_OTHER,
-        G1707_TRANSACTION_OTHER,
-        G1707_INSTALLMENT,
-        G1702MX_REGIME,
-        G1702MX_MCIT,
-        G1702RT_MCIT,
-        G1702RT_AMENDED,
-        G2000_OTHER,
-        G2000_BALANCE,
-        G2552_RELIEF,
-    ]
-    .into_iter()
-    .find(|gate| gate.lock == reason)
-    .map(|gate| gate.note)
+/// The longer sentence drawn under a locked box, looked up by the box
+/// itself. Reasons are shared across forms, so the reason string is never
+/// enough to choose the note.
+pub fn lock_note(form: &str, key: &str) -> Option<&'static str> {
+    gate_of(form, key).map(|gate| gate.note)
 }
 
 /// One clearing a save or fill just made.
