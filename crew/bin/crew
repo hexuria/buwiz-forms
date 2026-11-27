@@ -71,19 +71,33 @@ def permission_path(path):
     return str(Path(path).resolve()).replace(os.sep, "/")
 
 
+def permission_path_forms(path):
+    normal = permission_path(path)
+    if normal.startswith("//"):
+        return [normal]
+    alternate = ("/" + normal) if normal.startswith("/") else ("//" + normal)
+    return [normal, alternate]
+
+
 def claude_allowed_tools(tree, role_dir):
-    tree = permission_path(tree)
-    role_dir = permission_path(role_dir)
     git_words = ("status", "diff", "log", "show", "add", "commit", "switch", "checkout", "merge",
                  "stash", "rev-parse", "ls-files", "branch", "restore")
-    parts = [
-        "Read", "Glob", "Grep",
-        "Edit({0}/**)".format(tree), "Write({0}/**)".format(tree),
-        "Edit({0}/**)".format(role_dir), "Write({0}/**)".format(role_dir),
-    ]
+    # these stop an honest worker's accident; a worker outside a sandbox can write what its operating-system account can.
+    parts = ["Read", "Glob", "Grep"]
+    for form in permission_path_forms(tree):
+        parts.extend(["Edit({0}/**)".format(form), "Write({0}/**)".format(form)])
+    for form in permission_path_forms(role_dir):
+        parts.extend(["Edit({0}/**)".format(form), "Write({0}/**)".format(form)])
     parts.extend("Bash(git {0}:*)".format(name) for name in git_words)
     parts.append("Bash(git fetch origin)")
-    parts.append("Bash({0} crew/bin/crew push:*)".format(python_command_name()))
+    for python in ("python3", "python"):
+        parts.extend([
+            "Bash({0} -m unittest:*)".format(python),
+            "Bash({0} scripts/tests/:*)".format(python),
+            "Bash({0} crew/bin/crew lint)".format(python),
+            "Bash({0} crew/bin/crew sync --check)".format(python),
+            "Bash({0} crew/bin/crew push:*)".format(python),
+        ])
     parts.extend([
         "Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr checks:*)",
         "Bash(gh pr diff:*)", "Bash(gh pr create:*)", "Bash(gh run view:*)",
@@ -94,27 +108,38 @@ def claude_allowed_tools(tree, role_dir):
 
 
 def claude_disallowed_tools(tree, gitdir, common_dir):
-    tree = permission_path(tree)
-    gitdir = permission_path(gitdir)
-    common_dir = permission_path(common_dir)
+    # these stop an honest worker's accident; a worker outside a sandbox can write what its operating-system account can.
     parts = [
         "Edit(crew/bin/**)", "Write(crew/bin/**)",
         "Edit(.git/**)", "Write(.git/**)",
         "Edit(**/.git/**)", "Write(**/.git/**)",
-        "Edit({0}/crew/bin)".format(tree), "Write({0}/crew/bin)".format(tree),
-        "Edit({0}/crew/bin/**)".format(tree), "Write({0}/crew/bin/**)".format(tree),
-        "Edit({0}/.git)".format(tree), "Write({0}/.git)".format(tree),
-        "Edit({0}/.git/**)".format(tree), "Write({0}/.git/**)".format(tree),
-        "Edit({0}/**/.git)".format(tree), "Write({0}/**/.git)".format(tree),
-        "Edit({0}/**/.git/**)".format(tree), "Write({0}/**/.git/**)".format(tree),
-        "Edit({0})".format(gitdir), "Write({0})".format(gitdir),
-        "Edit({0}/**)".format(gitdir), "Write({0}/**)".format(gitdir),
-        "Edit({0})".format(common_dir), "Write({0})".format(common_dir),
-        "Edit({0}/**)".format(common_dir), "Write({0}/**)".format(common_dir),
+    ]
+    for form in permission_path_forms(tree):
+        parts.extend([
+            "Edit({0}/crew/bin)".format(form), "Write({0}/crew/bin)".format(form),
+            "Edit({0}/crew/bin/**)".format(form), "Write({0}/crew/bin/**)".format(form),
+            "Edit({0}/.git)".format(form), "Write({0}/.git)".format(form),
+            "Edit({0}/.git/**)".format(form), "Write({0}/.git/**)".format(form),
+            "Edit({0}/**/.git)".format(form), "Write({0}/**/.git)".format(form),
+            "Edit({0}/**/.git/**)".format(form), "Write({0}/**/.git/**)".format(form),
+        ])
+    for form in permission_path_forms(gitdir):
+        parts.extend([
+            "Edit({0})".format(form), "Write({0})".format(form),
+            "Edit({0}/**)".format(form), "Write({0}/**)".format(form),
+        ])
+    for form in permission_path_forms(common_dir):
+        parts.extend([
+            "Edit({0})".format(form), "Write({0})".format(form),
+            "Edit({0}/**)".format(form), "Write({0}/**)".format(form),
+        ])
+    parts.extend([
         "Bash(git push:*)", "Bash(gh pr merge:*)", "Bash(gh pr close:*)",
         "Bash(gh run cancel:*)", "Bash(gh release:*)", "Bash(git tag:*)",
         "Bash(cargo:*)", "Bash(nsh:*)",
-    ]
+        "Bash(git * --output*)", "Bash(git * -o *)", "Bash(git format-patch*)",
+        "Bash(git archive*)", "Bash(git bundle*)", "Bash(git config*)", "Bash(git worktree*)",
+    ])
     return ",".join(parts)
 
 
@@ -174,10 +199,24 @@ def expand_path(value, root):
     return path
 
 
+def settings_file_root(root):
+    root = Path(root)
+    if (root / "crew.local.ini").exists():
+        return root
+    try:
+        main_root = git_common_dir(root).parent
+    except CrewError:
+        return root
+    if (main_root / "crew.local.ini").exists():
+        return main_root
+    return root
+
+
 def load_settings(root):
     root = Path(root)
+    settings_root = settings_file_root(root)
     parser = configparser.ConfigParser(interpolation=None)
-    parser.read(str(root / "crew.local.ini"))
+    parser.read(str(settings_root / "crew.local.ini"))
 
     def value(section, key, default=""):
         if parser.has_section(section) and parser.has_option(section, key):
@@ -194,15 +233,15 @@ def load_settings(root):
                 engine = candidate
                 break
     return Settings(
-        state_dir=expand_path(state_value, root),
+        state_dir=expand_path(state_value, settings_root),
         state_remote=value("crew", "state_remote", ""),
         state_branch=value("crew", "state_branch", "crew-state") or "crew-state",
-        commit_identity=value("crew", "commit_identity", ""),
+        commit_identity=os.environ.get("CREW_COMMIT_IDENTITY") or value("crew", "commit_identity", ""),
         holder=value("crew", "holder", "conductor") or "conductor",
         engine=engine,
         devin_command=value("engine.devin", "command", "devin") or "devin",
         devin_model=value("engine.devin", "model", "swe-2-1-max"),
-        devin_config=expand_path(value("engine.devin", "config", "~/.config/devin/config.json"), root),
+        devin_config=expand_path(value("engine.devin", "config", "~/.config/devin/config.json"), settings_root),
         claude_command=value("engine.claude", "command", "claude") or "claude",
         claude_model=value("engine.claude", "model", ""),
         fleet_command=value("fleet", "command", ""),
@@ -335,8 +374,9 @@ def call_process(argv, *args, **kwargs):
     return subprocess.call(argv, *args, **kwargs)
 
 
-def compose_prompt(root, settings, role_name, task_text=""):
+def compose_prompt(root, settings, role_name, task_text="", tree=None):
     root = Path(root)
+    tree = Path(tree).resolve() if tree is not None else root
     role_path = root / "crew" / "roles" / (role_name + ".md")
     if not role_path.exists():
         raise CrewError("missing role file: {0}".format(role_path))
@@ -346,7 +386,7 @@ def compose_prompt(root, settings, role_name, task_text=""):
     state_role = settings.state_dir / "roles" / role.name
     header = "\n".join([
         "You are the '{0}' worker of the launch crew.".format(role.name),
-        "Repository root: {0}".format(root),
+        "Your worktree: {0}".format(tree),
         "State folder: {0}".format(state_role),
         "When a step needs the launcher, run the crew launcher (`crew/bin/crew`) with Python.",
     ])
@@ -473,7 +513,7 @@ def run_logged(argv, cwd, log_path, env=None, input_text=None):
 
 def git_rev_parse_path(tree, flag):
     try:
-        result = run_process([tool_path("git"), "-C", str(tree), "rev-parse", flag],
+        result = run_process([tool_path("git"), "-C", str(tree), "rev-parse", "--path-format=absolute", flag],
                              capture_output=True, text=True, check=False)
     except OSError as exc:
         raise CrewError("cannot run git to inspect the worktree: {0}".format(exc))
@@ -494,11 +534,22 @@ def git_admin_dir(tree):
     return git_rev_parse_path(tree, "--git-dir")
 
 
+def same_checkout_path(first, second):
+    first_text = str(Path(first).resolve())
+    second_text = str(Path(second).resolve())
+    if os.name == "nt" or sys.platform == "darwin":
+        return first_text.casefold() == second_text.casefold()
+    return first_text == second_text
+
+
 def worker_tree(root, args):
     if not args.worktree:
         raise CrewError("crew run refuses the conductor's own checkout; pass --worktree naming a different git worktree")
     tree = user_path(args.worktree, os.getcwd())
-    if tree.resolve() == Path(root).resolve():
+    top = git_rev_parse_path(tree, "--show-toplevel")
+    if not same_checkout_path(top, tree):
+        raise CrewError("crew run worktree must be the top level of a git worktree: {0}".format(tree))
+    if same_checkout_path(top, root):
         raise CrewError("crew run refuses the conductor's own checkout; pass --worktree naming a different git worktree")
     if git_common_dir(tree) != git_common_dir(root):
         raise CrewError("crew run worktree must be a different git worktree of the same repository")
@@ -522,15 +573,24 @@ def devin_permissions(tree, role_dir, gitdir, common_dir):
     crew_file_denies = [
         "Write({0}/crew/bin)".format(tree), "Write({0}/crew/bin/**)".format(tree),
     ]
+    # Python remains narrow here, but no command allow-list is a credential fence: the fence is
+    # the restricted token, branch protection or the sandbox.
+    python_rules = []
+    for python in ("python3", "python"):
+        python_rules.extend([
+            "Exec({0} -m unittest)".format(python),
+            "Exec({0} scripts/tests/)".format(python),
+            "Exec({0} crew/bin/crew lint)".format(python),
+            "Exec({0} crew/bin/crew sync --check)".format(python),
+            "Exec({0} crew/bin/crew push)".format(python),
+        ])
+    # these stop an honest worker's accident; a worker outside a sandbox can write what its operating-system account can.
     return {
         "allow": [
             "Write({0})".format(tree), "Write({0})".format(role_dir),
-        ] + git_read_commit + [
-            # Python remains narrow here, but no command allow-list is a credential fence: the fence is
-            # the restricted token, branch protection or the sandbox.
-            "Exec({0} crew/bin/crew push)".format(python_command_name()),
-            "Exec(grep)", "Exec(sed)", "Exec(ls)", "Exec(cat)",
-            "Exec(head)", "Exec(tail)", "Exec(wc)", "Exec(find)", "Exec(diff)", "Exec(sort)",
+        ] + git_read_commit + python_rules + [
+            "Exec(grep)", "Exec(sed -n)", "Exec(ls)", "Exec(cat)",
+            "Exec(head)", "Exec(tail)", "Exec(wc)", "Exec(diff)", "Exec(sort)",
             "Exec(uniq)", "Exec(mkdir)", "Exec(date)", "Exec(gh pr view)", "Exec(gh pr list)",
             "Exec(gh pr checks)", "Exec(gh pr diff)", "Exec(gh pr create)", "Exec(gh run view)",
             "Exec(gh run list)", "Exec(gh issue list)", "Exec(gh issue view)", "Exec(gh issue create)",
@@ -538,7 +598,9 @@ def devin_permissions(tree, role_dir, gitdir, common_dir):
         "deny": git_file_denies + crew_file_denies + [
             "Exec(git push)", "Exec(gh pr merge)", "Exec(gh pr close)", "Exec(gh run cancel)",
             "Exec(gh release)", "Exec(gh secret)", "Exec(gh auth)", "Exec(cargo)", "Exec(nsh)",
-            "Exec(rm -rf)", "Exec(git tag)", "Exec(git config)", "Exec(git fetch)", "Exec(git rebase)",
+            "Exec(rm -rf)", "Exec(git tag)", "Exec(git fetch)", "Exec(git rebase)",
+            "Exec(git * --output*)", "Exec(git * -o *)", "Exec(git format-patch*)",
+            "Exec(git archive*)", "Exec(git bundle*)", "Exec(git config*)", "Exec(git worktree*)",
         ],
     }
 
@@ -581,7 +643,7 @@ WORKER_SIGNIN_ENV = ("CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME")
 WORKER_WINDOWS_ENV = ("SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA",
                       "USERPROFILE", "HOMEDRIVE", "HOMEPATH")
 WORKER_BASE_ENV = ("PATH", "HOME", "USER", "LANG", "TMPDIR", "TERM", "SHELL")
-WORKER_CREW_ENV = ("CREW_STATE_DIR", "CREW_ENGINE")
+WORKER_CREW_ENV = ("CREW_STATE_DIR", "CREW_ENGINE", "CREW_COMMIT_IDENTITY")
 
 
 def worker_environment(settings):
@@ -597,6 +659,8 @@ def worker_environment(settings):
             env[name] = os.environ[name]
     if settings.gh_token_env and os.environ.get(settings.gh_token_env):
         env["GH_TOKEN"] = os.environ[settings.gh_token_env]
+    env["CREW_COMMIT_IDENTITY"] = settings.commit_identity
+    env["CREW_STATE_DIR"] = str(settings.state_dir)
     author_name, author_address = commit_identity_parts(settings)
     env["GIT_AUTHOR_NAME"] = author_name
     env["GIT_AUTHOR_EMAIL"] = author_address
@@ -701,7 +765,7 @@ def cmd_run(args):
     inbox.mkdir(parents=True, exist_ok=True)
     outbox.mkdir(parents=True, exist_ok=True)
     log = outbox / (name + ".run.log")
-    prompt = compose_prompt(root, settings, role.name, task_text)
+    prompt = compose_prompt(root, settings, role.name, task_text, tree=tree)
     if args.sandbox:
         if engine != "devin":
             raise CrewError("the sandbox worker is devin engine only")
@@ -1101,35 +1165,87 @@ HOME_PREFIXES.append("/" + "private/var/")
 HOME_PREFIXES.append("C:" + "/" + "Users/")
 
 
-def repository_allowlist(root):
+GITHUB_OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
+GITHUB_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
+
+
+def github_repository_parts(token):
+    if "/" not in token:
+        return None
+    owner, name = token.split("/", 1)
+    if not GITHUB_OWNER_RE.match(owner) or not GITHUB_REPO_RE.match(name):
+        return None
+    if not re.search(r"[A-Za-z0-9]", name):
+        return None
+    return owner, name
+
+
+def remote_owner_repo(value):
+    identity = remote_identity(value)
+    if not identity.startswith("git:") or "/" not in identity[4:]:
+        return None
+    owner, name = identity[4:].split("/", 1)
+    return owner, name
+
+
+def checkout_remote_repositories(root):
+    remotes = git_text_optional(Path(root), ["remote"])
+    if remotes is None:
+        return []
+    found = []
+    for name in remotes.splitlines():
+        url = git_text_optional(Path(root), ["remote", "get-url", name.strip()])
+        if not url:
+            continue
+        owner_repo = remote_owner_repo(url.strip())
+        if owner_repo:
+            found.append(owner_repo)
+    return found
+
+
+def repository_context(root):
     allowed = set()
+    owners = set()
     path = Path(root) / "crew" / "REPOS.md"
     if path.exists():
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             if not line.startswith("|"):
                 continue
             cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-            if cells and re.match(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", cells[0]):
-                allowed.add(cells[0])
+            parts = github_repository_parts(cells[0]) if cells else None
+            if parts:
+                owner, _name = parts
+                allowed.add(cells[0].casefold())
+                owners.add(owner.casefold())
     allowed.update([
         "owner/" + "repo", "owner/" + "name",
         "hexuria/" + "buwiz-forms-html",
     ])
-    return allowed
+    for owner, name in checkout_remote_repositories(root):
+        allowed.add((owner + "/" + name).casefold())
+        owners.add(owner.casefold())
+    return allowed, owners
 
 
-def repository_token_flagged(token, allowed):
-    owner, _name = token.split("/", 1)
-    if token in allowed or owner.isupper():
+def repository_allowlist(root):
+    return repository_context(root)[0]
+
+
+def repository_token_flagged(token, allowed, known_owners=(), known_owner_in_line=False):
+    parts = github_repository_parts(token)
+    if not parts:
+        return False
+    owner, name = parts
+    if token.casefold() in allowed or owner.isupper():
         return False
     if owner in ("crew", "scripts", "docs", "crates", "nsh", "forms", "rules", "html-frozen",
                  "agent-recipes", "packaging", "assets", "fix", "feat", "ci", "test", "chore",
-                 "try", "docs", "origin", "private"):
+                 "try", "origin", "private"):
         return False
-    return True
+    return known_owner_in_line or owner.casefold() in known_owners or name.casefold() in known_owners
 
 
-def privacy_reasons(line, deny_words=(), allowed_repos=()):
+def privacy_reasons(line, deny_words=(), allowed_repos=(), known_owners=()):
     reasons = []
     for match in EMAIL_RE.finditer(line):
         address = match.group(0)
@@ -1165,14 +1281,23 @@ def privacy_reasons(line, deny_words=(), allowed_repos=()):
             reasons.append("private word {0} ({1} characters)".format(word[:2].lower(), len(word)))
             break
     without_urls = URL_RE.sub(" ", line)
-    for match in REPO_TOKEN_RE.finditer(without_urls):
+    owner_set = {owner.casefold() for owner in known_owners}
+    matches = list(REPO_TOKEN_RE.finditer(without_urls))
+    known_owner_in_line = False
+    for match in matches:
+        token = match.group(1).rstrip(".,;:)]")
+        parts = github_repository_parts(token)
+        if parts and parts[0].casefold() in owner_set:
+            known_owner_in_line = True
+            break
+    for match in matches:
         token = match.group(1).rstrip(".,;:)]")
         before = without_urls[match.start() - 1] if match.start() else ""
         after = without_urls[match.end()] if match.end() < len(without_urls) else ""
         owner = token.split("/", 1)[0]
         if before == "/" or after == "/" or owner.startswith("."):
             continue
-        if repository_token_flagged(token, set(allowed_repos)):
+        if repository_token_flagged(token, set(allowed_repos), owner_set, known_owner_in_line):
             reasons.append("private repository name")
             break
     return reasons
@@ -1210,14 +1335,14 @@ def lint_tree(root):
     findings = []
     root = Path(root)
     settings = load_settings(root)
-    allowed_repos = repository_allowlist(root)
+    allowed_repos, known_owners = repository_context(root)
     for path in lint_candidate_files(root):
         try:
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             continue
         for number, line in enumerate(lines, 1):
-            for reason in privacy_reasons(line, settings.deny_words, allowed_repos):
+            for reason in privacy_reasons(line, settings.deny_words, allowed_repos, known_owners):
                 findings.append((path, number, reason))
     return findings
 
@@ -1235,20 +1360,20 @@ def cmd_lint(args):
 
 
 SYNC_MARKER = "<!-- generated by crew sync -->"
-REVIEWER_CLAUDE_TOOLS = ("Read, Grep, Glob, Bash(git fetch origin:*), Bash(git diff:*), Bash(git log:*), "
-                         "Bash(git show:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr checks:*), "
-                         "Bash(gh run view:*)")
+REVIEWER_CLAUDE_TOOLS = "Read, Grep, Glob, Bash"
 
 
 def agent_body(role):
-    return "\n".join([
+    lines = [
         "Before any work, read crew/RULES.md.",
         "Before any work, read crew/roles/{0}.md.".format(role.name),
-        "Before any work, run `{0} crew/bin/crew state path` and read `<state>/roles/{1}/STATE.md` there.".format(
-            python_command_name(), role.name),
+        "Before any work, run the crew launcher: `crew/bin/crew` with Python (`python3 crew/bin/crew …`; on Windows `python crew/bin/crew …`). Use the `state path` command and read `<state>/roles/{0}/STATE.md` there.".format(role.name),
         "Follow those files in that order before any work.",
-        "Before you stop, write `<state>/roles/{0}/STATE.md` with what is open and what comes next.".format(role.name),
-    ]) + "\n"
+    ]
+    if role.name == "reviewer":
+        lines.append("When you use Bash, run only read-only git and gh commands (`git fetch`, `git diff`, `git log`, `git show`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`); write only your own outbox.")
+    lines.append("Before you stop, write `<state>/roles/{0}/STATE.md` with what is open and what comes next.".format(role.name))
+    return "\n".join(lines) + "\n"
 
 
 def agent_file_text(role, devin=False):
@@ -1376,17 +1501,17 @@ def validate_state_branch(settings):
 
 def remote_identity(value):
     text = value.strip()
-    match = re.match(r"^(?:[^@\s]+@)?([^:\s]+):([^/\s]+)/(.+?)(?:\.git)?/?$", text)
-    if match:
-        return "git:" + match.group(2) + "/" + match.group(3)
     parsed = urllib.parse.urlparse(text)
-    if parsed.scheme in ("http", "https", "ssh", "git"):
+    if parsed.scheme in ("http", "https", "ssh", "git") and parsed.netloc:
         parts = [part for part in parsed.path.split("/") if part]
         if len(parts) >= 2:
             name = parts[-1]
             if name.endswith(".git"):
                 name = name[:-4]
             return "git:" + parts[-2] + "/" + name
+    match = re.match(r"^(?:[^@\s]+@)?([^:\s]+):([^/\s]+)/(.+?)(?:\.git)?/?$", text)
+    if match:
+        return "git:" + match.group(2) + "/" + match.group(3)
     expanded = os.path.expanduser(text)
     if expanded.endswith(".git"):
         expanded = expanded[:-4]
@@ -1506,7 +1631,7 @@ def state_push(root, settings):
     names = git_text(state, ["diff", "--cached", "--name-only"], check=False)
     if names.returncode != 0:
         raise CrewError("git diff failed in the state checkout")
-    allowed_repos = repository_allowlist(root)
+    allowed_repos, known_owners = repository_context(root)
     findings = []
     for relative in names.stdout.splitlines():
         path = state / relative
@@ -1517,7 +1642,7 @@ def state_push(root, settings):
         except OSError:
             continue
         for number, line in enumerate(lines, 1):
-            for reason in privacy_reasons(line, settings.deny_words, allowed_repos):
+            for reason in privacy_reasons(line, settings.deny_words, allowed_repos, known_owners):
                 findings.append("{0}:{1}: {2}".format(relative.replace(os.sep, "/"), number, reason))
     if findings:
         raise CrewError("state push privacy check failed\n" + "\n".join(findings))
@@ -1594,7 +1719,11 @@ def cmd_push(args):
     if tag.returncode == 0:
         raise CrewError("crew push refuses a branch name that is also a tag: {0}".format(branch))
     validate_unpushed_identity(root, settings)
-    push = git_text(root, ["push", "origin", "HEAD:refs/heads/" + branch], check=False)
+    refspec = "HEAD:refs/heads/" + branch
+    if args.print_command:
+        print(refspec)
+        return 0
+    push = git_text(root, ["push", "--no-follow-tags", "origin", refspec], check=False)
     if push.returncode != 0:
         detail = (push.stderr or push.stdout).strip()
         detail = re.sub(r"(https?://)[^/@\s]+@", r"\1<credentials>@", detail)
@@ -1654,7 +1783,10 @@ def build_parser():
     verdict.add_argument("repo")
     verdict.add_argument("pr")
     verdict.set_defaults(func=cmd_verdict)
-    sub.add_parser("push", help="push the current feature branch to origin").set_defaults(func=cmd_push)
+    push = sub.add_parser("push", help="push the current feature branch to origin")
+    push.add_argument("--print", dest="print_command", action="store_true",
+                      help="print the push refspec without pushing")
+    push.set_defaults(func=cmd_push)
     return parser
 
 
