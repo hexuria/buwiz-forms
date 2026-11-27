@@ -1,0 +1,69 @@
+{
+  "pr": 425,
+  "head": "fef911cf8baf979e5cb399cf0bf93a4593e214e5",
+  "branch": "feat/searchpick-followups",
+  "nsh_pin": "8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf",
+  "nsh_pin_verified": true,
+  "target": "C:\\Users\\Administrator\\pr425-fef-click-proof\\target-fef911cf",
+  "scratch_db": "C:\\Users\\Administrator\\pr425-fef-click-proof\\scratch-fef911cf.db",
+  "window_size": "900x700",
+  "manual_video_editing": false,
+  "results": {
+    "row_pick": {
+      "passed": 5,
+      "total": 5,
+      "count": "5/5",
+      "rows_clicked": [
+        "047 — East Makati",
+        "048 — West Makati",
+        "049 — North Makati",
+        "050 — South Makati",
+        "047 — East Makati"
+      ],
+      "distinct_rows_caveat": "only four Makati RDO rows exist in the filtered list, so five mutually distinct rows were impossible",
+      "note_absent_in_all_runs": true
+    },
+    "chevron": {
+      "passed": 3,
+      "total": 3,
+      "count": "3/3",
+      "observed": "first real click closed the filtered list; second real click opened the full list"
+    },
+    "click_away": {
+      "passed": 3,
+      "total": 3,
+      "count": "3/3",
+      "note": "Y",
+      "note_text": "“makati” fits 4 choices. Pick one from the list. The box kept 047 — East Makati.",
+      "observed": "list closed, box restored 047 — East Makati, note stayed visible after the Phone click in every run"
+    },
+    "alt_tab": {
+      "result": "PASS",
+      "other_window": "Docker Desktop",
+      "box_after_return": "047 — East Makati",
+      "list_open_after_return": false,
+      "note_visible_after_return": true
+    },
+    "zip_regression": {
+      "result": "PASS",
+      "typed": "12",
+      "clicked_row": "1012 — Tondo South",
+      "note_visible": false
+    }
+  },
+  "defects": [],
+  "artifacts": {
+    "video": "C:\\Users\\Administrator\\pr425-fef-proof-artifacts\\pr425-fef911cf-clicks.mp4",
+    "click_away_png": "C:\\Users\\Administrator\\pr425-fef-proof-artifacts\\click-away-note.png",
+    "alt_tab_png": "C:\\Users\\Administrator\\pr425-fef-proof-artifacts\\alt-tab-back-note.png",
+    "chevron_png": "C:\\Users\\Administrator\\pr425-fef-proof-artifacts\\chevron-reopen.png",
+    "zip_png": "C:\\Users\\Administrator\\pr425-fef-proof-artifacts\\zip-click-pass.png"
+  },
+  "safety": {
+    "suites_run": false,
+    "queue_pressed": false,
+    "live_submit": false,
+    "pushed_or_committed": false,
+    "env": "BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1; GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/BIR_SFTP_LIVE unset"
+  }
+}
