@@ -17,5 +17,7 @@ type new-tp-rdo_code-search $rdo
 wait_until new-tp-rdo_code-opt-$rdo --timeout-ms 5000
 click new-tp-rdo_code-opt-$rdo --screenshot
 click new-tp-save --screenshot
-wait_until nav-home --timeout-ms 10000
-assert context-pill name="Tax profile: $name" --screenshot
+wait_until tp-tabs-profile --timeout-ms 10000
+click tab-home
+wait_until home-tp-$tin_root --timeout-ms 5000
+assert home-tp-$tin_root --screenshot

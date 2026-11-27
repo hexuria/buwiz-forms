@@ -187,6 +187,7 @@ exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network ho
   -e DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
   -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_AUTH_BYPASS=1 -e BIR_SFTP_DRY_RUN=1 \
   -e GPUI_AGENT -e GPUI_AGENT_ADDR -e GPUI_AGENT_TOKEN -e BIR_DATABASE_PATH -e BUWIZ_ANDROID_DEV \
+  -e CARGO -e NSH_REAL_CARGO \
   -e BUWIZ_SERVER_URL -e BUWIZ_ACCOUNT_URL -e BUWIZ_TRUST_KEYS \
   "${mounts[@]}" \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
