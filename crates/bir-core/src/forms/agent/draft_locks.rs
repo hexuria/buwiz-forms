@@ -1709,6 +1709,8 @@ pub mod schedule1_1601fq {
     pub const LOCK: &str = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
     pub const CLEARED_NOTE: &str =
         "Schedule 1's rows were cleared: they apply only when item 13 is Yes.";
+    const ITEM4_CLEARED_NOTE: &str =
+        "Schedule 1's rows were cleared: changing item 4 clears all computation fields.";
 
     fn stem_keys(stems: &[&str]) -> Vec<String> {
         (0..ROWS)
@@ -1789,14 +1791,15 @@ pub mod schedule1_1601fq {
         pub id: String,
         pub gate: String,
         pub text: String,
+        pub event_text: String,
     }
 
-    /// Every typed Schedule 1 row a closing Item 13 gate cleared, keyed by
-    /// the row's stable id rather than its transient vector index.
+    /// Every typed Schedule 1 row a closing Item 13 gate or an Item 4 Yes→No
+    /// recompute cleared, keyed by stable id rather than transient vector index.
     pub fn row_clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<RowClearance> {
-        if kind.form_code() != "1601FQ"
-            || (lock_reason(after).is_none() && after["any_tax_withheld"] != json!(false))
-        {
+        let item4_clearing = before["any_tax_withheld"] == json!(true)
+            && after["any_tax_withheld"] == json!(false);
+        if kind.form_code() != "1601FQ" || (!item4_clearing && lock_reason(after).is_none()) {
             return Vec::new();
         }
         let empty_after = |id: &str| {
@@ -1821,10 +1824,21 @@ pub mod schedule1_1601fq {
                 }
                 let gate = format!("1601fq_schedule1:{id}");
                 let position = index + 1;
-                let text = format!(
-                    "Schedule 1 row {position} was cleared: it applies only when item 13 is Yes."
-                );
-                Some(RowClearance { id, gate, text })
+                let (reason, event_text) = if item4_clearing {
+                    (
+                        "changing item 4 clears all computation fields",
+                        ITEM4_CLEARED_NOTE,
+                    )
+                } else {
+                    ("it applies only when item 13 is Yes", CLEARED_NOTE)
+                };
+                let text = format!("Schedule 1 row {position} was cleared: {reason}.");
+                Some(RowClearance {
+                    id,
+                    gate,
+                    text,
+                    event_text: event_text.to_string(),
+                })
             })
             .collect()
     }
@@ -1842,7 +1856,10 @@ pub mod schedule1_1601fq {
                 .map(|row| row.id.as_str())
                 .collect::<Vec<_>>()
                 .join(",");
-            (format!("1601fq_schedule1:{ids}"), CLEARED_NOTE.to_string())
+            (
+                format!("1601fq_schedule1:{ids}"),
+                first.event_text.clone(),
+            )
         };
         Some((gate, text))
     }
@@ -2531,8 +2548,31 @@ mod tests {
         assert_eq!(clearances.len(), 1, "{clearances:?}");
         assert_eq!(
             clearances[0].1,
-            "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
+            "Schedule 1 row 1 was cleared: changing item 4 clears all computation fields."
         );
+    }
+
+    #[test]
+    fn clearing_a_1601fq_schedule_row_by_hand_at_item_4_no_records_no_notice() {
+        use super::schedule1_1601fq as gate;
+        let row = json!({
+            "instance_id": "row-00000000000000000001",
+            "treaty_code": "NA",
+            "atc_code": "NA",
+            "income_payment": 42.0,
+            "tax_rate": 10.0,
+        });
+        let before = json!({
+            "any_tax_withheld": false,
+            "tax_relief": "special_rate",
+            "schedule1": [row],
+        });
+        let after = json!({
+            "any_tax_withheld": false,
+            "tax_relief": "special_rate",
+            "schedule1": [],
+        });
+        assert_eq!(gate::clearances(kind("1601FQ"), &before, &after), vec![]);
     }
 
     #[test]
