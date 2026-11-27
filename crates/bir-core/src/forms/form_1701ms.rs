@@ -813,9 +813,14 @@ impl Form1701MsColumn {
             self.deduction = Form1701MsDeduction::Unanswered;
         }
         match self.tax_option {
-            // incomeIsSubjectTo* locks Item 17 without picking a deduction;
-            // the itemized boxes themselves open for exempt/special rates.
-            Form1701MsTaxOption::Exempt | Form1701MsTaxOption::Special => {}
+            // incomeIsSubjectToTP ticks Itemized and then disables Item 17
+            // (BIR-Form1701MS.hta L10287-10288; spouse L10539). The itemized
+            // boxes themselves open for exempt/special rates in `itemized_open`.
+            Form1701MsTaxOption::Exempt | Form1701MsTaxOption::Special => {
+                if self.source.has_business() {
+                    self.deduction = Form1701MsDeduction::Itemized;
+                }
+            }
             Form1701MsTaxOption::EightPercent | Form1701MsTaxOption::Unanswered => {
                 self.deduction = Form1701MsDeduction::Unanswered;
             }
@@ -2294,8 +2299,8 @@ mod tests {
         let tp = &d.taxpayer;
         assert_eq!(
             tp.deduction,
-            Form1701MsDeduction::Osd,
-            "the disabled Item 17 answer is left as it was, not picked"
+            Form1701MsDeduction::Itemized,
+            "incomeIsSubjectToTP ticks Itemized before disabling Item 17 (BIR-Form1701MS.hta L10287-10288)"
         );
         assert_eq!(tp.gross_income, 1_500_000.0);
         assert_eq!(tp.special_tax_due, 75_000.0);

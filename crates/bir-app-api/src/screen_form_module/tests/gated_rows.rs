@@ -845,19 +845,39 @@ fn form_1701ms_special_rate_business_keeps_cost_of_sales() {
     let cost = "frm1701MS:txtCostofSalesNo8a";
     let sales = "frm1701MS:txtSalesRevenueNo5a";
     let opened = open("1701MS", 0);
-    let special = fill(
+    let joint = fill(
         "1701MS",
         &opened["draft"],
         json!({
+            "frm1701MS:civilStatus": "Married",
+            "frm1701MS:txtIfMarriedJointlyNo5": "true",
+        }),
+    );
+    let special = fill(
+        "1701MS",
+        &joint["draft"],
+        json!({
             "frm1701MS:txtTaxpayerNo11a": "true",
             "frm1701MS:txtTaxpayerNo12e": "true",
+            "frm1701MS:txtTaxpayerNo11a1": "true",
+            "frm1701MS:txtTaxpayerNo12d1": "true",
         }),
     );
     assert_eq!(special["draft"]["taxpayer"]["tax_option"], "special");
-    assert_eq!(
-        special["draft"]["taxpayer"]["deduction"], "unanswered",
-        "the official special-rate branch disables Item 17 rather than picking it"
-    );
+    assert_eq!(special["draft"]["spouse"]["tax_option"], "exempt");
+    // BIR-Form1701MS.hta incomeIsSubjectToTP L10287-10288 (spouse L10539)
+    // ticks Itemized before disabling Item 17, so the payload and print must
+    // keep that tick even though the filer cannot change the locked radio.
+    for (column, yes, no) in [
+        ("taxpayer", "frm1701MS:txtTaxpayerNo17a", "frm1701MS:txtTaxpayerNo17b"),
+        ("spouse", "frm1701MS:txtSpouseNo17a", "frm1701MS:txtSpouseNo17b"),
+    ] {
+        assert_eq!(special["draft"][column]["deduction"], "itemized", "{column}");
+        assert_eq!(payload_map("1701MS", &special["draft"])[yes], "true", "{yes}");
+        assert_eq!(payload_map("1701MS", &special["draft"])[no], "false", "{no}");
+        assert_eq!(printed_map("1701MS", &special["draft"])[yes], "true", "print {yes}");
+        assert_eq!(printed_map("1701MS", &special["draft"])[no], "false", "print {no}");
+    }
     let with_sales = fill("1701MS", &special["draft"], json!({ sales: "1000" }));
     let typed = fill("1701MS", &with_sales["draft"], json!({ cost: "400" }));
     assert!(
