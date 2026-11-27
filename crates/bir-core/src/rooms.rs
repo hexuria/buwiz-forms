@@ -455,6 +455,11 @@ impl DeviceStore {
         Ok(Self { conn })
     }
 
+    /// The store's own connection, for the legacy claim's record (A2), written at `synchronous = FULL`.
+    pub(crate) fn conn(&self) -> &Connection {
+        &self.conn
+    }
+
     /// `PRAGMA synchronous` of this connection (2 is FULL).
     pub fn synchronous(&self) -> Result<i64, DeviceStoreError> {
         Ok(self

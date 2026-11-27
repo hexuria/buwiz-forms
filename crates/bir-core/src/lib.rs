@@ -46,6 +46,7 @@ pub mod install_id;
 #[cfg(target_os = "macos")]
 #[cfg_attr(not(feature = "sqlcipher"), allow(dead_code))]
 mod keychain;
+pub mod legacy_claim;
 pub mod legacy_migration;
 pub mod lock_timing;
 pub mod log_files;
