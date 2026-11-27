@@ -113,8 +113,12 @@ node_modules/
 # stow repository instead. Build-critical files formerly under docs/ and
 # .codex/ now live in schemas/validation-rules/, scripts/reference/ and
 # rules/agent-boundaries/ — see .stow-README.md.
-/.claude/
+/.claude/*
+!/.claude/agents/
+!/.claude/skills/
 /.codex/
+/.crew/
+/crew.local.ini
 /AGENT.md
 /AGENTS.md
 /CLAUDE.md
