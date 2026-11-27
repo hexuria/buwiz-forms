@@ -1891,15 +1891,11 @@ fn a_room_open_is_refused_before_start_and_the_claim_still_finishes() {
     let claim = install.claim();
     let room = room_of(&claim, &a);
     install.layout.create_room_dir(&room).unwrap();
-    let before =
-        std::panic::catch_unwind(|| crate::rooms::open_room_guarded(&install.layout, &room));
-    match before {
-        Ok(result) => assert!(
-            result.is_err(),
-            "the room opened before the claim's start() ran"
-        ),
-        Err(_) => {} // the debug_assert fired: refused either way
-    }
+    let before = crate::rooms::open_room_guarded(&install.layout, &room);
+    assert!(
+        before.is_err(),
+        "the room opened before the claim's start() ran"
+    );
     let outcome = claim_unlocked(&install, &a);
     assert_eq!(done_room(&outcome), room);
     crate::rooms::open_room_guarded(&install.layout, &room)
