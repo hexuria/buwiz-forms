@@ -553,15 +553,20 @@ fn queued_retry_is_due(
 
 /// A retry more than five minutes older than its stored time was missed while the worker was away (the device
 /// slept, the app was closed): five minutes is the shortest ordinary back-off, so that much lateness is not tick
-/// jitter. Do not fire it the moment the worker notices: move it one minute ahead first (the worker's next sweep),
-/// so the stored next try is always one a person can still wait for.
+/// jitter. Do not fire it the moment the worker notices: move it two minutes ahead first (safely past the worker's
+/// next sweep), so the stored next try is always one a person can still wait for. A queued return with no try yet
+/// (`submission_attempts` zero) is not a missed retry: its first send is due now.
 fn missed_retry_rescheduled_at(
     next_retry_at: Option<&str>,
+    submission_attempts: u32,
     now: chrono::DateTime<Utc>,
 ) -> Option<chrono::DateTime<Utc>> {
+    if submission_attempts == 0 {
+        return None;
+    }
     let next_retry = chrono::DateTime::parse_from_rfc3339(next_retry_at?).ok()?;
     let missed_by = now.signed_duration_since(next_retry.with_timezone(&Utc));
-    (missed_by > chrono::Duration::minutes(5)).then(|| now + chrono::Duration::minutes(1))
+    (missed_by > chrono::Duration::minutes(5)).then(|| now + chrono::Duration::minutes(2))
 }
 
 trait SubmissionTransport {
@@ -900,8 +905,11 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
     }
 
-    if let Some(next_try) = missed_retry_rescheduled_at(draft.next_retry_at.as_deref(), Utc::now())
-    {
+    if let Some(next_try) = missed_retry_rescheduled_at(
+        draft.next_retry_at.as_deref(),
+        draft.submission_attempts,
+        Utc::now(),
+    ) {
         draft.next_retry_at = Some(next_try.to_rfc3339());
         draft.updated_at = Utc::now().to_rfc3339();
         if let Ok(db_guard) = lock_timing::lock(&db) {
@@ -1290,9 +1298,11 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
         }
     }
 
-    if let Some(next_try) =
-        missed_retry_rescheduled_at(draft.lifecycle().next_retry_at.as_deref(), Utc::now())
-    {
+    if let Some(next_try) = missed_retry_rescheduled_at(
+        draft.lifecycle().next_retry_at.as_deref(),
+        draft.lifecycle().submission_attempts,
+        Utc::now(),
+    ) {
         let lifecycle = draft.lifecycle_mut();
         lifecycle.next_retry_at = Some(next_try.to_rfc3339());
         lifecycle.updated_at = Utc::now().to_rfc3339();
@@ -1800,8 +1810,11 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
         }
     }
 
-    if let Some(next_try) = missed_retry_rescheduled_at(draft.next_retry_at.as_deref(), Utc::now())
-    {
+    if let Some(next_try) = missed_retry_rescheduled_at(
+        draft.next_retry_at.as_deref(),
+        draft.submission_attempts,
+        Utc::now(),
+    ) {
         draft.next_retry_at = Some(next_try.to_rfc3339());
         draft.updated_at = Utc::now().to_rfc3339();
         if let Ok(db_guard) = lock_timing::lock(&db_clone) {
@@ -4797,6 +4810,29 @@ mod tests {
         serde_json::Value::String((Utc::now() - chrono::Duration::minutes(1)).to_rfc3339())
     }
 
+    /// A return queued while the worker was away has not missed a retry: it has never been tried. Its first
+    /// send is due as soon as a worker can make it.
+    #[tokio::test]
+    async fn process_queued_1601c_first_send_after_restart_is_not_deferred() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let mut value: serde_json::Value =
+            serde_json::from_str(&stored_json(&db, "1601C", &queued.tin)).unwrap();
+        value["next_retry_at"] =
+            serde_json::Value::String((Utc::now() - chrono::Duration::minutes(6)).to_rfc3339());
+        db.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE form_code = '1601C' AND tin = ?2",
+                rusqlite::params![value.to_string(), queued.tin],
+            )
+            .unwrap();
+        let transport = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+        assert_eq!(transport.calls().len(), 1, "the first send is not a retry");
+    }
+
     /// A retry missed while the worker was away is not fired the moment the worker wakes: it is moved to the
     /// next real try first, so no screen has to describe a time already past.
     #[tokio::test]
@@ -4807,6 +4843,7 @@ mod tests {
             serde_json::from_str(&stored_json(&db, "1601C", &queued.tin)).unwrap();
         value["next_retry_at"] =
             serde_json::Value::String((Utc::now() - chrono::Duration::minutes(6)).to_rfc3339());
+        value["submission_attempts"] = serde_json::json!(1);
         db.lock()
             .unwrap()
             .conn
