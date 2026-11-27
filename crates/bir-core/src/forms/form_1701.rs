@@ -592,6 +592,7 @@ impl Form1701Draft {
                 "frm1701:txtPg2TIN1",
                 "frm1701:txtPg2TIN2",
                 "frm1701:txtPg2TIN3",
+                "frm1701:txtPg2BranchCode",
             ],
         );
         let attachments: Vec<char> = fields

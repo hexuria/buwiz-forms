@@ -886,6 +886,14 @@ impl Form1801Draft {
             ],
         );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1801v2018:txtDateMonth",
+                "frm1801v2018:txtDateDay",
+                "frm1801v2018:txtDateYear",
+            ],
+        );
         fields
     }
 

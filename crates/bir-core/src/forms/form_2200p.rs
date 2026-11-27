@@ -578,6 +578,14 @@ impl Form2200PDraft {
             "page_header",
             super::print_map::tin_name_header(&self.tin, &self.taxpayer_name),
         );
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200P:txtPg1I1Month",
+                "frm2200P:txtPg1I1Day",
+                "frm2200P:txtPg1I1Year",
+            ],
+        );
         super::print_map::match_upload_case("2200p-v2020", &mut fields, None);
         fields
     }

@@ -3,18 +3,26 @@
 //!
 //! The sheet's drawing is its SVG layer: black rules (`layer-structural`,
 //! `layer-band`) and the grey and white fills (`layer-decorative`,
-//! `layer-knockout`) whose edges outline boxes and comb slots. Hand
-//! corrections draw some boxes in the cells themselves: a cell with a fill
-//! and an inset border (the TIN rows of 0605, 1600WP, 2550M and 2553), and a
-//! slot with a gradient tick at its right; those count as drawing too. A
-//! value cell (any cell something prints into: joined to a writer key, or
-//! holding an input stamped with a filing key; a drawn `<div>` with its own
-//! `id`, outside any `<template>`) passes when
+//! `layer-knockout`) whose edges outline boxes and comb slots. A value cell
+//! (any cell something prints into: joined to a writer key, or holding an
+//! input stamped with a filing key; a drawn `<div>` with its own `id`,
+//! outside any `<template>`) passes when
 //!
 //! - each of its four edges lies within [`TOL`] of a drawn edge running along
 //!   at least half of that side, and
 //! - for a comb, at least [`TICKS`] of the boundaries between its slots lie
 //!   on a drawn vertical edge (a tick or a fill's side) beside the cell.
+//!
+//! Hand corrections draw some boxes in the cells themselves: a cell with a
+//! fill and an inset border (the TIN rows of 0605, 1600WP, 2550M and 2553),
+//! whose slots draw their ticks as a gradient at their right. Such a
+//! self-boxed cell is its own box for its sides and slots, but its top and
+//! bottom must still lie on a printed horizontal that its row spans: the
+//! self-drawn boxes on that line (its groups and the dash cells between
+//! them) tile it end to end, each box meeting the next and the first and
+//! last meeting the line's ends, all within [`TOL`]. A group shrunk inside
+//! its row leaves the printed row showing beside it and fails. Its own edges
+//! and ticks are no drawing for any other cell.
 //!
 //! A hand-placed cell a few points off its box fails both. [`KNOWN`] lists
 //! the cells a little off whose values were seen to print inside their box;
@@ -45,6 +53,12 @@ struct Rect {
     h: f64,
 }
 
+/// A cell that draws its own box (any kind): its id and box.
+struct Tile {
+    id: String,
+    rect: Rect,
+}
+
 /// A drawn edge: its position across, half its thickness and its extent along.
 struct Edge {
     at: f64,
@@ -59,6 +73,10 @@ struct Cell {
     rect: Rect,
     /// Absolute left edge of every slot of a comb.
     slot_lefts: Vec<f64>,
+    /// The cell draws its own box (a fill with an inset border).
+    self_boxed: bool,
+    /// Ticks its own slots draw (a gradient at a slot's right), absolute x.
+    own_ticks: Vec<f64>,
 }
 
 fn frozen_root() -> PathBuf {
@@ -115,8 +133,12 @@ fn drawn(html: &str) -> String {
     out
 }
 
-/// Each page's drawn edges and value cells.
-fn pages(html: &str, joined: &BTreeSet<String>) -> Vec<(Vec<Edge>, Vec<Edge>, Vec<Cell>)> {
+/// A page's horizontal and vertical drawn edges, value cells and
+/// self-boxed cells.
+type Page = (Vec<Edge>, Vec<Edge>, Vec<Cell>, Vec<Tile>);
+
+/// Each page's drawn edges, value cells and self-boxed cells.
+fn pages(html: &str, joined: &BTreeSet<String>) -> Vec<Page> {
     let html = drawn(html);
     let marker = "<div class=\"page page-";
     let mut starts: Vec<usize> = html.match_indices(marker).map(|(at, _)| at).collect();
@@ -127,7 +149,7 @@ fn pages(html: &str, joined: &BTreeSet<String>) -> Vec<(Vec<Edge>, Vec<Edge>, Ve
         .collect()
 }
 
-fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cell>) {
+fn page(body: &str, joined: &BTreeSet<String>) -> Page {
     let mut across = Vec::new(); // horizontal edges: at = y
     let mut down = Vec::new(); // vertical edges: at = x
     if let (Some(open), Some(close)) = (body.find("<svg"), body.find("</svg>")) {
@@ -190,6 +212,7 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
         }
     }
     let mut cells: Vec<Cell> = Vec::new();
+    let mut tiles: Vec<Tile> = Vec::new();
     // The comb whose slots follow (a slot belongs to the cell just opened).
     let mut comb: Option<usize> = None;
     let mut from = 0;
@@ -205,17 +228,13 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
                 if let Some(left) = pt(style, "left") {
                     let cell = &mut cells[index];
                     cell.slot_lefts.push(cell.rect.x + left);
-                    // A slot that draws its own tick (a gradient at its right).
+                    // A slot that draws its own tick (a gradient at its right):
+                    // it vouches for this comb's slots only.
                     if let (true, Some(width)) = (
                         style.contains("linear-gradient") && style.contains("right"),
                         pt(style, "width"),
                     ) {
-                        down.push(Edge {
-                            at: cell.rect.x + left + width,
-                            half: 0.0,
-                            from: cell.rect.y,
-                            to: cell.rect.y + cell.rect.h,
-                        });
+                        cell.own_ticks.push(cell.rect.x + left + width);
                     }
                 }
             }
@@ -234,25 +253,10 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
             continue;
         };
         // A cell that draws its own box (a fill with an inset border, the
-        // sheets' hand corrections of a TIN row) is part of the drawing.
-        if style.contains("background:") && style.contains("box-shadow:inset") {
-            for at in [y, y + h] {
-                across.push(Edge {
-                    at,
-                    half: 0.0,
-                    from: x,
-                    to: x + w,
-                });
-            }
-            for at in [x, x + w] {
-                down.push(Edge {
-                    at,
-                    half: 0.0,
-                    from: y,
-                    to: y + h,
-                });
-            }
-        }
+        // sheets' hand corrections of a TIN row) is its own box for its sides
+        // and slots, but must still sit on the printed row (below); its edges
+        // are no drawing for any other cell.
+        let self_boxed = style.contains("background:") && style.contains("box-shadow:inset");
         // A value cell is a cell something prints into, whatever its kind
         // (`field`, `mixed` caption-and-boxes, even `label`): a cell a writer
         // key is joined to (`joined_cell_ids`, the engine's own joins
@@ -266,6 +270,12 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
         let Some(id) = attr(tag, "id") else {
             continue;
         };
+        if self_boxed {
+            tiles.push(Tile {
+                id: id.to_string(),
+                rect: Rect { x, y, w, h },
+            });
+        }
         let rest = &body[from..];
         let own = &rest[..rest.find("data-cell-kind=").unwrap_or(rest.len())];
         let mut inputs = own.match_indices("<input").map(|(at, _)| {
@@ -289,27 +299,67 @@ fn page(body: &str, joined: &BTreeSet<String>) -> (Vec<Edge>, Vec<Edge>, Vec<Cel
             comb: is_comb,
             rect: Rect { x, y, w, h },
             slot_lefts: Vec::new(),
+            self_boxed,
+            own_ticks: Vec::new(),
         });
     }
-    (across, down, cells)
+    (across, down, cells, tiles)
 }
 
 fn overlap(a0: f64, a1: f64, b0: f64, b1: f64) -> f64 {
     (a1.min(b1) - a0.max(b0)).max(0.0)
 }
 
+/// Whether the self-boxed cells of `cell`'s row (`cell` as placed, the
+/// others from `tiles`) tile the printed line `e` end to end: sorted along
+/// it, each meets the line's start or the box before it, and the last meets
+/// the line's end, all within [`TOL`].
+fn row_spans(cell: &Cell, tiles: &[Tile], e: &Edge) -> bool {
+    let Rect { y, h, .. } = cell.rect;
+    let mut row: Vec<Rect> = tiles
+        .iter()
+        .filter(|tile| tile.id != cell.id)
+        .map(|tile| tile.rect)
+        .chain(std::iter::once(cell.rect))
+        .filter(|r| {
+            (r.y - y).abs() <= TOL
+                && (r.y + r.h - (y + h)).abs() <= TOL
+                && e.from - TOL <= r.x
+                && r.x + r.w <= e.to + TOL
+        })
+        .collect();
+    row.sort_by(|a, b| a.x.total_cmp(&b.x));
+    let mut end = e.from;
+    for r in &row {
+        if (r.x - end).abs() > TOL {
+            return false;
+        }
+        end = r.x + r.w;
+    }
+    (e.to - end).abs() <= TOL
+}
+
 /// What is wrong with `cell`'s placement, or nothing.
-fn misplacement(cell: &Cell, across: &[Edge], down: &[Edge]) -> Option<String> {
+fn misplacement(cell: &Cell, across: &[Edge], down: &[Edge], tiles: &[Tile]) -> Option<String> {
     let Rect { x, y, w, h } = cell.rect;
     let (x1, y1) = (x + w, y + h);
     let on_across = |at: f64| {
-        across
-            .iter()
-            .any(|e| (e.at - at).abs() <= TOL + e.half && overlap(x, x1, e.from, e.to) >= 0.5 * w)
+        across.iter().any(|e| {
+            (e.at - at).abs() <= TOL + e.half
+                && if cell.self_boxed {
+                    // A self-boxed cell's row spans the printed line.
+                    row_spans(cell, tiles, e)
+                } else {
+                    overlap(x, x1, e.from, e.to) >= 0.5 * w
+                }
+        })
     };
+    // A self-boxed cell's own sides are its box.
     let on_down = |at: f64| {
-        down.iter()
-            .any(|e| (e.at - at).abs() <= TOL + e.half && overlap(y, y1, e.from, e.to) >= 0.5 * h)
+        cell.self_boxed
+            || down.iter().any(|e| {
+                (e.at - at).abs() <= TOL + e.half && overlap(y, y1, e.from, e.to) >= 0.5 * h
+            })
     };
     let mut wrong: Vec<&str> = [
         ("top", on_across(y)),
@@ -326,10 +376,11 @@ fn misplacement(cell: &Cell, across: &[Edge], down: &[Edge]) -> Option<String> {
         let hit = bounds
             .iter()
             .filter(|&&b| {
-                down.iter().any(|e| {
-                    (e.at - b).abs() <= 1.6 + e.half
-                        && overlap(y - 2.0, y1 + 2.0, e.from, e.to) > 0.0
-                })
+                cell.own_ticks.iter().any(|&t| (t - b).abs() <= 1.6)
+                    || down.iter().any(|e| {
+                        (e.at - b).abs() <= 1.6 + e.half
+                            && overlap(y - 2.0, y1 + 2.0, e.from, e.to) > 0.0
+                    })
             })
             .count();
         if (hit as f64) < TICKS * bounds.len() as f64 {
@@ -350,9 +401,9 @@ fn misplaced(slug: &str) -> Vec<(String, String)> {
     let html = std::fs::read_to_string(frozen_root().join(slug).join("index.html")).unwrap();
     let mut out = Vec::new();
     let joined = bir_print::frozen_html::joined_cell_ids(slug);
-    for (across, down, cells) in pages(&html, &joined) {
+    for (across, down, cells, tiles) in pages(&html, &joined) {
         for cell in &cells {
-            if let Some(why) = misplacement(cell, &across, &down) {
+            if let Some(why) = misplacement(cell, &across, &down, &tiles) {
                 out.push((cell.id.clone(), why));
             }
         }
@@ -411,10 +462,42 @@ fn every_value_cell_lies_on_its_drawn_box() {
 fn a_cell_a_few_points_off_its_box_fails() {
     let html = std::fs::read_to_string(frozen_root().join("2200t-2020/index.html")).unwrap();
     let joined = bir_print::frozen_html::joined_cell_ids("2200t-2020");
-    let (across, down, cells) = pages(&html, &joined).into_iter().next().unwrap();
+    let (across, down, cells, tiles) = pages(&html, &joined).into_iter().next().unwrap();
     let mut yes = cells.into_iter().find(|c| c.id == "p1c1030").unwrap();
-    assert_eq!(misplacement(&yes, &across, &down), None);
+    assert_eq!(misplacement(&yes, &across, &down, &tiles), None);
     yes.rect.x += 3.12;
     yes.rect.y += 11.7;
-    assert!(misplacement(&yes, &across, &down).is_some());
+    assert!(misplacement(&yes, &across, &down, &tiles).is_some());
+}
+
+/// A self-boxed cell (0605's hand-drawn TIN 4-6 box) must still sit on the
+/// printed row: on it, it passes; moved 4 pt down off the printed lines, its
+/// own box does not save it.
+#[test]
+fn a_self_boxed_cell_off_the_printed_row_fails() {
+    let html = std::fs::read_to_string(frozen_root().join("0605-1999/index.html")).unwrap();
+    let joined = bir_print::frozen_html::joined_cell_ids("0605-1999");
+    let (across, down, cells, tiles) = pages(&html, &joined).into_iter().next().unwrap();
+    let mut tin = cells.into_iter().find(|c| c.id == "p1c25").unwrap();
+    assert!(tin.self_boxed);
+    assert_eq!(misplacement(&tin, &across, &down, &tiles), None);
+    tin.rect.y += 4.0;
+    assert!(misplacement(&tin, &across, &down, &tiles).is_some());
+}
+
+/// A self-boxed cell must span its printed row: 0605's TIN 4-6 group
+/// (p1c25) shrunk to half its width still lies on the printed line, but
+/// leaves the row showing between it and the dash cell after it, and fails;
+/// in place, its row's seven boxes tile the line and it passes.
+#[test]
+fn a_self_boxed_cell_shrunk_inside_its_row_fails() {
+    let html = std::fs::read_to_string(frozen_root().join("0605-1999/index.html")).unwrap();
+    let joined = bir_print::frozen_html::joined_cell_ids("0605-1999");
+    let (across, down, cells, tiles) = pages(&html, &joined).into_iter().next().unwrap();
+    let mut tin = cells.into_iter().find(|c| c.id == "p1c25").unwrap();
+    assert!(tin.self_boxed);
+    assert_eq!(misplacement(&tin, &across, &down, &tiles), None);
+    tin.rect.w /= 2.0;
+    let why = misplacement(&tin, &across, &down, &tiles).unwrap();
+    assert!(why.contains("top, bottom"), "{why}");
 }

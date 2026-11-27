@@ -559,6 +559,14 @@ impl Form1707ADraft {
         ] {
             fields.insert(format!("derived:{key}"), value);
         }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1707Av2021:txtI1YearEndMonth",
+                "frm1707Av2021:txtI1YearEndDay",
+                "frm1707Av2021:txtI1YearEndYear",
+            ],
+        );
         super::print_map::match_upload_case("1707a-v2021", &mut fields, None);
         fields
     }
