@@ -267,9 +267,13 @@ pub(crate) fn auto_download_enabled(value: Option<&str>) -> bool {
     !matches!(value.to_ascii_lowercase().as_str(), "0" | "false" | "off")
 }
 
-/// What the database says about "Download updates automatically", on the thread that owns the database slot. The page cannot read
-/// this setting itself (`get_setting` answers only the theme), so the host reports it through `update_status`.
+/// What the device store says about "Download updates automatically", else the database (accounts-and-lock O1: the
+/// `device_settings` value first, then the same key in the database, on the thread that owns the database slot). The page
+/// cannot read this setting itself (`get_setting` answers only the theme), so the host reports it through `update_status`.
 fn stored_auto_download() -> Option<bool> {
+    if let Some(value) = bir_core::rooms::device_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING) {
+        return Some(auto_download_enabled(Some(&value)));
+    }
     let handle = bir_app_api::bir_module::database_handle().ok()?;
     let db = bir_core::lock_timing::lock(&handle).ok()?;
     let value = db.get_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING).ok().flatten();
@@ -628,6 +632,8 @@ pub(crate) fn prepare_process_at(database: &Path) -> bool {
 }
 
 /// The database the one-copy guard locks for this launch: the one this process opens, decided as the door decides it.
+/// Until rooms open (accounts-and-lock A3a) that is the legacy file, so the guard keeps the key every earlier version
+/// used (`<database>.instance` and its port file) and an older and a newer build still find each other.
 /// `None` when no guard applies: turned off or a test environment by default (`guard_wanted`); a door that makes a
 /// scratch database of its own (a test environment with no `BIR_DATABASE_PATH`, even under `BIR_SINGLE_INSTANCE=1`: that
 /// database is made per engine thread, later, and two copies never share one; locking `app_database_path()` here was
@@ -1388,6 +1394,21 @@ mod tests {
                 prepare_process();
                 say("survived");
             }
+            "run" => {
+                // This build's launch, staying up as the app does, until the parent closes its input.
+                prepare_process();
+                say("running");
+                std::thread::spawn(move || {
+                    loop {
+                        if ACTIVATE.swap(false, Ordering::SeqCst) {
+                            say("activated");
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                });
+                let mut line = String::new();
+                let _ = std::io::stdin().read_line(&mut line);
+            }
             _ => {}
         }
     }
@@ -1468,6 +1489,39 @@ mod tests {
             matches!(claim(&database), Claim::Primary(_)),
             "its lock went with it"
         );
+    }
+
+    /// Accounts-and-lock A1 keeps the one-copy guard on the key every earlier version used (`<database>.instance`, its
+    /// port beside it), so an older build and this one find each other both ways: the second to start brings the first
+    /// window forward and ends, never reaching the database (where it would meet `LiveDatabaseInUse`).
+    #[test]
+    fn older_version_refused_while_the_new_one_runs() {
+        let _turn = serial();
+        let (_folder, database) = scratch();
+        let path = database.display().to_string();
+        let env = [("BIR_SINGLE_INSTANCE", "1"), ("BIR_DATABASE_PATH", path.as_str())];
+
+        // An older build runs (it holds the guard as earlier versions did): this build's launch shows it and ends.
+        let older = Child2::start("hold", &database, &[]);
+        assert_eq!(older.said(), "held");
+        let newer = Child2::start("launch", &database, &env);
+        let (ended_well, said) = newer.finish();
+        assert!(ended_well, "the newer launch ends quietly");
+        assert_eq!(said, ["began"], "it never went on to open the database");
+        assert_eq!(older.said(), "activated", "the older build's window was asked forward");
+        let (older_ended, _) = older.finish();
+        assert!(older_ended);
+
+        // This build runs: an older build's launch (its claim on the same key) finds it and has it shown.
+        let running = Child2::start("run", &database, &env);
+        assert_eq!(running.said(), "running");
+        assert!(
+            matches!(claim(&database), Claim::Running { notified: true }),
+            "the older build is turned back at the guard, not at the database"
+        );
+        assert_eq!(running.said(), "activated", "this build's window was asked forward");
+        let (running_ended, _) = running.finish();
+        assert!(running_ended);
     }
 
     #[test]

@@ -10,7 +10,8 @@
    makes itself unless GPUI_AGENT_TOKEN is set, never printed;
 3. waits for the window's control plane (GPUI_AGENT_ADDR, default 127.0.0.1:17421) and the data plane (the next port);
 4. runs each recipe of the suite with `gpui-agent recipe run`, the variant for the form factor the app reports
-   (phone or desktop, a windows variant where one exists), its generated ids read from a snapshot first;
+   (phone or desktop; the target's own variant, e.g. linux or android, where one exists), its generated ids read
+   from a snapshot first;
 5. writes OUT/report.json, OUT/report.md and OUT/run.log: per recipe pass / fail, time, the failing step and its
    error, a screenshot and the tree on failure. OUT is ~/BuwizNsh/evidence/e2e/<target>-<time> unless --out.
 
@@ -328,7 +329,7 @@ def launch_env(environ, token, addr):
 
 # --- Suites -------------------------------------------------------------------------------------------------------
 
-VARIANT_KEYS = ("phone", "desktop", "windows", "file")
+VARIANT_KEYS = ("phone", "desktop") + TARGETS + ("file",)
 
 
 def load_suite(name, suites=SUITES):
@@ -349,10 +350,11 @@ def load_suite(name, suites=SUITES):
 
 
 def variant(entry, form_factor, target):
-    """The recipe file of `entry` for this host: `windows` on Windows when given, then `phone` / `desktop` by the form
-    factor, then `file` (the same everywhere). None when the entry has no variant for it."""
-    if target == "windows" and entry.get("windows"):
-        return entry["windows"]
+    """The recipe file of `entry` for this host: the target's own (`windows`, `linux`, `android`, ...) when given, then
+    `phone` / `desktop` by the form factor, then `file` (the same everywhere). None when the entry has no variant for
+    it. Linux needs its own: its window opens 420 px wide, so the app shows the narrow layout on a desktop host."""
+    if target in TARGETS and entry.get(target):
+        return entry[target]
     if entry.get(form_factor):
         return entry[form_factor]
     return entry.get("file")
@@ -380,7 +382,7 @@ def check_suite(suite):
         seen.add(name)
         files = entry_files(entry)
         if not files:
-            problems.append(f"{where}: names no recipe file (file, phone, desktop or windows)")
+            problems.append(f"{where}: names no recipe file (file, phone, desktop or a target)")
         supplied = set(params) | set(entry.get("set") or {}) | set(entry.get("resolve") or {})
         for file in files:
             path = (base / file).resolve()
@@ -1039,16 +1041,24 @@ def booted_simulator():
 
 
 def remove_scratch(db, log):
-    """The run's scratch database and its SQLite side files; the evidence stays."""
+    """The run's scratch database and its SQLite side files; the evidence stays. On Windows the app's grandchildren
+    can still hold the files for a moment after the group break (there is no process-tree kill): retry for a few
+    seconds before reporting a file as not removed."""
     removed = True
     for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal")):
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-        except OSError as error:
-            removed = False
-            log.line("clean", path, f"not removed: {error}", 0)
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                path.unlink()
+                break
+            except FileNotFoundError:
+                break
+            except OSError as error:
+                if os.name != "nt" or time.monotonic() >= deadline:
+                    removed = False
+                    log.line("clean", path, f"not removed: {error}", 0)
+                    break
+                time.sleep(0.5)
     if removed:
         log.line("clean", db, "scratch database removed", 0)
 

@@ -377,9 +377,8 @@ fn node_for(component: &str, id: &str) -> UiNode {
 /// `test` or `real`, from the environment this process started with.
 pub fn database_kind() -> &'static str {
     let test_env = bir_core::db::test_environment();
-    let override_path = std::env::var_os("BIR_DATABASE_PATH")
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from);
+    // An explicit path counts only where single-room mode exists (accounts-and-lock I3).
+    let override_path = bir_core::db::single_room_database();
     database_kind_for(
         test_env,
         override_path.as_deref(),

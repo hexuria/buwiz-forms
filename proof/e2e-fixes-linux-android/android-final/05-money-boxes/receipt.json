@@ -1,0 +1,34 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "money-boxes",
+  "fingerprint": "fnv1a64:1beec557f1e2c3f9",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1718,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/05-money-boxes/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": false,
+      "error": "target_gone: fp-frm2551Qv2018:txt16",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 176
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/05-money-boxes/001-s1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 1895
+}

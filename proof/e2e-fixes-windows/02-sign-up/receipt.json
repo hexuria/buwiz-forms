@@ -1,0 +1,151 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "sign-up",
+  "fingerprint": "fnv1a64:a5b1aedf614e6d2d",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 474
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 36
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 425
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 441
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 474
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 430
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 412
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 35
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 449
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 595,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 413
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 381
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 537,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 719,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 32
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 177,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\019-s19.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\02-sign-up\\019-s19.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 6127
+}
