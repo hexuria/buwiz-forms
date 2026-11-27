@@ -65,7 +65,7 @@ test("desktop: 1701 spouse employer name is shut until joint spouse compensation
   if (app.shows("text:Continue")) await app.press("text:Continue");
   await app.waitFor("text:✓ Saved", { timeout: 20000 });
   await reach(app, table);
-  await app.waitUntil(() => app.texts().some((text) => text.includes("Employer row employer-line-1 was cleared")), { timeout: 10000 });
+  await app.waitUntil(() => app.texts().some((text) => text.includes("Employer row 1 was cleared")), { timeout: 10000 });
   expect(app.texts().some((text) => text.includes("compensation income"))).toBe(true);
 }, 60000);
 

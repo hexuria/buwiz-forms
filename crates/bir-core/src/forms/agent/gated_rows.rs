@@ -557,39 +557,39 @@ pub struct Clearance {
 /// index. These schedules have fixed printed lines; when a row moves in a
 /// compacting table the identity belongs to the row content, not to the key
 /// position it moved into.
-fn row_line(form: &str, key: &str) -> Option<&'static str> {
+fn row_line(form: &str, key: &str) -> Option<(&'static str, &'static str)> {
     match form {
         "1701" => {
             if key.contains("Shed1a_1") {
-                return Some("employer-line-1");
+                return Some(("employer-line-1", "1"));
             }
             if key.contains("Shed2a_2") {
-                return Some("employer-line-2");
+                return Some(("employer-line-2", "2"));
             }
             let rest = key.strip_prefix("frm1701:txtPg3IShed5_")?;
             match rest.chars().next()? {
-                '1' => Some("schedule5-line-1"),
-                '2' => Some("schedule5-line-2"),
-                '4' => Some("schedule5-line-4"),
-                '5' => Some("schedule5-line-5"),
+                '1' => Some(("schedule5-line-1", "1")),
+                '2' => Some(("schedule5-line-2", "2")),
+                '4' => Some(("schedule5-line-4", "4")),
+                '5' => Some(("schedule5-line-5", "5")),
                 _ => None,
             }
         }
         "1702MX" => {
             let rest = key.strip_prefix("frm1702MX:txtPg7Sc9I")?;
             match rest.chars().next()? {
-                '1' => Some("mcit-line-1"),
-                '2' => Some("mcit-line-2"),
-                '3' => Some("mcit-line-3"),
+                '1' => Some(("mcit-line-1", "1")),
+                '2' => Some(("mcit-line-2", "2")),
+                '3' => Some(("mcit-line-3", "3")),
                 _ => None,
             }
         }
         "1702RT" => {
             let rest = key.strip_prefix("frm1702RT:txtPg4Sc4I")?;
             match rest.chars().next()? {
-                '1' => Some("mcit-line-1"),
-                '2' => Some("mcit-line-2"),
-                '3' => Some("mcit-line-3"),
+                '1' => Some(("mcit-line-1", "1")),
+                '2' => Some(("mcit-line-2", "2")),
+                '3' => Some(("mcit-line-3", "3")),
                 _ => None,
             }
         }
@@ -620,7 +620,12 @@ fn row_cleared_text(gate: Gate, line: &str) -> String {
 /// clearance unit of its own, keyed by its stable printed-line id; scalar
 /// boxes of one gate stay one unit.
 pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Clearance> {
-    let mut units: Vec<(String, Gate, Vec<&'static str>, Option<&'static str>)> = Vec::new();
+    let mut units: Vec<(
+        String,
+        Gate,
+        Vec<&'static str>,
+        Option<(&'static str, &'static str)>,
+    )> = Vec::new();
     for key in kind.definition().bindings.keys() {
         let Some(gate) = gate_of(kind.form_code(), key) else {
             continue;
@@ -628,7 +633,7 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
         let line = row_line(kind.form_code(), key);
         let unit_gate = line.map_or_else(
             || gate.gate.to_string(),
-            |line| format!("{}:{line}", gate.gate),
+            |(row_id, _)| format!("{}:{row_id}", gate.gate),
         );
         if let Some((_, _, keys, _)) = units.iter_mut().find(|(name, _, _, _)| *name == unit_gate) {
             keys.push(key.as_str());
@@ -661,7 +666,7 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
         if !cleared_keys.is_empty() {
             let text = line.map_or_else(
                 || gate.cleared.to_string(),
-                |line| row_cleared_text(gate, line),
+                |(_, printed_line)| row_cleared_text(gate, printed_line),
             );
             cleared.push(Clearance {
                 gate: unit_gate,

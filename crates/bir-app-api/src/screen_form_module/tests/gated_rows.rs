@@ -369,7 +369,7 @@ fn form_1701_spouse_item27_foreign_and_schedule5_are_gated() {
     assert_eq!(
         separate["relock_notes"][spouse_name],
         json!(
-            "Employer row employer-line-1 was cleared: Schedule 1 applies only to compensation income on a joint return."
+            "Employer row 1 was cleared: Schedule 1 applies only to compensation income on a joint return."
         )
     );
 
@@ -460,7 +460,7 @@ fn form_1701_spouse_item27_foreign_and_schedule5_are_gated() {
     assert_eq!(
         osd["relock_notes"][sched5],
         json!(
-            "Schedule 5 row schedule5-line-1 was cleared: it applies only to graduated rates with itemized deductions."
+            "Schedule 5 row 1 was cleared: it applies only to graduated rates with itemized deductions."
         )
     );
 }
@@ -864,7 +864,7 @@ fn form_1702rt_mcit_and_prior_payment_boxes_are_gated() {
     assert_eq!(regular["draft"]["schedule_4"]["rows"][0]["year"], "");
     assert_eq!(
         regular["relock_notes"][row_year],
-        json!("Schedule 4 row mcit-line-1 was cleared: MCIT does not apply.")
+        json!("Schedule 4 row 1 was cleared: MCIT does not apply.")
     );
 
     let amended = fill(
@@ -955,7 +955,7 @@ fn form_1702mx_item27_and_schedule9_are_gated() {
     assert_eq!(regular["draft"]["schedule_9"]["rows"][0]["year"], "");
     assert_eq!(
         regular["relock_notes"][row_year],
-        json!("Schedule 9 row mcit-line-1 was cleared: MCIT does not apply.")
+        json!("Schedule 9 row 1 was cleared: MCIT does not apply.")
     );
 }
 
@@ -984,7 +984,7 @@ fn deleting_an_earlier_1702mx_mcit_row_keeps_the_notice_on_the_right_stable_line
     assert_eq!(closed["draft"]["schedule_9"]["rows"][1]["year"], "");
     assert_eq!(
         closed["relock_notes"][row2],
-        json!("Schedule 9 row mcit-line-2 was cleared: MCIT does not apply.")
+        json!("Schedule 9 row 2 was cleared: MCIT does not apply.")
     );
     assert_eq!(
         closed["relock_notes"][row1],
