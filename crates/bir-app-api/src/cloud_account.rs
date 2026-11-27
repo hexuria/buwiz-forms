@@ -783,6 +783,26 @@ mod tests {
             });
         }
 
+        /// X3: the real sign_out_with runs on its own spawned thread (the account thread in the app), and the
+        /// scan a screen made on the engine thread is forgotten there too — the scan state is process-wide.
+        #[test]
+        fn sign_out_on_the_account_thread_forgets_the_engines_scan() {
+            signed_in(|file| {
+                let legacy_folder = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../bir-core/tests/legacy-ebirforms");
+                crate::legacy_import_module::scan_folder(&legacy_folder).unwrap();
+                assert!(crate::legacy_import_module::holds_scan());
+                let (fake, _heard) = logout(&file, answered);
+                sign_out_on_a_thread(fake)
+                    .recv_timeout(WAIT)
+                    .expect("sign-out returned");
+                assert!(
+                    !crate::legacy_import_module::holds_scan(),
+                    "the scan survived the sign-out: it is per-thread, and the account thread cleared only its own"
+                );
+            });
+        }
+
         /// (b), (d): a logout the server never answers does not hold the sign-out: it returns signed out, with
         /// nothing left on this device, while the request still hangs.
         #[test]

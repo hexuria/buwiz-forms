@@ -21,7 +21,6 @@
 //! The query never reads the stored file or its fields, so no bytes and no
 //! values can be in the answer.
 
-use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -123,10 +122,15 @@ struct SourceFile {
     modified: Option<SystemTime>,
 }
 
-thread_local! {
-    /// The scan under review, on the thread that owns the database slot.
-    static HELD: RefCell<Option<HeldScan>> = const { RefCell::new(None) };
-    static NEXT_SCAN: Cell<u64> = const { Cell::new(1) };
+/// The scan under review: process-wide, never per-thread (X3). A sign-out runs on the account
+/// thread, not the engine's, and must end the scan for everyone; the scan already records the
+/// database path it was made against and refuses an import when the room changed, so one scan
+/// for the process cannot cross rooms either.
+static HELD: std::sync::Mutex<Option<HeldScan>> = std::sync::Mutex::new(None);
+static NEXT_SCAN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn held_lock() -> std::sync::MutexGuard<'static, Option<HeldScan>> {
+    HELD.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 pub fn register(module: HostModule) -> HostModule {
@@ -235,8 +239,7 @@ pub(crate) fn scan_folder(path: &Path) -> HostResult {
     let taxpayers = taxpayer_count(&scan);
     let has_something = !scan.profiles.is_empty() || !scan.returns.is_empty();
     let id = if has_something {
-        let id = NEXT_SCAN.get();
-        NEXT_SCAN.set(id + 1);
+        let id = NEXT_SCAN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         id
     } else {
         0
@@ -258,7 +261,7 @@ pub(crate) fn scan_folder(path: &Path) -> HostResult {
             sources,
             scan,
         };
-        HELD.with(|slot| *slot.borrow_mut() = Some(held));
+        *held_lock() = Some(held);
     }
     Ok(summary)
 }
@@ -274,14 +277,14 @@ fn legacy_import(arguments: &HostArguments) -> HostResult {
         }
     };
     crate::account_gate::ensure_unlocked()?;
-    let Some(held) = HELD.with(|slot| slot.borrow_mut().take()) else {
+    let Some(held) = held_lock().take() else {
         return Err(HostError::new(
             "There is no scanned folder to import. Choose the folder again.",
         ));
     };
     if u64::try_from(id).ok() != Some(held.id) {
         // A newer scan is the one under review: keep it.
-        HELD.with(|slot| *slot.borrow_mut() = Some(held));
+        *held_lock() = Some(held);
         return Err(HostError::new(
             "That is not the folder under review. Scan the folder again.",
         ));
@@ -348,13 +351,13 @@ fn list_legacy_filed_returns(arguments: &HostArguments) -> HostResult {
 /// Lets the held scan go: after an import, on cancel, when another scan
 /// starts, and when the open database is replaced (a restore).
 pub(crate) fn forget_scan() {
-    HELD.with(|slot| slot.borrow_mut().take());
+    held_lock().take();
 }
 
 /// Whether a scan is held for `legacy_import`.
 #[cfg(test)]
 pub(crate) fn holds_scan() -> bool {
-    HELD.with(|slot| slot.borrow().is_some())
+    held_lock().is_some()
 }
 
 /// A file's name as the page may show it. The old program writes the address
