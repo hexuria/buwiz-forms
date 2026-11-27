@@ -41,6 +41,7 @@ export function PeriodField(props: PeriodFieldProps) {
   const yearBox = s.box(period.year.k);
   const monthLocked = () => monthBox.locked();
   const yearLocked = () => yearBox.locked();
+  const lockReason = () => (monthLocked() && yearLocked() ? s.periodLockReason([period.month.k, period.year.k]) : "");
   const focused = signal(false);
   const text = signal(untracked(() => box.value()));
   const long = (v: string) => longPeriod(v) || v;
@@ -92,6 +93,9 @@ export function PeriodField(props: PeriodFieldProps) {
         <If when={props.message}>
           <Text variant="meta" tone="danger">{props.message}</Text>
         </If>
+        <If when={!props.message && lockReason()}>
+          <Text variant="meta" tone="fg3">{lockReason()}</Text>
+        </If>
       </View>
     );
   }
@@ -107,6 +111,7 @@ export function PeriodField(props: PeriodFieldProps) {
             width={props.narrow() ? undefined : 72}
             tabular
             error={props.invalid || undefined}
+            locked={monthLocked()}
             onChange={(v) => {
               const m = Number(v.replace(/\D/g, "").slice(0, 2));
               if (m >= 1 && m <= 12) s.pickPeriodMonth(period, m);
@@ -121,6 +126,9 @@ export function PeriodField(props: PeriodFieldProps) {
         <If when={props.message}>
           <Text variant="meta" tone="danger" class="w-full">{props.message}</Text>
         </If>
+        <If when={!props.message && lockReason()}>
+          <Text variant="meta" tone="fg3" class="w-full">{lockReason()}</Text>
+        </If>
       </View>
     );
   }
@@ -133,6 +141,7 @@ export function PeriodField(props: PeriodFieldProps) {
             accessibilityLabel={props.label}
             value={text()}
             error={props.invalid || undefined}
+            locked={monthLocked() && yearLocked()}
             placeholder="MM/YYYY"
             width={props.narrow() ? undefined : 200}
             tabular
@@ -159,6 +168,9 @@ export function PeriodField(props: PeriodFieldProps) {
       </View>
       <If when={props.message}>
         <Text variant="meta" tone="danger">{props.message}</Text>
+      </If>
+      <If when={!props.message && lockReason()}>
+        <Text variant="meta" tone="fg3">{lockReason()}</Text>
       </If>
     </View>
   );

@@ -2,6 +2,7 @@
 // those cases (Cmd+A, a selected range, a click's caret, Tab) are in the shots lane, `just nsh-shots select`.
 import { expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
+import { isRecomputeCollapse } from "./fields";
 import { readout } from "./harness";
 
 const WIDE = { width: 800, height: 600, platform: "macos" as const };
@@ -134,6 +135,17 @@ test("unreadable text left in a zero box returns to the placeholder with the ord
   expect(read(app, "Zero:")).toBe("Zero: 0");
 });
 
+test("[Z1] unreadable text left in a blank box says the box was left blank, never that it kept 0.00", async () => {
+  const app = await open("./select.fixture.tsx", { ...WIDE, height: 1000 });
+  await app.type("id:s-blank", "1500x");
+  await app.type("id:s-free", "x");
+  await app.wait(50);
+  expect(app.value("id:s-blank")).toBe("");
+  expect(app.texts()).toContain("1500x is not an amount. The box was left blank.");
+  expect(app.texts().some((t) => t.includes("The box kept"))).toBe(false);
+  expect(read(app, "Blank:")).toBe("Blank: empty");
+});
+
 test("outside values move an unfocused zero box from placeholder to amount and back", async () => {
   const app = await open("./select.fixture.tsx", WIDE);
   expect(app.value("id:s-zero")).toBe("");
@@ -154,4 +166,17 @@ test("a percent typed into a zero stays shown after leaving, matching what it re
   await app.wait(100);
   expect(readout(app, "Rate:")).toBe("Rate: 42");
   expect(app.value("id:s-rate")).toBe("42");
+});
+
+test("[Z3] the recompute re-selection takes an end collapse soon after focus only while no key has been seen in the box since its focus", () => {
+  // Headless input reports a selection only after a text change (arrows, End, Home and setSelection report none; Enter blurs), so
+  // the guard's decision is driven here: an outside write, focus, a key press that changed no text, then the caret at the end.
+  const end = { start: 8, end: 8 };
+  expect(isRecomputeCollapse(end, 8, 40, false)).toBe(true);
+  expect(isRecomputeCollapse(end, 8, 40, true)).toBe(false);
+  // The bounds as before: late, not at the end, a range, an empty text.
+  expect(isRecomputeCollapse(end, 8, 151, false)).toBe(false);
+  expect(isRecomputeCollapse({ start: 3, end: 3 }, 8, 40, false)).toBe(false);
+  expect(isRecomputeCollapse({ start: 0, end: 8 }, 8, 40, false)).toBe(false);
+  expect(isRecomputeCollapse({ start: 0, end: 0 }, 0, 40, false)).toBe(false);
 });

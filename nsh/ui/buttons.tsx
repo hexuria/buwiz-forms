@@ -102,6 +102,9 @@ export interface IconButtonProps {
   dot?: boolean;
   testID?: string;
   onPress?: () => void;
+  /** A press went down on it, and that press ended (released, moved away or cancelled): SearchPick's chevron. */
+  onPressDown?: () => void;
+  onPressUp?: () => void;
 }
 
 /** A 28-point icon-only button (44 on touch): 16-point icon in fg2, the selected fill while pressed. */
@@ -119,6 +122,8 @@ export function IconButton(props: IconButtonProps) {
       accessibilityLabel={props.tooltip}
       tooltip={<Tooltip label={props.tooltip} shortcut={props.shortcut} />}
       onPress={props.onPress}
+      onPressDown={props.onPressDown}
+      onPressUp={props.onPressUp}
     >
       <Icon name={props.icon} tone={props.pressed ? "fg" : props.disabled ? "fg3" : "fg2"} />
       <If when={props.dot}>

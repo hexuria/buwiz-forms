@@ -757,6 +757,91 @@ test("unreadable note: a Delete row of its row takes it away; a sample with one 
   }
 });
 
+test("[Z1] unreadable note on a blank schedule cell: it says the box was left blank, never that it kept 0.00", async () => {
+  const s = await opened(at("2550Q", 2021, 1));
+  fillSched3Row(s, 0, "Agent One", "");
+  await s.idle();
+  // The box hands over "" as what it shows again: the cell held no amount.
+  s.leftUnreadable("txtIncomePayment30", "1500x", "");
+  expect(s.boxMessageOf("txtIncomePayment30")).toBe("(C) Income Payment: 1500x is not an amount. The box was left blank.");
+  s.leftUnreadable("txtIncomePayment30", "15,00,5", "");
+  expect(s.boxMessageOf("txtIncomePayment30")).toBe("(C) Income Payment: 15,00,5 is not an amount. The box was left blank. Use a point for centavos, and commas only between thousands.");
+  s.dispose();
+});
+
+test("[comma] a comma read as the decimal point is said under its box and stops nothing: not Queue, not a count; an edit ends it", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const sentence = "Item 15: 1500,50 was read as 1,500.50.";
+  const checks = countQueueChecks();
+  const h = hooks();
+  let s: FormSession | undefined;
+  try {
+    s = await opened(at("2551Q", 2023, 1), h);
+    s.jumpTo(2);
+    // The box left "1500,50": it reported 1500.50 (the to-do list as that amount leaves it), then said how it read it.
+    s.focus(key);
+    s.edit(key, "1500.50");
+    s.blur(key);
+    await s.idle();
+    const todo = s.todo().map((r) => r.id);
+    s.commaRead(key, "1500,50", "1,500.50");
+    await s.idle();
+    expect(s.valueOf(key)).toBe("1,500.50");
+    // A note, not a message: nothing red, nothing to fix.
+    expect(s.boxNoteOf(key)).toBe(sentence);
+    expect(s.boxMessageOf(key)).toBe("");
+    // Nothing to fix: the to-do list (and the counts it shares) is as it was.
+    expect(s.todo().map((r) => r.id)).toEqual(todo);
+    // Queue goes straight on to the host's check: it does not stop on this note, nor toast it.
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBeGreaterThan(0);
+    expect(h.said.toasts.map((t) => t.message)).not.toContain(sentence);
+    expect(s.boxNoteOf(key)).toBe(sentence);
+    // An edit of the box ends it.
+    s.edit(key, "1500");
+    expect(s.boxNoteOf(key)).toBe("");
+  } finally {
+    checks.restore();
+    s?.dispose();
+  }
+});
+
+test("[B3] an outside value that won over typing back to the shown amount: a note says what the return holds now, and stops Queue once", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const sentence = "Item 15: you typed 2,000.00; the return now holds 3,000.00.";
+  const checks = countQueueChecks();
+  const h = hooks();
+  let s: FormSession | undefined;
+  try {
+    s = await opened(at("2551Q", 2023, 2), h);
+    s.jumpTo(2);
+    s.edit(key, "2000");
+    await s.idle();
+    // The box had 2,000.00; 3000 came from outside while it had the keys; the filer typed 2000 again and left: it reports 3000.
+    s.focus(key);
+    s.edit(key, "3000");
+    s.outsideKept(key, "2000", "3,000.00");
+    s.blur(key);
+    await s.idle();
+    expect(s.valueOf(key)).toBe("3,000.00");
+    expect(s.boxMessageOf(key)).toBe(sentence);
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBe(0);
+    expect(h.said.toasts.map((t) => t.message)).toContain(sentence);
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBeGreaterThan(0);
+    expect(s.boxMessageOf(key)).toBe(sentence);
+    s.edit(key, "2000");
+    expect(s.boxMessageOf(key) ?? "").toBe("");
+  } finally {
+    checks.restore();
+    s?.dispose();
+  }
+});
+
 test("money note: leaving with a note and other valid edits saves them all; a second session reads them from the database", async () => {
   const key = "frm2551Qv2018:txt15";
   const restore = hostFault(key, "100", "99.00");
@@ -1253,6 +1338,53 @@ for (const [period, door, name] of [[4, "screen_form_save", "Save"], [2, "screen
   });
 }
 
+/**
+ * A money box with the keys whose blur never reaches the session in time (quit, the page going), as fields.tsx's MaskedField with its
+ * leaveRef: it reported `live` while typed and reads `reads` only on leaving ("1500,50" reads 1,500.50), which its leave reports.
+ */
+function leavingBox(s: FormSession, k: string, live: string, reads: string) {
+  let focused = true;
+  let blurred = 0;
+  s.registerBlur(k, () => void blurred++);
+  s.registerLeave(k, () => {
+    if (!focused) return;
+    focused = false;
+    s.edit(k, reads);
+    s.blur(k);
+  });
+  s.focus(k);
+  s.edit(k, live);
+  return { blurred: () => blurred };
+}
+
+for (const how of ["flushNow", "dispose"] as const) {
+  test(`[F1] ${how} with an amount box still focused leaves it first, in the same turn: the save holds what the box reads`, async () => {
+    const key = "frm2551Qv2018:txt15";
+    const target = at("2551Q", 2023, how === "flushNow" ? 3 : 4);
+    const s = await opened(target);
+    s.jumpTo(2);
+    const saves = recordAt("screen_form_save", () => s.valueOf(key));
+    let back: FormSession | undefined;
+    try {
+      const box = leavingBox(s, key, "1500", "1500.50");
+      if (how === "flushNow") expect(await s.flushNow()).toBe(true);
+      else s.dispose();
+      expect(saves.seen[saves.seen.length - 1]).toBe("1,500.50");
+      // [F1-1] flushNow also takes the keys out of the box (the page may stay); the page going needs no blur.
+      expect(box.blurred()).toBe(how === "flushNow" ? 1 : 0);
+      s.dispose();
+      back = new FormSession(target);
+      expect(await back.open()).toBe(null);
+      await back.idle();
+      expect(back.valueOf(key)).toBe("1,500.50");
+    } finally {
+      saves.restore();
+      s.dispose();
+      back?.dispose();
+    }
+  });
+}
+
 test("[B2] no box focused: Save and Print run in the same turn, as before", async () => {
   const key = "frm2551Qv2018:txt15";
   const s = await opened(at("2551Q", 2022, 4));
@@ -1271,5 +1403,300 @@ test("[B2] no box focused: Save and Print run in the same turn, as before", asyn
     saves.restore();
     prints.restore();
     s.dispose();
+  }
+});
+
+test("[B8] Continue on Queue's question with an amount box focused again leaves it first: what is queued holds what the box reads", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const door = bir as unknown as Record<string, unknown>;
+  const real = { check: door.screen_form_queue_check, period: door.queue_form_draft, plain: door.screen_form_queue };
+  const queued: string[] = [];
+  let s: FormSession | undefined;
+  try {
+    s = await opened(at("2551Q", 2022, 1));
+    s.jumpTo(2);
+    // Nothing stops this Queue and the host asks its question; the host's Queue is a stub that records the amount: nothing is queued.
+    door.screen_form_queue_check = () => ({ blocks: [], warns: ["A question to confirm."] });
+    door.queue_form_draft = () => void queued.push(s!.valueOf(key));
+    door.screen_form_queue = () => void queued.push(s!.valueOf(key));
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    // The box has the keys again under the question and holds "1500,50": it reported 1500 and reads 1,500.50 on leaving.
+    const box = heldBox(s, key, "1500", "later", "1500.50");
+    s.confirmQueue();
+    await s.idle();
+    // Its leave changed the return under the question: Queue judged it again from the start, and asks again.
+    if (s.overlay()?.kind === "queue-confirm") {
+      s.confirmQueue();
+      await s.idle();
+    }
+    expect(box.asked()).toBe(1);
+    expect(queued).toEqual(["1,500.50"]);
+  } finally {
+    door.screen_form_queue_check = real.check;
+    door.queue_form_draft = real.period;
+    door.screen_form_queue = real.plain;
+    s?.dispose();
+  }
+});
+
+test("[U1] a removal's Undo with an amount box still focused leaves it first: the amount stays on its own row, and Undo says it is no longer available", async () => {
+  const K = (n: string) => "frm1601EQ:" + n;
+  const h = hooks();
+  const s = await opened(at("1601EQ", 2023, 2), h);
+  s.choose({ [K("optWithheld:Y")]: "true", [K("optCategory:P")]: "true" });
+  s.choose({ [K("txtAtcCd1")]: "WI010" });
+  s.edit(K("txtTaxBase1"), "100");
+  s.flush();
+  s.choose({ [K("txtAtcCd2")]: "WI011" });
+  s.edit(K("txtTaxBase2"), "200");
+  s.flush();
+  await s.idle();
+  s.choose({ [K("txtAtcCd1")]: "" });
+  s.confirmRemoval();
+  await s.idle();
+  expect([s.valueOf(K("txtAtcCd1")), s.valueOf(K("txtTaxBase1"))]).toEqual(["WI011", "200.00"]);
+  // The filer is in WI011's base (row 1 now) with "1500,50": the box reported nothing for it and reads 1,500.50 only on leaving.
+  const base = K("txtTaxBase1");
+  let focused = true;
+  const leave = () => {
+    if (!focused) return;
+    focused = false;
+    s.edit(base, "1500.50");
+    s.blur(base);
+  };
+  s.registerBlur(base, () => void setTimeout(leave, 60));
+  s.focus(base);
+  s.undoLastRemoval();
+  await s.idle();
+  // A box nobody asked to leave is left later, when the filer goes elsewhere.
+  leave();
+  await s.idle();
+  const rows = [1, 2].map((n) => [s.valueOf(K("txtAtcCd" + n)), s.valueOf(K("txtTaxBase" + n))]);
+  expect(rows).toEqual([["WI011", "1,500.50"], ["", ""]]);
+  expect(h.said.toasts.map((t) => t.message)).toContain("Undo is no longer available: you typed since.");
+  s.dispose();
+});
+
+test("[S1] Queue pressed while a Delete row settles a focused amount box is kept: the row is deleted first, then Queue runs, once", async () => {
+  const s = await opened(at("2550Q", 2024, 1));
+  fillSched3Row(s, 0, "A0", "1000");
+  fillSched3Row(s, 1, "A1", "2000");
+  fillSched3Row(s, 2, "A2", "3000");
+  await s.idle();
+  const check = bir.screen_form_queue_check;
+  const door = bir as { screen_form_queue_check: typeof check };
+  // The rows as the host's queue check finds them, each time Queue reaches it.
+  const seen: string[][][] = [];
+  door.screen_form_queue_check = ((...args: Parameters<typeof check>): ReturnType<typeof check> => {
+    seen.push(sched3Rows(s, 3));
+    return check(...args);
+  }) as typeof check;
+  try {
+    const box = heldBox(s, "txtIncomePayment30", "500", "later");
+    deleteRow(s, 0);
+    s.queue();
+    await s.idle();
+    expect(box.asked()).toBe(1);
+    expect(sched3Rows(s, 3)).toEqual([["A1", "2,000.00"], ["A2", "3,000.00"], ["", ""]]);
+    expect(seen).toEqual([[["A1", "2,000.00"], ["A2", "3,000.00"], ["", ""]]]);
+  } finally {
+    door.screen_form_queue_check = check;
+    s.dispose();
+  }
+});
+
+test("[S1] Queue pressed twice while it settles a focused amount box runs once", async () => {
+  const checks = countQueueChecks();
+  const s = await opened(at("2550Q", 2024, 2));
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    await s.idle();
+    const box = heldBox(s, "txtIncomePayment30", "500", "later");
+    s.queue();
+    s.queue();
+    await s.idle();
+    expect(box.asked()).toBe(1);
+    expect(checks.count).toBe(1);
+  } finally {
+    checks.restore();
+    s.dispose();
+  }
+});
+
+/**
+ * Stubs the host's Queue check (nothing stops it; it asks its question, `warns()`) and its Queue, which records `read()` instead of
+ * queueing. `checks` counts the checks.
+ */
+function stubQueue(read: () => string, warns: () => string[] = () => ["A question to confirm."]): { queued: string[]; checks: () => number; restore: () => void } {
+  let checks = 0;
+  const door = bir as unknown as Record<string, unknown>;
+  const real = { check: door.screen_form_queue_check, period: door.queue_form_draft, plain: door.screen_form_queue };
+  const out = {
+    queued: [] as string[],
+    checks: () => checks,
+    restore: () => {
+      door.screen_form_queue_check = real.check;
+      door.queue_form_draft = real.period;
+      door.screen_form_queue = real.plain;
+    },
+  };
+  door.screen_form_queue_check = () => (checks++, { blocks: [], warns: warns() });
+  door.queue_form_draft = () => void out.queued.push(read());
+  door.screen_form_queue = () => void out.queued.push(read());
+  return out;
+}
+
+test("[B8-2] Continue with a focused amount box: saved first, queued once with no second question, and the stored row 2551Q's Queue reads holds what the box reads", async () => {
+  const key = "frm2551Qv2018:txt15";
+  let s: FormSession | undefined;
+  // What the database holds for the box: the amount the last save stored (2551Q's Queue reads the stored row, not the page).
+  const saves = recordAt("screen_form_save", () => s?.valueOf(key) ?? "");
+  const host = stubQueue(() => saves.seen[saves.seen.length - 1] ?? "nothing saved");
+  try {
+    s = await opened(at("2551Q", 2022, 2));
+    s.jumpTo(2);
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    heldBox(s, key, "1500", "later", "1500.50");
+    s.confirmQueue();
+    await s.idle();
+    // Queue ran again from the start after the box was left (saved, the host's check again), and its question was the one just
+    // accepted: not asked twice.
+    expect(host.checks()).toBe(2);
+    expect(s.overlay()?.kind ?? "").not.toBe("queue-confirm");
+    expect(host.queued).toEqual(["1,500.50"]);
+  } finally {
+    host.restore();
+    saves.restore();
+    s?.dispose();
+  }
+});
+
+test("[B8-1] Continue with a focused amount box left unreadable: Queue stops on the box's note and queues nothing", async () => {
+  const key = "frm2551Qv2018:txt15";
+  const h = hooks();
+  let s: FormSession | undefined;
+  const host = stubQueue(() => s?.valueOf(key) ?? "");
+  try {
+    s = await opened(at("2551Q", 2022, 3), h);
+    s.jumpTo(2);
+    s.edit(key, "1000");
+    await s.idle();
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    // The box holds "1500x": on leaving it puts 1,000.00 back and says so.
+    s.registerBlur(key, () => void setTimeout(() => {
+      s!.leftUnreadable(key, "1500x", "1,000.00");
+      s!.blur(key);
+    }, 60));
+    s.focus(key);
+    s.confirmQueue();
+    await s.idle();
+    expect(host.queued).toEqual([]);
+    expect(h.said.toasts.map((t) => t.message)).toContain("Item 15: 1500x is not an amount. The box kept 1,000.00.");
+    expect(s.overlay()?.kind ?? "").not.toBe("queue-confirm");
+  } finally {
+    host.restore();
+    s?.dispose();
+  }
+});
+
+test("[S1-1] the settling Queue pressed again keeps the Print pressed before it: Queue runs once, then Print", async () => {
+  const checks = countQueueChecks();
+  const s = await opened(at("2550Q", 2024, 3));
+  const prints = recordAt("screen_form_print", () => String(checks.count));
+  const unstub = previewHere();
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    await s.idle();
+    heldBox(s, "txtIncomePayment30", "500", "later");
+    s.queue();
+    s.print();
+    s.queue();
+    await s.idle();
+    expect(checks.count).toBe(1);
+    // Print ran once, after Queue had reached the host's check.
+    expect(prints.seen).toEqual(["1"]);
+  } finally {
+    unstub();
+    prints.restore();
+    checks.restore();
+    s.dispose();
+  }
+});
+
+test("[S1-2] a Delete row pressed while Queue settles a focused amount box is not kept: the filer is asked to wait, and no row is cleared", async () => {
+  const h = hooks();
+  const checks = countQueueChecks();
+  const s = await opened(at("2550Q", 2024, 4), h);
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    fillSched3Row(s, 1, "A1", "2000");
+    await s.idle();
+    heldBox(s, "txtIncomePayment30", "500", "later");
+    s.queue();
+    deleteRow(s, 1);
+    await s.idle();
+    expect(h.said.toasts.map((t) => t.message)).toContain("Wait for the amount to finish, then try again.");
+    expect(sched3Rows(s, 2)).toEqual([["A0", "500.00"], ["A1", "2,000.00"]]);
+    expect(checks.count).toBe(1);
+  } finally {
+    checks.restore();
+    s.dispose();
+  }
+});
+
+test("[S1-2] a Save pressed while a Delete row settles a focused amount box is kept: the row is deleted, then Save runs", async () => {
+  const h = hooks();
+  const s = await opened(at("2550Q", 2021, 2), h);
+  const saves = recordAt("screen_form_save", () => JSON.stringify(sched3Rows(s, 3)));
+  try {
+    fillSched3Row(s, 0, "A0", "1000");
+    fillSched3Row(s, 1, "A1", "2000");
+    fillSched3Row(s, 2, "A2", "3000");
+    await s.idle();
+    heldBox(s, "txtIncomePayment30", "500", "later");
+    const before = saves.seen.length;
+    deleteRow(s, 0);
+    s.saveNow();
+    await s.idle();
+    expect(h.said.toasts.map((t) => t.message)).not.toContain("Wait for the amount to finish, then try again.");
+    expect(h.said.toasts.map((t) => t.message)).toContain("Draft saved.");
+    expect(saves.seen.slice(before)).toContain(JSON.stringify([["A1", "2,000.00"], ["A2", "3,000.00"], ["", ""]]));
+  } finally {
+    saves.restore();
+    s.dispose();
+  }
+});
+
+test("[B8-2] Continue with a focused amount box whose leave changes the host's question: the new question is asked", async () => {
+  const key = "frm2551Qv2018:txt15";
+  let s: FormSession | undefined;
+  const saves = recordAt("screen_form_save", () => s?.valueOf(key) ?? "");
+  // No 2551Q question depends on an amount, so the stub's does: its text names the amount the return holds.
+  const host = stubQueue(() => saves.seen[saves.seen.length - 1] ?? "nothing saved", () => [`Confirm Item 15: ${s?.valueOf(key) || "blank"}.`]);
+  try {
+    s = await opened(at("2551Q", 2020, 4));
+    s.jumpTo(2);
+    s.queue();
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("queue-confirm");
+    heldBox(s, key, "1500", "later", "1500.50");
+    s.confirmQueue();
+    await s.idle();
+    // Another question than the one accepted: asked, nothing queued yet.
+    expect(s.overlay()).toEqual({ kind: "queue-confirm", warns: ["Confirm Item 15: 1,500.50."] });
+    expect(host.queued).toEqual([]);
+    s.confirmQueue();
+    await s.idle();
+    expect(host.queued).toEqual(["1,500.50"]);
+  } finally {
+    host.restore();
+    saves.restore();
+    s?.dispose();
   }
 });

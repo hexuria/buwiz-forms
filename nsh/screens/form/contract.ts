@@ -140,6 +140,8 @@ export interface BoxState {
   /** The text the box shows, ready to draw: an amount grouped ("10,000.00"), a date long ("Dec 1, 2020"), a tick "true",
    *  a choice its code ("03"). While the user types it is what they typed; the session reformats it on blur. */
   value: Accessor<string>;
+  /** A note under the box that is nothing to fix (a comma read as the decimal point), drawn in the note style; "" for none. */
+  note?: Accessor<string>;
   /** The box takes no typing: computed, locked by the host, a profile box not opened with Edit, read-only return, a
    *  penalty not opened, or turned off by another answer. A locked box draws as a read-only box (no Input). */
   locked: Accessor<boolean>;
@@ -186,8 +188,14 @@ export interface FieldControlProps {
   focusRef?(focus: () => void): void;
   /** Register how to take the keyboard out of this box (Queue leaves a focused amount box first), with the Input's ref; null when the box goes away. */
   blurRef?(blur: (() => void) | null): void;
+  /** Register how an amount box leaves at once, in this turn, without writing to its native box (quit and the page going leave it first); null when the box goes away. */
+  leaveRef?(leave: (() => void) | null): void;
   /** An amount box was left with text that is not an amount (`typed`) and shows `kept`, the return's amount, again. The session says so under it. */
   onLeftUnreadable?(typed: string, kept: string): void;
+  /** An amount box was left with one comma read as its decimal point (`typed` "1500,50", `shown` "1,500.50"). The session says so under it. */
+  onCommaRead?(typed: string, shown: string): void;
+  /** The filer typed in an amount box but came back to the amount it showed, and a value set from outside meanwhile won on leaving: it shows `shown`. The session says so under it. */
+  onOutsideKept?(typed: string, shown: string): void;
 }
 
 /** One answer of a radio group. */

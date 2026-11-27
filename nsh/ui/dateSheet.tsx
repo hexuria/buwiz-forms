@@ -27,6 +27,8 @@ export interface DateTouchFieldProps {
    * finish coming up first.
    */
   autoOpen?: boolean;
+  /** autoOpen opened the sheet: the caller stops asking for it, so a remount of the row (a resize between layouts) does not again. */
+  onAutoOpened?: () => void;
 }
 
 /** How long autoOpen waits for a sheet around the row to come in, in milliseconds. */
@@ -60,7 +62,10 @@ export function DateTouchField(props: DateTouchFieldProps) {
     open.set(true);
   };
   if (untracked(() => props.autoOpen && !props.disabled)) {
-    const timer = setTimeout(openSheet, AUTO_OPEN_MS);
+    const timer = setTimeout(() => {
+      openSheet();
+      props.onAutoOpened?.();
+    }, AUTO_OPEN_MS);
     cleanup(() => clearTimeout(timer));
   }
   const submit = () => {

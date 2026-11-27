@@ -165,18 +165,29 @@ for (const typed of ["1500x", "15,00,50"]) {
   }, 30_000);
 }
 
-test("decimal comma 1500,50: after leaving, the box shows the point amount, no sentence, and Save works", async () => {
+test("[comma] decimal comma 1500,50: after leaving, the box shows the point amount and one note says how the comma was read; Save and Queue go on", async () => {
   const app = await page(2024, 2);
   await app.type(BOX, "");
   await app.waitUntil(() => app.value(BOX) === "", { timeout: 3000 });
   await app.type(BOX, "1500,50");
   await app.submit(BOX);
   await app.waitUntil(() => app.value(BOX) === "1,500.50", { timeout: 5000 });
-  expect(probe(app)).toBe("1,500.50");
+  // The fixture republishes the draft's amount every 100 ms.
+  await app.waitUntil(() => probe(app) === "1,500.50", { timeout: 3000 });
   expect(app.texts().some((t) => t.includes("is not an amount"))).toBe(false);
+  const said = "Item 15: 1500,50 was read as 1,500.50.";
+  await app.waitUntil(() => app.texts().includes(said), { timeout: 3000 });
+  expect(app.texts().filter((t) => t === said).length).toBe(1);
+  // Drawn as a note (the row's note line), not as the box's red message.
+  expect(app.shows(`id:fp-boxnote-${PROBE}`)).toBe(true);
+  expect(app.shows(`id:fp-boxmsg-${PROBE}`)).toBe(false);
   await app.press("id:fp-save").catch(() => {});
   await app.waitFor("text:✓ Saved", { timeout: 8000 });
-}, 30_000);
+  // The note stops nothing: the first Queue goes on to the host's checks, with no toast of it.
+  await app.press("id:fp-queue");
+  await app.waitUntil(() => checked(app), { timeout: 5000 });
+  expect(app.texts().filter((t) => t === said).length).toBe(1);
+}, 40_000);
 
 // 2551Q Schedule 1, row 1's Taxable Amount: a cell edited in its row's drawer.
 const CELL = "id:fp-txtATCAmt1";
@@ -242,4 +253,30 @@ test("note in a row drawer: with the drawer closed and its part folded, Queue op
   // Shown once: no second toast of it; Queue went on to the host's checks.
   expect(saying()).toBe(before);
   expect(checked(app)).toBe(true);
+}, 40_000);
+
+// 2550Q Schedule 3 (a nullable schedule: the cells of a row not started hold no amount, not zero).
+const S3_TABLE = "fp-table-txtDateCovered30";
+
+test("[Z1] unreadable text left in a blank schedule cell: the cell stays blank and the note says it was left blank, not that it kept 0.00", async () => {
+  const edits = { txtDateCovered30: "01/01/2024", txtDateCovered3To0: "03/31/2024", txtNameWithHoldingAgent30: "A0", txtIncomePayment30: "1000" };
+  const pay = "txtIncomePayment31";
+  const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2550Q", year: 2024, period: 1, probeKey: pay, setup: [{ edits }] } } });
+  await app.waitFor("text:BIR Form 2550Q");
+  await app.press("id:fp-nav-5");
+  for (let i = 0; i < 30 && !app.shows(`id:${S3_TABLE}-add`); i++) await app.scroll("id:form-scroll", 400).catch(() => {});
+  // Add row opens row 2, nothing in it yet: its Income Payment holds no amount.
+  await app.press(`id:${S3_TABLE}-add`);
+  await app.waitFor(`id:fp-${pay}`);
+  expect(probe(app)).toBe("");
+  // Text that is no amount from its first key: the box reports nothing, so the row stays not started.
+  for (const ch of "abc") {
+    await app.type(`id:fp-${pay}`, ch);
+    await app.wait(40);
+  }
+  await app.keyboard.press("tab");
+  await app.waitUntil(() => app.texts().some((t) => t.includes("abc is not an amount")), { timeout: 5000 });
+  expect(app.texts().some((t) => t.endsWith("abc is not an amount. The box was left blank."))).toBe(true);
+  expect(app.texts().some((t) => t.includes("The box kept"))).toBe(false);
+  expect(probe(app)).toBe("");
 }, 40_000);

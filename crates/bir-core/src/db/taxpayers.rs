@@ -1671,6 +1671,42 @@ impl Database {
         self.set_taxpayer_credential(tin_root, "pin_hash", pin_hash)
     }
 
+    /// The client-PIN rehash (accounts-and-lock PLAN §B.1): the stored PIN `matched` (the old SHA-256 value a PIN
+    /// just matched) is replaced by `phc` in `taxpayers.pin_hash`, and the branch copies of the root
+    /// (`profiles.profile_pin_hash`) are cleared. `matched` is either the taxpayer's own value or, while the taxpayer
+    /// has none, a branch copy. Nothing is written when the stored PIN changed meanwhile; answers whether it was.
+    pub fn upgrade_client_pin_hash(
+        &self,
+        tin_root: &str,
+        matched: &str,
+        phc: &str,
+    ) -> Result<bool> {
+        let root = parse_tin_root(tin_root)?;
+        let tx = self.conn.unchecked_transaction()?;
+        let updated = tx.execute(
+            "UPDATE taxpayers SET pin_hash = ?3, updated_at = datetime('now')
+             WHERE tin_root = ?1
+               AND (pin_hash = ?2
+                    OR (pin_hash IS NULL AND EXISTS (
+                        SELECT 1 FROM profiles p
+                        WHERE length(p.tin) >= 9 AND substr(p.tin, 1, 9) = ?1
+                          AND json_valid(p.data_json)
+                          AND json_extract(p.data_json, '$.profile_pin_hash') = ?2)))",
+            params![root, matched, phc],
+        )?;
+        if updated == 1 {
+            tx.execute(
+                "UPDATE profiles
+                 SET data_json = json_set(data_json, '$.profile_pin_hash', NULL)
+                 WHERE length(tin) >= 9 AND substr(tin, 1, 9) = ?1 AND json_valid(data_json)
+                   AND json_type(data_json, '$.profile_pin_hash') <> 'null'",
+                params![root],
+            )?;
+        }
+        tx.commit()?;
+        Ok(updated == 1)
+    }
+
     /// Set (`Some`) or clear (`None`) the taxpayer's authenticator secret.
     pub fn set_taxpayer_totp_secret(&self, tin_root: &str, secret: Option<&str>) -> Result<()> {
         self.set_taxpayer_credential(tin_root, "totp_secret", secret)
