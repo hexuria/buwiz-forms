@@ -1,0 +1,57 @@
+{
+ "v": 1,
+ "description": "money probe",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "prior": "500.25",
+  "amount": "1234.56",
+  "amount_shown": "1,234.56",
+  "tin_root": "123456788",
+  "year": "2026"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "phone": "sign-up-phone.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "tax-year",
+   "file": "tax-year.wants",
+   "required": true
+  },
+  {
+   "name": "open-2551q",
+   "desktop": "open-2551q.wants",
+   "phone": "open-2551q-phone.wants",
+   "required": true
+  },
+  {
+   "name": "mbprobe",
+   "desktop": "mbprobe-desktop.json",
+   "phone": "mbprobe-phone.json",
+   "required": true,
+   "needs_cli": "0.4.1"
+  }
+ ]
+}
