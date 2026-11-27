@@ -1,0 +1,128 @@
+{
+ "suite": "smoke",
+ "target": "ios",
+ "started": "20261127-022912",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912",
+ "cli_version": "0.4.1",
+ "app_commit": "7d3b77fe",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 602,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 21297,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 7137,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 2347,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 2639,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "known gap",
+   "ms": 8191,
+   "note": "fallback: needs an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+   "file": "agent-recipes/e2e/money-boxes-phone.json",
+   "step": "s9",
+   "error": "node `fp-frm2551Qv2018:txt16` value: expected \"500.25\", got Some(\".52005\")",
+   "error_code": "assert_failed",
+   "line": null,
+   "known_gap": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/06-money-boxes/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/06-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 10176,
+   "note": "precondition: Queue validates first: a 2551Q holding only Items 15 and 16, on a profile without the business start date and the income-tax election, stops at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "step": "s5",
+   "error": "occluded_by: 575",
+   "error_code": "host_error",
+   "line": "click tp-branch-business_start_date",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/07-queue/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/07-queue/failure-tree.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 49,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "birth-date",
+   "status": "known gap",
+   "ms": 363,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "step": "s1",
+   "error": "occluded_by: 467",
+   "error_code": "host_error",
+   "line": null,
+   "known_gap": "gap 1: the date is set in a date sheet",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/09-birth-date/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/09-birth-date/failure-tree.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 324,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "step": "s1",
+   "error": "occluded_by: 467",
+   "error_code": "host_error",
+   "line": "click nb-avatar",
+   "known_gap": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/10-sign-out/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/10-sign-out/failure-tree.json"
+  }
+ ]
+}

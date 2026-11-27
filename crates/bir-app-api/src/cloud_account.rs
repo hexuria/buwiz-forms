@@ -42,6 +42,8 @@ export function cloud_account_refresh(): Promise<CloudAccountStatus>;
 export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
 export function cloud_account_session_opened(): null;
 export function cloud_account_session_closed(): null;
+/** Whether the signed-in account signs in on this device for the first time (the welcome line shows); a first time is recorded. False, and nothing recorded, when no account is signed in. The page learns nothing else: what the device keeps is a keyed hash, host-only. */
+export function welcome_first_time(): boolean;
 "#;
 
 pub fn register(module: HostModule) -> HostModule {
@@ -52,6 +54,7 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("cloud_account_sign_out", sign_out)
         .function("cloud_account_session_opened", |_| session_opened())
         .function("cloud_account_session_closed", |_| session_closed())
+        .function("welcome_first_time", |_| welcome_first_time())
 }
 
 /// Pause filing, then open the UI only when a saved session still qualifies.
@@ -60,6 +63,7 @@ pub fn prepare_launch() {
     bir_core::account_session::on_session_ended(session_ended_by_server);
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
+    drop_old_welcomed_list();
     if crate::account_gate::auth_bypass_enabled() {
         bir_core::transport::set_practice_account(false);
         crate::account_gate::set_unlocked(true);
@@ -390,6 +394,47 @@ fn forget_saved_server_url() {
             .map_err(|error| HostError::new(error.to_string()))
     }) {
         tracing::warn!("could not drop the saved Buwiz server address: {error}");
+    }
+}
+
+/// accounts-and-lock W3: whether the signed-in account (the host's saved sign-in, never a word from the page) signs
+/// in on this device for the first time, recorded on a true (`bir_core::welcome`). No account signed in: false, and
+/// nothing recorded.
+pub(crate) fn welcome_first_time() -> HostResult {
+    crate::account_gate::ensure_unlocked()?;
+    drop_old_welcomed_list();
+    let Some(account) = signed_in_account_key() else {
+        return Ok(HostValue::Bool(false));
+    };
+    bir_core::welcome::first_time(&bir_core::rooms::device_store_here(), &account)
+        .map(HostValue::Bool)
+        .map_err(host_error)
+}
+
+/// The signed-in account's key (`bir_core::welcome::account_key`), as `cloud_account_status` sees the sign-in.
+fn signed_in_account_key() -> Option<String> {
+    let resolved = resolve().ok()?;
+    let stored = load_stored().ok().flatten()?;
+    let status = cloud_account::status_from(&resolved, Some(&stored.to_secrets()));
+    if !status.signed_in {
+        return None;
+    }
+    bir_core::welcome::account_key(status.user_id.as_deref(), status.email.as_deref())
+}
+
+/// #417's list of welcomed accounts held their user ids and addresses: it is dropped from `device_settings` and from
+/// the open database's settings (where it was before A1), at launch and at each welcome check. At most one more
+/// welcome.
+pub(crate) fn drop_old_welcomed_list() {
+    if let Err(error) = bir_core::welcome::drop_old_list(&bir_core::rooms::device_store_here()) {
+        tracing::warn!("could not drop the old welcomed list from the device store: {error}");
+    }
+    if let Err(error) = with_account_database(|database| {
+        database
+            .delete_setting(bir_core::welcome::OLD_WELCOMED_SETTING)
+            .map_err(|error| HostError::new(error.to_string()))
+    }) {
+        tracing::warn!("could not drop the old welcomed list from the database: {error}");
     }
 }
 

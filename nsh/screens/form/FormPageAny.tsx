@@ -7,6 +7,7 @@ import "../../theme/fonts";
 import { createDemoTaxpayer, DEMO } from "../../bir/testing";
 import { app, store } from "../../shell";
 import { FormPage, type FormTarget } from "./FormPage";
+import { boxFrames, pollBoxFrames, watchBoxFrames } from "./layoutProbe";
 
 interface Params {
   formCode?: string;
@@ -47,6 +48,7 @@ const probeValue = signal("");
 let count = 0;
 
 function Fixture() {
+  watchBoxFrames(true);
   createDemoTaxpayer();
   const p = (host.params || {}) as Params;
   let probeTimer: ReturnType<typeof setInterval> | undefined;
@@ -82,7 +84,10 @@ function Fixture() {
               }
               for (const [k, v] of Object.entries(p.edits || {})) s.edit(k, v);
               if (p.stepRow) s.jumpTo(Number(p.stepRow.split(":")[0]), p.stepRow);
-              if (p.probeKey) probeTimer = setInterval(() => probeValue.set(s.valueOf(p.probeKey!) || ""), 100);
+              probeTimer = setInterval(() => {
+              if (p.probeKey) probeValue.set(s.valueOf(p.probeKey!) || "");
+              pollBoxFrames();
+            }, 100);
             })
           }
         />
@@ -91,6 +96,7 @@ function Fixture() {
         <Text>{`saved returns ${store.savedReturns().length}`}</Text>
         <Text testID="fx-session-fields">{`session fields ${sessionFields()}`}</Text>
         <Text>{`probe ${probeValue()}`}</Text>
+        <Text testID="fx-box-xs">{`boxx ${JSON.stringify(boxFrames())}`}</Text>
         <Each of={toasts()}>{(t) => <Text>{t()}</Text>}</Each>
       </View>
     </View>

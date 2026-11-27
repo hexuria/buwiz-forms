@@ -389,6 +389,9 @@ export const verify_taxpayer_pin = (...args: Parameters<typeof Host.verify_taxpa
 export const verify_taxpayer_totp = (...args: Parameters<typeof Host.verify_taxpayer_totp>): ReturnType<typeof Host.verify_taxpayer_totp> =>
   Door.call("verify_taxpayer_totp", args) as ReturnType<typeof Host.verify_taxpayer_totp>;
 
+export const welcome_first_time = (...args: Parameters<typeof Host.welcome_first_time>): ReturnType<typeof Host.welcome_first_time> =>
+  Door.call("welcome_first_time", args) as ReturnType<typeof Host.welcome_first_time>;
+
 export const year_facts = (...args: Parameters<typeof Host.year_facts>): ReturnType<typeof Host.year_facts> =>
   Door.call("year_facts", args) as ReturnType<typeof Host.year_facts>;
 
@@ -606,6 +609,7 @@ export const bir = {
   verify_admin_totp,
   verify_taxpayer_pin,
   verify_taxpayer_totp,
+  welcome_first_time,
   year_facts,
   yearly_forms,
 } as const;
@@ -740,6 +744,7 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "verify_admin_totp", kind: "sync" },
   { name: "verify_taxpayer_pin", kind: "sync" },
   { name: "verify_taxpayer_totp", kind: "sync" },
+  { name: "welcome_first_time", kind: "sync" },
   { name: "year_facts", kind: "sync" },
   { name: "yearly_forms", kind: "sync" },
 ];

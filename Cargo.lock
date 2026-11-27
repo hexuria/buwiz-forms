@@ -455,6 +455,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "bir-core",
+ "bir-print",
  "bir-rules",
  "bir-submit",
  "block2",

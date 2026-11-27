@@ -46,6 +46,7 @@ pub mod install_id;
 #[cfg(target_os = "macos")]
 #[cfg_attr(not(feature = "sqlcipher"), allow(dead_code))]
 mod keychain;
+pub mod legacy_claim;
 pub mod legacy_migration;
 pub mod lock_timing;
 pub mod log_files;
@@ -66,6 +67,7 @@ pub mod receipt;
 pub mod reference;
 pub mod relay;
 pub mod rooms;
+pub mod safe_fs;
 pub mod schema;
 pub mod send_in_flight;
 pub mod tax_profile;
@@ -75,6 +77,7 @@ pub mod time_utils;
 pub mod transport;
 pub mod validation;
 pub mod validation_summary;
+pub mod welcome;
 
 /// Local mock of the BIR SFTP endpoint. Tests and the `mock-bir` feature
 /// only; the shipped app never enables it.

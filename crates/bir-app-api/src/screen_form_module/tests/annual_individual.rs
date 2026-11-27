@@ -1004,6 +1004,43 @@ fn form_1701_schedule_3_and_4_take_the_filers_amounts() {
     }
 }
 
+/// The penalty group carries which of its components the filer typed: the
+/// screen marks every other box "Computed from other items". Nothing typed:
+/// the list is empty. Typing Item 29 puts its key in it, and the computed
+/// amounts (Items 27, 28, 30, 31) do not move.
+#[test]
+fn form_1701_penalty_group_says_which_components_are_typed() {
+    setup();
+    let opened = opened("1701");
+    let group = opened["penalties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| strings(&g["keys"]).contains("frm1701:txtPg1I27A"))
+        .unwrap();
+    assert_eq!(group["typed"], json!([]), "nothing typed yet");
+    let typed = fill_unlocked(
+        "1701",
+        &opened["draft"],
+        json!({"frm1701:txtPg1I29A": "1000"}),
+        &[
+            "frm1701:txtPg1I27A",
+            "frm1701:txtPg1I28A",
+            "frm1701:txtPg1I29A",
+        ],
+    );
+    let group = typed["penalties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| strings(&g["keys"]).contains("frm1701:txtPg1I27A"))
+        .unwrap();
+    assert_eq!(group["typed"], json!(["frm1701:txtPg1I29A"]));
+    let fields = field_map("1701", &typed["draft"]);
+    assert_eq!(fields["frm1701:txtPg1I29A"], "1,000.00");
+    assert_eq!(fields["frm1701:txtPg1I27A"], "0.00", "computed unchanged");
+}
+
 /// R8.0 (1701): Items 27-29 show the shared model's amounts, locked until
 /// Edit penalties; a typed one files and Items 30 and 31 follow. A draft
 /// stored before (no penalty state) says its amounts are kept as entered,
@@ -1056,6 +1093,17 @@ fn form_1701_penalties_are_computed_and_kept_ones_say_so() {
         .find(|g| strings(&g["keys"]).contains("frm1701:txtPg1I27A"))
         .unwrap();
     assert_eq!(group["kept"], true);
+    // A kept group's boxes are not computed: they show what the filer entered
+    // before the model, so the page marks none of them "computed from other items".
+    assert_eq!(
+        group["typed"],
+        json!([
+            "frm1701:txtPg1I27A",
+            "frm1701:txtPg1I28A",
+            "frm1701:txtPg1I29A"
+        ]),
+        "a kept group's boxes show what the filer entered, not computed amounts"
+    );
     let computed = fill_unlocked(
         "1701",
         &checked["draft"],

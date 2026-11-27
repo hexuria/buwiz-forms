@@ -143,7 +143,7 @@ jobs:
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
-        sudo apt-get update
+        sudo bash scripts/ci/apt_update.sh
         sudo apt-get install -y \
           pkg-config \
           libx11-dev \
@@ -401,7 +401,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         mkdir -p ~/apt-archives/partial
-        sudo apt-get update
+        sudo bash buwiz-forms/scripts/ci/apt_update.sh
         sudo -E apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" \
           build-essential pkg-config perl python3 \
           clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
@@ -473,6 +473,90 @@ jobs:
           exit 1
         fi
 
+  # Compile-proof the agent plug on the pull requests that move it. `nsh check` builds the app without `agent`,
+  # so a pin bump in nsh/Cargo.toml and nsh/Cargo.lock otherwise merges without nsh-gpui-agent-linux ever being
+  # compiled here. This is the compile half of nsh.yml's agent-feature step, direct by cargo so it needs no nsh CLI.
+  nsh-agent-check:
+    name: NSH app agent compile check (Linux)
+    needs: changes
+    if: needs.changes.outputs.nsh_agent_check == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: "1.99.0"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      BUWIZ_NO_KEYCHAIN: "1"
+      EBIR_TEST_ENV: "1"
+      BIR_AUTH_BYPASS: "1"
+      BIR_SFTP_DRY_RUN: "1"
+    steps:
+    - name: Check out buwiz-forms
+      uses: actions/checkout@v4
+      with:
+        path: buwiz-forms
+
+    - name: Read the NSH pin from nsh.yml
+      id: pin
+      run: |
+        ref=$(sed -n 's/^  NSH_PINNED_REF: *\([0-9a-f]\{40\}\) *$/\1/p' buwiz-forms/.github/workflows/nsh.yml)
+        [ -n "$ref" ] || { echo "::error::no NSH_PINNED_REF in nsh.yml"; exit 1; }
+        echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+    - name: Check out NSH (the pinned commit, beside buwiz-forms)
+      uses: actions/checkout@v4
+      with:
+        repository: hexuria/nsh
+        ref: ${{ steps.pin.outputs.ref }}
+        token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+        path: nsh
+        persist-credentials: false
+
+    - name: Check the two checkouts line up
+      run: |
+        test -f nsh/crates/nsh-core/Cargo.toml
+        test -f buwiz-forms/nsh/Cargo.toml
+        git -C nsh log -1 --format='NSH at %H %s'
+
+    - name: Restore the Linux packages
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/apt-archives
+        key: nsh-linux-apt-${{ runner.arch }}-${{ hashFiles('buwiz-forms/.github/workflows/nsh.yml') }}
+        restore-keys: nsh-linux-apt-${{ runner.arch }}-
+
+    - name: Install GTK 4, WebKitGTK, GStreamer and the build tools
+      timeout-minutes: 45
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        mkdir -p ~/apt-archives/partial
+        sudo bash buwiz-forms/scripts/ci/apt_update.sh
+        sudo -E apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" \
+          build-essential pkg-config perl python3 \
+          clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+          libdbus-1-dev libssl-dev \
+          xvfb xauth at-spi2-core libxtst6
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+
+    - name: Install huacnlee/cargo
+      uses: ./nsh/.github/actions/cargo
+      with:
+        cache: buwiz-nsh-app
+        lockfiles: buwiz-forms/nsh/Cargo.lock
+
+    # `--no-run` is the compile proof: the app's crate and its test targets build with `agent`, which links the
+    # Linux plug crate at the pin in Cargo.lock. Running the data-plane tests stays in the complete NSH suite.
+    - name: Compile the app and Linux plug with the agent feature
+      working-directory: buwiz-forms
+      run: cargo test --locked --manifest-path nsh/Cargo.toml --features agent --no-run
+
   # Decides what this run does: scripts/ci_plan.py (docs/CI.md has the same
   # rules in words, and scripts/tests/test_ci_plan.py tests them). The lane
   # comes from the event, the systems from the branch name or the inputs, and
@@ -493,6 +577,7 @@ jobs:
       check: ${{ steps.decide.outputs.check }}
       check_matrix: ${{ steps.decide.outputs.check_matrix }}
       nsh_check: ${{ steps.decide.outputs.nsh_check }}
+      nsh_agent_check: ${{ steps.decide.outputs.nsh_agent_check }}
       scripts: ${{ steps.decide.outputs.scripts }}
       installer: ${{ steps.decide.outputs.installer }}
       validation: ${{ steps.decide.outputs.validation }}
@@ -753,7 +838,7 @@ jobs:
   # check reads.
   ci-ok:
     name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok' }}
-    needs: [ changes, check, nsh-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
+    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
     runs-on: ubuntu-22.04
     steps:
@@ -765,6 +850,8 @@ jobs:
         WANT_CHECK: ${{ needs.changes.outputs.check }}
         NSH_CHECK: ${{ needs.nsh-check.result }}
         WANT_NSH_CHECK: ${{ needs.changes.outputs.nsh_check }}
+        NSH_AGENT_CHECK: ${{ needs.nsh-agent-check.result }}
+        WANT_NSH_AGENT_CHECK: ${{ needs.changes.outputs.nsh_agent_check }}
         WINDOWS_SETUP: ${{ needs.windows-setup.result }}
         WANT_WINDOWS_SETUP: ${{ needs.changes.outputs.installer }}
         SCRIPTS: ${{ needs.scripts.result }}
@@ -776,7 +863,7 @@ jobs:
         WANT_LEGACY_GUARD: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
       run: |
         set -euo pipefail
-        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
+        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
         fail() { echo "::error::$1"; exit 1; }
         [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
         expect() {
@@ -788,6 +875,7 @@ jobs:
         }
         expect check "$CHECK" "$WANT_CHECK"
         expect nsh-check "$NSH_CHECK" "$WANT_NSH_CHECK"
+        expect nsh-agent-check "$NSH_AGENT_CHECK" "$WANT_NSH_AGENT_CHECK"
         expect windows-setup "$WINDOWS_SETUP" "$WANT_WINDOWS_SETUP"
         expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
         expect validation-rules-v1 "$V1" "$WANT_VALIDATION"

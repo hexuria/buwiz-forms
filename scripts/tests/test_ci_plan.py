@@ -47,18 +47,34 @@ NOT_CLOSED_OR_DRAFT = ("(github.event_name != 'pull_request' || (github.event.ac
                        "&& !github.event.pull_request.draft))")
 
 NOTHING_HEAVY = dict(check_tests=False, installer=False, screens=False, build=False, nsh_rust=False, core_plain=False,
-                     nsh_systems=[])
+                     nsh_systems=[], nsh_agent_check=False)
+
+
+class AgentGatePolicyTests(unittest.TestCase):
+    def test_every_agent_gated_nsh_rust_file_is_an_agent_compile_input(self):
+        missing = []
+        for base in ("nsh/src", "nsh/tests"):
+            for path in sorted((ROOT / base).rglob("*.rs")):
+                if 'feature = "agent"' not in path.read_text(encoding="utf-8"):
+                    continue
+                relative = path.relative_to(ROOT).as_posix()
+                if not ci_plan.NSH_AGENT_CHECK_INPUTS.match(relative):
+                    missing.append(relative)
+        self.assertEqual(missing, [])
 
 
 class QuickLaneTests(unittest.TestCase):
-    def assert_quick(self, plan, *, check: bool, nsh_check: bool, scripts: bool = False, validation: bool = False):
+    def assert_quick(self, plan, *, check: bool, nsh_check: bool, scripts: bool = False, validation: bool = False,
+                     nsh_agent_check: bool = False):
         self.assertEqual(plan["lane"], "quick")
         self.assertEqual(plan["check_systems"], ["linux"] if check else [])
         self.assertEqual(plan["nsh_check"], nsh_check)
+        self.assertEqual(plan["nsh_agent_check"], nsh_agent_check)
         self.assertEqual(plan["scripts"], scripts)
         self.assertEqual(plan["validation_systems"], ["linux"] if validation else [])
         for name, value in NOTHING_HEAVY.items():
-            self.assertEqual(plan[name], value, name)
+            if name != "nsh_agent_check":
+                self.assertEqual(plan[name], value, name)
 
     def test_docs_only_runs_only_the_cheapest_jobs(self):
         self.assert_quick(pr("docs/plans/x.md", "README.md", "CONTRIBUTING.md", "docs/agent.md", "nsh/AGENTS.md",
@@ -72,12 +88,12 @@ class QuickLaneTests(unittest.TestCase):
         for path in ("crates/bir-core/src/lib.rs", "crates/bir-app-api/src/lib.rs", "Cargo.lock", "forms/1601C.json",
                      "justfile", "nsh/src/print.rs", "nsh/Cargo.toml"):
             with self.subTest(path=path):
-                self.assert_quick(pr(path), check=True, nsh_check=True)
+                self.assert_quick(pr(path), check=True, nsh_check=True, nsh_agent_check=(path == "nsh/Cargo.toml"))
 
     def test_nsh_ui_and_screen_tests_run_only_the_nsh_type_check(self):
         for path in ("nsh/screens/home/Home.tsx", "nsh/screens/home/Home.test.tsx", "nsh/tests/agent.rs"):
             with self.subTest(path=path):
-                self.assert_quick(pr(path), check=False, nsh_check=True)
+                self.assert_quick(pr(path), check=False, nsh_check=True, nsh_agent_check=(path == "nsh/tests/agent.rs"))
 
     def test_installer_and_packaging_run_only_the_script_tests(self):
         for path in ("packaging/windows/nsh.wxs", "assets/windows/x.png", "scripts/package_msix.ps1",
@@ -114,7 +130,20 @@ class QuickLaneTests(unittest.TestCase):
         for changed in (None, []):
             with self.subTest(changed=changed):
                 plan = ci_plan.decide(event="pull_request", ref="refs/pull/1/merge", changed=changed)
-                self.assert_quick(plan, check=True, nsh_check=True)
+                self.assert_quick(plan, check=True, nsh_check=True, nsh_agent_check=True)
+
+    def test_agent_compile_check_follows_the_plug_pin_and_agent_only_files(self):
+        for path in ("nsh/Cargo.toml", "nsh/Cargo.lock", "nsh/src/agent.rs", "nsh/tests/agent.rs",
+                     "nsh/tests/agent_send.rs", "nsh/tests/window_plane.rs"):
+            with self.subTest(path=path):
+                self.assertTrue(pr(path)["nsh_agent_check"])
+        for path in ("nsh/screens/home/Home.tsx", "nsh/tests/other.rs", "crates/bir-core/src/lib.rs"):
+            with self.subTest(path=path):
+                self.assertFalse(pr(path)["nsh_agent_check"])
+
+    def test_agent_compile_check_is_a_pull_request_check_only(self):
+        self.assertFalse(push_to("main", "nsh/Cargo.lock")["nsh_agent_check"])
+        self.assertFalse(ci_plan.decide(event="schedule", ref="refs/heads/main")["nsh_agent_check"])
 
     def test_push_to_main_and_codex_run_the_quick_lane(self):
         for ref in ("refs/heads/main", "refs/heads/codex/x"):
@@ -132,7 +161,7 @@ class ClosedAndDraftTests(unittest.TestCase):
     def assert_nothing(self, plan):
         self.assertEqual(plan["lane"], "none")
         out = ci_plan.outputs(plan)
-        for name in ("check", "nsh_check", "scripts", "installer", "validation", "nsh_macos", "nsh_linux",
+        for name in ("check", "nsh_check", "nsh_agent_check", "scripts", "installer", "validation", "nsh_macos", "nsh_linux",
                      "nsh_windows", "screens", "build", "nsh_rust", "core_plain", "linux_packages"):
             self.assertEqual(out[name], "false", name)
         self.assertEqual(json.loads(out["check_matrix"]), {"include": []})
@@ -313,7 +342,8 @@ class OutputTests(unittest.TestCase):
         quick = ci_plan.outputs(pr("crates/bir-core/src/lib.rs"))
         self.assertEqual(json.loads(quick["check_matrix"])["include"],
                          [{"os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu", "tests": False}])
-        self.assertEqual((quick["check"], quick["nsh_check"], quick["validation"]), ("true", "true", "false"))
+        self.assertEqual((quick["check"], quick["nsh_check"], quick["nsh_agent_check"], quick["validation"]),
+                         ("true", "true", "false", "false"))
 
     def test_main_writes_the_outputs_and_fails_on_bad_inputs(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -413,18 +443,19 @@ class WorkflowTests(unittest.TestCase):
         needs = re.search(r"(?m)^    needs: \[(.*)\]\s*$", gate)
         assert needs is not None
         self.assertEqual([name.strip() for name in needs.group(1).split(",")],
-                         ["changes", "check", "nsh-check", "windows-setup", "scripts", "validation-rules-v1",
+                         ["changes", "check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1",
                           "validation-rules-v2", "legacy-guard"])
         self.assertIn('[[ "$CHANGES" == success ]]', gate)
         self.assertIn("&& 'ci-ok' || 'tests-ok' }}", gate)
-        for name in ("check", "nsh-check", "windows-setup", "scripts", "validation-rules-v1", "validation-rules-v2",
+        for name in ("check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1", "validation-rules-v2",
                      "legacy-guard"):
             self.assertIn(f"expect {name} ", gate)
         # Folded into ci-ok; nothing waits for a runner just to read two results.
         self.assertNotIn("\n  validation-rules:\n", CI)
 
     def test_every_heavy_job_waits_for_the_plan(self):
-        for name, flag in (("windows-setup", "installer"), ("nsh-check", "nsh_check"), ("scripts", "scripts"),
+        for name, flag in (("windows-setup", "installer"), ("nsh-check", "nsh_check"),
+                           ("nsh-agent-check", "nsh_agent_check"), ("scripts", "scripts"),
                            ("validation-rules-v1", "validation"), ("validation-rules-v2", "validation")):
             self.assertIn(f"    if: needs.changes.outputs.{flag} == 'true'\n", job(CI, name))
         for name, flag in (("nsh-macos", "nsh_macos"), ("nsh-linux", "nsh_linux"), ("nsh-windows", "nsh_windows"),
@@ -477,6 +508,15 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(CI.count("8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf"), 0)
         self.assertIn("NSH_PINNED_REF", job(CI, "nsh-check"))
         self.assertIn("run: just nsh-check -v", job(CI, "nsh-check"))
+
+    def test_agent_compile_check_compiles_the_linux_plug_and_counts_in_ci_ok(self):
+        agent = job(CI, "nsh-agent-check")
+        self.assertIn("cargo test --locked --manifest-path nsh/Cargo.toml --features agent --no-run", agent)
+        self.assertIn("sudo bash buwiz-forms/scripts/ci/apt_update.sh", agent)
+        gate = job(CI, "ci-ok")
+        self.assertIn("NSH_AGENT_CHECK: ${{ needs.nsh-agent-check.result }}", gate)
+        self.assertIn("WANT_NSH_AGENT_CHECK: ${{ needs.changes.outputs.nsh_agent_check }}", gate)
+        self.assertIn('expect nsh-agent-check "$NSH_AGENT_CHECK" "$WANT_NSH_AGENT_CHECK"', gate)
 
     def test_main_failures_open_an_issue_but_cancellations_do_not(self):
         report = job(CI, "main-report")

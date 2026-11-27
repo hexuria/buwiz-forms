@@ -139,7 +139,7 @@ pub(crate) fn check_sample_with_layout(
 /// Parse `<stem>.official.xml` (`<div>key=valuekey=</div>`) tolerantly so
 /// extended-layout samples (added rows) are covered without needing each
 /// dynamic layout.
-fn parse_official_xml_fields(xml: &str) -> std::collections::BTreeMap<String, String> {
+pub(crate) fn parse_official_xml_fields(xml: &str) -> std::collections::BTreeMap<String, String> {
     let mut map = std::collections::BTreeMap::new();
     let mut rest = xml;
     while let Some(open) = rest.find("<div>") {
@@ -190,10 +190,13 @@ fn js_unescape_official(s: &str) -> String {
     out
 }
 
-fn frozen_slug_for_sample(stem: &str) -> &'static str {
+pub(crate) fn frozen_slug_for_sample(stem: &str) -> &'static str {
     let prefix = stem.split('-').next().unwrap_or(stem);
     match prefix {
         "0605" => "0605-1999",
+        "0619E" => "0619e-2018",
+        "0619F" => "0619f-2018",
+        "1600WP" => "1600wp-2010",
         "1600PT" => "1600-pt-2018",
         "1600VT" => "1600-vt-2018",
         "1601C" => "1601c-2018",
@@ -260,20 +263,101 @@ fn joined_keys_for_slug(slug: &str) -> std::collections::BTreeSet<String> {
     keys
 }
 
-fn norm_numeric(s: &str) -> Option<f64> {
+/// The signed number an amount text holds: commas and spaces dropped,
+/// `(123)` and `-123` both negative. `None` for anything that is not a number.
+pub(crate) fn norm_numeric(s: &str) -> Option<f64> {
     let t = s.trim().replace([',', ' '], "");
     if t.is_empty() {
         return None;
     }
-    let cleaned = if let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
-        format!("-{inner}")
-    } else {
-        t
+    let (negative, inner) = match t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        Some(inner) => (true, inner),
+        None => match t.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, t.as_str()),
+        },
     };
-    cleaned.parse::<f64>().ok()
+    if inner.is_empty() || !inner.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return None;
+    }
+    let magnitude: f64 = inner.parse().ok()?;
+    Some(if negative { -magnitude } else { magnitude })
 }
 
-fn official_matches_print_exact(official: &str, printed: &str) -> bool {
+/// What a joined key holds, which decides how its print is compared.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Kind {
+    /// Compared as a signed number.
+    Amount,
+    /// Compared by its digits.
+    Tin,
+    /// Compared exactly (checkbox truth marks aside).
+    Text,
+}
+
+/// The amount controls of the form printed on `slug`, from its official
+/// layout (`crates/bir-core/data/official-xml/<form_id>.json`, the form id
+/// writer-cells.json names): the `numbertext` entries (`"number"`) and the
+/// controls the official page starts at `0` or `0.00`.
+pub(crate) fn official_amount_keys(slug: &str) -> std::collections::BTreeSet<String> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let cells: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            root.join("../../html-frozen")
+                .join(slug)
+                .join("writer-cells.json"),
+        )
+        .expect("writer-cells.json"),
+    )
+    .expect("valid writer-cells.json");
+    let form_id = cells["form_id"]
+        .as_str()
+        .expect("writer-cells form_id")
+        .to_ascii_lowercase();
+    let path = root
+        .join("data/official-xml")
+        .join(format!("{form_id}.json"));
+    let layout: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("missing {}: {e}", path.display())),
+    )
+    .expect("valid official layout");
+    layout["entries"]
+        .as_array()
+        .expect("layout entries")
+        .iter()
+        .filter(|entry| {
+            entry.get("number").is_some() || matches!(entry["default"].as_str(), Some("0" | "0.00"))
+        })
+        .filter_map(|entry| entry["key"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// An official value written the way `formatCurrency()` writes an amount
+/// (`1,234.50`, `-5.00`): grouped digits with two decimals.
+pub(crate) fn is_currency_text(s: &str) -> bool {
+    let body = s.trim();
+    let body = body.strip_prefix('-').unwrap_or(body);
+    let Some((whole, cents)) = body.split_once('.') else {
+        return false;
+    };
+    cents.len() == 2
+        && cents.bytes().all(|b| b.is_ascii_digit())
+        && !whole.is_empty()
+        && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+}
+
+fn kind_of(key: &str, official: &str, amounts: &std::collections::BTreeSet<String>) -> Kind {
+    if amounts.contains(key) || is_currency_text(official) {
+        Kind::Amount
+    } else if key.to_ascii_uppercase().contains("TIN") {
+        Kind::Tin
+    } else {
+        Kind::Text
+    }
+}
+
+fn official_matches_print(official: &str, printed: &str, kind: Kind) -> bool {
     let off = official.trim();
     let prt = printed.trim();
     if off == prt {
@@ -284,73 +368,37 @@ fn official_matches_print_exact(official: &str, printed: &str) -> bool {
     {
         return true;
     }
-    // form-review/RULES.md section 7: an untouched amount box stays blank on
-    // paper even though the upload carries zero; typed or computed zero may print.
-    if norm_numeric(off) == Some(0.0) && prt.is_empty() {
-        return true;
-    }
-    if let (Some(a), Some(b)) = (norm_numeric(off), norm_numeric(prt)) {
-        if (a - b).abs() < 1e-6 {
-            return true;
+    match kind {
+        Kind::Amount => {
+            // form-review/RULES.md section 7: an untouched amount box stays
+            // blank on paper even though the upload carries zero; typed or
+            // computed zero may print.
+            if norm_numeric(off) == Some(0.0) && prt.is_empty() {
+                return true;
+            }
+            match (norm_numeric(off), norm_numeric(prt)) {
+                (Some(a), Some(b)) => (a - b).abs() < 1e-6,
+                _ => false,
+            }
         }
+        Kind::Tin => {
+            let digits = |s: &str| s.chars().filter(char::is_ascii_digit).collect::<String>();
+            off.chars().all(|c| c.is_ascii_digit())
+                && prt
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '-' || c == ' ')
+                && digits(off) == digits(prt)
+        }
+        Kind::Text => false,
     }
-    false
 }
 
-/// Permanent exact print-map parity test over all 73 official samples:
-/// every joined key in `html-frozen/<slug>/writer-cells.json` that holds a
-/// non-empty value in `<stem>.official.xml` must appear with the exact same
-/// value (case-sensitive, normalized only for numeric commas/decimals and
-/// checkbox truth marks) in the form's print field map.
-#[test]
-fn every_official_sample_joined_key_matches_official_xml_exact() {
+/// Every official sample (`<stem>.official.xml`) with the print field map of
+/// the draft that uploads it byte for byte: what the app prints for it.
+pub(crate) fn official_samples() -> Vec<(&'static str, std::collections::BTreeMap<String, String>)>
+{
     use bir_core::forms::queueable::QueueableForm;
-
-    // Explicit commented exception list (no other key may be skipped):
-    // 1. Email keys (`*email*`): the official upload uppercases email on
-    //    1700/1800/1801 (`SAMPLE.TAXPAYER@EXAMPLE.COM`), whereas paper keeps
-    //    email addresses in the case held by the draft (`sample.taxpayer@example.com`).
-    // 2. `frm1702RT:drpPg1I5AtcOther`: when "Other ATC" is NOT elected
-    //    (`other_selected == false`), the official HTML `<select>` still
-    //    serializes its disabled default `"IC010"`, while `to_print_field_map`
-    //    intentionally prints `""` so an unselected box stays blank on paper
-    //    (see `form_1702rt_official::tests::other_atc_prints_the_election_and_uploads_the_official_default`).
-    // 3. `frm1604c:txtYear` and `frm1604e:txtYear`: the frozen sheet preprints
-    //    `"2 0"` before the two year slots, so `to_print_field_map` emits the
-    //    two-digit suffix (`"25"`) while the upload holds the 4-digit year (`"2025"`).
-    // 4. `frm1701:txtPg2I2SpouseRDOCode`: when the spouse column is closed the
-    //    upload writes `"000"` while `spouse_rdo_shown()` intentionally prints `""`.
-    // 5. Unused zero-valued schedule rows on 1601C (`frm1601c:sched1:*`) and
-    //    2551Q (`txtATCAmt{2..6}`, `txtATCDue{2..6}`): upload writes `"0.00"`
-    //    while paper leaves unused rows blank.
-    let is_allowed_exception = |key: &str, official: &str, printed: &str| -> bool {
-        if key.to_ascii_lowercase().contains("email") && official.eq_ignore_ascii_case(printed) {
-            return true;
-        }
-        if key == "frm1702RT:drpPg1I5AtcOther" && official == "IC010" && printed.is_empty() {
-            return true;
-        }
-        if matches!(key, "frm1604c:txtYear" | "frm1604e:txtYear")
-            && official.len() == 4
-            && printed == &official[2..]
-        {
-            return true;
-        }
-        if key == "frm1701:txtPg2I2SpouseRDOCode" && official == "000" && printed.is_empty() {
-            return true;
-        }
-        if (key.starts_with("frm1601c:sched1:")
-            || key.starts_with("txtATCAmt")
-            || key.starts_with("txtATCDue"))
-            && official == "0.00"
-            && printed.is_empty()
-        {
-            return true;
-        }
-        false
-    };
-
-    let samples: Vec<(&str, std::collections::BTreeMap<String, String>)> = vec![
+    vec![
         (
             "1600PT-062025",
             sample_payloads::form_1600pt::sample_1600pt().to_print_field_map(),
@@ -643,9 +691,111 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
             "2550Q-122025Q1-specify",
             sample_payloads::form_2550q::sample_2550q_specify().to_print_field_map(),
         ),
-    ];
+        (
+            "0619E-062025",
+            sample_payloads::form_0619e::sample_0619e().print_field_map(),
+        ),
+        (
+            "0619F-062025WF",
+            sample_payloads::form_0619f::sample_0619f().print_field_map(),
+        ),
+        (
+            "1600WP-06152025",
+            sample_payloads::form_1600wp::sample_two_atcs().print_field_map(),
+        ),
+        (
+            "1600WP-07012025",
+            sample_payloads::form_1600wp::sample_one_atc().print_field_map(),
+        ),
+        (
+            "1600WP-08312025",
+            sample_payloads::form_1600wp::sample_no_atc().print_field_map(),
+        ),
+        (
+            "2552-03122025",
+            sample_payloads::form_2552::sample_2552_add_more().print_field_map(),
+        ),
+    ]
+}
+
+/// Permanent exact print-map parity test over all 79 official samples:
+/// every joined key in `html-frozen/<slug>/writer-cells.json` that holds a
+/// non-empty value in `<stem>.official.xml` must appear in the form's print
+/// field map: an amount as the same signed number (the print groups
+/// thousands and may show a negative in parentheses), a TIN by the same
+/// digits (the print may dash it), anything else exactly (case-sensitive;
+/// checkbox truth marks aside).
+#[test]
+fn every_official_sample_joined_key_matches_official_xml_exact() {
+    // Explicit commented exception list (no other key may be skipped):
+    // 1. Email keys (`*email*`): the official upload uppercases email on
+    //    1700/1800/1801 (`SAMPLE.TAXPAYER@EXAMPLE.COM`), whereas paper keeps
+    //    email addresses in the case held by the draft (`sample.taxpayer@example.com`).
+    // 2. `frm1702RT:drpPg1I5AtcOther`: when "Other ATC" is NOT elected
+    //    (`other_selected == false`), the official HTML `<select>` still
+    //    serializes its disabled default `"IC010"`, while `to_print_field_map`
+    //    intentionally prints `""` so an unselected box stays blank on paper
+    //    (see `form_1702rt_official::tests::other_atc_prints_the_election_and_uploads_the_official_default`).
+    // 3. `frm1604c:txtYear` and `frm1604e:txtYear`: the frozen sheet preprints
+    //    `"2 0"` before the two year slots, so `to_print_field_map` emits the
+    //    two-digit suffix (`"25"`) while the upload holds the 4-digit year (`"2025"`).
+    // 4. `frm1701:txtPg2I2SpouseRDOCode`: when the spouse column is closed the
+    //    upload writes `"000"` while `spouse_rdo_shown()` intentionally prints `""`.
+    // 5. `frm0619E:txtAddress` / `frm0619F:txtAddress` (`txtAddress2`): the
+    //    upload writes the address in capitals and cuts it at 100 characters,
+    //    the rest going to `txtAddress2`; the print map keeps the address
+    //    whole as typed, and the sheet prints it in capitals over its lines
+    //    (rendered_print_parity compares the printed lines with the upload's
+    //    two keys joined). So the print map's address equals the upload's two
+    //    keys joined, case aside, and `txtAddress2` has no value of its own.
+    // (Unused zero-valued amount rows, the upload's `"0.00"` against a blank
+    // box, need no entry: an amount compares as a number, and an untouched
+    // amount box is blank on paper by form-review/RULES.md section 7.)
+    let is_allowed_exception = |key: &str, official: &str, printed: &str| -> bool {
+        if key.to_ascii_lowercase().contains("email") && official.eq_ignore_ascii_case(printed) {
+            return true;
+        }
+        if key == "frm1702RT:drpPg1I5AtcOther" && official == "IC010" && printed.is_empty() {
+            return true;
+        }
+        if matches!(key, "frm1604c:txtYear" | "frm1604e:txtYear")
+            && official.len() == 4
+            && printed == &official[2..]
+        {
+            return true;
+        }
+        if key == "frm1701:txtPg2I2SpouseRDOCode" && official == "000" && printed.is_empty() {
+            return true;
+        }
+        false
+    };
+    let address_split = |key: &str,
+                         official: &std::collections::BTreeMap<String, String>,
+                         print_map: &std::collections::BTreeMap<String, String>|
+     -> bool {
+        let Some(form) = ["frm0619E", "frm0619F"].into_iter().find(|form| {
+            key == format!("{form}:txtAddress") || key == format!("{form}:txtAddress2")
+        }) else {
+            return false;
+        };
+        let get = |k: String| {
+            official
+                .get(&k)
+                .map(String::as_str)
+                .unwrap_or("")
+                .to_string()
+        };
+        let joined = get(format!("{form}:txtAddress")) + &get(format!("{form}:txtAddress2"));
+        print_map
+            .get(&format!("{form}:txtAddress"))
+            .is_some_and(|printed| printed.trim().eq_ignore_ascii_case(joined.trim()))
+    };
+
+    let samples = official_samples();
 
     let mut slug_cache: std::collections::BTreeMap<&str, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
+    let mut amount_cache: std::collections::BTreeMap<&str, std::collections::BTreeSet<String>> =
         std::collections::BTreeMap::new();
     let mut failures = Vec::new();
     let mut total_checked = 0usize;
@@ -655,6 +805,9 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
         let joined = slug_cache
             .entry(slug)
             .or_insert_with(|| joined_keys_for_slug(slug));
+        let amounts = amount_cache
+            .entry(slug)
+            .or_insert_with(|| official_amount_keys(slug));
         let xml_path = samples_dir().join(format!("{stem}.official.xml"));
         let xml = std::fs::read_to_string(&xml_path)
             .unwrap_or_else(|e| panic!("missing {}: {e}", xml_path.display()));
@@ -670,8 +823,9 @@ fn every_official_sample_joined_key_matches_official_xml_exact() {
             }
             total_checked += 1;
             let prt_val = print_map.get(key).map(String::as_str).unwrap_or("");
-            if official_matches_print_exact(off_trim, prt_val)
+            if official_matches_print(off_trim, prt_val, kind_of(key, off_trim, amounts))
                 || is_allowed_exception(key, off_trim, prt_val)
+                || address_split(key, &official, print_map)
             {
                 continue;
             }

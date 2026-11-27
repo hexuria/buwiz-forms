@@ -3904,6 +3904,199 @@ mod tests {
         assert!(matches!(draft.status, FilingStatus::Draft));
     }
 
+    fn session_with_a_valid_2551q() -> Session {
+        let mut session = session();
+        call(
+            &mut session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        session.lock_db().unwrap().grant_send(TIN, "2551Q").unwrap();
+        {
+            let db = session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+            draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
+            draft.schedule_1[0].taxable_amount = 10_000.0;
+            draft.creditable_tax_withheld = 12.5;
+            draft.recompute(None);
+            db.save_2551q_draft(&draft).unwrap();
+        }
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        session
+    }
+
+    #[test]
+    fn form_open_records_a_dormant_2551q_item16_clearing_as_pending() {
+        let mut session = session();
+        call(
+            &mut session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        {
+            let db = session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+            draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
+            draft.tax_paid_previous = 42.0;
+            draft.recompute(None);
+            draft.tax_paid_previous = 42.0;
+            db.save_2551q_draft(&draft).unwrap();
+        }
+
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        assert_eq!(
+            session.open.as_ref().unwrap().draft["tax_paid_previous"],
+            0.0
+        );
+        let db = session.lock_db().unwrap();
+        let pending = db
+            .settings_with_prefix("notice_pending:2551q_item16:")
+            .unwrap();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        assert!(pending[0].1.contains("Item 16 was cleared"), "{pending:?}");
+    }
+
+    #[test]
+    fn form_fill_records_an_assistant_recompute_clearing_from_the_stored_row() {
+        let mut session = session();
+        call(
+            &mut session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        {
+            let db = session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+            draft.is_amended = true;
+            draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
+            draft.tax_paid_previous = 42.0;
+            draft.recompute(None);
+            assert_eq!(draft.tax_paid_previous, 42.0);
+            db.save_2551q_draft(&draft).unwrap();
+        }
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        assert_eq!(
+            session.open.as_ref().unwrap().draft["tax_paid_previous"],
+            42.0
+        );
+
+        // The fill recomputes before it saves, so its in-memory before-image
+        // is already zero. The save must compare with the stored row instead.
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm2551Qv2018:amendedRtn_2": "true"}}),
+        )
+        .unwrap();
+        assert_eq!(
+            session.open.as_ref().unwrap().draft["tax_paid_previous"],
+            0.0
+        );
+        let db = session.lock_db().unwrap();
+        let pending = db
+            .settings_with_prefix("notice_pending:2551q_item16:")
+            .unwrap();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        assert!(pending[0].1.contains("Item 16 was cleared"), "{pending:?}");
+    }
+
+    #[test]
+    fn form_fields_and_send_hold_2551q_item16_to_its_gate() {
+        let mut session = session_with_a_valid_2551q();
+        let item16 = bir_core::forms::agent::draft_locks::item16_2551q::KEY;
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        let box_ = fields["boxes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|box_| box_["key"] == item16)
+            .unwrap_or_else(|| panic!("{fields}"));
+        assert_eq!(box_["value"], "0.00", "{box_}");
+        let refused = call(&mut session, "form.fill", json!({"fields": {item16: "42"}})).unwrap();
+        assert_eq!(
+            refused["refused"][item16],
+            bir_core::forms::agent::draft_locks::item16_2551q::AMENDED_LOCK,
+            "{refused}"
+        );
+        let zero = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {item16: "0.000"}}),
+        )
+        .unwrap();
+        assert!(zero.get("refused").is_none(), "{zero}");
+        assert_eq!(
+            session.open.as_ref().unwrap().draft["tax_paid_previous"],
+            0.0
+        );
+
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm2551Qv2018:amendedRtn_1": "true", item16: "42"}}),
+        )
+        .unwrap();
+        assert!(opened.get("refused").is_none(), "{opened}");
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        let box_ = fields["boxes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|box_| box_["key"] == item16)
+            .unwrap_or_else(|| panic!("{fields}"));
+        assert_eq!(box_["value"], "42.00", "{box_}");
+
+        let sent = call(&mut session, "form.send", json!({})).unwrap();
+        assert_eq!(sent["queued"], true, "{sent}");
+        let queued = session.open.as_ref().unwrap().draft.clone();
+        assert_eq!(queued["tax_paid_previous"], 42.0, "{queued}");
+        assert_eq!(
+            agent::field_map(AgentFormKind::Form2551Q, &queued).unwrap()[item16],
+            "42.00"
+        );
+    }
+
+    #[test]
+    fn form_send_payload_zeroes_2551q_item16_while_shut() {
+        let mut session = session_with_a_valid_2551q();
+        let item16 = bir_core::forms::agent::draft_locks::item16_2551q::KEY;
+        let sent = call(&mut session, "form.send", json!({})).unwrap();
+        assert_eq!(sent["queued"], true, "{sent}");
+        let queued = session.open.as_ref().unwrap().draft.clone();
+        assert_eq!(queued["tax_paid_previous"], 0.0, "{queued}");
+        assert_eq!(
+            agent::field_map(AgentFormKind::Form2551Q, &queued).unwrap()[item16],
+            "0.00"
+        );
+    }
+
     #[test]
     fn context_and_review_are_known_invokes() {
         let mut session = session();

@@ -483,17 +483,26 @@ pub fn save_draft(
     db: &crate::db::Database,
     draft: &mut Value,
 ) -> Result<i64, String> {
+    // The caller's bytes are only the fallback before-image. When the row
+    // already exists, the transactional save reads its stored bytes and those
+    // decide whether this recompute clears a dormant gated value: an assistant
+    // or page fill may already have recomputed its in-memory draft.
+    let incoming = draft.clone();
     compute(kind, draft)?;
+    let after = draft.clone();
     if identity(kind, draft)?.status != FilingStatus::Draft {
         return Err("this return is no longer a draft".to_string());
     }
+    let writer = move || pending_settings_writer(kind, incoming.clone(), after.clone());
     let id = match kind {
-        AgentFormKind::Form1601C => save_1601c(kind, db, draft)?,
-        AgentFormKind::Form2551Q => save_2551q(kind, db, draft)?,
+        AgentFormKind::Form1601C => save_1601c(kind, db, draft, writer())?,
+        AgentFormKind::Form2551Q => save_2551q(kind, db, draft, writer())?,
         // The 2550Q page keeps its own row format (`save_form_draft_v2`).
-        AgentFormKind::Queueable(QueueableKind::Form2550Q) => save_2550q(kind, db, draft)?,
+        AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
+            save_2550q(kind, db, draft, writer())?
+        }
         AgentFormKind::Queueable(queueable) => crate::with_queueable_kind!(queueable, F => {
-            save_queueable::<F>(kind, db, draft)?
+            save_queueable::<F>(kind, db, draft, writer())?
         }),
     };
     if let Value::Object(object) = draft {
@@ -502,17 +511,43 @@ pub fn save_draft(
     Ok(id)
 }
 
+#[doc(hidden)]
+pub fn pending_settings_writer(
+    kind: AgentFormKind,
+    incoming: Value,
+    after: Value,
+) -> crate::db::SettingsWriter<'static> {
+    Some(Box::new(move |draft_id, stored_json| {
+        let before = stored_json
+            .and_then(|stored| serde_json::from_str::<Value>(stored).ok())
+            .unwrap_or_else(|| incoming.clone());
+        Ok(draft_locks::pending_notices::settings_writes(
+            kind, &before, &after, draft_id,
+        ))
+    }))
+}
+
 #[inline(never)]
-fn save_1601c(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+fn save_1601c(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
+) -> Result<i64, String> {
     let typed: Form1601CDraft = parse(kind, draft)?;
-    db.save_1601c_draft(&typed)
+    db.save_1601c_draft_with_settings(&typed, settings_writer)
         .map_err(|error| error.to_string())
 }
 
 #[inline(never)]
-fn save_2551q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+fn save_2551q(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
+) -> Result<i64, String> {
     let typed: Form2551QDraft = parse(kind, draft)?;
-    db.save_2551q_draft(&typed)
+    db.save_2551q_draft_with_settings(&typed, settings_writer)
         .map_err(|error| error.to_string())
 }
 
@@ -521,14 +556,20 @@ fn save_queueable<F: QueueableForm + Serialize + DeserializeOwned>(
     kind: AgentFormKind,
     db: &crate::db::Database,
     draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
 ) -> Result<i64, String> {
     let typed: F = parse(kind, draft)?;
-    db.save_queueable_draft(&typed)
+    db.save_queueable_draft_with_settings(&typed, settings_writer)
         .map_err(|error| error.to_string())
 }
 
 #[inline(never)]
-fn save_2550q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+fn save_2550q(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
+) -> Result<i64, String> {
     Ok({
         let typed: super::form_2550q::Form2550QDraft = parse(kind, draft)?;
         let quarter = typed.quarter_number().unwrap_or(0);
@@ -548,13 +589,13 @@ fn save_2550q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> R
                 stored.lifecycle.status
             ));
         }
-        db.save_form_draft_v2(
+        db.save_form_draft_v2_with_settings(
             &typed.tin,
             "2550Q",
             typed.taxable_year,
             &FilingPeriod::Quarterly(quarter),
             &typed.lifecycle.status,
-            &typed,
+            (&typed, settings_writer),
         )
         .map_err(|error| error.to_string())?
     })
@@ -1463,6 +1504,14 @@ fn fill_box(
     // draft-dependent layer locks on the draft as it stands. A page writer
     // (as_host = true) never consults it: the page's own UX governs those
     // boxes (its Edit penalties opens a group).
+    if !as_host
+        && kind == AgentFormKind::Form2551Q
+        && key == draft_locks::item16_2551q::KEY
+        && draft_locks::item16_2551q::lock_reason(draft).is_some()
+        && draft_locks::item16_2551q::zero_noop(value)
+    {
+        return Ok(());
+    }
     if !as_host && let Some(lock) = draft_refusal(kind, def, draft, key, verdict.as_ref()) {
         return Err(format!("`{key}` {lock}"));
     }

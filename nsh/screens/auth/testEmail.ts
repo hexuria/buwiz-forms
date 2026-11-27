@@ -8,6 +8,8 @@
 //   resend     "early": Resend is refused as too early (the server's wait, 60 s); "ended": the request has ended
 //   slow       true: Continue, the check, Resend and Send a new code take 4 seconds (the spinner, "Checking…", a double press)
 //   blocked    "html": the check and Resend meet a challenge page; "throttled": the outer limit's HTML 429
+// welcome_first_time answers as the host does: true the first time the signed-in account asks, false after and while no code
+// has signed in (the host keeps a keyed hash of the account; the fake keeps the account's key in memory).
 // The code 246810 signs in; 111111 has expired; 999999 is one too many; 555555 belongs to an ended request; 777777 meets the
 // network's limit on code checks and 888888 a busy server (both "wait": no try spent); any other code is wrong,
 // with 4, 3, 2, 1 tries left and then too many. The address is the one typed (pending: juana@example.com).
@@ -63,6 +65,9 @@ export function fakeEmail(
   /** When the kept request's code was sent (ms), 0 for the one of `pending`; its address. */
   let sentAt = 0;
   let kept = "juana@example.com";
+  /** The code signed in at least once (the fake host's saved sign-in), and the accounts welcomed since. */
+  let signedInOnce = false;
+  const welcomed = new Set<string>();
   const step = (kind: CloudEmailStep["step"], extra: Partial<CloudEmailStep> = {}): CloudEmailStep => ({
     step: kind,
     email: address,
@@ -101,6 +106,7 @@ export function fakeEmail(
     if (p.blocked) return check("error", BLOCKED[p.blocked]);
     if (code === "246810") {
       pending = false;
+      signedInOnce = true;
       return check("approved", null);
     }
     if (code === "777777") return check("wait", "Too many sign-in codes are being checked right now. Try again in 3 minutes.");
@@ -127,6 +133,12 @@ export function fakeEmail(
     wrong = 0;
     sentAt = Date.now();
     return step("code");
+  };
+  host.welcome_first_time = () => {
+    const key = signedIn.user_id || signedIn.email?.trim().toLowerCase();
+    if (!signedInOnce || !key || welcomed.has(key)) return false;
+    welcomed.add(key);
+    return true;
   };
   host.cloud_account_email_cancel = () => {
     called("cloud_account_email_cancel");

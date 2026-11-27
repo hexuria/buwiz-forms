@@ -2672,7 +2672,8 @@ fn p4_14_a_kept_return_says_so_over_its_amounts() {
 /// other lock note only under a blank box, as before; the exceptions are
 /// 1702RT item 42 while shut (maintainer decision (pre-2020 MCIT is 2% of
 /// gross)) and 1702EX's rows BIR's
-/// program keeps shut (maintainer decision (1702EX shut rows locked like 1702MX)).
+/// program keeps shut (maintainer decision (1702EX shut rows locked like 1702MX)), and
+/// 2551Q Item 16 while its amended-return or 8% gate shuts it zeroed.
 #[test]
 fn p4_14_no_new_return_lists_a_note_shown_always() {
     setup();
@@ -2684,6 +2685,7 @@ fn p4_14_no_new_return_lists_a_note_shown_always() {
             "1702EX" => rows_annual_corporate::ex_attached_keys()
                 .filter(|key| key.ends_with("Amt") || key.ends_with("Amount"))
                 .collect(),
+            "2551Q" => vec![bir_core::forms::agent::draft_locks::item16_2551q::KEY.to_string()],
             _ => Vec::new(),
         };
         assert_eq!(opened["notes_always"], json!(expected), "{code}");

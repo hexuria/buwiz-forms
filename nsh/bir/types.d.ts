@@ -241,6 +241,8 @@ export function cloud_account_refresh(): Promise<CloudAccountStatus>;
 export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
 export function cloud_account_session_opened(): null;
 export function cloud_account_session_closed(): null;
+/** Whether the signed-in account signs in on this device for the first time (the welcome line shows); a first time is recorded. False, and nothing recorded, when no account is signed in. The page learns nothing else: what the device keeps is a keyed hash, host-only. */
+export function welcome_first_time(): boolean;
 
 export interface CloudEmailStep {
     step: "code" | "refused" | "restart";
@@ -699,6 +701,8 @@ export interface ScreenFormSamplePeriod {
 }
 export interface ScreenFormPenalties {
     keys: string[];
+    /** Each box whose component the filer typed: the others show the computed amounts and carry the computed mark. */
+    typed?: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
     /** The amounts are kept as entered before penalties were computed (1701Q, 1701): "Use the computed amounts" works once Edit opens them. */

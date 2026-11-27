@@ -2191,8 +2191,12 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
     assert_eq!(filled["draft"]["shares"][0]["number_of_shares"], 1000.0);
     assert_eq!(filled["draft"]["shares"][3]["certificate_number"], "C-4");
     assert_eq!(filled["draft"]["expenses"][3]["amount"], 250.0);
+    assert_eq!(
+        filled["values"]["frm1707:txtPg2P4Sch2NoOfShares1"],
+        "1,000.000"
+    );
     let map = printed("1707", &filled["draft"]);
-    assert_eq!(map["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000.000");
+    assert_eq!(map["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000");
     assert_eq!(map["frm1707:txtPg2P4Sch3Amount4"], "250.00");
     let mut typed: bir_core::forms::form_1707::Form1707Draft =
         serde_json::from_value(filled["draft"].clone()).unwrap();

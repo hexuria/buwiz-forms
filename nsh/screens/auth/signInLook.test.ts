@@ -1,12 +1,11 @@
-// The open pages' layout decisions, for touch and for a pointer (signInLook.ts), the logo's size (brand.tsx) and the welcome
-// line's "first time" (welcome.tsx). The headless test API reads no sizes or positions, so the numbers are checked here as the
-// pages' record of them.
+// The open pages' layout decisions, for touch and for a pointer (signInLook.ts) and the logo's size (brand.tsx). The headless
+// test API reads no sizes or positions, so the numbers are checked here as the pages' record of them. The welcome line's
+// "first time" is the host's answer now (welcome_first_time, accounts-and-lock W3): gate.test.tsx shows it once per account.
 import { expect, test } from "nsh/test";
 import {
   backRow, blockRoom, bottomPad, codeBoxWidth, keyboardCover, LOGO_STEPS_LARGE, LOGO_STEPS_PHONE, logoStep, logoSteps, openColumnMax, openSpacing, SAID_SLOT,
   signInHeights, underBackRowGuess,
 } from "./signInLook";
-import { accountKey, welcomedAfter } from "./welcome";
 
 test("the field, the buttons and the boxes: 46 points (48 on Android), the boxes 56 tall: whole touch targets", () => {
   expect(signInHeights(false)).toEqual({ field: 46, button: 46, box: 56 });
@@ -131,15 +130,4 @@ test("the keyboard: the room is what shows above it, counted once", () => {
   expect(keyboardCover(0, 753, 753)).toBe(0);
   // Part of it already taken (a note over the page): the rest.
   expect(keyboardCover(300, 753, 700)).toBe(247);
-});
-
-test("welcome: the first sign-in of an account here is new and written down; the second is not", () => {
-  expect(accountKey({ user_id: "u-1", email: "Juana@Example.com" })).toBe("u-1");
-  expect(accountKey({ user_id: null, email: " Juana@Example.com " })).toBe("juana@example.com");
-  expect(accountKey({ user_id: null, email: null })).toBe(null);
-  const first = welcomedAfter(null, "u-1");
-  expect(first).toEqual({ first: true, next: '["u-1"]' });
-  expect(welcomedAfter(first.next, "u-1").first).toBe(false);
-  expect(welcomedAfter(first.next, "u-2")).toEqual({ first: true, next: '["u-1","u-2"]' });
-  expect(welcomedAfter("not json", "u-1")).toEqual({ first: true, next: '["u-1"]' });
 });

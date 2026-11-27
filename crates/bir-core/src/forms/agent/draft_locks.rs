@@ -7,7 +7,7 @@
 //! the desktop assistant read one implementation: the page draws them and
 //! [`super::fill`] refuses them.
 //!
-//! [`draft_locks`] applies six layers, in this order, each named after the
+//! [`draft_locks`] applies seven layers, in this order, each named after the
 //! page's row module it came from (the last after the rule it carries):
 //!
 //! 1. [`dst_pt_vat`] (PR 4): 2000's 15B and 15C, computed; 2553's
@@ -26,6 +26,8 @@
 //!    opens them, so no penalty lock stands beside that.
 //! 6. [`item_13`]: 2551Q's Item 13 on a later quarter whose filed Q1 this
 //!    app holds, locked to that Q1's answer.
+//! 7. [`item16_2551q`]: 2551Q Item 16 is shut unless Amended Return is Yes
+//!    without the 8% option.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -88,6 +90,8 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     income_q::relock(kind, draft, locks);
     // 2551Q's Item 13 on a later quarter whose filed Q1 is in this app.
     item_13::relock(kind, draft, locks);
+    // 2551Q Item 16 follows Amended Return and the 8% option.
+    item16_2551q::relock(kind, draft, locks);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -98,6 +102,7 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
 pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut relocks = annual_corporate::live_locks(kind, draft);
     relocks.extend(excise::live_locks(kind, draft));
+    relocks.extend(item16_2551q::live_locks(kind, draft));
     relocks
 }
 
@@ -1254,6 +1259,84 @@ pub mod excise {
     }
 }
 
+pub mod item16_2551q {
+    //! 2551Q Item 16 (tax paid in a previously filed return) is shut unless
+    //! Amended Return is Yes without Item 13's 8% option. The official page
+    //! keeps the box disabled and zeroed in those states
+    //! (`rules/forms/2551q-v2018/validations.json` rules
+    //! `2551q-amended-toggle` and `2551q-tax-rate-eight-percent`).
+
+    use serde_json::{Map, Value, json};
+
+    use crate::forms::agent::AgentFormKind;
+
+    pub const KEY: &str = "frm2551Qv2018:txt16";
+    pub const AMENDED_LOCK: &str = "Item 16 applies only to an amended return.";
+    pub const EIGHT_PERCENT_LOCK: &str =
+        "Item 16 is nil on this return: Item 13 is the 8% income tax rate.";
+    pub const CLEARED_AMENDED_NOTE: &str =
+        "Item 16 was cleared: it applies only to an amended return.";
+    pub const CLEARED_EIGHT_PERCENT_NOTE: &str =
+        "Item 16 was cleared: Item 13 is the 8% income tax rate.";
+
+    /// The reason Item 16 is shut on `draft`, or `None` while it is open.
+    pub fn lock_reason(draft: &Value) -> Option<&'static str> {
+        if draft["item_13_election"] == "eight_percent" {
+            Some(EIGHT_PERCENT_LOCK)
+        } else if draft["is_amended"] != true {
+            Some(AMENDED_LOCK)
+        } else {
+            None
+        }
+    }
+
+    /// Whether `value` is the zero amount a shut Item 16 accepts as a no-op.
+    pub fn zero_noop(value: &Value) -> bool {
+        value.as_f64() == Some(0.0)
+            || value
+                .as_str()
+                .is_some_and(|text| crate::forms::agent::parse_amount(text) == Some(0.0))
+    }
+
+    /// The clearing note for a transition into the closed state, by cause.
+    pub fn cleared_note(draft: &Value) -> Option<&'static str> {
+        if draft["item_13_election"] == "eight_percent" {
+            Some(CLEARED_EIGHT_PERCENT_NOTE)
+        } else if draft["is_amended"] != true {
+            Some(CLEARED_AMENDED_NOTE)
+        } else {
+            None
+        }
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        if kind != AgentFormKind::Form2551Q {
+            return;
+        }
+        match lock_reason(draft) {
+            Some(reason) => {
+                locks.insert(KEY.to_string(), json!(reason));
+            }
+            None => {
+                locks.remove(KEY);
+            }
+        }
+    }
+
+    /// Item 16's lock as a fill leaves it (`null` opens it), so the page
+    /// shuts or opens the box as soon as Amended Return or Item 13 changes.
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if kind == AgentFormKind::Form2551Q {
+            locks.insert(
+                KEY.to_string(),
+                lock_reason(draft).map_or(Value::Null, |reason| json!(reason)),
+            );
+        }
+        locks
+    }
+}
+
 pub mod item_13 {
     //! 2551Q Item 13, the income-tax-rate election, is answered once a year,
     //! on the initial quarter. A later quarter (Q2-Q4) of a TIN whose Q1 of
@@ -1875,6 +1958,219 @@ mod tests {
             for key in item_13::KEYS {
                 assert_eq!(page_lock(kind("2551Q"), &q1, key), None, "{key}");
             }
+        }
+    }
+}
+
+pub mod pending_notices {
+    //! Pending gate-clearing notices, stored beside the once-note seen flags.
+    //!
+    //! A gate uses this by adding its dormant-before/cleared-after test to
+    //! [`clearance`]; [`super::super::save_draft`] then records the notice in
+    //! the same save operation that recomputes the draft, whoever initiated
+    //! that save. The key is `notice_pending:<gate>:<draft id>` and the value
+    //! carries the note text plus a unique clearing event. The page offers it
+    //! until that event is recorded seen (after an offered open, or when the
+    //! page's own inline clearing is saved); recording also removes the
+    //! pending key, so a later import or edit that newly clears the same gate
+    //! creates a fresh event and is said again.
+
+    use serde_json::{Value, json};
+
+    use crate::db::Database;
+    use crate::forms::agent::AgentFormKind;
+
+    pub const PENDING_PREFIX: &str = "notice_pending:";
+    pub const SEEN_PREFIX: &str = "notice_seen:";
+
+    fn pending_key(gate: &str, draft_id: i64) -> String {
+        format!("{PENDING_PREFIX}{gate}:{draft_id}")
+    }
+
+    fn seen_key(gate: &str, draft_id: i64, event: &str) -> String {
+        format!("{SEEN_PREFIX}{gate}:{draft_id}:{event}")
+    }
+
+    /// Parse a pending key into its gate and draft id.
+    pub fn parse_pending_key(key: &str) -> Option<(String, i64)> {
+        let rest = key.strip_prefix(PENDING_PREFIX)?;
+        let (gate, id) = rest.rsplit_once(':')?;
+        Some((gate.to_string(), id.parse().ok()?))
+    }
+
+    /// The key that records one clearing event seen.
+    pub fn seen_key_for(gate: &str, draft_id: i64, event: &str) -> String {
+        seen_key(gate, draft_id, event)
+    }
+
+    /// The clearings `save_draft` just made: every registered gate that
+    /// turned a dormant value into its closed zero/blank state. Add later
+    /// gates here; save then records them without each caller knowing which
+    /// path opened or imported the return. Gate and text are owned strings so
+    /// a row-keyed gate (1601FQ Schedule 1, for example) can name its row.
+    pub fn clearance(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
+        collect_clearances(kind, before, after, &[item16_2551q_clearance])
+    }
+
+    type ClearanceCheck = fn(AgentFormKind, &Value, &Value) -> Vec<(String, String)>;
+
+    fn collect_clearances(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+        checks: &[ClearanceCheck],
+    ) -> Vec<(String, String)> {
+        checks
+            .iter()
+            .flat_map(|check| check(kind, before, after))
+            .collect()
+    }
+
+    fn item16_2551q_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        if kind == AgentFormKind::Form2551Q
+            && before["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
+            && after["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() < 0.005
+            && let Some(text) = super::item16_2551q::cleared_note(after)
+        {
+            return vec![("2551q_item16".to_string(), text.to_string())];
+        }
+        Vec::new()
+    }
+
+    fn event_name() -> String {
+        let now = chrono::Utc::now();
+        now.timestamp_nanos_opt()
+            .unwrap_or_else(|| now.timestamp_millis())
+            .to_string()
+    }
+
+    /// The settings rows one save writes for its clearings. One event names
+    /// this save across every gate it cleared; a later clearing gets a later
+    /// event, so an old seen key cannot acknowledge it.
+    pub(crate) fn settings_writes(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+        draft_id: i64,
+    ) -> Vec<(String, String)> {
+        let clearances = clearance(kind, before, after);
+        if clearances.is_empty() {
+            return Vec::new();
+        }
+        let event = event_name();
+        clearances
+            .into_iter()
+            .map(|(gate, text)| {
+                let value = json!({"text": text, "event": event}).to_string();
+                (pending_key(&gate, draft_id), value)
+            })
+            .collect()
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct PendingNotice {
+        pub gate: String,
+        pub event: String,
+        pub text: String,
+        pub seen_key: String,
+    }
+
+    /// Pending clearings of one draft, unreadable entries skipped with a
+    /// warning so a bad app-state value never stops the return opening.
+    pub fn for_draft(db: &Database, draft_id: i64) -> Vec<PendingNotice> {
+        let rows = match db.settings_with_prefix(PENDING_PREFIX) {
+            Ok(rows) => rows,
+            Err(error) => {
+                tracing::warn!("reading pending gate notices failed: {error}");
+                return Vec::new();
+            }
+        };
+        rows.into_iter()
+            .filter_map(|(key, stored)| {
+                let rest = key.strip_prefix(PENDING_PREFIX)?;
+                let (gate, id) = rest.rsplit_once(':')?;
+                if id.parse::<i64>().ok()? != draft_id {
+                    return None;
+                }
+                let value: Value = match serde_json::from_str(&stored) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        tracing::warn!("{key}: pending gate notice is not JSON: {error}");
+                        return None;
+                    }
+                };
+                let event = value["event"].as_str()?.to_string();
+                let text = value["text"].as_str()?.to_string();
+                Some(PendingNotice {
+                    seen_key: seen_key(gate, draft_id, &event),
+                    gate: gate.to_string(),
+                    event,
+                    text,
+                })
+            })
+            .collect()
+    }
+
+    /// The pending key and event a seen key acknowledges, for
+    /// `screen_form_notes_seen`.
+    pub fn pending_event_for_seen(seen: &str) -> Option<(String, String)> {
+        let rest = seen.strip_prefix(SEEN_PREFIX)?;
+        let mut parts = rest.rsplitn(3, ':');
+        let event = parts.next()?;
+        let id = parts.next()?.parse::<i64>().ok()?;
+        let gate = parts.next()?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Some((pending_key(gate, id), event.to_string()))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use serde_json::{Value, json};
+
+        use super::{clearance, collect_clearances};
+        use crate::forms::agent::AgentFormKind;
+
+        #[test]
+        fn clearance_collects_every_gate_as_owned_row_keyed_strings() {
+            fn first(_: AgentFormKind, _: &Value, _: &Value) -> Vec<(String, String)> {
+                vec![("first".to_string(), "first cleared".to_string())]
+            }
+            fn second(_: AgentFormKind, _: &Value, _: &Value) -> Vec<(String, String)> {
+                vec![("schedule1:row:7".to_string(), "second cleared".to_string())]
+            }
+            let draft = json!({});
+            let both =
+                collect_clearances(AgentFormKind::Form2551Q, &draft, &draft, &[first, second]);
+            assert_eq!(
+                both,
+                vec![
+                    ("first".to_string(), "first cleared".to_string()),
+                    ("schedule1:row:7".to_string(), "second cleared".to_string()),
+                ]
+            );
+
+            let before = json!({"tax_paid_previous": 42.0});
+            let after = json!({
+                "tax_paid_previous": 0.0,
+                "is_amended": false,
+                "item_13_election": "graduated",
+            });
+            let clearances: Vec<(String, String)> =
+                clearance(AgentFormKind::Form2551Q, &before, &after);
+            assert_eq!(clearances.len(), 1);
+            assert_eq!(clearances[0].0, "2551q_item16");
+
+            let seen = super::seen_key("schedule1:row:7", 9, "E1");
+            assert_eq!(
+                super::pending_event_for_seen(&seen),
+                Some((super::pending_key("schedule1:row:7", 9), "E1".to_string()))
+            );
         }
     }
 }
