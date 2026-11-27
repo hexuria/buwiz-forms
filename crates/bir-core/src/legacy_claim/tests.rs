@@ -1719,3 +1719,35 @@ fn a_reused_inode_never_finishes_on_the_accounts_own_room() {
     assert_eq!(record.step, Step::Closed);
     assert_eq!(record.failure, None);
 }
+
+/// PLAN §A.8 reviewer pass, M1: a read error in the Copied window (an EIO, a sharing violation) is transient,
+/// never a permanent close: the record stays at Copied, and a later run with the error gone finishes the move.
+#[test]
+fn a_read_error_at_the_room_check_is_transient_not_closed() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    // A move the record never learned of: the legacy file is the room file now.
+    std::fs::rename(install.legacy(), install.room_file(&room)).unwrap();
+    ROOM_CHECK_ERR.with(|err| err.set(true));
+    let started = claim.start(&a);
+    assert!(
+        matches!(started, Start::Failed(Failure::Transient(_))),
+        "not transient: {started:?}"
+    );
+    let record = claim.record().unwrap().unwrap();
+    assert_eq!(record.step, Step::Copied, "the record must stay at Copied");
+    assert!(
+        !matches!(record.step, Step::Closed),
+        "a read error must never close the claim"
+    );
+    let finished = claim.start(&a);
+    assert!(
+        matches!(finished, Start::Finished(Outcome::Done { .. })),
+        "the move does not finish once the error is gone: {finished:?}"
+    );
+}

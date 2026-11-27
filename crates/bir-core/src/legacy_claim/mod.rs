@@ -686,7 +686,18 @@ impl LegacyClaim {
                     return Ok(Start::Finished(self.finish_after_move(&room, record)));
                 }
                 let moved_here = record.moved()
-                    || (!legacy_present && self.room_is_the_legacy(record, &room_file));
+                    || (!legacy_present
+                        && match self.room_is_the_legacy(record, &room_file) {
+                            Ok(the_same) => the_same,
+                            Err(error) => {
+                                tracing::warn!(
+                                    step = ?record.step,
+                                    %error,
+                                    "legacy claim: the room file could not be read; transient, never a close"
+                                );
+                                return Err(io_failure(error));
+                            }
+                        });
                 if moved_here {
                     let outcome = self.finish_after_move(&room, record.clone());
                     if !legacy_present || !matches!(outcome, Outcome::Done { .. }) {
@@ -817,23 +828,32 @@ impl LegacyClaim {
     /// it there is no copy, after it the record says moved), an identity match (a link or a rename keeps it), and the
     /// room file byte for byte the raw file: before step 6 the room is byte-equal to the raw file, so this never
     /// rejects a real move, and a reused inode with any other content never passes.
-    fn room_is_the_legacy(&self, record: &Record, room_file: &Path) -> bool {
+    fn room_is_the_legacy(&self, record: &Record, room_file: &Path) -> std::io::Result<bool> {
+        #[cfg(test)]
+        if ROOM_CHECK_ERR.with(std::cell::Cell::get) {
+            ROOM_CHECK_ERR.with(|err| err.set(false));
+            return Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        }
+        // Closed only on a definite mismatch (M1): the step is not Copied, the identity differs, or the hash
+        // differs. A read error (an EIO, a sharing violation, an antivirus filter) is not a mismatch: it is
+        // transient, or the move would be stranded for good with no room row and no step 6.
         if record.step != Step::Copied {
-            return false;
+            return Ok(false);
         }
         let identity_matches = match (record.legacy_file, crate::safe_fs::file_id(room_file)) {
             (Some(recorded), Ok(id)) => recorded == id,
-            _ => false,
+            (None, _) => false,
+            (_, Err(error)) => return Err(error),
         };
         #[cfg(test)]
         let identity_matches = identity_matches || SAME_ID.with(std::cell::Cell::get);
         if !identity_matches {
-            return false;
+            return Ok(false);
         }
-        record
-            .raw_sha256
-            .as_ref()
-            .is_some_and(|raw| files::sha256_file(room_file).is_ok_and(|hash| hash == *raw))
+        match record.raw_sha256.as_ref() {
+            None => Ok(false),
+            Some(raw) => Ok(files::sha256_file(room_file)? == *raw),
+        }
     }
 
     /// Record a permanent failure. Every one of these is before the move (the probe, the copy), so the claim is
@@ -1917,6 +1937,8 @@ thread_local! {
 thread_local! {
     /// A test's reused inode (N1): the room file reads as having the legacy file's recorded identity.
     pub(crate) static SAME_ID: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// A test's read error at the room-is-the-legacy check (M1): one io error, then cleared.
+    pub(crate) static ROOM_CHECK_ERR: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// A test's full disk at `point`, once; nothing outside tests.
