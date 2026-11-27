@@ -1445,13 +1445,25 @@ mod tests {
     fn item_twenty_is_part_of_the_basic_tax_due_before_penalties() {
         let mut draft = sample();
         draft.tax_remitted_previous = 500.0;
-        draft.surcharge = 25.5;
-        draft.interest_penalty = 10.0;
-        draft.keep_entered_penalties();
-        draft.recompute();
+        draft.penalty.clear_overrides();
+        draft.penalty.penalty_due_date = NaiveDate::from_ymd_opt(2025, 10, 31);
+        crate::forms::penalty_items::with_clock(
+            NaiveDate::from_ymd_opt(2025, 11, 1).unwrap(),
+            || {
+                draft.recompute();
+            },
+        );
+        // Official 1602Q rules: Item 22 includes Item 20, Item 23 = Item 17 -
+        // Item 22, and Item 27 = Items 24 + 25 + 26. The shared penalty rules
+        // for one late day here are surcharge = Item 23 * 25%, interest =
+        // Item 23 * 12% * 1/365, compromise = 20,000 for this tax-due bracket.
         assert_eq!(draft.item22, 4_000.51);
-        assert_eq!(draft.item27, 35.5);
-        assert_eq!(draft.item28, 193_013.14);
+        assert_eq!(draft.item23, 192_977.64);
+        assert_eq!(draft.surcharge, 48_244.41);
+        assert_eq!(draft.interest_penalty, 63.44);
+        assert_eq!(draft.compromise, 20_000.0);
+        assert_eq!(draft.item27, 68_307.85);
+        assert_eq!(draft.item28, 261_285.49);
     }
 
     #[test]

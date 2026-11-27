@@ -1476,7 +1476,7 @@
       "evidence": "painted view (retired) form_1600pt_view.rs (local:relief_spec via binding /tax_relief_specify): 'If yes, specify'; writer-cells printed caption: 'If Yes, specify'"
     },
     "frm1600PT:txtPg1P2I19TaxRemittedInRtrn": {
-      "label": "Tax Remitted in Return Previously Filed, if this is an amended return",
+      "label": "Tax remitted in return previously filed (amended only)",
       "evidence": "painted view (retired) form_1600pt_view.rs (local:prev via binding /tax_remitted_previous): 'Tax remitted in return previously filed (amended only)'; writer-cells printed caption: 'Less: Taxes Remitted in Return Previously Filed'"
     },
     "frm1600PT:txtPg1P2I20OthrPymntsMade": {
@@ -8665,7 +8665,7 @@
       "evidence": "painted view (retired) form_1602q_view.rs (local:rem2 via binding /remittance_second_month): 'Remittances made: 2nd month of the quarter'; writer-cells printed caption: 'Remittances, 2nd Month of the Quarter'"
     },
     "frm1602Q:txt20": {
-      "label": "Tax remitted in return previously filed (amended only)",
+      "label": "Tax Remitted in Return Previously Filed, if this is an amended return",
       "evidence": "painted view (retired) form_1602q_view.rs (local:prev via binding /tax_remitted_previous): 'Tax remitted in return previously filed (amended only)'; writer-cells printed caption: 'Tax Remitted in Return Previously Filed'"
     },
     "frm1602Q:txt21": {
