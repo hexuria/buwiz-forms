@@ -6,9 +6,9 @@ cd "$root"
 . "$root/scripts/lib/prebuilt.sh"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "e2e: $1 is not installed: $2" >&2; exit 1; }; }
 need just "install just (the setup script does)"
-need gpui-agent "run the setup script: it installs gpui-agent-cli at the version Cargo.lock pins"
+need gpui-agent "run the setup script: it installs gpui-agent-cli at the scripts/impeccable.pin version"
 need python3 "install Python 3"
-gpui_agent_version="$(prebuilt_installed_version gpui-agent-cli gpui-agent)"
+gpui_agent_version="$(installed_pinned_version gpui-agent-cli gpui-agent)"
 echo "app $(git rev-parse --short=8 HEAD), gpui-agent-cli ${gpui_agent_version:-unknown}"
 just e2e check smoke
 smoke() {

@@ -56,17 +56,27 @@ add it to your shell profile.
 
 ## Prebuilt tools
 
-The setup scripts use `scripts/lib/prebuilt.sh` (Linux/macOS) or `scripts/lib/Prebuilt.ps1` (Windows) for crate tools
-that publish their own prebuilt release artifacts. `gpui-agent-cli` is the largest one; the Linux cargo fallback for
-`just`, the `--extras` crates (`cargo-audit`, `cargo-outdated`, `cargo-machete`), and `impeccable` go through the same
-path. The helper first downloads prebuilt `cargo-binstall` at `CARGO_BINSTALL_VERSION` from `scripts/impeccable.pin`,
-then runs it with only the `crate-meta-data` strategy: the crate's own release assets, never a third-party prebuilt
-store and never an implicit compile. The `gpui-agent-cli` version still comes from the app's Cargo pin, and the
-`impeccable` version from the same pin file.
+The setup scripts use `scripts/lib/prebuilt.sh` (Linux/macOS) or `scripts/lib/Prebuilt.ps1` (Windows) for exactly two
+crate tools: `gpui-agent-cli` from `hexuria/gpui-agent` and `impeccable` from `hexuria/impeccable-rust`. For those two,
+the helper downloads the release archive directly from the release's `releases/download` URL over plain HTTPS (no
+GitHub API and no token), downloads the sibling `<archive>.sha256`, compares its first field with the archive's sha256,
+then unpacks the binary into Cargo's install bin directory and writes a `.buwiz-installed` stamp beside it. The stamp
+holds the version, the route (`prebuilt` or `source`), and the sha256 of the installed binary; replacing the binary
+invalidates the stamp.
 
-If `cargo-binstall` or a crate's prebuilt archive cannot be downloaded or installed, the helper prints one line and
-runs the usual `cargo install` source build. Set `BUWIZ_SETUP_NO_PREBUILT=1` before running a setup script to skip
-prebuilt downloads and force every crate tool to build from source.
+Any failure — no table entry, no archive for the machine's target, a download error, a digest mismatch, or an archive
+layout the helper does not expect — removes the download and falls back to one pinned `cargo install <crate> --version
+=<version>` source build. Set `BUWIZ_SETUP_NO_PREBUILT=1` before running a setup script to skip prebuilt downloads and
+force every crate tool to build from source. `just`, `cargo-audit`, `cargo-outdated` and `cargo-machete` never take the
+download route; they are plain pinned cargo installs.
+
+The pins live in `scripts/impeccable.pin`: `GPUI_AGENT_CLI_VERSION` for the CLI (separate from the app's `gpui-agent`
+library pin because recipes can need a newer CLI), `IMPECCABLE_VERSION` and `IMPECCABLE_SKILL_COMMIT` for impeccable,
+and `CARGO_BINSTALL_VERSION` plus the two `CARGO_BINSTALL_SHA256_*_linux_musl` digests for the Linux blueprint's
+impeccable host setup. Bump them there. macOS and Windows do not download cargo-binstall.
+
+Honest limit: the `.sha256` beside an archive guards against a broken download, not against a tampered release; both
+release repositories are ours.
 
 ## Local account server (all platforms)
 

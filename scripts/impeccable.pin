@@ -1,12 +1,18 @@
-# Pins for the impeccable verification CLI and its agent skill. The only place
-# these versions live: scripts/setup-impeccable.sh (sourced by setup-linux.sh
-# and setup-macos.sh), scripts/setup-windows.ps1, scripts/lib/prebuilt.sh and
-# scripts/lib/Prebuilt.ps1 read this file, and the Devin blueprint uses it
-# through the shell helper. One KEY=value per line, no spaces or trailing comments.
+# Pins for the impeccable verification CLI and its agent skill, the gpui-agent
+# CLI, and the Linux cargo-binstall helper. The only place these versions live:
+# scripts/setup-impeccable.sh (sourced by setup-linux.sh and setup-macos.sh),
+# scripts/setup-windows.ps1, scripts/lib/prebuilt.sh and scripts/lib/Prebuilt.ps1
+# read this file, and the Devin blueprint uses it through the shell helper. One
+# KEY=value per line, no spaces or trailing comments.
 #
 # IMPECCABLE_VERSION       crates.io version of the `impeccable` CLI
 # IMPECCABLE_SKILL_COMMIT  hexuria/impeccable-rust commit the skill/ files come from
-# CARGO_BINSTALL_VERSION   prebuilt cargo-binstall the setup scripts and Devin Linux blueprint install
+# GPUI_AGENT_CLI_VERSION   crates.io version of the `gpui-agent-cli` CLI the setup scripts install
+# CARGO_BINSTALL_VERSION   prebuilt cargo-binstall the Devin Linux blueprint installs for impeccable's host setup
+# CARGO_BINSTALL_SHA256_*  sha256 of each Linux musl cargo-binstall archive the blueprint may download
 IMPECCABLE_VERSION=0.2.1
 IMPECCABLE_SKILL_COMMIT=6c52a01007b260b71183b7599e8afa0bc26799ed
+GPUI_AGENT_CLI_VERSION=0.4.1
 CARGO_BINSTALL_VERSION=1.24.0
+CARGO_BINSTALL_SHA256_x86_64_unknown_linux_musl=7ffe1832c4bc3148d00f02d51c1d96c9cccdec76a0fa20e6e5692201d78bcc0b
+CARGO_BINSTALL_SHA256_aarch64_unknown_linux_musl=c2c44aba65d402ac43ee821387c49246bc574bde65d3d7f0f7a9e666c5a69f7f

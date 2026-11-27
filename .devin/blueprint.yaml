@@ -36,13 +36,13 @@ maintenance: |
   # workspace runs only maintenance and $ENVRC is reset on every build.
   # cargo-binstall comes prebuilt at the scripts/impeccable.pin version: its newest
   # release needs a newer Rust than this repo pins, so it cannot be built here.
-  # The shared helper downloads it into Cargo's install bin directory and puts that
-  # directory on PATH; a download failure is not fatal because crate tools can still
-  # fall back to cargo install from source.
+  # Only impeccable's host setup uses it. The shared helper downloads the Linux
+  # musl archive into Cargo's install bin directory after checking the pinned
+  # sha256; a download or digest failure is not fatal to maintenance.
   . scripts/lib/prebuilt.sh
   binstall=$(prebuilt_pin CARGO_BINSTALL_VERSION)
   if ! ensure_cargo_binstall; then
-    echo "warning: cargo-binstall $binstall could not be installed; crate tools will build from source" >&2
+    echo "warning: cargo-binstall $binstall could not be installed; impeccable host setup continues without it" >&2
   fi
   # The CLI and skill at their pins (a no-op when both match).
   bash scripts/setup-impeccable.sh

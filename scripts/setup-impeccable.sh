@@ -34,11 +34,6 @@ impeccable_use_cargo_bin() {
     warn "$bin is not on PATH; using it for this run. Add it to your shell profile so impeccable is found."
 }
 
-impeccable_installed_version() {  # empty when impeccable is not on PATH
-    command -v impeccable >/dev/null 2>&1 || return 0
-    impeccable --version 2>/dev/null | sed -n 's/^impeccable \([0-9][0-9.]*\).*/\1/p' | head -1 || true
-}
-
 impeccable_skill_at() {  # impeccable_skill_at <commit> → true when the skill is there at it
     local f
     [ "$(cat "$IMPECCABLE_SKILL_DIR/.commit" 2>/dev/null)" = "$1" ] || return 1
@@ -48,18 +43,12 @@ impeccable_skill_at() {  # impeccable_skill_at <commit> → true when the skill 
 }
 
 install_impeccable() {
-    local version installed
+    local version
     version="$(impeccable_pin IMPECCABLE_VERSION)"
     [ -n "$version" ] || die "IMPECCABLE_VERSION not found in $IMPECCABLE_PIN_FILE"
     impeccable_use_cargo_bin
-    installed="$(impeccable_installed_version)"
-    if [ "$installed" = "$version" ]; then
-        log "impeccable already installed at pinned version $version"
-        return 0
-    fi
-    [ -z "$installed" ] || warn "installed impeccable version $installed does not match $version; reinstalling"
     log "Installing impeccable CLI $version (pinned in scripts/impeccable.pin)"
-    install_prebuilt_or_build impeccable "$version" --locked
+    install_pinned_tool impeccable "$version" --locked
 }
 
 # Each file goes to a temp name and is moved into place only once complete, and
@@ -88,19 +77,12 @@ install_impeccable_skill() {
 }
 
 check_impeccable() {  # check_impeccable <label width> → prints two rows; false if either is off-pin
-    local w="$1" ok=0 version installed commit
+    local w="$1" ok=0 version commit
     version="$(impeccable_pin IMPECCABLE_VERSION)"
     commit="$(impeccable_pin IMPECCABLE_SKILL_COMMIT)"
     impeccable_use_cargo_bin
-    installed="$(impeccable_installed_version)"
-    if [ -z "$installed" ]; then
-        printf "  %-${w}s MISSING (pinned %s in scripts/impeccable.pin)\n" "impeccable" "$version"
+    if ! prebuilt_report_pinned impeccable impeccable impeccable "$version"; then
         ok=1
-    elif [ "$installed" != "$version" ]; then
-        printf "  %-${w}s %s, but scripts/impeccable.pin pins %s\n" "impeccable" "$installed" "$version"
-        ok=1
-    else
-        printf "  %-${w}s %s\n" "impeccable" "impeccable $installed"
     fi
     if impeccable_skill_at "$commit"; then
         printf "  %-${w}s %s at %s\n" "impeccable-skill" ".agents/skills/impeccable-rust" "${commit:0:7}"

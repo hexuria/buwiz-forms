@@ -21,11 +21,14 @@
 .PARAMETER NoImpeccable
     Skip the impeccable CLI and the impeccable-rust skill.
 
+.PARAMETER Check
+    Verify the pinned gpui-agent and impeccable CLIs only; install nothing.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
     # then, in a NEW PowerShell window:  just run
 #>
-param([switch]$NoImpeccable)
+param([switch]$NoImpeccable, [switch]$Check)
 
 $ErrorActionPreference = 'Stop'
 
@@ -37,6 +40,22 @@ function Exit-Native($message) {
 }
 
 . (Join-Path $PSScriptRoot 'lib\Prebuilt.ps1')
+
+if ($Check) {
+    $checkOk = $true
+    $gpuiPin = Read-PrebuiltPin 'GPUI_AGENT_CLI_VERSION'
+    if (-not (Write-PrebuiltPinnedReport 'gpui-agent' 'gpui-agent-cli' 'gpui-agent' $gpuiPin)) {
+        $checkOk = $false
+    }
+    if (-not $NoImpeccable) {
+        $impeccablePin = Read-PrebuiltPin 'IMPECCABLE_VERSION'
+        if (-not (Write-PrebuiltPinnedReport 'impeccable' 'impeccable' 'impeccable' $impeccablePin)) {
+            $checkOk = $false
+        }
+    }
+    if ($checkOk) { exit 0 }
+    exit 1
+}
 
 # Self-elevate: installs write to Program Files and the machine PATH, so this
 # needs admin rights. Relaunching keeps the documented command working from a
@@ -171,21 +190,18 @@ $env:Path = (($allPathEntries | Where-Object {
 
 # 6. gpui-agent CLI (client for the agent control plane; the app embeds its
 # own host, so only the CLI is needed -  todo-headless is the demo's daemon).
-# The CLI must match the exact version the app pins in the root Cargo.toml:
-# protocol skew fails closed, so installing the newest can break the handshake.
-$manifest = Join-Path (Split-Path $PSScriptRoot -Parent) 'Cargo.toml'
-$manifestText = Get-Content -LiteralPath $manifest -Raw
-$gpuiVersion = $null
-if ($manifestText -match '(?s)gpui-agent\s*=\s*\{[^}]*?\bversion\s*=\s*"=(\d+\.\d+\.\d+)"') {
-    $gpuiVersion = $matches[1]
-}
+# The library pin in the app is the protocol floor, while recipes can need a
+# newer CLI, so the exact CLI version lives in scripts\impeccable.pin.
+$gpuiVersion = Read-PrebuiltPin 'GPUI_AGENT_CLI_VERSION'
 if (-not $gpuiVersion) {
-    [Console]::Error.WriteLine("gpui-agent version pin not found in Cargo.toml")
+    [Console]::Error.WriteLine("GPUI_AGENT_CLI_VERSION not found in scripts\impeccable.pin")
     exit 1
 }
-Write-Step "Installing gpui-agent CLI (pinned version $gpuiVersion, matches Cargo.toml)"
-Install-PrebuiltOrBuild 'gpui-agent-cli' $gpuiVersion
-if ($LASTEXITCODE -ne 0) { Exit-Native "gpui-agent install failed" }
+Write-Step "Installing gpui-agent CLI $gpuiVersion (pinned in scripts\impeccable.pin)"
+if (-not (Install-PinnedTool 'gpui-agent-cli' $gpuiVersion)) {
+    [Console]::Error.WriteLine("gpui-agent install failed")
+    exit 1
+}
 
 # 7. impeccable CLI and the impeccable-rust agent skill, at scripts\impeccable.pin.
 # The skill goes to .agents\skills\impeccable-rust at the repository root, where
@@ -205,13 +221,10 @@ if ($NoImpeccable) {
         [Console]::Error.WriteLine("IMPECCABLE_VERSION or IMPECCABLE_SKILL_COMMIT not found in scripts\impeccable.pin")
         exit 1
     }
-    $haveImpeccable = if (Test-Path "$cargoBin\impeccable.exe") { & "$cargoBin\impeccable.exe" --version | Select-Object -First 1 }
-    if ("$haveImpeccable" -eq "impeccable $impeccableVersion") {
-        Write-Step "impeccable already installed at pinned version $impeccableVersion -  skipping"
-    } else {
-        Write-Step "Installing impeccable CLI $impeccableVersion (pinned in scripts\impeccable.pin)"
-        Install-PrebuiltOrBuild 'impeccable' $impeccableVersion '--locked'
-        if ($LASTEXITCODE -ne 0) { Exit-Native "impeccable install failed" }
+    Write-Step "Installing impeccable CLI $impeccableVersion (pinned in scripts\impeccable.pin)"
+    if (-not (Install-PinnedTool 'impeccable' $impeccableVersion '--locked')) {
+        [Console]::Error.WriteLine("impeccable install failed")
+        exit 1
     }
 
     $skillDir = Join-Path (Split-Path $PSScriptRoot -Parent) '.agents\skills\impeccable-rust'
