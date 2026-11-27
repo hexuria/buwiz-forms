@@ -1,0 +1,109 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261127-083229",
+ "out": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229",
+ "cli_version": "0.4.1",
+ "app_commit": "9b786302",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3211,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 11728,
+   "note": null,
+   "file": "agent-recipes/ui/ui-sign-up-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 6023,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/03-navigate/recording.mp4"
+  },
+  {
+   "name": "birth-date",
+   "status": "known gap",
+   "ms": 12367,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/04-birth-date/recording.mp4",
+   "step": "s14",
+   "error": "`node 5204` is offscreen",
+   "error_code": "host_error",
+   "line": "click tp-taxpayer-birth_date-sheet-done",
+   "known_gap": "gap 1: the date is set in a date sheet",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/04-birth-date/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/04-birth-date/failure-tree.json"
+  },
+  {
+   "name": "open-2551q",
+   "status": "fail",
+   "ms": 2402,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/05-open-2551q/recording.mp4",
+   "step": "s1",
+   "error": "occluded_by: 453",
+   "error_code": "host_error",
+   "line": "click nb-search",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/05-open-2551q/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/05-open-2551q/failure-tree.json"
+  },
+  {
+   "name": "money-boxes",
+   "status": "not run",
+   "ms": 0,
+   "note": "open-2551q failed and the suite needs it"
+  },
+  {
+   "name": "delete-row",
+   "status": "not run",
+   "ms": 0,
+   "note": "open-2551q failed and the suite needs it"
+  },
+  {
+   "name": "queue",
+   "status": "not run",
+   "ms": 0,
+   "note": "open-2551q failed and the suite needs it"
+  },
+  {
+   "name": "sign-out",
+   "status": "not run",
+   "ms": 0,
+   "note": "open-2551q failed and the suite needs it"
+  }
+ ]
+}

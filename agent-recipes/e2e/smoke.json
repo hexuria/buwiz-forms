@@ -45,15 +45,6 @@
    "linux": "navigate-phone.wants"
   },
   {
-   "name": "birth-date",
-   "desktop": "birth-date.wants",
-   "phone": "birth-date-phone.wants",
-   "known_gap": {
-    "phone": "gap 1: the date is set in a date sheet"
-   },
-   "linux": "birth-date-phone.wants"
-  },
-  {
    "name": "open-2551q",
    "desktop": "open-2551q.wants",
    "phone": "open-2551q-phone.wants",
@@ -92,6 +83,15 @@
    "file": "queue.wants",
    "send": true,
    "precondition": "Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog"
+  },
+  {
+   "name": "birth-date",
+   "desktop": "birth-date.wants",
+   "phone": "birth-date-phone.wants",
+   "known_gap": {
+    "phone": "gap 1: the date is set in a date sheet"
+   },
+   "linux": "birth-date-phone.wants"
   },
   {
    "name": "sign-out",
