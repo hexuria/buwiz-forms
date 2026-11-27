@@ -1,0 +1,54 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "probe-d",
+  "fingerprint": "fnv1a64:f5f573aeef19e2be",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 383
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 54
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 370
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 391
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 50
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 719
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 44
+    }
+  ],
+  "elapsed_ms": 2060
+}

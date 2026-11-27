@@ -1,8 +1,7 @@
-# Smoke 9, phone: Log out at the end of the tax profile sheet (a press inside a sheet: gpui-agent gap 1); the lock screen
-# comes up.
+# Smoke 9, phone and the narrow layout: Log out from the header's account menu; the lock screen comes up. Log out is
+# nb-menu-logout in that menu (nsh/shell/Narrow.tsx; the iOS failure tree lists it, and no nb-menu-profile): the old
+# path through the tax profile sheet's sheet-logout is gone.
 click nb-avatar
-wait_until nb-menu-profile --timeout-ms 5000
-click nb-menu-profile
-wait_until sheet-logout --timeout-ms 5000
-click sheet-logout
+wait_until nb-menu-logout --timeout-ms 5000
+click nb-menu-logout
 wait_until locked-screen --timeout-ms 10000 --screenshot

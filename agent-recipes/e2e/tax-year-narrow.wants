@@ -1,0 +1,20 @@
+# Smoke prerequisite, android and linux (the narrow layout): the new taxpayer has no tax year, and New return is refused
+# without one. Reaches the taxpayer through the header's Search (the narrow palette searches tax profiles only, and
+# the Home tile is not pressable), adds the year the Add year band offers (its picker is a sheet on Android, gap 1),
+# chooses 2551Q in Edit forms, ends on the Forms tab. These steps passed on both as the first half of open-2551q there.
+click nb-search
+wait_until palette-input --timeout-ms 5000
+set_value palette-input E2E
+key palette-input Enter
+wait_until tp-tabs-forms --timeout-ms 8000
+click tp-tabs-forms
+wait_until tp-add-year-add --timeout-ms 5000
+click tp-add-year-add
+wait_until tp-forms-edit --timeout-ms 5000
+click tp-forms-edit
+wait_until tp-forms-search --timeout-ms 5000
+set_value tp-forms-search 2551
+wait_until tp-form-2551Q --timeout-ms 5000
+click tp-form-2551Q
+click tp-forms-save
+wait_until tp-forms-save --absent --timeout-ms 5000 --screenshot

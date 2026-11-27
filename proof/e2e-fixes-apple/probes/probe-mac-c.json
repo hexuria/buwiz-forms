@@ -1,0 +1,28 @@
+{
+ "v": 1,
+ "description": "probe",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "probe-c",
+   "file": "probe-c.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  }
+ ]
+}
