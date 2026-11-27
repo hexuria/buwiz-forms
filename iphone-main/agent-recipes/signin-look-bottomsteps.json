@@ -1,0 +1,12 @@
+{
+ "v": 1,
+ "name": "e2e-signin-look-bottom",
+ "steps": [
+  {"id": "w0", "op": "wait_until", "target": "setup-card", "timeout_ms": 30000},
+  {"id": "solo", "op": "click", "target": "setup-solo"},
+  {"id": "waitname", "op": "wait_until", "target": "new-tp-name", "timeout_ms": 5000},
+  {"id": "scroll1", "op": "scroll", "target": "auth-scroll", "dy": 600},
+  {"id": "scroll2", "op": "scroll", "target": "auth-scroll", "dy": 600},
+  {"id": "bottom", "op": "assert", "target": "new-tp-save", "screenshot": true}
+ ]
+}

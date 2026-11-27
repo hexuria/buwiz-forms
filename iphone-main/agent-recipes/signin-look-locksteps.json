@@ -1,0 +1,27 @@
+{
+ "v": 1,
+ "name": "e2e-signin-look-lock",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "sign-in",
+   "timeout_ms": 30000
+  },
+  {
+   "id": "s2",
+   "op": "press",
+   "target": "$pin_field"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "auth-tin",
+   "timeout_ms": 5000,
+   "screenshot": true
+  }
+ ],
+ "params": [
+  "pin_field"
+ ]
+}

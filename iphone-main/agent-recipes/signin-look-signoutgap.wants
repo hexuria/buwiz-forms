@@ -1,0 +1,13 @@
+# Sign-in look 3, phone: the taxpayer is typed and saved, then Log out is pressed in the account sheet.
+# Presses inside sheets are gpui-agent gap #13: the press answers ok and nothing happens, so the email and
+# code pages (the account gate after sign-out) stay unreachable. This recipe is the evidence: it fails at
+# the last wait.
+type $tin_field 000123453 --key-delay-ms 80
+type new-tp-name "JUANA SANTOS" --key-delay-ms 40
+type new-tp-registered_address "1 TEST ST" --key-delay-ms 40
+click new-tp-save
+wait_until frame --timeout-ms 10000
+click nb-avatar
+wait_until nb-menu-logout --timeout-ms 5000
+click nb-menu-logout
+wait_until locked-screen --timeout-ms 8000

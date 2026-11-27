@@ -1,0 +1,48 @@
+{
+ "v": 1,
+ "description": "The sign-in pages' look on a phone: the admin-PIN setup in its error state, the New taxpayer page top and bottom, the TIN+PIN sign-in (the lock run), and the evidence for the account-gate gap. No PIN or code is typed anywhere.",
+ "params": {},
+ "recipes": [
+  {
+   "name": "pin-error-open",
+   "file": "signin-look-pin-open.wants",
+   "required": true,
+   "send": true
+  },
+  {
+   "name": "pin-error-shot",
+   "file": "signin-look-pin-shot.json",
+   "required": true,
+   "needs_cli": "0.4.1",
+   "resolve": {
+    "pin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^Admin PIN"
+    }
+   }
+  },
+  {
+   "name": "newtp",
+   "file": "signin-look-newtp.json",
+   "required": true
+  },
+  {
+   "name": "signout-gap",
+   "file": "signin-look-signoutgap.wants",
+   "needs_cli": "0.4.1",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "known_gap": "gap #13 (hexuria/nsh-gpui-agent#13): presses inside sheets answer ok and nothing happens, so Log out never fires and the account gate (the email and code pages) cannot be reached"
+  }
+ ]
+}

@@ -1,0 +1,8 @@
+{
+ "v": 1,
+ "description": "The New taxpayer page scrolled to its bottom, one launch.",
+ "params": {},
+ "recipes": [
+  {"name": "newtp-bottom", "file": "signin-look-bottomsteps.json", "required": true}
+ ]
+}

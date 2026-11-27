@@ -1,0 +1,14 @@
+{
+ "v": 1,
+ "name": "e2e-signin-look-newtp",
+ "steps": [
+  {"id": "back", "op": "click", "target": "setup-back"},
+  {"id": "waitcard", "op": "wait_until", "target": "setup-card", "timeout_ms": 5000},
+  {"id": "solo", "op": "click", "target": "setup-solo"},
+  {"id": "waitname", "op": "wait_until", "target": "new-tp-name", "timeout_ms": 5000},
+  {"id": "top", "op": "wait_until", "target": "new-tp-save", "timeout_ms": 5000, "screenshot": true},
+  {"id": "scroll1", "op": "scroll", "target": "auth-scroll", "dy": -500},
+  {"id": "scroll2", "op": "scroll", "target": "auth-scroll", "dy": -500},
+  {"id": "bottom", "op": "assert", "target": "new-tp-cancel", "screenshot": true}
+ ]
+}

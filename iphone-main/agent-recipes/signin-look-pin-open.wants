@@ -1,0 +1,6 @@
+# Sign-in look 1, phone: first-run setup, the help desk's PIN page in its error state (Continue with empty boxes).
+wait_until setup-card --timeout-ms 30000
+click setup-helpdesk
+wait_until setup-pin-card --timeout-ms 5000
+click setup-pin-submit
+wait_until auth-error --timeout-ms 5000

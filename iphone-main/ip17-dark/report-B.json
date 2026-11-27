@@ -1,0 +1,38 @@
+{
+ "suite": "signin-look-lock",
+ "target": "ios",
+ "started": "20261127-040037",
+ "out": "/Users/devin/BuwizNsh/scripts-run/signin/outB-ip17-dark",
+ "cli_version": "0.4.1",
+ "app_commit": "517374de",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "signin-pin",
+   "status": "setup",
+   "ms": 25,
+   "note": null,
+   "file": "agent-recipes/e2e/signin-look-locksteps.json",
+   "step": null,
+   "error": "$pin_field: no node matches {\"role\": [\"textbox\", \"textfield\"], \"name_regex\": \"^PIN\"}"
+  }
+ ]
+}

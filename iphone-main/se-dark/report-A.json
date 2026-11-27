@@ -1,0 +1,68 @@
+{
+ "suite": "signin-look",
+ "target": "ios",
+ "started": "20261127-040117",
+ "out": "/Users/devin/BuwizNsh/scripts-run/signin/outA-se-dark",
+ "cli_version": "0.4.1",
+ "app_commit": "517374de",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "pin-error-open",
+   "status": "pass",
+   "ms": 2095,
+   "note": null,
+   "file": "agent-recipes/e2e/signin-look-pin-open.wants",
+   "video": "/Users/devin/BuwizNsh/scripts-run/signin/outA-se-dark/01-pin-error-open/recording.mp4"
+  },
+  {
+   "name": "pin-error-shot",
+   "status": "pass",
+   "ms": 2229,
+   "note": null,
+   "file": "agent-recipes/e2e/signin-look-pin-shot.json",
+   "video": "/Users/devin/BuwizNsh/scripts-run/signin/outA-se-dark/02-pin-error-shot/recording.mp4"
+  },
+  {
+   "name": "newtp",
+   "status": "pass",
+   "ms": 5467,
+   "note": null,
+   "file": "agent-recipes/e2e/signin-look-newtp.json",
+   "video": "/Users/devin/BuwizNsh/scripts-run/signin/outA-se-dark/03-newtp/recording.mp4"
+  },
+  {
+   "name": "signout-gap",
+   "status": "known gap",
+   "ms": 32131,
+   "note": null,
+   "file": "agent-recipes/e2e/signin-look-signoutgap.wants",
+   "video": "/Users/devin/BuwizNsh/scripts-run/signin/outA-se-dark/04-signout-gap/recording.mp4",
+   "step": "s9",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 8000",
+   "known_gap": "gap #13 (hexuria/nsh-gpui-agent#13): presses inside sheets answer ok and nothing happens, so Log out never fires and the account gate (the email and code pages) cannot be reached",
+   "screenshot": "/Users/devin/BuwizNsh/scripts-run/signin/outA-se-dark/04-signout-gap/failure.png",
+   "tree": "/Users/devin/BuwizNsh/scripts-run/signin/outA-se-dark/04-signout-gap/failure-tree.json"
+  }
+ ]
+}

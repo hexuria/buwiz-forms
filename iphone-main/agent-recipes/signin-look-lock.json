@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "description": "The TIN+PIN sign-in page, on the database the signin-look run finished: launch with BIR_SHELL_START \"lock\" (theme=dark;lock for the dark run) so the app lock stands in front. No PIN is typed.",
+ "params": {},
+ "recipes": [
+  {
+   "name": "signin-pin",
+   "file": "signin-look-locksteps.json",
+   "required": true,
+   "resolve": {
+    "pin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^PIN"
+    }
+   }
+  }
+ ]
+}

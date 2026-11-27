@@ -1,0 +1,21 @@
+{
+ "v": 1,
+ "name": "e2e-signin-look-pin-shot",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "press",
+   "target": "$pin_field"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "auth-error",
+   "timeout_ms": 3000,
+   "screenshot": true
+  }
+ ],
+ "params": [
+  "pin_field"
+ ]
+}
