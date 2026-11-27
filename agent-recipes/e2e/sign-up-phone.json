@@ -62,12 +62,8 @@
   {
    "id": "s9",
    "op": "click",
-   "target": "new-tp-zip_code-trigger"
-  },
-  {
-   "id": "s9second",
-   "op": "click",
-   "target": "new-tp-zip_code-trigger"
+   "target": "new-tp-zip_code-trigger",
+   "delivery": "virtual"
   },
   {
    "id": "s9a",
@@ -89,9 +85,10 @@
   },
   {
    "id": "s11",
-   "op": "press",
+   "op": "click",
    "target": "new-tp-zip_code-opt-$zip",
-   "screenshot": true
+   "screenshot": true,
+   "delivery": "virtual"
   },
   {
    "id": "s12",
@@ -103,12 +100,8 @@
   {
    "id": "s13",
    "op": "click",
-   "target": "new-tp-rdo_code-trigger"
-  },
-  {
-   "id": "s13second",
-   "op": "click",
-   "target": "new-tp-rdo_code-trigger"
+   "target": "new-tp-rdo_code-trigger",
+   "delivery": "virtual"
   },
   {
    "id": "s13a",
@@ -148,9 +141,10 @@
   },
   {
    "id": "s18",
-   "op": "press",
+   "op": "click",
    "target": "new-tp-rdo_code-opt-$rdo",
-   "screenshot": true
+   "screenshot": true,
+   "delivery": "virtual"
   },
   {
    "id": "s19",

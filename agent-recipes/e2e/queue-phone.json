@@ -35,16 +35,28 @@
    "target": "tp-branch-business_start_date"
   },
   {
-   "id": "s6",
-   "op": "type",
-   "target": "tp-branch-business_start_date",
-   "text": "$bstart"
+   "id": "s5a",
+   "op": "wait_until",
+   "target": "tp-branch-business_start_date-sheet-input",
+   "timeout_ms": 5000
   },
   {
-   "id": "s7",
-   "op": "assert",
-   "target": "tp-branch-business_start_date",
+   "id": "s5b",
+   "op": "set_value",
+   "target": "tp-branch-business_start_date-sheet-input",
    "value": "$bstart"
+  },
+  {
+   "id": "s5c",
+   "op": "click",
+   "target": "tp-branch-business_start_date-sheet-done"
+  },
+  {
+   "id": "s5d",
+   "op": "wait_until",
+   "target": "tp-branch-business_start_date-sheet-input",
+   "timeout_ms": 5000,
+   "exists": false
   },
   {
    "id": "s8",

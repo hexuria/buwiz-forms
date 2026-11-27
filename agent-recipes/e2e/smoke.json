@@ -1,136 +1,136 @@
 {
- "v": 1,
- "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, a tax year with 2551Q, every screen, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), Queue in the dry-run test build, a schedule row deleted, the birth date, Log out. Variants per target where a platform needs its own steps (the Linux window shows the narrow layout). Run with `just e2e <target> smoke` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
- "params": {
-  "tin": "12345678800000",
-  "name": "E2E SMOKE TAXPAYER",
-  "address": "1 TEST ST",
-  "zip": "1000",
-  "rdo": "040",
-  "start_option": "new-tp-start-opt-none",
-  "birth": "01/15/1990",
-  "prior": "500.25",
-  "amount": "1234.56",
-  "amount_shown": "1,234.56",
-  "tin_root": "123456788",
-  "year": "2026",
-  "bstart": "01/01/2020"
- },
- "recipes": [
-  {
-   "name": "setup-start",
-   "file": "setup-start.wants",
-   "required": true,
-   "ios": "setup-start-seeded.wants"
+  "v": 1,
+  "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, a tax year with 2551Q, every screen, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), Queue in the dry-run test build, a schedule row deleted, the birth date, Log out. Variants per target where a platform needs its own steps (the Linux window shows the narrow layout). Run with `just e2e <target> smoke` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
+  "params": {
+    "tin": "12345678800000",
+    "name": "E2E SMOKE TAXPAYER",
+    "address": "1 TEST ST",
+    "zip": "1000",
+    "rdo": "040",
+    "start_option": "new-tp-start-opt-none",
+    "birth": "01/15/1990",
+    "prior": "500.25",
+    "amount": "1234.56",
+    "amount_shown": "1,234.56",
+    "tin_root": "123456788",
+    "year": "2026",
+    "bstart": "01/01/2020"
   },
-  {
-   "name": "sign-up-seed",
-   "ios": "seed-tax-profile.json",
-   "plane": "data",
-   "required": true,
-   "precondition": "Seeds the same taxpayer through the app's allow-listed data-plane profile.save because the phone picker trigger cannot yet be opened by gpui-agent."
-  },
-  {
-   "name": "sign-up",
-   "desktop": "sign-up.wants",
-   "linux": "sign-up-linux.wants",
-   "android": "sign-up-android.wants",
-   "resolve": {
-    "tin_field": {
-     "role": [
-      "textbox",
-      "textfield"
-     ],
-     "name_regex": "^TIN, 9 digits"
+  "recipes": [
+    {
+      "name": "setup-start",
+      "file": "setup-start.wants",
+      "required": true,
+      "ios": "setup-start-seeded.wants"
+    },
+    {
+      "name": "sign-up-seed",
+      "ios": "seed-tax-profile.json",
+      "plane": "data",
+      "required": true,
+      "precondition": "Seeds the same taxpayer through the app's allow-listed data-plane profile.save because the phone picker trigger cannot yet be opened by gpui-agent."
+    },
+    {
+      "name": "sign-up",
+      "desktop": "sign-up.wants",
+      "linux": "sign-up-linux.wants",
+      "android": "sign-up-android.wants",
+      "required": true,
+      "resolve": {
+        "tin_field": {
+          "role": [
+            "textbox",
+            "textfield"
+          ],
+          "name_regex": "^TIN, 9 digits"
+        }
+      }
+    },
+    {
+      "name": "tax-year",
+      "file": "tax-year.wants",
+      "linux": "tax-year-narrow.wants",
+      "android": "tax-year-narrow.wants",
+      "required": true,
+      "phone": "tax-year-narrow.wants"
+    },
+    {
+      "name": "navigate",
+      "desktop": "../ui/ui-navigate-app.wants",
+      "linux": "navigate-phone.wants",
+      "phone": "navigate-phone.wants"
+    },
+    {
+      "name": "open-2551q",
+      "desktop": "open-2551q.wants",
+      "windows": "open-2551q-windows.wants",
+      "linux": "open-2551q-phone.wants",
+      "phone": "open-2551q-phone.wants",
+      "required": true
+    },
+    {
+      "name": "money-boxes",
+      "desktop": "money-boxes-paced.json",
+      "linux": "money-boxes-phone.json",
+      "phone": "money-boxes-paced-phone.json",
+      "needs_cli": "0.4.1",
+      "needs_feature": {
+        "phone": "software_keyboard"
+      },
+      "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+      "fallback": {
+        "phone": "money-boxes-phone.json",
+        "file": "money-boxes.wants"
+      }
+    },
+    {
+      "name": "sheet-press",
+      "windows": "sheet-press.json",
+      "needs_cli": "0.4.1"
+    },
+    {
+      "name": "delete-row",
+      "file": "delete-row.wants",
+      "resolve": {
+        "table": {
+          "id_regex": "^(fp-table-.+)-add$",
+          "group": 1
+        }
+      },
+      "known_gap": {
+        "phone": "gap 1: the row drawer is a sheet on a phone",
+        "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
+      }
+    },
+    {
+      "name": "queue",
+      "file": "queue.wants",
+      "windows": "queue-windows.wants",
+      "precondition": "Stops before the Queue control after validating the return. The runner treats fp-queue itself as a send control, so the confirm-dialog send rehearsal is the separate queue-send recipe outside this suite.",
+      "desktop": "queue-desktop.json",
+      "phone": "queue-phone.json"
+    },
+    {
+      "name": "birth-date",
+      "desktop": "birth-date.wants",
+      "linux": "birth-date-phone.json",
+      "phone": "birth-date-phone.json",
+      "known_gap": {
+        "phone": "gap 1: the date is set in a date sheet",
+        "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
+      }
+    },
+    {
+      "name": "sign-out",
+      "desktop": "sign-out.wants",
+      "linux": "sign-out-phone.wants",
+      "phone": "sign-out-phone.wants",
+      "known_gap": {
+        "phone": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
+        "linux": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
+        "windows": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
+        "macos": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed (nb-menu-logout) but no locked-screen ever appears, so the wait can never pass in this environment"
+      }
     }
-   },
-   "required": true
-  },
-  {
-   "name": "tax-year",
-   "file": "tax-year.wants",
-   "linux": "tax-year-narrow.wants",
-   "android": "tax-year-narrow.wants",
-   "required": true,
-   "phone": "tax-year-narrow.wants"
-  },
-  {
-   "name": "navigate",
-   "desktop": "../ui/ui-navigate-app.wants",
-   "linux": "navigate-phone.wants",
-   "phone": "navigate-phone.wants"
-  },
-  {
-   "name": "open-2551q",
-   "desktop": "open-2551q.wants",
-   "windows": "open-2551q-windows.wants",
-   "linux": "open-2551q-phone.wants",
-   "phone": "open-2551q-phone.wants",
-   "required": true
-  },
-  {
-   "name": "money-boxes",
-   "desktop": "money-boxes-paced.json",
-   "linux": "money-boxes-phone.json",
-   "phone": "money-boxes-paced-phone.json",
-   "needs_cli": "0.4.1",
-   "needs_feature": {
-    "phone": "software_keyboard"
-   },
-   "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
-   "fallback": {
-    "phone": "money-boxes-phone.json",
-    "file": "money-boxes.wants"
-   }
-  },
-  {
-   "name": "sheet-press",
-   "windows": "sheet-press.json",
-   "needs_cli": "0.4.1"
-  },
-  {
-   "name": "delete-row",
-   "file": "delete-row.wants",
-   "resolve": {
-    "table": {
-     "id_regex": "^(fp-table-.+)-add$",
-     "group": 1
-    }
-   },
-   "known_gap": {
-    "phone": "gap 1: the row drawer is a sheet on a phone",
-    "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
-   }
-  },
-  {
-   "name": "queue",
-   "file": "queue.wants",
-   "windows": "queue-windows.wants",
-   "precondition": "Stops before the Queue control after validating the return. The runner treats fp-queue itself as a send control, so the confirm-dialog send rehearsal is the separate queue-send recipe outside this suite.",
-   "desktop": "queue-desktop.json",
-   "phone": "queue-phone.json"
-  },
-  {
-   "name": "birth-date",
-   "desktop": "birth-date.wants",
-   "linux": "birth-date-phone.json",
-   "phone": "birth-date-phone.json",
-   "known_gap": {
-    "phone": "gap 1: the date is set in a date sheet",
-    "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
-   }
-  },
-  {
-   "name": "sign-out",
-   "desktop": "sign-out.wants",
-   "linux": "sign-out-phone.wants",
-   "phone": "sign-out-phone.wants",
-   "known_gap": {
-    "phone": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
-    "linux": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
-    "windows": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
-    "macos": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed (nb-menu-logout) but no locked-screen ever appears, so the wait can never pass in this environment"
-   }
-  }
- ]
+  ]
 }
