@@ -176,8 +176,14 @@ export function TextField(props: TextFieldProps) {
 export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyboardType" | "masked" | "maxLength"> & {
   /** Test hook: each text or caret operation this field sends to its native box. */
   writeProbe?: (write: "text" | "caret", start?: number, end?: number) => void;
-  /** Money text was left unreadable: what was typed, and the amount text the box kept. */
+  /** Money text was left unreadable: what was typed, and the amount text the box kept ("" when it was left blank). */
   onLeftUnreadable?: (typed: string, kept: string) => void;
+  /** Money text was left with one comma the filer typed, read as its decimal point ("1500,50" as 1,500.50): what was typed, and what the box shows. */
+  onCommaRead?: (typed: string, shown: string) => void;
+  /** Money text the filer typed during this focus came to the amount the box showed, and a value set from outside meanwhile won on leaving: what was typed, and what the box shows now. */
+  onOutsideKept?: (typed: string, shown: string) => void;
+  /** Receives how to leave the box at once, in this turn, as unmount does (no write to the native box): a page that saves before quit or navigation. */
+  leaveRef?: (leave: () => void) => void;
 };
 
 interface MaskedProps {
@@ -223,6 +229,16 @@ const RESELECT_WRITE_MS = 300;
 const RECOMPUTE_RESELECT = platform.os === "windows" || platform.os === "linux";
 
 /**
+ * Whether a selection the input reported is the recompute collapse the guard repairs (Windows, Linux; the box armed by an outside
+ * write just before its focus): the caret collapsed to the end of a nonempty text within RESELECT_COLLAPSE_MS of that focus, and no
+ * key has been seen in the box since its focus. A key, even one that changed no text (Enter, a refused key), makes the caret the
+ * filer's. Exported for its test: headless input reports a selection only after a text change, so the box cannot be driven there.
+ */
+export function isRecomputeCollapse(selection: TextSelection, length: number, sinceFocus: number, keySeen: boolean): boolean {
+  return !keySeen && length > 0 && selection.start === length && selection.end === length && sinceFocus <= RESELECT_COLLAPSE_MS;
+}
+
+/**
  * A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. The box always shows
  * what was reported: an edit the mask refuses is taken back out of the native box, and leaving a box the filer edited
  * reports the value it settled on (a typed 1.255 shown as 1.26 is 1.26 in the draft too) when that is not the one last
@@ -263,6 +279,8 @@ function MaskedField(props: MaskedProps) {
   let selected: TextSelection | undefined;
   let editFrom: TextSelection | undefined;
   let editTyped = false;
+  // The text changed at the filer's hands during this focus (even back to what it was).
+  let typedThisFocus = false;
   // The text the box last reported while it has the keys. Keys that come faster than the answers (a burst, an agent's
   // typing) are typed on this text, not on the answer: NSH drops an answer the box has typed past.
   let boxText: string | undefined;
@@ -279,6 +297,8 @@ function MaskedField(props: MaskedProps) {
   let armWindowsReselect = false;
   let windowsReselectDone = false;
   let windowsFocusAt = 0;
+  // A key press reached the box since its focus (onKeyPress comes before any text change).
+  let keySeen = false;
   // Set only through the wrapped ref the page receives; a platform Tab, click or tap never sets it.
   let programmaticFocus = false;
   let programmaticFocusToken = 0;
@@ -329,6 +349,7 @@ function MaskedField(props: MaskedProps) {
   });
   const change = (raw: string) => {
     armWindowsReselect = false;
+    typedThisFocus = true;
     const prev = untracked(text);
     if (outsideAfterEmpty) outsideAfterEmpty = false;
     const from = editFrom;
@@ -393,12 +414,13 @@ function MaskedField(props: MaskedProps) {
         if (!validBlur) {
           // The return keeps the fallback amount. A newer outside value held during this focus is that fallback.
           const fallback = outsideValue ?? focusValue;
-          const shownFallback = props.shown(fallback, false);
-          const kept = shownFallback === "" ? props.shown("0", false) : shownFallback;
+          // What the box shows again: "" when the fallback is blank (a nullable schedule cell that held no amount), unless the host
+          // answered the box's own empty report with its zero (a started row's cell): then it holds that zero.
+          const kept = props.shown(fallback === "" && isZeroAmount(props.value ?? "") ? (props.value ?? "") : fallback, false);
           if (write) writeText(displayShown(kept));
           const hint = held.includes(",") ? " Use a point for centavos, and commas only between thousands." : "";
           if (props.field.onLeftUnreadable) props.field.onLeftUnreadable(held, kept);
-          else leftUnreadable.set(`${held} is not an amount. The box kept ${kept}.${hint}`);
+          else leftUnreadable.set(`${held} is not an amount. ${kept === "" ? "The box was left blank." : `The box kept ${kept}.`}${hint}`);
           invalidActive = false;
           rollbackReported = false;
         } else {
@@ -415,12 +437,23 @@ function MaskedField(props: MaskedProps) {
           if (!sameReported(value, last)) {
             report(value);
           }
+          // A lone comma of the filer's read as the decimal point only now (strictly it is no amount), and the box shows that
+          // reading (no outside value won): the caller may say so under the box.
+          const commaRead = props.commaStates && commaState === "filer" && reading.includes(",") && readAmountWithCommas(reading, commaState, props.commaNegative, false) === null;
+          if (commaRead && (filerEdited || outsideValue === undefined)) props.field.onCommaRead?.(held, semanticShown);
+          // B3: the filer typed during this focus but came to the amount the box showed (a key and its Backspace, the same amount
+          // typed again), so a value set from outside meanwhile wins: the number changes under the filer's keys, and the caller may
+          // say what the return holds now.
+          if (!filerEdited && !refillWins && outsideValue !== undefined && typedThisFocus && !sameReported(commaValueOf(reading, true), outsideValue)) {
+            props.field.onOutsideKept?.(held, semanticShown);
+          }
         }
         outsideValue = undefined;
         focused.set(false);
         editFrom = undefined;
         editTyped = false;
         edited = false;
+        typedThisFocus = false;
         lastReportEmpty = false;
         outsideAfterEmpty = false;
         programmaticFocus = false;
@@ -429,6 +462,10 @@ function MaskedField(props: MaskedProps) {
   };
 
   cleanup(() => {
+    if (untracked(focused)) finishLeave(false);
+  });
+  // The same leave, asked for by the page (its flush before quit or navigation, its going) while the box has the keys.
+  props.field.leaveRef?.(() => {
     if (untracked(focused)) finishLeave(false);
   });
 
@@ -482,12 +519,12 @@ function MaskedField(props: MaskedProps) {
         if (RECOMPUTE_RESELECT && armWindowsReselect && !windowsReselectDone) {
           const len = untracked(text).length;
           const now = Date.now();
-          if (len > 0 && e.start === len && e.end === len && now - windowsFocusAt <= RESELECT_COLLAPSE_MS) {
+          if (isRecomputeCollapse(e, len, now - windowsFocusAt, keySeen)) {
             // The second and only other deliberate selection write: the measured recompute collapse repair (Windows, Linux).
             windowsReselectDone = true;
             armWindowsReselect = false;
             writeCaret(0, len);
-          } else if (now - windowsFocusAt > RESELECT_COLLAPSE_MS) {
+          } else if (keySeen || now - windowsFocusAt > RESELECT_COLLAPSE_MS) {
             armWindowsReselect = false;
           }
         }
@@ -495,6 +532,7 @@ function MaskedField(props: MaskedProps) {
         props.field.onSelectionChange?.(e);
       }}
       onKeyPress={(e) => {
+        keySeen = true;
         editFrom = selected;
         editTyped = [...e.key].length === 1;
         props.field.onKeyPress?.(e);
@@ -507,8 +545,10 @@ function MaskedField(props: MaskedProps) {
           return;
         }
         focused.set(true);
+        keySeen = false;
         boxText = undefined;
         edited = false;
+        typedThisFocus = false;
         focusValue = props.value ?? "";
         rollbackReported = false;
         invalidActive = false;

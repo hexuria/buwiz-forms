@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "sign-out-phone",
+  "fingerprint": "fnv1a64:b6342a6d535c63d7",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 717
+    },
+    {
+      "id": "s2",
+      "ok": false,
+      "error": "wait_until timed out: node `nb-menu-profile` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 5015
+    }
+  ],
+  "elapsed_ms": 5732
+}

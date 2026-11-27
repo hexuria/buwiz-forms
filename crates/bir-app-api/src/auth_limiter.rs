@@ -2,8 +2,14 @@
 //!
 //! The wait lengths of the retired UI host's `components::rate_limiter`: after
 //! every six wrong codes in a row, a wait of 1 minute, then 5, 15, 30, 1 hour
-//! and 24 hours. A right code clears the count. Like the original limiter, the
-//! count lives in memory, so quitting the app resets it.
+//! and 24 hours. A right code clears the count.
+//!
+//! A client's count (one taxpayer's PIN and authenticator, [`guarded_client`])
+//! is kept in `device.db` (accounts-and-lock PLAN §B.2,
+//! `bir_core::owner_lock`), so quitting the app does not reset it. The hash runs,
+//! then its result is committed, then the page is answered. The admin's and the recovery key's counts still
+//! live in memory, like the original limiter's, until the legacy lock goes
+//! (A3a-2, B3).
 //!
 //! The host checks it rather than the script, so every way the UI asks for a
 //! code (sign-in, the admin override, the recovery key) waits the same.
@@ -12,20 +18,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use bir_core::owner_lock::{self, Attempt, AttemptKey, GuardError, lockout_message};
 use gpui_shell::HostError;
-
-/// The wait after the 6th, 12th, 18th... wrong code in a row; the last one
-/// repeats from then on.
-const LOCKOUT_WAITS: [Duration; 6] = [
-    Duration::from_secs(60),
-    Duration::from_secs(300),
-    Duration::from_secs(900),
-    Duration::from_secs(1800),
-    Duration::from_secs(3600),
-    Duration::from_secs(86_400),
-];
-
-const ATTEMPTS_PER_WAIT: u32 = 6;
 
 #[derive(Default)]
 struct Limiter {
@@ -42,11 +36,10 @@ impl Limiter {
 
     fn record_failure(&mut self, now: Instant) {
         self.failed += 1;
-        if !self.failed.is_multiple_of(ATTEMPTS_PER_WAIT) {
-            return;
+        // The one schedule, shared with the persisted limit.
+        if let Some(wait) = owner_lock::wait_after(i64::from(self.failed)) {
+            self.locked_until = Some(now + Duration::from_secs(wait as u64));
         }
-        let window = (self.failed / ATTEMPTS_PER_WAIT) as usize - 1;
-        self.locked_until = Some(now + LOCKOUT_WAITS[window.min(LOCKOUT_WAITS.len() - 1)]);
     }
 }
 
@@ -60,9 +53,59 @@ pub(crate) const ADMIN: &str = "admin";
 /// the way back in.
 pub(crate) const RECOVERY_KEY: &str = "recovery-key";
 
-/// One taxpayer's PIN and authenticator code share one count.
-pub(crate) fn taxpayer(tin_root: &str) -> String {
+/// One taxpayer's PIN and authenticator code share one count (the in-memory
+/// key, used only when `device.db` cannot be written: [`guarded_client`]).
+fn taxpayer(tin_root: &str) -> String {
     format!("taxpayer:{tin_root}")
+}
+
+/// Runs `check` for the client `tin_root` under its persisted count in
+/// `device.db`, for the room open on this thread (or the legacy file's
+/// clients while none is), in the order hash, commit, answer (PLAN §B.2, L5):
+/// a running wait refuses; then the check; then its result is committed (a
+/// match clears the count, a miss counts, and the miss that starts a wait says
+/// so); only then the answer. A `check` that fails commits nothing.
+///
+/// Where `device.db` cannot be opened before the check (missing while rooms are
+/// on disk, unreadable), the count falls back to this process's memory, as
+/// before B1: no weaker than today, and the client is not locked out by a
+/// broken store. A result that cannot be committed after the check gives no
+/// answer.
+pub(crate) fn guarded_client(
+    tin_root: &str,
+    check: impl FnOnce() -> Result<bool, HostError>,
+) -> Result<bool, HostError> {
+    let store = bir_core::rooms::device_store_here();
+    let key = AttemptKey::client(bir_core::db::open_room_id().as_ref(), tin_root);
+    let mut check = Some(check);
+    let attempt = owner_lock::guarded(&store, &key, &bir_core::boot_clock::read(), || {
+        check.take().map_or(Ok(false), |check| check())
+    });
+    match attempt {
+        Ok(attempt) => answer(attempt),
+        Err(GuardError::Check(error)) => Err(error),
+        Err(GuardError::Store(error)) => {
+            tracing::warn!(
+                "client PIN count kept in memory: the device store is not usable: {error}"
+            );
+            match check.take() {
+                Some(check) => guarded(&taxpayer(tin_root), check),
+                None => Err(HostError::new(error.to_string())),
+            }
+        }
+    }
+}
+
+/// The page's answer to a guarded try: a wait (running, or started by this
+/// miss) is an error that says how long.
+pub(crate) fn answer(attempt: Attempt) -> Result<bool, HostError> {
+    match attempt {
+        Attempt::Matched => Ok(true),
+        Attempt::Missed { wait: None } => Ok(false),
+        Attempt::Missed { wait: Some(wait) } | Attempt::Waiting(wait) => {
+            Err(HostError::new(lockout_message(wait)))
+        }
+    }
 }
 
 /// Runs `check` for `account` unless it is waiting out a lockout. A match
@@ -102,18 +145,6 @@ fn guarded_at(
             None => Ok(false),
         }
     })
-}
-
-/// "Too many wrong tries. Try again in 1:00." (minutes:seconds, or hours and
-/// minutes for the long waits).
-fn lockout_message(wait: Duration) -> String {
-    let secs = wait.as_secs().max(1);
-    let left = if secs >= 3600 {
-        format!("{} h {:02} min", secs / 3600, (secs % 3600) / 60)
-    } else {
-        format!("{}:{:02}", secs / 60, secs % 60)
-    };
-    format!("Too many wrong tries. Try again in {left}.")
 }
 
 #[cfg(test)]

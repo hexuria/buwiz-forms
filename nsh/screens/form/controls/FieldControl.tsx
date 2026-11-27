@@ -290,6 +290,10 @@ function TypedBox(props: { p: FieldInput }) {
         onFocus={() => p.onFocus()}
         onBlur={() => p.onBlur()}
         onLeftUnreadable={(typed, kept) => p.onLeftUnreadable?.(typed, kept)}
+        onCommaRead={(typed, shown) => p.onCommaRead?.(typed, shown)}
+        hint={p.box.note?.() || undefined}
+        onOutsideKept={(typed, shown) => p.onOutsideKept?.(typed, shown)}
+        leaveRef={(leave) => p.leaveRef?.(leave)}
         width={widthOf(p)}
         error={p.box.message?.() || p.box.invalid()}
         whole={!!p.field.w}
@@ -307,7 +311,10 @@ function TypedBox(props: { p: FieldInput }) {
  * off is drawn faded. Wide: the box has the width the page gives. Narrow: the whole room, with the kit's touch height.
  */
 export function FieldControl(props: FieldInput) {
-  cleanup(() => props.blurRef?.(null));
+  cleanup(() => {
+    props.blurRef?.(null);
+    props.leaveRef?.(null);
+  });
   return (
     <View class="min-w-0 gap-1" style={{ opacity: props.box.off() ? OFF_OPACITY : 1 }}>
       <If

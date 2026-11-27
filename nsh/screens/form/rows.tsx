@@ -39,7 +39,10 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
     onBlur: () => s.blur(f.k),
     focusRef: (focus) => s.registerFocus(f.k, focus),
     blurRef: (blur) => s.registerBlur(f.k, blur),
+    leaveRef: (leave) => s.registerLeave(f.k, leave),
     onLeftUnreadable: (typed, kept) => s.leftUnreadable(f.k, typed, kept),
+    onCommaRead: (typed, shown) => s.commaRead(f.k, typed, shown),
+    onOutsideKept: (typed, shown) => s.outsideKept(f.k, typed, shown),
   };
 }
 
@@ -61,7 +64,7 @@ export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: S
     checked: (k) => s.box(k).value() === "true",
     locked: () => boxes.every((b) => b.locked()),
     choiceLocked: (k) => s.box(k).locked(),
-    hint: () => (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
+    hint: () => s.periodLockReason(keys) || (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
     // A shut choice draws nothing, so its reason must not fade the choices that do draw.
     off: () => boxes.filter((_, i) => !(hidden?.() ?? []).includes(keys[i])).map((b) => b.off()).find(Boolean) || "",
     narrow,
@@ -710,6 +713,9 @@ export function ItemRow(props: RowProps) {
           </View>
         </If>
         <Each of={info().notes}>{(note) => <Text variant="meta" tone="fg3" class="mt-1">{note()}</Text>}</Each>
+        <Each of={info().boxNotes ?? []} key={(b: { key: string; sentence: string }) => b.key}>
+          {(b) => <Text variant="meta" tone="fg3" class="mt-1" testID={`fp-boxnote-${b().key}`}>{b().sentence}</Text>}
+        </Each>
         <Each of={info().boxMessages} key={(b: { key: string; sentence: string }) => b.key}>
           {(b) => (
             <View ref={(ref: ViewRef) => messageRefs.get(b().key)?.set(ref)}>

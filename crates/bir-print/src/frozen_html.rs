@@ -1641,8 +1641,8 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2200s-2018" => Some(include_str!(
             "../../../html-frozen/2200s-2018/writer-cells.json"
         )),
-        "2200t-2022" => Some(include_str!(
-            "../../../html-frozen/2200t-2022/writer-cells.json"
+        "2200t-2020" => Some(include_str!(
+            "../../../html-frozen/2200t-2020/writer-cells.json"
         )),
         "2550m-2007" => Some(include_str!(
             "../../../html-frozen/2550m-2007/writer-cells.json"
@@ -2176,6 +2176,35 @@ pub fn merged_writer_cells_json(slug: &str) -> Option<serde_json::Value> {
     }
     cells["joins"] = serde_json::Value::Array(joins);
     Some(cells)
+}
+
+/// Every cell of sheet `slug` a writer key prints into: the cells of its
+/// writer-cells joins (text, money, peso, check box and date), with the
+/// engine's own joins ([`SHEET_JOINS`], the donor and estate joins) merged
+/// in. Cells filled by an input's stamped name are not listed here.
+pub fn joined_cell_ids(slug: &str) -> BTreeSet<String> {
+    let Ok(cells) = writer_cells(slug) else {
+        return BTreeSet::new();
+    };
+    let mut ids: BTreeSet<String> = cells.joins.values().flatten().cloned().collect();
+    for join in &cells.money_joins {
+        for pair in &join.cells {
+            ids.insert(pair.peso_html_id.clone());
+            ids.extend(pair.cent_html_id.clone());
+        }
+    }
+    for join in &cells.xbox_joins {
+        ids.extend(join.html_ids.iter().cloned());
+    }
+    for join in &cells.peso_joins {
+        ids.extend(join.html_ids.iter().cloned());
+    }
+    for join in &cells.date_joins {
+        ids.insert(join.mm_html_id.clone());
+        ids.extend(join.dd_html_id.clone());
+        ids.insert(join.yyyy_html_id.clone());
+    }
+    ids
 }
 
 /// `slug`'s [`SHEET_JOINS`] that print in a comb: `(writer key, comb
@@ -6724,7 +6753,7 @@ mod tests {
         "2200m-2018",
         "2200p-2020",
         "2200s-2018",
-        "2200t-2022",
+        "2200t-2020",
         "2550m-2007",
         "2550q-2024",
         "2551q-2018",
@@ -6855,7 +6884,7 @@ mod tests {
     /// with the size); no `.fi` sets a letter-spacing, the size classes do.
     #[test]
     fn each_sheet_measures_in_its_own_face_and_spacing() {
-        const TINOS: [&str; 11] = [
+        const TINOS: [&str; 10] = [
             "0605-1999",
             "1601c-2018",
             "1602q-2019",
@@ -6864,7 +6893,6 @@ mod tests {
             "1604f-2018",
             "2200c-2018",
             "2200p-2020",
-            "2200t-2022",
             "2550m-2007",
             "2553-1999",
         ];
@@ -6881,7 +6909,7 @@ mod tests {
         }
         for (slug, pt) in [
             ("1604f-2018", 0.3238),
-            ("2200t-2022", 0.4092),
+            ("2200t-2020", 0.0),
             ("1600-pt-2018", 0.2778),
             ("1604e-2018", 0.1518),
             ("1600wp-2010", 0.0546),
@@ -7562,7 +7590,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1472, "band boxes");
+        assert_eq!(total, 1433, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 

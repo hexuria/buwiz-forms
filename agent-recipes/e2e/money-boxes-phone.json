@@ -1,0 +1,117 @@
+{
+ "v": 1,
+ "name": "e2e-money-boxes-phone",
+ "app": "bir-shell",
+ "params": [
+  "prior",
+  "amount",
+  "amount_shown"
+ ],
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:amendedRtn_1",
+   "screenshot": true
+  },
+  {
+   "id": "s2",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 300
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "fp-part-2-toggle"
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "fp-frm2551Qv2018:txt16",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s5",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 600
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "fp-frm2551Qv2018:txt15",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s7",
+   "op": "type",
+   "target": "fp-frm2551Qv2018:txt16",
+   "text": "$prior",
+   "key_delay_ms": 120
+  },
+  {
+   "id": "s8",
+   "op": "assert",
+   "target": "fp-frm2551Qv2018:txt16",
+   "value": "$prior",
+   "screenshot": true
+  },
+  {
+   "id": "s9",
+   "op": "type",
+   "target": "fp-frm2551Qv2018:txt15",
+   "text": "$amount",
+   "key_delay_ms": 120
+  },
+  {
+   "id": "s10",
+   "op": "assert",
+   "target": "fp-frm2551Qv2018:txt15",
+   "value": "$amount",
+   "screenshot": true
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:txt16"
+  },
+  {
+   "id": "s12",
+   "op": "assert",
+   "target": "fp-frm2551Qv2018:txt15",
+   "value": "$amount_shown",
+   "screenshot": true
+  },
+  {
+   "id": "s13",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:txt15"
+  },
+  {
+   "id": "s14",
+   "op": "assert",
+   "target": "fp-frm2551Qv2018:txt15",
+   "value": "$amount_shown",
+   "screenshot": true
+  },
+  {
+   "id": "s15",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -2400
+  },
+  {
+   "id": "s16",
+   "op": "wait_until",
+   "target": "fp-frm2551Qv2018:amendedRtn_2",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s17",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:amendedRtn_2",
+   "screenshot": true
+  }
+ ]
+}

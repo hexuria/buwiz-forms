@@ -3,7 +3,8 @@ import { expect, open, test } from "nsh/test";
 import { openKit, readout, SIZES } from "./harness";
 
 const commaHint = " Use a point for centavos, and commas only between thousands.";
-const leftSentence = (typed: string, kept: string) => `${typed} is not an amount. The box kept ${kept}.${typed.includes(",") ? commaHint : ""}`;
+const leftSentence = (typed: string, kept: string) =>
+  `${typed} is not an amount. ${kept === "" ? "The box was left blank." : `The box kept ${kept}.`}${typed.includes(",") ? commaHint : ""}`;
 
 for (const size of SIZES) {
   test(`${size.name}: touch date sheet validates Done, discards dismissal and clears`, async () => {
@@ -174,7 +175,7 @@ for (const size of SIZES) {
     await app.type("id:m-other", " ");
     expect(app.value("id:m-amount")).toBe("");
     expect(readout(app, "Amount:")).toBe("Amount: empty");
-    expect(app.texts()).toContain(leftSentence("1250000.5x", "0.00"));
+    expect(app.texts()).toContain(leftSentence("1250000.5x", ""));
   });
 
   test(`${size.name}: negatives read by sign or accounting parentheses only where allowed`, async () => {
@@ -373,7 +374,7 @@ for (const size of SIZES) {
     await app.type("id:m-other", " ");
     expect(app.value("id:m-amount")).toBe("");
     expect(readout(app, "Amount:")).toBe("Amount: empty");
-    expect(app.texts()).toContain(leftSentence("99999999.995x.", "0.00"));
+    expect(app.texts()).toContain(leftSentence("99999999.995x.", ""));
   });
 
   test(`${size.name}: typed commas and letters stay exact, invalid and unreported`, async () => {
@@ -391,7 +392,7 @@ for (const size of SIZES) {
       await app.type("id:m-other", " ");
       expect(app.value("id:m-amount")).toBe("");
       expect(readout(app, "Amount:")).toBe("Amount: empty");
-      expect(app.texts()).toContain(leftSentence(bad, "0.00"));
+      expect(app.texts()).toContain(leftSentence(bad, ""));
     }
   });
 
@@ -410,7 +411,7 @@ for (const size of SIZES) {
       await app.type("id:m-other", " ");
       expect(app.value("id:m-amount")).toBe("");
       expect(readout(app, "Amount:")).toBe("Amount: empty");
-      expect(app.texts()).toContain(leftSentence(bad, "0.00"));
+      expect(app.texts()).toContain(leftSentence(bad, ""));
     }
   });
 
@@ -428,7 +429,7 @@ for (const size of SIZES) {
     await app.type("id:m-other", " ");
     expect(app.value("id:m-amount")).toBe("");
     expect(readout(app, "Amount:")).toBe("Amount: empty");
-    expect(app.texts()).toContain(leftSentence("15000..50", "0.00"));
+    expect(app.texts()).toContain(leftSentence("15000..50", ""));
   });
 
   test(`${size.name}: invalid typing falls back to the focus value, and correcting it reports again`, async () => {
@@ -486,6 +487,48 @@ for (const size of SIZES) {
     expect(readout(app, "Invalid count:")).toBe("Invalid count: 1");
   });
 
+  test(`${size.name}: [comma] a lone comma read as the decimal point on leaving is said through onCommaRead, once; a thousands comma is not`, async () => {
+    const app = await open("./masked.fixture.tsx", size.options);
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "1500,50");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-cb")).toBe("1,500.50");
+    expect(readout(app, "Cb:")).toBe("Cb: 1500.50");
+    expect(readout(app, "Comma:")).toBe("Comma: 1500,50|1,500.50");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 1");
+    // Back in and out with no edit: the box's own grouping is no comma of the filer's.
+    await app.type("id:m-cb", "");
+    await app.type("id:m-other", " ");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 1");
+    // "1,5" is 1.50; "2,500" is two thousand five hundred, read strictly: no call.
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "1,5");
+    await app.type("id:m-other", " ");
+    expect(readout(app, "Comma:")).toBe("Comma: 1,5|1.50");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 2");
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "2,500");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-cb")).toBe("2,500.00");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 2");
+  });
+
+  test(`${size.name}: [F1] leaveRef's leave reads and reports the box at once, with the keys still in it, and the blur after it adds nothing`, async () => {
+    const app = await open("./masked.fixture.tsx", size.options);
+    await app.clear("id:m-cb");
+    await app.type("id:m-cb", "1500,50");
+    expect(readout(app, "Cb:")).not.toBe("Cb: 1500.50");
+    // Return's key press asks for the leave, in its own turn, before the blur Return brings headless.
+    await app.keyboard.press("enter");
+    expect(readout(app, "Cb at Return:")).toBe("Cb at Return: 1500.50");
+    expect(readout(app, "Comma:")).toBe("Comma: 1500,50|1,500.50");
+    // The blur after it is the same leave: it runs once.
+    await app.type("id:m-other", " ");
+    expect(readout(app, "Cb:")).toBe("Cb: 1500.50");
+    expect(readout(app, "Cb blurs:")).toBe("Cb blurs: 1");
+    expect(readout(app, "Comma count:")).toBe("Comma count: 1");
+  });
+
   test(`${size.name}: a held outside value is the fallback for unreadable text`, async () => {
     const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
     await app.press("id:m-arm-held");
@@ -505,6 +548,35 @@ for (const size of SIZES) {
     await app.type("id:m-other", " ");
     expect(app.value("id:m-two")).toBe("3,000.00");
     expect(readout(app, "Two:")).toBe("Two: 3000.00");
+  });
+
+  test(`${size.name}: [B3] an outside value that wins over typing back to the shown amount is said through onOutsideKept; with no typing it is not`, async () => {
+    const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
+    // The same amount typed again over the 2,000.00 the box showed, while 3000 arrived from outside.
+    await app.press("id:m-arm-held");
+    await app.clear("id:m-two");
+    await app.type("id:m-two", "2000");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-two")).toBe("3,000.00");
+    expect(readout(app, "Outside:")).toBe("Outside: 2000|3,000.00");
+    // A key and its Backspace: no edit, and the number still changed under the filer's keys.
+    const again = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
+    await again.press("id:m-arm-held");
+    await again.type("id:m-two", "");
+    await again.keyboard.press("4");
+    await again.keyboard.press("backspace");
+    await again.type("id:m-other", " ");
+    expect(again.value("id:m-two")).toBe("3,000.00");
+    expect(readout(again, "Outside:")).toBe("Outside: 2,000.00|3,000.00");
+  });
+
+  test(`${size.name}: [B3] focus and leave with no typing while an outside value arrives: the box shows it and says nothing`, async () => {
+    const app = await open("./masked.fixture.tsx", { ...size.options, clock: {} });
+    await app.press("id:m-arm-held");
+    await app.type("id:m-two", "");
+    await app.type("id:m-other", " ");
+    expect(app.value("id:m-two")).toBe("3,000.00");
+    expect(readout(app, "Outside:")).toBe("Outside: none");
   });
 
   test(`${size.name}: M2-2: an outside refill after the empty report wins when it is left unanswered`, async () => {
