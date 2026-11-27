@@ -10910,6 +10910,16 @@ mod tests {
                         .into_iter()
                         .map(|w| format!("{slug} ({len}): {w}")),
                 );
+                misplaced.extend(
+                    bands_sideways_off_their_cell(&doc)
+                        .into_iter()
+                        .map(|w| format!("{slug} ({len}): {w}")),
+                );
+                misplaced.extend(
+                    bands_covering_other_value_cells(&doc)
+                        .into_iter()
+                        .map(|w| format!("{slug} ({len}): {w}")),
+                );
             }
         }
         // Every Rule 6 band the long fills print (14 sheets), counted so a
@@ -11092,6 +11102,68 @@ mod tests {
         wrong
     }
 
+    /// D1, the band's sideways position: a band must start within 1 pt of
+    /// its own cell's left edge, or span the cell's whole width (a wider
+    /// band is fine: it still reads as the cell's value). Anything else is
+    /// the value printing under a neighbouring column.
+    fn bands_sideways_off_their_cell(doc: &str) -> Vec<String> {
+        let divs = drawn_divs(doc);
+        let mut wrong = Vec::new();
+        for band in divs.iter().filter(|d| d.band_of.is_some()) {
+            let of = band.band_of.as_deref().unwrap();
+            let Some(cell) = divs.iter().find(|d| {
+                d.band_of.is_none() && d.id.as_deref() == Some(of) && d.page == band.page
+            }) else {
+                continue;
+            };
+            let aligned = (band.left - cell.left).abs() <= 1.0;
+            let covers = band.left <= cell.left + 0.5
+                && band.left + band.width >= cell.left + cell.width - 0.5;
+            if !aligned && !covers {
+                wrong.push(format!(
+                    "{of}: band left {:.2} width {:.2} neither within 1 pt of its cell's left {:.2} nor covering the cell's span to {:.2}",
+                    band.left,
+                    band.width,
+                    cell.left,
+                    cell.left + cell.width
+                ));
+            }
+        }
+        wrong
+    }
+
+    /// D2, the band is white on top: the band prints its value on white
+    /// over whatever it overlaps, so it must intersect no other value cell
+    /// of the page — anything under it would be hidden. Its own cell is
+    /// excepted: the band never overlaps it (the vertical check), and it
+    /// is the value the band prints.
+    fn bands_covering_other_value_cells(doc: &str) -> Vec<String> {
+        let divs = drawn_divs(doc);
+        let mut wrong = Vec::new();
+        for band in divs.iter().filter(|d| d.band_of.is_some()) {
+            let of = band.band_of.as_deref().unwrap();
+            for cell in divs
+                .iter()
+                .filter(|d| d.value_cell && d.page == band.page)
+            {
+                if cell.id.as_deref() == Some(of) {
+                    continue;
+                }
+                let x = (band.left + band.width).min(cell.left + cell.width)
+                    - band.left.max(cell.left);
+                let y = (band.top + band.height).min(cell.top + cell.height)
+                    - band.top.max(cell.top);
+                if x > 0.05 && y > 0.05 {
+                    wrong.push(format!(
+                        "{of}: band covers value cell {} by {x:.2} pt sideways, {y:.2} pt down",
+                        cell.id.as_deref().unwrap_or("?")
+                    ));
+                }
+            }
+        }
+        wrong
+    }
+
     /// The band check fails a band that drifted a row down: 1700's band for
     /// p2c153, moved below the next value row under its cell (same gap),
     /// is too far from its cell and has that row between them; in place it
@@ -11145,6 +11217,118 @@ mod tests {
         assert!(wrong[0].starts_with("p2c153: band top "), "{wrong:?}");
         assert!(
             wrong[1].starts_with("p2c153: rows between") && wrong[1].contains(&next_id),
+            "{wrong:?}"
+        );
+    }
+
+    /// D1's negative: 1700's band for p2c153 moved sideways under the
+    /// next column of its row fails the sideways check (and nothing else
+    /// moves, so exactly one failure names it); in place it passes.
+    #[test]
+    fn a_rule6_band_moved_sideways_a_column_fails() {
+        let slug = "1700-2018";
+        let cells = writer_cells(slug).unwrap();
+        let fields: BTreeMap<String, String> = cells
+            .joins
+            .keys()
+            .map(|key| (key.clone(), words_of(200)))
+            .collect();
+        let doc = filled_document(slug, &fields).unwrap();
+        assert_eq!(bands_sideways_off_their_cell(&doc), Vec::<String>::new());
+
+        let divs = drawn_divs(&doc);
+        let band = divs
+            .iter()
+            .find(|d| d.band_of.as_deref() == Some("p2c153"))
+            .unwrap();
+        let cell = divs
+            .iter()
+            .find(|d| d.band_of.is_none() && d.id.as_deref() == Some("p2c153"))
+            .unwrap();
+        // The neighbouring column: the nearest other value cell whose row
+        // overlaps the cell's, sideways of it; falling back to a plain
+        // 30 pt shift where the row has none.
+        let neighbour = divs
+            .iter()
+            .filter(|d| d.page == band.page && d.value_cell && d.id != cell.id)
+            .filter(|d| {
+                d.top.max(cell.top) + 1.0 < (d.top + d.height).min(cell.top + cell.height)
+            })
+            .map(|d| d.left)
+            .min_by(|a, b| {
+                (a - cell.left)
+                    .abs()
+                    .total_cmp(&(b - cell.left).abs())
+            });
+        let moved_left = neighbour.unwrap_or(cell.left + 30.0);
+        let marker = "data-rule6-of=\"p2c153\" style=\"";
+        let at = doc.find(marker).unwrap() + marker.len();
+        let old_left = format!("left:{:.2}pt", band.left);
+        assert!(doc[at..].starts_with(&old_left));
+        let mut moved = doc.clone();
+        moved.replace_range(
+            at..at + old_left.len(),
+            &format!("left:{moved_left:.2}pt"),
+        );
+
+        let wrong = bands_sideways_off_their_cell(&moved);
+        assert_eq!(wrong.len(), 1, "{wrong:?}");
+        assert!(wrong[0].starts_with("p2c153: band left "), "{wrong:?}");
+    }
+
+    /// D2's negative: 1700's band for p2c153 moved down over the next
+    /// value cell under its own fails the white-on-top check, naming the
+    /// covered cell; in place it passes.
+    #[test]
+    fn a_rule6_band_moved_over_another_value_cell_fails() {
+        let slug = "1700-2018";
+        let cells = writer_cells(slug).unwrap();
+        let fields: BTreeMap<String, String> = cells
+            .joins
+            .keys()
+            .map(|key| (key.clone(), words_of(200)))
+            .collect();
+        let doc = filled_document(slug, &fields).unwrap();
+        assert_eq!(
+            bands_covering_other_value_cells(&doc),
+            Vec::<String>::new()
+        );
+
+        let divs = drawn_divs(&doc);
+        let band = divs
+            .iter()
+            .find(|d| d.band_of.as_deref() == Some("p2c153"))
+            .unwrap();
+        let cell = divs
+            .iter()
+            .find(|d| d.band_of.is_none() && d.id.as_deref() == Some("p2c153"))
+            .unwrap();
+        let bottom = cell.top + cell.height;
+        let next = divs
+            .iter()
+            .filter(|d| d.page == band.page && d.value_cell && d.id != cell.id)
+            .filter(|d| d.top >= bottom - 0.5)
+            .filter(|d| {
+                d.left.max(band.left) + 1.0 < (d.left + d.width).min(band.left + band.width)
+            })
+            .min_by(|a, b| a.top.total_cmp(&b.top))
+            .unwrap();
+        let moved_top = next.top + next.height / 2.0 - band.height / 2.0;
+        let marker = "data-rule6-of=\"p2c153\" style=\"";
+        let at = doc.find(marker).unwrap() + marker.len();
+        let old_top = format!("top:{:.2}pt", band.top);
+        assert!(doc[at..].starts_with(&format!("left:{:.2}pt;{old_top}", band.left)));
+        let mut moved = doc.clone();
+        let top_at = at + doc[at..].find(&old_top).unwrap();
+        moved.replace_range(
+            top_at..top_at + old_top.len(),
+            &format!("top:{moved_top:.2}pt"),
+        );
+
+        let wrong = bands_covering_other_value_cells(&moved);
+        let next_id = next.id.clone().unwrap();
+        assert!(
+            wrong.iter().any(|w| w.starts_with("p2c153: band covers value cell ") && w.contains(&next_id)),
             "{wrong:?}"
         );
     }
