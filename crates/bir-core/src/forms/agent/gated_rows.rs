@@ -353,7 +353,7 @@ fn gate_of(form: &str, key: &str) -> Option<Gate> {
         }
         "1702RT" => {
             if key == "frm1702RT:txtPg2Pt4I45IncomeTaxPaymentUnderMCIT"
-                || key.starts_with("frm1702RT:txtPg4Sc4I")
+                || (key.starts_with("frm1702RT:txtPg4Sc4I") && !key.ends_with("C4"))
             {
                 return Some(G1702RT_MCIT);
             }
@@ -465,13 +465,9 @@ fn employer_name_lock_reason(draft: &Value, key: &str) -> Option<&'static str> {
         return Some(C1701_EMPLOYER_OWNER);
     };
     match owner {
-        Form1701Party::Taxpayer if key.contains("TPName") => {
-            (!compensation(form.atc)).then_some(C1701_EMPLOYER_TAXPAYER)
-        }
-        Form1701Party::Spouse if key.contains("SName") => (!(form.spouse_column_active()
-            && compensation(form.spouse.atc)))
-        .then_some(C1701_EMPLOYER_SPOUSE),
-        _ => Some(C1701_EMPLOYER_OWNER),
+        Form1701Party::Taxpayer => (!compensation(form.atc)).then_some(C1701_EMPLOYER_TAXPAYER),
+        Form1701Party::Spouse => (!(form.spouse_column_active() && compensation(form.spouse.atc)))
+            .then_some(C1701_EMPLOYER_SPOUSE),
     }
 }
 

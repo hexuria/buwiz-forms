@@ -369,7 +369,12 @@ impl Form1701Draft {
                 Some(Form1701Party::Spouse) => spouse_name_allowed,
                 None => false,
             };
-            if !name_allowed {
+            let row_has_content = row.owner.is_some()
+                || !row.employer_name.is_empty()
+                || !row.employer_tin.is_empty()
+                || row.compensation_income.is_some_and(|amount| amount != 0.0)
+                || row.tax_withheld.is_some_and(|amount| amount != 0.0);
+            if !name_allowed && row_has_content {
                 row.owner = None;
                 row.employer_name.clear();
                 row.employer_tin.clear();

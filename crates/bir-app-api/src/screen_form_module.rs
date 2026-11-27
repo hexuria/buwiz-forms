@@ -6972,13 +6972,14 @@ fn screen_form_amend(
         u16::try_from(arguments.integer(2)?).map_err(|_| host_error("year is out of range"))?;
     let period = page_period(code, arguments.integer(3)?).map_err(host_error)?;
     let exact = arguments.get(4).and_then(|key| to_json(key).as_i64());
-    let (amended, from_profile, status, updated_at, carried) = with_database(|db| {
+    let (amended, from_profile, status, updated_at, filed_id, carried) = with_database(|db| {
         let profile = db
             .get_profile_for_year(&tin, year)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
         let filed =
             load_draft(db, kind, &profile, year, period, false, exact).map_err(host_error)?;
+        let filed_id = filed["id"].clone();
         let status = agent::identity(kind, &filed).map_err(host_error)?.status;
         let updated_at = filed["updated_at"]
             .as_str()
@@ -6995,7 +6996,7 @@ fn screen_form_amend(
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
         let carried = carry_forward::open_fields(db, kind, &tin, &amended);
-        Ok((amended, from_profile, status, updated_at, carried))
+        Ok((amended, from_profile, status, updated_at, filed_id, carried))
     })?;
     Ok(async move {
         let mut opened = on_large_stack(move || {
@@ -7013,7 +7014,11 @@ fn screen_form_amend(
         .map_err(host_error)?;
         put_amendment_mark(
             &mut opened["draft"],
-            Some(json!({ "status": status_name(&status), "updated_at": updated_at })),
+            Some(json!({
+                "status": status_name(&status),
+                "updated_at": updated_at,
+                "id": filed_id,
+            })),
         );
         opened["amends"] = json!(status_name(&status));
         for (field, value) in carried {
@@ -17636,9 +17641,9 @@ mod tests {
     /// for 1701MS (PR 7): item 16B's From and To are bound now and refused
     /// with the spouse gate's words until the return is joint.
     const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
-        "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
-        "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
-        "1707 frm1707:txtPg2P4Sch1I8DateCollection: cleared to \"\"",
+        "1701MS frm1701MS:txtTaxpayerNo16a1: Item 12 column A is Exempt or Special/Preferential Rate.",
+        "1701MS frm1701MS:txtTaxpayerNo16a: Item 12 column A is Exempt or Special/Preferential Rate.",
+        "1707 frm1707:txtPg2P4Sch1I8DateCollection: Item 9 transaction is Installment Sale.",
         // PR 8: 1707A's printed row 4 says the form computes it (from the
         // continuation rows), with what it waits for.
         "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: computed by BIR's own formulas",

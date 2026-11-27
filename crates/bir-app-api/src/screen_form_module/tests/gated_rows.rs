@@ -4,6 +4,15 @@
 
 use super::*;
 
+fn payload_map(code: &str, draft: &Value) -> std::collections::BTreeMap<String, String> {
+    agent::field_map(kind_of(code).unwrap(), draft).unwrap()
+}
+
+fn printed_map(code: &str, draft: &Value) -> std::collections::BTreeMap<String, String> {
+    let kind = kind_of(code).unwrap();
+    with_database(|db| print_map(db, kind, draft)).unwrap().0
+}
+
 fn notes_seen(keys: &[String]) -> Vec<String> {
     call("screen_form_notes_seen", vec![json(json!(keys))])
         .expect("notes seen")
@@ -109,6 +118,8 @@ fn form_2552_tax_relief_specification_is_gated_and_said_once() {
         closed["relock_notes"][spec],
         json!("The tax-relief specification was cleared: Item 10 is not Yes.")
     );
+    assert_eq!(payload_map("2552", &closed["draft"])[spec], "");
+    assert_eq!(printed_map("2552", &closed["draft"])[spec], "");
 
     // The page reported that clearing inline. Validation may rewrite the
     // draft, but the save that follows still marks exactly that gate seen:
@@ -1050,5 +1061,43 @@ fn blanking_an_earlier_1702mx_mcit_row_keeps_the_notice_on_the_right_stable_line
             .collect::<Vec<_>>(),
         vec!["1702mx_schedule9_mcit:mcit-line-2"],
         "{clearances:?}"
+    );
+
+    // The same row key carries the open migration's pending note: once the
+    // page records it seen, reopening does not offer it again. Rewrite the
+    // stored bytes so this is the legacy-row case, not a fill the page has
+    // already reported inline.
+    let saved = save("1702MX", &typed2["draft"]);
+    let id = saved["id"].as_i64().expect("1702MX draft id");
+    let mut legacy = saved["draft"].clone();
+    legacy["incorporation_date"] = json!("01/01/2024");
+    let bytes = serde_json::to_string(&legacy).expect("legacy 1702MX json");
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&bytes, &id.to_string()],
+    );
+    let migrated = open("1702MX", 0);
+    assert_eq!(migrated["draft"]["schedule_9"]["rows"][1]["year"], "");
+    assert!(
+        note_texts(&migrated)
+            .iter()
+            .any(|text| text.contains("Schedule 9 row 2 was cleared")),
+        "migration notes: {:?}",
+        migrated["notes"]
+    );
+    let recorded = notes_seen(&note_keys(&migrated));
+    assert!(
+        recorded
+            .iter()
+            .any(|key| key.contains(":1702mx_schedule9_mcit:mcit-line-2:")),
+        "row-keyed seen keys: {recorded:?}"
+    );
+    let reopened = open("1702MX", 0);
+    assert!(
+        !note_texts(&reopened)
+            .iter()
+            .any(|text| text.contains("Schedule 9 row 2 was cleared")),
+        "seen row-keyed note repeated: {:?}",
+        reopened["notes"]
     );
 }
