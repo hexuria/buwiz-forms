@@ -1832,7 +1832,7 @@ fn returns_waiting_count() -> HostResult {
         Some((handle, _)) => {
             let guard = match bir_core::lock_timing::lock(&handle) {
                 Ok(guard) => guard,
-                Err(_) => return Ok(HostValue::Null),
+                Err(_) => return Ok(HostValue::Number(0.0)),
             };
             let queued = guard.count_queued_drafts().unwrap_or(0);
             let open_prefix = crate::open_room::job_key_prefix();
@@ -1849,7 +1849,9 @@ fn returns_waiting_count() -> HostResult {
             queued + sending
         }
     };
-    Ok(HostObject::new().field("count", count).into())
+    // X6: a plain number, as the declaration says and the page compares — the object it used to
+    // return made `waiting > 0` false forever, so the sign-out count and the notice never showed.
+    Ok(HostValue::Number(count as f64))
 }
 
 /// The Settings row's copy state (§A.3.8): the pre-rooms zip of this room's claim — kept until the

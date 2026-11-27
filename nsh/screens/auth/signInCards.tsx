@@ -9,6 +9,7 @@ import { Button } from "nsh/base";
 import { app } from "../../shell";
 import { deviceCopy, PinCells, Spinner, T_MIN_H, Text, TextField, TOUCH } from "../../ui";
 import { BackControl, OpenPage, openTight, PageButton, PageHeading, SoftLine } from "./parts";
+import { dismissWaitingNotice, returnsWaitingNotice } from "../settings/cloud";
 import { codeSaid, emailSaid, resendLabel, type Said, signInFlow, type SignInState } from "./signInFlow";
 import { codeBoxWidth, OPEN_SIDE, openColumnMax, SAID_SLOT } from "./signInLook";
 
@@ -67,9 +68,21 @@ export function StartPage(props: { prefix: string }) {
     <OpenPage
       testID={`${props.prefix}-start`}
       gap="gap-0"
-      footer={<PageButton testID={`${props.prefix}-start-continue`} label={START_BUTTON} icon="mail" onPress={signInFlow.openEmail} />}
+      footer={<PageButton testID={`${props.prefix}-start-continue`} label={START_BUTTON} icon="mail" onPress={() => { dismissWaitingNotice(); signInFlow.openEmail(); }} />}
     >
       <SoftLine testID={`${props.prefix}-tagline`}>{TAGLINE}</SoftLine>
+      {/* §A.5: after a sign-out that left returns waiting, the notice shows once, with no names. */}
+      <If when={returnsWaitingNotice() > 0}>
+        {(() => {
+          return (
+            <View class="mt-2">
+              <Text variant="meta" tone="fg2" testID="returns-waiting-notice" class="text-center">
+                {"Returns are waiting to send on this device. They send when their account signs in again."}
+              </Text>
+            </View>
+          );
+        })()}
+      </If>
       <If when={app.gateError()}>
         <View class="mt-3">
           <SaidLine said={{ text: app.gateError() ?? "", danger: true }} testID={`${props.prefix}-start-said`} />

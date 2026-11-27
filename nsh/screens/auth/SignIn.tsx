@@ -50,7 +50,6 @@ export function SignIn() {
         <If when={returnsWaitingNotice() > 0}>
           {(() => {
             const count = returnsWaitingNotice();
-            dismissWaitingNotice();
             return (
               <Text variant="meta" tone="fg2" testID="returns-waiting-notice">
                 {"Returns are waiting to send on this device. They send when their account signs in again."}

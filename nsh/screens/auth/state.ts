@@ -4,6 +4,7 @@
 import { batch, signal } from "nsh";
 import { errorText } from "../../lib/errors";
 import { app, go, store, toast, type Session } from "../../shell";
+import { dismissWaitingNotice } from "../settings/cloud";
 import { codeLengthError, signInTarget, wrongCode } from "./logic";
 
 // ---------------------------------------------------------------- sign-in
@@ -54,6 +55,7 @@ function target() {
 
 /** TIN plus that account's own PIN or authenticator code. */
 function submitSignIn(): void {
+  dismissWaitingNotice();
   const t = target();
   if ("error" in t) return fail(t.error);
   const totp = method() === "totp";
