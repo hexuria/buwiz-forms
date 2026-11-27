@@ -347,10 +347,31 @@ impl Form1701Draft {
             self.spouse.foreign_tax_number.clear();
         }
 
-        // Employer rows (Schedule 1): amounts held at centavos.
+        if !PARTIES.iter().any(|party| {
+            matches!(
+                regime(self.party_atc_official(*party)),
+                Some(Regime::EightPercent { .. })
+            )
+        }) {
+            self.computations.schedule_3_descriptions.remove(&27);
+        }
+
+        // Employer rows (Schedule 1): amounts held at centavos. A name typed
+        // while its owner is not compensation income is dormant output, so the
+        // model clears it with the row rather than filing text the page hides.
+        let taxpayer_name_allowed = self.employer_row_allowed(Form1701Party::Taxpayer);
+        let spouse_name_allowed = self.employer_row_allowed(Form1701Party::Spouse);
         for row in &mut self.employers {
             row.compensation_income = Some(cents(amt(row.compensation_income)));
             row.tax_withheld = Some(cents(amt(row.tax_withheld)));
+            let name_allowed = match row.owner {
+                Some(Form1701Party::Taxpayer) => taxpayer_name_allowed,
+                Some(Form1701Party::Spouse) => spouse_name_allowed,
+                None => false,
+            };
+            if !name_allowed {
+                row.employer_name.clear();
+            }
         }
 
         for party in PARTIES {

@@ -19,6 +19,7 @@
 
 pub mod carry;
 pub mod draft_locks;
+pub mod gated_rows;
 pub mod probe;
 pub mod recipe;
 

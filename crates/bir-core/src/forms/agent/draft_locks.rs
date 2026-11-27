@@ -43,6 +43,8 @@
 
 use serde_json::{Map, Value};
 
+use super::gated_rows;
+
 use super::AgentFormKind;
 
 /// Lay the draft-dependent locks over `locks`, the base map
@@ -92,6 +94,7 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     item_13::relock(kind, draft, locks);
     // 2551Q Item 16 follows Amended Return and the 8% option.
     item16_2551q::relock(kind, draft, locks);
+    gated_rows::relock(kind, draft, locks, only);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -103,6 +106,7 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut relocks = annual_corporate::live_locks(kind, draft);
     relocks.extend(excise::live_locks(kind, draft));
     relocks.extend(item16_2551q::live_locks(kind, draft));
+    relocks.extend(gated_rows::live_locks(kind, draft));
     relocks
 }
 
@@ -2009,7 +2013,12 @@ pub mod pending_notices {
     /// path opened or imported the return. Gate and text are owned strings so
     /// a row-keyed gate (1601FQ Schedule 1, for example) can name its row.
     pub fn clearance(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
-        collect_clearances(kind, before, after, &[item16_2551q_clearance])
+        collect_clearances(
+            kind,
+            before,
+            after,
+            &[item16_2551q_clearance, gated_rows_clearance],
+        )
     }
 
     type ClearanceCheck = fn(AgentFormKind, &Value, &Value) -> Vec<(String, String)>;
@@ -2039,6 +2048,17 @@ pub mod pending_notices {
             return vec![("2551q_item16".to_string(), text.to_string())];
         }
         Vec::new()
+    }
+
+    fn gated_rows_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        super::gated_rows::clearances(kind, before, after)
+            .into_iter()
+            .map(|clearance| (clearance.gate, clearance.text))
+            .collect()
     }
 
     fn event_name() -> String {

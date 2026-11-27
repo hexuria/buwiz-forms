@@ -373,6 +373,9 @@ impl Form1707Draft {
         if !self.is_amended {
             self.tax_paid_previous = 0.0;
         }
+        if self.transaction_type != Some(Form1707TransactionType::Others) {
+            self.transaction_description.clear();
+        }
         let installment = self.is_installment();
         if installment {
             self.shares.clear();
