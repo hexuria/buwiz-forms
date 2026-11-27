@@ -1,10 +1,20 @@
-# Smoke 5, phone: Search > 2551 > New return > 2551Q, the default period, opened.
-click nb-avatar
-wait_until nb-menu-search --timeout-ms 5000
-click nb-menu-search
-wait_until palette-input --timeout-ms 5000
-set_value palette-input 2551
-key palette-input Enter
+# Smoke 5, phone (and any narrow window): the taxpayer files nothing yet (sign-up started from "Nothing yet"), so first a
+# tax year, then 2551Q ticked in Edit forms, then New return > 2551Q, the default period, opened. The narrow palette
+# searches tax profiles only (never forms), so the flow starts from the header's New return, not from Search.
+click home-tp-$tin_root
+wait_until tp-tabs-forms --timeout-ms 5000
+click tp-tabs-forms
+wait_until tp-add-year-open --timeout-ms 5000
+click tp-add-year-open
+wait_until tp-add-year-add --timeout-ms 5000
+click tp-add-year-add
+wait_until tp-forms-edit --timeout-ms 5000
+click tp-forms-edit
+wait_until tp-form-2551Q --timeout-ms 5000
+click tp-form-2551Q
+click tp-forms-save
+wait_until tp-forms-edit --timeout-ms 5000
+click nb-new
 wait_until new-return-2551Q --timeout-ms 5000
 click new-return-2551Q
 click new-return-open

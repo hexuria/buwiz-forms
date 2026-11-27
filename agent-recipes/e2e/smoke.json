@@ -40,8 +40,9 @@
   },
   {
    "name": "navigate",
+   "phone": "navigate-phone.wants",
    "desktop": "../ui/ui-navigate-app.wants",
-   "phone": "navigate-phone.wants"
+   "linux": "navigate-phone.wants"
   },
   {
    "name": "birth-date",
@@ -49,13 +50,15 @@
    "phone": "birth-date-phone.wants",
    "known_gap": {
     "phone": "gap 1: the date is set in a date sheet"
-   }
+   },
+   "linux": "birth-date-phone.wants"
   },
   {
    "name": "open-2551q",
    "desktop": "open-2551q.wants",
    "phone": "open-2551q-phone.wants",
-   "required": true
+   "required": true,
+   "linux": "open-2551q-phone.wants"
   },
   {
    "name": "money-boxes",
@@ -96,7 +99,8 @@
    "phone": "sign-out-phone.wants",
    "known_gap": {
     "phone": "gap 1: Log out is inside the tax profile sheet on a phone"
-   }
+   },
+   "linux": "sign-out-phone.wants"
   }
  ]
 }

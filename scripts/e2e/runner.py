@@ -328,7 +328,7 @@ def launch_env(environ, token, addr):
 
 # --- Suites -------------------------------------------------------------------------------------------------------
 
-VARIANT_KEYS = ("phone", "desktop", "windows", "file")
+VARIANT_KEYS = ("phone", "desktop", "windows", "linux", "file")
 
 
 def load_suite(name, suites=SUITES):
@@ -353,6 +353,8 @@ def variant(entry, form_factor, target):
     factor, then `file` (the same everywhere). None when the entry has no variant for it."""
     if target == "windows" and entry.get("windows"):
         return entry["windows"]
+    if target == "linux" and entry.get("linux"):
+        return entry["linux"]
     if entry.get(form_factor):
         return entry[form_factor]
     return entry.get("file")
