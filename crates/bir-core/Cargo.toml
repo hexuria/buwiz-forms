@@ -28,8 +28,10 @@ sqlcipher = ["rusqlite/bundled-sqlcipher"]
 # unavailable instead of executed.
 mas_build = []
 # Test fixtures of other crates (bir-app-api's host tests): raw SQL on the
-# connection, to stage a filed return or force a failing write. Never on in
-# a build that ships.
+# connection, to stage a filed return or force a failing write; and the
+# test-build rule that keeps a test out of the real data folder, logs and
+# keychain (`platform::data_dir`, `log_files::log_dir`,
+# `platform::keychain_disabled`). Never on in a build that ships.
 test-support = []
 # The local mock BIR SFTP server (`mock_bir` binary, `just mock-bir`). Never
 # on in a build that ships: the app does not enable it, so no listening code
@@ -160,6 +162,8 @@ keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] 
 keyring = { workspace = true, features = ["apple-native"] }
 
 [dev-dependencies]
+# Its own integration tests (tests/*.rs) get the test-build rule too.
+bir-core = { path = ".", default-features = false, features = ["test-support"] }
 insta = "1"
 tempfile = "3"
 temp-env = { version = "0.3", features = ["async_closure"] }

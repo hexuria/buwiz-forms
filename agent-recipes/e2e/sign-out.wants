@@ -1,0 +1,5 @@
+# Smoke 9, desktop: Log out from the account menu; the lock screen comes up.
+click account-row
+wait_until menu-logout --timeout-ms 5000
+click menu-logout
+wait_until locked-screen --timeout-ms 10000 --screenshot

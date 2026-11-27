@@ -973,11 +973,12 @@ fn forms_catalog() -> HostResult {
 
 /// The only settings the page may use through `get_setting`, `set_setting`
 /// and `delete_setting`: its theme toggle's (`THEME_PREF_KEY`,
-/// `nsh/shell/theme.ts`). Every other setting is host state, such as the
-/// access mode, the admin's TIN root, PIN hash and authenticator secret, and
-/// the recovery key's hash; host code reads and writes those through
-/// `Database` directly.
-const PAGE_SETTING_KEYS: [&str; 1] = ["theme_preference"];
+/// `nsh/shell/theme.ts`) and the accounts already welcomed after their first
+/// sign-in on this device (`WELCOMED_KEY`, `nsh/screens/auth/welcome.tsx`).
+/// Every other setting is host state, such as the access mode, the admin's
+/// TIN root, PIN hash and authenticator secret, and the recovery key's hash;
+/// host code reads and writes those through `Database` directly.
+const PAGE_SETTING_KEYS: [&str; 2] = ["theme_preference", "welcomed_accounts"];
 
 /// The key a page setting verb names, when it is in [`PAGE_SETTING_KEYS`].
 /// Any other key is refused before the database is opened, with an error
@@ -5409,6 +5410,32 @@ mod tests {
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
     }
 
+    /// What these tests prune, open or write when they name no folder (`set_log_retention`'s log pruning, the
+    /// device store `system_info` reads, the device files) is in the temp folder, never the real data folder.
+    #[test]
+    fn host_tests_keep_out_of_the_real_data_folder() {
+        temp_env::with_vars(
+            [("BIR_LOG_DIR", None::<&str>), ("BIR_DATABASE_PATH", None)],
+            || {
+                db::set_database_path_override(None);
+                let temp = std::env::temp_dir().canonicalize().unwrap();
+                let logs = bir_core::log_files::log_dir();
+                std::fs::create_dir_all(&logs).unwrap();
+                for dir in [
+                    logs,
+                    bir_core::platform::data_dir(),
+                    bir_core::platform::device_dir(),
+                ] {
+                    assert!(
+                        dir.canonicalize().unwrap().starts_with(&temp),
+                        "{} is outside the temp folder",
+                        dir.display()
+                    );
+                }
+            },
+        );
+    }
+
     /// Accounts-and-lock A1 (O1): the device-wide settings a person set
     /// before A1 live in the open database. Each reader answers them until
     /// `device_settings` has a value; every write goes to `device_settings`.
@@ -5475,6 +5502,21 @@ mod tests {
             serde_json::Value::Null
         );
         bir_core::log_files::remember_retention(bir_core::log_files::DEFAULT_RETENTION_DAYS);
+    }
+
+    /// The accounts welcomed on this device round-trip through the page
+    /// verbs too.
+    #[test]
+    fn the_welcomed_accounts_round_trip_through_the_page_verbs() {
+        setup();
+        let key = || s("welcomed_accounts");
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+        set_setting(&args(vec![key(), s("[\"demo\"]")])).unwrap();
+        assert_eq!(
+            stored_setting("welcomed_accounts").as_deref(),
+            Some("[\"demo\"]")
+        );
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("[\"demo\"]"));
     }
 
     /// (b) The help desk admin's authenticator secret stays host-side: the

@@ -33,6 +33,7 @@ import i_list from "../assets/icons/list.svg";
 import i_loader from "../assets/icons/loader.svg";
 import i_lock from "../assets/icons/lock.svg";
 import i_log_out from "../assets/icons/log-out.svg";
+import i_mail from "../assets/icons/mail.svg";
 import i_map_pin from "../assets/icons/map-pin.svg";
 import i_menu from "../assets/icons/menu.svg";
 import i_minus from "../assets/icons/minus.svg";
@@ -92,6 +93,7 @@ export const ICONS = {
   loader: i_loader,
   lock: i_lock,
   "log-out": i_log_out,
+  mail: i_mail,
   "map-pin": i_map_pin,
   menu: i_menu,
   minus: i_minus,

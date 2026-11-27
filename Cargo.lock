@@ -454,6 +454,7 @@ dependencies = [
  "ammonia",
  "anyhow",
  "argon2",
+ "bir-core",
  "bir-rules",
  "bir-submit",
  "block2",

@@ -41,12 +41,12 @@ for (const { name, size } of SIZES) {
   test(`${name}: the search keeps the rows whose words match, the section when its name matches, and says when nothing does`, async () => {
     const app = await openSettings(size, {}, undefined);
     await app.waitFor("id:settings-nav-general");
-    expectTexts(app, ["Personal", "General", "Account", "Data", "Import / Export", "Jobs", "System", name === "phone" ? "Device" : "Computer"]);
+    expectTexts(app, ["Personal", "General", "Account", "Data", "Import / Export", "Jobs", "Logs", "System", name === "phone" ? "Device" : "Computer"]);
     expect(app.shows("id:settings-nav-keyboard")).toBe(name !== "phone");
     await app.type("id:settings-search", "pin");
     await app.waitFor("text:/Account/");
     expect(app.shows("id:settings-nav-account")).toBe(true);
-    for (const gone of ["general", "transfer", "jobs", "computer"]) expect(app.shows(`id:settings-nav-${gone}`)).toBe(false);
+    for (const gone of ["general", "transfer", "jobs", "logs", "computer"]) expect(app.shows(`id:settings-nav-${gone}`)).toBe(false);
     await goSection(app, "account", "id:settings-security");
     // Only the security row of Account is kept: no Buwiz, who-is-signed-in or Google cards.
     expect(app.shows("id:settings-account")).toBe(false);
@@ -77,10 +77,11 @@ for (const { name, size } of SIZES) {
     expect(app.shows("id:settings-nav-computer")).toBe(true);
   }, 60_000);
 
-  test(`${name}: a taxpayer who signed in sees no Jobs and no Computer, and only Export under Import / Export`, async () => {
+  test(`${name}: a taxpayer who signed in sees no Jobs, no Logs and no Computer, and only Export under Import / Export`, async () => {
     const app = await openSettings(size, { solo: true, pin: "1234", signin: "taxpayer" });
     await app.waitFor("id:settings-nav-general");
     expect(app.shows("id:settings-nav-jobs")).toBe(false);
+    expect(app.shows("id:settings-nav-logs")).toBe(false);
     expect(app.shows("id:settings-nav-computer")).toBe(false);
     expect(app.shows("id:settings-nav-transfer")).toBe(true);
     await goSection(app, "transfer", "id:tp-export");

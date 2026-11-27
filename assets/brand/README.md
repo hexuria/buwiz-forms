@@ -56,3 +56,4 @@ pins its viewBox.
 | Windows MSIX | `assets/icon-store.*`, `icon-tile.*`, `icon-wide.*`, `icon-app.*` (scale and targetsize, plated and unplated) | plated: white, logo at 80%; unplated and lightunplated: transparent, 96% |
 | Android | `assets/android/icon.png` (legacy, 1024), `adaptive-foreground.png` (432), `play-icon-512.png` | the logo's circle at radius 0.45, 128 px and 0.47 of the side; plated ones are opaque white |
 | In the app | `nsh/shell/desktop/tray.png` (72), `nsh/shell/app-mark.png` (48, the Windows menu row) | transparent, the whole logo |
+| Pages before the app | `nsh/assets/brand/buwiz-forms-logo.png`, `@2x`, `@3x` (166 by 180, 332 by 360, 498 by 540) | transparent, the whole drawing 180 points high (sign-in, code, PIN, setup and locked pages) |

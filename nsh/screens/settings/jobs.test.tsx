@@ -1,9 +1,8 @@
-// Settings > Jobs at phone size and at desktop size: the Jobs tab (the status filters, Archive, Delete, Purge archived, Cancel queue, the
-// empty states) and the Logs tab (the level filters, the last 200 lines, Refresh, no file, an unreadable file). The job table and the log
-// are the fixture's (SettingsDemo.tsx jobs, log): the scratch database has no jobs, and its log file is the host's.
+// Settings > Jobs at phone size and at desktop size: the status filters, Archive, Delete, Purge archived, Cancel queue, and
+// the empty states. The log is the Logs section (logs.test.tsx). The job table is the fixture's (SettingsDemo.tsx jobs):
+// the scratch database has no jobs.
 import { expect, test } from "nsh/test";
-import { shoot } from "../../shots/shoot";
-import { calls, expectTexts, openSettings, SIZES, WIDE } from "./testing";
+import { calls, expectTexts, openSettings, SIZES } from "./testing";
 
 const JOBS = {
   queued: "id:job-submission-41",
@@ -13,15 +12,6 @@ const JOBS = {
   rebuilt: "id:job-job-4",
 };
 const ALL = Object.values(JOBS);
-
-test("startup writes today's log and Jobs shows its lines", async () => {
-  const app = await openSettings(WIDE, {}, "jobs");
-  await app.press("id:jobs-tabs >> text:Logs");
-  await app.waitFor("text:/eBIRForms started/");
-  const today = new Date().toISOString().slice(0, 10);
-  expect(app.texts().some((text) => text.includes(`ebirforms.${today}.log`))).toBe(true);
-  await shoot(app, "nsh-startup-log");
-});
 
 /** Which of the five rows show. */
 function shown(app: Awaited<ReturnType<typeof openSettings>>): string[] {
@@ -98,64 +88,5 @@ for (const { name, size } of SIZES) {
     expect(app.texts()).toContain("No background jobs in this view.");
     await app.press("id:jobs-filter >> text:Failed");
     expect(app.shows("id:jobs-empty")).toBe(true);
-  }, 60_000);
-
-  test(`${name}: the Logs tab tails the log, colours its levels, filters by level and reads the file again on Refresh`, async () => {
-    const app = await openSettings(size, { log: "mixed" }, "jobs");
-    await app.waitFor("id:jobs-tab");
-    await app.press("id:jobs-tabs >> text:Logs");
-    await app.waitFor("id:logs-tab");
-    expectTexts(app, ["ebirforms.2026-11-15.log · 8 lines"]);
-    const lines = () => app.texts().filter((t) => /^2026-11-15T|^a continuation/.test(t));
-    expect(lines()).toHaveLength(8);
-    expect(lines()[lines().length - 1]).toMatch(/fixture log read 1$/);
-
-    await app.press("id:logs-filter >> text:Error");
-    expect(lines().map((l) => l.includes(" ERROR ") || l.includes(" FATAL "))).toEqual([true, true]);
-    await app.press("id:logs-filter >> text:Warn");
-    expect(lines()).toHaveLength(1);
-    expect(lines()[0]).toContain(" WARN ");
-    await app.press("id:logs-filter >> text:Info");
-    expect(lines()).toHaveLength(4);
-    // The line with no level is only in All.
-    await app.press("id:logs-filter >> text:All");
-    expect(app.texts()).toContain("a continuation line with no level");
-    // The headline counts the whole file, and Refresh reads it again (the fixture adds a line saying which read this is).
-    await app.press("id:logs-refresh");
-    await app.waitFor("text:/fixture log read 2$/");
-    expect(app.texts().some((t) => /fixture log read 1$/.test(t))).toBe(false);
-    // Opening Logs again reads the file once more.
-    await app.press("id:jobs-tabs >> text:Jobs");
-    await app.waitFor("id:jobs-tab");
-    await app.press("id:jobs-tabs >> text:Logs");
-    await app.waitFor("text:/fixture log read 3$/");
-  }, 60_000);
-
-  test(`${name}: only the last 200 lines of a long log show, and the headline says so`, async () => {
-    const app = await openSettings(size, { log: "long" }, "jobs");
-    await app.press("id:jobs-tabs >> text:Logs");
-    await app.waitFor("id:logs-tab");
-    expect(app.texts()).toContain("ebirforms.2026-11-15.log · 301 lines · showing the last 200");
-    const lines = app.texts().filter((t) => /bir::app line \d+$|fixture log read/.test(t));
-    expect(lines).toHaveLength(200);
-    expect(lines.some((l) => /bir::app line 300$/.test(l))).toBe(true);
-    expect(lines.some((l) => /bir::app line 101$/.test(l))).toBe(false);
-    expect(lines.some((l) => /bir::app line 102$/.test(l))).toBe(true);
-    // Everything in it is Info: no Error line, and the filter says so.
-    await app.press("id:logs-filter >> text:Error");
-    await app.waitFor("id:logs-empty");
-    expect(app.texts()).toContain("No lines at this level.");
-  }, 60_000);
-
-  test(`${name}: a log with no file yet, and a log that cannot be read`, async () => {
-    const none = await openSettings(size, { log: "empty" }, "jobs");
-    await none.press("id:jobs-tabs >> text:Logs");
-    await none.waitFor("id:logs-empty");
-    expect(none.texts()).toContain("No log entries yet today.");
-    expect(none.texts()).toContain("No log file yet · 0 lines");
-    const broken = await openSettings(size, { log: "error" }, "jobs");
-    await broken.press("id:jobs-tabs >> text:Logs");
-    await broken.waitFor("id:logs-error");
-    expect(broken.texts()).toContain("The log file could not be read.");
   }, 60_000);
 }
