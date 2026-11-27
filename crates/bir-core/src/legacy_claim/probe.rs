@@ -131,6 +131,14 @@ pub fn probe_legacy(layout: &Layout) -> Result<LegacyProbe, Failure> {
 
 /// The probe on a scratch copy of `legacy` (the caller holds its owner lock).
 pub(crate) fn probe(layout: &Layout, legacy: &Path) -> Result<Probe, Failure> {
+    // A link is never claimed (C8): the identity and the hash would follow it while the link moves the link itself,
+    // and a relative one would dangle in the room folder.
+    if std::fs::symlink_metadata(legacy).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(permanent(
+            PermanentReason::Symlink,
+            "the legacy file is a symbolic link",
+        ));
+    }
     // A file the plain build cannot open is permanent here already (PLAN §A.3.2 step 3).
     match crate::db::database_file_kind(legacy) {
         Ok(crate::db::DatabaseFileKind::Other) => {

@@ -213,7 +213,18 @@ pub struct Record {
     /// The PHC string of the PIN typed at the legacy unlock, kept only until step 6 writes it into `owner_lock`, so a
     /// claim cut after the move still gives the owner the PIN they typed. Cleared at done.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner_pin_phc: Option<String>,
+    pub owner_pin_phc: Option<PinPhc>,
+}
+
+/// The PHC string of the owner PIN typed at the legacy unlock: stored as it is, never printed (C9).
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PinPhc(String);
+
+impl std::fmt::Debug for PinPhc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PinPhc(<redacted>)")
+    }
 }
 
 impl Record {
@@ -267,6 +278,8 @@ pub enum PermanentReason {
     NewerSchema,
     /// This build's open (its migrations) failed on a copy.
     CannotOpen,
+    /// `bir_data.db` is a symbolic link (C8): the claim never moves a link in place of a file.
+    Symlink,
 }
 
 /// Why a moved file did not open (PLAN §A.3.2 step 7).
@@ -353,6 +366,7 @@ impl Permanent {
             PermanentReason::Damaged => "the file is damaged",
             PermanentReason::NewerSchema => "they were saved by a newer version of eBIRForms",
             PermanentReason::CannotOpen => "this version cannot open the file",
+            PermanentReason::Symlink => "the file is a link to another place",
         };
         format!(
             "Tax profiles from an earlier version of eBIRForms could not be moved ({reason}). They are still on this \
@@ -582,7 +596,8 @@ impl LegacyClaim {
     }
 
     /// Decide from the files what the claim does for the account signed in now (PLAN §A.3.3), and finish a claim that
-    /// was cut after the move. Before the unlock nothing is written beside the legacy file and no record names a room.
+    /// was cut after the move. Before the unlock no record names a room, and nothing is written beside the legacy file
+    /// but its `.owner.lock` (made by any earlier version too, and by the holder here).
     pub fn start(&self, who: &Claimant) -> Start {
         match self.start_inner(who) {
             Ok(start) => start,
@@ -1460,7 +1475,7 @@ pub struct ReadyClaim {
     gate: Gate,
     empty_room_aside: bool,
     unlocked_by: UnlockedBy,
-    owner_pin_phc: Option<String>,
+    owner_pin_phc: Option<PinPhc>,
 }
 
 impl ReadyClaim {
@@ -1475,7 +1490,7 @@ impl ReadyClaim {
     /// The owner PIN step 6 writes: the PHC string of the PIN typed at the legacy unlock, hashed by the owner-PIN store
     /// (§B.1). Without one, `owner_lock.pin_phc` stays empty and Set PIN follows.
     pub fn with_owner_pin_phc(mut self, phc: String) -> Self {
-        self.owner_pin_phc = Some(phc);
+        self.owner_pin_phc = Some(PinPhc(phc));
         self
     }
 
@@ -1671,7 +1686,7 @@ impl LegacyClaim {
 }
 
 fn record_pin_phc(record: &Record) -> Option<&str> {
-    record.owner_pin_phc.as_deref()
+    record.owner_pin_phc.as_ref().map(|phc| phc.0.as_str())
 }
 
 fn new_record() -> Record {

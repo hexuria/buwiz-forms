@@ -1566,3 +1566,58 @@ fn the_legacy_unlock_is_limited() {
         .expect_err("the count survives a relaunch");
     assert!(matches!(refused.reason(), RefusedReason::Waiting(_)));
 }
+
+/// C8 (review of A2): a symlinked bir_data.db is a permanent failure at the probe; the link and its target are left
+/// as they are.
+#[cfg(unix)]
+#[test]
+fn a_symlinked_legacy_file_is_never_claimed() {
+    let install = Install::new();
+    let elsewhere = install.dir().join("elsewhere.db");
+    let db = Database::open(&elsewhere).unwrap();
+    taxpayer(&db, "123456788", "Behind A Link");
+    close(db);
+    std::os::unix::fs::symlink("elsewhere.db", install.legacy()).unwrap();
+    let target = std::fs::read(&elsewhere).unwrap();
+    let claim = install.claim();
+    match claim.start(&account("a")) {
+        Start::Failed(Failure::Permanent(permanent)) => {
+            assert_eq!(permanent.reason, PermanentReason::Symlink)
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(
+        std::fs::symlink_metadata(install.legacy())
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(std::fs::read(&elsewhere).unwrap(), target);
+    assert!(!install.layout.rooms_dir().exists());
+}
+
+/// C9 (review of A2): the owner PIN's hash is never in a `Debug` print of the token or the record.
+#[test]
+fn the_owner_pin_hash_is_never_printed() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let Start::Locked(locked) = claim.start(&account("a")) else {
+        panic!("not locked")
+    };
+    let phc = "$argon2id$v=19$m=19456,t=2,p=1$c2VjcmV0c2FsdA$c2VjcmV0aGFzaA";
+    let ready = locked
+        .unlock(&claim, LegacyCredential::Pin("1357"))
+        .unwrap()
+        .with_owner_pin_phc(phc.into());
+    assert!(!format!("{ready:?}").contains("c2VjcmV0"), "{ready:?}");
+    let record = Record {
+        owner_pin_phc: Some(PinPhc(phc.into())),
+        ..Record::default()
+    };
+    assert!(!format!("{record:?}").contains("c2VjcmV0"));
+    assert!(
+        serde_json::to_string(&record).unwrap().contains(phc),
+        "stored as it is"
+    );
+}
