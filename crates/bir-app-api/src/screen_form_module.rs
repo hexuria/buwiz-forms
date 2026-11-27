@@ -4986,8 +4986,19 @@ fn locate_row_mutation(
     best.map(|(_, path, index)| (path, index))
 }
 
-/// Remove `index` from the draft row list `path` (a JSON pointer to an array).
-fn remove_draft_row(draft: &mut Value, path: &str, index: usize) -> Result<(), String> {
+/// Remove `index` from the draft row list `path` (a JSON pointer to an array),
+/// and any raw editor buffers keyed by that row's stable instance id.
+fn remove_draft_row(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    path: &str,
+    index: usize,
+) -> Result<(), String> {
+    let instance_id = draft
+        .pointer(path)
+        .and_then(Value::as_array)
+        .and_then(|rows| rows.get(index))
+        .and_then(|row| row["instance_id"].as_str().map(str::to_string));
     let rows = draft
         .pointer_mut(path)
         .and_then(Value::as_array_mut)
@@ -4996,6 +5007,42 @@ fn remove_draft_row(draft: &mut Value, path: &str, index: usize) -> Result<(), S
         return Err(format!("row {} of `{path}` is not in the draft", index + 1));
     }
     rows.remove(index);
+    if kind == AgentFormKind::Queueable(QueueableKind::Form2550Q)
+        && let Some(instance_id) = instance_id
+    {
+        let family = match path {
+            "/schedule_1" => Some(bir_core::forms::form_2550q::Form2550QRowFamily::Schedule1),
+            "/schedule_3" => Some(bir_core::forms::form_2550q::Form2550QRowFamily::Schedule3),
+            "/schedule_4" => Some(bir_core::forms::form_2550q::Form2550QRowFamily::Schedule4),
+            "/item_19_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item19Additional)
+            }
+            "/item_42_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item42Additional)
+            }
+            "/item_47_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item47Additional)
+            }
+            "/item_56_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item56Additional)
+            }
+            _ => None,
+        };
+        if let Some(family) = family {
+            let mut raw: bir_core::forms::form_2550q::Form2550QRawEditorState =
+                if draft.get("raw_editor_state").is_none_or(Value::is_null) {
+                    Default::default()
+                } else {
+                    serde_json::from_value(draft["raw_editor_state"].clone())
+                        .map_err(|error| error.to_string())?
+                };
+            let instance = bir_core::forms::form_2550q::StableInstanceId::parse(instance_id)
+                .map_err(|error| error.to_string())?;
+            raw.remove_repeated_row(family, &instance);
+            draft["raw_editor_state"] =
+                serde_json::to_value(raw).map_err(|error| error.to_string())?;
+        }
+    }
     Ok(())
 }
 
@@ -5036,11 +5083,23 @@ fn screen_form_remove_row(arguments: &HostArguments) -> HostResult {
         return Err(host_error("row_keys must name the row's cells"));
     }
 
+    // Prepare the base before probing: `apply_screen_edits` does the same
+    // migration, and comparing a prepared probe with an unprepared base can
+    // make the wrong row win the change-score tie (2551Q then deletes row 0).
+    let mut base = draft.clone();
+    agent::prepare_for_writes(kind, &mut base).map_err(host_error)?;
+    // A row with a live-locked cell is not removable: deleting it would
+    // bypass the same lock that refuses a write to that cell.
+    for key in &row_keys {
+        if let Some(reason) = agent::draft_locks::draft_lock(kind, &base, key, None) {
+            return Err(host_error(reason));
+        }
+    }
     // Probe first: a custom row editor owns the visible slot -> backing row mapping, and a
     // static binding can describe the paper slot rather than that mapping. Binding paths are
     // the fallback for a row whose visible cells are already blank but whose hidden values exist.
     let mut location = None;
-    let mut probe = draft.clone();
+    let mut probe = base.clone();
     let unlocked = BTreeSet::new();
     for key in &row_keys {
         let before_step = probe.clone();
@@ -5072,7 +5131,7 @@ fn screen_form_remove_row(arguments: &HostArguments) -> HostResult {
         ]);
         return with_row_removed(screen_form_fill(&clear_arguments), false);
     };
-    let backing_exists = draft
+    let backing_exists = base
         .pointer(&path)
         .and_then(Value::as_array)
         .is_some_and(|rows| index < rows.len());
@@ -5091,8 +5150,8 @@ fn screen_form_remove_row(arguments: &HostArguments) -> HostResult {
         ]);
         return with_row_removed(screen_form_fill(&clear_arguments), false);
     }
-    let mut removed = draft.clone();
-    remove_draft_row(&mut removed, &path, index).map_err(host_error)?;
+    let mut removed = base.clone();
+    remove_draft_row(kind, &mut removed, &path, index).map_err(host_error)?;
     agent::identity(kind, &removed).map_err(|error| {
         host_error(format!(
             "Removing row {} of `{path}` does not fit this form's draft: {error}",
@@ -9586,6 +9645,146 @@ mod tests {
             save(code, &filled["draft"]);
             assert_eq!(open(code, 1)["values"][key], chosen, "{code}");
         }
+    }
+
+    /// A row containing a live-locked cell cannot be deleted: deletion would
+    /// bypass the lock a write to that cell would refuse. 1702EX Schedule 2
+    /// rows 2-3 are such rows (the attached schedule owns them).
+    #[test]
+    fn delete_row_refuses_a_live_locked_cell() {
+        setup();
+        let opened = open("1702EX", 0);
+        let keys = [
+            "frm1702EX:txtPg3Pt6S2I2Description",
+            "frm1702EX:txtPg3Pt6S2I2LegalBasis",
+            "frm1702EX:txtPg3Pt6S2I2Amount",
+        ];
+        let error = call(
+            "screen_form_remove_row",
+            vec![
+                "1702EX".into(),
+                json(opened["draft"].clone()),
+                HostValue::Array(keys.iter().map(|key| (*key).into()).collect()),
+            ],
+        )
+        .expect_err("a locked row refuses deletion");
+        assert!(
+            error
+                .to_string()
+                .contains("BIR's program keeps this row shut"),
+            "{error}"
+        );
+    }
+
+    /// Deleting a later 2551Q row must not collapse to row zero: the probe is
+    /// compared against the same prepared base `apply_screen_edits` writes.
+    #[test]
+    fn delete_row_2551q_later_row_keeps_row_zero() {
+        setup();
+        let opened = open("2551Q", 3);
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({
+                "drpATC1": "1",
+                "txtATCAmt1": "1000",
+                "drpATC2": "2",
+                "txtATCAmt2": "2000",
+                "drpATC3": "3",
+                "txtATCAmt3": "3000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}), "{filled}");
+        let first = filled["draft"]["schedule_1"][0].clone();
+        let third = filled["draft"]["schedule_1"][2].clone();
+        // A legacy stored draft is not prepared until the first write. Its
+        // unknown row fields drop out when the write preparation serializes the
+        // current model; if the probe's first blank is already blank in the
+        // target row, that normalization alone ties every row and an
+        // unprepared comparison picks row zero.
+        let mut stale = filled["draft"].clone();
+        stale["auto_compute_penalties"] = json!(false);
+        for row in stale["schedule_1"].as_array_mut().unwrap() {
+            row["legacy_row_payload"] = json!("dropped by the current model");
+        }
+        stale["schedule_1"][1]["atc"] = json!("");
+        stale["schedule_1"][1]["atc_description"] = json!("");
+        stale["schedule_1"][1]["tax_rate"] = json!(0.0);
+        let removed = remove_row(
+            "2551Q",
+            &stale,
+            &["txtATCRate2", "drpATC2", "txtATCAmt2", "txtATCDue2"],
+        );
+        let rows = removed["draft"]["schedule_1"].as_array().unwrap();
+        assert_eq!(rows.len(), 2, "{removed}");
+        assert_eq!(rows[0], first);
+        assert_eq!(rows[1], third);
+    }
+
+    /// A 2550Q imported through BIR's field map carries raw editor buffers by
+    /// stable row id. Deleting a schedule row must forget that row's buffers
+    /// too, or validation reports orphan raw bindings and blocks the draft.
+    #[test]
+    fn delete_row_2550q_imported_xml_forgets_the_rows_raw_state() {
+        setup();
+        let opened = open("2550Q", 2);
+        let filled = fill(
+            "2550Q",
+            &opened["draft"],
+            json!({
+                "txtDateCovered30": "04/01/2026",
+                "txtDateCovered3To0": "06/30/2026",
+                "txtNameWithHoldingAgent30": "Agent One",
+                "txtIncomePayment30": "1000",
+                "txtDateCovered31": "04/01/2026",
+                "txtDateCovered3To1": "06/30/2026",
+                "txtNameWithHoldingAgent31": "Agent Two",
+                "txtIncomePayment31": "2000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}), "{filled}");
+        let source: bir_core::forms::form_2550q::Form2550QDraft =
+            serde_json::from_value(filled["draft"].clone()).unwrap();
+        let mut fields = source.to_bir_field_map();
+        for key in [
+            "frm2550qv2024:taxPayerClassification1",
+            "frm2550qv2024:taxPayerClassification2",
+            "frm2550qv2024:taxPayerClassification4",
+        ] {
+            fields.insert(key.to_string(), "false".to_string());
+        }
+        fields.insert(
+            "frm2550qv2024:taxPayerClassification3".to_string(),
+            "true".to_string(),
+        );
+        let imported = bir_core::forms::form_2550q::Form2550QDraft::from_bir_field_map(&fields)
+            .expect("the row-filled field map imports as XML state");
+        let imported_json = serde_json::to_value(&imported).unwrap();
+        let first_id = imported_json["schedule_3"][0]["instance_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let second_id = imported_json["schedule_3"][1]["instance_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let removed = remove_row(
+            "2550Q",
+            &imported_json,
+            &[
+                "txtDateCovered30",
+                "txtDateCovered3To0",
+                "txtNameWithHoldingAgent30",
+                "txtIncomePayment30",
+                "txtTotalTaxWithHeld30",
+            ],
+        );
+        let rows = removed["draft"]["schedule_3"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{removed}");
+        assert_eq!(rows[0]["instance_id"], second_id);
+        let raw = serde_json::to_string(&removed["draft"]["raw_editor_state"]).unwrap();
+        assert!(!raw.contains(&first_id), "{raw}");
+        assert!(raw.contains(&second_id), "{raw}");
     }
 
     /// Delete row removes the backing object itself in a non-compacting

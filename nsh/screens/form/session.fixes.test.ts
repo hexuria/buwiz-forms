@@ -97,6 +97,50 @@ test("Delete row on 1601EQ asks nothing, removes the row, and Undo brings it bac
   s.dispose();
 });
 
+test("Delete row drops a refused entry and moves later row state up: 2550Q Schedule 3", async () => {
+  const s = await opened(at("2550Q", 2026, 2));
+  const row = (n: number) => ["txtDateCovered3" + n, "txtDateCovered3To" + n, "txtNameWithHoldingAgent3" + n, "txtIncomePayment3" + n, "txtTotalTaxWithHeld3" + n];
+  s.edit("txtDateCovered30", "04/01/2026");
+  s.edit("txtDateCovered3To0", "06/30/2026");
+  s.edit("txtNameWithHoldingAgent30", "Agent One");
+  s.edit("txtIncomePayment30", "abc");
+  s.flush();
+  s.edit("txtDateCovered31", "04/01/2026");
+  s.edit("txtDateCovered3To1", "06/30/2026");
+  s.edit("txtNameWithHoldingAgent31", "Agent Two");
+  s.edit("txtIncomePayment31", "2000");
+  await s.idle();
+  expect(s.boxMessageOf("txtIncomePayment30")).not.toBe("");
+  s.deleteRow(row(0));
+  await s.idle();
+  expect(s.valueOf("txtNameWithHoldingAgent30")).toBe("Agent Two");
+  expect(s.valueOf("txtIncomePayment30")).toBe("2,000.00");
+  expect(s.boxMessageOf("txtIncomePayment30")).toBe("");
+  expect(s.shownOf("txtIncomePayment30")).toBe("2,000.00");
+  s.dispose();
+});
+
+test("Delete row drops a refused entry and moves later row state up: 1601EQ", async () => {
+  const K = (n: string) => "frm1601EQ:" + n;
+  const rowKeys = (n: number) => [K("txtAtcCd" + n), K("txtTaxBase" + n), K("txtTaxRate" + n), K("txtTaxbeWithHeld" + n)];
+  const s = await opened(at("1601EQ", 2026, 3));
+  s.choose({ [K("optWithheld:Y")]: "true", [K("optCategory:P")]: "true" });
+  s.choose({ [K("txtAtcCd1")]: "WI010" });
+  s.edit(K("txtTaxBase1"), "abc");
+  s.flush();
+  s.choose({ [K("txtAtcCd2")]: "WI011" });
+  s.edit(K("txtTaxBase2"), "200");
+  await s.idle();
+  expect(s.boxMessageOf(K("txtTaxBase1"))).not.toBe("");
+  s.deleteRow(rowKeys(1));
+  await s.idle();
+  expect(s.valueOf(K("txtAtcCd1"))).toBe("WI011");
+  expect(s.valueOf(K("txtTaxBase1"))).toBe("200.00");
+  expect(s.boxMessageOf(K("txtTaxBase1"))).toBe("");
+  expect(s.shownOf(K("txtTaxBase1"))).toBe("200.00");
+  s.dispose();
+});
+
 test("F3-2: a removal's Undo is never outlived by a save: autosave waits out the Undo, then saves and retires it; later saves go through", async () => {
   const h = hooks();
   const s = await opened(at("1601EQ", 2025, 2), h);

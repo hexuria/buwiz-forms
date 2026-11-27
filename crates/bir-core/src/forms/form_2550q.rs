@@ -7,7 +7,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use bir_rules::{RawValue, StableInstanceId};
+use bir_rules::RawValue;
+pub use bir_rules::StableInstanceId;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::queueable::SubmissionLifecycle;
