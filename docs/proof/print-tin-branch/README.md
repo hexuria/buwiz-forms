@@ -12,8 +12,9 @@ then applying the application's print path exactly as the print pipeline does:
 staticize(prepare_html_for(slug, filled_html, true))
 ```
 
-The full staticized print HTML was rendered headlessly and cropped around the
-TIN row. The raw frozen HTML was not used directly.
+The full staticized print HTML was generated for every form; its page-2 sheet
+was then isolated only for deterministic headless rasterization and cropped
+around the TIN row. The raw frozen HTML was not used directly.
 
 | Form | Before | After |
 |---|---|---|
