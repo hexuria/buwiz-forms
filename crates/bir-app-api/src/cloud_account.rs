@@ -83,10 +83,15 @@ pub fn prepare_launch() {
     let (qualifies, _practice) = restore_saved_session();
     // The gate never unlocks here: I1 opens it at commit, once the room is in the phase. The
     // launch that qualifies begins the open; the claim resumes inside it (§A.4).
-    if qualifies && let Ok(Some(stored)) = load_stored() {
-        if let Some(owner) = crate::session::Owner::of_stored(&stored) {
-            crate::session::begin_open(owner, crate::bir_module::this_engine(), crate::session::OpenWhy::Launch);
-        }
+    if qualifies
+        && let Ok(Some(stored)) = load_stored()
+        && let Some(owner) = crate::session::Owner::of_stored(&stored)
+    {
+        crate::session::begin_open(
+            owner,
+            crate::bir_module::this_engine(),
+            crate::session::OpenWhy::Launch,
+        );
     }
 }
 
@@ -1591,6 +1596,225 @@ mod tests {
                 assert!(
                     bir_core::relay::peek_submitter().is_none(),
                     "the sign-out CONSTRUCTED a submitter under SESSION — the N3 hole"
+                );
+            });
+        }
+
+        /// The machine-native open for the rewritten safety-table tests: the production
+        /// begin_open, its open completed through the machine's own commit as session's tests
+        /// drive it.
+        fn open_machine_room(owner: &crate::session::Owner) {
+            crate::session::begin_open(owner.clone(), 1, crate::session::OpenWhy::SignIn);
+            let epoch = crate::session::snapshot().epoch;
+            let folder = tempfile::tempdir().unwrap();
+            let path = folder.into_path().join("room.db");
+            let handle = std::sync::Arc::new(std::sync::Mutex::new(
+                bir_core::db::Database::open(&path).unwrap(),
+            ));
+            crate::session::commit(
+                epoch,
+                crate::session::Target::Room {
+                    room_id: bir_core::rooms::room_id_for(&owner.origin, &owner.user_id),
+                    note: crate::session::Note::None,
+                    count_opened: false,
+                },
+                Some((handle, path)),
+            );
+        }
+
+        /// Row 1/2, rewritten against the machine: sign out through the REAL sign_out_with —
+        /// the machine's close drops the room, invalidates the TIN cache and forgets the device
+        /// key; a same-owner re-sign-in reopens through begin_open.
+        #[test]
+        fn real_sign_out_closes_the_room_and_a_same_owner_re_sign_in_reopens_it() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            let device = tempfile::tempdir().unwrap();
+            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
+            signed_in(|_file| {
+                let stored = stored("access-a", "refresh-a");
+                save_stored(&stored).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored,
+                ));
+                let owner = crate::session::Owner::of_stored(&stored).expect("a room owner");
+                open_machine_room(&owner);
+                assert_eq!(
+                    crate::session::snapshot().phase_kind,
+                    crate::session::PhaseKind::Open,
+                    "the machine did not open the room"
+                );
+                let device_dir = bir_core::platform::device_dir();
+                std::fs::create_dir_all(&device_dir).unwrap();
+                std::fs::write(device_dir.join("buwiz_submit_device_key.txt"), "key-of-a").unwrap();
+                std::fs::write(
+                    device_dir.join("buwiz_submit_device_owner.txt"),
+                    format!(
+                        "{}\n{}\n",
+                        bir_core::rooms::room_origin(SERVER).unwrap(),
+                        "u1"
+                    ),
+                )
+                .unwrap();
+                bir_core::relay::submitter().expect("the test environment builds the submitter");
+                let invalidations_before = bir_core::bir_submit::tins::INVALIDATIONS
+                    .load(std::sync::atomic::Ordering::SeqCst);
+                let (seen_tx, seen_rx) = mpsc::channel::<Seen>();
+                sign_out_with(Box::new(Logout {
+                    seen: seen_tx,
+                    release: None,
+                    file: _file.clone(),
+                    answer: answered,
+                }))
+                .expect("the sign-out answers");
+                crate::session::join_device_forget_threads();
+                let snapshot = crate::session::snapshot();
+                assert_eq!(
+                    snapshot.phase_kind,
+                    crate::session::PhaseKind::SignedOut,
+                    "the machine is not signed out after the real sign-out"
+                );
+                assert!(
+                    snapshot.room.is_none(),
+                    "the room survived the real sign-out"
+                );
+                assert!(
+                    bir_core::bir_submit::tins::INVALIDATIONS
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                        > invalidations_before,
+                    "the TIN cache was not invalidated"
+                );
+                assert!(
+                    !device_dir.join("buwiz_submit_device_key.txt").exists(),
+                    "the device key survived the sign-out"
+                );
+                let _ = seen_rx.try_recv();
+                // A same-owner re-sign-in reopens the room through begin_open — the machine is
+                // not wedged.
+                save_stored(&stored).unwrap();
+                crate::session::signed_in(&stored, 1).expect("the re-sign-in persists");
+                open_machine_room(&owner);
+                assert_eq!(
+                    crate::session::snapshot().phase_kind,
+                    crate::session::PhaseKind::Open,
+                    "the same-owner re-sign-in did not reopen the room"
+                );
+            });
+        }
+
+        /// Row 12, its new truth under the machine: the page's close verb IS the machine's
+        /// close — the gate locks, the room drops, the menu refreshes. Main left the room open;
+        /// the machine deliberately does not (the close kind makes no page exception).
+        #[test]
+        fn row12_the_pages_close_leaves_the_room_open() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            let device = tempfile::tempdir().unwrap();
+            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
+            signed_in(|_file| {
+                let stored = stored("access-a", "refresh-a");
+                save_stored(&stored).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored,
+                ));
+                let owner = crate::session::Owner::of_stored(&stored).expect("a room owner");
+                open_machine_room(&owner);
+                assert_eq!(
+                    crate::session::snapshot().phase_kind,
+                    crate::session::PhaseKind::Open
+                );
+                crate::account_gate::set_unlocked(true);
+                session_closed().expect("the page verb answers");
+                let snapshot = crate::session::snapshot();
+                assert_eq!(
+                    snapshot.phase_kind,
+                    crate::session::PhaseKind::SignedOut,
+                    "the page's close did not close the machine's session"
+                );
+                assert!(
+                    snapshot.room.is_none(),
+                    "the page's close left the room open — under the machine the close is full"
+                );
+                assert!(
+                    !crate::account_gate::unlocked_flag(),
+                    "the gate is still open after the page's close"
+                );
+            });
+        }
+
+        /// bir-mcp's condition (row 3), rewritten against the machine: bir-mcp's door signs in
+        /// B — the raw disk write, no cache update — while the app has A open through the
+        /// machine. refresh_account is the I/O point: the app closes A as signed in elsewhere,
+        /// the cache clears, B's sign-in is never touched.
+        #[test]
+        fn bir_mcps_sign_in_of_another_owner_closes_the_apps_session() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            let device = tempfile::tempdir().unwrap();
+            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
+            signed_in(|_file| {
+                let stored_a = stored("access-a", "refresh-a");
+                save_stored(&stored_a).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored_a,
+                ));
+                let owner = crate::session::Owner::of_stored(&stored_a).expect("a room owner");
+                open_machine_room(&owner);
+                assert_eq!(
+                    crate::session::snapshot().phase_kind,
+                    crate::session::PhaseKind::Open,
+                    "the machine did not open A's room"
+                );
+                // bir-mcp writes B the way its door really does: the account file the app
+                // really reads, no cache update, no machine.
+                let mut other = stored("access-b", "refresh-b");
+                other.user_id = "u2".into();
+                let path = std::env::var_os("BUWIZ_CLOUD_ACCOUNT_FILE")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| {
+                        bir_core::platform::device_dir().join("buwiz-cloud-account.json")
+                    });
+                let encoded = other.encode().unwrap();
+                std::fs::write(&path, encoded).unwrap();
+                // The I/O point, through the production entry: refresh_account reads the disk
+                // and sees the owner changed.
+                let (server, _) = scripted();
+                *server.mes.lock().unwrap() = [
+                    ("*".to_string(), 200u16),
+                    ("*".to_string(), 200u16),
+                    ("*".to_string(), 200u16),
+                ]
+                .into_iter()
+                .collect();
+                let factory_server = std::sync::Arc::clone(&server);
+                set_test_refresh_http(Some(Box::new(move || {
+                    Box::new(ScriptHttp(std::sync::Arc::clone(&factory_server)))
+                })));
+                let verb =
+                    crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+                        .expect("the refresh verb spawns");
+                let _ = futures::executor::block_on(verb);
+                set_test_refresh_http(None);
+                let snapshot = crate::session::snapshot();
+                assert_eq!(
+                    snapshot.phase_kind,
+                    crate::session::PhaseKind::SignedOut,
+                    "the app did not close A at the I/O point after bir-mcp signed in B"
+                );
+                assert!(
+                    snapshot.room.is_none(),
+                    "A's room survived the signed-in-elsewhere close"
+                );
+                assert!(
+                    bir_core::account_session::stored_owner().is_none(),
+                    "the stale cache was never cleared — it would re-close B on every refresh"
+                );
+                let on_disk = bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .expect("B's sign-in was cleared");
+                assert_eq!(
+                    on_disk.refresh_token, "refresh-b",
+                    "B's sign-in was touched"
                 );
             });
         }

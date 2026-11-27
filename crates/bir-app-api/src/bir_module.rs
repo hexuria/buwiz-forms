@@ -3277,7 +3277,7 @@ fn restore_staged_database(
             // reinstalled into the machine. (§5.8's full boundary — the importing flag, the
             // epoch CAS, the room-lock re-check — is commit 4's; the reinstall is its step 4.)
             let snap = crate::session::snapshot();
-            if let Some((_, _, room_id, room_path)) = snap.room {
+            if let Some((_, _, _room_id, room_path)) = snap.room {
                 let path = if matches!(snap.phase_kind, crate::session::PhaseKind::Legacy) {
                     bir_core::rooms::Layout::here().legacy_database()
                 } else {

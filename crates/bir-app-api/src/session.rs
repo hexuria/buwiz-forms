@@ -504,11 +504,7 @@ fn begin_open_locked(
     // non-blocking file lock: no blocking I/O under SESSION.
     match ensure_device_guard() {
         Ok(()) => {
-            session.phase = Phase::Opening {
-                owner,
-                engine,
-                why,
-            };
+            session.phase = Phase::Opening { owner, engine, why };
             (Some(session.epoch), outcome)
         }
         Err(detail) => {
@@ -526,13 +522,7 @@ fn begin_open_locked(
 
 /// begin_open's steps after SESSION is released (F17): the replaced room's Arc drops here,
 /// forget_device's half epoch-checked (F2), then the claim thread spawns.
-fn finish_open(
-    spawn: Option<u64>,
-    outcome: CloseOutcome,
-    owner: Owner,
-    engine: u64,
-    why: OpenWhy,
-) {
+fn finish_open(spawn: Option<u64>, outcome: CloseOutcome, owner: Owner, engine: u64, why: OpenWhy) {
     finish_close(&outcome, ForgetMode::Now);
     drop(outcome.dropped);
     if let Some(epoch) = spawn {
@@ -558,7 +548,6 @@ pub(crate) static CLAIM_THREAD_SPAWNS: std::sync::atomic::AtomicU64 =
 pub(crate) fn claim_thread_spawn_count() -> u64 {
     CLAIM_THREAD_SPAWNS.load(std::sync::atomic::Ordering::SeqCst)
 }
-
 
 fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
     #[cfg(test)]
@@ -869,10 +858,7 @@ fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
         Err((copy_saved, detail)) => {
             tracing::warn!("the open failed: {detail}");
             (
-                Target::Blocked(Blocked::Transient {
-                    copy_saved,
-                    detail,
-                }),
+                Target::Blocked(Blocked::Transient { copy_saved, detail }),
                 None,
             )
         }
@@ -882,6 +868,7 @@ fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
 
 /// Open what the claim decided, answering the commit's (handle, path). The handle is installed
 /// NOWHERE here (§1: `open_path` installs nothing); the commit installs it or drops it.
+#[allow(clippy::type_complexity)]
 fn open_spec(
     spec: &Option<OpenSpec>,
 ) -> Result<Option<(Arc<Mutex<Database>>, PathBuf)>, (bool, String)> {
@@ -1395,7 +1382,6 @@ pub fn clear_offer_note() {
         *note = Note::None;
     }
 }
-
 
 static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
@@ -2872,6 +2858,57 @@ mod tests {
             .unwrap_or_default();
         files.sort();
         files
+    }
+
+    /// Row 10, rewritten against the machine: a device_revoked on a send ends the session —
+    /// the machine closes (the room drops, the gate locks) and the revoked device's key is
+    /// forgotten.
+    #[test]
+    fn a_device_revoked_on_a_send_ends_the_session() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch_a = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        bir_core::account_session::on_session_ended(|owner, epoch, credential| {
+            server_ended(owner, epoch, credential);
+        });
+        bir_core::relay::lazy_first_key_for_test();
+        assert!(!device_key_files(&scratch).is_empty());
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a, epoch_a);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(
+            bir_core::account_session::SEND_CONTEXT.scope(context.clone(), async {
+                let tokens = bir_core::account_session::AccountTokens;
+                let _ = bir_core::bir_submit::TokenSource::access_token(&tokens, false).await;
+                // The bearer arm of the real client on a 403 device_revoked: the session ends
+                // inside the send's own context.
+                bir_core::bir_submit::TokenSource::session_ended(&tokens);
+            }),
+        );
+        join_device_forget_threads();
+        let snap = snapshot();
+        assert_eq!(
+            snap.phase_kind,
+            PhaseKind::SignedOut,
+            "the device_revoked on the send did not end the session"
+        );
+        assert!(
+            snap.room.is_none(),
+            "the room survived the device_revoked ending"
+        );
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "the revoked device's key was not forgotten"
+        );
     }
 
     /// F4's other half: after the revocation ended the session, a registration — whenever it
