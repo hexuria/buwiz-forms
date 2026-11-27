@@ -630,13 +630,27 @@ mod tests {
 
     /// I2: with device.db gone while the room's folder is on disk, the state reads `store_lost`, never "no PIN,
     /// unlocked"; no PIN may be set, a check is refused, and `lock_now` locks.
+    ///
+    /// The loss is made as it can happen on every system: the app's held connection is closed first (a stop and
+    /// a relaunch), then the files go. On Windows an open SQLite file cannot be deleted, so under a running app
+    /// device.db never goes missing; the case that matters there is a loss between runs, which this is. Each
+    /// delete is checked, so a delete that silently fails can no longer pass for a loss.
     #[test]
     fn a_lost_device_db_reads_lost_and_refuses_a_set() {
         let room = Room::open("user-lost");
         call("set_owner_pin", pin("0817")).unwrap();
+        bir_core::rooms::release_held_device_stores();
         for file in ["device.db", "device.db-wal", "device.db-shm"] {
-            let _ = std::fs::remove_file(room._folder.path().join(file));
+            match std::fs::remove_file(room._folder.path().join(file)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => panic!("{file} was not removed: {error}"),
+            }
         }
+        assert!(
+            !room._folder.path().join("device.db").exists(),
+            "the store is gone"
+        );
         let lost = state();
         assert_eq!(lost["store_lost"], true);
         assert_eq!(lost["has_pin"], false);

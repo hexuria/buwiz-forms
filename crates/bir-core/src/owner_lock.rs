@@ -1219,9 +1219,17 @@ mod tests {
         drop(DeviceStore::open(&layout).unwrap());
         // Gone, with the room's folder on disk (the held connection is dropped when the file is missing).
         layout.create_room_dir(&room).unwrap();
+        // As between two runs: no connection held (Windows cannot delete an open SQLite file), and every delete
+        // checked, so a delete that silently fails cannot pass for a loss.
+        crate::rooms::release_held_device_stores();
         for file in ["device.db", "device.db-wal", "device.db-shm"] {
-            let _ = std::fs::remove_file(folder.path().join(file));
+            match std::fs::remove_file(folder.path().join(file)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => panic!("{file} was not removed: {error}"),
+            }
         }
+        assert!(!layout.device_db().exists(), "the store is gone");
         assert!(matches!(
             owner_lock(&store, &room),
             Err(OwnerPinError::Store(DeviceStoreError::Lost(_)))
