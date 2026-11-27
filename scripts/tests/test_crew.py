@@ -65,8 +65,21 @@ def shell_join(parts):
     return " ".join(shlex.quote(str(part)) for part in parts)
 
 
+def crew_path(path):
+    return str(Path(path).resolve())
+
+
+def first_command_word(text):
+    text = text.lstrip()
+    if text[:1] in ("'", '"'):
+        quote = text[0]
+        end = text.find(quote, 1)
+        return text[1:end] if end != -1 else text[1:]
+    return text.split(None, 1)[0] if text else ""
+
+
 def permission_path(path):
-    return str(Path(path).resolve()).replace(os.sep, "/")
+    return crew_path(path).replace(os.sep, "/")
 
 
 def python_word():
@@ -79,7 +92,7 @@ def git_dir_for(tree, flag):
     path = Path(result.stdout.strip())
     if not path.is_absolute():
         path = Path(tree) / path
-    return path.resolve()
+    return Path(crew_path(path))
 
 
 def write_fake_engine(folder):
@@ -166,7 +179,8 @@ def write_path_python(folder, name, source):
     program.write_text(source, encoding="utf-8")
     if os.name == "nt":
         shim = folder / (name + ".cmd")
-        shim.write_text('@echo off\r\n"{0}" "{1}" %*\r\n'.format(sys.executable, program), encoding="utf-8")
+        with open(str(shim), "w", encoding="utf-8", newline="") as handle:
+            handle.write('@echo off\r\n"{0}" "{1}" %*\r\n'.format(sys.executable, program))
     else:
         shim = folder / name
         shim.write_text('#!/bin/sh\nexec "{0}" "{1}" "$@"\n'.format(sys.executable, program), encoding="utf-8")
@@ -218,21 +232,21 @@ class SettingsTests(unittest.TestCase):
     def state_path(self, env=None):
         result = run_crew(self.repo, "state", "path", env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        return Path(result.stdout.strip())
+        return crew_path(result.stdout.strip())
 
     def test_default_state_dir_is_under_the_repo(self):
-        self.assertEqual(self.state_path(), (self.repo / ".crew" / "state").resolve())
+        self.assertEqual(self.state_path(), crew_path(self.repo / ".crew" / "state"))
 
     def test_relative_state_dir_in_the_file_is_under_the_repo(self):
         (self.repo / "crew.local.ini").write_text("[crew]\nstate_dir = elsewhere/state\n", encoding="utf-8")
 
-        self.assertEqual(self.state_path(), (self.repo / "elsewhere" / "state").resolve())
+        self.assertEqual(self.state_path(), crew_path(self.repo / "elsewhere" / "state"))
 
     def test_environment_state_dir_overrides_the_file(self):
         (self.repo / "crew.local.ini").write_text("[crew]\nstate_dir = elsewhere/state\n", encoding="utf-8")
         override = Path(self.temp.name) / "env-state"
 
-        self.assertEqual(self.state_path({"CREW_STATE_DIR": str(override)}), override)
+        self.assertEqual(self.state_path({"CREW_STATE_DIR": str(override)}), crew_path(override))
 
     def test_tilde_state_dir_expands_to_the_home(self):
         home = Path(self.temp.name) / "home"
@@ -240,7 +254,7 @@ class SettingsTests(unittest.TestCase):
         (self.repo / "crew.local.ini").write_text("[crew]\nstate_dir = ~/crew-state\n", encoding="utf-8")
         env = {"HOME": str(home), "USERPROFILE": str(home)}
 
-        self.assertEqual(self.state_path(env), home / "crew-state")
+        self.assertEqual(self.state_path(env), crew_path(home / "crew-state"))
 
     def test_crew_engine_environment_overrides_the_file(self):
         (self.repo / "crew.local.ini").write_text("[crew]\nengine = devin\n", encoding="utf-8")
@@ -290,7 +304,7 @@ class PromptTests(unittest.TestCase):
         result = run_crew(repo, "prompt", "missing")
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn(str(repo / "crew" / "roles" / "missing.md"), result.stderr)
+        self.assertIn(crew_path(repo / "crew" / "roles" / "missing.md"), result.stderr)
 
     def test_missing_rules_is_an_error_naming_the_file(self):
         repo = write_fixture_repo(self.temp.name, {"tools": role_file()}, rules=None)
@@ -298,7 +312,7 @@ class PromptTests(unittest.TestCase):
         result = run_crew(repo, "prompt", "tools")
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn(str(repo / "crew" / "RULES.md"), result.stderr)
+        self.assertIn(crew_path(repo / "crew" / "RULES.md"), result.stderr)
 
 
 class StatusTests(unittest.TestCase):
@@ -879,7 +893,7 @@ print('gh version 2.0.0')
         self.assertIn("gh: signed in", result.stdout)
         self.assertIn("fleet: set", result.stdout)
         self.assertIn("sbx: found", result.stdout)
-        self.assertIn("state:", result.stdout)
+        self.assertIn(crew_path(self.repo / ".crew" / "state"), result.stdout)
         self.assertIn("tier: fleet", result.stdout)
         self.assertNotIn("dummy-auth-token", result.stdout + result.stderr)
 
@@ -984,7 +998,7 @@ class RunTests(unittest.TestCase):
         record = json.loads(record_path.read_text(encoding="utf-8"))
         argv = record["argv"]
         self.assertEqual(record["model"], "override-model")
-        self.assertEqual(Path(record["cwd"]).resolve(), tree_path.resolve())
+        self.assertEqual(crew_path(record["cwd"]), crew_path(tree_path))
         self.assertEqual(record["git_lfs_skip_push"], "1")
         for flag in ("-p", "--config", "--permission-mode", "--respect-workspace-trust", "--prompt-file"):
             self.assertIn(flag, argv)
@@ -1038,7 +1052,7 @@ class RunTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--permission-mode") + 1], "acceptEdits")
         tools = argv[argv.index("--allowedTools") + 1]
         tree = permission_path(tree_path)
-        role_dir_path = (repo / ".crew" / "state" / "roles" / "tools").resolve()
+        role_dir_path = crew_path(repo / ".crew" / "state" / "roles" / "tools")
         role_dir = permission_path(role_dir_path)
         expected_git = ",".join("Bash(git {0}:*)".format(name) for name in (
             "status", "diff", "log", "show", "add", "commit", "switch", "checkout", "merge",
@@ -1069,7 +1083,7 @@ class RunTests(unittest.TestCase):
                       "Bash(cargo:*)", "Bash(nsh:*)"):
             self.assertIn(entry, disallowed)
         self.assertIn("--setting-sources=", argv)
-        self.assertEqual(argv[argv.index("--add-dir") + 1], str(role_dir_path))
+        self.assertEqual(crew_path(argv[argv.index("--add-dir") + 1]), crew_path(role_dir_path))
         self.assertIsNone(record["config_path"])
         self.assertIn("TASK FOR WORKER", record["stdin"])
         self.assertIn("Role body line.", record["stdin"])
@@ -1113,13 +1127,13 @@ class RunTests(unittest.TestCase):
         worker_env = record["env"]
         self.assertEqual(worker_env.get("GIT_LFS_SKIP_PUSH"), "1")
         self.assertEqual(worker_env.get("LC_CREW_TEST"), "passed-locale")
-        self.assertEqual(worker_env.get("CLAUDE_CONFIG_DIR"), str(repo / "claude-config"))
+        self.assertEqual(crew_path(worker_env.get("CLAUDE_CONFIG_DIR")), crew_path(repo / "claude-config"))
         self.assertEqual(worker_env.get("GH_TOKEN"), "restricted-worker-token")
         self.assertEqual(worker_env.get("GIT_AUTHOR_NAME"), "Crew Maintainer")
         self.assertEqual(worker_env.get("GIT_AUTHOR_EMAIL"), "123456+maintainer@users.noreply.github.com")
         self.assertEqual(worker_env.get("GIT_COMMITTER_NAME"), "Crew Maintainer")
         self.assertEqual(worker_env.get("GIT_COMMITTER_EMAIL"), "123456+maintainer@users.noreply.github.com")
-        self.assertEqual(worker_env.get("CREW_STATE_DIR"), str(repo / "elsewhere-state"))
+        self.assertEqual(crew_path(worker_env.get("CREW_STATE_DIR")), crew_path(repo / "elsewhere-state"))
         self.assertEqual(worker_env.get("CREW_ENGINE"), "devin")
         for name in ("SYSTEMROOT", "COMSPEC", "PATHEXT", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA",
                      "USERPROFILE", "HOMEDRIVE", "HOMEPATH"):
@@ -1144,7 +1158,7 @@ class RunTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         record = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(record["env"].get("SSH_AUTH_SOCK"), sock)
+        self.assertEqual(crew_path(record["env"].get("SSH_AUTH_SOCK")), crew_path(sock))
 
     def run_with_identity_line(self, identity_line):
         repo, task, record_path, _config = write_run_fixture(self, engine="devin", model="role-model")
@@ -1351,30 +1365,33 @@ argv = sys.argv[1:]
 if 'rev-parse' in argv:
     print(os.environ.get('TEST_COMMON_DIR' if argv[-1] == '--git-common-dir' else 'TEST_ADMIN_DIR', ''))
 """
-        write_path_python(bin_dir, "git", git_source)
-        return {"PATH": str(bin_dir),
-                "TEST_COMMON_DIR": str(git_dir_for(self.tree, "--git-common-dir")),
-                "TEST_ADMIN_DIR": str(git_dir_for(self.tree, "--git-dir"))}
+        git_shim = write_path_python(bin_dir, "git", git_source)
+        env = {"PATH": str(bin_dir),
+               "TEST_COMMON_DIR": str(git_dir_for(self.tree, "--git-common-dir")),
+               "TEST_ADMIN_DIR": str(git_dir_for(self.tree, "--git-dir"))}
+        return env, git_shim
 
     def test_sandbox_print_shows_the_four_documented_commands_and_runs_nothing(self):
-        env = self.validation_git_env(Path(self.temp.name) / "bin-print")
+        env, git_shim = self.validation_git_env(Path(self.temp.name) / "bin-print")
         result = run_crew(self.repo, "run", "tools", str(self.task), "--worktree", str(self.tree),
                           "--sandbox", "--print", env=env)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = result.stdout.splitlines()
         self.assertEqual(len(lines), 4, result.stdout)
-        tree = str(self.tree.resolve())
+        tree = crew_path(self.tree)
+        prompt = crew_path(self.tree / ".crew" / "state" / "prompts" / "001-sample.md")
         name = "crew-tools-001-sample"
         self.assertEqual(lines[0], "sbx create --name {0} --clone devin {1}".format(name, tree))
         self.assertEqual(lines[1], "sbx exec {0} -- devin -p --model sand-model --prompt-file {1}".format(
-            name, str((self.tree / ".crew" / "state" / "prompts" / "001-sample.md").resolve())))
-        self.assertTrue(lines[2].endswith("git -C {0} fetch sandbox-{1}".format(tree, name)) or
-                        lines[2].endswith("git.cmd -C {0} fetch sandbox-{1}".format(tree, name)), lines[2])
+            name, prompt))
+        actual_git = first_command_word(lines[2])
+        self.assertEqual(os.path.normcase(crew_path(actual_git)), os.path.normcase(crew_path(git_shim)))
+        self.assertTrue(lines[2].endswith(" -C {0} fetch sandbox-{1}".format(tree, name)), lines[2])
         self.assertEqual(lines[3], "sbx rm --force {0}".format(name))
 
     def test_sandbox_without_sbx_refuses_and_names_the_playbook(self):
-        env = self.validation_git_env(Path(self.temp.name) / "bin-no-sbx")
+        env, _git_shim = self.validation_git_env(Path(self.temp.name) / "bin-no-sbx")
 
         result = run_crew(self.repo, "run", "tools", str(self.task), "--worktree", str(self.tree),
                           "--sandbox", env=env)
@@ -1438,7 +1455,8 @@ sys.exit(0)
         self.assertEqual(result.returncode, 7, result.stderr)
         sbx_calls = self.read_json_lines(sbx_record)
         self.assertEqual([call["argv"][0] for call in sbx_calls], ["create", "exec", "rm"])
-        self.assertTrue(any(call[:2] == ["-C", str(self.tree.resolve())] and "fetch" in call
+        self.assertTrue(any(len(call) > 1 and call[0] == "-C" and
+                            crew_path(call[1]) == crew_path(self.tree) and "fetch" in call
                             for call in self.read_json_lines(git_record)))
         self.assertFalse((self.tree / ".crew" / "state" / "prompts" / "001-sample.md").exists())
         create = sbx_calls[0]
@@ -1471,7 +1489,8 @@ class StartTests(unittest.TestCase):
                           env={"PATH": str(Path(self.temp.name) / "bin")})
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(str(shim), result.stdout)
+        program = first_command_word(result.stdout)
+        self.assertEqual(os.path.normcase(crew_path(program)), os.path.normcase(crew_path(shim)))
         self.assertIn("Re-instate from files: follow crew/playbooks/restart.md.", result.stdout)
         self.assertIn("Role body line.", result.stdout)
 
@@ -1481,7 +1500,8 @@ class StartTests(unittest.TestCase):
                           env={"PATH": str(Path(self.temp.name) / "bin")})
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(str(shim), result.stdout)
+        program = first_command_word(result.stdout)
+        self.assertEqual(os.path.normcase(crew_path(program)), os.path.normcase(crew_path(shim)))
         self.assertIn("--prompt-file ", result.stdout)
         parts = result.stdout.strip().split()
         prompt_path = Path(parts[2])
@@ -1660,7 +1680,7 @@ class FrontmatterTests(unittest.TestCase):
         result = run_crew(repo, "prompt", "tools")
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn(str(repo / "crew" / "roles" / "tools.md"), result.stderr)
+        self.assertIn(crew_path(repo / "crew" / "roles" / "tools.md"), result.stderr)
 
     def test_unknown_frontmatter_keys_are_kept_and_ignored(self):
         text = role_file(extra="future-key: future value", body="Unknown keys do not matter.\n")
@@ -1781,6 +1801,35 @@ class PythonPortabilityTests(unittest.TestCase):
         self.assertIn("python crew/bin/crew state path", windows)
         self.assertNotIn("python3 crew/bin/crew state path", windows)
         self.assertIn("python3 crew/bin/crew state path", posix)
+
+    def test_cmd_processes_go_through_comspec_with_the_windows_environment_on_any_system(self):
+        module = self.load_launcher()
+        comspec = r"C:\Windows\System32\cmd.exe"
+        engine = r"C:\Tools\CLAUDE.CMD"
+        argv, _child_env = module.process_command([engine, "--version"], {"COMSPEC": comspec})
+
+        self.assertEqual(argv, [comspec, "/c", engine, "--version"])
+        bat_argv, _child_env = module.process_command([r"C:\Tools\engine.BAT", "-p"], {"COMSPEC": comspec})
+        self.assertEqual(bat_argv[:2], [comspec, "/c"])
+        exe_argv, _child_env = module.process_command([r"C:\Tools\engine.EXE", "-p"], {"COMSPEC": comspec})
+        self.assertEqual(exe_argv, [r"C:\Tools\engine.EXE", "-p"])
+        ambient = {"COMSPEC": comspec, "SYSTEMROOT": r"C:\Windows", "PATHEXT": ".COM;.EXE;.BAT;.CMD"}
+        child_env = module.process_environment({"CUSTOM": "1"}, ambient=ambient)
+        self.assertEqual(child_env["COMSPEC"], comspec)
+        self.assertEqual(child_env["SYSTEMROOT"], r"C:\Windows")
+        self.assertEqual(child_env["PATHEXT"], ".COM;.EXE;.BAT;.CMD")
+        self.assertEqual(child_env["CUSTOM"], "1")
+
+        completed = subprocess.CompletedProcess([], 0, stdout="claude version 1.2.3\n", stderr="")
+        with unittest.mock.patch.object(module, "executable_for", return_value=(engine, ["claude"])):
+            with unittest.mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                path, version = module.version_line("claude")
+
+        self.assertEqual(path, engine)
+        self.assertEqual(version, "claude version 1.2.3")
+        version_argv = run.call_args[0][0]
+        self.assertEqual(version_argv[1:], ["/c", engine, "--version"])
+        self.assertTrue(version_argv[0].lower().endswith("cmd.exe"), version_argv)
 
 
 if __name__ == "__main__":
