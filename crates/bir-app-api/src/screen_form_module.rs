@@ -3036,6 +3036,13 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
+    // The upload omits a shut previous-payment box; the page still draws it
+    // at its cleared zero with the gate's sentence.
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        map.insert(spec.key.to_string(), "0.00".to_string());
+    }
     // PR 9's forms: what the draft keeps where the field map cuts it.
     rows_as_needed::values(kind, draft, &mut map);
     // A row family's row the upload leaves out still shows what the draft
@@ -3821,6 +3828,12 @@ fn lock_note(reason: &str) -> &'static str {
     if reason == bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK {
         return bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK;
     }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.lock == reason)
+    {
+        return spec.lock;
+    }
     if reason.starts_with("computed") {
         NOTE_COMPUTED
     } else if reason == Lock::Profile.reason() || reason.contains("from the tax profile") {
@@ -3867,6 +3880,11 @@ fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
         && bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft).is_some()
     {
         keys.push(bir_core::forms::agent::draft_locks::item16_2551q::KEY.to_string());
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        keys.push(spec.key.to_string());
     }
     keys
 }
@@ -5115,6 +5133,14 @@ pub(crate) fn page_gate_refusal(
     {
         return Some(reason.to_string());
     }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && key == spec.key
+        && !bir_core::forms::agent::draft_locks::previous_payment::zero_write(value)
+        && let Some(reason) =
+            bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft)
+    {
+        return Some(reason.to_string());
+    }
     if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
         .map(str::to_string)
         .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
@@ -5475,6 +5501,22 @@ fn apply_screen_edits_here(
                 .is_none_or(|amount| amount.abs() >= 0.005)
             && let Some(reason) =
                 bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
+        {
+            rejected.insert(key.clone(), json!(reason));
+            continue;
+        }
+        // A previous-payment box is shut unless Amended Return is Yes; zero
+        // is its already-empty state and passes as a no-op.
+        if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+            && key == spec.key
+            && let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && !bir_core::forms::agent::draft_locks::previous_payment::zero_write(value)
+            && let Some(reason) =
+                bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft)
         {
             rejected.insert(key.clone(), json!(reason));
             continue;
@@ -7676,6 +7718,8 @@ mod tests {
     // sweep and its recorder, then the rule's own tests.
     mod radio_untick;
     mod radio_untick_rule;
+    // The amended-return previous-payment gates.
+    mod previous_payment;
     // PR 15: the shared effective-lock table pinned core-side (P4-19).
     mod agent_locks;
     // The carry rule's page-side inputs, pinned core-side.

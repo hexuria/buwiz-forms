@@ -28,6 +28,8 @@
 //!    app holds, locked to that Q1's answer.
 //! 7. [`item16_2551q`]: 2551Q Item 16 is shut unless Amended Return is Yes
 //!    without the 8% option.
+//! 7. [`previous_payment`]: the previous-payment box of an unamended
+//!    return, shut with its item's amended-return reason.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -92,6 +94,8 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     item_13::relock(kind, draft, locks);
     // 2551Q Item 16 follows Amended Return and the 8% option.
     item16_2551q::relock(kind, draft, locks);
+    // Previous payment applies only to an amended return.
+    previous_payment::relock(kind, draft, locks);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -103,6 +107,7 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut relocks = annual_corporate::live_locks(kind, draft);
     relocks.extend(excise::live_locks(kind, draft));
     relocks.extend(item16_2551q::live_locks(kind, draft));
+    relocks.extend(previous_payment::live_locks(kind, draft));
     relocks
 }
 
@@ -1337,6 +1342,180 @@ pub mod item16_2551q {
     }
 }
 
+pub mod previous_payment {
+    //! Previous-payment boxes the official pages open only for an amended
+    //! return. One table serves the forms whose captured lock rules name the
+    //! box's amended-Yes control; 1602Q is deliberately absent because its
+    //! captured page leaves item 20 enabled on a new return.
+    //!
+
+    use serde_json::{Map, Value, json};
+
+    use crate::forms::agent::AgentFormKind;
+
+    pub struct Spec {
+        pub form_code: &'static str,
+        pub key: &'static str,
+        pub item: &'static str,
+        pub path: &'static str,
+        pub yes_key: &'static str,
+        pub no_key: &'static str,
+        pub lock: &'static str,
+        pub cleared: &'static str,
+    }
+
+    pub const SPECS: [Spec; 9] = [
+        Spec {
+            form_code: "0619E",
+            key: "frm0619E:txtTax15",
+            item: "15",
+            path: "item_15_amount_remitted_previously",
+            yes_key: "frm0619E:optAmend:Y",
+            no_key: "frm0619E:optAmend:N",
+            lock: "Item 15 applies only to an amended return.",
+            cleared: "Item 15 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "0619F",
+            key: "frm0619F:txtTax16",
+            item: "16",
+            path: "item_16_remitted_previously",
+            yes_key: "frm0619F:optAmend:Y",
+            no_key: "frm0619F:optAmend:N",
+            lock: "Item 16 applies only to an amended return.",
+            cleared: "Item 16 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1600PT",
+            key: "frm1600PT:txtPg1P2I19TaxRemittedInRtrn",
+            item: "19",
+            path: "tax_remitted_previous",
+            yes_key: "frm1600PT:rdoPg1I2AmendedYes",
+            no_key: "frm1600PT:rdoPg1I2AmendedNo",
+            lock: "Item 19 applies only to an amended return.",
+            cleared: "Item 19 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1600VT",
+            key: "frm1600VT:txtPg1P2I19TaxRemittedInRtrn",
+            item: "19",
+            path: "tax_remitted_previous",
+            yes_key: "frm1600VT:rdoPg1I2AmendedYes",
+            no_key: "frm1600VT:rdoPg1I2AmendedNo",
+            lock: "Item 19 applies only to an amended return.",
+            cleared: "Item 19 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1600WP",
+            key: "frm1600WP:txtTax13",
+            item: "13",
+            path: "tax_remitted_previous",
+            yes_key: "frm1600WP:AmendedReturn_1",
+            no_key: "frm1600WP:AmendedReturn_2",
+            lock: "Item 13 applies only to an amended return.",
+            cleared: "Item 13 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1603Q",
+            key: "frm1603Q:txtTax15",
+            item: "15",
+            path: "tax_remitted_previous",
+            yes_key: "frm1603Q:AmendedRtn_1",
+            no_key: "frm1603Q:AmendedRtn_2",
+            lock: "Item 15 applies only to an amended return.",
+            cleared: "Item 15 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1606",
+            key: "frm1606:txtLess",
+            item: "33",
+            path: "tax_remitted_previous",
+            yes_key: "frm1606:j_id217:_1",
+            no_key: "frm1606:j_id217:_2",
+            lock: "Item 33 applies only to an amended return.",
+            cleared: "Item 33 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1706",
+            key: "frm1706:txtLess",
+            item: "33",
+            path: "tax_paid_previous",
+            yes_key: "frm1706:j_id217:_1",
+            no_key: "frm1706:j_id217:_2",
+            lock: "Item 33 applies only to an amended return.",
+            cleared: "Item 33 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "2550M",
+            key: "frm2550m:txtTax23D",
+            item: "23D",
+            path: "vat_paid_previous",
+            yes_key: "frm2550m:OptAmendedYN1",
+            no_key: "frm2550m:OptAmendedYN2",
+            lock: "Item 23D applies only to an amended return.",
+            cleared: "Item 23D was cleared: it applies only to an amended return.",
+        },
+    ];
+
+    pub fn spec(kind: AgentFormKind) -> Option<&'static Spec> {
+        SPECS.iter().find(|spec| spec.form_code == kind.form_code())
+    }
+
+    pub fn lock_text(spec: &Spec) -> &'static str {
+        spec.lock
+    }
+
+    pub fn cleared_text(spec: &Spec) -> &'static str {
+        spec.cleared
+    }
+
+    /// The reason the box is shut on `draft`, or `None` for Amended Yes.
+    pub fn lock_reason(spec: &Spec, draft: &Value) -> Option<&'static str> {
+        (draft["is_amended"] != true).then_some(spec.lock)
+    }
+
+    /// A zero write is the box's already-empty state, so it is accepted as a no-op.
+    pub fn zero_write(value: &Value) -> bool {
+        value
+            .as_str()
+            .and_then(|text| text.replace(',', "").trim().parse::<f64>().ok())
+            .is_some_and(|amount| amount.abs() < 0.005)
+    }
+
+    /// Whether a closed draft still holds a dormant previous-payment amount.
+    pub fn dormant_amount(spec: &Spec, draft: &Value) -> bool {
+        lock_reason(spec, draft).is_some()
+            && draft[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        let Some(spec) = spec(kind) else {
+            return;
+        };
+        match lock_reason(spec, draft) {
+            Some(reason) => {
+                locks.insert(spec.key.to_string(), json!(reason));
+            }
+            None => {
+                locks.remove(spec.key);
+            }
+        }
+    }
+
+    /// The box's lock as a fill leaves it (`null` opens it), so the page
+    /// follows Amended Return as soon as its choice changes.
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if let Some(spec) = spec(kind) {
+            locks.insert(
+                spec.key.to_string(),
+                lock_reason(spec, draft).map_or(Value::Null, |reason| json!(reason)),
+            );
+        }
+        locks
+    }
+}
+
 pub mod item_13 {
     //! 2551Q Item 13, the income-tax-rate election, is answered once a year,
     //! on the initial quarter. A later quarter (Q2-Q4) of a TIN whose Q1 of
@@ -2009,7 +2188,12 @@ pub mod pending_notices {
     /// path opened or imported the return. Gate and text are owned strings so
     /// a row-keyed gate (1601FQ Schedule 1, for example) can name its row.
     pub fn clearance(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
-        collect_clearances(kind, before, after, &[item16_2551q_clearance])
+        collect_clearances(
+            kind,
+            before,
+            after,
+            &[item16_2551q_clearance, previous_payment_clearance],
+        )
     }
 
     type ClearanceCheck = fn(AgentFormKind, &Value, &Value) -> Vec<(String, String)>;
@@ -2037,6 +2221,28 @@ pub mod pending_notices {
             && let Some(text) = super::item16_2551q::cleared_note(after)
         {
             return vec![("2551q_item16".to_string(), text.to_string())];
+        }
+        Vec::new()
+    }
+
+    fn previous_payment_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        let Some(spec) = super::previous_payment::spec(kind) else {
+            return Vec::new();
+        };
+        if super::previous_payment::dormant_amount(spec, before)
+            && after[spec.path].as_f64().unwrap_or(0.0).abs() < 0.005
+            && super::previous_payment::lock_reason(spec, after).is_some()
+        {
+            let gate = format!(
+                "{}_item{}",
+                spec.form_code.to_lowercase(),
+                spec.item.to_lowercase()
+            );
+            return vec![(gate, spec.cleared.to_string())];
         }
         Vec::new()
     }
