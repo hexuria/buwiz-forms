@@ -1,8 +1,9 @@
 // The narrow layout (every phone and tablet, at any width; a desktop window under 600 points): a header and a bottom bar of four
 // tabs. The header: Back on a pushed page, the page's name, New return (+), Search, and the account badge; on a tablet the open
 // taxpayer's name, TIN and branch beside the badge, so whose return is on screen is always in view. The badge carries a red dot
-// while notifications are unread and opens a menu with the tax profile (the taxpayer switcher), search, the notifications and
-// Settings. The header keeps clear of the window's own buttons (titleBar()) and of a phone's sensor housing turned sideways.
+// while notifications are unread and opens a menu with the notifications, Settings, Lock app and Log out (search is the header's
+// own button, the tax profile the palette's). The header keeps clear of the window's own buttons (titleBar()) and of a phone's
+// sensor housing turned sideways.
 import type { JSX } from "nsh";
 import { safeArea, View } from "nsh";
 import { Button } from "nsh/base";
@@ -98,7 +99,7 @@ function TaxpayerLabel() {
   );
 }
 
-/** The badge (the taxpayer's avatar, or a person when there is none) and its menu: everything the wide title bar has. */
+/** The badge (the taxpayer's avatar, or a person when there is none) and its menu: the session's actions, as the wide account row's. */
 function AccountMenu() {
   const tp = () => app.taxpayer();
   const unread = () => app.unreadCount();
@@ -123,9 +124,6 @@ function AccountMenu() {
         </Button>
       )}
     >
-      <MenuItem testID="nb-menu-profile" label={tp()?.name ?? "Account"} icon="user" onSelect={() => app.togglePanel("profile")} />
-      <MenuSeparator />
-      <MenuItem testID="nb-menu-search" label="Search" icon="search" onSelect={app.openPalette} />
       <MenuItem
         testID="nb-menu-notifications"
         label={unread() > 0 ? `Notifications · ${unread()}` : "Notifications"}
@@ -133,6 +131,9 @@ function AccountMenu() {
         onSelect={() => app.togglePanel("notifs")}
       />
       <MenuItem testID="nb-menu-settings" label="Settings" icon="settings" onSelect={() => app.go("settings")} />
+      <MenuSeparator />
+      <MenuItem testID="nb-menu-lock" label="Lock app" icon="lock" onSelect={app.lockApp} />
+      <MenuItem testID="nb-menu-logout" label="Log out" icon="log-out" onSelect={app.logOut} />
     </Menu>
   );
 }

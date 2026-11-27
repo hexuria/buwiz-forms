@@ -627,27 +627,7 @@ mod tests {
 
     /// Log lines of `body`, as the app's subscriber writes them.
     fn logged(body: impl FnOnce()) -> String {
-        use std::sync::{Arc, Mutex};
-        #[derive(Clone, Default)]
-        struct Lines(Arc<Mutex<Vec<u8>>>);
-        impl std::io::Write for Lines {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0.lock().unwrap().extend_from_slice(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-        let lines = Lines::default();
-        let writer = lines.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || writer.clone())
-            .with_ansi(false)
-            .without_time()
-            .finish();
-        tracing::subscriber::with_default(subscriber, body);
-        String::from_utf8(lines.0.lock().unwrap().clone()).unwrap()
+        crate::test_logs::capture_logs(tracing::Level::INFO, body)
     }
 
     #[test]

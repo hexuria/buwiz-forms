@@ -450,6 +450,9 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             eprintln!("pid file: {error}");
         }
         let _pid_guard = ServePidGuard;
+        // The serve thread's one write must land first, or it overwrites
+        // this record after it is written (see try_start).
+        crate::agent::wait_for_serve_record(&addr);
         let identity = gpui_agent::discovery::detect_identity();
         let record = gpui_agent::discovery::HostRecord {
             addr: addr.to_string(),

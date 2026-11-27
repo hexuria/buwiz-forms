@@ -37,7 +37,7 @@ for (const look of LOOKS) {
   }, 120_000);
 }
 
-// A window between the phone layout and the full one: three tiles across, wide rows in a 618-point column.
+// A window between the phone layout and the full one: two columns of tiles, wide rows in a 618-point column.
 for (const look of LOOKS.filter((l) => l.width > 600)) {
   test(`home at 700 points, ${look.name}`, async () => {
     const app = await open(ENTRY, { width: 700, height: 900, platform: look.platform, colorScheme: look.colorScheme, ...asking(RICH) });

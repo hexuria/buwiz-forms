@@ -48,6 +48,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: "account", label: "Account", icon: "user", group: "Personal", adminOnly: false, search: "account personal profile" },
   { id: "transfer", label: "Import / Export", icon: "archive", group: "Data", adminOnly: false, search: "import export data transfer" },
   { id: "jobs", label: "Jobs", icon: "list", group: "Data", adminOnly: true, search: "jobs data background tasks" },
+  { id: "logs", label: "Logs", icon: "file-text", group: "Data", adminOnly: true, search: "logs data log file lines" },
   { id: "keyboard", label: "Keyboard", icon: "keyboard", group: "System", adminOnly: false, search: "keyboard keys shortcuts", desktopOnly: true },
   { id: "computer", label: "Computer", icon: "laptop", group: "System", adminOnly: true, search: "computer system this computer" },
 ];
@@ -70,7 +71,8 @@ export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
     { id: "import", search: "import zip restore database ebirforms bir official old program folder migrate filed returns", adminOnly: true },
     { id: "export", search: "export profile archive backup zip" },
   ],
-  jobs: [{ id: "jobs", search: "jobs background tasks queue logs confirmation watcher cron archive" }],
+  jobs: [{ id: "jobs", search: "jobs background tasks queue confirmation watcher cron archive" }],
+  logs: [{ id: "logs", search: "logs file lines level error warn info refresh tail today" }],
   keyboard: [
     { id: "quit", search: "quit key shortcut exit" },
     { id: "hide", search: "hide key shortcut tray menu bar" },

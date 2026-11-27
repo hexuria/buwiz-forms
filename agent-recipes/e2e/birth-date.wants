@@ -1,0 +1,13 @@
+# Smoke 4, desktop: the taxpayer's birth date on the Profile tab, typed into the date box, saved. Starts and ends with the
+# tax profile panel closed.
+click tb-panel
+wait_until panel-open-profile --timeout-ms 5000
+click panel-open-profile
+wait_until tp-sec-taxpayer-edit --timeout-ms 5000
+click tp-sec-taxpayer-edit
+wait_until tp-taxpayer-birth_date --timeout-ms 5000
+type tp-taxpayer-birth_date $birth --screenshot
+click tp-taxpayer-save
+wait_until tp-taxpayer-save --absent --timeout-ms 5000 --screenshot
+click tb-panel
+wait_until panel-open-profile --absent --timeout-ms 5000
