@@ -138,8 +138,9 @@ pub enum LegacyCredential<'a> {
     /// The recovery key, as typed.
     RecoveryKey(&'a str),
     /// The OS confirmed the computer's owner (LocalAuthentication / Windows Hello, A3a-2). Accepted once per
-    /// claim: the used mark is cleared when the claim ends (at Done, at Closed, in `clear_permanent`, on any
-    /// failure before the move), so the fallback is never spent forever.
+    /// unlock offer: every use is a fresh OS check, and the used mark is cleared when the claim ends (at Done,
+    /// at Closed, in `clear_permanent`, on any failure before the move) and whenever `start()` will offer an
+    /// unlock again, so the fallback is never spent forever.
     ComputerLogin,
 }
 
@@ -565,10 +566,18 @@ impl LegacyClaim {
         Ok(self.migration_value(OS_LOGIN_USED_KEY)?.is_some())
     }
 
-    /// "Use this computer's login" is usable once per claim, never once forever (PLAN §A.3.1): the used mark goes
-    /// whenever the claim it was spent in ends — at Done, at Closed, in [`LegacyClaim::clear_permanent`], and on any
-    /// transient or permanent failure before the move (a pre-move resume needs a new unlock, so that counts as the
-    /// claim ending: the person must never be left without their fallback).
+    /// Whether the computer login is offered right now: the inverse of the standing mark, as the
+    /// locked page reads it. Once per unlock offer; every use is a fresh OS check (L1).
+    #[cfg(test)]
+    pub(crate) fn offers_computer_login_standing(&self) -> bool {
+        !self.os_login_used().unwrap_or(true)
+    }
+
+    /// "Use this computer's login" is usable once per unlock offer, never once forever (PLAN §A.3.1): every use
+    /// is a fresh OS check, and the used mark goes whenever the claim it was spent in ends — at Done, at Closed,
+    /// in [`LegacyClaim::clear_permanent`], on any transient or permanent failure before the move — and whenever
+    /// `start()` will offer an unlock (the record is not moved()), so a kill at the wrong second never strands
+    /// the fallback.
     fn clear_os_login_used(&self) {
         if let Err(error) = self.store.conn().execute(
             "DELETE FROM migration WHERE key = ?1",
@@ -667,14 +676,13 @@ impl LegacyClaim {
             .insert(self.layout.device_dir().to_path_buf());
         let legacy = self.layout.legacy_database();
         let record = self.record().map_err(store_failure)?;
-        // L1: a kill or a dropped ReadyClaim between the used mark's write and the Unlocked record must not hide
-        // the computer login for the rest of that claim. No record — or one still at Started with no failure —
-        // means no claim is mid-move, so a spent mark belongs to a claim that never began and goes. A claim that
-        // began keeps its mark spent until it ends (the clears at Done, Closed, and the pre-move failures).
-        if record
-            .as_ref()
-            .is_none_or(|record| record.step == Step::Started && record.failure.is_none())
-        {
+        // L1, the orchestrator's ruling: the mark protects nothing and can strand a person, so it clears
+        // whenever start() will offer an unlock — whenever the record is not moved(). A kill during the copy
+        // (record at Unlocked) or before the move (record at Copied, the legacy file present) needs a new
+        // unlock, and the person must never lose their fallback because the app was closed at the wrong
+        // second. Within one live claim — no start() between the uses — the mark stands: once per unlock
+        // offer, and every use is a fresh OS check.
+        if record.as_ref().is_none_or(|record| !record.moved()) {
             self.clear_os_login_used();
         }
         let legacy_present = files::exists(&legacy).map_err(io_failure)?;
@@ -1417,8 +1425,9 @@ impl Gate {
     /// recovery key each count in `pin_attempts('', 'legacy')`, in B1's order (refuse during a wait, check, commit,
     /// then answer), so no caller can try without limit. The check reads only the probe's values in memory; nothing
     /// inside it takes a store or another lock (B1's lock-order rule). "Use this computer's login" is the operating
-    /// system's own check, with its own limit, and once per claim: it is not counted here. The once is cleared when
-    /// the claim ends (at Done, at Closed, in `clear_permanent`, on any failure before the move), never spent forever.
+    /// system's own check, with its own limit, and once per unlock offer: every use is a fresh OS check, and it is
+    /// not counted here. The once is cleared when the claim ends (at Done, at Closed, in `clear_permanent`, on any
+    /// failure before the move) and whenever `start()` will offer an unlock again, never spent forever.
     fn try_credential(
         &self,
         claim: &LegacyClaim,
@@ -1544,9 +1553,10 @@ impl LockedClaim {
         self.gate.probe.kinds()
     }
 
-    /// Offer "Use this computer's login" (A3a-2): only until it was used once for this claim. The used mark is
-    /// cleared when the claim ends — at Done, at Closed, in `clear_permanent`, on any failure before the move — so
-    /// it is offered again in the next claim.
+    /// Offer "Use this computer's login" (A3a-2): only until it was used once for this unlock offer. Every use
+    /// is a fresh OS check: the used mark is cleared when the claim ends — at Done, at Closed, in
+    /// `clear_permanent`, on any failure before the move — and whenever `start()` will offer an unlock again, so
+    /// it is offered again in the next claim and after any kill.
     pub fn offers_computer_login(&self, claim: &LegacyClaim) -> bool {
         !claim.os_login_used().unwrap_or(true)
     }

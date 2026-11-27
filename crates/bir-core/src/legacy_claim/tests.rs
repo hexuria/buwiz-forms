@@ -38,6 +38,22 @@ fn claim_cut_at(install: &Install, who: &Claimant, point: Cut) {
     assert!(result.is_err(), "the claim was not cut at {point:?}");
 }
 
+/// Run a locked claim for `who` (unlocked with `pin`) and cut it at `point`, as a kill there.
+fn locked_claim_cut_at(install: &Install, who: &Claimant, pin: &str, point: Cut) {
+    let claim = install.claim();
+    let Start::Locked(locked) = claim.start(who) else {
+        panic!("not locked")
+    };
+    let ready = match locked.unlock(&claim, LegacyCredential::Pin(pin)) {
+        Ok(ready) => ready,
+        Err(_) => panic!("refused"),
+    };
+    CUT_AT.with(|at| at.set(Some(point)));
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
+    CUT_AT.with(|at| at.set(None));
+    assert!(result.is_err(), "the claim was not cut at {point:?}");
+}
+
 /// Run `observe` when the claim reaches `point`.
 fn at_point(point: Cut, observe: impl FnOnce() + 'static) {
     AT_POINT.with(|slot| *slot.borrow_mut() = Some((point, Box::new(observe))));
@@ -538,7 +554,8 @@ fn computer_login_is_accepted_once_per_claim() {
         .unlock(&claim, LegacyCredential::ComputerLogin)
         .unwrap();
     assert_eq!(ready.unlocked_by(), UnlockedBy::ComputerLogin);
-    // The claim it was spent in is mid-move (cut after the copy's record): the same claim never spends it twice.
+    // Cut mid-move (after the copy's record): the resume needs a new unlock, and L1's ruling offers the button
+    // again — a person must never lose their fallback because the app was closed at the wrong second.
     CUT_AT.with(|at| at.set(Some(Cut::AfterCopyRecorded)));
     let cut = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
     CUT_AT.with(|at| at.set(None));
@@ -547,13 +564,14 @@ fn computer_login_is_accepted_once_per_claim() {
         panic!("not locked")
     };
     assert!(
-        !locked.offers_computer_login(&claim),
-        "not offered a second time"
+        locked.offers_computer_login(&claim),
+        "offered again for the resume (L1)"
     );
     assert!(
         locked
             .unlock(&claim, LegacyCredential::ComputerLogin)
-            .is_err()
+            .is_ok(),
+        "the computer login opens the resume"
     );
 }
 
@@ -574,9 +592,9 @@ fn computer_login_is_usable_again_when_the_claim_ends() {
     let ready = locked
         .unlock(&claim, LegacyCredential::ComputerLogin)
         .unwrap();
-    // Refused within the same claim: the claim it was spent in is mid-move (cut after the copy's record), so a
-    // re-unlock of the same claim never spends it twice. (A drop before the record is L1's dead claim: the login
-    // is offered again — computer_login_offered_again_when_the_unlock_died_before_the_record.)
+    // Cut mid-move (after the copy's record): the resume needs a new unlock, and L1's ruling offers the button
+    // again — a kill before the move never strands the fallback. The refusal that remains is within one live
+    // claim, no start() between the uses (a_second_use_within_one_live_claim_is_refused).
     CUT_AT.with(|at| at.set(Some(Cut::AfterCopyRecorded)));
     let cut = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
     CUT_AT.with(|at| at.set(None));
@@ -584,13 +602,13 @@ fn computer_login_is_usable_again_when_the_claim_ends() {
     let Start::Locked(locked) = claim.start(&a) else {
         panic!("not locked")
     };
-    let refused = locked
-        .unlock(&claim, LegacyCredential::ComputerLogin)
-        .expect_err("refused within the same claim");
-    let locked = refused.into_inner();
+    assert!(
+        locked.offers_computer_login(&claim),
+        "offered again for the resume (L1)"
+    );
     let ready = locked
-        .unlock(&claim, LegacyCredential::Pin("1357"))
-        .unwrap();
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("the computer login opens the resume");
     done_room(&ready.claim(&claim));
     assert!(
         !install.claim().os_login_used().unwrap(),
@@ -1887,4 +1905,83 @@ fn a_room_open_is_refused_before_start_and_the_claim_still_finishes() {
     assert_eq!(done_room(&outcome), room);
     crate::rooms::open_room_guarded(&install.layout, &room)
         .expect("the room opens once the claim ran");
+}
+
+// ------------------------------------------------------------------------- L1, the orchestrator's ruling
+
+/// The mark protects nothing and can strand a person: after a kill during the copy (the record is
+/// at Unlocked, no failure), the resume needs a new unlock — and the button must be offered.
+#[test]
+fn a_cut_at_unlocked_offers_the_computer_login_again() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    // A kill during the copy: the record got to Unlocked, no failure, the legacy file in place.
+    locked_claim_cut_at(&install, &a, "1357", Cut::AfterCopyRecorded);
+    let mut record = claim.record().unwrap().unwrap();
+    record.step = Step::Unlocked;
+    claim.write_record(&record).unwrap();
+    write_used_mark(&claim);
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(
+        locked.offers_computer_login(&claim),
+        "the button stayed hidden after a kill during the copy"
+    );
+    locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("the computer login opens the resume");
+}
+
+/// After a kill before the move (the record at Copied, the legacy file present), the resume needs
+/// a new unlock — and the button must be offered.
+#[test]
+fn a_cut_at_copied_with_the_legacy_file_present_offers_the_computer_login_again() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    locked_claim_cut_at(&install, &a, "1357", Cut::AfterCopyRecorded);
+    assert!(install.legacy().exists());
+    write_used_mark(&claim);
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(
+        locked.offers_computer_login(&claim),
+        "the button stayed hidden after a kill before the move"
+    );
+    locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("the computer login opens the resume");
+}
+
+/// The refusal that remains: a second use within one live claim, no start() between the uses. The
+/// mark is written at the first use, and until the claim ends the button is not offered again.
+#[test]
+fn a_second_use_within_one_live_claim_is_refused() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(locked.offers_computer_login(&claim), "offered first");
+    let ready = locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .unwrap();
+    // The claim is live: no start() since the use. The mark stands, so the page does not offer the
+    // button again and the credential is refused while this claim lives.
+    assert!(
+        claim.os_login_used().unwrap(),
+        "the mark must stand within the live claim"
+    );
+    assert!(
+        !claim.offers_computer_login_standing(),
+        "a second use within one live claim must be refused"
+    );
+    drop(ready);
 }
