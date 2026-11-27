@@ -1,0 +1,69 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-desktop-shot",
+  "fingerprint": "fnv1a64:285ac41a5ab411fc",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "w",
+      "ok": true,
+      "elapsed_ms": 127
+    },
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1178
+    },
+    {
+      "id": "p2w",
+      "ok": true,
+      "elapsed_ms": 161
+    },
+    {
+      "id": "p2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1110
+    },
+    {
+      "id": "pos",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1008
+    },
+    {
+      "id": "i24",
+      "ok": true,
+      "elapsed_ms": 358
+    },
+    {
+      "id": "edit",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 484
+    },
+    {
+      "id": "mark",
+      "ok": true,
+      "elapsed_ms": 320
+    },
+    {
+      "id": "align-shot",
+      "ok": true,
+      "elapsed_ms": 402,
+      "screenshot": {
+        "path": "/Users/devin/ev386/before287-desktop/04-pen-desktop-shot/009-align-shot.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/ev386/before287-desktop/04-pen-desktop-shot/009-align-shot.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 5152
+}

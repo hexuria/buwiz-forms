@@ -1,0 +1,35 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-firstpage",
+  "fingerprint": "fnv1a64:daceacab93f82d58",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "w1",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "w2",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "shot",
+      "ok": true,
+      "elapsed_ms": 153,
+      "screenshot": {
+        "path": "/Users/devin/ev386/before287-ios/02-pen-firstpage/003-shot.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/ev386/before287-ios/02-pen-firstpage/003-shot.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 173
+}

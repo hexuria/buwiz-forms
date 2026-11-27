@@ -1,0 +1,17 @@
+{
+ "v": 1,
+ "name": "pen-untouched",
+ "app": "bir-shell",
+ "steps": [
+  {"id": "s1", "op": "scroll", "target": "form-scroll", "dy": 800},
+  {"id": "p2w", "op": "wait_until", "target": "fp-part-2-toggle", "timeout_ms": 5000, "needs": ["s1"]},
+  {"id": "p2", "op": "click", "target": "fp-part-2-toggle", "needs": ["p2w"]},
+  {"id": "t1", "op": "scroll", "target": "form-scroll", "dy": 800, "needs": ["p2"]},
+  {"id": "w27", "op": "wait_until", "target": "fp-frm1701:txtPg1I27A", "timeout_ms": 8000, "needs": ["t1"]},
+  {"id": "upper", "op": "assert", "target": "form-scroll", "screenshot": true, "needs": ["w27"]},
+  {"id": "f1", "op": "scroll", "target": "form-scroll", "dy": 500, "needs": ["upper"]},
+  {"id": "mid", "op": "assert", "target": "form-scroll", "screenshot": true, "needs": ["f1"]},
+  {"id": "f2", "op": "scroll", "target": "form-scroll", "dy": 500, "needs": ["mid"]},
+  {"id": "lower", "op": "assert", "target": "form-scroll", "screenshot": true, "needs": ["f2"]}
+ ]
+}

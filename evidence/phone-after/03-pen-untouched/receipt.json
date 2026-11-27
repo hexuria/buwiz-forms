@@ -1,0 +1,91 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-untouched",
+  "fingerprint": "fnv1a64:266d5cc42c31c69c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 942
+    },
+    {
+      "id": "p2w",
+      "ok": true,
+      "elapsed_ms": 14
+    },
+    {
+      "id": "p2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1032
+    },
+    {
+      "id": "t1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 972
+    },
+    {
+      "id": "w27",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "upper",
+      "ok": true,
+      "elapsed_ms": 149,
+      "screenshot": {
+        "path": "/Users/devin/ev386/v2-ios-after/03-pen-untouched/006-upper.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "f1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 809
+    },
+    {
+      "id": "mid",
+      "ok": true,
+      "elapsed_ms": 157,
+      "screenshot": {
+        "path": "/Users/devin/ev386/v2-ios-after/03-pen-untouched/008-mid.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "f2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 768
+    },
+    {
+      "id": "lower",
+      "ok": true,
+      "elapsed_ms": 195,
+      "screenshot": {
+        "path": "/Users/devin/ev386/v2-ios-after/03-pen-untouched/010-lower.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/ev386/v2-ios-after/03-pen-untouched/006-upper.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/ev386/v2-ios-after/03-pen-untouched/008-mid.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/ev386/v2-ios-after/03-pen-untouched/010-lower.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 5057
+}

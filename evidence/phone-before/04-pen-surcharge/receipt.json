@@ -1,0 +1,66 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-surcharge",
+  "fingerprint": "fnv1a64:9543c2c91f1b1fac",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "edit",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 957
+    },
+    {
+      "id": "w1",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "open-shot",
+      "ok": true,
+      "elapsed_ms": 150,
+      "screenshot": {
+        "path": "/Users/devin/ev386/before287-ios/04-pen-surcharge/003-open-shot.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "focus",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1030
+    },
+    {
+      "id": "type",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 943
+    },
+    {
+      "id": "lift",
+      "ok": true,
+      "elapsed_ms": 186
+    },
+    {
+      "id": "typed-shot",
+      "ok": true,
+      "elapsed_ms": 180,
+      "screenshot": {
+        "path": "/Users/devin/ev386/before287-ios/04-pen-surcharge/007-typed-shot.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/ev386/before287-ios/04-pen-surcharge/003-open-shot.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/ev386/before287-ios/04-pen-surcharge/007-typed-shot.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 3466
+}

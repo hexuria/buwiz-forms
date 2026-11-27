@@ -1,0 +1,37 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-setup",
+  "fingerprint": "fnv1a64:c9b34b36145f453c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "save",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 38,
+      "result": {
+        "created": true,
+        "name": "Juana Santos",
+        "status": "ok",
+        "tin": "12345678800000"
+      }
+    },
+    {
+      "id": "open",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 83,
+      "result": {
+        "dry_run": null,
+        "form": "1701",
+        "period": 0,
+        "send": null,
+        "status": "Draft",
+        "tin": "12345678800000",
+        "year": 2025
+      }
+    }
+  ],
+  "elapsed_ms": 122
+}

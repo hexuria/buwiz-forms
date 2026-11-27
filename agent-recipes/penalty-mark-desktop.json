@@ -1,0 +1,38 @@
+{
+ "v": 1,
+ "description": "PR #386 penalty computed mark desktop proof: a joint 1701's Items 24 to 29 \u2014 the A and B columns of the penalty rows aligned with the money rows above. BEFORE at 287c3095 vs AFTER at the fix commit. Setup (profile, form, joint answers) is the data plane; the picture steps are the window plane through gpui-agent recipes only.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "Juana Santos",
+  "address": "123 Mabini Street, Barangay San Jose",
+  "zip": "1008",
+  "rdo": "001",
+  "birth": "1990-05-15",
+  "phone_no": "09171234567",
+  "email": "juana.santos@example.com"
+ },
+ "recipes": [
+  {
+   "name": "pen-desktop-setup",
+   "file": "pen-desktop-setup.json",
+   "plane": "data",
+   "required": true
+  },
+  {
+   "name": "pen-desktop-answer",
+   "file": "pen-desktop-answer.json",
+   "required": true
+  },
+  {
+   "name": "pen-desktop-reopen",
+   "file": "pen-desktop-reopen.json",
+   "plane": "data",
+   "required": true
+  },
+  {
+   "name": "pen-desktop-shot",
+   "file": "pen-desktop-shot.json",
+   "required": true
+  }
+ ]
+}

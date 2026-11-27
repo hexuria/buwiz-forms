@@ -1,0 +1,31 @@
+{
+ "v": 1,
+ "name": "pen-setup",
+ "app": "bir-shell",
+ "params": ["tin", "name", "address", "zip", "rdo", "birth", "phone_no", "email"],
+ "steps": [
+  {
+   "id": "save",
+   "op": "invoke",
+   "name": "profile.save",
+   "args": {
+    "tin": "$tin",
+    "name": "$name",
+    "rdo_code": "$rdo",
+    "taxpayer_type": "individual",
+    "birth_date": "$birth",
+    "registered_address": "$address",
+    "zip_code": "$zip",
+    "phone": "$phone_no",
+    "email": "$email"
+   }
+  },
+  {
+   "id": "open",
+   "op": "invoke",
+   "name": "form.open",
+   "args": {"code": "1701", "year": 2025, "period": 0, "tin": "$tin"},
+   "needs": ["save"]
+  }
+ ]
+}

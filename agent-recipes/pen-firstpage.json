@@ -1,0 +1,10 @@
+{
+ "v": 1,
+ "name": "pen-firstpage",
+ "app": "bir-shell",
+ "steps": [
+  {"id": "w1", "op": "wait_until", "target": "form-page", "timeout_ms": 20000},
+  {"id": "w2", "op": "wait_until", "target": "fp-frm1701:txtPg1I1Month#period", "timeout_ms": 20000, "needs": ["w1"]},
+  {"id": "shot", "op": "assert", "target": "form-page", "screenshot": true, "needs": ["w2"]}
+ ]
+}

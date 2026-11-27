@@ -1,0 +1,83 @@
+{
+ "v": 1,
+ "name": "pen-desktop-shot",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "w",
+   "op": "wait_until",
+   "target": "form-scroll",
+   "timeout_ms": 25000
+  },
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 800,
+   "needs": [
+    "w"
+   ]
+  },
+  {
+   "id": "p2w",
+   "op": "wait_until",
+   "target": "fp-part-2-toggle",
+   "timeout_ms": 8000,
+   "needs": [
+    "s1"
+   ]
+  },
+  {
+   "id": "p2",
+   "op": "click",
+   "target": "fp-part-2-toggle",
+   "needs": [
+    "p2w"
+   ]
+  },
+  {
+   "id": "pos",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 560,
+   "needs": [
+    "p2"
+   ]
+  },
+  {
+   "id": "i24",
+   "op": "wait_until",
+   "target": "fp-frm1701:txtPg1I24ATaxPayable",
+   "timeout_ms": 10000,
+   "needs": [
+    "pos"
+   ]
+  },
+  {
+   "id": "edit",
+   "op": "click",
+   "target": "fp-penalty-2:6",
+   "needs": [
+    "i24"
+   ]
+  },
+  {
+   "id": "mark",
+   "op": "wait_until",
+   "target": "fp-mark-info-frm1701:txtPg1I28A",
+   "timeout_ms": 10000,
+   "needs": [
+    "edit"
+   ]
+  },
+  {
+   "id": "align-shot",
+   "op": "assert",
+   "target": "form-scroll",
+   "screenshot": true,
+   "needs": [
+    "mark"
+   ]
+  }
+ ]
+}

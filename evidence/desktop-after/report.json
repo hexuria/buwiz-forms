@@ -1,0 +1,59 @@
+{
+ "suite": "penalty-mark-desktop",
+ "target": "macos",
+ "started": "20261127-064932",
+ "out": "/Users/devin/ev386/v2-desktop-after",
+ "cli_version": "0.4.1",
+ "app_commit": "0947bc9b",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "pen-desktop-setup",
+   "status": "pass",
+   "ms": 1253,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-desktop-setup.json",
+   "video": null
+  },
+  {
+   "name": "pen-desktop-answer",
+   "status": "pass",
+   "ms": 6882,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-desktop-answer.json",
+   "video": null
+  },
+  {
+   "name": "pen-desktop-reopen",
+   "status": "pass",
+   "ms": 206,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-desktop-reopen.json",
+   "video": null
+  },
+  {
+   "name": "pen-desktop-shot",
+   "status": "pass",
+   "ms": 5088,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-desktop-shot.json",
+   "video": null
+  }
+ ]
+}

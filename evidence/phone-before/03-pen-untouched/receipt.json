@@ -1,0 +1,91 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-untouched",
+  "fingerprint": "fnv1a64:266d5cc42c31c69c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 964
+    },
+    {
+      "id": "p2w",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "p2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 996
+    },
+    {
+      "id": "t1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1017
+    },
+    {
+      "id": "w27",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "upper",
+      "ok": true,
+      "elapsed_ms": 149,
+      "screenshot": {
+        "path": "/Users/devin/ev386/before287-ios/03-pen-untouched/006-upper.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "f1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 791
+    },
+    {
+      "id": "mid",
+      "ok": true,
+      "elapsed_ms": 160,
+      "screenshot": {
+        "path": "/Users/devin/ev386/before287-ios/03-pen-untouched/008-mid.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "f2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 819
+    },
+    {
+      "id": "lower",
+      "ok": true,
+      "elapsed_ms": 153,
+      "screenshot": {
+        "path": "/Users/devin/ev386/before287-ios/03-pen-untouched/010-lower.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/ev386/before287-ios/03-pen-untouched/006-upper.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/ev386/before287-ios/03-pen-untouched/008-mid.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/ev386/before287-ios/03-pen-untouched/010-lower.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 5084
+}

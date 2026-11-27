@@ -1,0 +1,83 @@
+{
+ "v": 1,
+ "name": "pen-desktop-answer",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "askw",
+   "op": "wait_until",
+   "target": "profile-ask-save",
+   "timeout_ms": 15000
+  },
+  {
+   "id": "asksave",
+   "op": "click",
+   "target": "profile-ask-save",
+   "needs": [
+    "askw"
+   ]
+  },
+  {
+   "id": "askgone",
+   "op": "wait_until",
+   "target": "profile-ask",
+   "exists": false,
+   "timeout_ms": 8000,
+   "needs": [
+    "asksave"
+   ]
+  },
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 800,
+   "needs": [
+    "askgone"
+   ]
+  },
+  {
+   "id": "p2w",
+   "op": "wait_until",
+   "target": "fp-part-2-toggle",
+   "timeout_ms": 5000,
+   "needs": [
+    "s1"
+   ]
+  },
+  {
+   "id": "p2",
+   "op": "click",
+   "target": "fp-part-2-toggle",
+   "needs": [
+    "p2w"
+   ]
+  },
+  {
+   "id": "t1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 800,
+   "needs": [
+    "p2"
+   ]
+  },
+  {
+   "id": "aw",
+   "op": "wait_until",
+   "target": "fp-ask-eopt_tier-choices",
+   "timeout_ms": 8000,
+   "needs": [
+    "t1"
+   ]
+  },
+  {
+   "id": "aclick",
+   "op": "click",
+   "target": "fp-ask-eopt_tier-choices-\"Micro\"",
+   "needs": [
+    "aw"
+   ]
+  }
+ ]
+}

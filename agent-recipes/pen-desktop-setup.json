@@ -1,0 +1,79 @@
+{
+ "v": 1,
+ "name": "pen-desktop-setup",
+ "app": "bir-shell",
+ "params": [
+  "tin",
+  "name",
+  "address",
+  "zip",
+  "rdo",
+  "birth",
+  "phone_no",
+  "email"
+ ],
+ "steps": [
+  {
+   "id": "save",
+   "op": "invoke",
+   "name": "profile.save",
+   "args": {
+    "tin": "$tin",
+    "name": "$name",
+    "rdo_code": "$rdo",
+    "taxpayer_type": "individual",
+    "birth_date": "$birth",
+    "registered_address": "$address",
+    "zip_code": "$zip",
+    "phone": "$phone_no",
+    "email": "$email"
+   }
+  },
+  {
+   "id": "open",
+   "op": "invoke",
+   "name": "form.open",
+   "args": {
+    "code": "1701",
+    "year": 2025,
+    "period": 0,
+    "tin": "$tin"
+   },
+   "needs": [
+    "save"
+   ]
+  },
+  {
+   "id": "regime",
+   "op": "invoke",
+   "name": "form.fill",
+   "args": {
+    "fields": {
+     "frm1701:rdoPg1I16CivilStatusM": "true",
+     "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+     "frm1701:rdoPg1I18FilingStatusJ": "true",
+     "frm1701:rdoPg1I6TaxpayerTypeS": "true",
+     "frm1701:rdoPg1I7ATC_II012": "true",
+     "frm1701:rdoPg1I21AMethodDeductionO": "true",
+     "frm1701:rdoPg2I3SpouseTypeS": "true"
+    }
+   },
+   "needs": [
+    "open"
+   ]
+  },
+  {
+   "id": "income",
+   "op": "invoke",
+   "name": "form.fill",
+   "args": {
+    "fields": {
+     "frm1701:txtPg2IShed3_8A": "1250000.50"
+    }
+   },
+   "needs": [
+    "regime"
+   ]
+  }
+ ]
+}

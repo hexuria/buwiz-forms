@@ -1,0 +1,61 @@
+{
+ "suite": "penalty-mark",
+ "target": "ios",
+ "started": "20261127-065124",
+ "out": "/Users/devin/ev386/v2-ios-after",
+ "cli_version": "0.4.1",
+ "app_commit": "0947bc9b",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "pen-setup",
+   "status": "pass",
+   "ms": 1178,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-setup.json",
+   "video": "/Users/devin/ev386/v2-ios-after/01-pen-setup/recording.mp4"
+  },
+  {
+   "name": "pen-firstpage",
+   "status": "pass",
+   "ms": 1308,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-firstpage.json",
+   "video": "/Users/devin/ev386/v2-ios-after/02-pen-firstpage/recording.mp4"
+  },
+  {
+   "name": "pen-untouched",
+   "status": "pass",
+   "ms": 6109,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-untouched.json",
+   "video": "/Users/devin/ev386/v2-ios-after/03-pen-untouched/recording.mp4"
+  },
+  {
+   "name": "pen-surcharge",
+   "status": "pass",
+   "ms": 4888,
+   "note": null,
+   "file": "agent-recipes/e2e/pen-surcharge.json",
+   "video": "/Users/devin/ev386/v2-ios-after/04-pen-surcharge/recording.mp4"
+  }
+ ]
+}

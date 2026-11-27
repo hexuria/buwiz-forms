@@ -1,0 +1,39 @@
+{
+ "v": 1,
+ "description": "PR #386 penalty computed mark phone proof: 1701 first page's ordinary rows, the penalty rows Items 27 to 29 untouched, then Edit penalties with only the surcharge typed at a person's pace. BEFORE at 0e7dbe96 vs AFTER at 7247c533. The taxpayer and form are set up on the data plane; every picture step is the window plane through gpui-agent recipes only.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "Juana Santos",
+  "address": "123 Mabini Street, Barangay San Jose",
+  "zip": "1008",
+  "rdo": "001",
+  "birth": "1990-05-15",
+  "phone_no": "09171234567",
+  "email": "juana.santos@example.com",
+  "surcharge": "1000"
+ },
+ "recipes": [
+  {
+   "name": "pen-setup",
+   "file": "pen-setup.json",
+   "plane": "data",
+   "required": true
+  },
+  {
+   "name": "pen-firstpage",
+   "file": "pen-firstpage.json",
+   "required": true
+  },
+  {
+   "name": "pen-untouched",
+   "file": "pen-untouched.json",
+   "required": true
+  },
+  {
+   "name": "pen-surcharge",
+   "file": "pen-surcharge.json",
+   "needs_cli": "0.4.1",
+   "required": true
+  }
+ ]
+}

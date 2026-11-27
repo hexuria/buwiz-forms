@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-desktop-reopen",
+  "fingerprint": "fnv1a64:fe54cefc0a08c0d5",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "saved",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 49,
+      "result": {
+        "form": "1701",
+        "id": 1,
+        "saved": true,
+        "status": "Draft"
+      }
+    },
+    {
+      "id": "dis",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 35,
+      "result": {
+        "dismissed": true,
+        "form": "1701"
+      }
+    },
+    {
+      "id": "reopen",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 62,
+      "result": {
+        "dry_run": null,
+        "form": "1701",
+        "period": 0,
+        "send": null,
+        "status": "Draft",
+        "tin": "12345678800000",
+        "year": 2025
+      }
+    }
+  ],
+  "elapsed_ms": 148
+}

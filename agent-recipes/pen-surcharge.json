@@ -1,0 +1,69 @@
+{
+ "v": 1,
+ "name": "pen-surcharge",
+ "app": "bir-shell",
+ "params": [
+  "surcharge"
+ ],
+ "steps": [
+  {
+   "id": "edit",
+   "op": "click",
+   "target": "fp-penalty-2:6"
+  },
+  {
+   "id": "w1",
+   "op": "wait_until",
+   "target": "fp-frm1701:txtPg1I28A",
+   "timeout_ms": 8000,
+   "needs": [
+    "edit"
+   ]
+  },
+  {
+   "id": "open-shot",
+   "op": "assert",
+   "target": "form-scroll",
+   "screenshot": true,
+   "needs": [
+    "w1"
+   ]
+  },
+  {
+   "id": "focus",
+   "op": "click",
+   "target": "fp-frm1701:txtPg1I28A",
+   "needs": [
+    "open-shot"
+   ]
+  },
+  {
+   "id": "type",
+   "op": "type",
+   "target": "fp-frm1701:txtPg1I28A",
+   "text": "$surcharge",
+   "needs": [
+    "focus"
+   ]
+  },
+  {
+   "id": "lift",
+   "op": "wait_until",
+   "target": "fp-mark-info-frm1701:txtPg1I28A",
+   "exists": false,
+   "timeout_ms": 15000,
+   "needs": [
+    "type"
+   ]
+  },
+  {
+   "id": "typed-shot",
+   "op": "assert",
+   "target": "form-scroll",
+   "screenshot": true,
+   "needs": [
+    "lift"
+   ]
+  }
+ ]
+}

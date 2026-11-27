@@ -1,0 +1,39 @@
+{
+ "v": 1,
+ "name": "pen-desktop-reopen",
+ "app": "bir-shell",
+ "params": [
+  "tin"
+ ],
+ "steps": [
+  {
+   "id": "saved",
+   "op": "invoke",
+   "name": "form.save_draft",
+   "args": {}
+  },
+  {
+   "id": "dis",
+   "op": "invoke",
+   "name": "form.dismiss",
+   "args": {},
+   "needs": [
+    "saved"
+   ]
+  },
+  {
+   "id": "reopen",
+   "op": "invoke",
+   "name": "form.open",
+   "args": {
+    "code": "1701",
+    "year": 2025,
+    "period": 0,
+    "tin": "$tin"
+   },
+   "needs": [
+    "dis"
+   ]
+  }
+ ]
+}

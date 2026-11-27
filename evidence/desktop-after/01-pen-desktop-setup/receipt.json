@@ -1,0 +1,83 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "pen-desktop-setup",
+  "fingerprint": "fnv1a64:6be90e53d348daff",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "save",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 43,
+      "result": {
+        "created": true,
+        "name": "Juana Santos",
+        "status": "ok",
+        "tin": "12345678800000"
+      }
+    },
+    {
+      "id": "open",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 55,
+      "result": {
+        "dry_run": null,
+        "form": "1701",
+        "period": 0,
+        "send": null,
+        "status": "Draft",
+        "tin": "12345678800000",
+        "year": 2025
+      }
+    },
+    {
+      "id": "regime",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1028,
+      "result": {
+        "applied": [
+          "frm1701:rdoPg1I16CivilStatusM",
+          "frm1701:rdoPg1I17SpouseIncomeYes",
+          "frm1701:rdoPg1I18FilingStatusJ",
+          "frm1701:rdoPg1I21AMethodDeductionO",
+          "frm1701:rdoPg1I6TaxpayerTypeS",
+          "frm1701:rdoPg1I7ATC_II012",
+          "frm1701:rdoPg2I3SpouseTypeS"
+        ],
+        "filled": [
+          "frm1701:rdoPg1I16CivilStatusM",
+          "frm1701:rdoPg1I17SpouseIncomeYes",
+          "frm1701:rdoPg1I18FilingStatusJ",
+          "frm1701:rdoPg1I21AMethodDeductionO",
+          "frm1701:rdoPg1I6TaxpayerTypeS",
+          "frm1701:rdoPg1I7ATC_II012",
+          "frm1701:rdoPg2I3SpouseTypeS"
+        ],
+        "form": "1701",
+        "kept_user_boxes": [],
+        "source": "ai"
+      }
+    },
+    {
+      "id": "income",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 90,
+      "result": {
+        "applied": [
+          "frm1701:txtPg2IShed3_8A"
+        ],
+        "filled": [
+          "frm1701:txtPg2IShed3_8A"
+        ],
+        "form": "1701",
+        "kept_user_boxes": [],
+        "source": "ai"
+      }
+    }
+  ],
+  "elapsed_ms": 1218
+}
