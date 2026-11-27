@@ -39,9 +39,10 @@ test("desktop: the palette carries the add row, ranked below the exact page and 
   expect(app.texts()).toContain("New tax profile");
   // A query matching the exact "Tax profile" page: the page row stays above it; the add row never displaces what was typed.
   await app.type("id:palette-input", "tax profile");
-  // Wait for the filter to actually narrow the list (a row no query matches must disappear), not just for a row
-  // id that exists before filtering too.
-  await app.waitUntil(() => !app.texts().includes("Toggle sidebar"));
+  // Wait for the filter to actually apply the full query: "Templates" survives the "ta" prefix (it contains "ta")
+  // but not "tax", so its disappearance proves the typed query went past the prefix; the relative order of the
+  // surviving rows cannot change with the query, so the ranking compared after it is the full query's.
+  await app.waitUntil(() => !app.texts().includes("Templates"));
   const texts = app.texts();
   const page = texts.indexOf("Tax profile");
   const add = texts.indexOf("New tax profile");
