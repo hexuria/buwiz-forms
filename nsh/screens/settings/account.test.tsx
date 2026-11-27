@@ -18,7 +18,7 @@ for (const { name, size } of SIZES) {
     expect(app.shows("id:settings-account-delete-button")).toBe(true);
     expect(app.shows("id:settings-account-sign-in")).toBe(false);
     // No sign-in page inside Settings.
-    for (const gone of ["Sign in to eBIRForms", "Continue with email", "Enter the code"]) expect(app.texts()).not.toContain(gone);
+    for (const gone of ["Prepare, file and print your BIR returns.", "Continue with email", "Enter your email", "Check your email"]) expect(app.texts()).not.toContain(gone);
   }, 60_000);
 
   test(`${name}: Sign out of Buwiz asks once: Cancel changes nothing; confirming signs out and shows the gate`, async () => {
@@ -39,7 +39,7 @@ for (const { name, size } of SIZES) {
     await app.waitFor("id:settings-sign-out-yes");
     await app.press("id:settings-sign-out-yes");
     await app.waitFor("text:/cloudLocked=true/");
-    await app.waitFor("id:gate-card");
+    await app.waitFor("id:gate-start");
     expect(calls(app)).toEqual(["cloud_account_refresh", "cloud_account_sign_out", "cloud_account_session_closed"]);
   }, 60_000);
 
@@ -51,9 +51,9 @@ for (const { name, size } of SIZES) {
     expect(app.shows("id:settings-account-sign-out")).toBe(false);
     expect(app.shows("id:settings-account-delete-button")).toBe(false);
     await app.press("id:settings-account-sign-in");
-    await app.waitFor("id:gate-card");
+    await app.waitFor("id:gate-start");
     expect(state(app)).toContain("cloudLocked=true");
-    expect(app.texts()).toContain("Sign in to eBIRForms");
+    expect(app.texts()).toContain("Continue with email");
   }, 60_000);
 
   test(`${name}: two headings: "Buwiz account" and the profile ${name === "phone" ? "on this device" : "on this computer"}, whose line names it too`, async () => {
@@ -233,13 +233,11 @@ for (const { name, size } of SIZES) {
     await app.press(name === "phone" ? "id:tab-home" : "id:nav-home");
     await app.waitFor("id:home-dashboard");
     if (name === "phone") {
-      // Home is a tab: Settings is reached again from the badge's sheet, and opens on its list.
+      // Home is a tab: Settings is reached again from the badge's menu, and opens on its list.
       await app.press("id:nb-avatar");
-      await app.press("id:nb-menu-profile");
-      await app.waitFor("id:sheet-extras");
-      await app.press("id:sheet-settings");
-      // The sheet closes as the page moves: until it is gone it still covers the list (a press on a row reaches the avatar in it).
-      await app.waitFor("id:sheet-extras", { state: "gone" });
+      await app.press("id:nb-menu-settings");
+      // The menu closes as the page moves: until it is gone it still covers the list (a press on a row reaches the sheet in it).
+      await app.waitFor("id:nb-menu-settings", { state: "gone" });
       await app.waitFor("id:settings-nav-account");
       await app.press("id:settings-nav-account");
     } else {

@@ -105,7 +105,7 @@ export function fakeEmail(
     }
     if (code === "777777") return check("wait", "Too many sign-in codes are being checked right now. Try again in 3 minutes.");
     if (code === "888888") return check("wait", "Sign-in is busy right now. Try again in a moment.");
-    if (code === "111111") return check("expired", "This code has expired. Press Resend for a new one.");
+    if (code === "111111") return check("expired", "This code has expired. Send a new code to try again.");
     if (code === "555555") {
       pending = false;
       return check("restart", "This sign-in request has ended. Start again.");
