@@ -1007,7 +1007,7 @@ fn form_1702mx_item27_and_schedule9_are_gated() {
 }
 
 #[test]
-fn deleting_an_earlier_1702mx_mcit_row_keeps_the_notice_on_the_right_stable_line() {
+fn blanking_an_earlier_1702mx_mcit_row_keeps_the_notice_on_the_right_stable_line() {
     setup();
     let opened = open("1702MX", 0);
     let row1 = "frm1702MX:txtPg7Sc9I1";
@@ -1024,7 +1024,7 @@ fn deleting_an_earlier_1702mx_mcit_row_keeps_the_notice_on_the_right_stable_line
     assert_eq!(deleted["draft"]["schedule_9"]["rows"][0]["year"], "");
     assert_eq!(
         deleted["draft"]["schedule_9"]["rows"][1]["year"], "2025",
-        "these printed lines are fixed slots; deleting line 1 does not move line 2"
+        "these printed lines are fixed slots; blanking line 1 does not move line 2"
     );
 
     let closed = fill("1702MX", &deleted["draft"], json!({ date: "01/01/2024" }));
@@ -1036,7 +1036,7 @@ fn deleting_an_earlier_1702mx_mcit_row_keeps_the_notice_on_the_right_stable_line
     assert_eq!(
         closed["relock_notes"][row1],
         json!("Schedule 9 applies only when MCIT applies."),
-        "the moved-or-deleted first line must not take the second line's notice"
+        "the blanked first line must not take the second line's notice"
     );
     let clearances = bir_core::forms::agent::gated_rows::clearances(
         AgentFormKind::from_code("1702MX").unwrap(),
