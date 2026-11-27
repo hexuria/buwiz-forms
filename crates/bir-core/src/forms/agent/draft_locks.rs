@@ -1441,10 +1441,9 @@ pub mod installment_1606 {
 
 pub mod previous_payment {
     //! Previous-payment boxes the official pages open only for an amended
-    //! return. One table serves the forms whose in-repository runtime-control
-    //! inventory records the box disabled at load; 0619E, 0619F, 2550M and
-    //! 1602Q are deliberately absent because their captured pages leave the
-    //! surveyed box enabled on a new return.
+    //! return. One table serves the forms whose official runtime handlers
+    //! disable the box on an original return; 1602Q remains absent because it
+    //! has no such official gate in this repository's evidence.
 
     use serde_json::{Map, Value, json};
 
@@ -1461,7 +1460,33 @@ pub mod previous_payment {
         pub cleared: &'static str,
     }
 
-    pub const SPECS: [Spec; 6] = [
+    pub const SPECS: [Spec; 9] = [
+        // BIR-Form0619E.hta: optAmend:N onclick disables txtTax15, sets
+        // 0.00 and recomputes (:330); load/enableAllControl disable it
+        // unless Amended is Yes (:1309-1313, :2490-2494).
+        Spec {
+            form_code: "0619E",
+            key: "frm0619E:txtTax15",
+            item: "15",
+            path: "item_15_amount_remitted_previously",
+            yes_key: "frm0619E:optAmend:Y",
+            no_key: "frm0619E:optAmend:N",
+            lock: "Item 15 applies only to an amended return.",
+            cleared: "Item 15 was cleared: it applies only to an amended return.",
+        },
+        // BIR-Form0619F.hta: optAmend:N onclick disables txtTax16, sets
+        // 0.00 and recomputes (:330); load/enableAllControl disable it
+        // unless Amended is Yes (:1359-1362, :2565-2568).
+        Spec {
+            form_code: "0619F",
+            key: "frm0619F:txtTax16",
+            item: "16",
+            path: "item_16_remitted_previously",
+            yes_key: "frm0619F:optAmend:Y",
+            no_key: "frm0619F:optAmend:N",
+            lock: "Item 16 applies only to an amended return.",
+            cleared: "Item 16 was cleared: it applies only to an amended return.",
+        },
         Spec {
             form_code: "1600PT",
             key: "frm1600PT:txtPg1P2I19TaxRemittedInRtrn",
@@ -1521,6 +1546,19 @@ pub mod previous_payment {
             no_key: "frm1706:j_id217:_2",
             lock: "Item 33 applies only to an amended return.",
             cleared: "Item 33 was cleared: it applies only to an amended return.",
+        },
+        // BIR-Form2550M.hta: optAmendFunc disables Item 23D and sets 0.00
+        // unless Amended is Yes (:2083-2090), called by the No radio (:342)
+        // and enableAllControl (:6937); init disables it (:2186).
+        Spec {
+            form_code: "2550M",
+            key: "frm2550m:txtTax23D",
+            item: "23D",
+            path: "vat_paid_previous",
+            yes_key: "frm2550m:OptAmendedYN1",
+            no_key: "frm2550m:OptAmendedYN2",
+            lock: "Item 23D applies only to an amended return.",
+            cleared: "Item 23D was cleared: it applies only to an amended return.",
         },
     ];
 
@@ -2927,6 +2965,32 @@ pub mod pending_notices {
                 super::pending_event_for_seen(&seen),
                 Some((super::pending_key("schedule1:row:7", 9), "E1".to_string()))
             );
+        }
+
+        #[test]
+        fn previous_payment_specs_cover_the_nine_officially_gated_forms() {
+            use crate::forms::agent::draft_locks::previous_payment::SPECS;
+
+            let expected = [
+                ("0619E", "frm0619E:txtTax15", "15"),
+                ("0619F", "frm0619F:txtTax16", "16"),
+                ("1600PT", "frm1600PT:txtPg1P2I19TaxRemittedInRtrn", "19"),
+                ("1600VT", "frm1600VT:txtPg1P2I19TaxRemittedInRtrn", "19"),
+                ("1600WP", "frm1600WP:txtTax13", "13"),
+                ("1603Q", "frm1603Q:txtTax15", "15"),
+                ("1606", "frm1606:txtLess", "33"),
+                ("1706", "frm1706:txtLess", "33"),
+                ("2550M", "frm2550m:txtTax23D", "23D"),
+            ];
+            assert_eq!(SPECS.len(), expected.len());
+            for (form_code, key, item) in expected {
+                assert!(
+                    SPECS.iter().any(|spec| spec.form_code == form_code
+                        && spec.key == key
+                        && spec.item == item),
+                    "{form_code} item {item} is in the previous-payment table"
+                );
+            }
         }
 
         #[test]
