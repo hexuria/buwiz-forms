@@ -7,6 +7,7 @@ import "../../theme/fonts";
 import { createDemoTaxpayer, DEMO } from "../../bir/testing";
 import { app, store } from "../../shell";
 import { FormPage, type FormTarget } from "./FormPage";
+import { boxXs } from "./layoutProbe";
 
 interface Params {
   formCode?: string;
@@ -91,6 +92,7 @@ function Fixture() {
         <Text>{`saved returns ${store.savedReturns().length}`}</Text>
         <Text testID="fx-session-fields">{`session fields ${sessionFields()}`}</Text>
         <Text>{`probe ${probeValue()}`}</Text>
+        <Text testID="fx-box-xs">{`boxx ${JSON.stringify(boxXs())}`}</Text>
         <Each of={toasts()}>{(t) => <Text>{t()}</Text>}</Each>
       </View>
     </View>
