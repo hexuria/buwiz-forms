@@ -42,12 +42,23 @@ static MIGRATION: std::sync::Mutex<Option<MigrationState>> = std::sync::Mutex::n
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MigrationState {
     Moving,
-    Transient { copy_saved: bool, detail: String },
-    Permanent { detail: String },
-    MovedNotOpened { detail: String },
+    Transient {
+        copy_saved: bool,
+        detail: String,
+    },
+    Permanent {
+        detail: String,
+    },
+    MovedNotOpened {
+        detail: String,
+    },
     /// X2: the offer is the account's it was made to — the answer refuses unless the slot is still
     /// that room, for that user, at that generation.
-    Offered { user_id: String, room_id: RoomId, generation: u64 },
+    Offered {
+        user_id: String,
+        room_id: RoomId,
+        generation: u64,
+    },
 }
 
 pub fn migration_state() -> Option<MigrationState> {
@@ -88,7 +99,12 @@ fn open_own_room(
     layout
         .create_room_dir(&room_id)
         .map_err(|error| error.to_string())?;
-    open_room::open_room(layout, room_id.clone(), user_id.to_owned(), origin.to_owned())?;
+    open_room::open_room(
+        layout,
+        room_id.clone(),
+        user_id.to_owned(),
+        origin.to_owned(),
+    )?;
     // F13: the zip rule's room-opened check never fired for want of this call — the opened room
     // is the claim's evidence that the move's data is in use, so count it now.
     if let Ok(claim) = LegacyClaim::at(layout.clone())
@@ -124,7 +140,9 @@ static OPEN_SESSION_HOOK: std::sync::Mutex<Option<std::sync::mpsc::Receiver<()>>
 #[cfg(test)]
 pub(crate) fn block_next_open_session_for_test() -> std::sync::mpsc::Sender<()> {
     let (tx, rx) = std::sync::mpsc::channel();
-    *OPEN_SESSION_HOOK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(rx);
+    *OPEN_SESSION_HOOK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(rx);
     tx
 }
 
@@ -148,7 +166,9 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
     // X1: once per process, keyed by (origin, user id) as the rooms are (the reviewer's note):
     // the user id alone would skip a same-user sign-in on another server into the wrong room.
     if crate::open_room::origin().as_deref()
-        == bir_core::rooms::room_origin(&stored.server_url).ok().as_deref()
+        == bir_core::rooms::room_origin(&stored.server_url)
+            .ok()
+            .as_deref()
         && crate::open_room::user_id().as_deref() == Some(stored.user_id.as_str())
     {
         if let Some(room_id) = crate::open_room::room_id() {
@@ -179,8 +199,14 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
             tracing::warn!("legacy claim not opened ({error})");
             bir_core::legacy_claim::note_claim_impossible(layout.device_dir());
             if layout.legacy_database().is_file() && !stored.practice {
-                tracing::warn!("legacy file present and the claim store unusable: legacy mode in place");
-                return match open_room::open_legacy_in_place(&layout, stored.user_id.clone(), origin_of(stored)) {
+                tracing::warn!(
+                    "legacy file present and the claim store unusable: legacy mode in place"
+                );
+                return match open_room::open_legacy_in_place(
+                    &layout,
+                    stored.user_id.clone(),
+                    origin_of(stored),
+                ) {
                     Ok(_) => SessionRoom::LegacyInPlace,
                     Err(open_error) => SessionRoom::BlockedTransient {
                         copy_saved: false,
@@ -232,10 +258,14 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
         Start::Locked(_locked) => {
             // §A.3.7: A3a-2 is absent — a credential in the legacy file means legacy mode. The file
             // opens in place as the one slot; nothing is written beside it.
-            match open_room::open_legacy_in_place(&layout, stored.user_id.clone(), origin_of(stored)) {
+            match open_room::open_legacy_in_place(
+                &layout,
+                stored.user_id.clone(),
+                origin_of(stored),
+            ) {
                 Ok(_) => {
                     bir_core::db::set_open_room_database(Some(layout.legacy_database()));
-                                    set_migration(None);
+                    set_migration(None);
                     SessionRoom::LegacyInPlace
                 }
                 Err(error) => {
@@ -256,10 +286,14 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
         Start::Offer(offer) => match offer {
             bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => {
                 // §A.3.6: the legacy unlock page is A3a-2; until then legacy-mode rules apply.
-                match open_room::open_legacy_in_place(&layout, stored.user_id.clone(), origin_of(stored)) {
+                match open_room::open_legacy_in_place(
+                    &layout,
+                    stored.user_id.clone(),
+                    origin_of(stored),
+                ) {
                     Ok(_) => {
                         bir_core::db::set_open_room_database(Some(layout.legacy_database()));
-                                            SessionRoom::LegacyInPlace
+                        SessionRoom::LegacyInPlace
                     }
                     Err(error) => SessionRoom::BlockedTransient {
                         copy_saved: false,
@@ -296,11 +330,7 @@ fn open_lookup_room(layout: &Layout, stored: &StoredAccount) -> SessionRoom {
     // F16: the store, never None — with None the Known branch is dead, and a sign-in after a
     // restart never finds the room the account already has.
     let store = bir_core::rooms::DeviceStore::open(layout).ok();
-    let lookup = bir_core::rooms::room_for(
-        store.as_ref(),
-        &stored.server_url,
-        &stored.user_id,
-    );
+    let lookup = bir_core::rooms::room_for(store.as_ref(), &stored.server_url, &stored.user_id);
     match lookup {
         Ok(bir_core::rooms::RoomLookup::Known(record)) => {
             let room_id = record.room_id.clone();
@@ -389,7 +419,6 @@ pub(crate) fn reset_for_tests() {
 /// One at a time across both test modules: the device-dir override, the slot and the guards are
 /// process-wide, so no two room tests may run in parallel in this process.
 #[cfg(test)]
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,7 +566,11 @@ mod tests {
         assert!(crate::open_room::legacy_mode(), "the slot is legacy mode");
         // Nothing beside it: no record in device.db, no zip, no room.
         assert!(
-            !scratch.layout.rooms_dir().exists() || std::fs::read_dir(scratch.layout.rooms_dir()).unwrap().next().is_none(),
+            !scratch.layout.rooms_dir().exists()
+                || std::fs::read_dir(scratch.layout.rooms_dir())
+                    .unwrap()
+                    .next()
+                    .is_none(),
             "legacy mode made a room"
         );
         assert!(
@@ -687,7 +720,10 @@ mod a3a_tests {
         let scratch = scratch();
         std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
         // The legacy file exists, and a connection to it outlives the close (a send's held Arc).
-        Database::open(&scratch.layout.legacy_database()).unwrap().close().unwrap();
+        Database::open(&scratch.layout.legacy_database())
+            .unwrap()
+            .close()
+            .unwrap();
         let (handle, _) = crate::open_room::open_legacy_in_place(
             &scratch.layout,
             "user-a".into(),
@@ -715,7 +751,10 @@ mod a3a_tests {
         let a = stored("f11-user");
         let session = open_session_room(&a);
         assert!(
-            matches!(session, SessionRoom::Room { .. } | SessionRoom::PermanentEmptyRoom { .. }),
+            matches!(
+                session,
+                SessionRoom::Room { .. } | SessionRoom::PermanentEmptyRoom { .. }
+            ),
             "a lost or newer device.db refused the sign-in: {session:?}"
         );
         assert!(
@@ -769,7 +808,10 @@ mod a3a_tests {
         let _turn = turn();
         let scratch = scratch();
         std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
-        Database::open(&scratch.layout.legacy_database()).unwrap().close().unwrap();
+        Database::open(&scratch.layout.legacy_database())
+            .unwrap()
+            .close()
+            .unwrap();
         std::fs::write(scratch.layout.device_db(), b"not a sqlite database at all").unwrap();
         let mut practice = stored("practice-user");
         practice.practice = true;
@@ -779,7 +821,10 @@ mod a3a_tests {
             "the practice account was given the legacy file: {session:?}"
         );
         assert!(
-            matches!(session, SessionRoom::Room { .. } | SessionRoom::PermanentEmptyRoom { .. }),
+            matches!(
+                session,
+                SessionRoom::Room { .. } | SessionRoom::PermanentEmptyRoom { .. }
+            ),
             "the practice account's own room did not open: {session:?}"
         );
     }
@@ -821,7 +866,12 @@ mod a3a_tests {
     }
 
     /// A record cut at `step`, as the library writes it — for G1's stopped-at-Moved opens.
-    fn write_record_at_step(layout: &Layout, room: &RoomId, who: &Claimant, step: bir_core::legacy_claim::Step) {
+    fn write_record_at_step(
+        layout: &Layout,
+        room: &RoomId,
+        who: &Claimant,
+        step: bir_core::legacy_claim::Step,
+    ) {
         let store = bir_core::rooms::DeviceStore::open(layout).unwrap();
         drop(store);
         let conn = rusqlite::Connection::open(layout.device_db()).unwrap();
@@ -867,7 +917,10 @@ mod a3a_tests {
         crate::account_gate::set_unlocked(true);
         let a = stored("user-a");
         assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
-        assert!(!bir_core::background_cron::submission_paused(), "paused before the import");
+        assert!(
+            !bir_core::background_cron::submission_paused(),
+            "paused before the import"
+        );
         // Mid-import — inside the checkpoint, after the jobs check and before the swap — sending
         // is paused, so no send can start in the gap.
         crate::bir_module::set_after_restore_checkpoint_hook_for_test(Box::new(|| {
@@ -882,7 +935,10 @@ mod a3a_tests {
         bir_core::export::export_database_zip(&source, &archive).unwrap();
         drop(source);
         crate::bir_module::restore_database_archive(&archive, 7).expect("the import runs");
-        assert!(!bir_core::background_cron::submission_paused(), "still paused after the import");
+        assert!(
+            !bir_core::background_cron::submission_paused(),
+            "still paused after the import"
+        );
         // A failed import — the zip is not a database — unpauses too.
         let broken = scratch.layout.device_dir().join("broken.zip");
         std::fs::write(&broken, b"not a zip").unwrap();
@@ -902,7 +958,10 @@ mod a3a_tests {
         std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
         let a = stored("user-a");
         assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
-        assert!(crate::open_room::current().is_some(), "no room open before quit");
+        assert!(
+            crate::open_room::current().is_some(),
+            "no room open before quit"
+        );
         // The quit runs on a thread of its own (its engine thread-locals end with it).
         std::thread::spawn(crate::bir_module::shutdown_for_quit)
             .join()
@@ -967,9 +1026,19 @@ mod a3a_tests {
             &bir_core::rooms::room_origin(&a.server_url).unwrap(),
             &a.user_id,
         );
-        write_record_at_step(&scratch.layout, &room, &who, bir_core::legacy_claim::Step::Moved);
+        write_record_at_step(
+            &scratch.layout,
+            &room,
+            &who,
+            bir_core::legacy_claim::Step::Moved,
+        );
         // D1: a refusal is an Err, never a panic.
-        let refused = crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a));
+        let refused = crate::open_room::open_room(
+            &scratch.layout,
+            room.clone(),
+            a.user_id.clone(),
+            origin_of(&a),
+        );
         assert!(
             matches!(&refused, Err(message) if message.contains("not yet hash-checked")),
             "open_room admitted a room at Moved with no hash check"
@@ -1002,7 +1071,12 @@ mod a3a_tests {
         );
         // device.db damaged beyond reading; the room folder exists.
         std::fs::write(scratch.layout.device_db(), b"not a sqlite database at all").unwrap();
-        let refused = crate::open_room::open_room(&scratch.layout, room.clone(), a.user_id.clone(), origin_of(&a));
+        let refused = crate::open_room::open_room(
+            &scratch.layout,
+            room.clone(),
+            a.user_id.clone(),
+            origin_of(&a),
+        );
         assert!(
             matches!(&refused, Err(message) if message.contains("cannot be read")),
             "an unreadable record with rooms present did not refuse"
@@ -1055,13 +1129,19 @@ mod a3a_tests {
                 .unwrap();
         }
         let jobs = bir_core::background_cron::get_active_jobs();
-        let inner = bir_core::background_cron::submission_job_key("1701Q", "12345678900000", 2026, None, Some(3));
-        jobs.lock().unwrap().insert(
-            bir_core::background_cron::room_job_key(
+        let inner = bir_core::background_cron::submission_job_key(
+            "1701Q",
+            "12345678900000",
+            2026,
+            None,
+            Some(3),
+        );
+        jobs.lock()
+            .unwrap()
+            .insert(bir_core::background_cron::room_job_key(
                 &format!("room:{}", room_id.as_str()),
                 &inner,
-            ),
-        );
+            ));
         let refused = crate::bir_module::restore_database_archive(&archive, 7);
         assert!(
             matches!(&refused, Err(error) if error.message().contains("A return is being sent. Try the import again when it has finished.")),
@@ -1099,7 +1179,10 @@ mod a3a_tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(status, "Submitted", "the job's status is not in the room file");
+        assert_eq!(
+            status, "Submitted",
+            "the job's status is not in the room file"
+        );
         let receipts: i64 = on_disk
             .conn_for_tests()
             .query_row(
@@ -1113,13 +1196,17 @@ mod a3a_tests {
 
         // The key has cleared: the send's writes are already in the real file, so receipt-pending
         // is restore semantics (the backup simply does not hold them) — the import runs.
-        crate::bir_module::restore_database_archive(&archive, 7).expect("the import runs once the send finished");
+        crate::bir_module::restore_database_archive(&archive, 7)
+            .expect("the import runs once the send finished");
 
         // F6's narrowing: a job of ANOTHER room writes into that room's own file, so this room's
         // import is not refused for it.
-        jobs.lock().unwrap().insert(
-            bir_core::background_cron::room_job_key("room:another-room-entirely", &inner),
-        );
+        jobs.lock()
+            .unwrap()
+            .insert(bir_core::background_cron::room_job_key(
+                "room:another-room-entirely",
+                &inner,
+            ));
         crate::bir_module::restore_database_archive(&archive, 7)
             .expect("another room's send in flight must not refuse this room's import");
         jobs.lock().unwrap().clear();
@@ -1185,7 +1272,10 @@ mod a3a_tests {
             panic!("not a room: {session:?}")
         };
         assert!(!scratch.layout.legacy_database().exists(), "not moved");
-        assert!(scratch.layout.room_database(&room_id).exists(), "no room file");
+        assert!(
+            scratch.layout.room_database(&room_id).exists(),
+            "no room file"
+        );
         // The claim wrote its record: done.
         let claim = LegacyClaim::at(scratch.layout.clone()).unwrap();
         let record = claim.record().unwrap().expect("no record");
@@ -1215,7 +1305,10 @@ mod a3a_tests {
         // A batch under room B sees the session's A-generation cache as stale.
         assert_ne!(Some(generation_a), crate::open_room::generation());
         session.rebuild();
-        assert!(session.selected_tin_for_test().is_none(), "the selection survived the room change");
+        assert!(
+            session.selected_tin_for_test().is_none(),
+            "the selection survived the room change"
+        );
     }
 
     /// §A.8: an eBIRForms scan made in room A can never import into room B — the scan records the
@@ -1306,7 +1399,8 @@ mod a3a_tests {
         )
         .unwrap();
         drop(conn);
-        let still_refused = crate::agent::headless::signed_in_room_database(&scratch.layout, Some(&a));
+        let still_refused =
+            crate::agent::headless::signed_in_room_database(&scratch.layout, Some(&a));
         assert!(
             still_refused.is_err(),
             "serve opened a room whose claim is at Moved with no hash check: {still_refused:?}"
@@ -1401,7 +1495,7 @@ mod a3a_tests {
         // No offer was made to the practice account: its "add them" must be refused, never imported.
         let arguments = HostArguments::new([HostValue::Bool(true)]);
         let answered = migration_offer_answer(&arguments);
-                match answered {
+        match answered {
             Err(error) => assert!(
                 error.to_string().contains("offer"),
                 "the refusal is not the offer's: {error}"
@@ -1496,7 +1590,9 @@ mod a3a_tests {
             &bir_core::rooms::room_origin(&b.server_url).unwrap(),
             &b.user_id,
         );
-        let after_switch = std::thread::spawn(bir_core::db::open_room_id).join().unwrap();
+        let after_switch = std::thread::spawn(bir_core::db::open_room_id)
+            .join()
+            .unwrap();
         assert_eq!(
             after_switch,
             Some(room_b),
@@ -1609,7 +1705,11 @@ fn migration_state_value() -> HostResult {
         Some(MigrationState::Transient { copy_saved, detail }) => ("transient", copy_saved, detail),
         Some(MigrationState::Permanent { detail }) => ("permanent", false, detail),
         Some(MigrationState::MovedNotOpened { detail }) => ("moved_not_opened", false, detail),
-        Some(MigrationState::Offered { user_id, room_id, generation }) => {
+        Some(MigrationState::Offered {
+            user_id,
+            room_id,
+            generation,
+        }) => {
             let still = crate::open_room::user_id().as_deref() == Some(user_id.as_str())
                 && crate::open_room::room_id().as_ref() == Some(&room_id.clone())
                 && crate::open_room::generation() == Some(generation);
@@ -1650,11 +1750,17 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
     // The slot is read once (the reviewer's note): four separate reads could interleave a sign-out.
     let slot = crate::open_room::snapshot();
     let bound = match (
-        &*MIGRATION.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
+        &*MIGRATION
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
         &slot,
     ) {
         (
-            Some(MigrationState::Offered { user_id, room_id, generation }),
+            Some(MigrationState::Offered {
+                user_id,
+                room_id,
+                generation,
+            }),
             Some((_, open_generation, open_room, open_user)),
         ) => {
             open_user == user_id
@@ -1734,7 +1840,9 @@ fn returns_waiting_count() -> HostResult {
                 .lock()
                 .map(|jobs| {
                     jobs.iter()
-                        .filter(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
+                        .filter(|key| {
+                            bir_core::background_cron::room_of_job_key(key) == open_prefix
+                        })
                         .count() as i64
                 })
                 .unwrap_or(0);

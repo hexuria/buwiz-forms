@@ -54,16 +54,17 @@ fn hold_device_guard(device_dir: &std::path::Path) -> Result<(), String> {
     if guards.contains_key(&key) {
         return Ok(());
     }
-    let guard = bir_core::db::take_device_instance_lock(device_dir).map_err(|error| {
-        format!("another copy of the app has this device's data open: {error}")
-    })?;
+    let guard = bir_core::db::take_device_instance_lock(device_dir)
+        .map_err(|error| format!("another copy of the app has this device's data open: {error}"))?;
     guards.insert(key, guard);
     Ok(())
 }
 static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// The open room's handle and generation, if one is open — the worker's tick source (§A.4).
@@ -200,7 +201,12 @@ pub fn open_room(
     user_id: String,
     origin: String,
 ) -> Result<(Arc<Mutex<Database>>, u64), String> {
-    open_path(&layout.room_database(&room_id), Some(room_id), user_id, origin)
+    open_path(
+        &layout.room_database(&room_id),
+        Some(room_id),
+        user_id,
+        origin,
+    )
 }
 
 /// Open the legacy file in place as the one slot (§A.3.7 legacy mode): no room, no record, no zip,

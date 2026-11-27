@@ -2262,7 +2262,11 @@ fn give_back_queueable<F: QueueableForm>(
     }
 }
 
-async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>, room_key: &str) {
+async fn process_submission_queue(
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+    room_key: &str,
+) {
     // A build with nowhere to send leaves every queued return as it is: no
     // attempt is counted and none goes back to Draft.
     if crate::transport::sending_unavailable() {
@@ -3168,18 +3172,30 @@ mod tests {
             }
         }
         temp_env::async_with_vars(
-            [(crate::cloud_account::ENV_ACCOUNT_FILE, Some(account_path.to_str().unwrap().to_owned()))],
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
             async {
-                crate::cloud_account::save_stored_account(&crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-a"))).unwrap();
+                crate::cloud_account::save_stored_account(
+                    &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-a")),
+                )
+                .unwrap();
                 let db = test_db();
                 let (queued, _summary) = stored_queued_2551q(&db);
                 let profile = reviewed_profile();
                 process_submission_queue(&profile, db.clone(), FIXED_ROOM_KEY).await;
                 // The switch happens before the spawned task's first poll.
-                crate::cloud_account::save_stored_account(&crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-b"))).unwrap();
+                crate::cloud_account::save_stored_account(
+                    &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-b")),
+                )
+                .unwrap();
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
                 while !get_active_jobs().lock().unwrap().is_empty() {
-                    assert!(std::time::Instant::now() < deadline, "the job key never cleared");
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "the job key never cleared"
+                    );
                     tokio::time::sleep(std::time::Duration::from_millis(25)).await;
                 }
                 let stored = db
@@ -3205,7 +3221,13 @@ mod tests {
         let db = test_db();
         let (_queued, _summary) = stored_queued_2551q(&db);
         let profile = reviewed_profile();
-        let inner = submission_job_key("2551Q", &profile.tin.full(), _queued.taxable_year, None, Some(_queued.quarter));
+        let inner = submission_job_key(
+            "2551Q",
+            &profile.tin.full(),
+            _queued.taxable_year,
+            None,
+            Some(_queued.quarter),
+        );
         get_active_jobs()
             .lock()
             .unwrap()
@@ -3215,7 +3237,10 @@ mod tests {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         loop {
             let keys = get_active_jobs().lock().unwrap().clone();
-            if keys.iter().any(|key| room_of_job_key(key) == "room:this-room") {
+            if keys
+                .iter()
+                .any(|key| room_of_job_key(key) == "room:this-room")
+            {
                 break;
             }
             assert!(
@@ -3226,7 +3251,12 @@ mod tests {
         }
         // Let the task finish so its key does not leak into other tests.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while get_active_jobs().lock().unwrap().iter().any(|key| room_of_job_key(key) == "room:this-room") {
+        while get_active_jobs()
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|key| room_of_job_key(key) == "room:this-room")
+        {
             assert!(std::time::Instant::now() < deadline);
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }
@@ -3249,8 +3279,14 @@ mod tests {
         let _same_or_not = Arc::as_ptr(&b) as usize == address;
         let mut ledger = RequeueLedger::default();
         assert!(ledger.should_requeue("room:a"), "first open of A");
-        assert!(!ledger.should_requeue("room:a"), "A again in the same worker");
-        assert!(ledger.should_requeue("room:b"), "B requeues even on A's freed address");
+        assert!(
+            !ledger.should_requeue("room:a"),
+            "A again in the same worker"
+        );
+        assert!(
+            ledger.should_requeue("room:b"),
+            "B requeues even on A's freed address"
+        );
     }
 
     /// F6: a job key carries its room, so the same return or job id in two rooms never collides,
@@ -3420,9 +3456,8 @@ mod tests {
             // A source the test flips between the rooms, as a sign-out and sign-in flip the app's.
             let current = Arc::new(Mutex::new(db_a.clone()));
             let source_db = current.clone();
-            let source: RoomSource = Arc::new(move || {
-                Some((source_db.lock().unwrap().clone(), fixed_room_key()))
-            });
+            let source: RoomSource =
+                Arc::new(move || Some((source_db.lock().unwrap().clone(), fixed_room_key())));
             let stop = CronStop::new();
             let worker = tokio::spawn(run_cron_jobs(source, stop.clone()));
             let expr_of = |db: &Arc<Mutex<Database>>| {

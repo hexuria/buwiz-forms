@@ -345,19 +345,20 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     // §A.4: the worker takes a room source, not the handle. In rooms mode each tick asks the open
     // room (None — a migration page, the gate, a sign-out — skips the tick); in single-room mode the
     // launch handle is the one room, as before.
-    let source: bir_core::background_cron::RoomSource = if bir_core::db::single_room_database().is_some() {
-        bir_core::background_cron::fixed_room_source(db)
-    } else {
-        std::sync::Arc::new(|| {
-            crate::open_room::snapshot().map(|(handle, _generation, room_id, _user)| {
-                let key = match room_id {
-                    Some(room) => format!("room:{}", room.as_str()),
-                    None => "legacy".to_owned(),
-                };
-                (handle, key)
+    let source: bir_core::background_cron::RoomSource =
+        if bir_core::db::single_room_database().is_some() {
+            bir_core::background_cron::fixed_room_source(db)
+        } else {
+            std::sync::Arc::new(|| {
+                crate::open_room::snapshot().map(|(handle, _generation, room_id, _user)| {
+                    let key = match room_id {
+                        Some(room) => format!("room:{}", room.as_str()),
+                        None => "legacy".to_owned(),
+                    };
+                    (handle, key)
+                })
             })
-        })
-    };
+        };
     let cron = bir_core::background_cron::run_cron_jobs(source, stop.clone());
     runtime.spawn(async move {
         cron.await;
@@ -3179,9 +3180,8 @@ fn restore_staged_database(
     let room_busy = bir_core::background_cron::get_active_jobs()
         .lock()
         .map(|jobs| {
-            jobs.iter().any(|key| {
-                bir_core::background_cron::room_of_job_key(key) == open_prefix
-            })
+            jobs.iter()
+                .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
         })
         .unwrap_or(false);
     if room_busy {

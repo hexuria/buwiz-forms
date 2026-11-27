@@ -1006,8 +1006,11 @@ pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbEr
             .and_then(|name| name.to_str())
             .and_then(crate::rooms::RoomId::parse)
         {
-            crate::legacy_claim::room_open_allowed(&crate::rooms::Layout::at(&device_dir), &room_id)
-                .map_err(|message| DbError::Io(std::io::Error::other(message)))?;
+            crate::legacy_claim::room_open_allowed(
+                &crate::rooms::Layout::at(&device_dir),
+                &room_id,
+            )
+            .map_err(|message| DbError::Io(std::io::Error::other(message)))?;
         }
     }
     prepare_app_database_file(&path);

@@ -1891,9 +1891,8 @@ fn a_room_open_is_refused_before_start_and_the_claim_still_finishes() {
     let claim = install.claim();
     let room = room_of(&claim, &a);
     install.layout.create_room_dir(&room).unwrap();
-    let before = std::panic::catch_unwind(|| {
-        crate::rooms::open_room_guarded(&install.layout, &room)
-    });
+    let before =
+        std::panic::catch_unwind(|| crate::rooms::open_room_guarded(&install.layout, &room));
     match before {
         Ok(result) => assert!(
             result.is_err(),
@@ -2013,14 +2012,10 @@ fn a_transient_room_check_does_not_open_the_room() {
         !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
         "a transient answer must not open the room"
     );
-    let refused = std::panic::catch_unwind(|| {
-        crate::rooms::open_room_guarded(&install.layout, &room)
-    });
+    let refused =
+        std::panic::catch_unwind(|| crate::rooms::open_room_guarded(&install.layout, &room));
     match refused {
-        Ok(result) => assert!(
-            result.is_err(),
-            "the room opened after a transient answer"
-        ),
+        Ok(result) => assert!(result.is_err(), "the room opened after a transient answer"),
         Err(_) => {} // the debug_assert fired: refused either way
     }
     // The error gone, the claim finishes — and now the room opens.

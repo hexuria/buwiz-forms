@@ -56,7 +56,9 @@ pub fn start_callback_server(
         let started = std::time::Instant::now();
         let accepted = loop {
             if cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                let _ = tx.send(Err("the sign-in this consent was started for is closed".to_owned()));
+                let _ = tx.send(Err(
+                    "the sign-in this consent was started for is closed".to_owned()
+                ));
                 return;
             }
             if started.elapsed() > std::time::Duration::from_secs(300) {

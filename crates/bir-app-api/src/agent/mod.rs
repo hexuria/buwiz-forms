@@ -286,7 +286,8 @@ pub fn drain_gated(
         let current = crate::open_room::generation();
         let stale = {
             let session = session.borrow();
-            session.cached_generation() != current && (session.cached_generation().is_some() || current.is_some())
+            session.cached_generation() != current
+                && (session.cached_generation().is_some() || current.is_some())
         };
         if stale {
             tracing::info!("agent session rebuilt: the open room changed");

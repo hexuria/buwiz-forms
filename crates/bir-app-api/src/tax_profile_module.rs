@@ -2931,7 +2931,9 @@ mod tests {
         );
         let db = database_handle().unwrap();
         assert_eq!(
-            test_inbox_connection_run(HEAD, &db, None).unwrap_err().message(),
+            test_inbox_connection_run(HEAD, &db, None)
+                .unwrap_err()
+                .message(),
             refused
         );
         assert_eq!(ok(inbox_state, vec![json!(HEAD)])["tracking_enabled"], true);
@@ -2960,7 +2962,9 @@ mod tests {
         );
         let db = database_handle().unwrap();
         assert_eq!(
-            connect_inbox_oauth_run(HEAD, &db, None).unwrap_err().message(),
+            connect_inbox_oauth_run(HEAD, &db, None)
+                .unwrap_err()
+                .message(),
             refused
         );
         assert_eq!(ok(inbox_state, vec![json!(HEAD)])["oauth_connected"], false);
@@ -3960,13 +3964,28 @@ mod tests {
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
         std::fs::create_dir_all(layout.device_dir()).unwrap();
-        let (handle, first) =
-            crate::open_room::open_legacy_in_place(&layout, "user-a".into(), "https://api.buwiz.test".into()).unwrap();
+        let (handle, first) = crate::open_room::open_legacy_in_place(
+            &layout,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
         // The room changes (a sign-out and a sign-in) while the consent is still open in the browser.
         crate::open_room::close_room();
-        let (_other, _second) =
-            crate::open_room::open_legacy_in_place(&layout, "user-b".into(), "https://api.buwiz.test".into()).unwrap();
-        let written = persist_oauth_grant_for(&handle, HEAD, "receipts@example.com", "access-x", "refresh-x", Some(first));
+        let (_other, _second) = crate::open_room::open_legacy_in_place(
+            &layout,
+            "user-b".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        let written = persist_oauth_grant_for(
+            &handle,
+            HEAD,
+            "receipts@example.com",
+            "access-x",
+            "refresh-x",
+            Some(first),
+        );
         assert!(
             matches!(&written, Err(error) if error.message().contains("the room changed")),
             "the grant write was not refused after the room changed"
@@ -3974,7 +3993,10 @@ mod tests {
         {
             let guard = bir_core::lock_timing::lock(&handle).unwrap();
             assert!(
-                guard.inbox_oauth_tokens("receipts@example.com").unwrap().is_none(),
+                guard
+                    .inbox_oauth_tokens("receipts@example.com")
+                    .unwrap()
+                    .is_none(),
                 "B's grant was written into A's room after the switch"
             );
         }
@@ -3992,8 +4014,12 @@ mod tests {
         std::fs::create_dir_all(layout.device_dir()).unwrap();
         // The legacy-in-place open populates the slot without the claim guard (legacy mode); every
         // open is a new generation, as a sign-out and sign-in makes one.
-        let (_handle, first) =
-            crate::open_room::open_legacy_in_place(&layout, "user-a".into(), "https://api.buwiz.test".into()).unwrap();
+        let (_handle, first) = crate::open_room::open_legacy_in_place(
+            &layout,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -4003,11 +4029,18 @@ mod tests {
             let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
             sender.send(Ok(HostValue::Null)).unwrap();
             let passed = finish_room_thread(Some(first), receiver, "x").await;
-            assert!(passed.is_ok(), "the result of the room's own thread dropped");
+            assert!(
+                passed.is_ok(),
+                "the result of the room's own thread dropped"
+            );
             // The room changed (a close and an open: a new generation): the result is dropped.
             crate::open_room::close_room();
-            let (_handle2, second) =
-                crate::open_room::open_legacy_in_place(&layout, "user-b".into(), "https://api.buwiz.test".into()).unwrap();
+            let (_handle2, second) = crate::open_room::open_legacy_in_place(
+                &layout,
+                "user-b".into(),
+                "https://api.buwiz.test".into(),
+            )
+            .unwrap();
             assert_ne!(first, second);
             let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
             sender.send(Ok(HostValue::Null)).unwrap();

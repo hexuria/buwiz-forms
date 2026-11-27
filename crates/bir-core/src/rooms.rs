@@ -378,7 +378,10 @@ pub struct DeviceStore {
 /// debug_assert in debug builds — when the legacy claim's `start()` has not run for this device folder in
 /// this session (R1): the open runs migrations and a checkpoint, and those writes change bytes the move's
 /// hash check still needs as evidence.
-pub fn open_room_guarded(layout: &Layout, room: &RoomId) -> Result<crate::db::Database, DeviceStoreError> {
+pub fn open_room_guarded(
+    layout: &Layout,
+    room: &RoomId,
+) -> Result<crate::db::Database, DeviceStoreError> {
     let ran = crate::legacy_claim::claim_started_this_session(layout.device_dir());
     debug_assert!(
         ran,

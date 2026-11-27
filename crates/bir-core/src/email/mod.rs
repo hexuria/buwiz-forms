@@ -14,9 +14,6 @@ pub use auth_oauth::{
     GoogleOAuthAuth, get_oauth_email, google_sign_in_available, start_oauth_flow,
 };
 pub use auth_password::AppPasswordAuth;
-/// F4: cancel every OAuth loopback listener waiting now — called when the room a consent was
-/// started in closes, so the grant cannot complete into the next sign-in.
-pub use oauth_server::cancel_listeners as cancel_oauth_listeners;
 pub use fetcher::{
     ImapAuthenticator, fetch_and_process_emails, fetch_and_process_emails_for_address,
     fetch_and_process_emails_for_address_until, test_connection,
@@ -25,3 +22,6 @@ pub use inbox::{
     EmailPollPlan, plan_email_poll_for_address, resolve_inbox_fetch_profile,
     select_imap_auth_profile,
 };
+/// F4: cancel every OAuth loopback listener waiting now — called when the room a consent was
+/// started in closes, so the grant cannot complete into the next sign-in.
+pub use oauth_server::cancel_listeners as cancel_oauth_listeners;
