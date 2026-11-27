@@ -552,14 +552,28 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
 pub fn lock_note(form: &str, key: &str, reason: &str) -> Option<&'static str> {
     let gate = gate_of(form, key)?;
     if gate.gate == G1701_SPOUSE_NAME.gate {
+        if ![
+            C1701_EMPLOYER_OWNER,
+            C1701_EMPLOYER_TAXPAYER,
+            C1701_EMPLOYER_SPOUSE,
+            C1701_EMPLOYER_COMPENSATION,
+        ]
+        .contains(&reason)
+        {
+            return None;
+        }
         if reason == C1701_EMPLOYER_OWNER {
             return Some("Schedule 1 needs the row marked for the taxpayer or the spouse.");
         }
         if key.contains("TPName") {
             return Some("Schedule 1 is for compensation income of the taxpayer.");
         }
+        return Some(gate.note);
     }
-    Some(gate.note)
+    // Reasons are shared across forms and layers. A note belongs to this
+    // gate only when this gate itself produced that reason; another lock on
+    // the same box keeps its own layer's note.
+    (reason == gate.lock).then_some(gate.note)
 }
 
 /// One clearing a save or fill just made.

@@ -64,6 +64,15 @@ fn gated_row_lock_notes_are_looked_up_by_form_and_key() {
         annual_a["lock_notes"]["frm1701A:txt23B"],
         json!("Column B is for a joint return.")
     );
+    assert_eq!(
+        bir_core::forms::agent::gated_rows::lock_note(
+            "1702RT",
+            "frm1702RT:txtPg2Pt4I51TaxPaidInReturn",
+            "MCIT applies to this return."
+        ),
+        None,
+        "another layer's coincidentally shared reason must not borrow this gate's note"
+    );
 }
 
 #[test]
