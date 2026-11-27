@@ -543,6 +543,7 @@ export class FormSession {
   /** Month+year pairs drawn as one MM/YYYY field, keyed "<month key>#period" (PR 3). */
   private onePeriods = new Map<string, { period: OnePeriod; row: string }>();
   private periodPartKeys = new Set<string>();
+  private periodKeyKinds = new Map<string, string>();
   /** From/to pairs drawn as one row of two date controls, by each end's edit key (PR 3, R1). */
   private dateRanges = new Map<string, { range: DateRange; row: string }>();
   /** Range ends that are text boxes edited as dates (2550Q's From). */
@@ -723,6 +724,73 @@ export class FormSession {
   /** Whether the box is one of the return period's own parts: a pick there sets the period, never an untick. */
   isPeriodBox(k: string): boolean {
     return this.st.periodParts.has(k);
+  }
+
+  /** The period-shaped part a key's own name suggests, before the host's lock evidence is applied. */
+  private periodNameKind(k: string): string | null {
+    const name = k.split(":").pop()?.toLowerCase() ?? "";
+    if (["due", "from", "to", "period", "birth", "incorporat", "start"].some((word) => name.includes(word))) return null;
+    if ((name.includes("quarter") || name.includes("qtr")) && /[1-4]$/.test(name)) return "quarter";
+    if (name.includes("month")) return "month";
+    if (name.includes("year")) return "year";
+    if (name.includes("day")) return "day";
+    return null;
+  }
+
+  /** The host says an identity key by its lock reason; a synthetic quarter key changes with `/quarter` or stands for the period. */
+  private hostPeriodMark(k: string, kind: string): boolean {
+    const reason = this.st.locks[k] ?? "";
+    if (reason.includes("picks which return this is")) return true;
+    return kind === "quarter" && (reason.includes("/quarter") || reason.includes("constant or the period"));
+  }
+
+  /** The keys that are the return's own period, known from the host's identity locks rather than their names alone. */
+  private indexPeriodKeys() {
+    this.periodKeyKinds.clear();
+    for (const it of this.items.values()) {
+      if (it.rows) continue;
+      const fields = it.f || [];
+      for (const period of onePeriods(it)) {
+        if (!this.hostPeriodMark(period.month.k, "month")) continue;
+        this.periodKeyKinds.set(period.month.k, "month");
+        this.periodKeyKinds.set(period.year.k, "year");
+      }
+      for (const f of fields) {
+        const kind = this.periodNameKind(f.k);
+        if (!kind || f.c || this.periodPartKeys.has(f.k) || !this.hostPeriodMark(f.k, kind)) continue;
+        if (kind === "quarter" && f.t === "radio" && f.grp) {
+          for (const radio of fields) {
+            if (radio.t === "radio" && radio.grp === f.grp) this.periodKeyKinds.set(radio.k, "quarter");
+          }
+        } else {
+          this.periodKeyKinds.set(f.k, kind);
+        }
+      }
+    }
+  }
+
+  /** The period part a drawn key sets, when the host marks it as the return's own period. */
+  private periodKindOf(k: string): string | null {
+    const marked = this.st.periodParts.get(k)?.part;
+    if (marked) return marked;
+    const named = this.periodKeyKinds.get(k);
+    if (named) return named;
+    return null;
+  }
+
+  /** Once a return is saved (or is an amendment of one) its period names the return itself: period parts cannot change until a new return. */
+  private periodFrozen(k: string): boolean {
+    const s = this.st;
+    return !s.sample && (s.saved || Boolean(s.amends)) && this.periodKindOf(k) !== null;
+  }
+
+  /** One sentence for a frozen period control, worded for the period part it sets. */
+  periodLockReason(keys: string[]): string {
+    const frozen = keys.filter((k) => this.periodFrozen(k));
+    if (!frozen.length) return "";
+    const parts = new Set(frozen.map((k) => this.periodKindOf(k)).filter(Boolean));
+    const kind = parts.has("quarter") ? "quarter" : parts.has("month") ? "month" : parts.has("day") ? "day" : parts.has("date") ? "date" : parts.has("year_end_month") ? "year-end month" : parts.has("year") ? "year" : "period";
+    return `The ${kind} is set when the return is saved. To file another ${kind}, start a new return.`;
   }
 
   row(id: string): Accessor<RowInfo> {
@@ -1084,6 +1152,7 @@ export class FormSession {
     }
     s.options = (r.options || {}) as Record<string, unknown[]>;
     s.locks = r.locks || {};
+    this.indexPeriodKeys();
     s.lockNotes = r.lock_notes || {};
     s.notesAlways = new Set((r as { notes_always?: string[] }).notes_always || []);
     s.profile = new Set(r.profile || []);
@@ -2457,6 +2526,10 @@ export class FormSession {
   private isLocked(k: string): boolean {
     const s = this.st;
     if (s.off[k]) return true;
+    if (this.periodFrozen(k)) return true;
+    // The host locks the quarter already named by a new return's target. Until the return is first saved,
+    // that quarter is still the filer's choice, so the period rule overrides the host's informational lock.
+    if (this.periodKindOf(k) === "quarter" && (s.sample || !s.amends)) return false;
     const penalty = this.penaltyGroupOf(k);
     if (penalty) return !penalty.applies || !(penalty.edited || s.penaltyOpen.has(k));
     return s.locks[k] !== undefined && !(s.profileEdit.has(k) && s.editing.has(k));

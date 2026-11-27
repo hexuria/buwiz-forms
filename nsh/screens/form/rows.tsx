@@ -64,7 +64,7 @@ export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: S
     checked: (k) => s.box(k).value() === "true",
     locked: () => boxes.every((b) => b.locked()),
     choiceLocked: (k) => s.box(k).locked(),
-    hint: () => (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
+    hint: () => s.periodLockReason(keys) || (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
     // A shut choice draws nothing, so its reason must not fade the choices that do draw.
     off: () => boxes.filter((_, i) => !(hidden?.() ?? []).includes(keys[i])).map((b) => b.off()).find(Boolean) || "",
     narrow,
