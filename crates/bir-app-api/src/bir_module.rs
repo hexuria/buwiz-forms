@@ -57,9 +57,9 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
         }
         return Ok(handle);
     }
-    // A3a (§A.4): the open room is the slot. The handle is never replaced inside an old Arc; a new
-    // room is a new Arc with a new generation, and the reader follows it.
-    if let Some((handle, generation)) = crate::open_room::current() {
+    // A3a (§A.4): the open room is the slot, read from the machine. The handle is never replaced
+    // inside an old Arc; a new room is a new Arc with a new generation, and the reader follows it.
+    if let Some((handle, generation, _, _)) = crate::session::snapshot().room {
         if READER_GENERATION.with(std::cell::Cell::get) != generation {
             // F15: a poisoned room mutex must not keep the old reader — recover the guard and
             // reinstall; the database behind a poisoned lock is still the room's one connection.
@@ -112,7 +112,12 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
     if opened {
         // A new handle: its own end, its own owner lock.
         ENGINE_SHUT_DOWN.with(|done| done.set(false));
-        if LAUNCH_PENDING.with(std::cell::Cell::get) && crate::account_gate::is_unlocked() {
+        // LAUNCH_PENDING is single-room mode's (§9): in rooms mode the machine's commit starts
+        // the worker, and a launch that found the room held is begin_open's retry, not this.
+        if bir_core::db::single_room_database().is_some()
+            && LAUNCH_PENDING.with(std::cell::Cell::get)
+            && crate::account_gate::is_unlocked()
+        {
             launch_on(handle.clone());
         }
     }
@@ -185,7 +190,7 @@ thread_local! {
     static LAUNCH_PENDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-fn this_engine() -> u64 {
+pub(crate) fn this_engine() -> u64 {
     ENGINE.with(|engine| {
         if engine.get() == 0 {
             engine.set(NEXT_ENGINE.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
@@ -288,6 +293,14 @@ pub fn submission_worker_refused() -> bool {
     SUBMISSION_WORKER_REFUSED.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+/// The process's worker in rooms mode (§6): started at the first commit into Open or Legacy,
+/// only woken at every later one — this is idempotent. The engine that asks is recorded, but the
+/// worker no longer ends with it: shutdown_at_engine_end leaves it in rooms mode, and only quit
+/// stops it (§8).
+pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
+    start_submission_worker(db);
+}
+
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — on a Tokio runtime of its
 /// own, owned by this engine. Nothing happens while a worker runs already
@@ -350,7 +363,16 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
             bir_core::background_cron::fixed_room_source(db)
         } else {
             std::sync::Arc::new(|| {
-                crate::open_room::snapshot().map(|(handle, _generation, room_id, _user)| {
+                // §5.3: the tick's room comes from one snapshot of the machine — no Open or
+                // Legacy phase, no tick. (The owner and epoch join the tick in commit 4.)
+                let snap = crate::session::snapshot();
+                if !matches!(
+                    snap.phase_kind,
+                    crate::session::PhaseKind::Open | crate::session::PhaseKind::Legacy
+                ) {
+                    return None;
+                }
+                snap.room.map(|(handle, _generation, room_id, _path)| {
                     let key = match room_id {
                         Some(room) => format!("room:{}", room.as_str()),
                         None => "legacy".to_owned(),
@@ -470,6 +492,12 @@ pub fn shutdown_at_engine_end() {
         return;
     }
     LAUNCH_PENDING.with(|pending| pending.set(false));
+    // §6: in rooms mode the worker is the process's, stopped only at quit — an engine's end
+    // releases only that engine's thread-local reader. Single-room mode keeps the old path (§9).
+    if bir_core::db::single_room_database().is_none() {
+        drop_reader();
+        return;
+    }
     let engine = this_engine();
     // Taken and told to stop here, before anything can fail: a loop told to
     // stop ends at its next check, and its tasks end with their sends.
@@ -3245,16 +3273,27 @@ fn restore_staged_database(
     match staged.install() {
         Ok(()) => {
             // F1: in rooms mode nothing may serve the ephemeral placeholder past the install —
-            // the room reopens on the restored file at once, a new Arc and a new generation.
-            if let Some(user_id) = crate::open_room::user_id() {
-                let room_id = crate::open_room::room_id();
-                let path = if crate::open_room::legacy_mode() {
+            // the room reopens on the restored file at once, a new Arc and a new generation,
+            // reinstalled into the machine. (§5.8's full boundary — the importing flag, the
+            // epoch CAS, the room-lock re-check — is commit 4's; the reinstall is its step 4.)
+            let snap = crate::session::snapshot();
+            if let Some((_, _, room_id, room_path)) = snap.room {
+                let path = if matches!(snap.phase_kind, crate::session::PhaseKind::Legacy) {
                     bir_core::rooms::Layout::here().legacy_database()
                 } else {
-                    db_path.to_path_buf()
+                    room_path
                 };
-                if let Err(error) = crate::open_room::reopen_fresh(&path, room_id, user_id) {
-                    tracing::warn!("the room did not reopen on the restored file: {error}");
+                match crate::open_room::reopen_fresh(&path) {
+                    Ok(handle) => {
+                        if !crate::session::reinstall_room(snap.epoch, handle, path) {
+                            tracing::warn!(
+                                "the room did not reinstall on the restored file: the session moved on"
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!("the room did not reopen on the restored file: {error}");
+                    }
                 }
             }
             Ok(HostObject::new().field("kind", "database").into())

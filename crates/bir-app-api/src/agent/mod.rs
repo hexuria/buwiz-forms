@@ -283,7 +283,11 @@ pub fn drain_gated(
     // A3a §A.5: the cached handle is compared with the open room's generation on each batch. On a
     // change the session is rebuilt — selected_tin = None, open = None, a new db.
     {
-        let current = crate::open_room::generation();
+        // The machine's one read (§1): the slot is gone — the generation asked after is the
+        // open room's in the snapshot, and there is no other open room.
+        let current = crate::session::snapshot()
+            .room
+            .map(|(_, generation, _, _)| generation);
         let stale = {
             let session = session.borrow();
             session.cached_generation() != current
@@ -299,10 +303,16 @@ pub fn drain_gated(
         // two reads would pair one room's Arc with the other's generation, and every later
         // batch would read the old room as "not stale". Single-room mode has no slot (no room
         // switches there): the separate reads are safe.
-        let pair = match crate::open_room::current() {
-            Some((handle, generation)) => Ok((handle, Some(generation))),
-            None => crate::bir_module::database_handle()
-                .map(|handle| (handle, crate::open_room::generation())),
+        let pair = match crate::session::snapshot().room {
+            Some((handle, generation, _, _)) => Ok((handle, Some(generation))),
+            None => crate::bir_module::database_handle().map(|handle| {
+                (
+                    handle,
+                    crate::session::snapshot()
+                        .room
+                        .map(|(_, generation, _, _)| generation),
+                )
+            }),
         };
         match pair {
             Ok((handle, generation)) => session.borrow_mut().set_db(handle, generation),

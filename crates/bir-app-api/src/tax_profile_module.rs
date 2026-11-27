@@ -1370,7 +1370,10 @@ fn disconnect_inbox_oauth(arguments: &HostArguments) -> HostResult {
 /// write into A's room after a switch.
 fn refuse_if_room_changed(generation: Option<u64>) -> Result<(), HostError> {
     if let Some(captured) = generation
-        && crate::open_room::current_generation() != Some(captured)
+        && crate::session::snapshot()
+            .room
+            .map(|(_, generation, _, _)| generation)
+            != Some(captured)
     {
         return Err(HostError::new(
             "the room changed while this ran; its result was dropped",
@@ -1823,11 +1826,16 @@ async fn finish_room_thread(
         .await
         .unwrap_or_else(|_| Err(HostError::new(failed)));
     if let Some(captured) = generation
-        && crate::open_room::current_generation() != Some(captured)
+        && crate::session::snapshot()
+            .room
+            .map(|(_, generation, _, _)| generation)
+            != Some(captured)
     {
         tracing::warn!(
             captured,
-            current = ?crate::open_room::current_generation(),
+            current = ?crate::session::snapshot()
+                .room
+                .map(|(_, generation, _, _)| generation),
             "room thread result dropped: the room changed while it ran"
         );
         return Err(HostError::new(
@@ -1843,9 +1851,11 @@ fn connect_inbox_oauth(
     let tin = arguments.string(0)?.to_owned();
     // X4/F4: the handle and the generation are one read of the slot; a switch between two reads
     // would write this thread's result into the wrong room as "not stale".
-    let (db, generation) = match crate::open_room::current() {
-        Some((handle, generation)) => (handle, Some(generation)),
-        None => (database_handle()?, crate::open_room::current_generation()),
+    let snap = crate::session::snapshot();
+    let slot_generation = snap.room.as_ref().map(|(_, generation, _, _)| *generation);
+    let (db, generation) = match snap.room {
+        Some((handle, generation, _, _)) => (handle, Some(generation)),
+        None => (database_handle()?, slot_generation),
     };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
@@ -1863,9 +1873,11 @@ fn test_inbox_connection(
     let tin = arguments.string(0)?.to_owned();
     // X4/F4: the handle and the generation are one read of the slot; a switch between two reads
     // would write this thread's result into the wrong room as "not stale".
-    let (db, generation) = match crate::open_room::current() {
-        Some((handle, generation)) => (handle, Some(generation)),
-        None => (database_handle()?, crate::open_room::current_generation()),
+    let snap = crate::session::snapshot();
+    let slot_generation = snap.room.as_ref().map(|(_, generation, _, _)| *generation);
+    let (db, generation) = match snap.room {
+        Some((handle, generation, _, _)) => (handle, Some(generation)),
+        None => (database_handle()?, slot_generation),
     };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
@@ -1883,9 +1895,11 @@ fn check_inbox_now(
     let tin = arguments.string(0)?.to_owned();
     // X4/F4: the handle and the generation are one read of the slot; a switch between two reads
     // would write this thread's result into the wrong room as "not stale".
-    let (db, generation) = match crate::open_room::current() {
-        Some((handle, generation)) => (handle, Some(generation)),
-        None => (database_handle()?, crate::open_room::current_generation()),
+    let snap = crate::session::snapshot();
+    let slot_generation = snap.room.as_ref().map(|(_, generation, _, _)| *generation);
+    let (db, generation) = match snap.room {
+        Some((handle, generation, _, _)) => (handle, Some(generation)),
+        None => (database_handle()?, slot_generation),
     };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
@@ -3964,15 +3978,15 @@ mod tests {
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
         std::fs::create_dir_all(layout.device_dir()).unwrap();
-        let (handle, first) = crate::open_room::open_legacy_in_place(
+        let (handle, first) = crate::session::open_legacy_in_place_for_test(
             &layout,
             "user-a".into(),
             "https://api.buwiz.test".into(),
         )
         .unwrap();
         // The room changes (a sign-out and a sign-in) while the consent is still open in the browser.
-        crate::open_room::close_room();
-        let (_other, _second) = crate::open_room::open_legacy_in_place(
+        crate::session::close(crate::session::Reason::SignOut);
+        let (_other, _second) = crate::session::open_legacy_in_place_for_test(
             &layout,
             "user-b".into(),
             "https://api.buwiz.test".into(),
@@ -4000,7 +4014,7 @@ mod tests {
                 "B's grant was written into A's room after the switch"
             );
         }
-        crate::open_room::close_room();
+        crate::session::close(crate::session::Reason::SignOut);
         bir_core::platform::set_device_dir_override(None);
     }
 
@@ -4018,7 +4032,7 @@ mod tests {
         std::fs::create_dir_all(layout.device_dir()).unwrap();
         // The legacy-in-place open populates the slot without the claim guard (legacy mode); every
         // open is a new generation, as a sign-out and sign-in makes one.
-        let (_handle, first) = crate::open_room::open_legacy_in_place(
+        let (_handle, first) = crate::session::open_legacy_in_place_for_test(
             &layout,
             "user-a".into(),
             "https://api.buwiz.test".into(),
@@ -4038,8 +4052,8 @@ mod tests {
                 "the result of the room's own thread dropped"
             );
             // The room changed (a close and an open: a new generation): the result is dropped.
-            crate::open_room::close_room();
-            let (_handle2, second) = crate::open_room::open_legacy_in_place(
+            crate::session::close(crate::session::Reason::SignOut);
+            let (_handle2, second) = crate::session::open_legacy_in_place_for_test(
                 &layout,
                 "user-b".into(),
                 "https://api.buwiz.test".into(),
@@ -4054,7 +4068,7 @@ mod tests {
                 "the result was written after the room changed"
             );
         });
-        crate::open_room::close_room();
+        crate::session::close(crate::session::Reason::SignOut);
         bir_core::platform::set_device_dir_override(None);
     }
 }

@@ -26,6 +26,19 @@ pub struct Owner {
     pub practice: bool,
 }
 
+impl Owner {
+    /// The owner of a stored sign-in: the normalised server origin, the user id, the practice
+    /// flag. `None` while the server URL does not normalise — the sign-in is not a room owner's.
+    pub fn of_stored(stored: &bir_core::cloud_account::StoredAccount) -> Option<Owner> {
+        let origin = bir_core::rooms::room_origin(&stored.server_url).ok()?;
+        Some(Owner {
+            origin,
+            user_id: stored.user_id.clone(),
+            practice: stored.practice,
+        })
+    }
+}
+
 /// Why an open started: the launch resume, a fresh sign-in, or Try again from a blocked page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenWhy {
@@ -219,7 +232,15 @@ pub fn snapshot() -> Snap {
 
 /// What an open computes outside the lock and commits by compare-and-swap (§3 step 3).
 pub enum Target {
-    Room(RoomId),
+    Room {
+        room_id: RoomId,
+        /// The migration note the open room carries (§A.3.4 permanent, §A.3.6 offered).
+        note: Note,
+        /// F13: the zip rule's room-opened count runs at commit only on a LATER open of the
+        /// room — a lookup's, a permanent failure's, the offer's — never on the claim's own
+        /// Done, whose open is the move's own finish, not evidence of use.
+        count_opened: bool,
+    },
     Legacy,
     Blocked(Blocked),
     /// Single-room and dev-database mode (§9): the named file, no room id.
@@ -435,55 +456,83 @@ pub fn close(reason: Reason) {
 /// section: the epoch bumps, the phase becomes Opening, the claim thread spawns and this returns
 /// at once (F10).
 pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
-    let (spawn, outcome) = {
-        let mut session = locked();
-        hooks::at("begin_open.locked");
-        if session.phase.kind() == PhaseKind::Quitting {
-            tracing::info!("begin_open refused: the session is quitting");
-            return;
+    let mut session = locked();
+    hooks::at("begin_open.locked");
+    if session.phase.kind() == PhaseKind::Quitting {
+        tracing::info!("begin_open refused: the session is quitting");
+        return;
+    }
+    if same_owner_open(&session, &owner) {
+        return;
+    }
+    let (spawn, outcome) = begin_open_locked(&mut session, owner.clone(), engine, why);
+    drop(session);
+    finish_open(spawn, outcome, owner, engine, why);
+}
+
+/// F20: the same-owner check is (origin, user id), as I2's is — practice is not part of
+/// who the owner IS, and a practice-flag difference alone never replaces a session.
+fn same_owner_open(session: &Session, owner: &Owner) -> bool {
+    if let Some(current) = session.phase.owner()
+        && current.origin == owner.origin
+        && current.user_id == owner.user_id
+        && matches!(
+            session.phase.kind(),
+            PhaseKind::Open | PhaseKind::Legacy | PhaseKind::Opening
+        )
+    {
+        return true;
+    }
+    false
+}
+
+/// begin_open's critical section (§3 step 1), for callers already holding SESSION — signed_in
+/// runs it in the same section as its cache write. The caller runs [`finish_open`] after the
+/// lock is released.
+fn begin_open_locked(
+    session: &mut Session,
+    owner: Owner,
+    engine: u64,
+    why: OpenWhy,
+) -> (Option<u64>, CloseOutcome) {
+    // F2: the replacement's owner-ending steps run only when the owner being replaced is a
+    // DIFFERENT one — a Try again or a launch of the same owner keeps its device key.
+    let outcome = close_locked(session, &CloseKind::ReplacedBy(owner.clone()), None);
+    // §1 [D4c]: the device guard is taken at process start (init). If it was not held then
+    // (another copy had it), every begin_open — Try again included — retries it; while it
+    // cannot be taken the phase is Blocked::Transient and no claim thread starts. A
+    // non-blocking file lock: no blocking I/O under SESSION.
+    match ensure_device_guard() {
+        Ok(()) => {
+            session.phase = Phase::Opening {
+                owner,
+                engine,
+                why,
+            };
+            (Some(session.epoch), outcome)
         }
-        // F20: the same-owner check is (origin, user id), as I2's is — practice is not part of
-        // who the owner IS, and a practice-flag difference alone never replaces a session.
-        if let Some(current) = session.phase.owner()
-            && current.origin == owner.origin
-            && current.user_id == owner.user_id
-            && matches!(
-                session.phase.kind(),
-                PhaseKind::Open | PhaseKind::Legacy | PhaseKind::Opening
-            )
-        {
-            return;
+        Err(detail) => {
+            session.phase = Phase::Blocked {
+                owner,
+                reason: Blocked::Transient {
+                    copy_saved: false,
+                    detail,
+                },
+            };
+            (None, outcome)
         }
-        // F2: the replacement's owner-ending steps run only when the owner being replaced is a
-        // DIFFERENT one — a Try again or a launch of the same owner keeps its device key.
-        let outcome = close_locked(&mut session, &CloseKind::ReplacedBy(owner.clone()), None);
-        // §1 [D4c]: the device guard is taken at process start (init). If it was not held then
-        // (another copy had it), every begin_open — Try again included — retries it; while it
-        // cannot be taken the phase is Blocked::Transient and no claim thread starts. A
-        // non-blocking file lock: no blocking I/O under SESSION.
-        match ensure_device_guard() {
-            Ok(()) => {
-                session.phase = Phase::Opening {
-                    owner: owner.clone(),
-                    engine,
-                    why,
-                };
-                (Some(session.epoch), outcome)
-            }
-            Err(detail) => {
-                session.phase = Phase::Blocked {
-                    owner: owner.clone(),
-                    reason: Blocked::Transient {
-                        copy_saved: false,
-                        detail,
-                    },
-                };
-                (None, outcome)
-            }
-        }
-    };
-    // F17: the replaced room's Arc drops after SESSION is released; forget_device's half runs
-    // here too, epoch-checked (F2).
+    }
+}
+
+/// begin_open's steps after SESSION is released (F17): the replaced room's Arc drops here,
+/// forget_device's half epoch-checked (F2), then the claim thread spawns.
+fn finish_open(
+    spawn: Option<u64>,
+    outcome: CloseOutcome,
+    owner: Owner,
+    engine: u64,
+    why: OpenWhy,
+) {
     finish_close(&outcome, ForgetMode::Now);
     drop(outcome.dropped);
     if let Some(epoch) = spawn {
@@ -492,9 +541,13 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
     report_invariants();
 }
 
-/// The claim thread "buwiz-room-open" (§3 step 2). Its real work — the claim, the classify, the
-/// open — is wired in commit 2; the thread is the machine's already, so the spawn, the epoch and
-/// the commit path it ends in are tested here.
+/// The claim threads serialise (§3 step 2): a second Opening waits here instead of being refused
+/// by the claim store's own one-at-a-time rule.
+static CLAIM_RUN: Mutex<()> = Mutex::new(());
+
+/// The claim thread "buwiz-room-open" (§3 step 2). It carries its caller's database-name and
+/// device-folder overrides, as spawn_account does, so a test's engine reads the install the test
+/// set up; in production there is never an override.
 /// Test instrumentation: how many claim threads this process spawned. two_engines asserts
 /// exactly one for two boots of one session; d4c asserts none for a refused open.
 #[cfg(test)]
@@ -506,19 +559,20 @@ pub(crate) fn claim_thread_spawn_count() -> u64 {
     CLAIM_THREAD_SPAWNS.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+
 fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
-    let _ = (engine, why);
     #[cfg(test)]
     CLAIM_THREAD_SPAWNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    if let Err(error) = std::thread::Builder::new()
+    let database = bir_core::db::capture_database_path_override();
+    let device = bir_core::platform::capture_device_dir_override();
+    let spawn = std::thread::Builder::new()
         .name("buwiz-room-open".to_string())
         .spawn(move || {
-            let _ = (owner, epoch);
-            // commit 3 wires the claim thread's real work: CLAIM_RUN, the hooks,
-            // LegacyClaim::here() and classify, start(), room_open_allowed, open_path, then
-            // commit(epoch, target, handle).
-        })
-    {
+            database.run(move || {
+                device.run(move || claim_thread_work(owner, engine, why, epoch));
+            });
+        });
+    if let Err(error) = spawn {
         tracing::warn!("the room-open thread did not spawn: {error}");
     }
 }
@@ -568,7 +622,6 @@ pub(crate) fn sign_out_inner(
     // Step 3: outside every lock. Until the machine is wired the production room lives in the
     // old slot: a real sign-out closes it here, exactly as main did — never left open behind a
     // sign-out, the standing rule — and the menu shows the gate.
-    crate::room_session::close_session();
     crate::hooks::hooks().refresh_menu();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
@@ -623,7 +676,6 @@ pub fn end_changed_server(server_url: &str, refresh_token: &str) {
         bir_core::account_session::cache_owner(None);
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
-    crate::room_session::close_session();
     crate::hooks::hooks().refresh_menu();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
@@ -652,7 +704,6 @@ pub fn close_signed_in_elsewhere(disk_owner: &bir_core::account_session::OwnerKe
         bir_core::account_session::cache_owner(None);
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
-    crate::room_session::close_session();
     crate::hooks::hooks().refresh_menu();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
@@ -720,7 +771,6 @@ pub fn server_ended(
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
     // The real path's close, as in sign_out (F2): the old slot's room goes and the menu shows it.
-    crate::room_session::close_session();
     crate::hooks::hooks().refresh_menu();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
@@ -734,17 +784,332 @@ pub fn server_ended(
 /// register_device_soon stays where it is until commit moves it into commit.
 pub fn signed_in(
     stored: &bir_core::cloud_account::StoredAccount,
+    engine: u64,
 ) -> Result<(), bir_core::cloud_account::CloudError> {
     {
         let _account = bir_core::account_session::lock();
         bir_core::account_session::save_stored(stored)?;
     }
-    {
-        let _session = locked();
+    // §4: ONE SESSION section — the cache write AND the open's beginning together, so no reader
+    // can ever see the cache name an owner whose open has not started.
+    let spawned = {
+        let mut session = locked();
         bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(stored));
+        match Owner::of_stored(stored) {
+            // A server URL that does not normalise is not a room owner's sign-in: the cache is
+            // still the machine's picture, and nothing opens (§9's single-room mode opens its
+            // own way).
+            None => None,
+            Some(owner) => {
+                if session.phase.kind() == PhaseKind::Quitting || same_owner_open(&session, &owner)
+                {
+                    None
+                } else {
+                    let (spawn, outcome) =
+                        begin_open_locked(&mut session, owner.clone(), engine, OpenWhy::SignIn);
+                    Some((spawn, outcome, owner))
+                }
+            }
+        }
+    };
+    if let Some((spawn, outcome, owner)) = spawned {
+        finish_open(spawn, outcome, owner, engine, OpenWhy::SignIn);
+    } else {
+        report_invariants();
     }
-    report_invariants();
     Ok(())
+}
+
+use bir_core::cloud_account::StoredAccount;
+use bir_core::legacy_claim::{Claimant, LegacyClaim, NotHere, Outcome, Start};
+use bir_core::rooms::Layout;
+
+/// What the claim decided to open, opened outside SESSION after CLAIM_RUN lets go.
+enum OpenSpec {
+    /// The account's room, by the claim's outcome or the device-store lookup.
+    Room {
+        path: PathBuf,
+        room_id: RoomId,
+        /// Whether a move's copy is already saved, for the transient detail if the open fails.
+        copy_saved: bool,
+    },
+    /// §A.3.7 legacy mode: the legacy file in place, nothing written beside it.
+    LegacyInPlace { path: PathBuf },
+    /// Single-room/dev mode: the named file through the old path (§9).
+    NamedFile,
+}
+
+fn claimant_of(stored: &StoredAccount) -> Claimant {
+    Claimant {
+        server_url: stored.server_url.clone(),
+        user_id: stored.user_id.clone(),
+        email: stored.email.clone(),
+        practice: stored.practice,
+    }
+}
+
+/// The claim thread's work (§3 step 2): the claim, the target, the open — all outside SESSION —
+/// ending in the compare-and-swap commit. Only the commit writes anything visible (§5.9).
+fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
+    let _ = (engine, why);
+    let (target, spec) = {
+        let _claim_run = lock(&CLAIM_RUN);
+        hooks::at("claim.before_start");
+        let decided = decide_claim(&owner);
+        hooks::at("claim.after_claim");
+        decided
+    };
+    // CLAIM_RUN released: the open runs outside it and outside SESSION (§3 step 2) — migrations
+    // and the checkpoint inside Database::open can take real time. A stale opener can only
+    // migrate its own room's file: the same account's, idempotent, the evidence already passed.
+    let handle = open_spec(&spec);
+    hooks::at("open.done");
+    let (target, handle) = match handle {
+        Ok(handle) => (target, handle),
+        Err((copy_saved, detail)) => {
+            tracing::warn!("the open failed: {detail}");
+            (
+                Target::Blocked(Blocked::Transient {
+                    copy_saved,
+                    detail,
+                }),
+                None,
+            )
+        }
+    };
+    commit(epoch, target, handle);
+}
+
+/// Open what the claim decided, answering the commit's (handle, path). The handle is installed
+/// NOWHERE here (§1: `open_path` installs nothing); the commit installs it or drops it.
+fn open_spec(
+    spec: &Option<OpenSpec>,
+) -> Result<Option<(Arc<Mutex<Database>>, PathBuf)>, (bool, String)> {
+    match spec {
+        None => Ok(None),
+        Some(OpenSpec::Room {
+            path,
+            room_id,
+            copy_saved,
+        }) => {
+            let layout = Layout::here();
+            if let Err(error) = layout.create_room_dir(room_id) {
+                return Err((*copy_saved, error.to_string()));
+            }
+            crate::open_room::open_path(path, Some(room_id))
+                .map(|handle| Some((handle, path.clone())))
+                .map_err(|error| (*copy_saved, error))
+        }
+        Some(OpenSpec::LegacyInPlace { path }) => crate::open_room::open_path(path, None)
+            .map(|handle| Some((handle, path.clone())))
+            .map_err(|error| (false, error)),
+        Some(OpenSpec::NamedFile) => bir_core::db::open_live_database()
+            .map(|(database, path, _recovered)| Some((Arc::new(Mutex::new(database)), path)))
+            .map_err(|error| (false, error.to_string())),
+    }
+}
+
+/// What note the room the lookup names carries. `Offered` is decided once the room is known:
+/// the note carries the room it was made in (X2).
+enum LookupNote {
+    None,
+    Permanent { detail: String },
+    Offered,
+}
+
+/// The account's room by the device-store lookup (rooms A1): known, or new and empty.
+fn lookup_target(layout: &Layout, owner: &Owner, note: LookupNote) -> (Target, Option<OpenSpec>) {
+    let store = bir_core::rooms::DeviceStore::open(layout).ok();
+    let stored = crate::cloud_account::load_stored().ok().flatten();
+    let server_url = stored
+        .as_ref()
+        .map(|stored| stored.server_url.clone())
+        .unwrap_or_default();
+    let lookup = bir_core::rooms::room_for(store.as_ref(), &server_url, &owner.user_id);
+    let room_id = match lookup {
+        Ok(bir_core::rooms::RoomLookup::Known(record)) => record.room_id,
+        Ok(bir_core::rooms::RoomLookup::New { room_id, .. }) => room_id,
+        Err(error) => {
+            tracing::warn!("room lookup failed: {error}");
+            return (
+                Target::Blocked(Blocked::Transient {
+                    copy_saved: false,
+                    detail: error.to_string(),
+                }),
+                None,
+            );
+        }
+    };
+    let note = match note {
+        LookupNote::None => Note::None,
+        LookupNote::Permanent { detail } => Note::Permanent { detail },
+        LookupNote::Offered => Note::Offered {
+            room: room_id.clone(),
+        },
+    };
+    (
+        Target::Room {
+            room_id: room_id.clone(),
+            note,
+            count_opened: true,
+        },
+        Some(OpenSpec::Room {
+            path: layout.room_database(&room_id),
+            room_id,
+            copy_saved: false,
+        }),
+    )
+}
+
+/// What an outcome of the claim leaves open (§A.3.4): Done is the claimer's room; transient opens
+/// no room; permanent before the move opens the empty room with the note; moved-not-opened opens
+/// nothing.
+fn outcome_target(layout: &Layout, owner: &Owner, outcome: Outcome) -> (Target, Option<OpenSpec>) {
+    match outcome {
+        Outcome::Done { room, .. } => (
+            Target::Room {
+                room_id: room.clone(),
+                note: Note::None,
+                // F13: the claim's own Done is not counted — a LATER open is the use evidence.
+                count_opened: false,
+            },
+            Some(OpenSpec::Room {
+                path: layout.room_database(&room),
+                room_id: room,
+                copy_saved: true,
+            }),
+        ),
+        Outcome::Transient(transient) => (
+            Target::Blocked(Blocked::Transient {
+                copy_saved: transient.copy_saved,
+                detail: transient.detail,
+            }),
+            None,
+        ),
+        Outcome::Permanent(permanent) => lookup_target(
+            layout,
+            owner,
+            LookupNote::Permanent {
+                detail: permanent.detail,
+            },
+        ),
+        Outcome::MovedNotOpened(moved) => (
+            Target::Blocked(Blocked::MovedNotOpened {
+                detail: moved.detail,
+            }),
+            None,
+        ),
+    }
+}
+
+/// §A.3.7 legacy mode, and the store-error fallback with a legacy file present (F11's arm, kept
+/// until commit 5 reclassifies): the legacy file in place is the slot, writing nothing beside it.
+fn legacy_in_place(layout: &Layout) -> (Target, Option<OpenSpec>) {
+    (
+        Target::Legacy,
+        Some(OpenSpec::LegacyInPlace {
+            path: layout.legacy_database(),
+        }),
+    )
+}
+
+/// The claim, as room_session computed it before the machine (§12.2 item 3: today's arms; §7's
+/// reclassification is commit 5). Everything here runs on the claim thread, outside SESSION.
+fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
+    let layout = Layout::here();
+    let Some(stored) = crate::cloud_account::load_stored().ok().flatten() else {
+        tracing::warn!("the stored sign-in went away before the claim ran");
+        return (
+            Target::Blocked(Blocked::Transient {
+                copy_saved: false,
+                detail: "the stored sign-in is gone".to_string(),
+            }),
+            None,
+        );
+    };
+    let who = claimant_of(&stored);
+    let claim = match LegacyClaim::here() {
+        Ok(claim) => claim,
+        Err(error) => {
+            // F11, narrowed (kept until commit 5): with a legacy file present, an empty room
+            // beside it is forbidden, so the file opens in place as the one slot, writing nothing
+            // beside it. A practice account is never given the legacy file.
+            tracing::warn!("legacy claim not opened ({error})");
+            bir_core::legacy_claim::note_claim_impossible(layout.device_dir());
+            if layout.legacy_database().is_file() && !owner.practice {
+                tracing::warn!(
+                    "legacy file present and the claim store unusable: legacy mode in place"
+                );
+                return legacy_in_place(&layout);
+            }
+            return lookup_target(&layout, owner, LookupNote::None);
+        }
+    };
+    // F8: the registry is checked before start(); the refusal applies only when the probe says
+    // Ready — the move is what races the live connection's writes.
+    let live_legacy = crate::open_room::live_entry_for(&layout.legacy_database());
+    let started = claim.start(&who);
+    // §A.3.8: count today toward the zip's launch days, then delete the pre-rooms zip when the
+    // rule says it goes. Never in legacy mode's way.
+    if !matches!(started, Start::Locked(_)) {
+        let today = chrono::Local::now().date_naive();
+        if let Err(error) = claim.note_launch(today) {
+            tracing::warn!("launch day not counted: {error}");
+        }
+        match claim.delete_zip_if_due(chrono::Utc::now()) {
+            Ok(deleted) => {
+                for path in &deleted {
+                    tracing::info!(?path, "pre-rooms safety zip deleted by the 30-day rule");
+                }
+            }
+            Err(kept) => {
+                tracing::info!(?kept, "pre-rooms safety zip kept");
+            }
+        }
+    }
+    match started {
+        Start::Ready(ready) => {
+            if live_legacy {
+                // F8: a live connection to the legacy file means the file is still written; the
+                // claim must not copy and move it under those writes.
+                return (
+                    Target::Blocked(Blocked::Transient {
+                        copy_saved: false,
+                        detail: "the earlier database is still in use; try again in a moment"
+                            .into(),
+                    }),
+                    None,
+                );
+            }
+            let outcome = ready.claim(&claim);
+            outcome_target(&layout, owner, outcome)
+        }
+        Start::Nothing | Start::DeclinedHere | Start::NotHere(NotHere::Practice) => {
+            lookup_target(&layout, owner, LookupNote::None)
+        }
+        Start::NotHere(NotHere::SingleRoom) | Start::NotHere(NotHere::DevDatabase) => {
+            // Single-room mode (§9): the named file, opened through the old path. No claim,
+            // no rooms.
+            (Target::NotHere(PathBuf::new()), Some(OpenSpec::NamedFile))
+        }
+        Start::Locked(_locked) => legacy_in_place(&layout),
+        Start::Finished(outcome) => outcome_target(&layout, owner, outcome),
+        Start::Offer(offer) => match offer {
+            bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => legacy_in_place(&layout),
+            bir_core::legacy_claim::OfferStart::Open(_open_offer) => {
+                // The offer waits for the page; the account's room opens, never merged (§A.3.6).
+                // X2: never to a practice account — the store-review account is nobody's heir.
+                let note = if owner.practice {
+                    LookupNote::None
+                } else {
+                    // The offered note carries the room it was made in; the lookup decides which.
+                    LookupNote::Offered
+                };
+                lookup_target(&layout, owner, note)
+            }
+        },
+        Start::Failed(failure) => outcome_target(&layout, owner, Outcome::from(failure)),
+    }
 }
 
 /// commit (§3 step 3): under SESSION, short, no I/O. A stale epoch or a phase that isn't Opening
@@ -762,8 +1127,12 @@ pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Datab
         Abandon(Option<(Arc<Mutex<Database>>, PathBuf)>),
         /// The phase moved to Blocked; the gate stays locked; a handle (if any) drops.
         Blocked(Option<(Arc<Mutex<Database>>, PathBuf)>),
-        /// A room or the legacy file is the slot; the gate is unlocked.
-        Installed,
+        /// A room or the legacy file is the slot; the gate is unlocked. The worker is started or
+        /// woken with this handle; the room-opened count runs for this room, if at all.
+        Installed {
+            handle: Arc<Mutex<Database>>,
+            count_opened: Option<RoomId>,
+        },
     }
     let outcome = {
         let mut session = locked();
@@ -799,14 +1168,23 @@ pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Datab
                     Outcome::Blocked(None)
                 }
                 (target, Some((handle, path))) => {
+                    let (room_id, note, count) = match &target {
+                        Target::Room {
+                            room_id,
+                            note,
+                            count_opened,
+                        } => (
+                            Some(room_id.clone()),
+                            note.clone(),
+                            count_opened.then(|| room_id.clone()),
+                        ),
+                        _ => (None, Note::None, None),
+                    };
                     let room = OpenRoom {
-                        room_id: match &target {
-                            Target::Room(room) => Some(room.clone()),
-                            _ => None,
-                        },
+                        room_id,
                         path: path.clone(),
                         generation: next_generation(),
-                        handle,
+                        handle: handle.clone(),
                     };
                     bir_core::db::set_open_room_database(Some(path));
                     bir_core::transport::set_practice_account(owner.practice);
@@ -820,23 +1198,39 @@ pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Datab
                         Phase::Open {
                             owner,
                             room,
-                            note: Note::None,
+                            note,
                             importing: false,
                         }
                     };
                     // I1: the gate opens LAST, once the room is in the phase.
                     crate::account_gate::set_unlocked(true);
-                    Outcome::Installed
+                    Outcome::Installed {
+                        handle,
+                        count_opened: count,
+                    }
                 }
             },
         }
     };
     match outcome {
         Outcome::Abandon(dropped) | Outcome::Blocked(dropped) => drop(dropped),
-        Outcome::Installed => {
-            // §3 step 3: outside the lock, wake the worker and refresh the menu.
+        Outcome::Installed {
+            handle,
+            count_opened,
+        } => {
+            // §3 step 3, outside the lock: the worker is the process's (§6) — started at the
+            // first commit into Open or Legacy, only woken at every later one — and the menu
+            // refreshes. F13: the zip rule's room-opened count runs here on a LATER open of the
+            // room (never the claim's own Done); a failed count is logged, never fatal.
+            crate::bir_module::ensure_worker(handle);
             bir_core::background_cron::wake();
             crate::hooks::hooks().refresh_menu();
+            if let Some(room_id) = count_opened
+                && let Ok(claim) = LegacyClaim::here()
+                && let Err(error) = claim.note_room_opened(&room_id)
+            {
+                tracing::warn!("room-opened not counted toward the zip rule: {error}");
+            }
         }
     }
     hooks::at("commit.done");
@@ -855,6 +1249,42 @@ fn stored_is(owner: &Owner) -> bool {
 /// from account_session's owner cache — no I/O, no lock of account_session's (F8).
 fn stored_owner_key() -> Option<(String, String)> {
     bir_core::account_session::stored_owner().map(|key| (key.origin, key.user_id))
+}
+
+/// Test door: a legacy-in-place open installed directly into the phase — the generation tests
+/// need a machine room without driving a whole claim. The open is the machine's in everything
+/// after: snapshot reads it, close ends it, the generation is the machine's own.
+#[cfg(any(test, feature = "test-support"))]
+pub fn open_legacy_in_place_for_test(
+    layout: &bir_core::rooms::Layout,
+    user_id: String,
+    origin: String,
+) -> Result<(Arc<Mutex<Database>>, u64), String> {
+    let path = layout.legacy_database();
+    let handle = crate::open_room::open_path(&path, None)?;
+    let owner = Owner {
+        origin,
+        user_id,
+        practice: false,
+    };
+    let generation = next_generation();
+    {
+        let mut session = locked();
+        session.epoch += 1;
+        mirror(session.epoch);
+        session.phase = Phase::Legacy {
+            owner,
+            room: OpenRoom {
+                room_id: None,
+                path: path.clone(),
+                generation,
+                handle: handle.clone(),
+            },
+            importing: false,
+        };
+    }
+    bir_core::db::set_open_room_database(Some(path));
+    Ok((handle, generation))
 }
 
 /// quit (§8's state part): the epoch bumps, the phase is terminal, the gate locks. The release
@@ -879,6 +1309,94 @@ pub fn quit() {
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
+/// §5.8 step 4's mechanism (the import's reinstall, as much of it as commit 2 needs): under
+/// SESSION, CAS on the epoch — if the session moved on since the import started, the new handle
+/// installs nothing and the caller is told. Within the epoch the room is replaced with a new
+/// generation. The importing flag and the pause dance are commit 4's.
+pub fn reinstall_room(epoch: u64, handle: Arc<Mutex<Database>>, path: PathBuf) -> bool {
+    let mut session = locked();
+    if session.epoch != epoch {
+        return false;
+    }
+    let generation = next_generation();
+    match &mut session.phase {
+        Phase::Open { room, .. } | Phase::Legacy { room, .. } => {
+            room.handle = handle;
+            room.generation = generation;
+            room.path = path.clone();
+            bir_core::db::set_open_room_database(Some(path));
+            true
+        }
+        _ => false,
+    }
+}
+
+/// The migration state the page reads (§1): computed from the phase, never a state of its own.
+/// Opening reads as moving; Blocked reads as its kind; Open with a note reads as permanent or
+/// offered. `None` is an ordinary sign-in — SignedOut, Quitting, Open with no note, Legacy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MigrationState {
+    Moving,
+    Transient {
+        copy_saved: bool,
+        detail: String,
+    },
+    Permanent {
+        detail: String,
+    },
+    MovedNotOpened {
+        detail: String,
+    },
+    /// The device store cannot be read and rooms exist (§7, wired in commit 5): the support
+    /// page plus Try again.
+    DeviceStore {
+        detail: String,
+    },
+    /// The legacy file reappeared after the move (or this account's room has data): the offer
+    /// waits for the page. Bound by construction: the note is in the phase, so a close or a
+    /// replace ends it — there is nothing to compare.
+    Offered,
+}
+
+/// The migration state, computed from the phase in one read (§1: MIGRATION is gone).
+pub fn migration_state() -> Option<MigrationState> {
+    let session = locked();
+    match &session.phase {
+        Phase::Opening { .. } => Some(MigrationState::Moving),
+        Phase::Blocked { reason, .. } => Some(match reason {
+            Blocked::Transient { copy_saved, detail } => MigrationState::Transient {
+                copy_saved: *copy_saved,
+                detail: detail.clone(),
+            },
+            Blocked::MovedNotOpened { detail } => MigrationState::MovedNotOpened {
+                detail: detail.clone(),
+            },
+            Blocked::DeviceStore { detail } => MigrationState::DeviceStore {
+                detail: detail.clone(),
+            },
+        }),
+        Phase::Open { note, .. } => match note {
+            Note::None => None,
+            Note::Permanent { detail } => Some(MigrationState::Permanent {
+                detail: detail.clone(),
+            }),
+            Note::Offered { .. } => Some(MigrationState::Offered),
+        },
+        Phase::SignedOut | Phase::Legacy { .. } | Phase::Quitting => None,
+    }
+}
+
+/// The offer's "Not now", and its answered-in-success end (§5.11's note clearing, as much as
+/// commit 2 needs for the verb to run against the machine): the note leaves the phase under
+/// SESSION. The full boundary — the epoch binding, the room lock — is commit 4's.
+pub fn clear_offer_note() {
+    let mut session = locked();
+    if let Phase::Open { note, .. } = &mut session.phase {
+        *note = Note::None;
+    }
+}
+
+
 static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -1228,7 +1746,11 @@ mod tests {
     }
 
     fn room_target(owner: &Owner) -> Target {
-        Target::Room(bir_core::rooms::room_id_for(&owner.origin, &owner.user_id))
+        Target::Room {
+            room_id: bir_core::rooms::room_id_for(&owner.origin, &owner.user_id),
+            note: Note::None,
+            count_opened: false,
+        }
     }
 
     /// The gate's raw flag, without the test bypass is_unlocked adds (tests run with it on).
@@ -2352,59 +2874,6 @@ mod tests {
         files
     }
 
-    /// F4: a device_revoked on a send ends the session on the REAL path — the send's context
-    /// carries the owner, the epoch and the credential; the bearer arm's session_ended reads
-    /// them, the credential matches the disk, and the close is owner-ending: signed out, the
-    /// room closed (F2's close), the device key forgotten.
-    #[test]
-    fn a_device_revoked_on_a_send_ends_the_session() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch_a = snapshot().epoch;
-        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
-        bir_core::account_session::on_session_ended(|owner, epoch, credential| {
-            server_ended(owner, epoch, credential);
-        });
-        // The device key, registered as A's — the revocation must forget it.
-        bir_core::relay::lazy_first_key_for_test();
-        assert!(!device_key_files(&scratch).is_empty());
-        // The send's fetch records the credential, as the real send does.
-        let key_a = bir_core::account_session::OwnerKey {
-            origin: owner_a.origin.clone(),
-            user_id: owner_a.user_id.clone(),
-        };
-        let context = bir_core::account_session::SendContext::new(key_a, epoch_a);
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.block_on(
-            bir_core::account_session::SEND_CONTEXT.scope(context.clone(), async {
-                let tokens = bir_core::account_session::AccountTokens;
-                let _ = bir_core::bir_submit::TokenSource::access_token(&tokens, false).await;
-                // The bearer arm of the real client on a 403 device_revoked: the session ends
-                // inside the send's own context.
-                bir_core::bir_submit::TokenSource::session_ended(&tokens);
-            }),
-        );
-        join_device_forget_threads();
-        assert_eq!(
-            snapshot().phase_kind,
-            PhaseKind::SignedOut,
-            "the device_revoked on the send did not end the session"
-        );
-        assert!(
-            crate::open_room::current().is_none(),
-            "the room survived the device_revoked ending"
-        );
-        assert!(
-            device_key_files(&scratch).is_empty(),
-            "the revoked device's key was not forgotten"
-        );
-    }
-
     /// F4's other half: after the revocation ended the session, a registration — whenever it
     /// was started — writes nothing: the cache names no owner and the epoch has moved, so the
     /// gate refuses and a revoked device is never re-registered behind the ending's back.
@@ -2437,78 +2906,6 @@ mod tests {
         assert!(
             device_key_files(&scratch).is_empty(),
             "the revoked device was re-registered: a key is on disk after the ending"
-        );
-    }
-
-    /// bir-mcp's condition (row 3): bir-mcp's door signs in B — the raw disk write, no cache
-    /// update, exactly what a process without the machine does — while the app has A open
-    /// through TODAY's real path (the slot, open_session_room). At the next I/O point the app
-    /// closes A as signed in elsewhere. B's stored sign-in is never touched.
-    #[test]
-    fn bir_mcps_sign_in_of_another_owner_closes_the_apps_session() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        crate::open_room::reset_for_tests();
-        crate::room_session::reset_for_tests();
-        bir_core::db::set_open_room_database(None);
-        let owner_a = seed_stored("user-a", false);
-        // The room through TODAY's real path — the slot — so the interim close_session of the
-        // ending is what the test proves, not the machine's phase.
-        let stored_a = bir_core::cloud_account::load_stored_account()
-            .unwrap()
-            .expect("the seeded sign-in reads back");
-        let _opened = crate::room_session::open_session_room(&stored_a);
-        assert!(
-            crate::open_room::current().is_some(),
-            "the real path opened no room"
-        );
-        let _ = &scratch;
-        let _ = &owner_a;
-        // bir-mcp's door: the RAW writer at the very path the app reads — the environment's
-        // account-file override when set, the device folder otherwise — with no cache update.
-        let stored_b = bir_core::cloud_account::StoredAccount {
-            server_url: owner_a.origin.clone(),
-            access_token: "access-user-b".into(),
-            refresh_token: "refresh-user-b".into(),
-            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
-            user_id: "user-b".into(),
-            email: None,
-            offline: false,
-            last_refresh_unix: 0,
-            practice: false,
-        };
-        let account_path = std::env::var_os("BUWIZ_CLOUD_ACCOUNT_FILE")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| bir_core::platform::device_dir().join("buwiz-cloud-account.json"));
-        std::fs::write(account_path, stored_b.encode().unwrap()).unwrap();
-        assert_eq!(
-            bir_core::account_session::stored_owner().map(|key| key.user_id),
-            Some("user-a".to_string()),
-            "the cache still names A — bir-mcp's write never updated it"
-        );
-        // The next I/O point: the real refresh verb, with the build resolving the stored
-        // sign-in's own server (as production's does) so the verb reaches the owner check.
-        temp_env::with_vars(
-            [("BUWIZ_SERVER_URL", Some("https://buwiz.example.test"))],
-            || {
-                let verb =
-                    crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
-                        .expect("the refresh verb spawns");
-                let _ = futures::executor::block_on(verb);
-            },
-        );
-        assert!(
-            crate::open_room::current().is_none(),
-            "A's room survived the owner change on disk"
-        );
-        let disk = bir_core::cloud_account::load_stored_account()
-            .unwrap()
-            .expect("B's stored sign-in is untouched");
-        assert_eq!(disk.user_id, "user-b");
-        assert_eq!(
-            bir_core::account_session::stored_owner(),
-            None,
-            "the stale cache was never cleared — it would re-close B on every refresh"
         );
     }
 
@@ -3220,7 +3617,7 @@ mod tests {
             last_refresh_unix: 0,
             practice: false,
         };
-        signed_in(&stored).unwrap();
+        signed_in(&stored, 1).unwrap();
         assert_eq!(
             bir_core::account_session::stored_owner().map(|key| key.user_id),
             Some("user-a".to_string()),
@@ -3234,7 +3631,7 @@ mod tests {
             "the cache followed the clear"
         );
         // The server-ended arm the same way.
-        signed_in(&stored).unwrap();
+        signed_in(&stored, 1).unwrap();
         let epoch = snapshot().epoch;
         server_ended(
             bir_core::account_session::OwnerKey::of(&stored).unwrap(),

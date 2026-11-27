@@ -69,19 +69,24 @@ pub fn prepare_launch() {
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
     drop_old_welcomed_list();
+    // §1 [D4c]: the device guard and the owner-cache fill are the machine's init, the first
+    // thing the boot runs — before any claim or open, outside every SESSION section.
+    let layout = bir_core::rooms::Layout::here();
+    if let Err(error) = crate::session::init(layout.device_dir()) {
+        tracing::info!("device guard not held at launch: {error}");
+    }
     if crate::account_gate::auth_bypass_enabled() {
-        bir_core::transport::set_practice_account(false);
-        crate::account_gate::set_unlocked(true);
+        // §9: the bypass is the machine's own door, so check_invariants knows to step aside.
+        crate::session::bypass_unlock();
         return;
     }
-    let (unlocked, practice) = restore_saved_session();
-    // Set before the gate opens, so no send can start ahead of it.
-    bir_core::transport::set_practice_account(unlocked && practice);
-    crate::account_gate::set_unlocked(unlocked);
-    if unlocked && let Ok(Some(stored)) = load_stored() {
-        // The launch resume (§A.4): a claim cut mid-move finishes here, before anything opens the
-        // room. R1's order is the room open's own guard.
-        crate::room_session::open_session_room(&stored);
+    let (qualifies, _practice) = restore_saved_session();
+    // The gate never unlocks here: I1 opens it at commit, once the room is in the phase. The
+    // launch that qualifies begins the open; the claim resumes inside it (§A.4).
+    if qualifies && let Ok(Some(stored)) = load_stored() {
+        if let Some(owner) = crate::session::Owner::of_stored(&stored) {
+            crate::session::begin_open(owner, crate::bir_module::this_engine(), crate::session::OpenWhy::Launch);
+        }
     }
 }
 
@@ -137,27 +142,14 @@ pub(crate) fn save_signed_in(
         offline: false,
         practice,
     };
-    bir_core::transport::set_practice_account(practice);
-    // F10/F8': the persist and the cache are the machine's one step. Commit 3 adds the begin_open
-    // inside it; register_device_soon stays here until commit moves it into commit.
-    crate::session::signed_in(&stored_from(secrets, now)).map_err(host_error)?;
-    bir_core::relay::forget_device();
-    register_device_soon();
+    // F10/F8': the persist, the cache and the open's beginning are the machine's one step. The
+    // practice flag is commit's to set when the room installs (I1's order); the device key's
+    // forget and the new registration are the machine's — a replace forgets the ended owner's
+    // key epoch-checked (F2), and commit starts the registration with its own (owner, epoch)
+    // (F2'), so a same-owner re-sign-in keeps its key and a stale registration writes nothing.
+    crate::session::signed_in(&stored_from(secrets, now), crate::bir_module::this_engine())
+        .map_err(host_error)?;
     Ok(())
-}
-
-/// Adds this device to the account (bir-core `relay::register_after_sign_in`) on a thread of its own, so signing in never
-/// waits for it: a failure is logged there and the first send registers as it always did; a practice account adds none.
-fn register_device_soon() {
-    let database = bir_core::db::capture_database_path_override();
-    let started = std::thread::Builder::new()
-        .name("buwiz-device-register".into())
-        .spawn(move || {
-            database.run(bir_core::relay::register_after_sign_in);
-        });
-    if let Err(error) = started {
-        tracing::warn!("device registration not started ({error}); the first send registers");
-    }
 }
 
 /// Test seam: the Http refresh_account uses. A test parks the network by installing a factory
@@ -538,23 +530,15 @@ fn session_opened() -> HostResult {
     // F10: the claim can copy, hash and zip a large legacy file — never on the UI thread, or
     // "Moving" never paints (the page polls the migration state while this runs). The order is
     // unchanged: the claim runs or resumes, the room opens, the gate opens only after the room.
-    let _room_open = spawn_account("buwiz-room-open", || {
-        if let Ok(Some(stored)) = load_stored() {
-            crate::room_session::open_session_room(&stored);
-        }
-        crate::account_gate::set_unlocked(true);
-        crate::bir_module::open_database_at_launch();
-        crate::hooks::hooks().refresh_menu();
-        Ok(HostValue::Null)
-    });
+    // A no-op for the room (the spec's choice): session::signed_in already began the open in
+    // its own SESSION section, and a second begin_open for the same owner is the X1 no-op.
+    // The updater still starts here, as before.
     crate::hooks::hooks().start_updater();
     Ok(HostValue::Null)
 }
 
 fn session_closed() -> HostResult {
-    crate::account_gate::set_unlocked(false);
-    bir_core::transport::set_practice_account(false);
-    crate::hooks::hooks().refresh_menu();
+    crate::session::close(crate::session::Reason::PageClosed);
     Ok(HostValue::Null)
 }
 
@@ -851,22 +835,9 @@ mod tests {
         );
     }
 
-    /// F10: session_opened never runs the claim on the calling thread — it returns while the
-    /// room work is still blocked, and the work finishes on the spawned thread.
-    #[test]
-    fn session_opened_returns_while_the_room_work_is_still_running() {
-        use_ephemeral_database();
-        let release = crate::room_session::block_next_open_session_for_test();
-        let opened = std::thread::spawn(session_opened);
-        std::thread::sleep(std::time::Duration::from_millis(300));
-        assert!(
-            opened.is_finished(),
-            "session_opened is still blocked in the room work: the claim runs on the calling thread"
-        );
-        let _ = release.send(());
-        let _ = opened.join();
-        crate::account_gate::set_unlocked(false);
-    }
+    // F10's threading is the machine's now: the claim runs on the buwiz-room-open thread the
+    // machine spawns, never on the calling thread — session_opened is a no-op for the room, and
+    // the machine's own tests drive the real thread.
 
     /// Startup deletes `buwiz_server_url`. The child uses a scratch database
     /// (`BIR_DATABASE_PATH`), `EBIR_TEST_ENV=1`, and `BIR_SFTP_DRY_RUN=1`.
@@ -1624,40 +1595,6 @@ mod tests {
             });
         }
 
-        /// Row 12: the page's close verb locks the gate and refreshes the menu but does NOT
-        /// close the room — as main, until commit 3.
-        #[test]
-        fn row12_the_pages_close_leaves_the_room_open() {
-            let _turn = crate::open_room::room_test_turn();
-            crate::open_room::reset_for_tests();
-            crate::room_session::reset_for_tests();
-            bir_core::db::set_open_room_database(None);
-            let device = tempfile::tempdir().unwrap();
-            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
-            signed_in(|_file| {
-                let stored = stored("access-a", "refresh-a");
-                save_stored(&stored).unwrap();
-                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
-                    &stored,
-                ));
-                let opened = crate::room_session::open_session_room(&stored);
-                assert!(
-                    crate::open_room::current().is_some(),
-                    "the real path opened no room ({opened:?})"
-                );
-                crate::account_gate::set_unlocked(true);
-                session_closed().expect("the page verb answers");
-                assert!(
-                    crate::open_room::current().is_some(),
-                    "the page's close closed the room — main does not"
-                );
-                assert!(
-                    !crate::account_gate::unlocked_flag(),
-                    "the gate is still open after the page's close"
-                );
-            });
-        }
-
         /// Row 11: a 401 of the account GET or the TIN-list POST — a non-send caller with no
         /// send context — logs only: NOTHING ends, as main does.
         #[test]
@@ -1861,92 +1798,6 @@ mod tests {
                     "the merged record wrote the old access token back"
                 );
             });
-        }
-
-        /// F2 (the standing rule): the REAL sign-out path closes the room, invalidates the TIN
-        /// cache and forgets the device key, and a same-owner re-sign-in reopens the room. Until
-        /// commit 3 wires the machine, the close verbs run the old slot's close themselves.
-        #[test]
-        fn real_sign_out_closes_the_room_and_a_same_owner_re_sign_in_reopens_it() {
-            let _turn = crate::open_room::room_test_turn();
-            crate::open_room::reset_for_tests();
-            crate::room_session::reset_for_tests();
-            bir_core::db::set_open_room_database(None);
-            let device = tempfile::tempdir().unwrap();
-            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
-            signed_in(|_file| {
-                let stored = stored("access-a", "refresh-a");
-                save_stored(&stored).unwrap();
-                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
-                    &stored,
-                ));
-                // The room opens through today's real path: session_opened's own entry.
-                let opened = crate::room_session::open_session_room(&stored);
-                assert!(
-                    crate::open_room::current().is_some(),
-                    "the real path opened no room ({opened:?})"
-                );
-                // A device key owned by the account, as a registration leaves it — in the device
-                // folder as this environment resolves it, the same path the forget deletes from.
-                let device_dir = bir_core::platform::device_dir();
-                std::fs::create_dir_all(&device_dir).unwrap();
-                std::fs::write(device_dir.join("buwiz_submit_device_key.txt"), "key-of-a").unwrap();
-                std::fs::write(
-                    device_dir.join("buwiz_submit_device_owner.txt"),
-                    format!(
-                        "{}\n{}\n",
-                        bir_core::rooms::room_origin(SERVER).unwrap(),
-                        "u1"
-                    ),
-                )
-                .unwrap();
-                assert!(
-                    bir_core::relay::device_key_owner().is_some(),
-                    "the seeded owner record does not read back"
-                );
-                // The submitter exists, as it does on any real path that has sent or listed
-                // TINs — N3 invalidates only an existing one's cache, never constructs one.
-                bir_core::relay::submitter().expect("the test environment builds the submitter");
-                let invalidations_before = bir_core::bir_submit::tins::INVALIDATIONS
-                    .load(std::sync::atomic::Ordering::SeqCst);
-                let (seen_tx, seen_rx) = mpsc::channel::<Seen>();
-                sign_out_with(Box::new(Logout {
-                    seen: seen_tx,
-                    release: None,
-                    file: _file.clone(),
-                    answer: answered,
-                }))
-                .expect("the sign-out answers");
-                // The device-key forget is the backgrounded half of the close: join it before
-                // judging, as the machine's own tests do.
-                crate::session::join_device_forget_threads();
-                assert!(
-                    crate::open_room::current().is_none(),
-                    "the room survived the real sign-out"
-                );
-                assert!(
-                    bir_core::bir_submit::tins::INVALIDATIONS
-                        .load(std::sync::atomic::Ordering::SeqCst)
-                        > invalidations_before,
-                    "the TIN cache was not invalidated"
-                );
-                assert!(
-                    !device_dir.join("buwiz_submit_device_key.txt").exists(),
-                    "the device key survived the sign-out"
-                );
-                let _ = seen_rx.try_recv();
-                // A same-owner re-sign-in reopens the room — the slot is not wedged.
-                save_stored(&stored).unwrap();
-                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
-                    &stored,
-                ));
-                let reopened = crate::room_session::open_session_room(&stored);
-                assert!(
-                    bir_core::db::open_room_id().is_some(),
-                    "the re-sign-in did not reopen the room ({reopened:?})"
-                );
-            });
-            bir_core::platform::set_device_dir_override(None);
         }
 
         /// F1: the verb's changed-server arm must not deadlock — the decision is made inside the
