@@ -440,6 +440,9 @@ pub fn shutdown_for_quit() {
     LAUNCH_PENDING.with(|pending| pending.set(false));
     finish_worker(take_worker(None), this_engine());
     release_taken(take_database_slot());
+    // F9: the rooms-mode slot and the device guard go too — an update relaunch must not meet
+    // this process's device guard or room lock.
+    crate::open_room::release_all_for_quit();
 }
 
 /// [`shutdown_for_quit`] at an engine thread's end (the NSH door's guard,

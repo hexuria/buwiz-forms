@@ -689,6 +689,32 @@ mod a3a_tests {
         .unwrap();
     }
 
+    /// F9: quit releases the room and the device guard — a relaunch (the update's replacement)
+    /// opens the same device without meeting the old process's locks.
+    #[test]
+    fn quit_releases_the_room_and_the_device_guard() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        assert!(crate::open_room::current().is_some(), "no room open before quit");
+        // The quit runs on a thread of its own (its engine thread-locals end with it).
+        std::thread::spawn(crate::bir_module::shutdown_for_quit)
+            .join()
+            .unwrap();
+        assert!(
+            crate::open_room::current().is_none(),
+            "the room stayed in the slot past quit"
+        );
+        // The relaunch: the same device opens again — no device guard, no room lock held over.
+        let b = stored("user-a");
+        assert!(
+            matches!(open_session_room(&b), SessionRoom::Room { .. }),
+            "the relaunch did not open the room"
+        );
+    }
+
     /// F12: single-room mode never runs a real claim — the named file is the slot, no record, no rooms.
     #[test]
     fn single_room_mode_opens_no_room_and_runs_no_claim() {

@@ -221,6 +221,16 @@ pub fn close_room() {
     lock(&REGISTRY).retain(|_, (weak, _)| weak.strong_count() > 0);
 }
 
+/// F9: quit releases everything the slot holds — the room's Arc and generation, the registry's
+/// connections (each file's owner lock rides with them) and the device guards — so an update's
+/// replacement process is never kept out by the one that just exited. Sends in flight finish
+/// against their own Arcs, as ever; the process is ending either way.
+pub fn release_all_for_quit() {
+    lock(&SLOT).take();
+    lock(&REGISTRY).clear();
+    lock(&DEVICE_GUARDS).clear();
+}
+
 #[cfg(test)]
 static ROOM_TEST_TURN: Mutex<()> = Mutex::new(());
 
