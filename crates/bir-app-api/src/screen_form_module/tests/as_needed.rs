@@ -3675,6 +3675,7 @@ fn v2018_1606_a_legacy_dormant_installment_amount_is_cleared_on_open_and_said_on
     assert_eq!(open("1606", 1)["notes"], json!([]));
 }
 
+#[cfg(feature = "agent")]
 #[test]
 fn v2018_1606_an_assistant_clearing_is_pending_for_the_page_open() {
     setup();
@@ -3699,21 +3700,19 @@ fn v2018_1606_an_assistant_clearing_is_pending_for_the_page_open() {
         &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
     );
 
-    // The assistant's form.open saves every Draft through agent::save_draft.
-    // That save clears the dormant value before any page has opened; the page
-    // still receives the pending notice on its first open.
-    with_database(|db| {
-        let mut draft = legacy.clone();
-        agent::save_draft(
-            bir_core::forms::agent::AgentFormKind::Queueable(
-                bir_core::forms::queueable::QueueableKind::Form1606,
-            ),
-            db,
-            &mut draft,
-        )
-        .map_err(host_error)
-    })
-    .unwrap();
+    // The assistant's form.open itself saves every Draft through
+    // agent::save_draft. That save clears the dormant value before any page
+    // has opened; the page still receives the pending notice on its first open.
+    use gpui_agent::AgentHost;
+    let mut assistant = crate::agent::Session::new(crate::agent::UiQueue::discarding());
+    assistant.set_db(crate::bir_module::database_handle().unwrap());
+    let opened = assistant
+        .dispatch(&gpui_agent::protocol::Op::Invoke {
+            name: "form.open".into(),
+            args: json!({"code": "1606", "year": YEAR, "period": 1, "tin": TIN}),
+        })
+        .unwrap();
+    assert_eq!(opened.value.unwrap()["form"], "1606");
     let first = open("1606", 1);
     assert_eq!(first["draft"]["cost_and_expenses"], 0.0);
     let stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
