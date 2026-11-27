@@ -89,6 +89,9 @@ click tp-branch-rdo_code-search
 key tp-branch-rdo_code-search mod+a
 type tp-branch-rdo_code-search zzzz
 wait_until tp-branch-rdo_code-nothing --timeout-ms 3000
+# The open list (here only its "Nothing matches" line) covers Save, as any open dropdown does: leave the box first,
+# then press Save at once. The leaving settles at once (#458): the list is gone and the press reaches Save.
+click tp-branch-name
 click tp-branch-save --screenshot
 wait_until tp-branch-save --absent --timeout-ms 5000 --screenshot
 click tp-sec-address-edit
@@ -176,6 +179,9 @@ click tp-address-zip_code-search
 key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search zzzz
 wait_until tp-address-zip_code-nothing --timeout-ms 3000
+# The open list (here only its "Nothing matches" line) covers Save, as any open dropdown does: leave the box first,
+# then press Save at once. The leaving settles at once (#458): the list is gone and the press reaches Save.
+click tp-address-phone
 click tp-address-save --screenshot
 wait_until tp-address-save --absent --timeout-ms 5000 --screenshot
 click tb-panel
