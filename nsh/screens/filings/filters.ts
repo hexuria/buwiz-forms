@@ -1,6 +1,6 @@
-// Filings' filters: one owner for the search, the four filters, the month a Home tile asked for, and the narrow list's tab.
+// Filings' filters: one owner for the search, the four filters, the month a navigation preset asked for, and the narrow list's tab.
 // They live in this module, not in the view, so they survive leaving Filings and coming back (the old app kept them in an
-// object made at boot and cleared them with Clear filters or a Home tile's preset). Signals are private; read the
+// object made at boot and cleared them with Clear filters or a navigation preset). Signals are private; read the
 // accessors inside JSX or a closure.
 import { signal } from "nsh";
 import { app } from "../../shell";
@@ -44,7 +44,7 @@ function active(): boolean {
 let appliedFrom: object | null = null;
 
 // The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in): no filter, the All tab, and a
-// Home tile's preset may apply again.
+// navigation preset may apply again.
 app.onSessionChange(() => {
   reset();
   tab.set("all");
@@ -75,7 +75,7 @@ export const filters = {
   /** Clear filters: the search and every filter go back to all. The narrow list's tab stays. */
   clear: reset,
   /**
-   * A Home tile's preset replaces every filter, once per navigation: `from` is the navigation's params object, which Back
+   * A navigation preset replaces every filter, once per navigation: `from` is the navigation's params object, which Back
    * hands over again unchanged. A preset moves the narrow list to All, where its returns show with their statuses.
    */
   applyPreset(preset: FilingsPreset, from: object): void {

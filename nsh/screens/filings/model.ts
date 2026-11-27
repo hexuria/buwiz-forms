@@ -107,9 +107,9 @@ export interface FilterValues {
   forms: ReadonlySet<string> | null;
   periods: ReadonlySet<string> | null;
   statuses: ReadonlySet<string> | null;
-  /** "YYYY-MM": only returns last changed in that month (Home's "Filed this month"). */
+  /** "YYYY-MM": only returns last changed in that month (a navigation preset). */
   updatedMonth: string | null;
-  /** Only returns that count as filed (`countsAsFiled`: no dry run), as Home's "Filed this month" counts them. */
+  /** Only returns that count as filed (`countsAsFiled`: no dry run). */
   filedOnly?: boolean;
 }
 
@@ -129,19 +129,19 @@ export function filterRows(rows: readonly ReturnRow[], index: FormIndex, f: Filt
   });
 }
 
-/** What a Home tile asks Filings to show: statuses ("Draft", "Queued", ...) and a month ("YYYY-MM"), as dashboard.js FilingsPreset. */
+/** What a navigation preset asks Filings to show: statuses ("Draft", "Queued", ...) and a month ("YYYY-MM"), as dashboard.js FilingsPreset. */
 export interface FilingsPreset {
   statuses?: readonly string[];
   updatedMonth?: string;
-  /** Only returns that count as filed (Home's "Filed this month": a dry run is left out). */
+  /** Only returns that count as filed (a dry run is left out). */
   filedOnly?: boolean;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
- * The preset in a navigation's params, or null. Home sends `go("filings", { statuses, updatedMonth })`, the old preset's
- * own names; the same two keys inside a `preset` object are read too.
+ * The preset in a navigation's params, or null. Home sends `go("filings", { statuses })`; a preset can also carry
+ * updatedMonth and filedOnly, the old preset's own names. The same keys inside a `preset` object are read too.
  */
 export function presetOf(params: Readonly<Record<string, unknown>>): FilingsPreset | null {
   const src = isRecord(params.preset) ? params.preset : params;
