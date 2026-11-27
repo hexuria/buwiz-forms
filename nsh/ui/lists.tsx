@@ -49,6 +49,10 @@ export interface ChoiceRowProps {
   testID?: string;
   /** Picks it; a disabled row has none. */
   onPress?: () => void;
+  /** A press went down on it (before the focus it takes leaves the box that opened the list: SearchPick's combobox). */
+  onPressDown?: () => void;
+  /** That press ended: released, moved away or cancelled. */
+  onPressUp?: () => void;
   disabled?: boolean;
   /** The current value: a check at the end. */
   chosen?: boolean;
@@ -75,6 +79,8 @@ export function ChoiceRow(props: ChoiceRowProps) {
       selected={props.chosen}
       disabled={props.disabled}
       onPress={props.onPress}
+      onPressDown={props.onPressDown}
+      onPressUp={props.onPressUp}
       onMouseEnter={() => props.onHover?.()}
       tooltip={props.tooltip ? <Tooltip label={props.tooltip} /> : undefined}
       class={cx(
