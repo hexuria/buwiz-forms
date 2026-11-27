@@ -11523,7 +11523,7 @@ mod tests {
             "the narrowed band must truncate this fill: {value:?}"
         );
         assert!(
-            !value.contains("TAGUIGME"),
+            !value.contains("GLOB..."),
             "a mid-word fragment must never print: {value:?}"
         );
         for piece in value.split('\n') {
