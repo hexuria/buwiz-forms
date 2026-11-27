@@ -64,10 +64,11 @@ fn links_unsupported(error: &io::Error) -> bool {
     #[cfg(unix)]
     {
         let code = error.raw_os_error();
-        matches!(
-            code,
-            Some(libc::EPERM) | Some(libc::ENOTSUP) | Some(libc::EOPNOTSUPP) | Some(libc::ENOSYS)
-        ) || (cfg!(target_os = "android") && code == Some(libc::EACCES))
+        // A slice, not a pattern: ENOTSUP and EOPNOTSUPP are one value on Linux, so a pattern is unreachable there.
+        [libc::EPERM, libc::ENOTSUP, libc::EOPNOTSUPP, libc::ENOSYS]
+            .into_iter()
+            .any(|errno| code == Some(errno))
+            || (cfg!(target_os = "android") && code == Some(libc::EACCES))
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -98,10 +99,11 @@ fn tolerated_sync_error(error: &io::Error) -> bool {
     }
     #[cfg(unix)]
     {
-        matches!(
-            error.raw_os_error(),
-            Some(libc::EINVAL) | Some(libc::ENOTSUP) | Some(libc::EOPNOTSUPP)
-        )
+        // A slice, not a pattern: ENOTSUP and EOPNOTSUPP are one value on Linux, so a pattern is unreachable there.
+        let code = error.raw_os_error();
+        [libc::EINVAL, libc::ENOTSUP, libc::EOPNOTSUPP]
+            .into_iter()
+            .any(|errno| code == Some(errno))
     }
     #[cfg(not(unix))]
     {
