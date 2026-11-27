@@ -36,6 +36,8 @@ function Exit-Native($message) {
     exit $code
 }
 
+. (Join-Path $PSScriptRoot 'lib\Prebuilt.ps1')
+
 # Self-elevate: installs write to Program Files and the machine PATH, so this
 # needs admin rights. Relaunching keeps the documented command working from a
 # regular PowerShell window (shows a UAC prompt).
@@ -182,7 +184,7 @@ if (-not $gpuiVersion) {
     exit 1
 }
 Write-Step "Installing gpui-agent CLI (pinned version $gpuiVersion, matches Cargo.toml)"
-& "$cargoBin\cargo.exe" install gpui-agent-cli --version $gpuiVersion
+Install-PrebuiltOrBuild 'gpui-agent-cli' $gpuiVersion
 if ($LASTEXITCODE -ne 0) { Exit-Native "gpui-agent install failed" }
 
 # 7. impeccable CLI and the impeccable-rust agent skill, at scripts\impeccable.pin.
@@ -208,7 +210,7 @@ if ($NoImpeccable) {
         Write-Step "impeccable already installed at pinned version $impeccableVersion -  skipping"
     } else {
         Write-Step "Installing impeccable CLI $impeccableVersion (pinned in scripts\impeccable.pin)"
-        & "$cargoBin\cargo.exe" install --locked impeccable --version $impeccableVersion
+        Install-PrebuiltOrBuild 'impeccable' $impeccableVersion '--locked'
         if ($LASTEXITCODE -ne 0) { Exit-Native "impeccable install failed" }
     }
 

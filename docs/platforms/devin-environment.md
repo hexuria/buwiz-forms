@@ -33,8 +33,9 @@ It is read-only: never edit it.
 
 ## Verification tooling (all platforms)
 
-Every setup script (`setup-linux.sh`, `setup-macos.sh`, `setup-windows.ps1`) installs the `impeccable` CLI with
-`cargo install --locked` and downloads the `impeccable-rust` agent skill (`SKILL.md`, `performance.md`) from
+Every setup script (`setup-linux.sh`, `setup-macos.sh`, `setup-windows.ps1`) installs the `impeccable` CLI at its pin
+(through the prebuilt path below, with `cargo install --locked` as the fallback) and downloads the `impeccable-rust`
+agent skill (`SKILL.md`, `performance.md`) from
 `hexuria/impeccable-rust` into `.agents/skills/impeccable-rust/` at the repository root, where agents look for skills.
 `.agents/` is git-ignored because agent artifacts are never committed, so the skill is downloaded at a pinned commit
 instead; a `.commit` file there records which one. `--check` reports both; `--no-impeccable` (`-NoImpeccable` on
@@ -52,6 +53,20 @@ else hard-codes them. Linux maintenance re-downloads `cargo-binstall` when its p
 re-run the platform's setup script. On Linux and macOS, if Cargo's install directory (`$CARGO_INSTALL_ROOT/bin`, else
 `$CARGO_HOME/bin`, else `~/.cargo/bin`) is not on `PATH`, the setup scripts add it for their own run and warn you to
 add it to your shell profile.
+
+## Prebuilt tools
+
+The setup scripts use `scripts/lib/prebuilt.sh` (Linux/macOS) or `scripts/lib/Prebuilt.ps1` (Windows) for crate tools
+that publish their own prebuilt release artifacts. `gpui-agent-cli` is the largest one; the Linux cargo fallback for
+`just`, the `--extras` crates (`cargo-audit`, `cargo-outdated`, `cargo-machete`), and `impeccable` go through the same
+path. The helper first downloads prebuilt `cargo-binstall` at `CARGO_BINSTALL_VERSION` from `scripts/impeccable.pin`,
+then runs it with only the `crate-meta-data` strategy: the crate's own release assets, never a third-party prebuilt
+store and never an implicit compile. The `gpui-agent-cli` version still comes from the app's Cargo pin, and the
+`impeccable` version from the same pin file.
+
+If `cargo-binstall` or a crate's prebuilt archive cannot be downloaded or installed, the helper prints one line and
+runs the usual `cargo install` source build. Set `BUWIZ_SETUP_NO_PREBUILT=1` before running a setup script to skip
+prebuilt downloads and force every crate tool to build from source.
 
 ## Local account server (all platforms)
 

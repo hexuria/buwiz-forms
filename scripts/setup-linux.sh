@@ -66,6 +66,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+# shellcheck source=scripts/lib/prebuilt.sh
+. "$SCRIPT_DIR/lib/prebuilt.sh"
 # shellcheck source=scripts/setup-impeccable.sh
 . "$SCRIPT_DIR/setup-impeccable.sh"
 
@@ -221,7 +223,7 @@ install_just() {
     fi
     if ! command -v just >/dev/null 2>&1; then
         log "Installing just via cargo"
-        cargo install just
+        install_prebuilt_or_build just 1.45.0
     fi
 }
 
@@ -259,8 +261,7 @@ install_gpui_agent() {
     if command -v gpui-agent >/dev/null 2>&1; then
         # A crates.io install lists as `gpui-agent-cli v0.4.0:`; one from git
         # carries its source after the version and never matches.
-        installed_version="$(cargo install --list 2>/dev/null | sed -n \
-            's/^gpui-agent-cli v\([0-9][0-9.]*\):$/\1/p' | head -1)"
+        installed_version="$(prebuilt_installed_version gpui-agent-cli gpui-agent)"
         if [ "$installed_version" = "$version" ]; then
             log "gpui-agent already installed at pinned version $version"
             return 0
@@ -268,7 +269,7 @@ install_gpui_agent() {
         warn "installed gpui-agent version ${installed_version:-unknown} does not match $version; reinstalling"
     fi
     log "Installing gpui-agent CLI $version (matches the app's pinned host crate)"
-    cargo install gpui-agent-cli --version "$version"
+    install_prebuilt_or_build gpui-agent-cli "$version"
 }
 
 # ---------------------------------------------------------------------------
@@ -361,7 +362,9 @@ main() {
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
-        cargo install cargo-audit cargo-outdated cargo-machete
+        install_prebuilt_or_build cargo-audit 0.22.1
+        install_prebuilt_or_build cargo-outdated 0.19.0
+        install_prebuilt_or_build cargo-machete 0.9.2
     fi
 
     # Freeze-inventory / stamp CI scripts expect Python 3.13; warn if older.

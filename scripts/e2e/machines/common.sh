@@ -2,11 +2,14 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
 cd "$root"
+# shellcheck source=scripts/lib/prebuilt.sh
+. "$root/scripts/lib/prebuilt.sh"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "e2e: $1 is not installed: $2" >&2; exit 1; }; }
 need just "install just (the setup script does)"
 need gpui-agent "run the setup script: it installs gpui-agent-cli at the version Cargo.lock pins"
 need python3 "install Python 3"
-echo "app $(git rev-parse --short=8 HEAD), $(cargo install --list 2>/dev/null | grep '^gpui-agent-cli' || echo 'gpui-agent-cli: version unknown')"
+gpui_agent_version="$(prebuilt_installed_version gpui-agent-cli gpui-agent)"
+echo "app $(git rev-parse --short=8 HEAD), gpui-agent-cli ${gpui_agent_version:-unknown}"
 just e2e check smoke
 smoke() {
     # A dry-run test build only: the runner refuses the Queue recipe without these and --allow-send.

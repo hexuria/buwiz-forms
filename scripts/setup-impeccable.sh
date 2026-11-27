@@ -17,6 +17,8 @@ IMPECCABLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMPECCABLE_PIN_FILE="$IMPECCABLE_ROOT/scripts/impeccable.pin"
 IMPECCABLE_SKILL_DIR="$IMPECCABLE_ROOT/.agents/skills/impeccable-rust"
 IMPECCABLE_SKILL_FILES="SKILL.md performance.md"
+# shellcheck source=scripts/lib/prebuilt.sh
+. "$IMPECCABLE_ROOT/scripts/lib/prebuilt.sh"
 
 impeccable_pin() {  # impeccable_pin <KEY> → its value in scripts/impeccable.pin
     sed -n "s/^$1=\([^[:space:]]*\).*/\1/p" "$IMPECCABLE_PIN_FILE" 2>/dev/null | head -1 || true
@@ -57,7 +59,7 @@ install_impeccable() {
     fi
     [ -z "$installed" ] || warn "installed impeccable version $installed does not match $version; reinstalling"
     log "Installing impeccable CLI $version (pinned in scripts/impeccable.pin)"
-    cargo install --locked impeccable --version "$version"
+    install_prebuilt_or_build impeccable "$version" --locked
 }
 
 # Each file goes to a temp name and is moved into place only once complete, and
