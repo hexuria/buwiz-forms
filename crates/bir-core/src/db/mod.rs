@@ -2304,6 +2304,7 @@ mod tests {
     #[cfg(feature = "sqlcipher")]
     #[test]
     fn test_open_or_recreate_quarantines_unreadable_db() {
+        let _turn = crate::db::room_path_test_turn();
         let mut db_file = NamedTempFile::new().unwrap();
         db_file.write_all(b"not-a-sqlite-database").unwrap();
 
@@ -2469,6 +2470,7 @@ mod tests {
     /// that must see the name is handed it, see the next two tests.)
     #[test]
     fn an_in_process_database_path_wins_over_the_environment() {
+        let _turn = crate::db::room_path_test_turn();
         let named = tempfile::tempdir().expect("temporary directory");
         let from_env = named.path().join("from-env.db");
         let in_process = named.path().join("in-process.db");

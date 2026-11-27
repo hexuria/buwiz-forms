@@ -446,6 +446,7 @@ mod tests {
 
     #[test]
     fn with_no_room_open_the_verbs_say_so() {
+        let _turn = crate::open_room::room_test_turn();
         bir_core::db::set_open_room_database(None);
         bir_core::rooms::use_ephemeral_device_store();
         assert_eq!(state()["room_open"], false);

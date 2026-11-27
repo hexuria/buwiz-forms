@@ -3960,6 +3960,7 @@ mod tests {
     #[test]
     fn oauth_grant_is_not_written_after_the_room_changed() {
         let _turn = crate::open_room::room_test_turn();
+        let _turn = crate::open_room::room_test_turn();
         let folder = tempfile::tempdir().unwrap();
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());

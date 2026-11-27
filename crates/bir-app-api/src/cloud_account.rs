@@ -813,6 +813,7 @@ mod tests {
         /// scan a screen made on the engine thread is forgotten there too — the scan state is process-wide.
         #[test]
         fn sign_out_on_the_account_thread_forgets_the_engines_scan() {
+            let _turn = crate::open_room::room_test_turn();
             signed_in(|file| {
                 let legacy_folder = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("../bir-core/tests/legacy-ebirforms");
@@ -833,6 +834,7 @@ mod tests {
         /// nothing left on this device, while the request still hangs.
         #[test]
         fn sign_out_returns_signed_out_while_the_logout_request_still_hangs() {
+            let _turn = crate::open_room::room_test_turn();
             signed_in(|file| {
                 let (mut fake, heard) = logout(&file, answered);
                 let (release, held) = mpsc::channel();
@@ -858,6 +860,7 @@ mod tests {
         /// sign-in was gone before the request, and stays gone.
         #[test]
         fn a_refused_or_unreachable_logout_leaves_the_device_signed_out() {
+            let _turn = crate::open_room::room_test_turn();
             for answer in [refused, unreachable] {
                 signed_in(|file| {
                     let (fake, heard) = logout(&file, answer);
@@ -881,6 +884,7 @@ mod tests {
         /// free), and survives it: the old logout carries only the old token.
         #[test]
         fn a_new_sign_in_while_the_old_logout_hangs_is_saved_and_kept() {
+            let _turn = crate::open_room::room_test_turn();
             signed_in(|file| {
                 let (mut fake, heard) = logout(&file, answered);
                 let (release, held) = mpsc::channel();
@@ -915,6 +919,7 @@ mod tests {
         #[cfg(unix)]
         #[test]
         fn a_sign_in_that_cannot_be_removed_is_an_error_and_the_gate_stays_locked() {
+            let _turn = crate::open_room::room_test_turn();
             use std::os::unix::fs::PermissionsExt;
             let mode = |path: &std::path::Path, mode: u32| {
                 std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
@@ -981,6 +986,7 @@ mod tests {
         /// rotated pair is saved, and the gate opens.
         #[test]
         fn a_launch_restore_with_an_expired_token_saves_the_rotated_pair_and_opens_the_gate() {
+            let _turn = crate::open_room::room_test_turn();
             signed_in(|_file| {
                 let mut expired = stored("old-access", "old-refresh");
                 expired.access_expires_at_unix = 0;
