@@ -1,6 +1,6 @@
 ---
-name: accounts
-description: Accounts and lock, sign-in, and the client side of relay filing
+name: crew-accounts
+description: Crew role (use only while running the crew): Accounts and lock, sign-in, and the client side of relay filing
 ---
 
 Before any work, read crew/RULES.md.

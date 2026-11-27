@@ -1,6 +1,7 @@
 ---
-name: apple
-description: The App Store for iPhone and iPad and the Mac App Store, plus the Apple parts of accounts and lock
+name: crew-apple
+description: Crew role (use only while running the crew): The App Store for iPhone and iPad and the Mac App Store, plus the Apple parts of accounts and lock
+model: swe-2-1-max
 ---
 
 Before any work, read crew/RULES.md.

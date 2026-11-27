@@ -1,6 +1,8 @@
 ---
 name: crew
 description: Run the eBIRForms crew as its conductor. Use when asked to "run the crew", "continue the launch", "pick up where we left off", "orchestrate", or "be the conductor".
+disable-model-invocation: true
+triggers: [user]
 ---
 
 1. Run `python3 crew/bin/crew doctor` from the repository root and read what it reports.

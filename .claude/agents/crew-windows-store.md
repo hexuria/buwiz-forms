@@ -1,6 +1,6 @@
 ---
-name: windows-store
-description: The Microsoft Store package and the Windows installers
+name: crew-windows-store
+description: Crew role (use only while running the crew): The Microsoft Store package and the Windows installers
 ---
 
 Before any work, read crew/RULES.md.

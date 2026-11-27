@@ -122,7 +122,13 @@ node_modules/
 # crew.local.ini: none of these is ever committed here.
 /.claude/*
 !/.claude/agents/
+/.claude/agents/*
+!/.claude/agents/crew-*.md
 !/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/crew/
+/.devin/agents/*
+!/.devin/agents/crew-*.md
 /.codex/
 /.crew/
 /crew.local.ini

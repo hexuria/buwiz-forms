@@ -1,6 +1,6 @@
 ---
-name: forms
-description: The correctness of every BIR form: what a filer can type, what the app files, and what it prints
+name: crew-forms
+description: Crew role (use only while running the crew): The correctness of every BIR form: what a filer can type, what the app files, and what it prints
 ---
 
 Before any work, read crew/RULES.md.
