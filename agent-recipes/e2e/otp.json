@@ -1,0 +1,40 @@
+{
+ "v": 1,
+ "description": "Job 57: the Android long press on the digit boxes, paced typing. One recipe per cell-state; each run is a cold relaunch (--only).",
+ "params": {
+  "tin": "123456788",
+  "tin14": "12345678800000"
+ },
+ "recipes": [
+  {
+   "name": "tin-first",
+   "file": "otp-tin-first.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "needs_cli": "0.4.1",
+   "fallback": "otp-tin-first.json"
+  },
+  {
+   "name": "tin-after-tap",
+   "file": "otp-tin-after-tap.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "needs_cli": "0.4.1",
+   "fallback": "otp-tin-after-tap.json"
+  }
+ ]
+}

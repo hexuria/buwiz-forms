@@ -1,0 +1,17 @@
+{
+ "v": 1,
+ "name": "otp-tin-first",
+ "app": "bir-shell",
+ "params": ["tin", "tin_field"],
+ "steps": [
+  {"id": "s1", "op": "wait_until", "target": "setup-solo", "timeout_ms": 30000},
+  {"id": "s2", "op": "click", "target": "setup-solo"},
+  {"id": "s3", "op": "wait_until", "target": "new-tp-name", "timeout_ms": 5000},
+  {"id": "s4", "op": "type", "target": "$tin_field", "text": "$tin", "key_delay_ms": 80, "screenshot": true},
+  {"id": "s5", "op": "click", "target": "new-tp-name"},
+  {"id": "s6", "op": "screenshot", "path": "typed.png"},
+  {"id": "s7", "op": "long_press", "target": "$tin_field", "duration_ms": 1200},
+  {"id": "s8", "op": "screenshot", "path": "after-longpress.png"},
+  {"id": "s9", "op": "snapshot"}
+ ]
+}
