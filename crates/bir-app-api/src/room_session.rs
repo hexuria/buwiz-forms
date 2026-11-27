@@ -749,4 +749,37 @@ mod a3a_tests {
             scratch.layout.room_database(&room)
         );
     }
+
+    /// §A.8: after B signs in, no screen and no agent reads room A — the slot serves only the open
+    /// room, and a handle of room A still held somewhere is never what new reads go through.
+    #[test]
+    fn no_screen_or_agent_reads_A_after_B_signs_in() {
+        let _turn = turn();
+        let scratch = scratch();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        // A marker in room A, as the owner's screen would write one.
+        let (handle_a, _) = crate::open_room::current().unwrap();
+        {
+            let guard = bir_core::lock_timing::lock(&handle_a).unwrap();
+            guard.set_setting("a3a.marker", "room-a").unwrap();
+        }
+        crate::open_room::close_room();
+        let b = stored("user-b");
+        assert!(matches!(open_session_room(&b), SessionRoom::Room { .. }));
+        // The screen path: whatever open_database_slot serves now is room B, and it has no A rows.
+        let (handle_b, _) = crate::open_room::current().unwrap();
+        assert!(
+            !std::sync::Arc::ptr_eq(&handle_a, &handle_b),
+            "B reads the same handle as A"
+        );
+        let seen = {
+            let guard = bir_core::lock_timing::lock(&handle_b).unwrap();
+            guard.get_setting("a3a.marker").unwrap()
+        };
+        assert_eq!(seen.as_deref(), None, "B's screen reads room A's rows");
+    }
 }
