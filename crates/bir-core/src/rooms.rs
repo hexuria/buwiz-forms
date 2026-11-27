@@ -725,6 +725,15 @@ pub fn release_held_device_stores() {
         .clear();
 }
 
+/// Whether this process holds a connection to `layout`'s `device.db`. Test builds only.
+#[cfg(any(test, feature = "test-support"))]
+pub fn device_store_is_held(layout: &Layout) -> bool {
+    HELD_STORES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains_key(&layout.device_db())
+}
+
 /// Which device store a thread uses, taken on that thread ([`device_store_here`]) so work it hands to another
 /// thread (the PIN hash, PLAN §B.1) reaches the same store: this thread's in-memory one, or `device.db` of
 /// its device folder.

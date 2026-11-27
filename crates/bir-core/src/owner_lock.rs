@@ -1207,6 +1207,45 @@ mod tests {
         assert_eq!(row(&store, &key).failures, 7, "the late miss still counts");
     }
 
+    /// I2 under a running app (Unix, where an open file can be deleted): device.db and its -wal/-shm go WHILE
+    /// the process holds its connection. The held connection is dropped when the file is missing
+    /// (`DeviceStoreRef::with`), so the state reads Lost, never an answer from the unlinked file.
+    #[cfg(unix)]
+    #[test]
+    fn a_device_db_deleted_under_the_held_connection_reads_lost() {
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path());
+        let store = file_store(folder.path());
+        let room = with_room(&store);
+        set_owner_pin(&store, &room, "0817").unwrap();
+        layout.create_room_dir(&room).unwrap();
+        assert!(
+            crate::rooms::device_store_is_held(&layout),
+            "the PIN's write left its connection held"
+        );
+        std::fs::remove_file(layout.device_db()).unwrap();
+        for file in ["device.db-wal", "device.db-shm"] {
+            match std::fs::remove_file(folder.path().join(file)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => panic!("{file} was not removed: {error}"),
+            }
+        }
+        assert!(matches!(
+            owner_lock(&store, &room),
+            Err(OwnerPinError::Store(DeviceStoreError::Lost(_)))
+        ));
+        assert!(store_lost(&store, &room).unwrap());
+        assert!(matches!(
+            set_owner_pin(&store, &room, "2468"),
+            Err(OwnerPinError::StoreLost)
+        ));
+        assert!(
+            !layout.device_db().exists(),
+            "nothing made it again silently"
+        );
+    }
+
     /// I2: a device.db missing while rooms are on disk is "lost", never "no PIN"; so is one made again after the
     /// loss, for a room with no PIN since. No PIN may be set there until the emailed reset stores one (B3).
     #[test]

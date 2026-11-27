@@ -628,6 +628,41 @@ mod tests {
         assert_eq!(state()["unlocked"], true);
     }
 
+    /// I2 under a running app (Unix, where an open file can be deleted): device.db and its -wal/-shm go WHILE
+    /// the host holds its connection. The state reads `store_lost`, never an answer from the unlinked file.
+    #[cfg(unix)]
+    #[test]
+    fn a_device_db_deleted_under_the_held_connection_reads_lost() {
+        let room = Room::open("user-lost-held");
+        call("set_owner_pin", pin("0817")).unwrap();
+        let layout = Layout::at(room._folder.path());
+        assert!(
+            bir_core::rooms::device_store_is_held(&layout),
+            "the PIN's write left its connection held"
+        );
+        std::fs::remove_file(layout.device_db()).unwrap();
+        for file in ["device.db-wal", "device.db-shm"] {
+            match std::fs::remove_file(room._folder.path().join(file)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => panic!("{file} was not removed: {error}"),
+            }
+        }
+        let lost = state();
+        assert_eq!(lost["store_lost"], true);
+        assert_eq!(lost["unlocked"], false);
+        assert!(
+            call("set_owner_pin", pin("2468"))
+                .unwrap_err()
+                .message()
+                .contains("lock was lost")
+        );
+        assert!(
+            !room._folder.path().join("device.db").exists(),
+            "nothing made it again silently"
+        );
+    }
+
     /// I2: with device.db gone while the room's folder is on disk, the state reads `store_lost`, never "no PIN,
     /// unlocked"; no PIN may be set, a check is refused, and `lock_now` locks.
     ///
