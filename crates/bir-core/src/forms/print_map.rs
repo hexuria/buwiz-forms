@@ -33,8 +33,8 @@ pub fn digits_of(fields: &BTreeMap<String, String>, keys: &[&str]) -> String {
 /// A stored TIN (dashed or compact) as the 14 digits a header comb holds:
 /// the nine TIN digits then the branch, zero-filled to five.
 pub fn tin_digits(tin: &str) -> String {
-    let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
-    format!("{digits:0<14}")
+    let (tin1, tin2, tin3, branch) = super::official_inputs::split_tin(tin);
+    format!("{tin1}{tin2}{tin3}{branch}")
 }
 
 /// Formats a compact 12–14 digit TIN with standard BIR dashes
