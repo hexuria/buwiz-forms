@@ -1,0 +1,72 @@
+{
+ "suite": "otp",
+ "target": "android",
+ "started": "20261127-175145",
+ "out": "/home/ubuntu/j57/ev2-B/copychain-run2",
+ "cli_version": "0.4.1",
+ "app_commit": "dd77c820",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3028,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-prep.json",
+   "video": "/home/ubuntu/j57/ev2-B/copychain-run2/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/copychain-run2/01-prep/post-tree.json"
+  },
+  {
+   "name": "copychain-select",
+   "status": "fail",
+   "ms": 14308,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-copychain-select.json",
+   "video": "/home/ubuntu/j57/ev2-B/copychain-run2/09-copychain-select/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/copychain-run2/09-copychain-select/post-tree.json",
+   "step": "c1w",
+   "error": "wait_until timed out: node `system-text-menu` not found",
+   "error_code": "timeout",
+   "line": null,
+   "screenshot": "/home/ubuntu/j57/ev2-B/copychain-run2/09-copychain-select/failure.png",
+   "tree": "/home/ubuntu/j57/ev2-B/copychain-run2/09-copychain-select/failure-tree.json"
+  },
+  {
+   "name": "copychain-paste",
+   "status": "fail",
+   "ms": 2091,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-copychain-paste.json",
+   "video": "/home/ubuntu/j57/ev2-B/copychain-run2/10-copychain-paste/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/copychain-run2/10-copychain-paste/post-tree.json",
+   "step": "p1",
+   "error": "no text menu shows",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "/home/ubuntu/j57/ev2-B/copychain-run2/10-copychain-paste/failure.png",
+   "tree": "/home/ubuntu/j57/ev2-B/copychain-run2/10-copychain-paste/failure-tree.json"
+  }
+ ]
+}

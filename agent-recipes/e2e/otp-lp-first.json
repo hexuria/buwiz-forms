@@ -6,20 +6,32 @@
   {
    "id": "s7",
    "op": "long_press",
-   "x": "$tin_field_cx",
-   "y": "$tin_field_cy",
+   "target": "new-tp-tin",
    "duration_ms": 1100,
    "screenshot": true
   },
   {
    "id": "s7w",
-   "op": "wait",
-   "timeout_ms": 2500,
-   "screenshot": true
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": true
   },
   {
    "id": "s8",
    "op": "snapshot"
+  },
+  {
+   "id": "s9",
+   "op": "assert",
+   "target": "system-text-menu-copy",
+   "exists": true
+  },
+  {
+   "id": "s10",
+   "op": "assert",
+   "target": "system-text-menu-cut",
+   "exists": true
   }
  ]
 }

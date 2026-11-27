@@ -1,0 +1,34 @@
+{
+ "v": 1,
+ "name": "otp-foreign-paste",
+ "params": [],
+ "steps": [
+  {
+   "id": "f1",
+   "op": "click",
+   "target": "new-tp-name"
+  },
+  {
+   "id": "f2",
+   "op": "long_press",
+   "target": "new-tp-name",
+   "duration_ms": 1100
+  },
+  {
+   "id": "f2w",
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": true
+  },
+  {
+   "id": "f3",
+   "op": "click",
+   "target": "system-text-menu-paste"
+  },
+  {
+   "id": "f4",
+   "op": "snapshot"
+  }
+ ]
+}

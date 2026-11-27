@@ -1,0 +1,37 @@
+{
+ "v": 1,
+ "name": "otp-lp-after-tap",
+ "params": [],
+ "steps": [
+  {
+   "id": "s7",
+   "op": "long_press",
+   "target": "new-tp-tin",
+   "duration_ms": 1100,
+   "screenshot": true
+  },
+  {
+   "id": "s7w",
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": true
+  },
+  {
+   "id": "s8",
+   "op": "snapshot"
+  },
+  {
+   "id": "s9",
+   "op": "assert",
+   "target": "system-text-menu-copy",
+   "exists": true
+  },
+  {
+   "id": "s10",
+   "op": "assert",
+   "target": "system-text-menu-cut",
+   "exists": true
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-prep",
+  "fingerprint": "fnv1a64:4a35eca952072735",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 14
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 725
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 301
+    }
+  ],
+  "elapsed_ms": 1040
+}

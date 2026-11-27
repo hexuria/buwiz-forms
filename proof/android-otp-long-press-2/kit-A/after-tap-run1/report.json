@@ -1,0 +1,66 @@
+{
+ "suite": "otp",
+ "target": "android",
+ "started": "20261127-181101",
+ "out": "/home/ubuntu/j57/ev2-A/after-tap-run1",
+ "cli_version": "0.4.1",
+ "app_commit": "dd77c820",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3051,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-prep.json",
+   "video": "/home/ubuntu/j57/ev2-A/after-tap-run1/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-A/after-tap-run1/01-prep/post-tree.json"
+  },
+  {
+   "name": "tin-after-tap",
+   "status": "pass",
+   "ms": 11636,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-tin-after-tap.json",
+   "video": "/home/ubuntu/j57/ev2-A/after-tap-run1/04-tin-after-tap/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-A/after-tap-run1/04-tin-after-tap/post-tree.json"
+  },
+  {
+   "name": "lp-after-tap",
+   "status": "fail",
+   "ms": 4258,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-lp-after-tap.json",
+   "video": "/home/ubuntu/j57/ev2-A/after-tap-run1/05-lp-after-tap/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-A/after-tap-run1/05-lp-after-tap/post-tree.json",
+   "step": "s9",
+   "error": "node `system-text-menu-copy` not found",
+   "error_code": "not_found",
+   "line": null,
+   "screenshot": "/home/ubuntu/j57/ev2-A/after-tap-run1/05-lp-after-tap/failure.png",
+   "tree": "/home/ubuntu/j57/ev2-A/after-tap-run1/05-lp-after-tap/failure-tree.json"
+  }
+ ]
+}

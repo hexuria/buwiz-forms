@@ -1,0 +1,35 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "otp-foreign-paste",
+  "fingerprint": "fnv1a64:b749ebdd62d4dbdb",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "f1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 434
+    },
+    {
+      "id": "f2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2583
+    },
+    {
+      "id": "f2w",
+      "ok": true,
+      "elapsed_ms": 87
+    },
+    {
+      "id": "f3",
+      "ok": false,
+      "error": "the clipboard was not set by this run: Paste would put in what a person or another app copied (cut or copy through the text menu first)",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 20
+    }
+  ],
+  "elapsed_ms": 3125
+}

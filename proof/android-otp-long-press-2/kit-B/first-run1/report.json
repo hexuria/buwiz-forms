@@ -1,0 +1,66 @@
+{
+ "suite": "otp",
+ "target": "android",
+ "started": "20261127-174359",
+ "out": "/home/ubuntu/j57/ev2-B/first-run1",
+ "cli_version": "0.4.1",
+ "app_commit": "dd77c820",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3176,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-prep.json",
+   "video": "/home/ubuntu/j57/ev2-B/first-run1/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/first-run1/01-prep/post-tree.json"
+  },
+  {
+   "name": "tin-first",
+   "status": "pass",
+   "ms": 10678,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-tin-first.json",
+   "video": "/home/ubuntu/j57/ev2-B/first-run1/02-tin-first/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/first-run1/02-tin-first/post-tree.json"
+  },
+  {
+   "name": "lp-first",
+   "status": "fail",
+   "ms": 7902,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-lp-first.json",
+   "video": "/home/ubuntu/j57/ev2-B/first-run1/03-lp-first/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/first-run1/03-lp-first/post-tree.json",
+   "step": "s7w",
+   "error": "wait_until timed out: node `system-text-menu` not found",
+   "error_code": "timeout",
+   "line": null,
+   "screenshot": "/home/ubuntu/j57/ev2-B/first-run1/03-lp-first/failure.png",
+   "tree": "/home/ubuntu/j57/ev2-B/first-run1/03-lp-first/failure-tree.json"
+  }
+ ]
+}

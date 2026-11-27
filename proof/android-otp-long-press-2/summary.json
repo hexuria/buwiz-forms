@@ -1,0 +1,265 @@
+{
+ "B": {
+  "first": [
+   {
+    "run": 1,
+    "sel": "0-0",
+    "menu": "none",
+    "status": "fail",
+    "error": "wait_until timed out: node `system-text-menu` not found",
+    "tree": "/home/ubuntu/j57/ev2-B/first-run1/03-lp-first/post-tree.json"
+   },
+   {
+    "run": 2,
+    "sel": "0-0",
+    "menu": "none",
+    "status": "fail",
+    "error": "wait_until timed out: node `system-text-menu` not found",
+    "tree": "/home/ubuntu/j57/ev2-B/first-run2/03-lp-first/post-tree.json"
+   },
+   {
+    "run": 3,
+    "sel": "0-0",
+    "menu": "none",
+    "status": "fail",
+    "error": "wait_until timed out: node `system-text-menu` not found",
+    "tree": "/home/ubuntu/j57/ev2-B/first-run3/03-lp-first/post-tree.json"
+   }
+  ],
+  "after-tap": [
+   {
+    "run": 1,
+    "sel": "0-0",
+    "menu": "none",
+    "status": "fail",
+    "error": "wait_until timed out: node `system-text-menu` not found",
+    "tree": "/home/ubuntu/j57/ev2-B/after-tap-run1/05-lp-after-tap/post-tree.json"
+   },
+   {
+    "run": 2,
+    "sel": "0-0",
+    "menu": "none",
+    "status": "fail",
+    "error": "wait_until timed out: node `system-text-menu` not found",
+    "tree": "/home/ubuntu/j57/ev2-B/after-tap-run2/05-lp-after-tap/post-tree.json"
+   },
+   {
+    "run": 3,
+    "sel": "0-0",
+    "menu": "none",
+    "status": "fail",
+    "error": "wait_until timed out: node `system-text-menu` not found",
+    "tree": "/home/ubuntu/j57/ev2-B/after-tap-run3/05-lp-after-tap/post-tree.json"
+   }
+  ],
+  "scroll": [
+   {
+    "run": 1,
+    "before": "9-9",
+    "after_scroll": "9-9",
+    "after_tap": "4-4",
+    "statuses": {
+     "prep": "pass",
+     "tin-first": "pass",
+     "scroll-only": "pass",
+     "scroll-tap": "pass"
+    }
+   },
+   {
+    "run": 2,
+    "before": "9-9",
+    "after_scroll": "9-9",
+    "after_tap": "4-4",
+    "statuses": {
+     "prep": "pass",
+     "tin-first": "pass",
+     "scroll-only": "pass",
+     "scroll-tap": "pass"
+    }
+   },
+   {
+    "run": 3,
+    "before": "9-9",
+    "after_scroll": "9-9",
+    "after_tap": "4-4",
+    "statuses": {
+     "prep": "pass",
+     "tin-first": "pass",
+     "scroll-only": "pass",
+     "scroll-tap": "pass"
+    }
+   }
+  ],
+  "copychain": [
+   {
+    "run": 1,
+    "select": {
+     "status": "fail",
+     "step": "c1w",
+     "error": "wait_until timed out: node `system-text-menu` not found"
+    },
+    "paste": {
+     "status": "fail",
+     "step": "p1",
+     "error": "no text menu shows"
+    },
+    "sel": "0-0",
+    "menu": "none"
+   },
+   {
+    "run": 2,
+    "select": {
+     "status": "fail",
+     "step": "c1w",
+     "error": "wait_until timed out: node `system-text-menu` not found"
+    },
+    "paste": {
+     "status": "fail",
+     "step": "p1",
+     "error": "no text menu shows"
+    },
+    "sel": "0-0",
+    "menu": "none"
+   },
+   {
+    "run": 3,
+    "select": {
+     "status": "fail",
+     "step": "c1w",
+     "error": "wait_until timed out: node `system-text-menu` not found"
+    },
+    "paste": {
+     "status": "fail",
+     "step": "p1",
+     "error": "no text menu shows"
+    },
+    "sel": "0-0",
+    "menu": "none"
+   }
+  ],
+  "menu-dismiss": [
+   {
+    "run": "menu-dismiss-run1",
+    "recipes": {
+     "prep": {
+      "status": "pass",
+      "step": null,
+      "error": null
+     },
+     "menu-dismiss": {
+      "status": "pass",
+      "step": null,
+      "error": null
+     }
+    },
+    "menu": "none"
+   }
+  ],
+  "foreign-paste": [
+   {
+    "run": "foreign-paste-run1",
+    "recipes": {
+     "prep": {
+      "status": "pass",
+      "step": null,
+      "error": null
+     },
+     "foreign-paste": {
+      "status": "fail",
+      "step": "f3",
+      "error": "the insertion text menu has no `paste` (it has: autofill)"
+     }
+    },
+    "menu": "insertion:autofill(disabled)"
+   },
+   {
+    "run": "foreign-paste-run2",
+    "recipes": {
+     "prep": {
+      "status": "pass",
+      "step": null,
+      "error": null
+     },
+     "foreign-paste": {
+      "status": "fail",
+      "step": "f3",
+      "error": "the clipboard was not set by this run: Paste would put in what a person or another app copied (cut or copy through the text menu first)"
+     }
+    },
+    "menu": "insertion:paste/autofill(disabled)"
+   }
+  ],
+  "clipboard-seed": [
+   {
+    "run": "clipboard-seed-run1",
+    "recipes": {
+     "prep": {
+      "status": "pass",
+      "step": null,
+      "error": null
+     },
+     "clipboard-seed": {
+      "status": "pass",
+      "step": null,
+      "error": null
+     }
+    },
+    "menu": "none"
+   }
+  ]
+ },
+ "A": {
+  "first": [
+   {
+    "run": 1,
+    "sel": "9-9",
+    "menu": "insertion:paste/select-all/autofill(disabled)",
+    "status": "fail",
+    "error": "node `system-text-menu-copy` not found",
+    "tree": "/home/ubuntu/j57/ev2-A/first-run1/03-lp-first/post-tree.json"
+   },
+   {
+    "run": 2,
+    "sel": "9-9",
+    "menu": "insertion:paste/select-all/autofill(disabled)",
+    "status": "fail",
+    "error": "node `system-text-menu-copy` not found",
+    "tree": "/home/ubuntu/j57/ev2-A/first-run2/03-lp-first/post-tree.json"
+   },
+   {
+    "run": 3,
+    "sel": "9-9",
+    "menu": "insertion:paste/select-all/autofill(disabled)",
+    "status": "fail",
+    "error": "node `system-text-menu-copy` not found",
+    "tree": "/home/ubuntu/j57/ev2-A/first-run3/03-lp-first/post-tree.json"
+   }
+  ],
+  "after-tap": [
+   {
+    "run": 1,
+    "sel": "9-9",
+    "menu": "insertion:paste/select-all/autofill(disabled)",
+    "status": "fail",
+    "error": "node `system-text-menu-copy` not found",
+    "tree": "/home/ubuntu/j57/ev2-A/after-tap-run1/05-lp-after-tap/post-tree.json"
+   },
+   {
+    "run": 2,
+    "sel": "9-9",
+    "menu": "insertion:paste/select-all/autofill(disabled)",
+    "status": "fail",
+    "error": "node `system-text-menu-copy` not found",
+    "tree": "/home/ubuntu/j57/ev2-A/after-tap-run2/05-lp-after-tap/post-tree.json"
+   },
+   {
+    "run": 3,
+    "sel": "9-9",
+    "menu": "insertion:paste/select-all/autofill(disabled)",
+    "status": "fail",
+    "error": "node `system-text-menu-copy` not found",
+    "tree": "/home/ubuntu/j57/ev2-A/after-tap-run3/05-lp-after-tap/post-tree.json"
+   }
+  ]
+ }
+}

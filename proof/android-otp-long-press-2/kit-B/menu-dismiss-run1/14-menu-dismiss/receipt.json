@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-menu-dismiss",
+  "fingerprint": "fnv1a64:195fd5645cf31877",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "d1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2307
+    },
+    {
+      "id": "d1w",
+      "ok": true,
+      "elapsed_ms": 34
+    },
+    {
+      "id": "d2",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "d3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 507
+    },
+    {
+      "id": "d3w",
+      "ok": true,
+      "elapsed_ms": 465
+    },
+    {
+      "id": "d4",
+      "ok": true,
+      "elapsed_ms": 30
+    },
+    {
+      "id": "d5",
+      "ok": true,
+      "elapsed_ms": 27
+    }
+  ],
+  "elapsed_ms": 3402
+}

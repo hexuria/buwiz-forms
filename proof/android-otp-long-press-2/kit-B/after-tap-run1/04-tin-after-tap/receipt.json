@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-tin-after-tap",
+  "fingerprint": "fnv1a64:14c597c56d97e0a9",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 7046
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1031,
+      "screenshot": {
+        "path": "/home/ubuntu/j57/ev2-B/after-tap-run1/04-tin-after-tap/002-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1561
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j57/ev2-B/after-tap-run1/04-tin-after-tap/002-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9639
+}

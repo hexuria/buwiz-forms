@@ -1,0 +1,65 @@
+{
+ "v": 1,
+ "name": "otp-copychain-paste",
+ "params": [],
+ "steps": [
+  {
+   "id": "p1",
+   "op": "click",
+   "target": "system-text-menu-copy"
+  },
+  {
+   "id": "p1w",
+   "op": "wait_until",
+   "target": "system-text-menu-copy",
+   "timeout_ms": 3000,
+   "exists": false
+  },
+  {
+   "id": "p2",
+   "op": "assert",
+   "target": "system-text-menu-copy",
+   "exists": false
+  },
+  {
+   "id": "p3",
+   "op": "click",
+   "target": "new-tp-name"
+  },
+  {
+   "id": "p4",
+   "op": "long_press",
+   "target": "new-tp-name",
+   "duration_ms": 1100
+  },
+  {
+   "id": "p4w",
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": true
+  },
+  {
+   "id": "p5",
+   "op": "assert",
+   "target": "system-text-menu-paste",
+   "exists": true
+  },
+  {
+   "id": "p6",
+   "op": "click",
+   "target": "system-text-menu-paste"
+  },
+  {
+   "id": "p7",
+   "op": "assert",
+   "target": "new-tp-name",
+   "value": "123456788",
+   "screenshot": true
+  },
+  {
+   "id": "p8",
+   "op": "snapshot"
+  }
+ ]
+}

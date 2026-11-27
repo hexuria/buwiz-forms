@@ -19,6 +19,10 @@
    "target": "new-tp-name"
   },
   {
+   "id": "s5b",
+   "op": "snapshot"
+  },
+  {
    "id": "s6",
    "op": "scroll",
    "dy": 300,

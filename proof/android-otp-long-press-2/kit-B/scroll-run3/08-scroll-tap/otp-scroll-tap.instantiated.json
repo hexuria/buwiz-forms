@@ -1,0 +1,19 @@
+{
+ "v": 1,
+ "name": "otp-scroll-tap",
+ "params": [
+  "tin_field"
+ ],
+ "steps": [
+  {
+   "id": "t1",
+   "op": "click",
+   "target": "$tin_field",
+   "screenshot": true
+  },
+  {
+   "id": "t2",
+   "op": "snapshot"
+  }
+ ]
+}

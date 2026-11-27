@@ -88,6 +88,36 @@
    }
   },
   {
+   "name": "scroll-only",
+   "file": "otp-scroll-only.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-scroll-only.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "scroll-tap",
+   "file": "otp-scroll-tap.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-scroll-tap.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
    "name": "probe",
    "file": "otp-probe.json",
    "needs_cli": "0.4.1",
@@ -101,6 +131,45 @@
      "name_regex": "^TIN, 9 digits"
     }
    }
+  },
+  {
+   "name": "copychain-select",
+   "file": "otp-copychain-select.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-copychain-select.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "copychain-paste",
+   "file": "otp-copychain-paste.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-copychain-paste.json"
+  },
+  {
+   "name": "clipboard-seed",
+   "file": "otp-clipboard-seed.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-clipboard-seed.json"
+  },
+  {
+   "name": "foreign-paste",
+   "file": "otp-foreign-paste.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-foreign-paste.json"
+  },
+  {
+   "name": "menu-dismiss",
+   "file": "otp-menu-dismiss.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-menu-dismiss.json"
   }
  ]
 }

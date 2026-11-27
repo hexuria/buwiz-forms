@@ -1,0 +1,7 @@
+build: app dd77c820 (with uncommitted changes), nsh 6f2afaa8 beside it, tool nsh 0.6.1 (6f2afaa), cargo 1.99.0 (5f94df478 2026-08-27) (/home/ubuntu/.rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo), folder /home/ubuntu/BuwizNsh/target-j57-A-part2
+nsh android dev runtime: 6f2afaa, classes.dex sha256 8a67503a7dd194bd1a81541ddfccef0c580011e8d71128b57077ecb62c6a0376
+nsh android release runtime: 6f2afaa, classes.dex sha256 8a67503a7dd194bd1a81541ddfccef0c580011e8d71128b57077ecb62c6a0376
+nsh-run-agent: device emulator-5554, window plane on 127.0.0.1:17421, data plane on 127.0.0.1:17422; run: "/home/ubuntu/Android/Sdk/platform-tools/adb" -s emulator-5554 forward tcp:17421 tcp:17421 && "/home/ubuntu/Android/Sdk/platform-tools/adb" -s emulator-5554 forward tcp:17422 tcp:17422
+plug evidence:
+/home/ubuntu/BuwizNsh/target-j57-A-part2/armv7-linux-androideabi/debug/deps/nsh_gpui_agent_android-6bb250e9adf392e5.d: /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/b559e40/crates/nsh-gpui-agent-android/src/lib.rs /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/b559e40/crates/nsh-gpui-agent-android/src/android.rs /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/b559e40/crates/nsh-gpui-agent-android/src/native.rs /home/ubuntu/BuwizNsh/target-j57-A-part2/armv7-linux-androideabi/debug/build/nsh-gpui-agent-android-94c7cc2a25f222be/out/classes.dex
+cargo tree:

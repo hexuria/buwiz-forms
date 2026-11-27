@@ -1,0 +1,55 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-clipboard-seed",
+  "fingerprint": "fnv1a64:e0302a2f120bc3a3",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "z1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 876
+    },
+    {
+      "id": "z2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3428
+    },
+    {
+      "id": "z3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1743
+    },
+    {
+      "id": "z3w",
+      "ok": true,
+      "elapsed_ms": 51
+    },
+    {
+      "id": "z4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 171
+    },
+    {
+      "id": "z4w",
+      "ok": true,
+      "elapsed_ms": 518
+    },
+    {
+      "id": "z5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 167
+    },
+    {
+      "id": "z6",
+      "ok": true,
+      "elapsed_ms": 206
+    }
+  ],
+  "elapsed_ms": 7165
+}

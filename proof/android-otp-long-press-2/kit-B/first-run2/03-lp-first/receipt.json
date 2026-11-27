@@ -1,0 +1,33 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "otp-lp-first",
+  "fingerprint": "fnv1a64:0cb362dc328c97b5",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2746,
+      "screenshot": {
+        "path": "/home/ubuntu/j57/ev2-B/first-run2/03-lp-first/001-s7.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7w",
+      "ok": false,
+      "error": "wait_until timed out: node `system-text-menu` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 3042
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j57/ev2-B/first-run2/03-lp-first/001-s7.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 5789
+}

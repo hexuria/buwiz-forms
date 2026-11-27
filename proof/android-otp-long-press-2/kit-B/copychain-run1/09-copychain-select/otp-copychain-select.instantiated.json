@@ -1,0 +1,47 @@
+{
+ "v": 1,
+ "name": "otp-copychain-select",
+ "params": [
+  "tin_field",
+  "tin"
+ ],
+ "steps": [
+  {
+   "id": "c0",
+   "op": "type",
+   "target": "$tin_field",
+   "text": "$tin",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "c1",
+   "op": "long_press",
+   "target": "new-tp-tin",
+   "duration_ms": 1100,
+   "screenshot": true
+  },
+  {
+   "id": "c1w",
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": true
+  },
+  {
+   "id": "c2",
+   "op": "snapshot"
+  },
+  {
+   "id": "c3",
+   "op": "assert",
+   "target": "system-text-menu-copy",
+   "exists": true
+  },
+  {
+   "id": "c4",
+   "op": "assert",
+   "target": "system-text-menu-cut",
+   "exists": true
+  }
+ ]
+}

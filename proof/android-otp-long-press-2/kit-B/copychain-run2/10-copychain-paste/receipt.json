@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "otp-copychain-paste",
+  "fingerprint": "fnv1a64:f09572a27ea0ff6f",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "p1",
+      "ok": false,
+      "error": "no text menu shows",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 3
+    }
+  ],
+  "elapsed_ms": 3
+}

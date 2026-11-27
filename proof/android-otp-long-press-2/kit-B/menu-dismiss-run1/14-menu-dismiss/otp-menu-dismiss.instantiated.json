@@ -1,0 +1,48 @@
+{
+ "v": 1,
+ "name": "otp-menu-dismiss",
+ "params": [],
+ "steps": [
+  {
+   "id": "d1",
+   "op": "long_press",
+   "target": "new-tp-tin",
+   "duration_ms": 1100
+  },
+  {
+   "id": "d1w",
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": true
+  },
+  {
+   "id": "d2",
+   "op": "assert",
+   "target": "system-text-menu",
+   "exists": true
+  },
+  {
+   "id": "d3",
+   "op": "click",
+   "target": "new-tp-name"
+  },
+  {
+   "id": "d3w",
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": false
+  },
+  {
+   "id": "d4",
+   "op": "assert",
+   "target": "system-text-menu",
+   "exists": false
+  },
+  {
+   "id": "d5",
+   "op": "snapshot"
+  }
+ ]
+}

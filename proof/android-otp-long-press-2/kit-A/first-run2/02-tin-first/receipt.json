@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-tin-first",
+  "fingerprint": "fnv1a64:a92f189bee086426",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 7008
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1031,
+      "screenshot": {
+        "path": "/home/ubuntu/j57/ev2-A/first-run2/02-tin-first/002-s5.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j57/ev2-A/first-run2/02-tin-first/002-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8039
+}

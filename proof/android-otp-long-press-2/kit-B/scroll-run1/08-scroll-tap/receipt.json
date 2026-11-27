@@ -1,0 +1,31 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "otp-scroll-tap",
+  "fingerprint": "fnv1a64:48208d773ea5fa32",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "t1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2187,
+      "screenshot": {
+        "path": "/home/ubuntu/j57/ev2-B/scroll-run1/08-scroll-tap/001-t1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "t2",
+      "ok": true,
+      "elapsed_ms": 393
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j57/ev2-B/scroll-run1/08-scroll-tap/001-t1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2580
+}

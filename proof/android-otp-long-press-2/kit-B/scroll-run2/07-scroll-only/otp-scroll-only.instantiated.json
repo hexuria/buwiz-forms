@@ -1,0 +1,27 @@
+{
+ "v": 1,
+ "name": "otp-scroll-only",
+ "params": [
+  "tin_field"
+ ],
+ "steps": [
+  {
+   "id": "s0",
+   "op": "assert",
+   "target": "$tin_field",
+   "exists": true
+  },
+  {
+   "id": "s6",
+   "op": "scroll",
+   "x": 185.1,
+   "y": 368.8,
+   "dy": 300,
+   "screenshot": true
+  },
+  {
+   "id": "s7",
+   "op": "snapshot"
+  }
+ ]
+}

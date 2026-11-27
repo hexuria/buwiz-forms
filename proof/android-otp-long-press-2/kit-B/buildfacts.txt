@@ -1,0 +1,22 @@
+== build B facts ==
+2026-11-27T17:40:07Z
+app:dd77c820f461124ebd9066c7bfc6100da7d34a92
+sibling:95e6868e4b4d1c7e0ea62964a6b54c471ec2a904
+nsh_version:nsh 0.6.1 (95e6868)
+runtime_dev_ref:95e6868e4b4d1c7e0ea62964a6b54c471ec2a904
+runtime_dev_dex_sha256:8a67503a7dd194bd1a81541ddfccef0c580011e8d71128b57077ecb62c6a0376
+runtime_release_ref:95e6868e4b4d1c7e0ea62964a6b54c471ec2a904
+runtime_release_dex_sha256:8a67503a7dd194bd1a81541ddfccef0c580011e8d71128b57077ecb62c6a0376
+cargo:cargo 1.99.0 (5f94df478 2026-08-27)
+which_a_cargo:
+/home/ubuntu/.cargo/bin/cargo
+cargo_config:no
+cargo_targets_dir:no
+api:35
+long_press_timeout:400
+-- cargo tree plug --
+nsh-gpui-agent-android v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b559e40dc593bd8e8cd78060ddb5a3507a237767#b559e40d)
+└── nsh-app-ebirforms v0.2.1 (/home/ubuntu/j57/app/nsh)
+    ├── nsh-app-nsh-app-ebirforms-android v0.0.0 (/home/ubuntu/j57/app/nsh/.nsh/rust/android)
+-- dep-info --
+/home/ubuntu/BuwizNsh/target-j57-B-part2/debug/deps/nsh_gpui_agent-5f8d5b9cacde3c2d.d: /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/b559e40/crates/nsh-gpui-agent/src/lib.rs

@@ -1,0 +1,53 @@
+{
+ "v": 1,
+ "name": "otp-clipboard-seed",
+ "params": [],
+ "steps": [
+  {
+   "id": "z1",
+   "op": "click",
+   "target": "new-tp-name"
+  },
+  {
+   "id": "z2",
+   "op": "type",
+   "target": "new-tp-name",
+   "text": "seedclip",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "z3",
+   "op": "long_press",
+   "target": "new-tp-name",
+   "duration_ms": 1100
+  },
+  {
+   "id": "z3w",
+   "op": "wait_until",
+   "target": "system-text-menu",
+   "timeout_ms": 3000,
+   "exists": true
+  },
+  {
+   "id": "z4",
+   "op": "click",
+   "target": "system-text-menu-select-all"
+  },
+  {
+   "id": "z4w",
+   "op": "wait_until",
+   "target": "system-text-menu-copy",
+   "timeout_ms": 3000,
+   "exists": true
+  },
+  {
+   "id": "z5",
+   "op": "click",
+   "target": "system-text-menu-copy"
+  },
+  {
+   "id": "z6",
+   "op": "snapshot"
+  }
+ ]
+}

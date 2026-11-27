@@ -1,0 +1,69 @@
+{
+ "suite": "otp",
+ "target": "android",
+ "started": "20261127-175621",
+ "out": "/home/ubuntu/j57/ev2-B/scroll-run2",
+ "cli_version": "0.4.1",
+ "app_commit": "dd77c820",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3157,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-prep.json",
+   "video": "/home/ubuntu/j57/ev2-B/scroll-run2/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/scroll-run2/01-prep/post-tree.json"
+  },
+  {
+   "name": "tin-first",
+   "status": "pass",
+   "ms": 10233,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-tin-first.json",
+   "video": "/home/ubuntu/j57/ev2-B/scroll-run2/02-tin-first/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/scroll-run2/02-tin-first/post-tree.json"
+  },
+  {
+   "name": "scroll-only",
+   "status": "pass",
+   "ms": 3430,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-scroll-only.json",
+   "video": "/home/ubuntu/j57/ev2-B/scroll-run2/07-scroll-only/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/scroll-run2/07-scroll-only/post-tree.json"
+  },
+  {
+   "name": "scroll-tap",
+   "status": "pass",
+   "ms": 5010,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-scroll-tap.json",
+   "video": "/home/ubuntu/j57/ev2-B/scroll-run2/08-scroll-tap/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/scroll-run2/08-scroll-tap/post-tree.json"
+  }
+ ]
+}

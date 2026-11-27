@@ -716,6 +716,11 @@ def run_entry(index, entry, suite, context, agent, log, out):
     redact_file(folder / "receipt.json", log)
     receipt = first_json(stdout)
     result["ms"] = round((time.monotonic() - started) * 1000)
+    try:
+        (folder / "post-tree.json").write_text(log.redact(json.dumps(agent.snapshot(), indent=1)), encoding="utf-8")
+        result["post_tree"] = str(folder / "post-tree.json")
+    except SuiteError:
+        pass
     if code == 0 and isinstance(receipt, dict) and receipt.get("ok"):
         result["status"] = "pass"
         log.line("recipe", entry["name"], "pass" + (f" ({note})" if note else ""), result["ms"])

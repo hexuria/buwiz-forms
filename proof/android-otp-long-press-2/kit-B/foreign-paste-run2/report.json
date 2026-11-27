@@ -1,0 +1,57 @@
+{
+ "suite": "otp",
+ "target": "android",
+ "started": "20261127-175459",
+ "out": "/home/ubuntu/j57/ev2-B/foreign-paste-run2",
+ "cli_version": "0.4.1",
+ "app_commit": "dd77c820",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "prep",
+   "status": "pass",
+   "ms": 3050,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-prep.json",
+   "video": "/home/ubuntu/j57/ev2-B/foreign-paste-run2/01-prep/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/foreign-paste-run2/01-prep/post-tree.json"
+  },
+  {
+   "name": "foreign-paste",
+   "status": "fail",
+   "ms": 5248,
+   "note": null,
+   "file": "agent-recipes/e2e/otp-foreign-paste.json",
+   "video": "/home/ubuntu/j57/ev2-B/foreign-paste-run2/12-foreign-paste/recording.mp4",
+   "post_tree": "/home/ubuntu/j57/ev2-B/foreign-paste-run2/12-foreign-paste/post-tree.json",
+   "step": "f3",
+   "error": "the clipboard was not set by this run: Paste would put in what a person or another app copied (cut or copy through the text menu first)",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "/home/ubuntu/j57/ev2-B/foreign-paste-run2/12-foreign-paste/failure.png",
+   "tree": "/home/ubuntu/j57/ev2-B/foreign-paste-run2/12-foreign-paste/failure-tree.json"
+  }
+ ]
+}
