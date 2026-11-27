@@ -682,6 +682,8 @@ _package-mac-appstore args="": build-frozen-html-identity
     rm -f "$OUT"/*.tar.gz "$OUT"/.nsh-updater.json "$OUT"/*.entitlements "$APP/Contents/Resources/nsh/assets/nsh-updater.json"
     # The print renderer reads the per-form CSS fixes from Contents/Resources/print-overrides (bir-app-api print_sheet.rs).
     cp -R print-overrides "$APP/Contents/Resources/"
+    # The same privacy manifest as the iOS app: the Mac build collects the same data (assets/ios/PrivacyInfo.xcprivacy).
+    cp assets/ios/PrivacyInfo.xcprivacy "$APP/Contents/Resources/"
     PLIST="$APP/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Add :LSApplicationCategoryType string public.app-category.finance" "$PLIST" || true
     # Export compliance exemption, so App Store Connect skips the encryption question.

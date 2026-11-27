@@ -6,9 +6,15 @@
   - UserDefaults: NSH reads the system's temperature unit (nsh-platform-ios surface.rs), CA92.1.
   - System boot time: mach_absolute_time for elapsed time (nsh-platform-ios synth.rs, Rust's Instant), 35F9.1.
   - File timestamps: the app reads modification times of its own files (database, drafts, print output), C617.1.
-  Collected data must say the same as the App Privacy answers in App Store Connect: the Buwiz account's email
-  and user id (sign-in, crates/bir-core/src/cloud_account.rs; linked to the person, not tracking, app functionality).
-  Returns sent through the relay are added once relay filing ships.
+  Also copied to Contents/Resources of the Mac App Store app by `just app`, since the Mac build collects the same data.
+  Collected data must say the same as the App Privacy answers in App Store Connect. None of it is used for tracking,
+  and all of it is for app functionality:
+  - Email address and user id of the Buwiz account (sign-in, crates/bir-core/src/cloud_account.rs), linked to the person.
+  - Other financial info, linked: the send record Buwiz keeps for each return sent through the relay while the account
+    exists (TIN, form, period, outcome, receipt), and the sealed return while it passes through.
+  - Device id, linked: the app-made device id and public key registered at sign-in and used to sign relay requests.
+  - Other diagnostic data, NOT linked: the reachability record of each relay send (times, outcome, failure classes,
+    app version, and day-keyed hashes whose key is dropped within a day).
 -->
 <plist version="1.0">
 <dict>
@@ -35,6 +41,42 @@
 			<string>NSPrivacyCollectedDataTypeUserID</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherFinancialInfo</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
