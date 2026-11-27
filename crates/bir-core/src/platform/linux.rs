@@ -8,14 +8,8 @@ use std::path::PathBuf;
 ///
 /// Uses `$HOME/.taxman-ebir` following XDG-compatible conventions.
 #[cfg(feature = "sqlcipher")]
-pub fn data_dir() -> PathBuf {
-    if let Some(home) = std::env::var_os("HOME") {
-        let dir = PathBuf::from(home).join(".taxman-ebir");
-        let _ = std::fs::create_dir_all(&dir);
-        return dir;
-    }
-
-    PathBuf::from(".taxman-ebir")
+pub(super) fn data_dir_path() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".taxman-ebir"))
 }
 
 /// Returns the Linux application data directory of the plain-SQLite (NSH)
@@ -23,20 +17,19 @@ pub fn data_dir() -> PathBuf {
 /// `$HOME/.local/share/dev.goldcoders.bir` when `XDG_DATA_HOME` is not an
 /// absolute path.
 #[cfg(not(feature = "sqlcipher"))]
-pub fn data_dir() -> PathBuf {
+pub(super) fn data_dir_path() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
         .or_else(|| {
             std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local").join("share"))
-        });
-    if let Some(base) = base {
-        let dir = base.join(super::NSH_APP_ID);
-        let _ = std::fs::create_dir_all(&dir);
-        return dir;
-    }
+        })?;
+    Some(base.join(super::NSH_APP_ID))
+}
 
-    PathBuf::from(".taxman-ebir")
+/// [`data_dir_path`], created if missing. Without a home: `.taxman-ebir`, not created.
+pub fn data_dir() -> PathBuf {
+    super::create_data_dir(data_dir_path())
 }
 
 /// Returns the temporary directory.

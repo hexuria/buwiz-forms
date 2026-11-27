@@ -28,8 +28,10 @@ sqlcipher = ["rusqlite/bundled-sqlcipher"]
 # unavailable instead of executed.
 mas_build = []
 # Test fixtures of other crates (bir-app-api's host tests): raw SQL on the
-# connection, to stage a filed return or force a failing write. Never on in
-# a build that ships.
+# connection, to stage a filed return or force a failing write; and the
+# test-build rule that keeps a test out of the real data folder, logs and
+# keychain (`platform::data_dir`, `log_files::log_dir`,
+# `platform::keychain_disabled`). Never on in a build that ships.
 test-support = []
 # The local mock BIR SFTP server (`mock_bir` binary, `just mock-bir`). Never
 # on in a build that ships: the app does not enable it, so no listening code
@@ -98,6 +100,10 @@ tracing-appender = "0.2.3"
 tracing-log = "0.2"
 dotenvy = { workspace = true }
 rand = "0.10.1"
+# The PIN hash (accounts-and-lock PLAN §B.1). The version already in the lockfile (through ssh-key); the salt
+# comes from `rand`'s system generator, so no getrandom feature is needed here. `zeroize` wipes its working
+# memory after each hash (N5).
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash", "zeroize"] }
 hex = "0.4.3"
 imap = "2.4.1"
 native-tls = "0.2.18"
@@ -138,6 +144,8 @@ objc2-user-notifications = { version = "0.3.2", default-features = false, featur
 # makes the existing database unreadable and gets it quarantined.
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { workspace = true, features = ["windows-native"] }
+# The boot id and time since boot of the PIN wait (boot_clock.rs). Already in the lockfile.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_System_SystemInformation"] }
 
 # sync-secret-service is required for the same reason as windows-native above:
 # without a backend feature keyring 3.x uses its in-memory mock and the master
@@ -154,7 +162,11 @@ keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] 
 keyring = { workspace = true, features = ["apple-native"] }
 
 [dev-dependencies]
+# Its own integration tests (tests/*.rs) get the test-build rule too.
+bir-core = { path = ".", default-features = false, features = ["test-support"] }
 insta = "1"
 tempfile = "3"
 temp-env = { version = "0.3", features = ["async_closure"] }
 tokio = { workspace = true, features = ["test-util"] }
+# The isolation guard reads every Cargo.toml (already in Cargo.lock; parse only, nothing new to fetch).
+toml_edit = { version = "0.25", default-features = false, features = ["parse"] }
