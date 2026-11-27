@@ -61,8 +61,14 @@
   },
   {
    "id": "s9",
-   "op": "press",
+   "op": "click",
    "target": "new-tp-zip_code-trigger"
+  },
+  {
+   "id": "s9key",
+   "op": "key",
+   "target": "new-tp-zip_code-trigger",
+   "key": "Enter"
   },
   {
    "id": "s9a",
@@ -97,8 +103,14 @@
   },
   {
    "id": "s13",
-   "op": "press",
+   "op": "click",
    "target": "new-tp-rdo_code-trigger"
+  },
+  {
+   "id": "s13key",
+   "op": "key",
+   "target": "new-tp-rdo_code-trigger",
+   "key": "Enter"
   },
   {
    "id": "s13a",
