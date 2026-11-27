@@ -61,7 +61,7 @@
   },
   {
    "id": "s9",
-   "op": "click",
+   "op": "press",
    "target": "new-tp-zip_code-trigger"
   },
   {
@@ -84,7 +84,7 @@
   },
   {
    "id": "s11",
-   "op": "click",
+   "op": "press",
    "target": "new-tp-zip_code-opt-$zip",
    "screenshot": true
   },
@@ -97,7 +97,7 @@
   },
   {
    "id": "s13",
-   "op": "click",
+   "op": "press",
    "target": "new-tp-rdo_code-trigger"
   },
   {
@@ -138,7 +138,7 @@
   },
   {
    "id": "s18",
-   "op": "click",
+   "op": "press",
    "target": "new-tp-rdo_code-opt-$rdo",
    "screenshot": true
   },
