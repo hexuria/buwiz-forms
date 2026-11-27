@@ -13,17 +13,17 @@
 //                while a return is Queued the lists are read every 3 s for about 30 s after the Queued set last changed (startQueuedWatch,
 //                also in the dev environment; it and the library warm-up wait for the frame to be shown: nothing is read behind a lock)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, effect, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
-import { Application } from "nsh/desktop";
+import { batch, computed, effect, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
+import { Application, isAvailable } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
 import { errorText } from "../lib/errors";
-import { isDryRun } from "../lib/statusWord";
+import { DRY_RUN_WORD, isDryRun } from "../lib/statusWord";
 import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
-import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
+import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName, phoneLayout } from "../ui";
 import { eventToast, takeFresh } from "./events";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
@@ -181,14 +181,16 @@ function writeLocal(key: string, value: unknown): void {
 
 // ---------------------------------------------------------------- layout (from the window's width)
 
-/** Under 600: the narrow layout (no sidebar, a bottom tab bar). */
-const narrow = computed(() => windowSize().width < BREAK.phone);
-/** Under 860: the sidebar and the panel float over the page. */
-const overlayMode = computed(() => windowSize().width < BREAK.overlays);
+/** The narrow (phone) layout: a header, a bottom tab bar, sheets. Every phone and tablet at any width; a desktop window under 600. */
+const narrow = computed(() => phoneLayout());
+/** The sidebar and the panel float over the page (under 860), and never dock in the narrow layout, which draws neither. */
+const overlayMode = computed(() => narrow() || windowSize().width < BREAK.overlays);
 const sidebarDocked = computed(() => sidebarOpen() && !overlayMode());
 const panelDocked = computed(() => panel() !== null && !overlayMode());
 /** The main surface's width: the window less what is docked beside it and the inset. */
 const mainWidth = computed(() => {
+  // Narrow: the surface is the window's width (no sidebar, no panel, no inset).
+  if (narrow()) return Math.max(240, windowSize().width);
   const left = sidebarDocked() ? 248 : 8;
   const right = panelDocked() ? 320 : 8;
   return Math.max(240, windowSize().width - left - right - 2);
@@ -246,6 +248,8 @@ function readAccess(): boolean | null {
 function retryAccess(): void {
   if (accessError() === null) return;
   const code = readAccess();
+  // One line per press, on the console (the daily log needs the database this card may be locked out of).
+  console.warn(`Try again on the locked card: ${code === null ? `still locked: ${accessError()}` : "opened"}`);
   if (code !== null) appLocked.set(code);
 }
 
@@ -507,8 +511,13 @@ function settled(): Promise<void> {
   return leaving ?? Promise.resolve();
 }
 
-/** The two steps that end the run, as one object so a test can stand in for them; the app never changes it. */
+/** The steps that end the run, as one object so a test can stand in for them; the app never changes it. */
 export const quitSteps = {
+  /**
+   * Whether this platform ends the run when asked: the desktops. Elsewhere NSH's `Application.quit()` and `restart()` do nothing
+   * (a phone, where only the agent's quit gets here), and an app whose door was shut would go on running with every call refused.
+   */
+  ends: (): boolean => isAvailable && platform.desktop,
   /** The door's quit path: the submission worker stops and the database is checkpointed (safe to call twice). */
   shutdown: (): void => shutdown(),
   /** The application ends. */
@@ -518,8 +527,13 @@ export const quitSteps = {
 /**
  * What ends the run once every screen has finished its work: the door's quit path first, then `then` (the app ends). A caller that
  * ends the run its own way (the updater's install and restart) calls this inside its exit, so no way out skips the door's shutdown.
+ * Where the platform does not end the run (`quitSteps.ends`), neither happens: the app stays open and its door keeps answering.
  */
 function endRun(then: () => void = () => quitSteps.end()): void {
+  if (!quitSteps.ends()) {
+    store.logScreen("warn", "quit: this platform does not end the run; the app stays open");
+    return;
+  }
   try {
     quitSteps.shutdown();
   } catch (error) {
@@ -962,7 +976,8 @@ function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
 
 /**
  * Submissions sent and confirmation emails received, newest first: the return's own status is the record. A send the worker only
- * simulated (`isDryRun`: a dry run, a practice account, a phone build) is a finished dry run, not a submission.
+ * simulated (`isDryRun`: a dry run, a practice account, a Buwiz test TIN) is a test send, not a submission: it says the host's one
+ * sentence for it (`send.line`, send_state.rs `TEST_SENT_LINE`: "Test send. Nothing reached the BIR.").
  */
 const notifications = computed<Notification[]>(() => {
   const seen = readIds();
@@ -973,17 +988,18 @@ const notifications = computed<Notification[]>(() => {
     const id = `return:${r.id}:${confirmed ? "confirmed" : "submitted"}`;
     const who = r.branch_count > 1 ? `${r.taxpayer_name} · ${r.branch_name}` : r.taxpayer_name;
     const dry = !confirmed && isDryRun(r);
+    const testLine = r.send?.stage === "test_sent" ? r.send.line : DRY_RUN_WORD;
     items.push({
       id,
       title: confirmed
         ? `BIR confirmed ${r.form_code} for ${r.period_label}`
         : dry
-          ? `${r.form_code} for ${r.period_label}: dry run finished`
+          ? `${r.form_code} for ${r.period_label}: ${testLine}`
           : `${r.form_code} for ${r.period_label} was submitted`,
       sub: confirmed
         ? `Confirmation email received · ${who}`
         : dry
-          ? `Nothing was sent to the BIR · ${who}`
+          ? who
           : r.submitted_via_relay
             ? `Sent to the mock relay, not to BIR: no BIR email will come · ${who}`
             : `Waiting for BIR's confirmation email · ${who}`,
@@ -1398,7 +1414,18 @@ async function finishUnlock(): Promise<boolean> {
   return true;
 }
 
-/** Signed out of the Buwiz account (the host already dropped the refresh token): the account gate comes back. */
+/** What runs each time the account gate comes back (lockCloud): the sign-in flow starts over on its first page. */
+const cloudLockHooks: (() => void)[] = [];
+
+/** Hears every lockCloud, before the gate shows (screens/auth/signInFlow.ts puts the sign-in back on its first page). */
+function onCloudLock(hook: () => void): void {
+  cloudLockHooks.push(hook);
+}
+
+/**
+ * Signed out of the Buwiz account (the host already dropped the refresh token), or Settings' Sign in: the account gate comes
+ * back, on its first page, whichever way it was asked for (the menu's Sign Out, Settings).
+ */
 function lockCloud(): void {
   try {
     bir.cloud_account_session_closed();
@@ -1406,6 +1433,7 @@ function lockCloud(): void {
     // The host already locked the process.
   }
   batch(() => {
+    for (const hook of cloudLockHooks) hook();
     gateError.set(null);
     cloudLocked.set(true);
   });
@@ -1533,6 +1561,7 @@ export const app = {
   setGateError: (message: string | null) => gateError.set(message),
   finishUnlock,
   lockCloud,
+  onCloudLock,
   signOutAfterSetupChange,
   /** The sign-in and setup screens' dev start-route steps (keys the frame does not know). */
   setAccessSteps: (run: ((key: string, value: string) => void) | null) => {

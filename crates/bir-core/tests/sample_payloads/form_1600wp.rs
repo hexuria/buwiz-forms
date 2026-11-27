@@ -13,7 +13,7 @@ fn draft(month: u8, day: u8) -> Form1600WpDraft {
 }
 
 /// Government agent, both ATCs, an amended return and Schedule II rows.
-fn sample_two_atcs() -> Form1600WpDraft {
+pub(crate) fn sample_two_atcs() -> Form1600WpDraft {
     let mut draft = draft(6, 15);
     draft.is_amended = true;
     draft.set_taxes_withheld(true);
@@ -47,7 +47,7 @@ fn sample_two_atcs() -> Form1600WpDraft {
 }
 
 /// Private agent, one ATC.
-fn sample_one_atc() -> Form1600WpDraft {
+pub(crate) fn sample_one_atc() -> Form1600WpDraft {
     let mut draft = draft(7, 1);
     draft.set_taxes_withheld(true);
     draft.set_agent_category(Form1600WpAgentCategory::Private);
@@ -60,7 +60,7 @@ fn sample_one_atc() -> Form1600WpDraft {
 }
 
 /// No tax withheld.
-fn sample_no_atc() -> Form1600WpDraft {
+pub(crate) fn sample_no_atc() -> Form1600WpDraft {
     let mut draft = draft(8, 31);
     draft.set_taxes_withheld(false);
     draft.set_agent_category(Form1600WpAgentCategory::Private);

@@ -184,6 +184,10 @@ export interface FieldControlProps {
   onBlur(): void;
   /** Register the focusable view so a pill step can put the keyboard in this box. Call with the Input's ref. */
   focusRef?(focus: () => void): void;
+  /** Register how to take the keyboard out of this box (Queue leaves a focused amount box first), with the Input's ref; null when the box goes away. */
+  blurRef?(blur: (() => void) | null): void;
+  /** An amount box was left with text that is not an amount (`typed`) and shows `kept`, the return's amount, again. The session says so under it. */
+  onLeftUnreadable?(typed: string, kept: string): void;
 }
 
 /** One answer of a radio group. */

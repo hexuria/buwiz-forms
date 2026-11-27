@@ -198,11 +198,15 @@ function Frame() {
       <If when={app.layout.narrow()} else={<WideChrome />}>
         <NarrowBar />
       </If>
-      {/* Wide on an iPad or a phone turned sideways: keep off the home indicator and the sensor housing (the tab bar does it when narrow). */}
+      {/* Keep off a phone's sensor housing turned sideways, and (wide) off the home indicator; narrow, the tab bar keeps off the bottom. */}
       <View
         testID="frame-body"
         class="min-h-0 flex-1 flex-row"
-        style={app.layout.narrow() ? {} : { paddingLeft: safeArea().left, paddingRight: safeArea().right, paddingBottom: safeArea().bottom }}
+        style={
+          app.layout.narrow()
+            ? { paddingLeft: safeArea().left, paddingRight: safeArea().right }
+            : { paddingLeft: safeArea().left, paddingRight: safeArea().right, paddingBottom: safeArea().bottom }
+        }
       >
         <If when={app.layout.sidebarDocked() && !app.layout.narrow()}>
           <Sidebar />
@@ -237,6 +241,7 @@ function LockedFrame() {
   return (
     <View testID="locked-frame" class="min-h-0 flex-1">
       {/* The locked menu (About, Quit, editing) stays reachable where the window draws the menu: the menu row, or ☰ when narrow. */}
+      {/* On a phone or tablet the strip is only the status bar's room: the page's back row is where a navigation bar would be. */}
       <If
         when={chromeNow().menuRow}
         else={
@@ -244,7 +249,7 @@ function LockedFrame() {
             testID="title-bar"
             desktop={{ windowDrag: true }}
             class="shrink-0 flex-row items-center"
-            style={{ height: SIZE.titleBar + safeArea().top, paddingTop: safeArea().top, paddingLeft: 8 + titleBar().left, paddingRight: titleBar().right }}
+            style={{ height: (TOUCH ? 0 : SIZE.titleBar) + safeArea().top, paddingTop: safeArea().top, paddingLeft: 8 + titleBar().left, paddingRight: titleBar().right }}
           >
             <If when={chromeNow().hamburger}>
               <MenuListButton testID="locked-menu" />
@@ -280,8 +285,10 @@ export function Shell(props: ShellProps) {
   }
   bindKeys();
   bindMenuKeys();
-  // Android's back button: the topmost layer closes first, then history goes back; else the app leaves.
-  if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.dismiss() || app.back());
+  // Android's back button: the topmost layer closes first, then history goes back; else the app leaves. While the frame is
+  // hidden (the account gate, sign-in, first-run setup) the history behind it is not the person's to walk: the press is
+  // left alone, so it leaves the app (the gate's own listener steps back on its email and code pages first).
+  if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.chromeVisible() && (app.dismiss() || app.back()));
   // The polls end with the root; headless fixtures leave them off unless a test asks.
   if (props.polling !== false) cleanup(startPolling());
   // A queued return is watched where the polls run, and in the dev environment too (the app asks); fixtures leave it off.

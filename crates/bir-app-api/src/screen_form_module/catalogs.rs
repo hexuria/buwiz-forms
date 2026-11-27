@@ -726,7 +726,7 @@ fn fill_2550m_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), St
 }
 
 /// The `sel` schema field for `key`, from `f` or a row's `cols`.
-fn sel_field(kind: AgentFormKind, key: &str) -> Option<Value> {
+pub(super) fn sel_field(kind: AgentFormKind, key: &str) -> Option<Value> {
     let form = schema_entry(kind.form_code())?;
     let mut field = None;
     'walk: for part in form["parts"].as_array().into_iter().flatten() {
@@ -776,7 +776,7 @@ pub(super) fn sel_list(kind: AgentFormKind, key: &str, draft: &Value) -> Option<
         return None;
     }
     let field = sel_field(kind, key)?;
-    if let Some(o) = field["o"].as_array().filter(|o| !o.is_empty()) {
+    if let Some(o) = schema_list(&field) {
         return Some(o.iter().filter_map(sel_option_value).collect());
     }
     field_options(kind, key, draft).map(|rows| {
@@ -797,7 +797,7 @@ pub(super) fn sel_list(kind: AgentFormKind, key: &str, draft: &Value) -> Option<
 pub(super) fn sel_judged(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<String>> {
     let field = sel_field(kind, key)?;
     let listed = sel_list(kind, key, draft)?;
-    if field["o"].as_array().is_some_and(|o| !o.is_empty()) {
+    if schema_list(&field).is_some() {
         // A schema list judges only when the binding is the same list.
         let Some(Binding::Choice { options }) = kind
             .definition()
@@ -815,6 +815,21 @@ pub(super) fn sel_judged(kind: AgentFormKind, key: &str, draft: &Value) -> Optio
         return same.then_some(listed);
     }
     Some(listed)
+}
+
+/// The schema's own `o` for a `sel` field, when it is a list. A list made
+/// only of the official page's unevaluated script — template text
+/// (`" + rdo.description + "`), an empty-array literal (`[]`) and the
+/// dummy `000` beside them — is no list: 1601C's and 1701Q's RDO boxes
+/// carry one, and the host's own list (`field_options`) stands instead.
+pub(super) fn schema_list(field: &Value) -> Option<&Vec<Value>> {
+    let o = field["o"].as_array().filter(|o| !o.is_empty())?;
+    let template =
+        |t: &str| t.starts_with('"') || t.contains("\" +") || t.contains("+ \"") || t == "[]";
+    let leftover = o.iter().any(|x| x.as_str().is_some_and(template))
+        && o.iter()
+            .all(|x| x.as_str().is_some_and(|t| template(t) || t == "000"));
+    (!leftover).then_some(o)
 }
 
 /// One schema `o` entry's code, as the page's `optionOf` reads it: an
@@ -1027,7 +1042,7 @@ pub(super) fn options(kind: AgentFormKind, draft: &Value) -> Value {
     };
     let mut add = |field: &Value, key: &str| {
         if field["t"] == "sel"
-            && field["o"].as_array().is_none_or(Vec::is_empty)
+            && schema_list(field).is_none()
             && let Some(rows) = field_options(kind, key, draft)
         {
             options.insert(key.to_string(), Value::Array(rows));

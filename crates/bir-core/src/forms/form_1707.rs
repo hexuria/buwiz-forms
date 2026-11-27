@@ -498,6 +498,7 @@ impl Form1707Draft {
             ],
         );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
+        super::print_map::match_upload_case("1707-v2021", &mut fields, None);
         fields
     }
 

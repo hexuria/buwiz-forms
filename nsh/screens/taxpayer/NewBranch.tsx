@@ -175,6 +175,7 @@ export function NewBranchPage() {
                       testID={`new-branch-${f()[0]}`}
                       label={f()[1]}
                       options={pickOptions(f()[0] as "rdo_code" | "zip_code")}
+                      searchKeyboard={f()[0] === "zip_code" ? "digits-first" : "default"}
                       value={d().values[f()[0]]}
                       onPick={(v) => {
                         setField(f()[0], v);

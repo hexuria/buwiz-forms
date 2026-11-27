@@ -1,5 +1,5 @@
 //! A dry run is not a filing. The submission worker marks a send it only
-//! simulated (a dry run, a practice account, a phone build) with
+//! simulated (a dry run, a practice account) with
 //! `submitted_dry_run`: the return is stored Submitted, but nothing reached
 //! the BIR. Every rule that asks "was this return filed?" asks it here, so a
 //! dry run never stands in for a real filing. A real send (no flag), a send

@@ -50,6 +50,12 @@ pub fn is_unlocked() -> bool {
     auth_bypass_enabled() || UNLOCKED.load(Ordering::SeqCst)
 }
 
+/// What sign-in and sign-out set, without the test bypass that [`is_unlocked`] adds (tests run with it on).
+#[cfg(test)]
+pub(crate) fn unlocked_flag() -> bool {
+    UNLOCKED.load(Ordering::SeqCst)
+}
+
 pub fn set_unlocked(unlocked: bool) {
     UNLOCKED.store(unlocked, Ordering::SeqCst);
     // Signing out leaves the gate. Filing menus must not survive into it.

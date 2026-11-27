@@ -2,6 +2,12 @@
 //! store (Keychain, Credential Manager, Secret Service) through `keyring`,
 //! or, where there is none (Android, a headless Linux box), a file in the
 //! app's private data dir, as bir-core does for its database key.
+//!
+//! On iPhone and iPad they are always files ([`FileStore`]): the iOS build
+//! has no credential-store type at all (`KeyringStore` and `keyring` exist
+//! only for macOS, Windows and Linux), so they can never be offered to the
+//! Keychain. Each file is written with the protection "complete until first
+//! user authentication" (`crate::ios_storage::protect_file`).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -23,42 +29,27 @@ pub trait SecretStore: Send + Sync {
 
 /// The store for this platform: with `use_keychain`, the OS credential
 /// store, falling back to files in `data_dir` when the OS store cannot be
-/// used; without it (the host's `BUWIZ_NO_KEYCHAIN=1`, Android, tests),
-/// files in `data_dir` only.
+/// used; without it (the host's `BUWIZ_NO_KEYCHAIN=1`, Android, tests), and
+/// always on iOS, files in `data_dir` only.
 pub fn platform_store(data_dir: PathBuf, use_keychain: bool) -> Box<dyn SecretStore> {
     if !use_keychain {
         return Box::new(FileStore::new(data_dir));
     }
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "windows",
-        target_os = "linux"
-    ))]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     {
         Box::new(KeyringStore {
             keychain: Box::new(OsKeychain),
             fallback: FileStore::new(data_dir),
         })
     }
-    #[cfg(not(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "windows",
-        target_os = "linux"
-    )))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         Box::new(FileStore::new(data_dir))
     }
 }
 
 /// The OS credential store's three calls, so a test can stand in for it.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 trait Keychain: Send + Sync {
     fn get(&self, name: &str) -> Result<String, keyring::Error>;
     fn set(&self, name: &str, value: &str) -> Result<(), keyring::Error>;
@@ -66,32 +57,17 @@ trait Keychain: Send + Sync {
 }
 
 /// The real one: entries of [`SERVICE`] named `device-key`, `device-id`.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 struct OsKeychain;
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl OsKeychain {
     fn entry(name: &str) -> Result<keyring::Entry, keyring::Error> {
         keyring::Entry::new(SERVICE, &name.replace('_', "-"))
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl Keychain for OsKeychain {
     fn get(&self, name: &str) -> Result<String, keyring::Error> {
         Self::entry(name).and_then(|entry| entry.get_password())
@@ -109,23 +85,13 @@ impl Keychain for OsKeychain {
 /// The OS credential store. When it is unavailable (no Secret Service on
 /// D-Bus, for one), secrets go to the fallback file store, and a secret
 /// already in that file wins, as bir-core does with `bir_key.txt`.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub struct KeyringStore {
     keychain: Box<dyn Keychain>,
     fallback: FileStore,
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl KeyringStore {
     fn unavailable(error: &keyring::Error) -> bool {
         matches!(
@@ -135,12 +101,7 @@ impl KeyringStore {
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "windows",
-    target_os = "linux"
-))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 impl SecretStore for KeyringStore {
     fn get(&self, name: &str) -> Result<Option<String>, StoreError> {
         if let Some(value) = self.fallback.get(name)? {
@@ -225,7 +186,9 @@ impl SecretStore for FileStore {
         std::io::Write::write_all(&mut file, value.as_bytes())
             .map_err(|error| StoreError(error.to_string()))?;
         drop(file);
-        std::fs::rename(&temporary, &path).map_err(|error| StoreError(error.to_string()))
+        std::fs::rename(&temporary, &path).map_err(|error| StoreError(error.to_string()))?;
+        crate::ios_storage::protect_file(&path);
+        Ok(())
     }
 
     fn delete(&self, name: &str) -> Result<(), StoreError> {
@@ -300,12 +263,7 @@ mod tests {
         assert_eq!(store.get("device_key").unwrap(), None);
     }
 
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "windows",
-        target_os = "linux"
-    ))]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     mod keychain {
         use super::super::*;
 

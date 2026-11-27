@@ -865,16 +865,26 @@ impl Form1801Draft {
 
     /// The field map for the print preview: the upload's map, except the
     /// e-mail is printed as typed (the upload keeps it in capitals), plus
-    /// `derived:tin_digits`, the nine TIN digits of the page 2 header.
+    /// `derived:tin_digits`, the TIN and branch digits of the page 2 header.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
         fields.insert(
             "frm1801v2018:txtEmail".to_string(),
             self.email.trim().to_string(),
         );
-        // The page 2 header comb has nine inputs (the branch is preprinted).
-        let mut tin_digits = super::print_map::tin_digits(&self.tin);
-        tin_digits.truncate(9);
+        // The page 2 header comb has fourteen inputs: nine TIN digits and
+        // the five-digit branch code, read from the upload's own page 2 TIN
+        // keys (as 1601C does), so pages 1 and 2 and the upload carry the
+        // same left-padded branch.
+        let tin_digits = super::print_map::digits_of(
+            &fields,
+            &[
+                "frm1801v2018:tinA_2",
+                "frm1801v2018:tinB_2",
+                "frm1801v2018:tinC_2",
+                "frm1801v2018:branchCode_2",
+            ],
+        );
         fields.insert("derived:tin_digits".to_string(), tin_digits);
         fields
     }
@@ -1137,6 +1147,23 @@ impl Form1801Draft {
                         &format!("Incomplete values on {schedule}, Row {}.", index + 1),
                     );
                 }
+            }
+        }
+        // Schedule 4's RDO is the official rdo.xml dropdown ("000", its
+        // empty choice, is a blank cell above): free text off it is no RDO.
+        for (index, b) in self.business_interests.iter().enumerate() {
+            let rdo = b.rdo_code.trim();
+            if !rdo.is_empty()
+                && rdo != "000"
+                && !crate::validation::rdo_code_is_official_option(rdo)
+            {
+                err(
+                    &format!("business_interests[{index}].rdo_code"),
+                    &format!(
+                        "Please enter a valid RDO Code on Schedule 4, Row {}.",
+                        index + 1
+                    ),
+                );
             }
         }
 
@@ -1656,6 +1683,27 @@ mod tests {
             },
             "Incomplete values on Schedule 1, Row 1.",
         );
+        let row = |rdo: &str| Form1801Business {
+            name: "Example Store".into(),
+            address: "1 Example Street".into(),
+            rdo_code: rdo.into(),
+            value: Form1801Split {
+                exclusive: 1000.0,
+                conjugal: 0.0,
+            },
+        };
+        check(
+            &|d| d.business_interests = vec![row("000")],
+            "Incomplete values on Schedule 4, Row 1.",
+        );
+        check(
+            &|d| d.business_interests = vec![row("[]")],
+            "Please enter a valid RDO Code on Schedule 4, Row 1.",
+        );
+        let mut d = sample();
+        d.business_interests = vec![row("040")];
+        d.recompute();
+        assert!(!messages(&d).iter().any(|m| m.contains("Schedule 4")));
     }
 
     #[test]

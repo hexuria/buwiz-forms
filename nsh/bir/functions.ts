@@ -5,6 +5,12 @@
 import { Door } from "ebirforms/native";
 import type * as Host from "./types";
 
+export const account_tins = (...args: Parameters<typeof Host.account_tins>): ReturnType<typeof Host.account_tins> =>
+  Door.callAsync("account_tins", args) as ReturnType<typeof Host.account_tins>;
+
+export const activate_tin = (...args: Parameters<typeof Host.activate_tin>): ReturnType<typeof Host.activate_tin> =>
+  Door.callAsync("activate_tin", args) as ReturnType<typeof Host.activate_tin>;
+
 export const add_tax_year = (...args: Parameters<typeof Host.add_tax_year>): ReturnType<typeof Host.add_tax_year> =>
   Door.call("add_tax_year", args) as ReturnType<typeof Host.add_tax_year>;
 
@@ -38,14 +44,20 @@ export const change_to_helpdesk = (...args: Parameters<typeof Host.change_to_hel
 export const check_inbox_now = (...args: Parameters<typeof Host.check_inbox_now>): ReturnType<typeof Host.check_inbox_now> =>
   Door.callAsync("check_inbox_now", args) as ReturnType<typeof Host.check_inbox_now>;
 
-export const cloud_account_begin_sign_in = (...args: Parameters<typeof Host.cloud_account_begin_sign_in>): ReturnType<typeof Host.cloud_account_begin_sign_in> =>
-  Door.callAsync("cloud_account_begin_sign_in", args) as ReturnType<typeof Host.cloud_account_begin_sign_in>;
+export const cloud_account_email_cancel = (...args: Parameters<typeof Host.cloud_account_email_cancel>): ReturnType<typeof Host.cloud_account_email_cancel> =>
+  Door.call("cloud_account_email_cancel", args) as ReturnType<typeof Host.cloud_account_email_cancel>;
 
-export const cloud_account_begin_sign_up = (...args: Parameters<typeof Host.cloud_account_begin_sign_up>): ReturnType<typeof Host.cloud_account_begin_sign_up> =>
-  Door.callAsync("cloud_account_begin_sign_up", args) as ReturnType<typeof Host.cloud_account_begin_sign_up>;
+export const cloud_account_email_pending = (...args: Parameters<typeof Host.cloud_account_email_pending>): ReturnType<typeof Host.cloud_account_email_pending> =>
+  Door.call("cloud_account_email_pending", args) as ReturnType<typeof Host.cloud_account_email_pending>;
 
-export const cloud_account_finish_sign_in = (...args: Parameters<typeof Host.cloud_account_finish_sign_in>): ReturnType<typeof Host.cloud_account_finish_sign_in> =>
-  Door.callAsync("cloud_account_finish_sign_in", args) as ReturnType<typeof Host.cloud_account_finish_sign_in>;
+export const cloud_account_email_resend = (...args: Parameters<typeof Host.cloud_account_email_resend>): ReturnType<typeof Host.cloud_account_email_resend> =>
+  Door.callAsync("cloud_account_email_resend", args) as ReturnType<typeof Host.cloud_account_email_resend>;
+
+export const cloud_account_email_start = (...args: Parameters<typeof Host.cloud_account_email_start>): ReturnType<typeof Host.cloud_account_email_start> =>
+  Door.callAsync("cloud_account_email_start", args) as ReturnType<typeof Host.cloud_account_email_start>;
+
+export const cloud_account_email_verify = (...args: Parameters<typeof Host.cloud_account_email_verify>): ReturnType<typeof Host.cloud_account_email_verify> =>
+  Door.callAsync("cloud_account_email_verify", args) as ReturnType<typeof Host.cloud_account_email_verify>;
 
 export const cloud_account_gate = (...args: Parameters<typeof Host.cloud_account_gate>): ReturnType<typeof Host.cloud_account_gate> =>
   Door.call("cloud_account_gate", args) as ReturnType<typeof Host.cloud_account_gate>;
@@ -401,8 +413,9 @@ export type {
   BackgroundJob,
   JobLogTail,
   CloudAccountStatus,
-  CloudSignInStart,
   CloudAccountGate,
+  CloudEmailStep,
+  CloudEmailCheck,
   BranchFieldName,
   BranchFacts,
   Branch,
@@ -431,6 +444,9 @@ export type {
   InboxVerifyResult,
   InboxCheckResult,
   SendGrant,
+  TinState,
+  TinStatusRow,
+  TinStatusList,
   ScreenFormIndexEntry,
   ScreenFormError,
   ScreenFormStatus,
@@ -461,6 +477,8 @@ export type {
 
 /** Every wrapper above, for bir.system_info()-style calls. */
 export const bir = {
+  account_tins,
+  activate_tin,
   add_tax_year,
   agent_take,
   annual_return_conflicts,
@@ -472,9 +490,11 @@ export const bir = {
   change_owner,
   change_to_helpdesk,
   check_inbox_now,
-  cloud_account_begin_sign_in,
-  cloud_account_begin_sign_up,
-  cloud_account_finish_sign_in,
+  cloud_account_email_cancel,
+  cloud_account_email_pending,
+  cloud_account_email_resend,
+  cloud_account_email_start,
+  cloud_account_email_verify,
   cloud_account_gate,
   cloud_account_refresh,
   cloud_account_session_closed,
@@ -591,6 +611,8 @@ export const bir = {
 
 /** The names of the wrapped functions, with their kind, for tests. */
 export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
+  { name: "account_tins", kind: "async" },
+  { name: "activate_tin", kind: "async" },
   { name: "add_tax_year", kind: "sync" },
   { name: "agent_take", kind: "sync" },
   { name: "annual_return_conflicts", kind: "sync" },
@@ -602,9 +624,11 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "change_owner", kind: "sync" },
   { name: "change_to_helpdesk", kind: "sync" },
   { name: "check_inbox_now", kind: "async" },
-  { name: "cloud_account_begin_sign_in", kind: "async" },
-  { name: "cloud_account_begin_sign_up", kind: "async" },
-  { name: "cloud_account_finish_sign_in", kind: "async" },
+  { name: "cloud_account_email_cancel", kind: "sync" },
+  { name: "cloud_account_email_pending", kind: "sync" },
+  { name: "cloud_account_email_resend", kind: "async" },
+  { name: "cloud_account_email_start", kind: "async" },
+  { name: "cloud_account_email_verify", kind: "async" },
   { name: "cloud_account_gate", kind: "sync" },
   { name: "cloud_account_refresh", kind: "async" },
   { name: "cloud_account_session_closed", kind: "sync" },

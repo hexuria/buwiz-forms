@@ -42,8 +42,8 @@ function seed(p: Params) {
     bir.set_yearly_forms(head.tin, year, ["1601C", "2551Q"]);
   }
   if (p.branch && !taxpayer.branches.some((b) => b.code === "00001")) bir.create_branch(taxpayer.tin_root, { branch_code: "00001", name: "Cebu branch" });
-  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111229")) {
-    bir.create_taxpayer({ tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
+  if (p.second && !bir.list_taxpayers().some((t) => t.tin_root === "000111225")) {
+    bir.create_taxpayer({ tin_root: "000-111-225", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039", registered_address: "Quezon City", zip_code: "1100" } });
   }
 }
 

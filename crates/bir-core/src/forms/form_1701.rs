@@ -546,6 +546,33 @@ impl<'de> Deserialize<'de> for PenaltySlot {
     }
 }
 
+fn split_employer_name_lines(raw: &str, line1_max: usize, line2_max: usize) -> (String, String) {
+    let trimmed = raw.trim();
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() <= line1_max {
+        return (trimmed.to_string(), String::new());
+    }
+    // Prefer splitting at the last whitespace within line1_max so words aren't broken
+    // and line 2 never starts with a leading space.
+    let split_at = chars[..=line1_max.min(chars.len() - 1)]
+        .iter()
+        .rposition(|c| c.is_whitespace())
+        .filter(|&idx| idx > 0)
+        .unwrap_or(line1_max);
+    let line1: String = chars[..split_at]
+        .iter()
+        .collect::<String>()
+        .trim_end()
+        .to_string();
+    let rest: String = chars[split_at..]
+        .iter()
+        .collect::<String>()
+        .trim_start()
+        .to_string();
+    let line2: String = rest.chars().take(line2_max).collect();
+    (line1, line2)
+}
+
 impl Form1701Draft {
     /// The print sheet's field map: the upload map plus `derived:` keys
     /// that only shape the print.
@@ -615,6 +642,37 @@ impl Form1701Draft {
                 self.page_header_name(),
             );
         }
+        // Page 2 Schedule 1 employer name (35 + 16 comb slots) and 14-digit TIN
+        // share one row per employer regardless of Taxpayer/Spouse owner, whereas
+        // the XML splits TPName/SName and TIN1/TIN2/TIN3/BranchCode.
+        for n in 1..=2 {
+            let base = format!("frm1701:txtPg2IShed{n}a");
+            let raw_name = fields
+                .get(&format!("{base}_{n}TPName"))
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| {
+                    fields
+                        .get(&format!("{base}_{n}SName"))
+                        .filter(|s| !s.trim().is_empty())
+                })
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            let (line1, line2) = split_employer_name_lines(&raw_name, 35, 16);
+            let tin = super::print_map::digits_of(
+                &fields,
+                &[
+                    &format!("{base}_TIN1"),
+                    &format!("{base}_TIN2"),
+                    &format!("{base}_TIN3"),
+                    &format!("{base}_BranchCode"),
+                ],
+            );
+            fields.insert(format!("derived:sched1_row{n}_name_line1"), line1);
+            fields.insert(format!("derived:sched1_row{n}_name_line2"), line2);
+            fields.insert(format!("derived:sched1_row{n}_tin"), tin);
+        }
+        let official = self.to_official_field_map();
+        super::print_map::match_upload_case("1701-v2018", &mut fields, Some(&official));
         fields
     }
 

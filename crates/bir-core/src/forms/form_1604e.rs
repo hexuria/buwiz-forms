@@ -389,6 +389,17 @@ impl Form1604eDraft {
     /// (40 + 31 slots) and the whole 14-digit TIN for the page-2 header.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
+        // Item 1 on the 1604E sheet preprints "2 0" in slots 0-1 and provides
+        // only two input boxes (slots 2-3); keep the 4-digit year in upload XML.
+        // Leave blank if the year is outside 2000..=2099 rather than printing a wrong century.
+        if (2000..=2099).contains(&self.taxable_year) {
+            fields.insert(
+                "frm1604e:txtYear".to_string(),
+                format!("{:02}", self.taxable_year % 100),
+            );
+        } else {
+            fields.insert("frm1604e:txtYear".to_string(), String::new());
+        }
         let address: Vec<char> = self.registered_address.trim().chars().collect();
         fields.insert(
             "derived:address1".to_string(),

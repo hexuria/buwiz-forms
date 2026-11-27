@@ -16,7 +16,7 @@ test("phone: the owner's TIN and PIN sign in; wrong ones say why and clear the c
   expect(app.shows("id:frame")).toBe(false);
   await app.press("id:auth-submit");
   await app.waitFor("text:Type all 9 digits of the TIN.");
-  await app.type("id:auth-tin", "000111229");
+  await app.type("id:auth-tin", "000111225");
   await app.waitFor("text:Type all 9 digits of the TIN.", { state: "gone" });
   await app.type("id:auth-tp-pin", "1234");
   await app.waitFor("text:No taxpayer has that TIN on this device.");
@@ -99,7 +99,7 @@ test("desktop: an authenticator code signs a taxpayer in; Lock app and Log out b
   expect(app.shows("id:auth-tp-pin")).toBe(true);
   expect(app.texts()).toContain("session: open");
   // A taxpayer with no PIN cannot sign in with one.
-  await app.type("id:auth-tin", "000111229");
+  await app.type("id:auth-tin", "000111225");
   await app.type("id:auth-tp-pin", "1111");
   await app.waitFor("text:That taxpayer has no PIN yet. Ask the admin to open it.");
   // The help desk admin.
@@ -159,4 +159,29 @@ test("phone: with no admin code the sign-in offers Open without signing in, and 
   await app.keyboard.press("mod+l");
   await app.waitFor("text:Set your PIN in Settings first. With no PIN there is nothing to sign back in with.");
   expect(app.shows("id:auth-card")).toBe(false);
+});
+
+test("phone: the badge's menu locks the app and logs out, each back at the sign-in", async () => {
+  const app = await open(ENTRY, { host: { params: SOLO } });
+  await app.waitFor("id:auth-card");
+  await app.type("id:auth-tin", "000123453");
+  await app.type("id:auth-tp-pin", "1234");
+  await app.waitFor("id:frame");
+  await app.waitFor("text:session: admin");
+  // Lock app from the badge's menu: the sign-in again, nothing of the frame left.
+  await app.press("id:nb-avatar");
+  await app.waitFor("id:nb-menu-lock");
+  await app.press("id:nb-menu-lock");
+  await app.waitFor("id:auth-card");
+  expect(app.shows("id:frame")).toBe(false);
+  expect(app.texts()).toContain("session: open");
+  // Back in, then Log out: the sign-in, with "Signed out.".
+  await app.type("id:auth-tin", "000123453");
+  await app.type("id:auth-tp-pin", "1234");
+  await app.waitFor("id:frame");
+  await app.press("id:nb-avatar");
+  await app.waitFor("id:nb-menu-logout");
+  await app.press("id:nb-menu-logout");
+  await app.waitFor("id:auth-card");
+  await app.waitFor("text:Signed out.");
 });

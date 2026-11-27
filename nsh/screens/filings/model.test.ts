@@ -1,10 +1,10 @@
 // Filings' pure rules, without a window: how a return is named, dated and grouped, what the search and filters keep, and what
-// a Home tile's preset sets. Rows are generated (the demo taxpayer's name and TIN, a Cebu branch, a second generated taxpayer).
+// a navigation preset sets. Rows are generated (the demo taxpayer's name and TIN, a Cebu branch, a second generated taxpayer).
 import { expect, test } from "nsh/test";
 import type { ReturnRow, SendState } from "../../bir";
 import {
   cardLabel, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
-  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, whoLine,
+  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, visibleColumns, whoLine,
 } from "./model";
 
 const INDEX = [
@@ -27,7 +27,7 @@ const R = [
   row({ id: 2, form_code: "1601C", period: 9, period_label: "September 2026", status: "Queued" }),
   row({ id: 3, form_code: "1604C", period: 0, period_label: "TY 2025", taxable_year: 2025, status: "Paid", updated_at: "2026-10-31 22:30:00" }),
   row({ id: 4, tin: "00012345300001", branch_code: "00001", branch_name: "Cebu branch", period: 2, period_label: "Q2 2026", updated_at: "2026-11-15 01:00:00" }),
-  row({ id: 5, tin: "00011122900000", tin_root: "000111229", taxpayer_name: "Sample Trading Corp", form_code: "1601C", period: 8, period_label: "August 2026", status: "Confirmed" }),
+  row({ id: 5, tin: "00011122500000", tin_root: "000111225", taxpayer_name: "Sample Trading Corp", form_code: "1601C", period: 8, period_label: "August 2026", status: "Confirmed" }),
 ];
 const ids = (rows: ReturnRow[]) => rows.map((r) => r.id);
 
@@ -91,7 +91,7 @@ test("newest change first", () => {
 
 test("every filter keeps what it names and null means every value", () => {
   expect(ids(filterRows(R, INDEX, ALL))).toEqual([1, 2, 3, 4, 5]);
-  expect(ids(filterRows(R, INDEX, { ...ALL, tps: new Set(["000111229"]) }))).toEqual([5]);
+  expect(ids(filterRows(R, INDEX, { ...ALL, tps: new Set(["000111225"]) }))).toEqual([5]);
   expect(ids(filterRows(R, INDEX, { ...ALL, forms: new Set(["1601C"]) }))).toEqual([2, 5]);
   expect(ids(filterRows(R, INDEX, { ...ALL, periods: new Set(["Q3 2026"]) }))).toEqual([1, 2, 5]);
   expect(ids(filterRows(R, INDEX, { ...ALL, periods: new Set(["TY 2025"]) }))).toEqual([3]);
@@ -135,7 +135,7 @@ test("Filed only keeps what counts as filed: a real send, a relay send, Confirme
   ];
   expect(ids(filterRows(rows, INDEX, { ...ALL, filedOnly: true }))).toEqual([12, 13, 14, 15]);
   expect(ids(filterRows(rows, INDEX, ALL))).toEqual([11, 12, 13, 14, 15, 16, 17]);
-  // Home's "Filed this month" asks for it; a preset carries it only when set.
+  // A navigation preset carries filedOnly only when set.
   expect(presetOf({ statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11", filedOnly: true })).toEqual({
     statuses: ["Submitted", "Confirmed", "Paid"],
     updatedMonth: "2026-11",
@@ -152,13 +152,24 @@ test("the board's columns hold every status once, with Paid in Confirmed", () =>
   expect(COLUMNS[3].statuses).toEqual(["Confirmed", "Paid"]);
 });
 
+test("the statuses filter names the visible columns: null is all, empty is none, and Paid keeps Confirmed visible", () => {
+  const ids = (statuses: ReadonlySet<string> | null) => visibleColumns(statuses).map((c) => c.id);
+  expect(ids(null)).toEqual(["draft", "queued", "submitted", "confirmed"]);
+  expect(ids(new Set())).toEqual([]);
+  expect(ids(new Set(["Draft"]))).toEqual(["draft"]);
+  expect(ids(new Set(["Queued", "Submitted"]))).toEqual(["queued", "submitted"]);
+  expect(ids(new Set(["Paid"]))).toEqual(["confirmed"]);
+  expect(ids(new Set(["Confirmed"]))).toEqual(["confirmed"]);
+  expect(ids(new Set(["Draft", "Confirmed", "Paid"]))).toEqual(["draft", "confirmed"]);
+});
+
 test("plural", () => {
   expect(plural(0, "return")).toBe("0 returns");
   expect(plural(1, "return")).toBe("1 return");
   expect(plural(7, "return")).toBe("7 returns");
 });
 
-test("a Home tile's preset: the old names, flat or inside preset", () => {
+test("a navigation preset: the old names, flat or inside preset", () => {
   expect(presetOf({ statuses: ["Draft"] })).toEqual({ statuses: ["Draft"], updatedMonth: undefined });
   expect(presetOf({ statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11" })).toEqual({
     statuses: ["Submitted", "Confirmed", "Paid"],

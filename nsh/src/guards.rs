@@ -115,10 +115,50 @@ pub fn send_guard() -> SendMode {
 }
 
 fn restrict_sending(debug_build: bool) -> bool {
-    !cfg!(any(target_os = "macos", target_os = "windows", target_os = "linux"))
-        || debug_build
-        || bir_core::db::test_environment()
-        || matches!(bir_core::config::var("GPUI_AGENT").as_deref(), Ok("1" | "true"))
+    restricted_launch(
+        System::this(),
+        debug_build,
+        bir_core::db::test_environment(),
+        matches!(bir_core::config::var("GPUI_AGENT").as_deref(), Ok("1" | "true")),
+    )
+}
+
+/// The system an app build runs on, for [`restricted_launch`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum System {
+    MacOs,
+    Windows,
+    Linux,
+    Ios,
+    Android,
+}
+
+impl System {
+    #[cfg(test)]
+    const ALL: [System; 5] = [System::MacOs, System::Windows, System::Linux, System::Ios, System::Android];
+
+    fn this() -> System {
+        if cfg!(target_os = "ios") {
+            System::Ios
+        } else if cfg!(target_os = "android") {
+            System::Android
+        } else if cfg!(target_os = "windows") {
+            System::Windows
+        } else if cfg!(target_os = "linux") {
+            System::Linux
+        } else {
+            System::MacOs
+        }
+    }
+}
+
+/// Whether this launch may only simulate, or send through a server on this computer: a debug build
+/// (`cfg!(debug_assertions)`), a test environment (`EBIR_TEST_ENV`) or an agent-driven launch (`GPUI_AGENT`). The
+/// system does not change it: a release build (an App Store or TestFlight build, a Play bundle, a desktop package:
+/// all built without `debug_assertions`) files through the Buwiz relay on iPhone, iPad and Android exactly as on
+/// macOS, Windows and Linux, and a development build never sends or registers through production on any of them.
+fn restricted_launch(_system: System, debug_build: bool, test_environment: bool, agent: bool) -> bool {
+    debug_build || test_environment || agent
 }
 
 /// [`send_guard`] with the "is anything listening there" probe given, for tests.
@@ -578,9 +618,36 @@ pub fn database_refusal(path: &Path, protected: &[PathBuf]) -> Option<String> {
     None
 }
 
+/// The folder under an Android engine's data folder where a test run may keep a named database that outlives its
+/// process (`BIR_DATABASE_PATH`, an opted-in development build's dev list).
+pub const ANDROID_TEST_DATA: &str = "test-data";
+
+/// On Android in a test run, a database named with `BIR_DATABASE_PATH` must sit inside `<data_dir>/test-data`: never the
+/// app's own database (`<data_dir>/bir_data.db`), nor anywhere else. Pure, so it runs on any system.
+#[cfg_attr(not(target_os = "android"), allow(dead_code, reason = "called on Android; tested everywhere"))]
+pub(crate) fn android_test_database_refusal(path: &Path, data_dir: &Path) -> Option<String> {
+    let allowed = canonical_target(&data_dir.join(ANDROID_TEST_DATA));
+    let canonical = canonical_target(path);
+    if canonical != allowed && inside(&canonical, &allowed) {
+        return None;
+    }
+    Some(format!(
+        "Refusing to open {}: a test run names a database only inside {}.",
+        canonical.display(),
+        allowed.display()
+    ))
+}
+
 /// [`database_refusal`] for the owner's real folders. With no home folder to name them, the answer is a
 /// refusal.
 pub fn database_refusal_here(path: &Path) -> Option<String> {
+    #[cfg(target_os = "android")]
+    if crate::door::test_environment()
+        && bir_core::config::var(DATABASE_PATH_ENV).is_ok_and(|value| !value.is_empty())
+        && let Some(why) = android_test_database_refusal(path, &bir_core::platform::data_dir())
+    {
+        return Some(why);
+    }
     // A test that names its own "home" (the seam) checks the by-name rules on any system.
     #[cfg(test)]
     let seamed = TEST_PROTECTED.with(|slot| slot.borrow().is_some());
@@ -837,6 +904,22 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn an_android_test_run_opens_a_named_database_only_inside_test_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("files/nsh/dev.goldcoders.bir");
+        assert_eq!(android_test_database_refusal(&data.join("test-data/bir_data.db"), &data), None);
+        for refused in [
+            data.join("bir_data.db"),
+            data.join("test-data"),
+            data.join("test-data/../bir_data.db"),
+            data.join("other/bir_data.db"),
+            dir.path().join("elsewhere.db"),
+        ] {
+            assert!(android_test_database_refusal(&refused, &data).is_some(), "{}", refused.display());
+        }
+    }
+
     /// Every variable the send guard reads or writes, so a test runs with exactly the ones it names.
     fn sending_env<R>(set: &[(&str, &str)], body: impl FnOnce() -> R) -> R {
         let names = [
@@ -873,9 +956,30 @@ mod tests {
         std::env::var("BIR_SFTP_DRY_RUN").ok()
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    /// Every system alike, phones included: only a release launch outside a test or agent environment may file; any
+    /// debug, test or agent launch is restricted.
     #[test]
-    fn desktop_release_leaves_the_filing_transport_in_control() {
+    fn only_a_plain_release_launch_may_file_on_any_system() {
+        for system in System::ALL {
+            assert!(!restricted_launch(system, false, false, false), "{system:?}: a release build files");
+            for debug_build in [false, true] {
+                for test_environment in [false, true] {
+                    for agent in [false, true] {
+                        assert_eq!(
+                            restricted_launch(system, debug_build, test_environment, agent),
+                            debug_build || test_environment || agent,
+                            "{system:?}: debug {debug_build}, test {test_environment}, agent {agent}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// A release launch, on whatever system the test runs, leaves the filing transport in control (it ran on the
+    /// desktops only while phones were held to a dry run).
+    #[test]
+    fn a_release_launch_leaves_the_filing_transport_in_control() {
         // A dry run wins; then a build with nowhere to send is off; only a build that can file itself is live.
         for (transport_is_dry, nowhere_to_send, expected) in [
             (false, false, SendMode::Live),
@@ -1683,6 +1787,22 @@ mod tests {
         assert_eq!(database_refusal(&default, &shipped), None, "the shipped app opens its own database");
         // A scratch database and the agents folder are untouched either way.
         assert_eq!(database_refusal(&home.path("BuwizNsh/agents/door.db"), &in_test), None);
+    }
+
+    /// The Simulator check of `docs/platforms/ios.md`: a database named under the app container's `Documents/`
+    /// survives relaunches and a test-environment run may open it, while the app's own data folder
+    /// (`Library/Application Support/dev.goldcoders.bir`) stays refused. On iOS the container is HOME and the guard
+    /// verifies (Unix), so nothing else is asked.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[test]
+    fn a_test_run_may_open_a_database_in_the_containers_documents() {
+        let home = Home::new();
+        let in_test = protected_folders_for(home.root.path(), true);
+        let stable = home.path("Documents/buwiz-check/bir_data.db");
+        assert_eq!(database_refusal(&stable, &in_test), None);
+        assert_eq!(unverified_refusal(cfg!(any(unix, windows)), &stable, None), None);
+        let own = home.path("Library/Application Support/dev.goldcoders.bir/bir_data.db");
+        assert!(database_refusal(&own, &in_test).is_some(), "the app's own folder stays refused");
     }
 
     /// On Windows the guard verifies now: with nothing named, a scratch database opens and the owner's real data

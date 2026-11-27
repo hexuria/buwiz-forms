@@ -1,0 +1,16 @@
+Supplementary temporary-instrumentation excerpt (instrumentation restored afterward, not committed):
+console.log in MaskedField.onSelectionChange printed "MONEYSEL <start> <end> <text>".
+
+Tap x=900 into filled grouped amount `1,000,000.01`:
+MONEYSEL 0 0 1,000,000.01
+MONEYSEL 0 0 1,000,000.01
+MONEYSEL 0 0 1,000,000.01
+MONEYSEL 6 6 1,000,000.01
+
+A repeated tap x=900 into filled grouped amount `1,234.51` showed the same transient zero reports before the tap caret:
+MONEYSEL 0 0 1,234.51
+MONEYSEL 0 0 1,234.51
+MONEYSEL 0 0 1,234.51
+MONEYSEL 2 2 1,234.51
+
+Interpretation: Android does transiently report caret 0 after the tap, then reports the caret where the tap landed. In the uninstrumented 1,234.56 proof the digit was typed only after the correct report; it landed after the comma (`1,7234.56`), not at index 0.

@@ -7,7 +7,7 @@ use bir_core::forms::form_1702ex::{
     Form1702ExSpecialRow,
 };
 
-fn sample_1702ex() -> Form1702ExDraft {
+pub(crate) fn sample_1702ex() -> Form1702ExDraft {
     let mut draft =
         Form1702ExDraft::new_from_profile(&dummy_profile("1702EX", "Corporation"), 2025);
     draft.registered_name = "Sample Dummy Foundation Inc".to_string();
@@ -71,7 +71,7 @@ fn form_1702ex_sample_payload_is_current() {
 /// Item 17I plus two popup rows, Schedule 2 Item 4 plus one, Schedule 3
 /// Item 3 plus two (a `maxLength` 12 box: no commas), Items 6 and 8 plus
 /// one each. Popup amounts lose their centavos.
-fn sample_1702ex_popups() -> Form1702ExDraft {
+pub(crate) fn sample_1702ex_popups() -> Form1702ExDraft {
     let mut draft = sample_1702ex();
     let row = |description: &str, amount: f64| Form1702ExRow {
         description: description.to_string(),

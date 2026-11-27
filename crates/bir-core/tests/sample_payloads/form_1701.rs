@@ -12,7 +12,7 @@ const TP: Form1701Party = Form1701Party::Taxpayer;
 const SP: Form1701Party = Form1701Party::Spouse;
 
 /// Mixed income (II013), graduated rates with OSD, rounding cases.
-fn sample_1701() -> Form1701Draft {
+pub(crate) fn sample_1701() -> Form1701Draft {
     let mut d =
         Form1701Draft::new_from_profile(&dummy_profile("1701v2018", "Individual"), 2025, 12);
     d.taxpayer_type = Some(Form1701TaxpayerType::SingleProprietor);
@@ -52,7 +52,7 @@ fn sample_1701() -> Form1701Draft {
 
 /// Joint filing: a professional on the 8% rate and a spouse with mixed
 /// income on graduated rates with itemized deductions and NOLCO.
-fn sample_1701_joint() -> Form1701Draft {
+pub(crate) fn sample_1701_joint() -> Form1701Draft {
     let mut d =
         Form1701Draft::new_from_profile(&dummy_profile("1701v2018", "Individual"), 2025, 12);
     d.taxpayer_type = Some(Form1701TaxpayerType::Professional);
@@ -188,7 +188,7 @@ fn form_1701_sample_payload_matches_the_official_page() {
 /// paid in the return previously filed, kept only on an amended return) and
 /// Part IX's particulars. For the agent-form probe only (PR 7): without it
 /// the probe saw those boxes blank on every sample and could not bind them.
-fn sample_1701_joint_details() -> Form1701Draft {
+pub(crate) fn sample_1701_joint_details() -> Form1701Draft {
     let mut d = sample_1701_joint();
     d.is_amended = true;
     d.claims_foreign_tax_credits = Some(true);

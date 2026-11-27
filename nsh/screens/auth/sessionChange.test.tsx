@@ -7,7 +7,7 @@ import { expect, open, test } from "nsh/test";
 const ENTRY = "../../AuthDemo.tsx";
 const WIDE = { width: 1440, height: 900, platform: "macos" as const };
 const A = { tin: "000123453", pin: "4321", name: "Juana Santos" };
-const B = { tin: "000111229", pin: "5555", name: "Sample Trading Corp" };
+const B = { tin: "000111225", pin: "5555", name: "Sample Trading Corp" };
 const PARAMS = { demo: true, second: true, years: true, mode: "helpdesk", adminPin: "1234", pins: { [A.tin]: A.pin, [B.tin]: B.pin }, readout: true };
 
 type App = Awaited<ReturnType<typeof open>>;
@@ -92,9 +92,8 @@ test("phone: a log out and another taxpayer: the Filings filters and the Form li
   await app.waitFor("id:library-search");
   await app.type("id:library-search", "juana");
   await app.press("id:nb-avatar");
-  await app.press("id:nb-menu-profile");
-  await app.waitFor("id:sheet-logout");
-  await app.press("id:sheet-logout");
+  await app.waitFor("id:nb-menu-logout");
+  await app.press("id:nb-menu-logout");
   await signIn(app, B.tin, B.pin);
   await app.waitFor("text:session: taxpayer " + B.tin);
   await app.press("id:tab-library");
