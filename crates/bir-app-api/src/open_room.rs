@@ -42,7 +42,7 @@ static DEVICE_GUARDS: std::sync::LazyLock<
 
 /// Take the device-wide one-copy guard for `device_dir`, or re-answer the one this process already
 /// holds. `Err` while another copy — a new one or an older one running — holds it.
-fn hold_device_guard(device_dir: &std::path::Path) -> Result<(), String> {
+pub(crate) fn hold_device_guard(device_dir: &std::path::Path) -> Result<(), String> {
     let key = device_dir
         .canonicalize()
         .unwrap_or_else(|_| device_dir.to_path_buf());

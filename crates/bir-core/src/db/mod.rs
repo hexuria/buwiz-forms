@@ -687,12 +687,14 @@ pub fn single_room_database() -> Option<PathBuf> {
     None
 }
 
+#[cfg(any(test, feature = "test-support"))]
 static ROOM_PATH_TEST_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// One turn for every test touching the process-wide open-room path: the tests run in parallel in
 /// one process, and the path is process-wide in production now — never per-thread — so a test that
 /// sets it holds this turn and resets the path before letting go. This is the whole mechanism: no
 /// test reads a per-thread shadow of the slot, so a thread-local regression cannot hide (X1).
+#[cfg(any(test, feature = "test-support"))]
 pub fn room_path_test_turn() -> std::sync::MutexGuard<'static, ()> {
     ROOM_PATH_TEST_TURN
         .lock()

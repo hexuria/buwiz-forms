@@ -254,7 +254,7 @@ pub fn close(reason: Reason) {
     };
     tracing::info!("session closed: {reason:?}");
     drop(dropped);
-    check_invariants();
+    report_invariants();
 }
 
 /// begin_open (§3 step 1). A no-op for the same owner already open, opening or legacy (X1: the
@@ -262,7 +262,7 @@ pub fn close(reason: Reason) {
 /// section: the epoch bumps, the phase becomes Opening, the claim thread spawns and this returns
 /// at once (F10).
 pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
-    let epoch = {
+    let (spawn, dropped_room) = {
         let mut session = locked();
         hooks::at("begin_open.locked");
         if session.phase.kind() == PhaseKind::Quitting {
@@ -279,15 +279,37 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
             return;
         }
         let dropped_room = close_locked(&mut session);
-        drop(dropped_room);
-        session.phase = Phase::Opening {
-            owner: owner.clone(),
-            engine,
-            why,
-        };
-        session.epoch
+        // §1 [D4c]: the device guard is taken at process start (init). If it was not held then
+        // (another copy had it), every begin_open — Try again included — retries it; while it
+        // cannot be taken the phase is Blocked::Transient and no claim thread starts. A
+        // non-blocking file lock: no blocking I/O under SESSION.
+        match ensure_device_guard() {
+            Ok(()) => {
+                session.phase = Phase::Opening {
+                    owner: owner.clone(),
+                    engine,
+                    why,
+                };
+                (Some(session.epoch), dropped_room)
+            }
+            Err(detail) => {
+                session.phase = Phase::Blocked {
+                    owner: owner.clone(),
+                    reason: Blocked::Transient {
+                        copy_saved: false,
+                        detail,
+                    },
+                };
+                (None, dropped_room)
+            }
+        }
     };
-    spawn_claim_thread(owner, engine, why, epoch);
+    // F17: the replaced room's Arc drops after SESSION is released.
+    drop(dropped_room);
+    if let Some(epoch) = spawn {
+        spawn_claim_thread(owner, engine, why, epoch);
+    }
+    report_invariants();
 }
 
 /// The claim thread "buwiz-room-open" (§3 step 2). Its real work — the claim, the classify, the
@@ -315,98 +337,103 @@ fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
 pub fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Database>>, PathBuf)>) {
     hooks::at("commit.enter");
     enum Outcome {
+        /// Nothing installed; the handle (if any) drops after the lock is released.
         Abandon(Option<(Arc<Mutex<Database>>, PathBuf)>),
+        /// The phase moved to Blocked; the gate stays locked; a handle (if any) drops.
+        Blocked(Option<(Arc<Mutex<Database>>, PathBuf)>),
+        /// A room or the legacy file is the slot; the gate is unlocked.
         Installed,
     }
     let outcome = {
         let mut session = locked();
-        let stale = session.epoch != epoch || !matches!(session.phase, Phase::Opening { .. });
-        if stale {
-            tracing::info!("commit abandoned: epoch {epoch} is not current or nothing is opening");
-            Outcome::Abandon(handle)
-        } else {
-            let owner = match &session.phase {
-                Phase::Opening { owner, .. } => owner.clone(),
-                _ => unreachable!(),
-            };
-            // I2: the stored sign-in, re-read under account_session::lock() inside SESSION —
-            // the lock order — must still be this owner.
-            let stored_owner = crate::cloud_account::load_stored()
-                .ok()
-                .flatten()
-                .map(|stored| (stored.server_url.clone(), stored.user_id.clone()));
-            let stored_matches = stored_owner.as_ref().is_some_and(|(origin, user_id)| {
-                origins_match(origin, &owner.origin) && *user_id == owner.user_id
-            });
-            if !stored_matches {
+        let opening_owner = match (&session.phase, session.epoch == epoch) {
+            (Phase::Opening { owner, .. }, true) => Some(owner.clone()),
+            _ => None,
+        };
+        match opening_owner {
+            None => {
+                tracing::info!("commit abandoned: epoch {epoch} is not current or nothing is opening");
+                Outcome::Abandon(handle)
+            }
+            Some(owner) if !stored_is(&owner) => {
                 tracing::info!("commit abandoned: the stored sign-in is no longer this owner");
                 Outcome::Abandon(handle)
-            } else {
-                match target {
-                    Target::Blocked(reason) => {
-                        session.phase = Phase::Blocked { owner, reason };
-                        // The gate stays locked: nothing else moved.
-                    }
-                    Target::Room(_) | Target::Legacy | Target::NotHere(_) => {
-                        let (handle, path) = match handle {
-                            Some(pair) => pair,
-                            None => {
-                                tracing::info!("commit abandoned: a room target with no handle");
-                                session.phase = Phase::Blocked {
-                                    owner,
-                                    reason: Blocked::Transient {
-                                        copy_saved: false,
-                                        detail: "the room did not open".to_string(),
-                                    },
-                                };
-                                return;
-                            }
-                        };
-                        let generation = next_generation();
-                        let room = OpenRoom {
-                            room_id: match &target {
-                                Target::Room(room) => Some(room.clone()),
-                                _ => None,
-                            },
-                            path: path.clone(),
-                            generation,
-                            handle,
-                        };
-                        bir_core::db::set_open_room_database(Some(path));
-                        bir_core::transport::set_practice_account(owner.practice);
-                        let legacy = matches!(target, Target::Legacy);
-                        session.phase = if legacy {
-                            Phase::Legacy {
-                                owner,
-                                room,
-                                importing: false,
-                            }
-                        } else {
-                            Phase::Open {
-                                owner,
-                                room,
-                                note: Note::None,
-                                importing: false,
-                            }
-                        };
-                        // I1: the gate opens LAST, once the room is in the phase.
-                        crate::account_gate::set_unlocked(true);
-                    }
-                }
-                Outcome::Installed
             }
+            Some(owner) => match (target, handle) {
+                (Target::Blocked(reason), handle) => {
+                    session.phase = Phase::Blocked { owner, reason };
+                    Outcome::Blocked(handle)
+                }
+                (_, None) => {
+                    tracing::warn!("commit: a room target came with no handle");
+                    session.phase = Phase::Blocked {
+                        owner,
+                        reason: Blocked::Transient {
+                            copy_saved: false,
+                            detail: "the room did not open".to_string(),
+                        },
+                    };
+                    Outcome::Blocked(None)
+                }
+                (target, Some((handle, path))) => {
+                    let room = OpenRoom {
+                        room_id: match &target {
+                            Target::Room(room) => Some(room.clone()),
+                            _ => None,
+                        },
+                        path: path.clone(),
+                        generation: next_generation(),
+                        handle,
+                    };
+                    bir_core::db::set_open_room_database(Some(path));
+                    bir_core::transport::set_practice_account(owner.practice);
+                    session.phase = if matches!(target, Target::Legacy) {
+                        Phase::Legacy {
+                            owner,
+                            room,
+                            importing: false,
+                        }
+                    } else {
+                        Phase::Open {
+                            owner,
+                            room,
+                            note: Note::None,
+                            importing: false,
+                        }
+                    };
+                    // I1: the gate opens LAST, once the room is in the phase.
+                    crate::account_gate::set_unlocked(true);
+                    Outcome::Installed
+                }
+            },
         }
     };
-    hooks::at("commit.done");
     match outcome {
-        Outcome::Abandon(dropped) => drop(dropped),
+        Outcome::Abandon(dropped) | Outcome::Blocked(dropped) => drop(dropped),
         Outcome::Installed => {
             // §3 step 3: outside the lock, wake the worker and refresh the menu.
             bir_core::background_cron::wake();
             crate::hooks::hooks().refresh_menu();
         }
     }
-    check_invariants();
+    hooks::at("commit.done");
+    report_invariants();
+}
+
+/// I2's re-read (§3 step 3): the stored sign-in, read under `account_session::lock()` — taken
+/// inside SESSION, which is the lock order, and held for this file read only (§3's rule [D2]) —
+/// is this owner: the same normalised origin and the same user id.
+fn stored_is(owner: &Owner) -> bool {
+    let _stored = bir_core::account_session::lock();
+    stored_owner_key().is_some_and(|(origin, user_id)| origin == owner.origin && user_id == owner.user_id)
+}
+
+/// The stored sign-in's (normalised origin, user id), or None while nobody is stored. The
+/// caller holds `account_session::lock()` when it needs the read to be atomic with a write.
+fn stored_owner_key() -> Option<(String, String)> {
+    let stored = crate::cloud_account::load_stored().ok().flatten()?;
+    let origin = bir_core::rooms::room_origin(&stored.server_url).ok()?;
+    Some((origin, stored.user_id))
 }
 
 /// quit (§8's state part): the epoch bumps, the phase is terminal, the gate locks. The release
@@ -421,6 +448,7 @@ pub fn quit() {
         bir_core::transport::set_practice_account(false);
     }
     hooks::at("quit.after_bump");
+    report_invariants();
 }
 
 static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -429,41 +457,78 @@ fn next_generation() -> u64 {
     NEXT_GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
 }
 
-/// Server origins compare by their normalised form: the stored sign-in's server URL and the
-/// owner's origin are the same place written two ways (the room key uses the normalised one).
-fn origins_match(stored_url: &str, origin: &str) -> bool {
-    stored_url.trim_end_matches('/') == origin.trim_end_matches('/')
-}
-
 /// session::init(): the device guard, taken ONCE at process start — the first thing the door's
-/// boot runs, before any claim or open (§1). Held until quit releases it last. While it can't be
-/// taken the phase starts Blocked::Transient, and Try again retries the guard.
+/// boot runs, before any claim or open (§1 [D4c]). Held until quit releases it last. There is one
+/// holder in the process (`open_room`'s guard map), so nothing ever takes it twice. If it can't be
+/// taken now, every begin_open retries it, and the phase is Blocked::Transient meanwhile.
 pub fn init(device_dir: &std::path::Path) -> Result<(), String> {
-    bir_core::db::take_device_instance_lock(device_dir)
-        .map(|guard| {
-            lock(&DEVICE_GUARD).replace(guard);
-        })
-        .map_err(|error| format!("another copy of the app has this device's data open: {error}"))
+    crate::open_room::hold_device_guard(device_dir)
 }
 
-static DEVICE_GUARD: Mutex<Option<bir_core::db::OwnerLock>> = Mutex::new(None);
+/// The guard for this process's device folder, taken if it is not held yet (begin_open's retry).
+fn ensure_device_guard() -> Result<(), String> {
+    let layout = bir_core::rooms::Layout::here();
+    crate::open_room::hold_device_guard(layout.device_dir())
+}
 
-/// check_invariants(): the STATE invariants I1, I2 and I4 (§2). The harness calls it after every
-/// scripted step; debug builds call it at the end of every transition. It never claims the
-/// per-operation rules I3 and I5 — those are enforced at their check points.
-pub fn check_invariants() {
-    #[cfg(debug_assertions)]
-    {
-        let snap = snapshot();
-        // I1: gate unlocked ⇔ phase ∈ {Open, Legacy}.
-        let open_kind = matches!(snap.phase_kind, PhaseKind::Open | PhaseKind::Legacy);
-        let unlocked = crate::account_gate::is_unlocked();
-        if open_kind != unlocked && !crate::account_gate::auth_bypass_enabled() {
-            tracing::warn!(
-                "INVARIANT I1 BROKEN: gate unlocked={unlocked} but the phase is {:?}",
-                snap.phase_kind
-            );
+/// check_invariants(): the STATE invariants I1, I2 and I4 (§2). The harness asserts it is Ok after
+/// every scripted step; debug builds log a breach at the end of every transition
+/// ([`report_invariants`]). It never claims the per-operation rules I3 and I5: those are enforced
+/// and tested at their own check points (§2 [D3]).
+pub fn check_invariants() -> Result<(), String> {
+    if crate::account_gate::auth_bypass_enabled() {
+        // Outside the machine (§9): the bypass unlocks with no owner.
+        return Ok(());
+    }
+    let snap = snapshot();
+    let stored = {
+        let _stored = bir_core::account_session::lock();
+        stored_owner_key()
+    };
+    let owner_is_stored = snap.owner.as_ref().is_some_and(|owner| {
+        stored
+            .as_ref()
+            .is_some_and(|(origin, user_id)| *origin == owner.origin && *user_id == owner.user_id)
+    });
+    let open_kind = matches!(snap.phase_kind, PhaseKind::Open | PhaseKind::Legacy);
+    let unlocked = crate::account_gate::is_unlocked();
+    let mut breaches = Vec::new();
+    // I1: gate unlocked ⇔ phase ∈ {Open, Legacy} AND the stored sign-in is the phase's owner.
+    if unlocked != (open_kind && owner_is_stored) {
+        breaches.push(format!(
+            "I1: the gate is {} while the phase is {:?} and the stored sign-in {} its owner",
+            if unlocked { "unlocked" } else { "locked" },
+            snap.phase_kind,
+            if owner_is_stored { "is" } else { "is not" },
+        ));
+    }
+    // I2: the slot's owner is the stored sign-in.
+    if open_kind && !owner_is_stored {
+        breaches.push(format!(
+            "I2: a {:?} slot is open for an owner who is not the stored sign-in",
+            snap.phase_kind
+        ));
+    }
+    // I4: no room is open while the claim's move evidence for it is pending.
+    if let Some((_, _, Some(room_id), _)) = &snap.room {
+        let layout = bir_core::rooms::Layout::here();
+        if let Err(detail) = bir_core::legacy_claim::room_move_evidence_clear(&layout, room_id) {
+            breaches.push(format!("I4: room {room_id} is open while {detail}"));
         }
+    }
+    if breaches.is_empty() {
+        Ok(())
+    } else {
+        Err(breaches.join("; "))
+    }
+}
+
+/// The end of every transition: in debug builds, a breach of I1, I2 or I4 is logged as an error
+/// (never a panic: the harness tests assert `check_invariants()` themselves).
+fn report_invariants() {
+    #[cfg(debug_assertions)]
+    if let Err(breach) = check_invariants() {
+        tracing::error!("session invariant broken: {breach}");
     }
 }
 
@@ -484,15 +549,16 @@ pub mod hooks {
 
     struct Harness {
         points: HashMap<&'static str, Point>,
-        condvar: Condvar,
     }
+
+    /// One condvar for the harness, beside its map's mutex: no pointer games.
+    static CONDVAR: Condvar = Condvar::new();
 
     fn harness() -> &'static Mutex<Harness> {
         static HARNESS: std::sync::OnceLock<Mutex<Harness>> = std::sync::OnceLock::new();
         HARNESS.get_or_init(|| {
             Mutex::new(Harness {
                 points: HashMap::new(),
-                condvar: Condvar::new(),
             })
         })
     }
@@ -516,6 +582,7 @@ pub mod hooks {
             point.arrivals += 1;
             point.gate.map(|(generation, _)| generation)
         };
+        CONDVAR.notify_all();
         if let Some(generation) = generation {
             loop {
                 let released = state
@@ -527,12 +594,7 @@ pub mod hooks {
                 if released {
                     break;
                 }
-                let condvar = &state.condvar as *const Condvar;
-                // SAFETY-FREE NOTE: the condvar is behind the same OnceLock as the map and never
-                // moves; the guard is reborrowed after each wait.
-                state = unsafe { &*condvar }
-                    .wait(state)
-                    .unwrap_or_else(|e| e.into_inner());
+                state = CONDVAR.wait(state).unwrap_or_else(|e| e.into_inner());
             }
         }
     }
@@ -602,8 +664,7 @@ pub mod hooks {
                     "never reached: {}",
                     self.name
                 );
-                let condvar = &state.condvar as *const Condvar;
-                let (guard, _) = unsafe { &*condvar }
+                let (guard, _) = CONDVAR
                     .wait_timeout(state, left.min(std::time::Duration::from_millis(100)))
                     .unwrap_or_else(|e| e.into_inner());
                 state = guard;
@@ -626,7 +687,8 @@ pub mod hooks {
                     }
                 }
             }
-            state.condvar.notify_all();
+            drop(state);
+            CONDVAR.notify_all();
         }
     }
 
@@ -635,7 +697,8 @@ pub mod hooks {
         let mutex = harness();
         let mut state = lock(mutex);
         state.points.clear();
-        state.condvar.notify_all();
+        drop(state);
+        CONDVAR.notify_all();
     }
 }
 
@@ -657,10 +720,13 @@ pub fn test_turn() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 pub(crate) fn reset_for_tests() {
     hooks::reset();
-    let mut session = locked();
-    session.phase = Phase::SignedOut;
-    session.epoch += 1;
-    mirror(session.epoch);
+    let dropped = {
+        let mut session = locked();
+        let dropped = close_locked(&mut session);
+        session.phase = Phase::SignedOut;
+        dropped
+    };
+    drop(dropped);
 }
 
 #[cfg(test)]
