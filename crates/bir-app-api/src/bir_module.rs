@@ -5171,7 +5171,7 @@ mod tests {
     }
 
     /// The accounts welcomed on this device round-trip through the page
-    /// verbs too.
+    /// verbs too, and live in the device store (A1), not the room's file.
     #[test]
     fn the_welcomed_accounts_round_trip_through_the_page_verbs() {
         setup();
@@ -5179,10 +5179,13 @@ mod tests {
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
         set_setting(&args(vec![key(), s("[\"demo\"]")])).unwrap();
         assert_eq!(
-            stored_setting("welcomed_accounts").as_deref(),
+            bir_core::rooms::device_setting("welcomed_accounts").as_deref(),
             Some("[\"demo\"]")
         );
+        assert_eq!(stored_setting("welcomed_accounts"), None, "not the room's");
         assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("[\"demo\"]"));
+        delete_setting(&args(vec![key()])).unwrap();
+        assert_eq!(bir_core::rooms::device_setting("welcomed_accounts"), None);
     }
 
     /// (b) The help desk admin's authenticator secret stays host-side: the
