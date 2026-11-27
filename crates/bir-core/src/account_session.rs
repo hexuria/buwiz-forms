@@ -186,6 +186,37 @@ pub fn save_stored_if(owner: &OwnerKey, stored: &StoredAccount) -> Result<bool, 
     Ok(true)
 }
 
+/// Merge the PROFILE fields of a verb's refresh into the stored sign-in — never its tokens
+/// (revision 5's F3): the write runs only while the disk's sign-in is still `owner` AND its
+/// refresh token is still `credential`, the exact token the verb loaded before its network
+/// calls. A rotation or a newer sign-in in the network window discards the merge, so a spent
+/// token never lands back over the newer record. The caller holds [`lock`]. Answers whether
+/// the merge ran.
+pub fn merge_profile_if(
+    owner: &OwnerKey,
+    credential: &str,
+    user_id: &str,
+    email: Option<String>,
+    practice: bool,
+    offline: bool,
+) -> Result<bool, CloudError> {
+    let Ok(Some(current)) = cloud_account::load_stored_account() else {
+        return Ok(false);
+    };
+    if OwnerKey::of(&current).as_ref() != Some(owner) || current.refresh_token != credential {
+        return Ok(false);
+    }
+    let merged = StoredAccount {
+        user_id: user_id.to_string(),
+        email,
+        practice,
+        offline,
+        ..current
+    };
+    save_stored(&merged)?;
+    Ok(true)
+}
+
 /// Clear the stored sign-in through the one path: the file write. The caller holds [`lock`],
 /// outside SESSION; the cache's None is the machine's SESSION-section step (F8').
 pub fn clear_stored() {

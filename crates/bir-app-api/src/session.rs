@@ -249,7 +249,10 @@ struct CloseOutcome {
     /// The epoch this close produced.
     pub epoch: u64,
     /// The owner who ended, when the owner-ending steps ran — his is the key the forget takes.
-    pub ended_owner: Option<Owner>,
+    /// The owner whose key the forget targets, when the owner ended: the phase's owner, or —
+    /// on the real path before the machine is wired, where the phase never leaves SignedOut —
+    /// the owner the cache named before the close cleared it.
+    pub ended_owner: Option<bir_core::account_session::OwnerKey>,
 }
 
 /// How the owner-ending steps are decided (F2): they run when the owner really ends — a
@@ -270,7 +273,11 @@ fn owner_key_of(owner: &Owner) -> (String, String) {
 /// locked, practice off, the room out, the room path None, the phase SignedOut. The OWNER-ENDING
 /// half — the OAuth listeners and the TIN cache invalidated under SESSION, forget_device owing a
 /// run outside it — is decided by the kind and the previous owner.
-fn close_locked(session: &mut Session, kind: &CloseKind) -> CloseOutcome {
+fn close_locked(
+    session: &mut Session,
+    kind: &CloseKind,
+    cache_key: Option<bir_core::account_session::OwnerKey>,
+) -> CloseOutcome {
     session.epoch += 1;
     mirror(session.epoch);
     crate::account_gate::set_unlocked(false);
@@ -285,8 +292,13 @@ fn close_locked(session: &mut Session, kind: &CloseKind) -> CloseOutcome {
     // A held legacy scan is room-scoped state: no close — sign-out, server-ended, replacement —
     // may leave one behind for the next session to import from.
     crate::legacy_import_module::forget_scan();
+    // The owner-ending steps run when the owner really ends — and, until the machine is wired
+    // (commit 3), the phase never leaves SignedOut on the real path, so the cache the close just
+    // cleared is the evidence the owner existed at all. Without it the forget, the TIN invalidate
+    // and the listeners would never run on a real sign-out: the F2 safety regression.
     let owner_ended = match (&previous, kind) {
-        (None, _) => false,
+        (None, CloseKind::OwnerEnds) => cache_key.is_some(),
+        (None, CloseKind::ReplacedBy(_)) => false,
         (Some(_), CloseKind::OwnerEnds) => true,
         (Some(previous), CloseKind::ReplacedBy(new)) => owner_key_of(previous) != owner_key_of(new),
     };
@@ -300,7 +312,16 @@ fn close_locked(session: &mut Session, kind: &CloseKind) -> CloseOutcome {
         dropped: room,
         owner_ended,
         epoch: session.epoch,
-        ended_owner: if owner_ended { previous } else { None },
+        ended_owner: if owner_ended {
+            previous
+                .map(|owner| bir_core::account_session::OwnerKey {
+                    origin: owner.origin.clone(),
+                    user_id: owner.user_id.clone(),
+                })
+                .or(cache_key)
+        } else {
+            None
+        },
     }
 }
 
@@ -354,10 +375,7 @@ fn finish_close(outcome: &CloseOutcome, mode: ForgetMode) {
             return;
         }
         if let Some(ended) = &ended {
-            bir_core::relay::forget_device_key_for(&bir_core::account_session::OwnerKey {
-                origin: ended.origin.clone(),
-                user_id: ended.user_id.clone(),
-            });
+            bir_core::relay::forget_device_key_for(ended);
         } else {
             bir_core::relay::forget_device();
         }
@@ -396,7 +414,7 @@ pub fn close(reason: Reason) {
             tracing::info!("close after quit ignored: the session is terminal");
             return;
         }
-        close_locked(&mut session, &CloseKind::OwnerEnds)
+        close_locked(&mut session, &CloseKind::OwnerEnds, None)
     };
     tracing::info!("session closed: {reason:?}");
     crate::open_room::sweep_registry();
@@ -431,7 +449,7 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
         }
         // F2: the replacement's owner-ending steps run only when the owner being replaced is a
         // DIFFERENT one — a Try again or a launch of the same owner keeps its device key.
-        let outcome = close_locked(&mut session, &CloseKind::ReplacedBy(owner.clone()));
+        let outcome = close_locked(&mut session, &CloseKind::ReplacedBy(owner.clone()), None);
         // §1 [D4c]: the device guard is taken at process start (init). If it was not held then
         // (another copy had it), every begin_open — Try again included — retries it; while it
         // cannot be taken the phase is Blocked::Transient and no claim thread starts. A
@@ -532,13 +550,19 @@ pub(crate) fn sign_out_inner(
         (logout, removed)
     };
     hooks::at("sign_out.after_persist");
-    // Step 2: the one SESSION section — the cache and the close together.
+    // Step 2: the one SESSION section — the cache and the close together. The cache's owner is
+    // the close's evidence on the real path, where the phase never left SignedOut (F2).
     let outcome = {
         let mut session = locked();
+        let cache_key = bir_core::account_session::stored_owner();
         bir_core::account_session::cache_owner(None);
-        close_locked(&mut session, &CloseKind::OwnerEnds)
+        close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
-    // Step 3: outside every lock.
+    // Step 3: outside every lock. Until the machine is wired the production room lives in the
+    // old slot: a real sign-out closes it here, exactly as main did — never left open behind a
+    // sign-out, the standing rule — and the menu shows the gate.
+    crate::room_session::close_session();
+    crate::hooks::hooks().refresh_menu();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
     drop(outcome.dropped);
@@ -581,7 +605,11 @@ pub fn server_ended(
             })
             .unwrap_or(false);
         if matches {
-            bir_core::account_session::clear_stored();
+            // F16: the file AND the keychain, as sign-out does — a keychain-only survivor would
+            // sign the ended account back in at the next launch on desktop.
+            if let Err(error) = bir_core::account_session::forget_stored() {
+                tracing::warn!("server-ended left the saved sign-in on this device: {error}");
+            }
         }
         matches
     };
@@ -594,7 +622,8 @@ pub fn server_ended(
     // Step 2: the one SESSION section — cache and close together, only if both still match.
     let outcome = {
         let mut session = locked();
-        let cache_is_owner = bir_core::account_session::stored_owner().as_ref() == Some(&owner);
+        let cache_key = bir_core::account_session::stored_owner();
+        let cache_is_owner = cache_key.as_ref() == Some(&owner);
         if session.epoch != epoch || !cache_is_owner {
             tracing::info!(
                 "server_ended for epoch {epoch}: the disk is cleared, the session moved on already"
@@ -602,8 +631,11 @@ pub fn server_ended(
             return;
         }
         bir_core::account_session::cache_owner(None);
-        close_locked(&mut session, &CloseKind::OwnerEnds)
+        close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
+    // The real path's close, as in sign_out (F2): the old slot's room goes and the menu shows it.
+    crate::room_session::close_session();
+    crate::hooks::hooks().refresh_menu();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
     drop(outcome.dropped);
@@ -1038,7 +1070,7 @@ pub(crate) fn reset_for_tests() {
     hooks::reset();
     let dropped = {
         let mut session = locked();
-        let outcome = close_locked(&mut session, &CloseKind::OwnerEnds);
+        let outcome = close_locked(&mut session, &CloseKind::OwnerEnds, None);
         session.phase = Phase::SignedOut;
         outcome.dropped
     };

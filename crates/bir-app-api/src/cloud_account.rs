@@ -7,7 +7,7 @@
 
 use bir_core::cloud_account::{
     self, AccountSecrets, AccountStatus, BlockingHttp, CloudError, ENV_SERVER_URL, GateDecision,
-    RefreshOutcome, SessionUpdate, StoredAccount,
+    RefreshOutcome, StoredAccount,
 };
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
 
@@ -184,6 +184,135 @@ fn refresh_http() -> Box<dyn cloud_account::Http + Send> {
     Box::new(BlockingHttp::new())
 }
 
+/// What a verb's refresh learned, for its own answer shape.
+enum VerbRefresh {
+    /// The profile was confirmed or refreshed; the save ran. Carries the practice flag.
+    Online { practice: bool },
+    /// The server was unreachable; the sign-in stands as it is.
+    Offline,
+    /// The credential was rejected: the sign-in ended through the machine.
+    Ended,
+    /// The stored sign-in changed hands or vanished in the verb's network window: nothing of
+    /// the new owner's is the verb's to write, and the verb answers for itself alone.
+    Gone,
+}
+
+/// The one refresh of the verbs (revision 5's F3). The TOKEN rotation never runs here directly:
+/// it goes through [`bir_core::account_session::access_token_with_credential`], the keyed single
+/// flight every refresh of the process joins — a verb concurrent with a send's flight or a
+/// second engine's launch is ONE network refresh, never the double spend the server ends a
+/// sign-in for. The PROFILE merge writes only the profile fields, and only while the disk's
+/// sign-in is still this owner on the exact refresh token the verb loaded — a spent token never
+/// lands back over a rotated record.
+fn verb_refresh(
+    http: &mut dyn cloud_account::Http,
+    stored: &StoredAccount,
+    owner: &bir_core::account_session::OwnerKey,
+    epoch: u64,
+    now: i64,
+) -> Result<VerbRefresh, HostError> {
+    // The profile-only arm: the access token is valid, so no rotation is needed at all.
+    if stored.access_expires_at_unix > now.saturating_add(30) {
+        match cloud_account::load_profile(http, &stored.server_url, &stored.access_token) {
+            Ok((user_id, email, practice)) => {
+                let saved = {
+                    let _one = bir_core::account_session::lock();
+                    bir_core::account_session::merge_profile_if(
+                        owner,
+                        &stored.refresh_token,
+                        &user_id,
+                        email,
+                        practice,
+                        false,
+                    )
+                    .map_err(host_error)?
+                };
+                return Ok(if saved {
+                    VerbRefresh::Online { practice }
+                } else {
+                    VerbRefresh::Gone
+                });
+            }
+            Err(CloudError::Network(_)) => {
+                let _saved = {
+                    let _one = bir_core::account_session::lock();
+                    bir_core::account_session::merge_profile_if(
+                        owner,
+                        &stored.refresh_token,
+                        &stored.user_id,
+                        stored.email.clone(),
+                        stored.practice,
+                        true,
+                    )
+                };
+                return Ok(VerbRefresh::Offline);
+            }
+            Err(CloudError::InvalidGrant) => {
+                // The access token itself was rejected: the rotation below decides.
+            }
+            Err(error) => return Err(host_error(error)),
+        }
+    }
+    // The rotation through the keyed flight — never a refresh_tokens of the verb's own.
+    match bir_core::account_session::access_token_with_credential(http, now, false, owner) {
+        Ok((access, _credential)) => {
+            let fresh = {
+                let _one = bir_core::account_session::lock();
+                match load_stored()? {
+                    Some(fresh)
+                        if bir_core::account_session::OwnerKey::of(&fresh).as_ref()
+                            == Some(owner) =>
+                    {
+                        fresh
+                    }
+                    _ => return Ok(VerbRefresh::Gone),
+                }
+            };
+            match cloud_account::load_profile(http, &fresh.server_url, &access) {
+                Ok((user_id, email, practice)) => {
+                    let saved = {
+                        let _one = bir_core::account_session::lock();
+                        bir_core::account_session::merge_profile_if(
+                            owner,
+                            &fresh.refresh_token,
+                            &user_id,
+                            email,
+                            practice,
+                            false,
+                        )
+                        .map_err(host_error)?
+                    };
+                    Ok(if saved {
+                        VerbRefresh::Online { practice }
+                    } else {
+                        VerbRefresh::Gone
+                    })
+                }
+                Err(CloudError::Network(_)) => Ok(VerbRefresh::Offline),
+                Err(CloudError::InvalidGrant) => {
+                    // The just-refreshed access token rejected at once: the sign-in is ended.
+                    crate::session::server_ended(
+                        owner.clone(),
+                        epoch,
+                        stored.refresh_token.clone(),
+                    );
+                    Ok(VerbRefresh::Ended)
+                }
+                Err(error) => Err(host_error(error)),
+            }
+        }
+        Err(bir_core::account_session::TokenError::SignedOut) => {
+            // The flight's InvalidGrant already ran the ending hook exactly once for the
+            // credential; this call is the no-op confirmation when it did, and the ending
+            // itself when the verb is the only witness.
+            crate::session::server_ended(owner.clone(), epoch, stored.refresh_token.clone());
+            Ok(VerbRefresh::Ended)
+        }
+        Err(bir_core::account_session::TokenError::Offline(_)) => Ok(VerbRefresh::Offline),
+        Err(bir_core::account_session::TokenError::Other(message)) => Err(HostError::new(message)),
+    }
+}
+
 pub(crate) fn refresh_account(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
@@ -218,34 +347,13 @@ pub(crate) fn refresh_account(
         };
         let mut http = refresh_http();
         let now = cloud_account::unix_now();
-        match cloud_account::refresh_session(http.as_mut(), &stored.to_secrets(), now)
-            .map_err(host_error)?
-        {
-            SessionUpdate::Online(secrets) => {
-                bir_core::transport::set_practice_account(secrets.practice);
-                let _saved = {
-                    let _one = bir_core::account_session::lock();
-                    bir_core::account_session::save_stored_if(&owner, &stored_from(secrets, now))
-                        .map_err(host_error)?
-                };
+        match verb_refresh(http.as_mut(), &stored, &owner, epoch, now)? {
+            // F15: the practice flag is set only after the save succeeded — Online carries it
+            // only then, so a discarded merge never flips the transport's account kind.
+            VerbRefresh::Online { practice } => {
+                bir_core::transport::set_practice_account(practice);
             }
-            SessionUpdate::Offline(secrets) => {
-                bir_core::transport::set_practice_account(secrets.practice);
-                let _saved = {
-                    let _one = bir_core::account_session::lock();
-                    bir_core::account_session::save_stored_if(
-                        &owner,
-                        &stored_from(secrets, stored.last_refresh_unix),
-                    )
-                    .map_err(host_error)?
-                };
-            }
-            SessionUpdate::SignedOut => {
-                // D1 + revision 5's A: the machine's one section — the disk's
-                // delete-if-credential, the cache, the close — decided by the owner, the epoch
-                // captured above, and the exact refresh token the server rejected.
-                crate::session::server_ended(owner, epoch, stored.refresh_token.clone());
-            }
+            VerbRefresh::Offline | VerbRefresh::Ended | VerbRefresh::Gone => {}
         }
         status_now()
     })
@@ -358,34 +466,17 @@ pub(crate) fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> 
         (stored, owner)
     };
     let now = cloud_account::unix_now();
-    let previous_refresh = stored.last_refresh_unix;
     let mut practice = stored.practice;
-    let outcome = match cloud_account::refresh_session(http, &stored.to_secrets(), now) {
-        Ok(SessionUpdate::Online(secrets)) => {
-            practice = secrets.practice;
-            let saved = {
-                let _one = bir_core::account_session::lock();
-                bir_core::account_session::save_stored_if(&owner, &stored_from(secrets, now))
-                    .unwrap_or(false)
-            };
-            if !saved {
-                return (false, false);
-            }
+    let outcome = match verb_refresh(http, &stored, &owner, epoch, now) {
+        Ok(VerbRefresh::Online {
+            practice: confirmed,
+        }) => {
+            practice = confirmed;
             RefreshOutcome::Online
         }
-        Ok(SessionUpdate::Offline(secrets)) => {
-            practice = secrets.practice;
-            let _ = {
-                let _one = bir_core::account_session::lock();
-                bir_core::account_session::save_stored_if(
-                    &owner,
-                    &stored_from(secrets, previous_refresh),
-                )
-            };
-            RefreshOutcome::Offline
-        }
-        Ok(SessionUpdate::SignedOut) => RefreshOutcome::Revoked,
-        Err(CloudError::InvalidGrant) => RefreshOutcome::Revoked,
+        Ok(VerbRefresh::Offline) => RefreshOutcome::Offline,
+        Ok(VerbRefresh::Ended) => RefreshOutcome::Revoked,
+        Ok(VerbRefresh::Gone) => return (false, false),
         Err(_) => RefreshOutcome::Offline,
     };
     match cloud_account::gate_after_refresh(outcome) {
@@ -400,7 +491,7 @@ pub(crate) fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> 
         } => {
             // D1 at the launch too, with revision 5's credential: the delete matches only the
             // exact refresh token the server rejected, so a newer sign-in is never taken by it.
-            crate::session::server_ended(owner, epoch, stored.refresh_token.clone());
+            crate::session::server_ended(owner.clone(), epoch, stored.refresh_token.clone());
             (false, false)
         }
         GateDecision::Closed {
@@ -766,6 +857,10 @@ mod tests {
                 [
                     ("BUWIZ_NO_KEYCHAIN", Some("1")),
                     ("BUWIZ_SERVER_URL", Some(SERVER)),
+                    // A test trust key: a development build builds its relay client only for a
+                    // server trusted through one, and the real-path close test observes the TIN
+                    // invalidation through that client.
+                    ("BUWIZ_TRUST_KEYS", Some("test-key")),
                     (
                         bir_core::email_sign_in::ENV_PENDING_FILE,
                         Some(dir.path().join("pending.json").to_str().unwrap()),
@@ -785,6 +880,263 @@ mod tests {
             result
         }
 
+        /// The fake server of the F3 flight tests: token refreshes and profile fetches counted,
+        /// the first refresh parked on a gate so a second caller joins the flight as its waiter.
+        struct FlightServer {
+            refreshes: std::sync::atomic::AtomicU64,
+            profiles: std::sync::atomic::AtomicU64,
+            parked: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>>,
+            gate: std::sync::Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+            park_profiles: bool,
+        }
+
+        struct FlightHttp(std::sync::Arc<FlightServer>);
+
+        impl cloud_account::Http for FlightHttp {
+            fn exchange(&mut self, request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                let server = &self.0;
+                if request.url.ends_with("/oauth/token") {
+                    server
+                        .refreshes
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let park = server.parked.lock().unwrap().take();
+                    let gate = server.gate.lock().unwrap().take();
+                    if let (Some(parked), Some(gate)) = (park, gate) {
+                        let _ = parked.send(());
+                        let _ = gate.recv();
+                    }
+                    return Ok(HttpResponse {
+                        status: 200,
+                        body: r#"{"access_token":"access-r2","refresh_token":"refresh-r2","expires_in":3600}"#.into(),
+                    });
+                }
+                if request.url.ends_with("/me") {
+                    server
+                        .profiles
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if server.park_profiles {
+                        let park = server.parked.lock().unwrap().take();
+                        let gate = server.gate.lock().unwrap().take();
+                        if let (Some(parked), Some(gate)) = (park, gate) {
+                            let _ = parked.send(());
+                            let _ = gate.recv();
+                        }
+                    }
+                    return Ok(HttpResponse {
+                        status: 200,
+                        body: r#"{"user_id":"u1","email":"filer@example.test","practice":false}"#
+                            .into(),
+                    });
+                }
+                Err(CloudError::Unexpected(format!(
+                    "unexpected request: {}",
+                    request.url
+                )))
+            }
+        }
+
+        fn flight_server(
+            park_profiles: bool,
+        ) -> (
+            std::sync::Arc<FlightServer>,
+            std::sync::mpsc::Receiver<()>,
+            std::sync::mpsc::Sender<()>,
+        ) {
+            let (parked_tx, parked_rx) = std::sync::mpsc::channel();
+            let (gate_tx, gate_rx) = std::sync::mpsc::channel();
+            let server = std::sync::Arc::new(FlightServer {
+                refreshes: std::sync::atomic::AtomicU64::new(0),
+                profiles: std::sync::atomic::AtomicU64::new(0),
+                parked: std::sync::Mutex::new(Some(parked_tx)),
+                gate: std::sync::Mutex::new(Some(gate_rx)),
+                park_profiles,
+            });
+            (server, parked_rx, gate_tx)
+        }
+
+        /// F3: a verb's refresh concurrent with a send's flight is ONE network refresh — the
+        /// verb joins the credential's keyed flight rather than burning the rotation again.
+        #[test]
+        fn a_verb_refresh_concurrent_with_a_sends_flight_is_one_network_refresh() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                // The access token is expired, so both callers must rotate.
+                let mut expired = stored("access-old", "refresh-r1");
+                expired.access_expires_at_unix = 1;
+                save_stored(&expired).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (server, parked, gate) = flight_server(false);
+                // The verb leads: it parks inside the flight's token refresh.
+                let verb_server = std::sync::Arc::clone(&server);
+                let verb_stored = expired.clone();
+                let verb_owner = owner.clone();
+                let verb = std::thread::spawn(move || {
+                    let mut http = FlightHttp(verb_server);
+                    verb_refresh(&mut http, &verb_stored, &verb_owner, epoch, now).ok()
+                });
+                parked
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("the verb never reached the token refresh");
+                // The send joins the SAME credential's flight: it must wait, never refresh itself.
+                let send_server = std::sync::Arc::clone(&server);
+                let send = std::thread::spawn(move || {
+                    let mut http = FlightHttp(send_server);
+                    bir_core::account_session::access_token_with_credential(
+                        &mut http, now, false, &owner,
+                    )
+                });
+                // The waiter is in the flight before the leader is released — the join is the
+                // point, so give it its moment: the release after this send's spawn either way
+                // proves the count, since a second leader would burn the rotation again.
+                std::thread::yield_now();
+                let _ = gate.send(());
+                let verb_outcome = verb.join().expect("the verb thread panicked");
+                let send_answer = send.join().expect("the send thread panicked");
+                assert_eq!(
+                    server.refreshes.load(std::sync::atomic::Ordering::SeqCst),
+                    1,
+                    "two concurrent refreshes of one credential burned the rotation twice"
+                );
+                assert!(verb_outcome.is_some(), "the verb refresh failed");
+                assert!(send_answer.is_ok(), "the send's token fetch failed");
+                assert!(
+                    server.profiles.load(std::sync::atomic::Ordering::SeqCst) >= 1,
+                    "the verb never confirmed the profile"
+                );
+            });
+        }
+
+        /// F3's lost update: the profile-only arm's merge is a CAS on (owner, the refresh token
+        /// it loaded) and never writes tokens — a rotation in the network window survives whole.
+        #[test]
+        fn the_profile_only_arms_merge_never_writes_tokens_back() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                // The access token is valid: the profile-only arm, no rotation of the verb's own.
+                let current = stored("access-valid", "refresh-r1");
+                save_stored(&current).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&current).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (server, parked, gate) = flight_server(true);
+                let verb_server = std::sync::Arc::clone(&server);
+                let verb_stored = current.clone();
+                let verb_owner = owner.clone();
+                let verb = std::thread::spawn(move || {
+                    let mut http = FlightHttp(verb_server);
+                    verb_refresh(&mut http, &verb_stored, &verb_owner, epoch, now).ok()
+                });
+                parked
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("the verb never reached the profile fetch");
+                // The rotation in the network window: another path saves R2 over R1.
+                let mut rotated = stored("access-r2", "refresh-r2");
+                rotated.user_id = "u1".into();
+                {
+                    let _one = bir_core::account_session::lock();
+                    save_stored(&rotated).unwrap();
+                }
+                let _ = gate.send(());
+                verb.join().expect("the verb thread panicked");
+                let on_disk = bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .expect("the sign-in vanished");
+                assert_eq!(
+                    on_disk.refresh_token, "refresh-r2",
+                    "the spent R1 landed back over the rotation — the F3 lost update"
+                );
+                assert_eq!(
+                    on_disk.access_token, "access-r2",
+                    "the merged record wrote the old access token back"
+                );
+            });
+        }
+
+        /// F2 (the standing rule): the REAL sign-out path closes the room, invalidates the TIN
+        /// cache and forgets the device key, and a same-owner re-sign-in reopens the room. Until
+        /// commit 3 wires the machine, the close verbs run the old slot's close themselves.
+        #[test]
+        fn real_sign_out_closes_the_room_and_a_same_owner_re_sign_in_reopens_it() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::open_room::reset_for_tests();
+            crate::room_session::reset_for_tests();
+            bir_core::db::set_open_room_database(None);
+            let device = tempfile::tempdir().unwrap();
+            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
+            signed_in(|_file| {
+                let stored = stored("access-a", "refresh-a");
+                save_stored(&stored).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored,
+                ));
+                // The room opens through today's real path: session_opened's own entry.
+                let opened = crate::room_session::open_session_room(&stored);
+                assert!(
+                    crate::open_room::current().is_some(),
+                    "the real path opened no room ({opened:?})"
+                );
+                // A device key owned by the account, as a registration leaves it — in the device
+                // folder as this environment resolves it, the same path the forget deletes from.
+                let device_dir = bir_core::platform::device_dir();
+                std::fs::create_dir_all(&device_dir).unwrap();
+                std::fs::write(device_dir.join("buwiz_submit_device_key.txt"), "key-of-a").unwrap();
+                std::fs::write(
+                    device_dir.join("buwiz_submit_device_owner.txt"),
+                    format!(
+                        "{}\n{}\n",
+                        bir_core::rooms::room_origin(SERVER).unwrap(),
+                        "u1"
+                    ),
+                )
+                .unwrap();
+                assert!(
+                    bir_core::relay::device_key_owner().is_some(),
+                    "the seeded owner record does not read back"
+                );
+                let invalidations_before = bir_core::bir_submit::tins::INVALIDATIONS
+                    .load(std::sync::atomic::Ordering::SeqCst);
+                let (seen_tx, seen_rx) = mpsc::channel::<Seen>();
+                sign_out_with(Box::new(Logout {
+                    seen: seen_tx,
+                    release: None,
+                    file: _file.clone(),
+                    answer: answered,
+                }))
+                .expect("the sign-out answers");
+                // The device-key forget is the backgrounded half of the close: join it before
+                // judging, as the machine's own tests do.
+                crate::session::join_device_forget_threads();
+                assert!(
+                    crate::open_room::current().is_none(),
+                    "the room survived the real sign-out"
+                );
+                assert!(
+                    bir_core::bir_submit::tins::INVALIDATIONS
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                        > invalidations_before,
+                    "the TIN cache was not invalidated"
+                );
+                assert!(
+                    !device_dir.join("buwiz_submit_device_key.txt").exists(),
+                    "the device key survived the sign-out"
+                );
+                let _ = seen_rx.try_recv();
+                // A same-owner re-sign-in reopens the room — the slot is not wedged.
+                save_stored(&stored).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored,
+                ));
+                let reopened = crate::room_session::open_session_room(&stored);
+                assert!(
+                    bir_core::db::open_room_id().is_some(),
+                    "the re-sign-in did not reopen the room ({reopened:?})"
+                );
+            });
+            bir_core::platform::set_device_dir_override(None);
+        }
+
         /// F1: the verb's changed-server arm must not deadlock — the decision is made inside the
         /// account lock, the sign-out runs after it is released. The join is bounded: at the
         /// deadlock the verb never returns, and the margin is what fails.
@@ -796,8 +1148,9 @@ mod tests {
                 let mut moved = stored("old-access", "old-refresh");
                 moved.server_url = "https://elsewhere.example.test".into();
                 save_stored(&moved).unwrap();
-                let verb = crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
-                    .expect("the verb spawns");
+                let verb =
+                    crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+                        .expect("the verb spawns");
                 let ran = std::thread::spawn(move || futures::executor::block_on(verb));
                 let (done, finished) = std::sync::mpsc::channel();
                 std::thread::spawn(move || {

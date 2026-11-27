@@ -389,6 +389,7 @@ impl TinsCache {
     /// offline (a send was just refused for a TIN).
     pub(crate) fn invalidate(&self) {
         self.state.lock().expect("tins cache").generation += 1;
+        INVALIDATIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// The generation a read starting now belongs to.
@@ -782,6 +783,10 @@ fn add_error(error: ClientError) -> AddTinError {
         },
     }
 }
+
+/// Test instrumentation: how many invalidations this process ran. The real-path sign-out test
+/// counts them — the cache itself is the submitter's private state.
+pub static INVALIDATIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn tins_error(error: ClientError) -> TinsError {
     match error {
