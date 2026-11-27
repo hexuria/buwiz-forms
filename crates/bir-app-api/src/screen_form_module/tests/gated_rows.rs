@@ -346,6 +346,40 @@ fn form_1707_other_detail_and_installment_rows_are_gated() {
 }
 
 #[test]
+fn form_1701_employer_amounts_typed_before_the_owner_tick_survive() {
+    setup();
+    let opened = open("1701", 0);
+    let income = "frm1701:txtPg2IShed1c_1CI";
+    let withheld = "frm1701:txtPg2IShed1c_1TW";
+    let typed = fill(
+        "1701",
+        &opened["draft"],
+        json!({ income: "1000", withheld: "100" }),
+    );
+    assert_eq!(typed["draft"]["employers"][0]["compensation_income"], 1000.0);
+    assert_eq!(typed["draft"]["employers"][0]["tax_withheld"], 100.0);
+
+    let compensation = fill(
+        "1701",
+        &typed["draft"],
+        json!({"frm1701:rdoPg1I7ATC_II013": "true"}),
+    );
+    assert_eq!(
+        compensation["draft"]["employers"][0]["compensation_income"],
+        1000.0,
+        "answering Item 7 after the amounts does not wipe them"
+    );
+    let owned = fill(
+        "1701",
+        &compensation["draft"],
+        json!({"frm1701:chkPg2IShed1a_1Taxpayer": "true"}),
+    );
+    assert_eq!(owned["draft"]["employers"][0]["owner"], "Taxpayer");
+    assert_eq!(owned["draft"]["employers"][0]["compensation_income"], 1000.0);
+    assert_eq!(owned["draft"]["employers"][0]["tax_withheld"], 100.0);
+}
+
+#[test]
 fn form_1701_spouse_item27_foreign_and_schedule5_are_gated() {
     setup();
     let opened = open("1701", 0);
