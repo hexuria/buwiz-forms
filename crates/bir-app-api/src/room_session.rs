@@ -108,7 +108,32 @@ pub(crate) fn close_session() {
 /// The room of the account signed in now, claimed or looked up: `session_opened` and the launch
 /// resume both run this, in the §A.4 order. Never opens anything before the claim's `start()` ran
 /// (R1): it is the first thing here.
+#[cfg(test)]
+static OPEN_SESSION_HOOK: std::sync::Mutex<Option<std::sync::mpsc::Receiver<()>>> =
+    std::sync::Mutex::new(None);
+
+/// F10's test: the worker thread blocks in the hook until the test lets it through, so the test
+/// can tell a synchronous session_opened (blocked) from an asynchronous one (returns).
+#[cfg(test)]
+pub(crate) fn block_next_open_session_for_test() -> std::sync::mpsc::Sender<()> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    *OPEN_SESSION_HOOK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(rx);
+    tx
+}
+
+#[cfg(test)]
+pub(crate) fn take_open_session_hook() -> Option<std::sync::mpsc::Receiver<()>> {
+    OPEN_SESSION_HOOK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+}
+
 pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
+    #[cfg(test)]
+    if let Some(rx) = take_open_session_hook() {
+        let _ = rx.recv();
+    }
     let layout = Layout::here();
     // X1: once per process. A second engine's boot runs the launch resume again (prepare_launch →
     // here); while the slot already holds this user id, nothing reruns — not the claim, not the
@@ -137,7 +162,11 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
     let claim = match LegacyClaim::here() {
         Ok(claim) => claim,
         Err(error) => {
+            // F11: the fallback is the account's empty room, never a permanent refusal. The claim
+            // cannot run in this process at all, so the started-rule is discharged for the
+            // session; the evidence half of the open rule still reads what it can.
             tracing::warn!("legacy claim not opened ({error}); the account's room lookup stands");
+            bir_core::legacy_claim::note_claim_impossible(layout.device_dir());
             return open_lookup_room(&layout, stored);
         }
     };
@@ -614,6 +643,26 @@ mod a3a_tests {
         let mut hash = sha2::Sha256::new();
         hash.update(std::fs::read(path).unwrap());
         format!("{:x}", hash.finalize())
+    }
+
+    /// F11: device.db unreadable (lost, or written by a newer build) — the fallback is the
+    /// account's empty room, not a permanent refusal of every sign-in.
+    #[test]
+    fn a_claim_store_that_cannot_open_still_opens_the_accounts_room() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not a sqlite database at all").unwrap();
+        let a = stored("f11-user");
+        let session = open_session_room(&a);
+        assert!(
+            matches!(session, SessionRoom::Room { .. } | SessionRoom::PermanentEmptyRoom { .. }),
+            "a lost or newer device.db refused the sign-in: {session:?}"
+        );
+        assert!(
+            crate::open_room::current().is_some(),
+            "no room is open after the fallback"
+        );
     }
 
     fn write_cut_record(layout: &Layout, room: &RoomId, who: &Claimant, raw_sha256: String) {

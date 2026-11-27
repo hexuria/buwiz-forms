@@ -119,6 +119,11 @@ pub fn room_move_evidence_clear(
             room_id
         )
     };
+    // F11: a session whose claim store cannot open at all has no completable move to protect —
+    // the evidence rule is moot there, and enforcing it would refuse every sign-in permanently.
+    if claim_impossible_this_session(layout.device_dir()) {
+        return Ok(());
+    }
     let record = match LegacyClaim::at(layout.clone()) {
         Ok(claim) => match claim.record() {
             Ok(record) => record,
@@ -160,6 +165,37 @@ pub fn room_open_allowed(
 
 /// Whether the claim's `start()` ran to a definitive answer for `device_dir` in this session (R1): the point
 /// is that the claim looked at the disk — and finished looking — before anything opened a room's database.
+/// F11: the claim store itself cannot open (device.db lost or written by a newer version). No
+/// claim can ever run in this process — nothing can resume and no move can start — so the
+/// started-rule's purpose is discharged for the session. The evidence half of the open rule
+/// still stands on its own. Chosen over a permanent refusal of every sign-in (the review's F11).
+pub fn note_claim_impossible(device_dir: &std::path::Path) {
+    let key = started_key(device_dir);
+    STARTED_THIS_SESSION
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(key.clone());
+    IMPOSSIBLE_THIS_SESSION
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(key);
+}
+
+/// The device folders whose claim store cannot open at all in this session (F11). There the
+/// evidence rule is moot: no move can resume, complete or be verified without the store, so
+/// protecting its evidence forever would only refuse the person their rooms permanently. What
+/// the rule protects — a move that can still finish — cannot exist there.
+static IMPOSSIBLE_THIS_SESSION: std::sync::Mutex<std::collections::BTreeSet<std::path::PathBuf>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+fn claim_impossible_this_session(device_dir: &std::path::Path) -> bool {
+    let key = started_key(device_dir);
+    IMPOSSIBLE_THIS_SESSION
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains(&key)
+}
+
 pub fn claim_started_this_session(device_dir: &std::path::Path) -> bool {
     let key = started_key(device_dir);
     STARTED_THIS_SESSION

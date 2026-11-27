@@ -4,7 +4,7 @@ import { app } from "../../shell";
 import { AppButton, Card, SettingRow, Text } from "../../ui";
 import { ProfileExportCard } from "../taxpayer";
 import { Labeled } from "./parts";
-import { importing, runImport } from "./importState";
+import { importResultLine, importing, runImport } from "./importState";
 import { EbirFormsImport } from "./EbirFormsImport";
 import { safetyCopyLine, safetyCopyStatus } from "../auth/migrationNote";
 
@@ -26,6 +26,12 @@ export function TransferSection(props: { rows: string[] }) {
                 onPress={() => void runImport()}
               />
             </SettingRow>
+            <Text variant="meta" tone="fg3" testID="settings-import-help">
+              Importing a backup replaces this account's tax profiles with the backup's. Returns sent after this backup was made will not be in it.
+            </Text>
+            <If when={importResultLine() !== null}>
+              <Text variant="meta" tone="fg2" testID="settings-import-result">{importResultLine() ?? ""}</Text>
+            </If>
             <EbirFormsImport />
           {/* The safety copy of the move to this account, while it is kept (§A.3.4). */}
           <If when={safetyCopyStatus() !== null}>

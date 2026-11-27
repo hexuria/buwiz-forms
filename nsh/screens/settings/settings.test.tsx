@@ -187,6 +187,23 @@ for (const { name, size } of SIZES) {
       await app.waitFor("text:calls: import_archive");
       if (toastText) await app.waitFor(`text:${toastText}`);
       else expect(app.texts().some((t) => /imported|restored|failed/i.test(t))).toBe(false);
+      // 9c: the help line under the control says what an import means for returns already sent.
+      expect(app.shows("id:settings-import-help")).toBe(true);
+      expect(app.texts()).toContain(
+        "Importing a backup replaces this account's tax profiles with the backup's. Returns sent after this backup was made will not be in it."
+      );
+      if (kind === "database") {
+        // The result line carries both sentences: the returns warning and the truthful way back
+        // (no in-app row imports a safety copy back, so it names the support route).
+        await app.waitFor("id:settings-import-result");
+        const line = app.texts().find((t) => t.startsWith("Database imported. Returns sent after this backup"));
+        expect(line).toBe(
+          "Database imported. Returns sent after this backup was made will not be in it. " +
+            "A copy of what was here before is kept on this device; write to support@buwiz.com to get it back."
+        );
+      } else {
+        expect(app.shows("id:settings-import-result")).toBe(false);
+      }
       // The button is free again once the host has answered.
       await app.waitFor("text:Import", { timeout: 5000 });
       expect(app.enabled("id:settings-import-btn")).toBe(true);

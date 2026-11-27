@@ -8,6 +8,25 @@ use std::net::TcpListener;
 use std::sync::mpsc;
 use tracing::info;
 
+/// The live listeners' cancel flags (F4): when the room a consent was started in closes, the
+/// callback it waits for is no longer wanted — a grant completing afterwards belongs to nobody.
+static LISTENERS: std::sync::LazyLock<
+    std::sync::Mutex<Vec<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
+/// Cancel every listener waiting now: each answers Err and its thread exits. Called when the
+/// room closes (a sign-out, a switch), so a consent page still open in the browser cannot
+/// complete into whatever account signs in next.
+pub fn cancel_listeners() {
+    for flag in LISTENERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .drain(..)
+    {
+        flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// Start a single-shot HTTP server on a random port.
 ///
 /// Returns `(port, receiver)` where `receiver` yields the authorization code
@@ -21,14 +40,38 @@ pub fn start_callback_server(
 
     info!("OAuth callback server listening on 127.0.0.1:{}", port);
 
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    LISTENERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(cancel.clone());
+
     // Spawn a thread that handles exactly one request then exits
     std::thread::spawn(move || {
-        // Accept one connection (with a 5-minute timeout)
         listener
-            .set_nonblocking(false)
+            .set_nonblocking(true)
             .expect("set_nonblocking failed");
-
-        if let Ok((mut stream, _addr)) = listener.accept() {
+        // Wait for the one connection, the cancel flag, or the timeout — a cancelled listener
+        // answers Err and accepts nothing more (F4).
+        let started = std::time::Instant::now();
+        let accepted = loop {
+            if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                let _ = tx.send(Err("the sign-in this consent was started for is closed".to_owned()));
+                return;
+            }
+            if started.elapsed() > std::time::Duration::from_secs(300) {
+                return;
+            }
+            match listener.accept() {
+                Ok(connection) => break connection,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Err(_) => return,
+            }
+        };
+        let (mut stream, _addr) = accepted;
+        {
             let mut buf = vec![0u8; 4096];
             let n = stream.read(&mut buf).unwrap_or(0);
             let request = String::from_utf8_lossy(&buf[..n]);
@@ -190,6 +233,24 @@ fn extract_callback(request: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_callback_after_cancel_is_never_accepted() {
+        // F4: the room the consent was started in has closed — the listener answers Err and the
+        // late callback connects to nothing.
+        let (port, rx) = start_callback_server("the-state".to_owned()).unwrap();
+        cancel_listeners();
+        let answer = rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the cancelled listener must answer");
+        assert!(answer.is_err(), "a cancelled listener accepted the wait");
+        // A callback arriving now is never accepted: nothing listens.
+        assert!(
+            std::net::TcpStream::connect(("127.0.0.1", port)).is_err()
+                || std::net::TcpStream::connect(("127.0.0.1", port)).is_err(),
+            "the listener is still accepting after the cancel"
+        );
+    }
 
     #[test]
     fn extract_callback_returns_decoded_code_and_state() {

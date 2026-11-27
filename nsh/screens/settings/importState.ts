@@ -5,6 +5,10 @@ import { store, toast } from "../../shell";
 import { legacyDatabaseReplaced } from "./legacyState";
 
 const busy = signal(false);
+const resultLine = signal<string | null>(null);
+
+/** The outcome of the last database-archive restore, shown under the Import control (9c). */
+export const importResultLine = (): string | null => resultLine();
 
 /** Whether an import is waiting on the file dialog or the restore. */
 export const importing = (): boolean => busy();
@@ -20,6 +24,13 @@ export async function runImport(): Promise<void> {
     const result = await store.writeAsync("import_archive");
     if (result.kind === "database") {
       legacyDatabaseReplaced();
+      // 9c: no confirm step, so the person reads it here — what an import means for returns already
+      // sent, and the way back. There is no in-app row that imports a safety copy back, so the line
+      // names the truthful route.
+      resultLine.set(
+        "Database imported. Returns sent after this backup was made will not be in it. " +
+          "A copy of what was here before is kept on this device; write to support@buwiz.com to get it back."
+      );
       toast("Database imported.", "upload");
     }
     else if (result.kind === "profile") toast("Taxpayer data restored.", "upload");

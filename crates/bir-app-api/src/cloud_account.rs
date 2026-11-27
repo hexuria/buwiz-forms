@@ -280,13 +280,19 @@ fn session_opened() -> HostResult {
     // account's room opens; the worker starts or wakes (the launch path below); the agent session
     // rebuilds (its generation check does, on the next batch). F2: the gate opens only after the
     // room — never ahead of it, so no tick and no screen runs on the old room under the new sign-in.
-    if let Ok(Some(stored)) = load_stored() {
-        crate::room_session::open_session_room(&stored);
-    }
-    crate::account_gate::set_unlocked(true);
-    crate::bir_module::open_database_at_launch();
+    // F10: the claim can copy, hash and zip a large legacy file — never on the UI thread, or
+    // "Moving" never paints (the page polls the migration state while this runs). The order is
+    // unchanged: the claim runs or resumes, the room opens, the gate opens only after the room.
+    let _room_open = spawn_account("buwiz-room-open", || {
+        if let Ok(Some(stored)) = load_stored() {
+            crate::room_session::open_session_room(&stored);
+        }
+        crate::account_gate::set_unlocked(true);
+        crate::bir_module::open_database_at_launch();
+        crate::hooks::hooks().refresh_menu();
+        Ok(HostValue::Null)
+    });
     crate::hooks::hooks().start_updater();
-    crate::hooks::hooks().refresh_menu();
     Ok(HostValue::Null)
 }
 
@@ -581,6 +587,23 @@ mod tests {
             resolved.url, "https://saved.example.test",
             "buwiz_server_url is not read"
         );
+    }
+
+    /// F10: session_opened never runs the claim on the calling thread — it returns while the
+    /// room work is still blocked, and the work finishes on the spawned thread.
+    #[test]
+    fn session_opened_returns_while_the_room_work_is_still_running() {
+        use_ephemeral_database();
+        let release = crate::room_session::block_next_open_session_for_test();
+        let opened = std::thread::spawn(session_opened);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(
+            opened.is_finished(),
+            "session_opened is still blocked in the room work: the claim runs on the calling thread"
+        );
+        let _ = release.send(());
+        let _ = opened.join();
+        crate::account_gate::set_unlocked(false);
     }
 
     /// Startup deletes `buwiz_server_url`. The child uses a scratch database

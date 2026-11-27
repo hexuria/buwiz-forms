@@ -137,17 +137,25 @@ fn open_path(
         bir_core::legacy_claim::room_open_allowed(&bir_core::rooms::Layout::at(&device_dir), room)?;
     }
     hold_device_guard(&device_dir)?;
+    // F10: REGISTRY is never held across Database::open — its migrations and checkpoint can take
+    // real time, and every close/open of any room would wait behind them. Opens serialize on
+    // OPEN_SERIAL instead, so the check-insert race stays closed without holding the registry.
+    static OPEN_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _opening = lock(&OPEN_SERIAL);
     let handle = {
-        let mut registry = lock(&REGISTRY);
-        registry.retain(|_, (weak, _)| weak.strong_count() > 0);
-        match registry.get(path).and_then(|(weak, _)| Weak::upgrade(weak)) {
+        let reuse = {
+            let mut registry = lock(&REGISTRY);
+            registry.retain(|_, (weak, _)| weak.strong_count() > 0);
+            registry.get(path).and_then(|(weak, _)| Weak::upgrade(weak))
+        };
+        match reuse {
             Some(live) => live,
             None => {
                 let owner_lock =
                     bir_core::db::hold_owner_lock(path).map_err(|error| error.to_string())?;
                 let database = Database::open(path).map_err(|error| error.to_string())?;
                 let handle = Arc::new(Mutex::new(database));
-                registry.insert(path.to_path_buf(), (Arc::downgrade(&handle), owner_lock));
+                lock(&REGISTRY).insert(path.to_path_buf(), (Arc::downgrade(&handle), owner_lock));
                 handle
             }
         }
@@ -215,6 +223,9 @@ pub fn current_generation() -> Option<u64> {
 /// against their own Arc; the registry reopens the same connection if the room is opened again
 /// before they finish. The room's file and its PIN stay.
 pub fn close_room() {
+    // F4: a consent started in this room must not complete into whatever signs in next — its
+    // loopback listener answers Err and accepts nothing more.
+    bir_core::email::cancel_oauth_listeners();
     lock(&SLOT).take();
     // A dead connection's entry goes now, not at the next open: its file's owner lock releases when
     // the last strong handle is gone, so a sign-out frees the file for whatever comes next.
