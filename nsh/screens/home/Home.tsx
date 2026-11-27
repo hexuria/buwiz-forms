@@ -5,7 +5,7 @@
 import { cleanup, computed, signal, View, windowSize } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow } from "../../bir";
 import { loadDashboard, pickedDeadlines, tileSpecs, type HomeView, type TileSpec } from "../../lib/dashboard";
-import { countsAsFiled } from "../../lib/statusWord";
+import { isDryRun } from "../../lib/statusWord";
 import { MONTHS_LONG } from "../../lib/dates";
 import { app, contentColumn, go, store, today } from "../../shell";
 import { SAVED_RETURNS_KEY } from "../../shell/store";
@@ -114,7 +114,7 @@ function Dashboard(props: { width: () => number }) {
   const picked = computed(() => pickedDeadlines(view(), data()));
   const rows = () => picked().rows as DeadlineRow[];
   const specs = computed(() => tileSpecs(data()));
-  const filed = computed<ReturnRow[]>(() => store.returns("filed").filter(countsAsFiled).slice(0, 3));
+  const filed = computed<ReturnRow[]>(() => store.returns("filed").filter((row) => !isDryRun(row)).slice(0, 3));
   /** The Recent list a phone or tablet shows here (no sidebar): the sidebar's returns, five at most. */
   const recentRows = computed(() => visibleRecent().slice(0, 5));
   const asNeeded = computed(() => asNeededEntries(store.asNeeded(today().getFullYear())));

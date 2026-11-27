@@ -15338,6 +15338,13 @@ mod tests {
             assert_eq!(open["send"]["stage"], "test_sent", "{code}");
             assert_eq!(open["send"]["line"], TEST_SENT_LINE, "{code}");
 
+            let (_, _, print_test_send) =
+                with_database(|db| print_map(db, kind_of(code).unwrap(), &sent)).unwrap();
+            assert!(
+                print_test_send,
+                "{code}: the print path knows it is a test send"
+            );
+
             let rows = call("list_returns", vec!["all".into()]).unwrap();
             let row = rows
                 .as_array()

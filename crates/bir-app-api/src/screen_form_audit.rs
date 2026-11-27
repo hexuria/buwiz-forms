@@ -992,7 +992,7 @@ fn audit_all_screen_forms() {
                                 // `screen_form_print` calls it.
                                 let printed = with_database(|db| {
                                     print_map(db, kind, &reopened["draft"])
-                                        .map(|(fields, _)| fields)
+                                        .map(|(fields, _, _)| fields)
                                 });
                                 match printed {
                                     Err(error) => findings
