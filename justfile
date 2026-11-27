@@ -738,14 +738,25 @@ _package-mac-appstore args="": build-frozen-html-identity
 # next, as `just app` uses, or the number given: `just play-bundle 28`). Needs no secret: the bundle comes out UNSIGNED, and the owner signs it with the
 # upload key (`just play-sign`). nsh package always signs, with the debug key here; `android_bundle.py prepare` takes that
 # signature off with the updater's source (Google Play updates the app; the updater never starts on a phone).
-[macos]
-play-bundle build="":
+play-bundle *args:
     #!/usr/bin/env bash
     set -euo pipefail
     umask 022
     root="$(pwd)"
-    BUILD="{{build}}"
+    # A build number, --allow-dotenv, or both: `just play-bundle 28`, `just play-bundle --allow-dotenv`.
+    BUILD="" DOTENV=()
+    for arg in {{args}}; do
+        case "$arg" in
+            --allow-dotenv) DOTENV=(--allow-dotenv) ;;
+            ''|*[!0-9]*) echo "Unknown argument: $arg (a build number, or --allow-dotenv)" >&2; exit 2 ;;
+            *) [ -z "$BUILD" ] || { echo "Two build numbers: $BUILD and $arg" >&2; exit 2; }; BUILD="$arg" ;;
+        esac
+    done
+    # `just` has loaded any .env into this recipe (`set dotenv-load`), and the app bakes some variables in at compile
+    # time: a store build takes one only when the caller says it is meant (scripts/play_bundle_guard.py).
+    {{PYTHON}} scripts/play_bundle_guard.py dotenv "$root" ${DOTENV[@]+"${DOTENV[@]}"}
     if [ -z "$BUILD" ]; then
+        [ -f .env ] || { echo "❌ App Store Connect's next build number needs .env: give the number (just play-bundle 28)" >&2; exit 1; }
         set -a && source .env && set +a
         BUILD="$(uv run scripts/bump_build.py --print-next)"
     fi
@@ -757,44 +768,60 @@ play-bundle build="":
     # whose shared tool must stay as it is builds with the pinned one beside it (scripts/setup-android-macos.sh). Either way
     # the CLI must be at the NSH pin, or the bundle is not what CI tested.
     TOOLS="${NSH_TOOLS:-$HOME/BuwizNsh/tools}"
+    case "$(uname -s)" in Darwin) SETUP=scripts/setup-android-macos.sh ;; *) SETUP=scripts/setup-linux-nsh.sh ;; esac
     export PATH="$TOOLS/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target/play-bundle}"
+    # On Linux the pinned nsh (built in Ubuntu 24.04 for GTK 4) runs in that image through the wrapper
+    # scripts/setup-linux-nsh.sh writes; inside the image already (/.dockerenv), or on a Mac, it runs as it is.
+    NSH_RUN=()
+    if [ "$(uname -s)" = Linux ] && [ ! -f /.dockerenv ]; then
+        WRAPPER="${NSH_WRAPPER:-$HOME/BuwizNsh/nsh2404.sh}"
+        [ -x "$WRAPPER" ] || { echo "❌ No $WRAPPER: run scripts/setup-linux-nsh.sh (NSH_TOOLS=<folder> for a fresh one)." >&2; exit 1; }
+        {{PYTHON}} scripts/play_bundle_guard.py wrapper "$WRAPPER" "$root/nsh" "$TOOLS" "$HOME"
+        export NSH_TOOLS="$TOOLS"
+        NSH_RUN=("$WRAPPER")
+    fi
     # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
     PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
     scripts/build-line.sh --strict
     PIN="$(sed -n 's/^ *NSH_PINNED_REF: *//p' .github/workflows/nsh.yml | head -1)"
-    HAVE="$(nsh --version 2>/dev/null || true)"
+    HAVE="$(${NSH_RUN[@]+"${NSH_RUN[@]}"} nsh --version 2>/dev/null || true)"
     case "$HAVE" in
         *"(${PIN:0:7})"*) ;;
-        *) echo "❌ $TOOLS/bin/nsh is '${HAVE:-missing}', not the NSH pin ${PIN:0:7}: run scripts/setup-android-macos.sh (NSH_TOOLS=<folder> for one beside the shared tool)." >&2; exit 1 ;;
+        *) echo "❌ $TOOLS/bin/nsh is '${HAVE:-missing}', not the NSH pin ${PIN:0:7}: run $SETUP (NSH_TOOLS=<folder> for one beside the shared tool)." >&2; exit 1 ;;
     esac
     # `nsh package` takes the Android RELEASE runtime next to the CLI (or under $NSH_RUNTIME), whatever built it. The setup
     # script records the NSH commit beside it (nsh-ref); a runtime without that record, or from another commit, is refused.
     RUNTIME="${NSH_RUNTIME:-$TOOLS/runtime}/android/release"
     RUNTIME_REF="$(cat "$RUNTIME/nsh-ref" 2>/dev/null || true)"
     if [ ! -f "$RUNTIME/classes.dex" ] || [ "$RUNTIME_REF" != "$PIN" ]; then
-        echo "❌ The Android release runtime in $RUNTIME is ${RUNTIME_REF:+from $RUNTIME_REF, }not recorded as built at the NSH pin $PIN: run scripts/setup-android-macos.sh." >&2
+        echo "❌ The Android release runtime in $RUNTIME is ${RUNTIME_REF:+from $RUNTIME_REF, }not recorded as built at the NSH pin $PIN: run $SETUP." >&2
         exit 1
     fi
     echo "nsh: $HAVE; Android release runtime at $PIN, classes.dex sha256 $(shasum -a 256 "$RUNTIME/classes.dex" | cut -d' ' -f1)"
     # NSH's CLI sets CC and AR for Android but not RANLIB, which the vendored OpenSSL needs: the NDK has only llvm-ranlib
     # (setup-linux-nsh.sh and setup-android-windows.ps1 set the same).
-    SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+    case "$(uname -s)" in Darwin) DEFAULT_SDK="$HOME/Library/Android/sdk" ;; *) DEFAULT_SDK="$HOME/Android/Sdk" ;; esac
+    SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$DEFAULT_SDK}}"
     NDK="${ANDROID_NDK_HOME:-$(ls -d "$SDK"/ndk/* 2>/dev/null | sort -V | tail -1)}"
     RANLIB_NDK="$(ls "$NDK"/toolchains/llvm/prebuilt/*/bin/llvm-ranlib 2>/dev/null | head -1)"
-    [ -x "$RANLIB_NDK" ] || { echo "❌ No llvm-ranlib in the NDK ($NDK): run scripts/setup-android-macos.sh." >&2; exit 1; }
+    [ -x "$RANLIB_NDK" ] || { echo "❌ No llvm-ranlib in the NDK ($NDK): run $SETUP." >&2; exit 1; }
     export RANLIB_aarch64_linux_android="${RANLIB_aarch64_linux_android:-$RANLIB_NDK}"
     export RANLIB_armv7_linux_androideabi="${RANLIB_armv7_linux_androideabi:-$RANLIB_NDK}"
-    # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one.
-    unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV
+    # A release keystore never reaches this recipe, and a development build's baked environment never reaches a store one;
+    # nor does a server address, which the app would bake in (option_env!): a release build uses Buwiz's own.
+    unset NSH_KEYSTORE_PASSWORD BUWIZ_ANDROID_DEV BUWIZ_ANDROID_DEV_ENV BUWIZ_SERVER_URL BUWIZ_ACCOUNT_URL
     # nsh builds libnsh.so in its generated workspace, which has no [profile.release]: this repository's own profile never
     # applies there, and Cargo's defaults make a 116 MB library. These make it 84 MB (24 MB to download) on arm64.
     # Not opt-level z and not panic=abort until such a build has been used on a real phone (docs/platforms/android.md).
     export CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_OPT_LEVEL=s
+    # What the build will see, read where it runs (inside the container through the wrapper): the profile above, and
+    # nothing that would make the store binary a development one or bake a server address in.
+    ${NSH_RUN[@]+"${NSH_RUN[@]}"} env | {{PYTHON}} scripts/play_bundle_guard.py container-env
     OUT="$root/{{RELEASE_DIR}}/android"
     AAB="$root/{{RELEASE_DIR}}/{{APP_NAME}}-Android-{{VERSION}}-$BUILD.aab"
     rm -rf "$OUT" "$AAB"
     mkdir -p "$OUT"
-    (cd nsh && nsh package --target android --format aab --abi arm64-v8a,armeabi-v7a --id com.buwiz.ebirforms \
+    (cd nsh && ${NSH_RUN[@]+"${NSH_RUN[@]}"} nsh package --target android --format aab --abi arm64-v8a,armeabi-v7a --id com.buwiz.ebirforms \
         --build "$BUILD" --app-version "{{VERSION}}" -o "$OUT")
     {{PYTHON}} scripts/android_bundle.py prepare "$OUT/{{APP_NAME}}.aab" "$AAB"
     {{PYTHON}} scripts/android_bundle.py check "$AAB" --package com.buwiz.ebirforms --version-code "$BUILD" --target-sdk "$TARGET_SDK"

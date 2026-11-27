@@ -25,6 +25,10 @@ MANIFEST = "base/manifest/AndroidManifest.xml"
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 UPDATER_ASSET = "base/assets/nsh/assets/nsh-updater.json"
 PHONE_ABIS = {"arm64-v8a", "armeabi-v7a"}
+# The permissions the store listing and its Data safety answers are written for. A bundle that asks for another (a
+# camera or microphone switched on in nsh.json, USE_BIOMETRIC once fingerprint unlock is in) needs both brought up to
+# date first, and then this list.
+STORE_PERMISSIONS = {"android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS"}
 
 
 class BundleError(Exception):
@@ -157,6 +161,10 @@ def check(bundle: Path, package: str, version_code: int, target_sdk: int) -> lis
             problems.append("no dataExtractionRules: Android 12 and later would still move the app's data to a new device")
         if app.get("debuggable") not in (None, "false"):
             problems.append("the app is debuggable")
+    asked = {element.get("name") for element in manifest.find("uses-permission")}
+    if not asked <= STORE_PERMISSIONS:
+        problems.append(f"permissions {sorted(p or '?' for p in asked - STORE_PERMISSIONS)} are not among the ones the "
+                        "store listing declares (STORE_PERMISSIONS)")
     abis = {name.split("/")[2] for name in names if name.startswith("base/lib/") and name.count("/") >= 3}
     if not abis:
         problems.append("no native code under base/lib/")

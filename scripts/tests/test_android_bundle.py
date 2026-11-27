@@ -72,6 +72,25 @@ class BundleTests(unittest.TestCase):
         android_bundle.prepare(self.built, self.ready)
         self.assertEqual(android_bundle.check(self.ready, **PLAY_ARGS), [])
 
+    def test_a_permission_the_listing_does_not_declare_is_a_problem(self):
+        write_bundle(self.built, PLAY)
+        android_bundle.prepare(self.built, self.ready)
+        real = android_bundle.read_manifest
+
+        def with_camera(data):
+            manifest = real(data)
+            manifest.children.append(android_bundle.Element(
+                "uses-permission", {(android_bundle.ANDROID_NS, "name"): "android.permission.CAMERA"}, []))
+            return manifest
+
+        android_bundle.read_manifest = with_camera
+        try:
+            problems = android_bundle.check(self.ready, **PLAY_ARGS)
+        finally:
+            android_bundle.read_manifest = real
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("android.permission.CAMERA", problems[0])
+
     def test_prepare_drops_only_the_signature_and_the_updater(self):
         write_bundle(self.built, PLAY, abis=("arm64-v8a", "armeabi-v7a"))
         self.assertEqual(android_bundle.prepare(self.built, self.ready), 4)

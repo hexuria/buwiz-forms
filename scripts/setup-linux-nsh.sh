@@ -11,12 +11,14 @@
 # What it sets up (idempotent; finished pieces are skipped):
 #   - ../nsh checked out at NSH_PINNED_REF (.github/workflows/nsh.yml)
 #   - the buwiz-nsh-2404 image (GTK 4, WebKitGTK 6.0, JDK 17, Noto fonts)
-#   - the nsh CLI in ~/BuwizNsh/tools/bin, built in the image at the pin
+#   - the nsh CLI in ~/BuwizNsh/tools/bin (or $NSH_TOOLS/bin), built in the image at the pin
 #   - Android (x86_64 host): JDK 17, SDK command-line tools, platform-tools, emulator,
-#     android-35, build-tools 35.0.1, NDK 27, the API 35 x86_64 image, an AVD
+#     the platform nsh/nsh.json targets (android.targetSdk), build-tools 35.0.1, NDK 27,
+#     the API 35 x86_64 image for the emulator, an AVD
 #     named "buwiz", the Rust Android targets and NSH's Android dev and release runtimes
 #     (copies, each with the NSH commit it was built from in nsh-ref)
-#   - ~/BuwizNsh/nsh2404.sh <cmd>: runs <cmd> in the image from nsh/ with
+#   - ~/BuwizNsh/nsh2404.sh <cmd>: runs <cmd> in the image from nsh/ (with the release profile
+#     `just play-bundle` sets, so a store bundle built through it is optimised as on a Mac) with
 #     $DISPLAY (default :0), host networking (`just mock-account` on 127.0.0.1:3008) and
 #     the local-test safety variables (baked into Android dev builds)
 #
@@ -24,6 +26,7 @@
 #   scripts/setup-linux-nsh.sh               # everything
 #   scripts/setup-linux-nsh.sh --no-android  # desktop NSH only
 #   scripts/setup-linux-nsh.sh --check       # verify only, install nothing
+#   NSH_TOOLS=~/fresh-tools scripts/setup-linux-nsh.sh   # the CLI and runtimes in a folder of their own
 #
 # Then:
 #   just mock-account &
@@ -39,7 +42,7 @@ for arg in "$@"; do
         --check)      CHECK_ONLY=1 ;;
         --no-android) WITH_ANDROID=0 ;;
         -h|--help)
-            sed -n '2,31p' "$0"
+            sed -n '2,34p' "$0"
             exit 0
             ;;
         *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
@@ -54,6 +57,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 NSH="$(cd "$REPO/.." && pwd)/nsh"
 WORK="$HOME/BuwizNsh"
+# The nsh CLI and the Android runtimes: ~/BuwizNsh/tools, or a folder of their own (NSH_TOOLS), which the image mounts too.
+TOOLS="$(realpath -m -- "${NSH_TOOLS:-$WORK/tools}")"
 IMAGE="buwiz-nsh-2404"
 ANDROID_HOME="$(realpath -m -- "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}")"
 CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
@@ -65,6 +70,15 @@ AVD="buwiz"
 REF="$(sed -n 's/^ *NSH_PINNED_REF: *//p' "$REPO/.github/workflows/nsh.yml" | head -1)"
 [ -n "$REF" ] || die "NSH_PINNED_REF not found in .github/workflows/nsh.yml"
 
+# The Android platform the app is built against: nsh/nsh.json's android.targetSdk, never a number written here.
+android_api() {
+    local api
+    api="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["android"]["targetSdk"])' \
+        "$REPO/nsh/nsh.json" 2>/dev/null)" || die "no android.targetSdk in $REPO/nsh/nsh.json"
+    [[ "$api" =~ ^[0-9]+$ ]] || die "android.targetSdk in $REPO/nsh/nsh.json is '$api', not an API level"
+    printf '%s\n' "$api"
+}
+
 SUDO=""
 [ "$(id -u)" -ne 0 ] && SUDO="sudo"
 
@@ -74,7 +88,7 @@ outside_home() {
     case "$1/" in "$HOME"/*) return 1 ;; esac
 }
 MOUNTS=(-v "$HOME:$HOME")
-for dir in "$REPO" "$NSH"; do
+for dir in "$REPO" "$NSH" "$TOOLS"; do
     outside_home "$dir" && MOUNTS+=(-v "$dir:$dir")
 done
 # The SDK is mounted only for Android work, once the host install has created
@@ -102,8 +116,8 @@ in_image() {  # in_image <workdir> <docker -e args...> -- <cmd...>
 }
 
 nsh_cli_current() {
-    [ -x "$WORK/tools/bin/nsh" ] &&
-        in_image "$NSH" -- "$WORK/tools/bin/nsh" --version 2>/dev/null | grep -q "(${REF:0:7})"
+    [ -x "$TOOLS/bin/nsh" ] &&
+        in_image "$NSH" -- "$TOOLS/bin/nsh" --version 2>/dev/null | grep -q "(${REF:0:7})"
 }
 
 checkout_nsh() {
@@ -146,8 +160,8 @@ write_wrapper() {
 # Written by scripts/setup-linux-nsh.sh.
 set -euo pipefail
 NSH_EOF
-    printf 'app_dir=%q\nandroid_home=%q\nndk_version=%q\n' \
-        "$REPO/nsh" "$ANDROID_HOME" "$NDK_VERSION" >> "$WORK/nsh2404.sh"
+    printf 'app_dir=%q\nandroid_home=%q\nndk_version=%q\ntools=%q\n' \
+        "$REPO/nsh" "$ANDROID_HOME" "$NDK_VERSION" "$TOOLS" >> "$WORK/nsh2404.sh"
     cat >> "$WORK/nsh2404.sh" <<'NSH_EOF'
 cd "$app_dir"
 display="${DISPLAY:-:0}"
@@ -224,10 +238,11 @@ NSH_EOF
     cat >> "$WORK/nsh2404.sh" <<'NSH_EOF'
 exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network host --security-opt apparmor=unconfined -u "$uid:$(id -g)" \
   -e HOME="$HOME" \
-  -e PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
+  -e PATH="${NSH_TOOLS:-$tools}/bin:$HOME/.cargo/bin:$android_home/platform-tools:/usr/local/bin:/usr/bin:/bin" \
   -e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}" \
   -e NSH_RUNTIME \
   -e CARGO_INCREMENTAL=0 \
+  -e CARGO_PROFILE_RELEASE_LTO -e CARGO_PROFILE_RELEASE_CODEGEN_UNITS -e CARGO_PROFILE_RELEASE_OPT_LEVEL \
   -e ANDROID_HOME="$android_home" -e ANDROID_NDK_HOME="$ndk" \
   -e RANLIB_x86_64_linux_android="$RANLIB" -e RANLIB_aarch64_linux_android="$RANLIB" -e RANLIB_armv7_linux_androideabi="$RANLIB" \
   -e DISPLAY="$display" -e XDG_RUNTIME_DIR="/run/user/$uid" \
@@ -252,7 +267,7 @@ install_nsh_cli() {
     fi
     log "Building the nsh CLI at ${REF:0:7} in the image"
     in_image "$NSH" -e CARGO_TARGET_DIR="$WORK/target-nsh" -- \
-        cargo install --locked --path crates/nsh-cli --root "$WORK/tools"
+        cargo install --locked --path crates/nsh-cli --root "$TOOLS"
 }
 
 find_java_home() {
@@ -296,9 +311,10 @@ install_android_sdk() {
         mv "$tmp/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
         rm -rf "$tmp"
     fi
-    log "Installing Android SDK packages (NDK $NDK_VERSION, API 35)"
+    local api; api="$(android_api)"
+    log "Installing Android SDK packages (NDK $NDK_VERSION, API $api)"
     yes | "$sdkmanager" --licenses >/dev/null 2>&1 || true
-    "$sdkmanager" "platform-tools" "emulator" "platforms;android-35" "build-tools;35.0.1" \
+    "$sdkmanager" "platform-tools" "emulator" "platforms;android-$api" "build-tools;35.0.1" \
         "ndk;$NDK_VERSION" "$SYSTEM_IMAGE" >/dev/null
     if ! "$ANDROID_HOME/emulator/emulator" -list-avds 2>/dev/null | grep -qx "$AVD"; then
         log "Creating the $AVD AVD (Pixel 7, API 35)"
@@ -318,7 +334,7 @@ android_runtime_stamp() {
 
 nsh_android_runtime_current() {
     local variant="${1:-dev}" abi
-    local dest="$WORK/tools/runtime/android/$variant"
+    local dest="$TOOLS/runtime/android/$variant"
     [ ! -L "$dest" ] && [ -s "$dest/classes.dex" ] &&
         [ "$(cat "$dest/nsh-build" 2>/dev/null)" = "$(android_runtime_stamp)" ] &&
         [ "$(cat "$dest/nsh-ref" 2>/dev/null)" = "$REF" ] || return 1
@@ -341,8 +357,8 @@ install_android_runtime() {
             -e ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" \
             -e CARGO_PROFILE_DEV_DEBUG="$ANDROID_RUNTIME_DEBUG" -- \
             cargo xtask android "$flag"
-        local dest="$WORK/tools/runtime/android/$variant"
-        rm -rf "$dest" && mkdir -p "$WORK/tools/runtime/android"
+        local dest="$TOOLS/runtime/android/$variant"
+        rm -rf "$dest" && mkdir -p "$TOOLS/runtime/android"
         cp -r "$NSH/target/android/$built" "$dest"
         android_runtime_stamp > "$dest/nsh-build"
         printf '%s\n' "$REF" > "$dest/nsh-ref"
@@ -366,12 +382,16 @@ check() {
         grep -qxF "$(printf 'app_dir=%q' "$REPO/nsh")" "$WORK/nsh2404.sh" &&
         { [ "$WITH_ANDROID" -eq 0 ] ||
             { grep -qxF "$(printf 'android_home=%q' "$ANDROID_HOME")" "$WORK/nsh2404.sh" &&
-              grep -qxF "$(printf 'ndk_version=%q' "$NDK_VERSION")" "$WORK/nsh2404.sh"; }; }; then
+              grep -qxF "$(printf 'ndk_version=%q' "$NDK_VERSION")" "$WORK/nsh2404.sh"; }; } &&
+        grep -qxF "$(printf 'tools=%q' "$TOOLS")" "$WORK/nsh2404.sh"; then
         report "nsh2404.sh wrapper" present 1
     else report "nsh2404.sh wrapper" "MISSING or stale" 0; fi
     if [ "$WITH_ANDROID" -eq 1 ]; then
         if [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then report "android ndk" "$NDK_VERSION" 1
         else report "android ndk" MISSING 0; fi
+        local api; api="$(android_api)"
+        if [ -d "$ANDROID_HOME/platforms/android-$api" ]; then report "android platform" "android-$api" 1
+        else report "android platform" "android-$api MISSING" 0; fi
         if "$ANDROID_HOME/emulator/emulator" -list-avds 2>/dev/null | grep -qx "$AVD"; then report "avd:$AVD" present 1
         else report "avd:$AVD" MISSING 0; fi
         if nsh_android_runtime_current dev; then report "nsh android dev runtime" "${REF:0:7}" 1
