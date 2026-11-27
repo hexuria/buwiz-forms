@@ -2053,3 +2053,31 @@ fn a_symlinked_device_folder_is_the_same_for_the_guard() {
     );
     std::fs::remove_file(&link).unwrap();
 }
+
+/// R1(b): the guard sits at the choke point every room open in the app passes — `open_live_database`
+/// behind `app_database_path` — not only in `open_room_guarded`. An open through the app's real path
+/// before start() is refused; once the claim has run, the same open goes through.
+#[test]
+fn the_apps_real_open_path_is_refused_before_start() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    crate::db::set_open_room_database(Some(install.room_file(&room)));
+    let before = std::panic::catch_unwind(crate::db::open_live_database);
+    crate::db::set_open_room_database(None);
+    match before {
+        Ok(result) => assert!(
+            result.is_err(),
+            "the room opened through the app's real path before start() ran"
+        ),
+        Err(_) => {} // the debug_assert fired: refused either way
+    }
+    claim_unlocked(&install, &a);
+    crate::db::set_open_room_database(Some(install.room_file(&room)));
+    let after = crate::db::open_live_database();
+    crate::db::set_open_room_database(None);
+    after.expect("the room opens through the app's real path once the claim ran");
+}

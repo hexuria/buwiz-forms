@@ -682,4 +682,71 @@ mod a3a_tests {
             "a scan of room A is still held in room B"
         );
     }
+
+    /// R1(c): `bir-headless serve` is a separate process that never runs start(). While the claim
+    /// record is at Copied — the move unfinished — opening the room file would migrate its bytes and
+    /// close the move unfinished, so the serve path refuses it. Once the record is moved, it answers.
+    /// (`headless` is its own feature, over `agent`: this test runs under `--features headless`.)
+    #[cfg(feature = "headless")]
+    #[test]
+    fn serve_refuses_a_room_whose_claim_is_cut_at_copied() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let a = stored("user-a");
+        let who = Claimant {
+            server_url: a.server_url.clone(),
+            user_id: a.user_id.clone(),
+            email: a.email.clone(),
+            practice: false,
+        };
+        let room = bir_core::rooms::room_id_for(
+            &bir_core::rooms::room_origin(&a.server_url).unwrap(),
+            &a.user_id,
+        );
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        // The room row exists mid-claim when the account's empty room was already the account's
+        // (the empty-room-aside flow): step 5 comes after the move, but this row predates the claim.
+        store
+            .add_room(&bir_core::rooms::RoomRecord {
+                room_id: room.clone(),
+                origin: bir_core::rooms::room_origin(&a.server_url).unwrap(),
+                user_id: a.user_id.clone(),
+                email: a.email.clone(),
+                created_at: "2026-11-27T00:00:00Z".into(),
+                from_legacy: false,
+            })
+            .unwrap();
+        drop(store);
+        write_cut_record(&scratch.layout, &room, &who, "00".repeat(32));
+        scratch.layout.create_room_dir(&room).unwrap();
+        std::fs::write(scratch.layout.room_database(&room), b"copied bytes").unwrap();
+        let refused = crate::agent::headless::signed_in_room_database(&scratch.layout, Some(&a));
+        assert!(
+            refused.is_err(),
+            "serve opened a room whose claim is cut at Copied: {refused:?}"
+        );
+        // Once the record is moved the same path answers the room file.
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        let value: String = conn
+            .query_row(
+                "SELECT value FROM migration WHERE key = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let mut record: bir_core::legacy_claim::Record = serde_json::from_str(&value).unwrap();
+        record.step = bir_core::legacy_claim::Step::Moved;
+        conn.execute(
+            "UPDATE migration SET value = ?1 WHERE key = 'legacy'",
+            [serde_json::to_string(&record).unwrap()],
+        )
+        .unwrap();
+        drop(conn);
+        let answered = crate::agent::headless::signed_in_room_database(&scratch.layout, Some(&a));
+        assert_eq!(
+            answered.expect("the room answers once the record is moved"),
+            scratch.layout.room_database(&room)
+        );
+    }
 }

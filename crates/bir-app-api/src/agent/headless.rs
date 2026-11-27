@@ -186,6 +186,19 @@ pub(crate) fn signed_in_room_database(
     match bir_core::rooms::room_for(Some(&store), &stored.server_url, &stored.user_id) {
         Ok(bir_core::rooms::RoomLookup::Known(room)) => {
             let path = layout.room_database(&room.room_id);
+            // R1(c): serve is a separate process that never runs the claim's start(). While the
+            // record is at Copied — the move unfinished — opening the room file would migrate its
+            // bytes and close the move unfinished, so the room does not answer here. The smaller
+            // fix of the two the reviewer offered: refuse, rather than running start() in serve.
+            if let Ok(claim) = bir_core::legacy_claim::LegacyClaim::at(layout.clone())
+                && let Ok(Some(record)) = claim.record()
+                && record.step == bir_core::legacy_claim::Step::Copied
+            {
+                return Err(
+                    "the legacy claim's move is unfinished on this device (the record is at Copied);                      serve refuses the room until the app finishes it"
+                        .to_owned(),
+                );
+            }
             if path.is_file() {
                 Ok(path)
             } else {
@@ -486,7 +499,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
 
         let db = Arc::new(Mutex::new(opened));
         let mut session = Session::headless();
-        session.set_db(db.clone());
+        session.set_db(db.clone(), None); // serve never changes rooms in its process: no generation
         let host = Arc::new(Mutex::new(session));
         let mailbox = AgentMailbox::new();
         let (addr, shutdown) = match spawn_mailbox_named(

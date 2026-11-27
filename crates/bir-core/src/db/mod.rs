@@ -719,6 +719,20 @@ pub fn open_room_id() -> Option<crate::rooms::RoomId> {
     crate::rooms::RoomId::parse(folder.file_name()?.to_str()?)
 }
 
+/// The device folder `path` is a room of — `<device>/rooms/<id>/bir_data.db` — or `None` for the
+/// legacy file, a single-room file, and everything else. The R1 guards key on this.
+pub(crate) fn room_device_dir(path: &Path) -> Option<PathBuf> {
+    if path.file_name()? != "bir_data.db" {
+        return None;
+    }
+    let room_dir = path.parent()?;
+    let rooms = room_dir.parent()?;
+    if rooms.file_name()? != crate::rooms::ROOMS_DIR {
+        return None;
+    }
+    Some(rooms.parent()?.to_path_buf())
+}
+
 /// Live DB file painted `bir` and `bir-headless serve` open.
 ///
 /// In order:
@@ -928,6 +942,22 @@ fn acquire_exclusive_owner_lock(file: &File, db_path: &Path) -> Result<(), DbErr
 /// ephemeral in-memory fixture. Painted `bir` uses [`Database::open_or_recreate`].
 pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbError> {
     let path = app_database_path();
+    // R1(b): the choke point every room open in the app passes. A room's database is never opened
+    // before the legacy claim's start() ran for its device folder in this session: the open runs
+    // migrations and a checkpoint, and those writes change bytes the move's hash check still needs
+    // as evidence. The legacy file and single-room files are not rooms and open as before.
+    if let Some(device_dir) = room_device_dir(&path) {
+        let ran = crate::legacy_claim::claim_started_this_session(&device_dir);
+        debug_assert!(
+            ran,
+            "a room's database opened before the claim's start() ran in this session (R1)"
+        );
+        if !ran {
+            return Err(DbError::Io(std::io::Error::other(
+                "the legacy claim's start() has not run for this device folder in this session;                  a room's database is never opened before it (R1)",
+            )));
+        }
+    }
     prepare_app_database_file(&path);
     let lock = try_acquire_live_owner_lock(&path)?;
     let (db, recovered) = Database::open_or_recreate(&path)?;
