@@ -15,5 +15,4 @@ Before CSVs are the loops from the first timing investigation. justfile, scripts
 | before-loaded-class-3-30.csv | 30 | 300 | 3 | 3 | 14.584 |
 | before-loaded-class-4-30.csv | 30 | 300 | 2 | 2 | 14.090 |
 
-The before single-test loops are also included: 	est_android_sdk_root_is_used_when_android_home_is_unset failed once in 100 runs and 	est_a_cancelled_launch_stops_the_token_writer passed 100 of 100. efore-failure-details.txt shows the Stop-Job/Receive-Job errors. 
-ormal-timeline-after.txt is a normal traced run; orced-timeout-example-after.txt is the new diagnostic failure output.
+The before single-test loops are also included: `test_android_sdk_root_is_used_when_android_home_is_unset` failed once in 100 runs and `test_a_cancelled_launch_stops_the_token_writer` passed 100 of 100. `before-failure-details.txt` shows the Stop-Job/Receive-Job errors. `normal-timeline-after.txt` is a normal traced run; `forced-timeout-example-after.txt` is the new diagnostic failure output.

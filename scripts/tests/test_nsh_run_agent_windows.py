@@ -254,7 +254,8 @@ class NshRunAgentWindowsTests(unittest.TestCase):
 
     def output_after_wait(self, process):
         process.output_reader.join(timeout=5)
-        process.stdout.close()
+        if not process.output_reader.is_alive():
+            process.stdout.close()
         return self.output_so_far(process)
 
     def masked(self, text):
@@ -304,7 +305,10 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         path = self.state / 'timeline.log'
         if not path.exists():
             return '<no timeline file>'
-        return self.masked(path.read_text(errors='replace'))
+        try:
+            return self.masked(path.read_text(errors='replace'))
+        except OSError as error:
+            return f'<timeline unreadable: {error}>'
 
     def timeout_evidence(self, process=None, output=''):
         parts = []
