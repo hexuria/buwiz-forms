@@ -1039,16 +1039,24 @@ def booted_simulator():
 
 
 def remove_scratch(db, log):
-    """The run's scratch database and its SQLite side files; the evidence stays."""
+    """The run's scratch database and its SQLite side files; the evidence stays. On Windows the app's grandchildren
+    can still hold the files for a moment after the group break (there is no process-tree kill): retry for a few
+    seconds before reporting a file as not removed."""
     removed = True
     for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal")):
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-        except OSError as error:
-            removed = False
-            log.line("clean", path, f"not removed: {error}", 0)
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                path.unlink()
+                break
+            except FileNotFoundError:
+                break
+            except OSError as error:
+                if os.name != "nt" or time.monotonic() >= deadline:
+                    removed = False
+                    log.line("clean", path, f"not removed: {error}", 0)
+                    break
+                time.sleep(0.5)
     if removed:
         log.line("clean", db, "scratch database removed", 0)
 

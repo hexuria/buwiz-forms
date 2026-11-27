@@ -23,9 +23,19 @@
    "name": "sign-up",
    "desktop": "sign-up.wants",
    "phone": "../ui/ui-sign-up-phone.wants",
-   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits"}},
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
    "required": true,
-   "known_gap": {"phone": "gap 1: the ZIP and RDO pickers are sheets on a phone, and gpui-agent presses inside sheets did not land in this week's rounds"}
+   "known_gap": {
+    "phone": "gap 1: the ZIP and RDO pickers are sheets on a phone, and gpui-agent presses inside sheets did not land in this week's rounds"
+   }
   },
   {
    "name": "navigate",
@@ -36,7 +46,9 @@
    "name": "birth-date",
    "desktop": "birth-date.wants",
    "phone": "birth-date-phone.wants",
-   "known_gap": {"phone": "gap 1: the date is set in a date sheet"}
+   "known_gap": {
+    "phone": "gap 1: the date is set in a date sheet"
+   }
   },
   {
    "name": "open-2551q",
@@ -49,16 +61,14 @@
    "desktop": "money-boxes-paced.json",
    "phone": "money-boxes-paced-phone.json",
    "needs_cli": "0.4.1",
-   "needs_feature": {"phone": "software_keyboard"},
+   "needs_feature": {
+    "phone": "software_keyboard"
+   },
    "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
    "fallback": "money-boxes.wants",
-   "known_gap": {"macos": "gap 2: under the old in-process macOS listener the money box refused agent text; this branch moves macOS to the strict adapter, not yet proven on a Mac"}
-  },
-  {
-   "name": "delete-row",
-   "file": "delete-row.wants",
-   "resolve": {"table": {"id_regex": "^(fp-table-.+)-add$", "group": 1}},
-   "known_gap": {"phone": "gap 1: the row drawer is a sheet on a phone"}
+   "known_gap": {
+    "macos": "gap 2: under the old in-process macOS listener the money box refused agent text; this branch moves macOS to the strict adapter, not yet proven on a Mac"
+   }
   },
   {
    "name": "queue",
@@ -67,10 +77,24 @@
    "precondition": "Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog"
   },
   {
+   "name": "delete-row",
+   "file": "delete-row.wants",
+   "resolve": {
+    "table": {
+     "id_regex": "^(fp-table-.+)-add$",
+     "group": 1
+    }
+   },
+   "known_gap": {
+    "phone": "gap 1: the row drawer is a sheet on a phone",
+    "windows": "gpui-agent on Windows cannot press inside the row drawer: the host reports every node in the Sheet visible=false with zero-height geometry though it is painted and clickable, so each press is refused offscreen"
+   }
+  },
+  {
    "name": "sign-out",
    "desktop": "sign-out.wants",
    "phone": "sign-out-phone.wants",
-   "known_gap": {"phone": "gap 1: Log out is inside the tax profile sheet on a phone"}
+   "known_gap": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out"
   }
  ]
 }

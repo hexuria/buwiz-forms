@@ -2,6 +2,10 @@
 # read from a snapshot first. On a phone the drawer is a sheet: the presses in it are gpui-agent gap 1.
 click $table-add
 wait_until $table-drawer --timeout-ms 5000 --screenshot
+# Delete row is disabled while the row holds nothing (Schedule.tsx), and 2551Q's Schedule 1 pre-holds row 1 (PT010),
+# so $table-none never shows: fill the new row's amount, delete it, and check the row-2 line is gone instead.
+wait_until fp-txtATCAmt2 visible=true --timeout-ms 5000
+type fp-txtATCAmt2 1000
 click $table-delete
 wait_until $table-drawer --absent --timeout-ms 5000
-assert $table-none --screenshot
+wait_until fp-row-drpATC1-1 --absent --timeout-ms 5000 --screenshot

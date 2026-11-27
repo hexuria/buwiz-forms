@@ -1,6 +1,36 @@
-# Smoke 5, desktop: New return > 2551Q, the default period, opened.
+# Smoke 5, desktop: New return > 2551Q, the default period, opened. On a fresh database the branch has no tax year
+# yet, and "+" only toasts until a year exists with forms chosen (app.startNewReturn): first add the default year on
+# the Forms tab (the no-year band is already showing), then tick 2551Q under Edit forms and save.
+click tb-panel
+wait_until panel-open-forms --timeout-ms 5000
+click panel-open-forms
+wait_until tp-forms-tab --timeout-ms 5000
+click tp-add-year-add
+wait_until tp-forms-edit --timeout-ms 5000
+click tp-forms-edit
+wait_until tp-forms-search --timeout-ms 5000
+type tp-forms-search 2551Q
+click tp-form-2551Q
+click tp-forms-save
+wait_until tp-forms-edit --timeout-ms 5000 --screenshot
+click tb-panel
+wait_until panel-open-forms --absent --timeout-ms 5000
 click sb-new
 wait_until new-return-2551Q --timeout-ms 5000
 click new-return-2551Q
 click new-return-open
 wait_until form-page --timeout-ms 20000 --screenshot
+# A fresh profile lacks the facts 2551Q reads (the branch's business start date, the year's income-tax election) and
+# the return's own For-the is unset: Queue's validation would stop at its to-do list, so set them now through the
+# form's own prerequisite banners, as FormPagePrerequisites.test.tsx does, while the form top is still in view.
+click fp-set-profile-business_start_date
+wait_until tp-branch-business_start_date --timeout-ms 8000
+type tp-branch-business_start_date 01/01/2026
+click tp-branch-save
+wait_until fp-set-profile-income_tax_election --timeout-ms 10000
+click fp-set-profile-income_tax_election
+wait_until tp-fact-income_tax_election-choice --timeout-ms 8000
+click tp-fact-income_tax_election-choice-EightPercent
+click tp-fact-income_tax_election-save
+wait_until fp-queue --timeout-ms 10000
+click fp-frm2551Qv2018:forThe_1
