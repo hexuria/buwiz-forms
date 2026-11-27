@@ -1,0 +1,14 @@
+2026-11-26T23:33:17.865Z	launch	nsh-run-agent windows C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261126-233316.db	started	0ms
+2026-11-26T23:59:34.977Z	wait	window plane	ready	1577112ms
+2026-11-26T23:59:35.017Z	wait	data plane	ready	39ms
+2026-11-26T23:59:35.049Z	app.info	database	test	32ms
+2026-11-26T23:59:35.723Z	recipe	setup-start	pass	674ms
+2026-11-26T23:59:35.770Z	resolve	$tin_field	n11	45ms
+2026-11-26T23:59:44.012Z	recipe	sign-up	pass	8288ms
+2026-11-26T23:59:53.293Z	recipe	navigate	fail at s12: wait_until timed out: node `tp-profile-years` not found	9001ms
+2026-11-26T23:59:59.009Z	recipe	birth-date	fail at s2: wait_until timed out: node `panel-open-profile` not found	5475ms
+2026-11-27T00:00:04.665Z	recipe	open-2551q	fail at s2: wait_until timed out: node `new-return-2551Q` not found	5424ms
+2026-11-27T00:00:04.683Z	stop	app	stopped	17ms
+2026-11-27T00:00:04.688Z	clean	C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261126-233316.db	not removed: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\Administrator\\BuwizNsh\\agents\\e2e-windows-20261126-233316.db'	0ms
+2026-11-27T00:00:04.689Z	clean	C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261126-233316.db-wal	not removed: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\Administrator\\BuwizNsh\\agents\\e2e-windows-20261126-233316.db-wal'	0ms
+2026-11-27T00:00:04.689Z	clean	C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261126-233316.db-shm	not removed: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\Administrator\\BuwizNsh\\agents\\e2e-windows-20261126-233316.db-shm'	0ms

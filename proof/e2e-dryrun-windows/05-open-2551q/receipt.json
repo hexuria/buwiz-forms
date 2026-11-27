@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "open-2551q",
+  "fingerprint": "fnv1a64:76fd54ae5d8fd6da",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 397
+    },
+    {
+      "id": "s2",
+      "ok": false,
+      "error": "wait_until timed out: node `new-return-2551Q` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 5004
+    }
+  ],
+  "elapsed_ms": 5402
+}

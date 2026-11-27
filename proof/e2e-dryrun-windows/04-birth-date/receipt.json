@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "birth-date",
+  "fingerprint": "fnv1a64:531bb4357784b2c6",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 413
+    },
+    {
+      "id": "s2",
+      "ok": false,
+      "error": "wait_until timed out: node `panel-open-profile` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 5047
+    }
+  ],
+  "elapsed_ms": 5460
+}
