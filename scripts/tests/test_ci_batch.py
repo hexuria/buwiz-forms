@@ -90,8 +90,11 @@ class FakeGitHub(ci_batch.GitHub):
     def main(self):
         return self.sha("refs/heads/main"), self.sha("refs/heads/main^{tree}")
 
-    def runs(self, branch: str):
-        return self.run_list
+    def runs(self, branch: str, workflow=None):
+        if workflow is None:
+            return self.run_list
+        path = f".github/workflows/{workflow}"
+        return [run for run in self.run_list if run.get("workflowFile") == path]
 
     def jobs(self, run_id: int):
         return self.job_lists.get(run_id, [])
@@ -195,9 +198,9 @@ class BuildTests(BatchTestCase):
 
     def suite_run(self, head: str, run_id: int, status: str = "completed", conclusion: str = "success",
                   name: str = "NSH app", event: str = "push", branch: str = "test/linux-windows/change",
-                  path: str = ".github/workflows/nsh.yml"):
+                  path: str = ".github/workflows/nsh.yml", attempt: int = 1):
         return dict(id=run_id, name=name, head_sha=head, status=status, conclusion=conclusion, event=event,
-                    head_branch=branch, path=path)
+                    head_branch=branch, path=path, run_attempt=attempt)
 
     def shard_job(self, run_id: int, system: str, shard: int, status: str = "completed",
                   conclusion: str = "success"):
@@ -212,6 +215,15 @@ class BuildTests(BatchTestCase):
             jobs.extend(self.shard_job(run_id, system, shard) for shard in wanted)
         return jobs
 
+    def second_attempt_jobs(self, run_id: int):
+        jobs = self.green_jobs(run_id)
+        for job in jobs:
+            job["run_attempt"] = 1
+        rerun = next(job for job in jobs if job["name"] == "NSH app (Windows, shard 1)")
+        rerun["run_attempt"] = 2
+        rerun["id"] += 500000
+        return jobs
+
     def branch_for(self, systems) -> str:
         chosen = tuple(systems)
         if set(chosen) == {"linux", "windows"}:
@@ -223,10 +235,10 @@ class BuildTests(BatchTestCase):
     def add_suite_run(self, head: str, run_id: int, systems=("linux", "windows"), branch: str = None,
                       event: str = "push", status: str = "completed", conclusion: str = "success",
                       jobs=None, log: str = None, name: str = "NSH app",
-                      path: str = ".github/workflows/nsh.yml"):
+                      path: str = ".github/workflows/nsh.yml", attempt: int = 1):
         branch = branch or self.branch_for(systems)
         run = self.suite_run(head, run_id, status=status, conclusion=conclusion, event=event, branch=branch,
-                             name=name, path=path)
+                             name=name, path=path, attempt=attempt)
         self.github.workflow_runs_by_sha.setdefault(head, []).append(run)
         if jobs is None:
             jobs = self.green_jobs(run_id, systems) if status == "completed" and conclusion == "success" else []
@@ -471,6 +483,18 @@ class BuildTests(BatchTestCase):
         self.assertIn("linux partial (run 40)", text)
         self.assertIn("windows partial (run 40)", text)
 
+    def test_a_manual_run_whose_plan_log_cannot_be_read_is_refused_as_partial(self):
+        head = self.repos.pull_request(69, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 45, event="workflow_dispatch", branch="feat/change")
+
+        with mock.patch.object(self.github, "job_log", side_effect=ci_batch.BatchError("log missing")):
+            with self.assertRaises(ci_batch.BatchError) as caught:
+                self.build(69)
+
+        text = str(caught.exception)
+        self.assertIn("linux partial (run 45)", text)
+        self.assertIn("windows partial (run 45)", text)
+
     def test_a_full_manual_run_passes(self):
         head = self.repos.pull_request(64, self.base, {"nsh/src/app.tsx": "app\n"})
         self.add_suite_run(head, 41, event="workflow_dispatch", branch="feat/change", log=self.manual_log())
@@ -501,6 +525,25 @@ class BuildTests(BatchTestCase):
             self.build(66)
 
         self.assertIn("windows missing (run 50)", str(caught.exception))
+
+    def test_a_re_run_with_carried_over_green_shards_passes(self):
+        head = self.repos.pull_request(72, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 80, attempt=2, jobs=self.second_attempt_jobs(80))
+
+        code, output = self.main("build", "--dry-run", "72")
+
+        self.assertEqual(code, 0)
+        self.assertIn(f"#72      {head}  suite 80  Change 72", output)
+
+    def test_a_re_run_without_a_carried_over_shard_is_missing(self):
+        head = self.repos.pull_request(73, self.base, {"nsh/src/app.tsx": "app\n"})
+        jobs = [job for job in self.second_attempt_jobs(81) if job["name"] != "NSH app (Linux, shard 1)"]
+        self.add_suite_run(head, 81, attempt=2, jobs=jobs)
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(73)
+
+        self.assertIn("linux missing (run 81)", str(caught.exception))
 
     def test_a_completed_run_without_the_systems_jobs_is_not_the_systems_newest_run(self):
         head = self.repos.pull_request(68, self.base, {"nsh/src/app.tsx": "app\n"})
@@ -769,10 +812,11 @@ class AfterTheBuildTests(BatchTestCase):
     def runs(self, ci="success", nsh="success", status="completed", sha=None):
         sha = sha or self.sha
         self.github.run_list = [
-            dict(databaseId=1, workflowName="CI", status=status, conclusion=ci if status == "completed" else "",
-                 headSha=sha, url="u1", event="push", createdAt="2026-11-26T10:00:00Z"),
-            dict(databaseId=2, workflowName="NSH app", status="completed", conclusion=nsh, headSha=sha, url="u2",
-                 event="push", createdAt="2026-11-26T10:00:00Z"),
+            dict(databaseId=1, workflowName="CI", workflowFile=".github/workflows/ci.yml", status=status,
+                 conclusion=ci if status == "completed" else "", headSha=sha, url="u1", event="push",
+                 createdAt="2026-11-26T10:00:00Z"),
+            dict(databaseId=2, workflowName="NSH app", workflowFile=".github/workflows/nsh.yml", status="completed",
+                 conclusion=nsh, headSha=sha, url="u2", event="push", createdAt="2026-11-26T10:00:00Z"),
         ]
 
     def status(self) -> str:
@@ -800,6 +844,13 @@ class AfterTheBuildTests(BatchTestCase):
         self.assertIn("does not say which pull request", text)
         self.assertIn("just ci-batch linux-windows 1 2\n", text + "\n")
         self.assertIn("just ci-batch linux-windows 3\n", text + "\n")
+
+    def test_status_matches_the_workflow_file_not_the_display_name(self):
+        self.runs()
+        for run in self.github.run_list:
+            run["workflowName"] = "Renamed"
+
+        self.assertEqual(self.status(), "green")
 
     def test_merge_prints_the_commands_in_order_with_the_recorded_heads(self):
         self.runs()

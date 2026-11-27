@@ -42,11 +42,13 @@ import ci_plan  # noqa: E402
 REPO = "hexuria/buwiz-forms"
 SYSTEMS = ("linux-windows", "linux", "windows", "macos", "all")
 DEFAULT_SYSTEM = "linux-windows"
+CI_WORKFLOW = "CI"
+CI_WORKFLOW_FILE = "ci.yml"
 SUITE_WORKFLOW = "NSH app"
 SUITE_WORKFLOW_FILE = "nsh.yml"
 SUITE_WORKFLOW_PATH = ".github/workflows/nsh.yml"
 # The workflows a push to test/** starts (ci.yml and nsh.yml).
-WORKFLOWS = ("CI", SUITE_WORKFLOW)
+WORKFLOWS = ((CI_WORKFLOW_FILE, CI_WORKFLOW), (SUITE_WORKFLOW_FILE, SUITE_WORKFLOW))
 SHA = re.compile(r"^[0-9a-f]{40}$")
 FAILED = ("failure", "timed_out", "cancelled", "startup_failure", "action_required", "stale")
 # Where a batch's record commit is also kept locally, in case its branch was deleted (`just ci-test-clean`).
@@ -238,9 +240,12 @@ class GitHub:
         data = json.loads(self._gh("api", f"repos/{self.repo}/commits/main"))
         return data["sha"], data["commit"]["tree"]["sha"]
 
-    def runs(self, branch: str) -> List[dict]:
-        return json.loads(self._gh("run", "list", "--repo", self.repo, "--branch", branch, "--limit", "100",
-                                   "--json", "databaseId,workflowName,status,conclusion,headSha,url,event,createdAt"))
+    def runs(self, branch: str, workflow: Optional[str] = None) -> List[dict]:
+        args = ["run", "list", "--repo", self.repo, "--branch", branch, "--limit", "100"]
+        if workflow is not None:
+            args += ["--workflow", workflow]
+        args += ["--json", "databaseId,workflowName,status,conclusion,headSha,url,event,createdAt"]
+        return json.loads(self._gh(*args))
 
     def jobs(self, run_id: int) -> List[dict]:
         return json.loads(self._gh("run", "view", str(run_id), "--repo", self.repo, "--json", "jobs"))["jobs"]
@@ -403,8 +408,6 @@ def classify_suite_run(run: dict, system: str, jobs: Sequence[dict], context: di
         if job is None or job.get("conclusion") in (None, "skipped"):
             missing = True
             continue
-        if job.get("status") != "completed":
-            return "running"
         if job.get("conclusion") != "success":
             return "failed"
     return "missing" if missing else "success"
@@ -692,14 +695,16 @@ def read_batch(git: Git, branch: str) -> Tuple[str, Record]:
 def status(git: Git, github, branch: str, say: Callable[[str], None] = print) -> str:
     """'green', 'red' or 'running'."""
     sha, record = read_batch(git, branch)
-    runs = [run for run in github.runs(branch) if run.get("headSha") == sha and run.get("event") == "push"]
     latest: Dict[str, dict] = {}
-    for run in sorted(runs, key=lambda r: r.get("createdAt", "")):
-        latest[run["workflowName"]] = run
+    for workflow_file, _name in WORKFLOWS:
+        runs = [run for run in github.runs(branch, workflow_file)
+                if run.get("headSha") == sha and run.get("event") == "push"]
+        for run in sorted(runs, key=lambda r: r.get("createdAt", "")):
+            latest[workflow_file] = run
     verdicts = []
     say(f"{branch} at {sha}")
-    for name in WORKFLOWS:
-        run = latest.get(name)
+    for workflow_file, name in WORKFLOWS:
+        run = latest.get(workflow_file)
         if run is None:
             verdicts.append("running")
             say(f"  {name}: no run yet (a run can take a minute to appear)")
