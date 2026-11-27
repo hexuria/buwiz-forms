@@ -69,10 +69,10 @@ NSH_INPUTS = re.compile(
 )
 # The quick NSH type check lives in ci.yml.
 NSH_CHECK_INPUTS = re.compile(NSH_INPUTS.pattern + r"|^\.github/workflows/ci\.yml$")
-# The plug pin, plus the small set of app files compiled only with the agent feature. `nsh/src/agent.rs` compiles
-# either way (its host module has non-agent stubs), so it is not here; these three integration tests are crate-gated on it.
+# The plug pin, plus every nsh source or test file whose text carries `feature = "agent"` gates. The policy test in
+# scripts/tests/test_ci_plan.py keeps this set in step with the tree.
 NSH_AGENT_CHECK_INPUTS = re.compile(
-    r"^nsh/(Cargo\.(toml|lock)|tests/(agent|agent_send|window_plane)\.rs)$"
+    r"^nsh/(Cargo\.(toml|lock)|src/agent\.rs|tests/(agent|agent_send|window_plane)\.rs)$"
 )
 # The extracted validation-rules corpus and what audits it.
 VALIDATION = re.compile(

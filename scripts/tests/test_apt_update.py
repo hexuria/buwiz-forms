@@ -114,6 +114,67 @@ class AptSourceFilterTests(unittest.TestCase):
             self.assertEqual(third.returncode, 0, third.stderr)
 
 
+class AptUpdateRetryDecisionTests(unittest.TestCase):
+    def run_decision(self, status: int, output: str) -> subprocess.CompletedProcess[str]:
+        command = 'source "$1"\napt_update_needs_retry "$2" "$3"\n'
+        return subprocess.run(
+            ["bash", "-c", command, "_", str(SCRIPT), str(status), output],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_a_nonzero_exit_retries(self) -> None:
+        result = self.run_decision(100, "")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_clean_zero_exit_does_not_retry(self) -> None:
+        output = "Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease\nReading package lists...\n"
+        result = self.run_decision(0, output)
+        self.assertEqual(result.returncode, 1, result.stderr)
+
+    def test_a_zero_exit_with_a_failed_fetch_retries(self) -> None:
+        for level in ("E", "W"):
+            with self.subTest(level=level):
+                output = (
+                    "Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease\n"
+                    f"{level}: Failed to fetch http://security.ubuntu.com/ubuntu/dists/noble-security/InRelease 403\n"
+                    "Reading package lists...\n"
+                )
+                result = self.run_decision(0, output)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_failed_fetch_must_start_the_line(self) -> None:
+        output = "Reading package lists...\nSome index files failed to download; W: Failed to fetch is later in the line\n"
+        result = self.run_decision(0, output)
+        self.assertEqual(result.returncode, 1, result.stderr)
+
+    def test_the_update_retries_a_zero_exit_failed_fetch(self) -> None:
+        command = """
+source "$1"
+apt-get() {
+  printf '%s\\n' 'W: Failed to fetch http://archive.ubuntu.com/ubuntu/dists/noble/InRelease 403'
+  return 0
+}
+sleep() { :; }
+if apt_update_with_retries; then
+  status=0
+else
+  status=$?
+fi
+printf 'status=%s\\n' "$status"
+"""
+        result = subprocess.run(
+            ["bash", "-c", command, "_", str(SCRIPT)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("status=1", result.stdout)
+        self.assertEqual(result.stdout.count("W: Failed to fetch"), 3)
+
+
 class WorkflowAptPolicyTests(unittest.TestCase):
     def test_no_workflow_runs_a_bare_apt_get_update(self) -> None:
         offenders: list[str] = []

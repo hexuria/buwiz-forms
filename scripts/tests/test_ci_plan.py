@@ -50,6 +50,19 @@ NOTHING_HEAVY = dict(check_tests=False, installer=False, screens=False, build=Fa
                      nsh_systems=[], nsh_agent_check=False)
 
 
+class AgentGatePolicyTests(unittest.TestCase):
+    def test_every_agent_gated_nsh_rust_file_is_an_agent_compile_input(self):
+        missing = []
+        for base in ("nsh/src", "nsh/tests"):
+            for path in sorted((ROOT / base).rglob("*.rs")):
+                if 'feature = "agent"' not in path.read_text(encoding="utf-8"):
+                    continue
+                relative = path.relative_to(ROOT).as_posix()
+                if not ci_plan.NSH_AGENT_CHECK_INPUTS.match(relative):
+                    missing.append(relative)
+        self.assertEqual(missing, [])
+
+
 class QuickLaneTests(unittest.TestCase):
     def assert_quick(self, plan, *, check: bool, nsh_check: bool, scripts: bool = False, validation: bool = False,
                      nsh_agent_check: bool = False):
@@ -120,12 +133,11 @@ class QuickLaneTests(unittest.TestCase):
                 self.assert_quick(plan, check=True, nsh_check=True, nsh_agent_check=True)
 
     def test_agent_compile_check_follows_the_plug_pin_and_agent_only_files(self):
-        for path in ("nsh/Cargo.toml", "nsh/Cargo.lock", "nsh/tests/agent.rs",
+        for path in ("nsh/Cargo.toml", "nsh/Cargo.lock", "nsh/src/agent.rs", "nsh/tests/agent.rs",
                      "nsh/tests/agent_send.rs", "nsh/tests/window_plane.rs"):
             with self.subTest(path=path):
                 self.assertTrue(pr(path)["nsh_agent_check"])
-        # src/agent.rs compiles in the plain type check too: its non-agent stubs are part of the ordinary module.
-        for path in ("nsh/src/agent.rs", "nsh/screens/home/Home.tsx", "nsh/tests/other.rs", "crates/bir-core/src/lib.rs"):
+        for path in ("nsh/screens/home/Home.tsx", "nsh/tests/other.rs", "crates/bir-core/src/lib.rs"):
             with self.subTest(path=path):
                 self.assertFalse(pr(path)["nsh_agent_check"])
 

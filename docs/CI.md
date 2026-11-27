@@ -38,6 +38,7 @@ The quick checks are:
   check that the app does not enable `direct-bir`.
 - `NSH app agent compile check (Linux)`: on a pull request that moves `nsh/Cargo.toml`, `nsh/Cargo.lock` or an
   agent-only app file, compiles the app and Linux plug with `--features agent --no-run`; skipped otherwise.
+  It compiles the Linux arm only; the other platforms stay covered by the complete suite.
 - `legacy-guard`.
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.

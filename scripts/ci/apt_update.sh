@@ -130,11 +130,36 @@ set_aside_third_party_source_lists() {
   done < <(find "$directory" -mindepth 1 -maxdepth 1 \( -type f -o -type l \) -print | LC_ALL=C sort)
 }
 
+# True when apt failed, or when it returned 0 after reporting a failed fetch at the start of an output line. apt can
+# return 0 for that partial update even though some Ubuntu index files did not download.
+apt_update_needs_retry() {
+  local status="${1:?apt exit status required}" output="${2-}" line
+  if [ "$status" -ne 0 ]; then
+    return 0
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      "E: Failed to fetch"*|"W: Failed to fetch"*) return 0 ;;
+    esac
+  done <<EOF
+$output
+EOF
+  return 1
+}
+
 apt_update_with_retries() {
-  local attempt pause
+  local attempt pause output status
   pause="${APT_UPDATE_RETRY_PAUSE:-5}"
   for attempt in 1 2 3; do
-    if apt-get update; then
+    if output="$(apt-get update 2>&1)"; then
+      status=0
+    else
+      status=$?
+    fi
+    if [ -n "$output" ]; then
+      printf '%s\n' "$output"
+    fi
+    if ! apt_update_needs_retry "$status" "$output"; then
       return 0
     fi
     if [ "$attempt" -lt 3 ]; then
