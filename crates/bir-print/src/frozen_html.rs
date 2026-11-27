@@ -1021,6 +1021,11 @@ const PLAIN_WRAP_MIN_HEIGHT_PT: f64 = 15.55;
 /// printed in full on the additional sheet.
 const PLAIN_TEXT_MIN_PT: f64 = 7.5;
 
+/// An amount shrunk below this size (pt) to fit its box still prints there,
+/// whole, and is also carried, whole, to the additional sheet
+/// (`data-overflow-warning="amount-small"`): legible in full somewhere.
+pub(crate) const AMOUNT_ADDITIONAL_SHEET_BELOW_PT: f64 = 5.0;
+
 /// Vertical room factor for two wrapped lines (`2 * 1.04 = 2.08`).
 const PLAIN_TWO_LINE_HEIGHT_FACTOR: f64 = 2.08;
 
@@ -2131,6 +2136,75 @@ fn is_percentage_rate_cell(writer_key: &str, caption: Option<&str>) -> bool {
     is_rate_cell(writer_key, caption)
 }
 
+/// Whether `writer_key`'s cell (printed caption `caption`) holds an
+/// identifier, a TIN (or a part of one: its digit groups, its branch code)
+/// or an ATC. An identifier is never shortened on the page: like an amount
+/// it shrinks to its cell's room, with no 7.5 pt floor, and never ends in
+/// "..." with the whole on the additional sheet (a cut TIN or ATC names a
+/// different taxpayer or tax). Long free text keeps the long-text rule.
+///
+/// Read from the writer key's own name, its last `:` segment (a cloned
+/// continuation key, `<key>__cont_<cell>`, by its original key): `TIN` or
+/// `ATC` anywhere in capitals (`SellerTIN0`, `txtTINE1`, `drpATCCode1`,
+/// `Pg2Sc1ATC1`); `Tin` or `Atc` as a word (`txtTin1`, `SignatoryTin1`,
+/// `txtAtcCd1`, `drpPg1I5AtcOther`, `_Atc`); `tin` or `atc` as a
+/// lowercase word (`derived:tin_digits`, `buyer_tin`, `tinA`, `sched1_atc1`,
+/// `tp_atc`); and a branch code (`txtBranchCode`, `derived:att_branch`).
+/// Writer keys that say none of that (2200AN `txtXGOthers1`, 2553 `txt18B`)
+/// are read from the caption the sheet prints for the cell: it names
+/// the cell as a TIN or ATC in its last word (`... row 1, ATC`, `18B ATC`;
+/// a trailing note in brackets aside). An ATC description is text, not a
+/// code, and a header holding a TIN and a name (`derived:page_header`) is
+/// a line of text.
+fn is_identifier_cell(writer_key: &str, caption: Option<&str>) -> bool {
+    let key = writer_key.split("__cont_").next().unwrap_or(writer_key);
+    let last = key.rsplit(':').next().unwrap_or(key);
+    let lower = last.to_ascii_lowercase();
+    if lower.contains("description") || lower.contains("page_header") {
+        return false;
+    }
+    if last.contains("TIN") || last.contains("ATC") || lower.contains("branch") {
+        return true;
+    }
+    let bytes = last.as_bytes();
+    let word_at = |at: usize, len: usize, lowercase: bool| {
+        let before_ok = !lowercase || at == 0 || bytes[at - 1] == b'_';
+        let after = bytes.get(at + len).copied();
+        let after_ok = match after {
+            None => true,
+            Some(b) if lowercase => b == b'_' || b.is_ascii_uppercase() || b.is_ascii_digit(),
+            Some(b) => !b.is_ascii_lowercase(),
+        };
+        before_ok && after_ok
+    };
+    for (needle, lowercase) in [("Tin", false), ("Atc", false), ("tin", true), ("atc", true)] {
+        let mut from = 0;
+        while let Some(rel) = last[from..].find(needle) {
+            let at = from + rel;
+            if word_at(at, needle.len(), lowercase) {
+                return true;
+            }
+            from = at + 1;
+        }
+    }
+    let Some(caption) = caption else {
+        return false;
+    };
+    let caption = match caption
+        .trim()
+        .strip_suffix(')')
+        .and_then(|c| c.rfind('(').map(|at| &c[..at]))
+    {
+        Some(head) => head.trim(),
+        None => caption.trim(),
+    };
+    !caption.to_ascii_lowercase().contains("description")
+        && caption
+            .rsplit(|c: char| !c.is_ascii_alphanumeric())
+            .find(|word| !word.is_empty())
+            .is_some_and(|word| word == "TIN" || word == "ATC")
+}
+
 /// Whether a plain cell or rectangle holds a short code (ATC, treaty code,
 /// tax type code, seq no) that Rule 4 centers.
 fn is_short_code_cell(writer_key: &str, caption: Option<&str>, value: &str) -> bool {
@@ -2786,11 +2860,6 @@ fn fill_text_input(
         {
             return;
         }
-        // Text longer than its comb (a long name, an email, a
-        // `derived:line:` print value) prints whole as plain type across
-        // the comb, shrunk to fit, instead of losing the characters past
-        // the last box.
-        let whole_line = via_cell || is_email_key(name) || name.starts_with("derived:line:");
         let amount_comb = is_amount_comb_value(print)
             && (is_amount_comb_key(name) || is_formatted_money_amount(print));
         // An amount longer than its boxes, or with centavos in an amount comb
@@ -2814,17 +2883,49 @@ fn fill_text_input(
             );
             return;
         }
-        let overflow = (whole_line && chars.len() > ordered.len())
-            .then(|| comb_overflow_line(html, input_name, print, sheet))
-            .flatten();
-        let spread = overflow.is_none();
-        if let Some((at, line)) = overflow {
-            replacements.push((at, at, line));
+        // A value longer than its boxes is never spread with its tail lost,
+        // stamped (`via_cell` false) or not: it prints as one line over the
+        // comb. An identifier (a TIN, an ATC) or a figure (digits, a sign,
+        // separators) prints whole on that line, shrunk to fit, never cut;
+        // other text keeps the long-text rule (two lines, 7.5 pt, "...",
+        // the whole on the additional sheet).
+        if chars.len() > ordered.len() {
+            let never_cut = is_identifier_cell(name, caption) || is_amount_comb_value(print);
+            let line = if never_cut {
+                comb_overflow_line_whole(html, input_name, print, sheet)
+            } else {
+                comb_overflow_line(html, input_name, print, sheet)
+            };
+            match line {
+                Some((at, line)) => {
+                    replacements.push((at, at, line));
+                    for (offset, &index) in ordered.iter().enumerate() {
+                        let writer = (via_cell && offset == 0).then_some(print);
+                        replacements.push((
+                            tags[index].start,
+                            tags[index].end,
+                            set_value(tags[index].tag, "", writer),
+                        ));
+                    }
+                }
+                // No geometry to lay a line on: the boxes stay empty and
+                // the first carries the whole value to the additional sheet.
+                None => amount_rect(
+                    html,
+                    tags,
+                    &ordered,
+                    (input_name, None),
+                    print,
+                    via_cell.then_some(print),
+                    sheet,
+                    replacements,
+                ),
+            }
+            return;
         }
         for (offset, index) in ordered.into_iter().enumerate() {
             let ch = chars
                 .get(offset)
-                .filter(|_| spread)
                 .copied()
                 .map(|c| c.to_string())
                 .unwrap_or_default();
@@ -2843,7 +2944,13 @@ fn fill_text_input(
         let split =
             sheet.split.iter().any(|(cell, _)| *cell == input_name) && splits(tags, indices);
         let overflow = (split && !fits_one_per_box(print, indices.len()))
-            .then(|| comb_overflow_line(html, input_name, print, sheet))
+            .then(|| {
+                if is_identifier_cell(name, caption) || is_amount_comb_value(print) {
+                    comb_overflow_line_whole(html, input_name, print, sheet)
+                } else {
+                    comb_overflow_line(html, input_name, print, sheet)
+                }
+            })
             .flatten();
         if let Some((at, line)) = overflow {
             replacements.push((at, at, line));
@@ -2939,10 +3046,17 @@ fn fill_text_input(
             && ((is_amount_typed_cell(name, caption)
                 && (is_formatted_money_amount(print) || is_formatted_whole_peso_amount(print)))
                 || (is_quantity_typed_key(name) && is_formatted_numeric_quantity(print)));
-        // A figure (an amount box, or any value written as an amount) is
-        // never wrapped or cut: it shrinks until it fits.
+        // A figure (an amount box, any value written as an amount with or
+        // without decimals, `-200000` in a box whose caption names no
+        // amount, or an identifier: a TIN or an ATC) is never wrapped or
+        // cut: it shrinks until it fits.
         let figure = right_align_numeric
-            || (!is_rate_cell && via_cell && !split && is_formatted_money_amount(print));
+            || (!is_rate_cell
+                && via_cell
+                && !split
+                && (is_formatted_money_amount(print) || is_formatted_whole_peso_amount(print)))
+            || is_identifier_cell(name, caption);
+        let amount_figure = figure && !is_identifier_cell(name, caption);
         for &index in indices {
             let writer = via_cell.then_some(print);
             let fit = dims.filter(|_| !split).and_then(|(width, height)| {
@@ -2976,6 +3090,10 @@ fn fill_text_input(
                     if fit.truncated {
                         let insert_at = tag.rfind('>').unwrap_or(tag.len());
                         tag.insert_str(insert_at, " data-overflow-warning=\"text-truncated\"");
+                    }
+                    if amount_figure && fit.font_size_pt < AMOUNT_ADDITIONAL_SHEET_BELOW_PT {
+                        let insert_at = tag.rfind('>').unwrap_or(tag.len());
+                        tag.insert_str(insert_at, " data-overflow-warning=\"amount-small\"");
                     }
                     tag
                 }
@@ -6347,8 +6465,13 @@ fn comb_overflow_amount_union(
     } else {
         String::new()
     };
+    let warning = if size < AMOUNT_ADDITIONAL_SHEET_BELOW_PT {
+        format!("amount-small\" data-writer-value=\"{}", html_escape(text))
+    } else {
+        "amount-comb".to_string()
+    };
     let input = format!(
-        "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"{width_css}font-size:{size:.2}pt;text-align:right;justify-content:flex-end;padding-right:1pt;z-index:1\" data-overflow-warning=\"amount-comb\" data-overflow-of=\"{peso_cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
+        "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"{width_css}font-size:{size:.2}pt;text-align:right;justify-content:flex-end;padding-right:1pt;z-index:1\" data-overflow-warning=\"{warning}\" data-overflow-of=\"{peso_cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
         html_escape(text)
     );
     if cent_cell.is_some() {
@@ -6422,6 +6545,32 @@ fn comb_overflow_line(
 ) -> Option<(usize, String)> {
     let (_, _, width, _) = cell_box_pt(html, cell)?;
     overflow_input_with_fit(html, cell, text, fit_line(sheet, width, text), sheet)
+}
+
+/// [`comb_overflow_line`] for an identifier ([`is_identifier_cell`]): the
+/// whole text on one line, its type measured to set within the line's real
+/// room (the cell less the input's 1 pt insets and 1 pt left padding, with
+/// 1 pt to spare) with no 7.5 pt floor, never cut with "...".
+fn comb_overflow_line_whole(
+    html: &str,
+    cell: &str,
+    text: &str,
+    sheet: &SheetType,
+) -> Option<(usize, String)> {
+    let (_, _, width, _) = cell_box_pt(html, cell)?;
+    let letter = sheet.letter_for("fi");
+    let size = sheet.fit(letter, (width - 4.0).max(1.0), text, PLAIN_MAX_PT);
+    let (l, t, _, height) = cell_box_pt(html, cell)?;
+    let (r, b) = (l + width, t + height);
+    let open = html.find(&format!("<div id=\"{cell}\""))?;
+    let close = open + html[open..].find('>')?;
+    Some((
+        close + 1,
+        format!(
+            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"{cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
+            html_escape(text)
+        ),
+    ))
 }
 
 /// Rule 1 + Rule 3: plain-rectangle text for an overflowing comb cell,
@@ -7058,6 +7207,183 @@ mod tests {
         assert_eq!(fit.text, "1,234,567.89");
         assert!(!fit.two_lines && !fit.truncated);
         assert!(fit.font_size_pt < super::PLAIN_TEXT_MIN_PT);
+    }
+
+    /// TINs and ATCs are identifiers, never shortened on the page: by the
+    /// writer key's name, else by the caption the sheet prints for the cell.
+    #[test]
+    fn tin_and_atc_cells_are_identifiers() {
+        use super::is_identifier_cell as id;
+        for key in [
+            "frm1600PT:Pg2Sc1TIN1",
+            "frm1600PT:Pg2Sc1ATC1",
+            "frm1707:txtPg1I6SellerTIN0",
+            "frm1801v2018:txtTINE1",
+            "frm1600WP:dtSched:txtTin1",
+            "frm1600WP:dtSched:drpAtcCode1",
+            "frm1702RT:txtPg1Pt2SignatoryTin1",
+            "frm1702RT:drpPg1I5AtcOther",
+            "frm2200Av2020:txtSched1_xa_others1_Atc",
+            "frm2200P:txtSched1ATC26",
+            "frm1604c:tinA",
+            "frm1601FQ:txtBranchCode",
+            "derived:tin_digits",
+            "derived:buyer_tin",
+            "derived:employer1_tin",
+            "derived:sched1_atc1",
+            "derived:tp_atc",
+            "frm1600PT:Pg2Sc1TIN1__cont_cont_s0_p0_b0_r0_p2c16",
+        ] {
+            assert!(id(key, None), "{key}");
+        }
+        assert!(id(
+            "frm2200ANv2018:txtXGOthers1",
+            Some("Schedule 1B Others (specify) row 1, ATC")
+        ));
+        assert!(id("frm2553:txt18B", Some("18B ATC")));
+        for (key, caption) in [
+            (
+                "derived:tp_atc_description",
+                Some("18 ATC (option text beside the code)"),
+            ),
+            (
+                "derived:atc_description",
+                Some("5 ATC description (second line)"),
+            ),
+            (
+                "derived:page_header",
+                Some("Page 2 header: TIN / Taxpayer's Name"),
+            ),
+            (
+                "txtTaxAgentNo",
+                Some("Tax Agent Accreditation No. / (Indicate Title/Designation and TIN)"),
+            ),
+            (
+                "frm2200ANv2018:txtXG021Exempt1",
+                Some("ATC XG021 row, Exempt1"),
+            ),
+            ("frm1602Q:txtSched3TotInterest1", None),
+            ("derived:crediting_month", None),
+            (
+                "frm1601FQ:txtNatIncPayment0",
+                Some("Schedule 1 row 1, Nature of Income Payment"),
+            ),
+        ] {
+            assert!(!id(key, caption), "{key}");
+        }
+    }
+
+    /// N2: a TIN or ATC is never shortened on the page. Before, 1600-PT's
+    /// Schedule 1 payee TIN (plain box p2c16) printed `987654...` and
+    /// 2200-P's Others ATC (p2c376) `9...`, the whole only on the
+    /// additional sheet.
+    #[test]
+    fn tins_and_atcs_print_whole_in_their_boxes() {
+        for (slug, key, cell, value) in [
+            (
+                "1600-pt-2018",
+                "frm1600PT:Pg2Sc1TIN1",
+                "p2c16",
+                "987654321000",
+            ),
+            ("2200p-2020", "frm2200P:txtSched1ATC26", "p2c376", "999"),
+        ] {
+            let fields = BTreeMap::from([(key.to_string(), value.to_string())]);
+            let doc = super::filled_document(slug, &fields).unwrap();
+            assert_eq!(super::printed_text(&doc, cell), value, "{slug} {cell}");
+            assert!(
+                !super::overflow_warnings(&doc)
+                    .iter()
+                    .any(|w| w.kind == "text-truncated" && w.cell == cell),
+                "{slug} {cell}"
+            );
+        }
+    }
+
+    /// N2: a value longer than its comb is never spread with its tail lost.
+    /// A stamped comb (`via_cell` false) printed the first boxes' worth
+    /// (`["1", "2", "3", "4"]` of `123456788000`); it now prints whole over
+    /// the comb, and where the cell has no geometry its boxes stay empty
+    /// and the whole value goes to the additional sheet.
+    #[test]
+    fn a_long_comb_value_never_loses_its_tail() {
+        let html = format!(
+            "<div id=\"frm1601C:txtTIN1\" style=\"left:10pt;top:10pt;width:40pt;height:14pt\">{}</div>",
+            comb("frm1601C:txtTIN1", 4)
+        );
+        let fields = BTreeMap::from([("frm1601C:txtTIN1".to_string(), "123456788000".to_string())]);
+        let doc = super::fill_by_name(&html, &fields);
+        assert!(comb_values(&doc, "frm1601C:txtTIN1")
+            .iter()
+            .all(String::is_empty));
+        assert_eq!(
+            super::printed_cell(&doc, "frm1601C:txtTIN1").0,
+            "123456788000"
+        );
+        assert!(!doc.contains("..."));
+
+        let html = comb("frm1601C:txtName", 4);
+        let fields = BTreeMap::from([("frm1601C:txtName".to_string(), "SAMPLE NAME".to_string())]);
+        let doc = super::fill_by_name(&html, &fields);
+        assert!(comb_values(&doc, "frm1601C:txtName")
+            .iter()
+            .all(String::is_empty));
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1, "{doc}");
+        assert_eq!(warnings[0].value, "SAMPLE NAME");
+    }
+
+    /// N3: a figure without decimals in a box whose caption names no amount
+    /// is never cut. 2200-P's Place of Removal box (p2c99) printed
+    /// `-200000000...`; it now shrinks and prints whole.
+    #[test]
+    fn a_decimal_less_figure_is_never_cut() {
+        let fields = BTreeMap::from([(
+            "frm2200P:txtSched1PlaceOfRemoval6".to_string(),
+            "-200000000000".to_string(),
+        )]);
+        let doc = super::filled_document("2200p-2020", &fields).unwrap();
+        assert_eq!(super::printed_text(&doc, "p2c99"), "-200000000000");
+        assert!(!super::overflow_warnings(&doc)
+            .iter()
+            .any(|w| w.kind == "text-truncated"));
+    }
+
+    /// N1: an amount shrunk below 5 pt to fit its box still prints there,
+    /// whole, and is also carried whole to the additional sheet. Before, it
+    /// printed at 2-4 pt with nothing else.
+    #[test]
+    fn an_amount_below_5_pt_is_also_on_the_additional_sheet() {
+        let loaded = super::bundle("1601c-2018").expect("1601c bundle");
+        let sheet = super::SheetType::of_sheet("1601c-2018", loaded.css);
+        let html = format!(
+            "<div class=\"page page-1\"><div id=\"p1c90\" style=\"left:10pt;top:10pt;width:40pt;height:14pt\">{}</div></div>",
+            comb("p1c90", 4)
+        );
+        let fields = BTreeMap::from([(
+            "frm1601C:txtTax".to_string(),
+            "-1,234,567,890,123.45".to_string(),
+        )]);
+        let cells = BTreeMap::from([("frm1601C:txtTax".to_string(), vec!["p1c90".to_string()])]);
+        let doc = super::fill_by_name_set(
+            &html,
+            &fields,
+            &cells,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &sheet,
+        );
+        let (text, size) = super::printed_cell(&doc, "p1c90");
+        assert_eq!(text, "-1,234,567,890,123.45");
+        assert!(size.unwrap() < super::AMOUNT_ADDITIONAL_SHEET_BELOW_PT);
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, "amount-small");
+        assert_eq!(warnings[0].value, "-1,234,567,890,123.45");
+        let report = crate::continuation::OverflowReport::default();
+        let entries = crate::continuation::collect_truncated_entries("1601c-2018", &doc, &report);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].full_text, "-1,234,567,890,123.45");
     }
 
     /// F6: every sheet the negative-style table names a bracket form is a
@@ -11079,7 +11405,10 @@ mod tests {
                 let line = printed_cells(&document).remove(*cell);
                 let (text, size) = line.expect("an overflow line");
                 let size = size.unwrap();
-                assert!(size >= super::PLAIN_TEXT_MIN_PT);
+                // A figure is never cut: it prints whole, shrunk below the
+                // 7.5 pt floor long text keeps if it must.
+                assert_eq!(text, long, "{slug} {cell}");
+                assert!(size > 0.0);
                 let width = plain_cell_width(&document, cell).unwrap();
                 if text.ends_with("...") {
                     assert!(document.contains("data-overflow-warning=\"text-truncated\""));

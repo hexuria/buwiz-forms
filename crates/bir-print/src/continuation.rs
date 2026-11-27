@@ -124,6 +124,20 @@ impl FilledDocument {
                 .iter()
                 .filter(|w| w.kind == "amount-comb")
                 .count();
+            let small_count = cell_warnings
+                .iter()
+                .filter(|w| w.kind == "amount-small")
+                .count();
+            if small_count == 1 {
+                lines.push(
+                    "1 amount printed very small is also printed in full on an additional sheet"
+                        .to_string(),
+                );
+            } else if small_count > 1 {
+                lines.push(format!(
+                    "{small_count} amounts printed very small are also printed in full on an additional sheet"
+                ));
+            }
             if amount_count == 1 {
                 lines.push("1 amount printed as a fitted line instead of in boxes".to_string());
             } else if amount_count > 1 {
@@ -142,7 +156,7 @@ impl FilledDocument {
                     "{truncated_count} long entries are printed in full on an additional sheet"
                 ));
             }
-            let other_count = cell_warnings.len() - amount_count - truncated_count;
+            let other_count = cell_warnings.len() - amount_count - small_count - truncated_count;
             if other_count == 1 {
                 lines.push("1 value overflowed its official box".to_string());
             } else if other_count > 1 {
@@ -358,7 +372,9 @@ pub fn collect_truncated_entries(
         page_number += 1;
 
         for warning in frozen_html::overflow_warnings(page_slice) {
-            if warning.kind != "text-truncated" {
+            // A long text shortened with "...", or an amount shrunk below
+            // `AMOUNT_ADDITIONAL_SHEET_BELOW_PT`: either prints whole here.
+            if warning.kind != "text-truncated" && warning.kind != "amount-small" {
                 continue;
             }
             let cell_id = warning.cell.strip_suffix("-i").unwrap_or(&warning.cell);
