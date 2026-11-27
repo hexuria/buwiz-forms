@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,11 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/ci/apt_update.sh"
 
 
+# The script is bash for Ubuntu runners; on Windows there is no apt and the runner's bash does not take these paths.
+NOT_WINDOWS = unittest.skipIf(sys.platform == "win32", "apt_update.sh is for the Linux runners")
+
+
+@NOT_WINDOWS
 class AptSourceFilterTests(unittest.TestCase):
     def run_filter(self, directory: Path, dry_run: str = "1", env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         command = 'source "$1"\nset_aside_third_party_source_lists "$2" "$3"\n'
@@ -114,6 +120,7 @@ class AptSourceFilterTests(unittest.TestCase):
             self.assertEqual(third.returncode, 0, third.stderr)
 
 
+@NOT_WINDOWS
 class AptUpdateRetryDecisionTests(unittest.TestCase):
     def run_decision(self, status: int, output: str) -> subprocess.CompletedProcess[str]:
         command = 'source "$1"\napt_update_needs_retry "$2" "$3"\n'
