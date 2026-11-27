@@ -512,6 +512,37 @@ export interface SendGrant { tin: string; form: string; granted_at: string; }
 export function list_send_grants(tin: string): SendGrant[];
 export function grant_send(tin: string, form: string): SendGrant;
 export function revoke_send(tin: string, form: string): void;
+/** Where a TIN stands for sending on the Buwiz account: "activated" sends, "pending" waits for Buwiz (in review or paused), "fix" has a step on the account site (`action_url`), "not_activated" is a tax profile on this device whose TIN and branch the account does not have. */
+export type TinState = "activated" | "pending" | "fix" | "not_activated";
+export interface TinStatusRow {
+    /** 9 digits. */
+    tin_root: string;
+    /** 5 digits. */
+    branch: string;
+    state: TinState;
+    /** The server's line for the row; null for "not_activated". */
+    message: string | null;
+    /** The row's Verify or Fix page, only on the account site and only for "fix"; open it as it is. */
+    action_url: string | null;
+    /** A test TIN: its sends are dry runs, never sent to the BIR. */
+    test_only: boolean;
+    /** Answered from an earlier read (offline, or the server asked to wait). */
+    stale: boolean;
+    /** When the list was read, in seconds since the epoch. */
+    fetched_at: number;
+}
+/** The account's TINs, then a "not_activated" row for each tax profile branch on this device the account lacks: those only when the list is complete. */
+export interface TinStatusList {
+    rows: TinStatusRow[];
+    /** The server listed every state: a TIN missing from it is not on the account. */
+    complete: boolean;
+    stale: boolean;
+    fetched_at: number;
+}
+/** The account's TINs, from memory when the last read is younger than `max_age` seconds (screens 60, Queue 0). Never on a timer. Throws the reason when there is no list (signed out, offline with no list, the server's refusal). */
+export function account_tins(max_age: number): Promise<TinStatusList>;
+/** "Activate this TIN to send": adds the tax profile's TIN and branch (14 digits) to the account as not verified, with the profile's kind and registered name. Only from that button, never when a profile is created. The added row (null when the answer could not be read), or throws the refusal's sentence; after one saying the account already holds the TIN, the next account_tins asks the server. */
+export function activate_tin(tin_full: string): Promise<TinStatusRow | null>;
 
 export interface ScreenFormIndexEntry {
     c: string;
@@ -920,3 +951,28 @@ export interface LegacyFiledReturn {
 }
 /** The returns imported from the old program for one branch's TIN (12 to 14 digits, dashes allowed), oldest import first; none for a TIN the import never named. */
 export function list_legacy_filed_returns(tin: string): LegacyFiledReturn[];
+
+export interface OwnerLockState {
+    /** An account's room is open on this device. */
+    room_open: boolean;
+    /** This device's lock store was lost (device.db missing or made again): never unlocked, and no PIN may be set until the emailed reset. */
+    store_lost: boolean;
+    /** The room has an owner PIN. */
+    has_pin: boolean;
+    /** When the owner PIN was set (RFC 3339), or null. */
+    set_at: string | null;
+    /** This app's own check unlocked the room since its last lock, or the room has no PIN (nothing to unlock). */
+    unlocked: boolean;
+    /** Wrong owner PINs in a row. */
+    failures: number;
+    /** Seconds left of the owner's current wait; 0 when none. */
+    wait_secs: number;
+}
+/** The owner lock of the open room; reads the device store only. */
+export function owner_lock_state(): OwnerLockState;
+/** Set the owner PIN (exactly 4 digits) of the open room: one with no PIN yet, or one unlocked with its current PIN; refused while the store is lost. Hashed off the engine thread. */
+export function set_owner_pin(pin: string): Promise<null>;
+/** Check the owner PIN under the persisted limit, hashed off the engine thread: true on a match, false on a miss; a running wait (or the miss that starts one) is an error that says how long. */
+export function verify_owner_pin(pin: string): Promise<boolean>;
+/** Lock the open room now. False, and nothing done, in a room with no owner PIN. */
+export function lock_now(): boolean;

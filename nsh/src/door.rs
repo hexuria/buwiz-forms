@@ -56,11 +56,7 @@ pub(crate) fn install_logging() {
     static LOGGING: Once = Once::new();
     LOGGING.call_once(|| {
         if test_environment() {
-            bir_core::log_files::set_default_log_dir(
-                bir_core::platform::temp_dir()
-                    .join(format!("ebirforms-logs-{}", std::process::id()))
-                    .join("logs"),
-            );
+            bir_core::log_files::set_default_log_dir(bir_core::log_files::fresh_test_log_dir());
         }
         let developer_mode = bir_core::logging::developer_mode_enabled();
         let default_filter = if developer_mode {
@@ -669,7 +665,17 @@ mod tests {
                 data_change_token().unwrap().as_deref(),
                 Some(first.as_str())
             );
-            call("set_setting", vec![json!("theme_preference"), json!("dark")]).expect("write");
+            // A local write to the database (the theme is a device setting since accounts-and-lock A1: it goes to
+            // device.db, which this token does not follow).
+            call("set_setting", vec![json!("theme_preference"), json!("dark")]).expect("device write");
+            assert_eq!(data_change_token().unwrap().as_deref(), Some(first.as_str()));
+            {
+                let handle = bir_app_api::bir_module::database_handle().expect("handle");
+                bir_core::lock_timing::lock(&handle)
+                    .expect("lock")
+                    .set_setting("door.local_write_probe", "1")
+                    .expect("local write");
+            }
             let second = data_change_token().unwrap().unwrap();
             assert_ne!(second, first);
             let other = bir_core::db::Database::open(&database).expect("another connection");

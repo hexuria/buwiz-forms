@@ -1,0 +1,100 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "birth-date-phone",
+  "fingerprint": "fnv1a64:763d4e8a44137a95",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 586
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 30
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 477
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 702
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 14
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 370
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 716
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 718
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 63,
+      "screenshot": {
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1177
+    },
+    {
+      "id": "s14",
+      "ok": false,
+      "error": "`node 9282` is offscreen",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 211
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/012-s12.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 5117
+}

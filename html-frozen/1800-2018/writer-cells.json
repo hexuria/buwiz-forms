@@ -1,7 +1,7 @@
 {
   "form_id": "1800-v2018",
   "html_slug": "1800-2018",
-  "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. Schedule rows are matched by the printed column header and row order; layout index 0-4 is printed rows 1-5. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb, or one text cell where the sheet has no comb pair. Booleans fill X in the box left of the printed option, with the Yes box before No by reading order. Left out: the TIN branch (mixed cell with preprinted zeros), the 8A ZIP cell (caption overlaps), item 13A specify (option code), item 14 cents (text box), and rows with no layout key. Since #113 the page 2 TIN prints from derived:tin_digits (Form1800Draft::to_print_field_map); date_joins split each Part III payment date (MM/DD/YYYY) across its MM, DD and YYYY combs; every value the print map carries has a box or a reviewed not_joined reason.",
+  "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. Schedule rows are matched by the printed column header and row order; layout index 0-4 is printed rows 1-5. Amounts print the writer official text: a peso comb plus a 2-slot centavo comb, or one text cell where the sheet has no comb pair. Booleans fill X in the box left of the printed option, with the Yes box before No by reading order. Left out: the 8A ZIP cell (caption overlaps), item 13A specify (option code), and rows with no layout key. The TIN branch cells and item 14 centavos now print. Since #113 the page 2 TIN prints from derived:tin_digits (Form1800Draft::to_print_field_map); date_joins split each Part III payment date (MM/DD/YYYY) across its MM, DD and YYYY combs; every value the print map carries has a box or a reviewed not_joined reason.",
   "joins": [
     {
       "writer_key": "frm1800v2018:txtMonth",
@@ -20,6 +20,12 @@
       "html_id": "p1c7",
       "printed": "1 Date of Donation (YY)",
       "reason": "caption \"(MM/DD/YY)\"; third 2-slot comb"
+    },
+    {
+      "writer_key": "frm1800v2018:txtBranchCode",
+      "html_id": "p1c18",
+      "printed": "5 Donor TIN branch code",
+      "reason": "five-slot branch comb after the third TIN dash; the sheet now exposes all five slots"
     },
     {
       "writer_key": "frm1800v2018:txtSheets",
@@ -812,7 +818,7 @@
       "peso_html_id": "p1c62",
       "cent_html_id": "p1c64",
       "printed": "14 Total Net Gifts Subject to Tax",
-      "reason": "item 14 peso comb (p1c62, 10 slots) plus 2 centavo inputs (p1c64-i0..i1)"
+      "reason": "item 14 peso comb plus the two-slot centavo comb"
     }
   ],
   "xbox_joins": [
@@ -881,10 +887,6 @@
       "reason": "no fillable cell on the frozen sheet for this key (the DN 010 ATC is preprinted)"
     },
     {
-      "writer_key": "frm1800v2018:txtBranchCode",
-      "reason": "TIN branch cell p1c18 is mixed: five zeros are preprinted inside its slots, so a writer value would overprint them"
-    },
-    {
       "writer_key": "frm1800v2018:txtZipCode",
       "reason": "8A ZIP cell p1c26 is mixed: the printed \"8A ZIP Code\" caption overlaps its slots"
     },
@@ -898,7 +900,7 @@
     },
     {
       "writer_key": "frm1800v2018:txtPg2BranchCode",
-      "reason": "page 2 TIN is one 14-slot comb (p2c5) for TIN parts and branch; not split"
+      "reason": "prints inside derived:tin_digits: the page-2 header is one 14-slot comb whose branch slots are now editable"
     },
     {
       "writer_key": "chkscheduleADelete0",
@@ -1142,10 +1144,6 @@
     }
   ],
   "not_joined_cells": [
-    {
-      "html_id": "p1c18",
-      "reason": "branch cell (mixed; five preprinted zeros in its slots); see txtBranchCode"
-    },
     {
       "html_id": "p1c26",
       "reason": "8A ZIP cell overlaps its printed caption; see txtZipCode"

@@ -4,7 +4,7 @@ import type { InputRef, ViewRef } from "nsh";
 import { mount, signal, View } from "nsh";
 import { AppButton } from "./buttons";
 import { Checkbox, Dropdown } from "./choice";
-import { DateField, IntInput, MoneyInput, PercentInput, TinInput } from "./fields";
+import { DateField, IntInput, MoneyInput, PercentInput, TextField, TinInput } from "./fields";
 import { Text } from "./text";
 
 const OPTIONS = [
@@ -14,44 +14,82 @@ const OPTIONS = [
 
 function App() {
   const money = signal("");
+  const filled = signal("1234.56");
+  const textWrites = signal(0);
+  const caretWrites = signal(0);
+  const caretRange = signal("none");
+  const focusEvents = signal(0);
   const pct = signal("");
   const int = signal("");
   const tin = signal("");
   const date = signal("");
+  const plain = signal("Registered name");
+  const plainSelection = signal("none");
   const pick = signal<string | null>(null);
   const ticked = signal(false);
   let moneyRef: InputRef | undefined;
+  let filledRef: InputRef | undefined;
   let pctRef: InputRef | undefined;
   let intRef: InputRef | undefined;
   let tinRef: InputRef | undefined;
   let dateRef: InputRef | undefined;
+  let plainRef: InputRef | undefined;
   let dropRef: ViewRef | undefined;
   let boxRef: ViewRef | undefined;
   return (
     <View class="gap-2 p-3">
       <View class="flex-row flex-wrap gap-x-3">
         <Text variant="cap">{`Money: ${money() || "empty"}`}</Text>
+        <Text variant="cap">{`Filled: ${filled() || "empty"}`}</Text>
+        <Text variant="cap">{`Text writes: ${textWrites()}`}</Text>
+        <Text variant="cap">{`Caret writes: ${caretWrites()}`}</Text>
+        <Text variant="cap">{`Caret range: ${caretRange()}`}</Text>
+        <Text variant="cap">{`Focus events: ${focusEvents()}`}</Text>
         <Text variant="cap">{`Pct: ${pct() || "empty"}`}</Text>
         <Text variant="cap">{`Int: ${int() || "empty"}`}</Text>
         <Text variant="cap">{`Tin: ${tin() || "empty"}`}</Text>
         <Text variant="cap">{`Date: ${date() || "empty"}`}</Text>
+        <Text variant="cap">{`Plain selection: ${plainSelection()}`}</Text>
         <Text variant="cap">{`Pick: ${pick() ?? "none"}`}</Text>
         <Text variant="cap">{`Ticked: ${ticked()}`}</Text>
       </View>
       <View class="flex-row flex-wrap gap-2">
         <AppButton label="Focus money" size="sm" testID="go-money" onPress={() => moneyRef?.focus()} />
+        <AppButton label="Focus filled" size="sm" testID="go-filled" onPress={() => filledRef?.focus()} />
+        <AppButton label="Insert 2500" size="sm" testID="insert-filled" onPress={() => filledRef?.insertText("2500")} />
+        <AppButton label="Focus filled twice" size="sm" testID="go-filled-twice" onPress={() => {
+          filledRef?.focus();
+          filledRef?.focus();
+        }} />
         <AppButton label="Focus pct" size="sm" testID="go-pct" onPress={() => pctRef?.focus()} />
         <AppButton label="Focus int" size="sm" testID="go-int" onPress={() => intRef?.focus()} />
         <AppButton label="Focus tin" size="sm" testID="go-tin" onPress={() => tinRef?.focus()} />
         <AppButton label="Focus date" size="sm" testID="go-date" onPress={() => dateRef?.focus()} />
+        <AppButton label="Focus plain" size="sm" testID="go-plain" onPress={() => plainRef?.focus()} />
         <AppButton label="Focus dropdown" size="sm" testID="go-drop" onPress={() => dropRef?.focus()} />
         <AppButton label="Focus checkbox" size="sm" testID="go-box" onPress={() => boxRef?.focus()} />
       </View>
       <MoneyInput label="Money" value={money()} onChange={(v) => money.set(v)} inputRef={(r) => (moneyRef = r)} testID="f-money" />
+      <MoneyInput
+        label="Filled"
+        value={filled()}
+        onChange={(v) => filled.set(v)}
+        inputRef={(r) => (filledRef = r)}
+        onFocus={() => focusEvents.update((n) => n + 1)}
+        writeProbe={(write, start, end) => {
+          if (write === "text") textWrites.update((n) => n + 1);
+          else {
+            caretWrites.update((n) => n + 1);
+            caretRange.set(`${start}:${end}`);
+          }
+        }}
+        testID="f-filled"
+      />
       <PercentInput label="Pct" value={pct()} onChange={(v) => pct.set(v)} inputRef={(r) => (pctRef = r)} testID="f-pct" />
       <IntInput label="Int" value={int()} onChange={(v) => int.set(v)} inputRef={(r) => (intRef = r)} testID="f-int" />
       <TinInput label="TIN" value={tin()} onChange={(v) => tin.set(v)} inputRef={(r) => (tinRef = r)} testID="f-tin" />
       <DateField label="Date" value={date()} onChange={(v) => date.set(v)} inputRef={(r) => (dateRef = r)} testID="f-date" />
+      <TextField label="Plain" value={plain()} onChange={(v) => plain.set(v)} inputRef={(r) => (plainRef = r)} onSelectionChange={(e) => plainSelection.set(`${e.start}:${e.end}`)} testID="f-plain" />
       <Dropdown label="Pick" options={OPTIONS} value={pick()} onChange={(v) => pick.set(v)} focusRef={(r) => (dropRef = r)} testID="f-drop" />
       <Checkbox label="Ticked" checked={ticked()} onChange={(on) => ticked.set(on)} focusRef={(r) => (boxRef = r)} testID="f-box" />
     </View>

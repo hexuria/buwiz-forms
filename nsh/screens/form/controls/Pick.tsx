@@ -7,8 +7,10 @@
 //   Enter picks it, Escape closes and restores, Tab leaves; the chevron opens the whole list. Text that is not a choice is not taken
 //   on leaving: the box goes back to the last pick and a line under it says so (resolveTyped in model.ts).
 import type { Accessor, InputRef, ListRef, ViewRef } from "nsh";
-import { announce, batch, effect, keymap, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
-import { ChoiceRow, Icon, IconButton, Line, phoneLayout, Popover, Sheet, sheetBodyRoom, T_MIN_H, T_PX, Text, TextField, TOUCH } from "../../../ui";
+import { announce, batch, cleanup, effect, keymap, lifecycle, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
+import {
+  ChoiceRow, Icon, IconButton, Line, phoneLayout, Popover, Sheet, sheetBodyRoom, sheetPanelMaxHeight, T_MIN_H, T_PX, Text, TextField, TOUCH,
+} from "../../../ui";
 import type { ChoiceOption } from "../contract";
 import { cx, matchWords, pickLabel, resolveTyped, searchKeyboardType } from "./model";
 
@@ -59,18 +61,36 @@ export interface FrameBox {
   bottom: number;
 }
 
-/** The phone sheet's search field, its list and the panel around them, with the window's height. */
+/**
+ * The phone sheet's search field, its list and the panel around them; the sheet's own header and body (Sheet's views), the top of
+ * the sheet's panel (the header's top less its place in the panel); what sheetBodyRoom() and sheetPanelMaxHeight() said then; and
+ * the window's height.
+ */
 export interface SheetFrames {
   testID: string;
   search: FrameBox;
   list: FrameBox;
   panel: FrameBox;
+  header: FrameBox;
+  body: FrameBox;
+  sheetTop: number;
+  room: number;
+  maxHeight: number;
   window: number;
+}
+
+/** Sheet's header and body views, kept only while a test watches (SheetPick hands Sheet the refs then). */
+interface SheetParts {
+  header?: ViewRef;
+  body?: ViewRef;
 }
 
 let frameWatch: ((f: SheetFrames) => void) | null = null;
 
-/** Test seam: hears the sheet's frames as it opens and as its list scrolls (PickProbe.tsx prints them). Null stops. */
+/**
+ * Test seam: hears the sheet's frames as it opens and as its list scrolls (PickProbe.tsx prints them). Registered before the pick
+ * mounts; null stops.
+ */
 export function watchSheetFrames(fn: ((f: SheetFrames) => void) | null) {
   frameWatch = fn;
 }
@@ -92,7 +112,7 @@ function RowWords(props: { o: Accessor<ChoiceOption>; oneLine?: boolean }) {
 }
 
 /** The sheet's body: the search field, then the list in the room that is left. Mounted per opening (a fresh search, the list on the current choice). */
-function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void }) {
+function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void; parts: SheetParts }) {
   const p = props.p;
   const query = signal("");
   const rows = () => matchWords(real(p), query());
@@ -108,15 +128,34 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
   let list: ListRef | null = null;
   // Measured once every part is laid out (the panel's and the list's onLayout: a ref callback comes before its later siblings' refs
   // and before layout, so the old report from the search field's ref found no list and said nothing) and on every scroll of the list.
-  // Only a test that registered watchSheetFrames before the sheet opened gets the handlers below: without one the panel and the list
+  // Only a test that registered watchSheetFrames before the pick mounted gets the handlers below: without one the panel and the list
   // carry no onLayout or scroll handlers at all (no events sent, no measure() calls, no signals written, so no extra renders).
   const watch = frameWatch;
   const watching = <T,>(fn: T): T | undefined => (watch ? fn : undefined);
   const report = () => {
-    if (!watch || !refs.search || !refs.list || !refs.panel) return;
-    void Promise.all([boxOf(refs.search), boxOf(refs.list), boxOf(refs.panel)]).then(([search, listBox, panel]) => {
-      if (search && listBox && panel) watch({ testID: p.testID, search, list: listBox, panel, window: windowSize().height });
-    });
+    const { header, body } = props.parts;
+    if (!watch || !refs.search || !refs.list || !refs.panel || !header || !body) return;
+    const room = sheetBodyRoom();
+    const maxHeight = sheetPanelMaxHeight();
+    void Promise.all([boxOf(refs.search), boxOf(refs.list), boxOf(refs.panel), header.measure(), boxOf(body)]).then(
+      ([search, listBox, panel, head, bodyBox]) => {
+        if (!search || !listBox || !panel || !head || !bodyBox) return;
+        const top = head.pagePosition.y;
+        watch({
+          testID: p.testID,
+          search,
+          list: listBox,
+          panel,
+          header: { top, bottom: top + head.bounds.size.height },
+          body: bodyBox,
+          // The header's frame is in the sheet's panel: its y there is everything above it (the grabber and its margin).
+          sheetTop: top - head.bounds.origin.y,
+          room,
+          maxHeight,
+          window: windowSize().height,
+        });
+      },
+    );
   };
   const submit = () => {
     const open = rows().filter((o) => !o.disabled);
@@ -204,6 +243,9 @@ function SheetPick(props: { p: SearchPickProps }) {
     sheet.set(false);
     p.onPick(value);
   };
+  // The test seam's refs to Sheet's own views: handed over only while a test watches, so a release build passes Sheet none.
+  const parts: SheetParts = {};
+  const watched = frameWatch !== null;
   return (
     <>
       {/* A popover that is never open: its trigger is the kit's pressable (focus, Return, the press), routed to the sheet (AGENTS.md). */}
@@ -229,9 +271,17 @@ function SheetPick(props: { p: SearchPickProps }) {
           </View>
         }
       />
-      <Sheet testID={`${p.testID}-sheet`} open={sheet()} onOpenChange={asked} title={p.label} scroll={false}>
+      <Sheet
+        testID={`${p.testID}-sheet`}
+        open={sheet()}
+        onOpenChange={asked}
+        title={p.label}
+        scroll={false}
+        headerRef={watched ? (r: ViewRef) => (parts.header = r) : undefined}
+        bodyRef={watched ? (r: ViewRef) => (parts.body = r) : undefined}
+      >
         <If when={sheet()}>
-          <SheetPanel p={p} choose={choose} />
+          <SheetPanel p={p} choose={choose} parts={parts} />
         </If>
       </Sheet>
     </>
@@ -239,6 +289,24 @@ function SheetPick(props: { p: SearchPickProps }) {
 }
 
 // ---------------------------------------------------------------- wide: a combobox
+
+/**
+ * The longest a press on a row or the chevron holds off the settling of the box's leaving: a backstop only. A lost press-up is
+ * ended by close(), the box's onFocus and onChange and the box going away; a deliberate slow press (a finger resting on a row) is
+ * never cut short by it.
+ */
+const PRESS_HOLDS_MS = 30_000;
+
+/**
+ * How long a leaving with the list open waits for the press that may have caused it. On Windows the box's blur, and a timer of
+ * 0 ms after it, come BEFORE the press-down on the row or the chevron the pointer went down on (real clicks: a next-turn settle
+ * closed the list under the click, so no row could be picked), so the press is given this long to arrive. A leaving with no press
+ * (the form's focus(), Queue's jump) settles this much later: not seen.
+ */
+const LEAVE_GRACE_MS = 250;
+
+/** A press-outside this soon after the refusal line appeared is the press that made it (Windows delivers it to the new overlay too). */
+const NOTE_PRESS_GRACE_MS = 400;
 
 /** A wide row is 32 points; the list shows eight before it scrolls. */
 const ROW = 32;
@@ -252,6 +320,9 @@ function FieldList(props: {
   showClear: Accessor<boolean>;
   setLit: (value: string) => void;
   choose: (value: string) => void;
+  /** A press went down on a row, and ended: the focus that press takes from the box is not the box's leaving. */
+  pressDown: () => void;
+  pressUp: () => void;
   list: (ref: ListRef) => void;
   seen: (first: number, last: number) => void;
 }) {
@@ -277,7 +348,13 @@ function FieldList(props: {
       }}
       header={() => (
         <If when={props.showClear()}>
-          <ChoiceRow testID={`${p.testID}-opt-`} label="Clear the choice" onPress={() => props.choose("")}>
+          <ChoiceRow
+            testID={`${p.testID}-opt-`}
+            label="Clear the choice"
+            onPress={() => props.choose("")}
+            onPressDown={props.pressDown}
+            onPressUp={props.pressUp}
+          >
             <Text tone="fg3">Clear the choice</Text>
           </ChoiceRow>
         </If>
@@ -295,6 +372,8 @@ function FieldList(props: {
               tooltip={pickLabel(o())}
               onHover={o().disabled ? undefined : () => props.setLit(o().value)}
               onPress={o().disabled ? undefined : () => props.choose(o().value)}
+              onPressDown={props.pressDown}
+              onPressUp={props.pressUp}
             >
               <RowWords o={o} oneLine />
             </ChoiceRow>
@@ -321,6 +400,26 @@ function FieldPick(props: { p: SearchPickProps }) {
   let list: ListRef | null = null;
   let seen = { first: 0, last: -1 };
   let selectOnCaret = false;
+  /** The focus left the box with the list open, not yet settled (settleLeaving). */
+  let leaving = false;
+  /**
+   * A press is down on a row or the chevron, since `pressAt`. Only onPressUp ends it normally, so a press whose view goes away
+   * under it (the list closing, a lock or a sheet unmounting the overlay) is ended by close() and onFocus as well, and counts for
+   * PRESS_HOLDS_MS at most: a lost press-up never keeps a later leaving from settling.
+   */
+  let pressing = false;
+  let pressAt = 0;
+  /** When the refusal line last appeared (NOTE_PRESS_GRACE_MS). */
+  let noteAt = 0;
+  /** The box went away (its page, the overlay, the lock): nothing deferred may pick or settle after that. */
+  let gone = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  cleanup(() => {
+    gone = true;
+    pressing = false;
+    leaving = false;
+    clearTimeout(settleTimer);
+  });
 
   const current = () => currentOf(p);
   const shown = () => (dirty() ? typed() : current() ? pickLabel(current()!) : "");
@@ -334,11 +433,13 @@ function FieldPick(props: { p: SearchPickProps }) {
       dirty.set(false);
       typed.set("");
     });
-  const close = () =>
+  const close = () => {
+    pressing = false;
     batch(() => {
       open.set(false);
       lit.set(null);
     });
+  };
   const showList = () => {
     if (p.disabled) return;
     const r = pickable();
@@ -351,6 +452,7 @@ function FieldPick(props: { p: SearchPickProps }) {
   };
   /** A row chosen (a press, Enter): it is the value, the list closes, the keys stay in the box. */
   const choose = (value: string) => {
+    leaving = false;
     batch(() => {
       close();
       restore();
@@ -361,12 +463,14 @@ function FieldPick(props: { p: SearchPickProps }) {
   };
   /** The keys leave (Tab, a press elsewhere, the focus going): the typed text is taken only when it names a choice. */
   const commit = () => {
+    leaving = false;
     if (!dirty()) return close();
     const r = resolveTyped(p.options, typed(), p.value, p.clearable !== false);
     batch(() => {
       close();
       restore();
       note.set(r.kind === "revert" ? r.note : "");
+      noteAt = Date.now();
     });
     if (r.kind === "pick") p.onPick(r.value);
     else if (r.kind === "clear") p.onPick("");
@@ -395,6 +499,32 @@ function FieldPick(props: { p: SearchPickProps }) {
     if (dirty()) return commit();
     showList();
   };
+  // The focus left the box while the list was open. A press in the list (a row, the clear row) or on the chevron takes the focus
+  // as it goes down and settles the box itself (choose, or the chevron's commit). Any other leaving comes with no press the list
+  // hears (the form's focus() into another box, Queue's jump to a note, the lock, a window switch): the typed text is settled on
+  // the next turn, as Tab settles it, so the box never shows typed words over a value they are not.
+  const settleLeaving = (delay = LEAVE_GRACE_MS) => {
+    if (gone) return;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      if (gone || !leaving || focused()) return;
+      // A press still down holds it off, up to the PRESS_HOLDS_MS backstop: then it is tried again.
+      if (pressHeld()) return settleLeaving(PRESS_HOLDS_MS - (Date.now() - pressAt) + 10);
+      commit();
+    }, delay);
+  };
+  const pressHeld = () => pressing && Date.now() - pressAt < PRESS_HOLDS_MS;
+  const pressDown = () => {
+    pressing = true;
+    pressAt = Date.now();
+  };
+  // A turn after the release, so the press it makes (a row's pick) comes first; a press that picked nothing (moved off,
+  // cancelled) lets the leaving settle.
+  const pressUp = () =>
+    setTimeout(() => {
+      pressing = false;
+      if (leaving) settleLeaving(0);
+    }, 0);
 
   // The keys a combobox takes while its box has the focus; Escape only while there is something to close or restore, so a dialog
   // around a quiet box still closes on it. Tab moves on as it always does (passThrough) after the text is settled.
@@ -409,6 +539,12 @@ function FieldPick(props: { p: SearchPickProps }) {
     return () => {
       for (const off of offs) off();
     };
+  });
+
+  // The window stops being the active one (a switch to another window or app, Alt+Tab, Cmd+Tab): as a native combobox's popup, the
+  // list closes and typed text is settled as on leaving, so the window comes back showing what the box holds. The keys stay put.
+  effect(() => {
+    if (lifecycle() !== "active" && untracked(open)) untracked(commit);
   });
 
   return (
@@ -432,6 +568,8 @@ function FieldPick(props: { p: SearchPickProps }) {
         }}
         onFocus={() => {
           focused.set(true);
+          leaving = false;
+          pressing = false;
           note.set("");
           // A click leaves its caret after the focus (AppKit selects all, then puts the caret): select the whole choice again, so
           // typing replaces it rather than adding to "050 — South Makati".
@@ -445,11 +583,15 @@ function FieldPick(props: { p: SearchPickProps }) {
         }}
         onBlur={() => {
           focused.set(false);
-          // With the list open the press that took the focus may be a row's; the list's own press-outside settles the rest.
-          if (!open()) commit();
+          if (!open()) return commit();
+          // With the list open the press that took the focus may be a row's: settled a turn later, unless it was (settleLeaving).
+          leaving = true;
+          settleLeaving();
         }}
         onChange={(v) => {
           selectOnCaret = false;
+          // Keys in the box: no press on a row is going on any more, whatever became of its press-up.
+          pressing = false;
           batch(() => {
             typed.set(v);
             dirty.set(true);
@@ -470,6 +612,8 @@ function FieldPick(props: { p: SearchPickProps }) {
             tooltip={`Show every ${p.label}`}
             testID={`${p.testID}-trigger`}
             disabled={p.disabled}
+            onPressDown={pressDown}
+            onPressUp={pressUp}
             onPress={() => {
               if (open()) return commit();
               batch(() => {
@@ -505,6 +649,8 @@ function FieldPick(props: { p: SearchPickProps }) {
                 showClear={showClear}
                 setLit={(v) => lit.set(v)}
                 choose={choose}
+                pressDown={pressDown}
+                pressUp={pressUp}
                 list={(r) => (list = r)}
                 seen={(first, last) => (seen = { first, last })}
               />
@@ -513,7 +659,9 @@ function FieldPick(props: { p: SearchPickProps }) {
         </Overlay>
       </If>
       <If when={note() && !open() && anchor()}>
-        <Overlay anchor={anchor()} placement="bottom" align="start" offset={4} margin={8} onPressOutside={() => note.set("")}>
+        <Overlay anchor={anchor()} placement="bottom" align="start" offset={4} margin={8} onPressOutside={() => {
+            if (Date.now() - noteAt > NOTE_PRESS_GRACE_MS) note.set("");
+          }}>
           <View
             testID={`${p.testID}-note`}
             class="rounded-(--radius-ctl) border border-border bg-raised px-2 py-1 shadow-md"
