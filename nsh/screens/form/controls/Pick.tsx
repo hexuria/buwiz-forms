@@ -7,7 +7,7 @@
 //   Enter picks it, Escape closes and restores, Tab leaves; the chevron opens the whole list. Text that is not a choice is not taken
 //   on leaving: the box goes back to the last pick and a line under it says so (resolveTyped in model.ts).
 import type { Accessor, InputRef, ListRef, ViewRef } from "nsh";
-import { announce, batch, effect, keymap, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
+import { announce, batch, cleanup, effect, keymap, List, Overlay, platform, signal, untracked, View, windowSize } from "nsh";
 import {
   ChoiceRow, Icon, IconButton, Line, phoneLayout, Popover, Sheet, sheetBodyRoom, sheetPanelMaxHeight, T_MIN_H, T_PX, Text, TextField, TOUCH,
 } from "../../../ui";
@@ -290,8 +290,12 @@ function SheetPick(props: { p: SearchPickProps }) {
 
 // ---------------------------------------------------------------- wide: a combobox
 
-/** The longest a press on a row or the chevron holds off the settling of the box's leaving (its press-up may never come). */
-const PRESS_HOLDS_MS = 2000;
+/**
+ * The longest a press on a row or the chevron holds off the settling of the box's leaving: a backstop only. A lost press-up is
+ * ended by close(), the box's onFocus and onChange and the box going away; a deliberate slow press (a finger resting on a row) is
+ * never cut short by it.
+ */
+const PRESS_HOLDS_MS = 30_000;
 
 /** A wide row is 32 points; the list shows eight before it scrolls. */
 const ROW = 32;
@@ -394,6 +398,15 @@ function FieldPick(props: { p: SearchPickProps }) {
    */
   let pressing = false;
   let pressAt = 0;
+  /** The box went away (its page, the overlay, the lock): nothing deferred may pick or settle after that. */
+  let gone = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  cleanup(() => {
+    gone = true;
+    pressing = false;
+    leaving = false;
+    clearTimeout(settleTimer);
+  });
 
   const current = () => currentOf(p);
   const shown = () => (dirty() ? typed() : current() ? pickLabel(current()!) : "");
@@ -476,14 +489,16 @@ function FieldPick(props: { p: SearchPickProps }) {
   // as it goes down and settles the box itself (choose, or the chevron's commit). Any other leaving comes with no press the list
   // hears (the form's focus() into another box, Queue's jump to a note, the lock, a window switch): the typed text is settled on
   // the next turn, as Tab settles it, so the box never shows typed words over a value they are not.
-  const settleLeaving = () =>
-    setTimeout(() => {
-      if (!leaving || focused()) return;
-      // A press still down holds it off, but only for what is left of PRESS_HOLDS_MS: then it is tried again, so a press-up that
-      // never comes (its row gone) cannot leave the list open under a box that has lost the keys.
-      if (pressHeld()) return void setTimeout(settleLeaving, PRESS_HOLDS_MS - (Date.now() - pressAt) + 10);
+  const settleLeaving = (delay = 0) => {
+    if (gone) return;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      if (gone || !leaving || focused()) return;
+      // A press still down holds it off, up to the PRESS_HOLDS_MS backstop: then it is tried again.
+      if (pressHeld()) return settleLeaving(PRESS_HOLDS_MS - (Date.now() - pressAt) + 10);
       commit();
-    }, 0);
+    }, delay);
+  };
   const pressHeld = () => pressing && Date.now() - pressAt < PRESS_HOLDS_MS;
   const pressDown = () => {
     pressing = true;

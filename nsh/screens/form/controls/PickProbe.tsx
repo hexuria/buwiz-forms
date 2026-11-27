@@ -54,6 +54,9 @@ function Probe() {
   const other = signal("");
   let otherRef: InputRef | null = null;
   host.on("focus-other", () => otherRef?.focus());
+  // The RDO pick goes away (its page, the overlay, the lock): host event "hide-rdo".
+  const showRdo = signal(true);
+  host.on("hide-rdo", () => showRdo.set(false));
   watchSheetFrames((f) => {
     if (!first()) first.set(said(f));
     last.set(said(f));
@@ -62,18 +65,20 @@ function Probe() {
   return (
     <View class="flex-1 gap-4 bg-card p-6">
       <Text variant="title">Pick probe</Text>
-      <SearchPick
-        testID="pp-rdo"
-        label="RDO"
-        options={RDO}
-        value={rdo()}
-        clearable={!p.required}
-        onPick={(v) => {
-          rdo.set(v);
-          bump("rdoPicks");
-        }}
-        onOpen={() => bump("rdoOpens")}
-      />
+      <If when={showRdo()}>
+        <SearchPick
+          testID="pp-rdo"
+          label="RDO"
+          options={RDO}
+          value={rdo()}
+          clearable={!p.required}
+          onPick={(v) => {
+            rdo.set(v);
+            bump("rdoPicks");
+          }}
+          onOpen={() => bump("rdoOpens")}
+        />
+      </If>
       <SearchPick
         testID="pp-zip"
         label="ZIP code"

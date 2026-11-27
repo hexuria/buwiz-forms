@@ -355,6 +355,40 @@ test("desktop: a press whose row goes away under it never keeps a later leaving 
   expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
 });
 
+test("desktop: a box that goes away under a press picks and settles nothing afterwards", async () => {
+  const app = await probe({ rdo: "050" }, { ...DESKTOP, clock: {} });
+  await app.clear("id:pp-rdo-search");
+  // A code typed whole: settled, it would pick 047.
+  await app.type("id:pp-rdo-search", "047");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.dragAndHold("id:pp-rdo-opt-047", { y: 1 });
+  // The focus leaves with the list open while the press is down: the settling waits for the press.
+  await app.host.send("focus-other");
+  // The pick goes away (its page, the lock) before the press ends.
+  await app.host.send("hide-rdo");
+  await app.waitFor("id:pp-rdo-search", { state: "gone" });
+  await app.wait(31_000);
+  await app.drop();
+  await app.wait(100);
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+});
+
+test("desktop: a slow press held three seconds still picks its row", async () => {
+  const app = await probe({ rdo: "050" }, { ...DESKTOP, clock: {} });
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.dragAndHold("id:pp-rdo-opt-047", {});
+  await app.wait(3_000);
+  // Still open under the finger: no backstop cut the press short.
+  expect(app.shows("id:pp-rdo-opt-047")).toBe(true);
+  await app.drop();
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  await app.wait(50);
+  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 1");
+  expect(app.value("id:pp-rdo-search")).toBe("047 — East Makati");
+});
+
 test("desktop: the clear row clears a chosen value from the whole list", async () => {
   const app = await probe({ rdo: "050" }, DESKTOP);
   await app.press("id:pp-rdo-trigger");
