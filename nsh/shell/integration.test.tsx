@@ -13,7 +13,7 @@ const typed7 = (app: { value(s: string): string | null }) => (app.value(SHEETS) 
 /** The page is drawn (its Expand all button): the header shows while the form is still opening. */
 const PAGE = "id:fp-parts-toggle";
 
-test("desktop: removing a schedule row on a form shows Undo in the frame, and Undo brings the row back", async () => {
+test("desktop: removing a schedule row on a form shows the row-deleted Undo in the frame with no confirmation, and Undo brings the row back exactly", async () => {
   const app = await open("./FrameDemo.tsx", { ...WIDE, ...asking({ removal: true, start: "form=1601EQ/2025/3" }) });
   await app.waitFor(PAGE, { timeout: 30_000 });
   await app.press(PAGE);
@@ -24,16 +24,21 @@ test("desktop: removing a schedule row on a form shows Undo in the frame, and Un
   await app.press(row);
   await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-delete");
   await app.press("id:fp-table-frm1601EQ:txtAtcCd1-delete");
-  // Clearing the ATC asks first.
-  await app.waitFor("id:removal-confirm");
-  await app.press("id:removal-continue");
-  // The toast has its Undo button (the frame used to drop it).
+  // Delete row removes the row at once (session.ts deleteRow: "no confirmation"): the removal
+  // question never shows — the toast offering the exact Undo appears with no Continue step.
   await app.waitFor("id:toast-action");
+  expect(app.shows("id:removal-confirm")).toBe(false);
+  expect(app.texts()).toContain("Row deleted.");
   expect(app.texts()).toContain("Undo");
   expect(atc()).toBe(false);
   await app.press("id:toast-action");
   await app.waitFor("id:toast-action", { state: "gone" });
+  // Undo restores the draft exactly: the row is back, and its drawer holds its own values again.
   await app.waitUntil(atc);
+  await app.press(row);
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-done");
+  expect(app.value("id:fp-frm1601EQ:txtAtcCd1") ?? "").toContain("WI010");
+  expect(app.value("id:fp-frm1601EQ:txtTaxBase1")).toBe("250.50");
 });
 
 test("desktop: what is typed is saved when the person leaves the form within a moment, and the return opens with it", async () => {
