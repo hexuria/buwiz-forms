@@ -132,7 +132,9 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
     // no worker tick and no screen of the new sign-in ever meets the old room.
     close_session();
     let who = claimant(stored);
-    let claim = match LegacyClaim::at(layout.clone()) {
+    // F12: here(), not at() — mode-aware, so single-room mode (BIR_DATABASE_PATH or the thread's
+    // named file) and the dev database never run a real claim on the named file.
+    let claim = match LegacyClaim::here() {
         Ok(claim) => claim,
         Err(error) => {
             tracing::warn!("legacy claim not opened ({error}); the account's room lookup stands");
@@ -685,6 +687,32 @@ mod a3a_tests {
             rusqlite::params![serde_json::to_string(&record).unwrap()],
         )
         .unwrap();
+    }
+
+    /// F12: single-room mode never runs a real claim — the named file is the slot, no record, no rooms.
+    #[test]
+    fn single_room_mode_opens_no_room_and_runs_no_claim() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        // A legacy file with data a claim would move, were one to run.
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.checkpoint().unwrap();
+        drop(db);
+        // Single-room mode: the thread names its own file.
+        let named = scratch.layout.device_dir().join("single.db");
+        bir_core::db::set_database_path_override(Some(named));
+        let a = stored("user-a");
+        let session = open_session_room(&a);
+        assert!(
+            matches!(session, SessionRoom::SingleRoom),
+            "single-room mode did not answer SingleRoom: {session:?}"
+        );
+        assert!(
+            !scratch.layout.rooms_dir().exists(),
+            "a claim ran in single-room mode: rooms/ was made"
+        );
+        bir_core::db::set_database_path_override(None);
     }
 
     /// G1: the slot's real path refuses a room whose record is at Moved with no hash check, even
