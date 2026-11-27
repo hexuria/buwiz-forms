@@ -3353,6 +3353,16 @@ impl Database {
     }
 
     /// Every form draft summary for a TIN, whatever its taxable year.
+    /// How many returns of this database wait to send (status Queued): the sign-out confirm's count
+    /// (§A.5) — a number only, never a name.
+    pub fn count_queued_drafts(&self) -> Result<i64, DbError> {
+        Ok(self.conn.query_row(
+            "SELECT COUNT(*) FROM form_drafts WHERE status = 'Queued'",
+            [],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn list_draft_summaries_all_years(
         &self,
         tin: &str,

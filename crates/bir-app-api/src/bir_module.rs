@@ -3545,9 +3545,10 @@ pub fn module() -> HostModule {
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
     let module = crate::owner_lock_module::register(module);
+    let module = crate::room_session::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::cloud_email::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
@@ -3555,6 +3556,7 @@ pub fn module() -> HostModule {
         crate::dashboard_module::DECLARATIONS,
         crate::legacy_import_module::DECLARATIONS,
         crate::owner_lock_module::DECLARATIONS,
+        crate::room_session::DECLARATIONS,
     ))
 }
 
