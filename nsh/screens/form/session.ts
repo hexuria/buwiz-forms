@@ -563,6 +563,7 @@ export class FormSession {
   private sBoxMsg = new SignalMap<string>("");
   private sBoxNote = new SignalMap<string>("");
   private sRefusal = new SignalMap<string>("");
+  private sPenaltyComputed = new SignalMap<boolean>(false);
   private sGuessed = signal(0);
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
   private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, items: 0, open: false, fold: null }, sameJson);
@@ -2522,6 +2523,23 @@ export class FormSession {
     return (this.st.penalties || []).find((g) => g.keys.includes(k)) || null;
   }
 
+  /** A penalty box whose component the filer never typed: it shows the computed
+      amounts, and the page marks it "Computed from other items". */
+  penaltyComputed(k: string): boolean {
+    return this.sPenaltyComputed.get(k)();
+  }
+
+  /** The box belongs to a penalty group, its component typed or not (the membership is static). */
+  inPenaltyGroup(k: string): boolean {
+    return Boolean(this.penaltyGroupOf(k));
+  }
+
+  /** The same state, straight from the penalties the host last sent: publishBoxes feeds the signal. */
+  private penaltyComputedOf(k: string): boolean {
+    const g = this.penaltyGroupOf(k);
+    return Boolean(g && !(g.typed || []).includes(k));
+  }
+
   /** Locked on the page: off, a penalty not opened, or a host lock unless a profile box opened with Edit. */
   private isLocked(k: string): boolean {
     const s = this.st;
@@ -4398,6 +4416,7 @@ export class FormSession {
       // hold the row drawer shut. An unfixable one put the stored value back, so nothing stands.
       const liveRefusal = k in s.rejected && !s.unfixable.has(k);
       this.sRefusal.get(k).set(liveRefusal ? this.refusalText(k, s.rejected[k]) : "");
+      this.sPenaltyComputed.get(k).set(this.penaltyComputedOf(k));
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];

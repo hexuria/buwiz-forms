@@ -47,8 +47,8 @@ them again after its own read of `.env`. An account server that is not on this m
      otherwise `desktop`. A variant named after the target (`windows`, `linux`, `android`, ...) wins on that target
      when the suite has one. Linux needs its own: its window opens 420 px wide (although `nsh.json` asks 1440x900),
      so the app shows the narrow layout on a desktop host.
-   - **Generated ids.** Ids the app generates (the TIN box, a schedule's table) are read from a snapshot first
-     (`resolve`).
+   - **Generated ids.** Ids the app generates (the TIN box, a schedule's table) are read from a snapshot before the
+     recipe, or after a named step when the `resolve` spec carries `after`.
    - **Screenshots.** Steps marked `--screenshot` / `"screenshot": true` are saved in the recipe's folder.
 5. Stops the app and writes, under `~/BuwizNsh/evidence/e2e/<target>-<time>/` (or `--out`):
    - `report.md` and `report.json`: per recipe, the result, the time, the failing step with its `.wants` line and
@@ -65,7 +65,7 @@ Results:
 - `needs`: skipped until a gpui-agent release or a host build carries what it needs;
 - `refused`: a send step without the safety conditions;
 - `skipped`: no variant for this form factor;
-- `setup`: a generated id was not found;
+- `setup`: a generated id was not found, before the recipe or at its `after` step;
 - `not run`: a required recipe before it failed.
 
 The exit status is 0 only when every recipe passed or was skipped.
@@ -144,6 +144,22 @@ A suite is `agent-recipes/e2e/<name>.json`:
 **Resolving generated ids.** A `resolve` spec picks the first node of a snapshot that matches every field given:
 `id`, `id_regex` (with `group`), `role` (one or a list), `name`, `name_regex`, `visible`.
 
+A spec may add `"after": "<step id>"` when the node can exist only after the recipe has run for a while. JSON recipes
+use their own step ids; a `.wants` recipe's steps are `s1`, `s2`, ... in file order. The runner writes the slice files
+into the run's evidence folder (never the repository), runs the steps through that step, takes a fresh snapshot and
+resolves, then runs the rest in the same app session. `.wants` slicing assumes one step per non-comment line, the same
+shape gpui-agent parses; that is what maps a slice line number back to the original step id. The report and the merged
+receipt are still one recipe with the original step ids. A node not found there is `setup` at that step, with the
+screenshot and tree kept. A parameter used at or before its `after` step is refused by `just e2e check <suite>`.
+
+The delete-row case: 2551Q's Schedule 1 is the collapsed part 3 (`fp-part-3-toggle`), and its Add row can be culled
+until that part is expanded or scrolled to. If `delete-row.wants` first takes a step that makes the table visible (that
+step must not use `$table`) and only then clicks `$table-add`, the entry's spec becomes:
+
+```json
+{"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "s1"}
+```
+
 **Requirements and fallbacks.**
 - `needs_cli` / `needs_feature`: the installed gpui-agent-cli version, or a `hello.features` entry. Either can be a
   map per target or form factor.
@@ -163,6 +179,8 @@ A suite is `agent-recipes/e2e/<name>.json`:
 `just e2e check <suite>` checks a suite with no app:
 - every file exists and parses;
 - every param it uses is supplied;
+- a param resolved `after` a step is not used at or before that step;
+- in a JSON recipe, the cut after that step does not separate a step from a step it `needs`;
 - send steps are marked;
 - no secret box is typed into;
 - `key_delay_ms` appears only on `type`, and only in entries with `needs_cli`;
@@ -232,9 +250,9 @@ In gpui-agent and the plug (nsh-gpui-agent):
   though painted, so every press inside one is refused as offscreen: the date sheet (Linux, Android, iOS), the row
   drawer (Windows), Android's picker sheets. `set_value` into a sheet's box lands. Modal dialogs hit-test fine.
 - **Scrolling** (hexuria/gpui-agent#121): `.wants` has no scroll verb (JSON recipes have `op: scroll`), and the tree
-  culls nodes outside the viewport with no "scroll until it exists" step. The runner's `resolve` reads one snapshot
-  before the recipe's first step, so delete-row's `$table` can never be found below the fold (ours to change once
-  gpui-agent can scroll to a node).
+  culls nodes outside the viewport with no "scroll until it exists" step. The runner can now resolve after a recipe
+  step, but delete-row still needs a leading step that brings Schedule 1 into the tree before `$table` can be found
+  below the fold.
 - **macOS focus** (hexuria/nsh-gpui-agent#14): bare `type` does not move focus out of the segmented TIN control;
   focus flags read false everywhere; every step reports `delivered_unverified`, landed or not.
 - **Money boxes under injected text** (hexuria/nsh-gpui-agent#15): paced `500.25` lands as `0.25` on macOS and as

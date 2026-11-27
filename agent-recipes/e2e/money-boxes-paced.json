@@ -94,12 +94,6 @@
    "screenshot": true
   },
   {
-   "id": "s15",
-   "op": "click",
-   "target": "fp-frm2551Qv2018:amendedRtn_2",
-   "screenshot": true
-  },
-  {
    "id": "s12a",
    "op": "set_value",
    "target": "fp-frm2551Qv2018:txt15",
@@ -110,6 +104,12 @@
    "op": "set_value",
    "target": "fp-frm2551Qv2018:txt16",
    "value": "0"
+  },
+  {
+   "id": "s15",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:amendedRtn_2",
+   "screenshot": true
   }
  ]
 }

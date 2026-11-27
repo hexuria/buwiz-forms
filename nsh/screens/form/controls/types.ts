@@ -1,6 +1,6 @@
 // What the controls take beyond the contract (../contract.ts, B1's file, which this folder never edits): optional props, so the
 // page's plain FieldControlProps / RadioGroupProps / ScheduleProps still fit. The gaps are listed in B2's report.
-import type { Accessor } from "nsh";
+import type { Accessor, JSX } from "nsh";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps } from "../contract";
 
 /** A value, or an accessor of it (the page may pass either). */
@@ -22,6 +22,8 @@ export interface FieldExtras {
   placeholder?: string;
   /** A cell of the phone TIN grid (PR 8): centred tabular digits, and a locked box shows no lock of its own — the row's "From the tax profile" line says it once. Only the TIN row's narrow layout passes it. */
   tinCell?: boolean;
+  /** Something at the end of the box, inside it (the computed-penalty mark); only the editable money box takes it. */
+  trailing?: JSX.Element;
 }
 
 /** What FieldControl takes: the contract's props and the extras. */

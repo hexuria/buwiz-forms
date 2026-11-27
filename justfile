@@ -220,6 +220,13 @@ ci-test system="":
     echo "https://github.com/hexuria/buwiz-forms/actions?query=branch%3A${target//\//%2F}"
     echo "When the runs are done: just ci-test-clean"
 
+# Push the exact head GitHub reports for pull request <number> to test/<system>/pr-<number> and print the Actions URL.
+# No system: Linux and Windows. The script fetches pull/<n>/head and refuses when that object is not GitHub's head.
+# Ask GitHub for the test suites at a pull request's exact head: `just ci-test-pr <n> [linux|windows|macos|all]`
+[unix]
+ci-test-pr number system="":
+    {{PYTHON}} scripts/ci_batch.py test-pr {{quote(number)}} {{quote(system)}}
+
 # Deletes only branches with no queued or running workflow run; their results stay on the commit and its pull request.
 # Delete the test/** branches whose runs have all finished
 [unix]

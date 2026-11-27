@@ -1,0 +1,87 @@
+{
+ "v": 1,
+ "name": "e2e-sheet-press",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 600
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "fp-part-4-toggle"
+  },
+  {
+   "id": "s3",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 600
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-0",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "fp-row-drpATC1-0"
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "fp-table-drpATC1-drawer",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s7",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s8",
+   "op": "click",
+   "target": "fp-txtATCAmt1"
+  },
+  {
+   "id": "s9",
+   "op": "type",
+   "target": "fp-txtATCAmt1",
+   "text": "100000",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s9a",
+   "op": "assert",
+   "target": "fp-txtATCAmt1",
+   "value": "100000"
+  },
+  {
+   "id": "s10",
+   "op": "click",
+   "target": "fp-table-drpATC1-done",
+   "screenshot": true
+  },
+  {
+   "id": "s11",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "timeout_ms": 5000,
+   "screenshot": true,
+   "exists": false
+  },
+  {
+   "id": "s12",
+   "op": "wait_until",
+   "target": "fp-save-state",
+   "name": "\u2713 Saved",
+   "timeout_ms": 10000
+  }
+ ]
+}

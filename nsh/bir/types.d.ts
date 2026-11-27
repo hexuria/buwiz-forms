@@ -701,6 +701,8 @@ export interface ScreenFormSamplePeriod {
 }
 export interface ScreenFormPenalties {
     keys: string[];
+    /** Each box whose component the filer typed: the others show the computed amounts and carry the computed mark. */
+    typed?: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
     /** The amounts are kept as entered before penalties were computed (1701Q, 1701): "Use the computed amounts" works once Edit opens them. */

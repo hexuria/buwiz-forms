@@ -769,6 +769,15 @@ test("[Z1] unreadable note on a blank schedule cell: it says the box was left bl
   s.dispose();
 });
 
+test("[Z1] unreadable note on a stored zero schedule cell: it still says the box kept 0.00", async () => {
+  const s = await opened(at("2551Q", 2021, 3));
+  s.edit("txtATCAmt1", "0");
+  await s.idle();
+  s.leftUnreadable("txtATCAmt1", "abc", "0.00");
+  expect(s.boxMessageOf("txtATCAmt1")).toBe("Taxable Amount: abc is not an amount. The box kept 0.00.");
+  s.dispose();
+});
+
 test("[comma] a comma read as the decimal point is said under its box and stops nothing: not Queue, not a count; an edit ends it", async () => {
   const key = "frm2551Qv2018:txt15";
   const sentence = "Item 15: 1500,50 was read as 1,500.50.";

@@ -69,6 +69,11 @@ NSH_INPUTS = re.compile(
 )
 # The quick NSH type check lives in ci.yml.
 NSH_CHECK_INPUTS = re.compile(NSH_INPUTS.pattern + r"|^\.github/workflows/ci\.yml$")
+# The plug pin, plus every nsh source or test file whose text carries `feature = "agent"` gates. The policy test in
+# scripts/tests/test_ci_plan.py keeps this set in step with the tree.
+NSH_AGENT_CHECK_INPUTS = re.compile(
+    r"^nsh/(Cargo\.(toml|lock)|src/agent\.rs|tests/(agent|agent_send|window_plane)\.rs)$"
+)
 # The extracted validation-rules corpus and what audits it.
 VALIDATION = re.compile(
     r"^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/"
@@ -100,8 +105,8 @@ def classify(path: str) -> str:
 def what_changed(changed: list[str] | None) -> dict[str, bool]:
     """What the change can affect. None (unknown range) and an empty list mean everything."""
     if not changed:
-        return dict(app=True, windows_pkg=True, other=True, nsh=True, nsh_check=True, nsh_beyond_tests=True,
-                    core_inputs=True, validation_paths=False, known=False)
+        return dict(app=True, windows_pkg=True, other=True, nsh=True, nsh_check=True, nsh_agent_check=True,
+                    nsh_beyond_tests=True, core_inputs=True, validation_paths=False, known=False)
     classes = [classify(path) for path in changed]
     nsh_paths = [path for path in changed if NSH_INPUTS.match(path) and not DOCS.match(path)]
     return dict(
@@ -110,6 +115,7 @@ def what_changed(changed: list[str] | None) -> dict[str, bool]:
         other=bool({"windows_pkg", "macos_pkg", "linux_pkg", "scripts"} & set(classes)),
         nsh=bool(nsh_paths),
         nsh_check=any(NSH_CHECK_INPUTS.match(path) and not DOCS.match(path) for path in changed),
+        nsh_agent_check=any(NSH_AGENT_CHECK_INPUTS.match(path) for path in changed),
         nsh_beyond_tests=any(not SCREEN_TEST.match(path) for path in nsh_paths),
         # The plain-SQLite core tests: the crates, forms and workspace files, not the app in nsh/.
         core_inputs=any(not path.startswith("nsh/") for path in nsh_paths),
@@ -168,9 +174,9 @@ def decide(
     else:
         raise PlanError(f"no lane for event {event}")
 
-    plan = dict(lane=lane, check_systems=[], check_tests=False, nsh_check=False, scripts=False, installer=False,
-                validation_systems=[], nsh_systems=[], screens=False, build=False, nsh_rust=False, core_plain=False,
-                shards=[0], shard_count=1, screens_filter="")
+    plan = dict(lane=lane, check_systems=[], check_tests=False, nsh_check=False, nsh_agent_check=False, scripts=False,
+                installer=False, validation_systems=[], nsh_systems=[], screens=False, build=False, nsh_rust=False,
+                core_plain=False, shards=[0], shard_count=1, screens_filter="")
 
     if lane == "quick":
         seen = what_changed(changed)
@@ -178,6 +184,9 @@ def decide(
             reasons.append("change range unknown or empty: every quick check")
         plan["check_systems"] = ["linux"] if seen["app"] else []
         plan["nsh_check"] = seen["nsh_check"]
+        # Compile-proof the agent plug on pull requests only: the pin must be green before merge, while main and the
+        # test lane already have the complete NSH suite's agent build.
+        plan["nsh_agent_check"] = event == "pull_request" and seen["nsh_agent_check"]
         # `check` runs the Python script tests itself.
         plan["scripts"] = not seen["app"] and (seen["other"] or seen["windows_pkg"])
         # The validation-rules audits: Linux only, and only when asked for by a path, the label or the branch. An
@@ -262,6 +271,7 @@ def outputs(plan: dict) -> dict[str, str]:
         "check": flag(bool(check)),
         "check_matrix": json.dumps({"include": check}, separators=(",", ":")),
         "nsh_check": flag(plan["nsh_check"]),
+        "nsh_agent_check": flag(plan["nsh_agent_check"]),
         "scripts": flag(plan["scripts"]),
         "installer": flag(plan["installer"]),
         "validation": flag(bool(validation)),
