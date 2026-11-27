@@ -148,6 +148,157 @@ pub fn forget_device() {
     }
 }
 
+// ---------- I6: the device key's owner, recorded (F2') ----------
+
+/// The one lock of the device key's lifecycle (F2'b): the forget's check-and-delete and the
+/// registration's replace-and-write both run under it, so they can never interleave. NEVER
+/// nested inside SESSION — the session machine calls in only after its own lock is released.
+static DEVICE_KEY: Mutex<()> = Mutex::new(());
+
+/// Where the key's owner is recorded: a small file beside the key in the secrets folder,
+/// written in the same step as the key itself. Two lines: the normalised origin, the user id.
+fn device_owner_path() -> std::path::PathBuf {
+    secrets_dir().join("buwiz_submit_device_owner.txt")
+}
+
+/// The owner recorded beside the device key, or None for a key from before the recording
+/// (an existing install's — the adoption case) or no key at all.
+pub fn device_key_owner() -> Option<crate::account_session::OwnerKey> {
+    let text = std::fs::read_to_string(device_owner_path()).ok()?;
+    let mut lines = text.lines();
+    let origin = lines.next()?.trim().to_string();
+    let user_id = lines.next()?.trim().to_string();
+    if origin.is_empty() || user_id.is_empty() {
+        return None;
+    }
+    Some(crate::account_session::OwnerKey { origin, user_id })
+}
+
+/// Write the owner beside the key, in the key's own step. The caller holds DEVICE_KEY.
+fn write_device_owner(owner: &crate::account_session::OwnerKey) {
+    let text = format!(
+        "{}
+{}
+",
+        owner.origin, owner.user_id
+    );
+    if let Err(error) = std::fs::write(device_owner_path(), text) {
+        tracing::warn!("could not record the device key's owner: {error}");
+    }
+}
+
+/// The caller holds DEVICE_KEY.
+fn clear_device_owner() {
+    match std::fs::remove_file(device_owner_path()) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => tracing::warn!("could not remove the device key's owner record: {error}"),
+    }
+}
+
+/// The forget's half of I6, under DEVICE_KEY: forget the key only while it is still the ending
+/// owner's — recorded as his, or unrecorded (a pre-recording install's key, which is the current
+/// sign-in's until adoption). A key already recorded for a NEWER owner is never touched: someone
+/// got there first, and it is not this ending's to take.
+pub fn forget_device_key_for(owner: &crate::account_session::OwnerKey) {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    match device_key_owner() {
+        Some(recorded) if recorded != *owner => {
+            tracing::info!("device key forget skipped: the key is a newer owner's already");
+            return;
+        }
+        _ => {}
+    }
+    forget_device_key_local();
+    clear_device_owner();
+}
+
+/// The key and id deleted from the device store directly — never through the submitter's
+/// construction, so the forget cannot be skipped for want of a server config (the deletion is
+/// local in bir-submit too; nothing here reaches the network).
+fn forget_device_key_local() {
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    if let Err(error) = store.delete(bir_submit::DEVICE_KEY) {
+        tracing::warn!("could not forget the device key: {error}");
+    }
+    if let Err(error) = store.delete(bir_submit::DEVICE_ID) {
+        tracing::warn!("could not forget the device id: {error}");
+    }
+    forget_device();
+}
+
+/// The registration's half of I6, under DEVICE_KEY: a key recorded for ANOTHER owner, or one
+/// with no owner recorded, is replaced — the old key and its server registration go, a new key
+/// is made and registered, and key plus owner are written in this one step. So a failed, skipped
+/// or crashed forget never hands A's key to B. A key already this owner's is kept (signing in
+/// again as the same owner breaks no sends).
+pub fn register_device_key_for(owner: &crate::account_session::OwnerKey) -> Registration {
+    register_device_key_with(owner, register_after_sign_in)
+}
+
+/// The registration's decision logic, with the register step injected: the tests drive it with
+/// a registration that needs no server, so the replace-and-write is proven file by file.
+fn register_device_key_with(
+    owner: &crate::account_session::OwnerKey,
+    register: impl FnOnce() -> Registration,
+) -> Registration {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if device_key_owner().as_ref() != Some(owner) {
+        forget_device_key_local();
+        clear_device_owner();
+    }
+    let registration = register();
+    if matches!(
+        registration,
+        Registration::Registered | Registration::AlreadyDone
+    ) {
+        write_device_owner(owner);
+    }
+    registration
+}
+
+/// The test door of [`register_device_key_with`]: a registration without a server.
+#[cfg(any(test, feature = "test-support"))]
+pub fn register_device_key_for_test(
+    owner: &crate::account_session::OwnerKey,
+    register: impl FnOnce() -> Registration,
+) -> Registration {
+    register_device_key_with(owner, register)
+}
+
+/// Test instrumentation: the DEVICE_KEY lock itself, so the funnel test can hold it and prove
+/// the forget and the registration both wait on it.
+#[cfg(any(test, feature = "test-support"))]
+pub fn device_key_lock_for_test() -> std::sync::MutexGuard<'static, ()> {
+    DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Adoption (F2'): an existing install's key has no owner recorded. The stored sign-in's owner
+/// adopts it — the record is written, the key keeps working — at the first commit after the
+/// update, under DEVICE_KEY, and only while the owner cache is that owner. Never replaced while
+/// the same owner is signed in, so nobody's sends break on the update. Answers whether the
+/// adoption ran.
+pub fn adopt_device_key(owner: &crate::account_session::OwnerKey) -> bool {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if device_key_owner().is_some() {
+        return false;
+    }
+    if crate::account_session::stored_owner().as_ref() != Some(owner) {
+        return false;
+    }
+    write_device_owner(owner);
+    true
+}
+
 /// What [`register_after_sign_in`] did. Never an error the sign-in sees.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Registration {

@@ -239,6 +239,13 @@ pub(crate) fn live_entry_for(path: &std::path::Path) -> bool {
         .is_some()
 }
 
+/// Drop the registry entries whose connection is dead. A closed room's entry goes now, not at
+/// the next open: the file's owner lock releases when the last strong handle is gone, so a
+/// sign-out frees the file for whatever comes next.
+pub(crate) fn sweep_registry() {
+    lock(&REGISTRY).retain(|_, (weak, _)| weak.upgrade().is_some());
+}
+
 /// The key this room's worker jobs file under (F6): the room's id in rooms mode, the fixed
 /// key in single-room mode, "legacy" for the legacy file in place. The worker's source and every
 /// reader asking after the open room's jobs build it here, so the two cannot drift.

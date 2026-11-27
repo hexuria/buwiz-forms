@@ -5703,19 +5703,17 @@ mod tests {
                 ),
             ],
             || {
-                bir_core::cloud_account::save_stored_account(
-                    &bir_core::cloud_account::StoredAccount {
-                        server_url: WELCOME_SERVER.into(),
-                        access_token: "access".into(),
-                        refresh_token: "refresh".into(),
-                        access_expires_at_unix: i64::MAX / 2,
-                        user_id: user_id.into(),
-                        email: Some(email.into()),
-                        offline: false,
-                        last_refresh_unix: 1_000,
-                        practice: false,
-                    },
-                )
+                bir_core::account_session::save_stored(&bir_core::cloud_account::StoredAccount {
+                    server_url: WELCOME_SERVER.into(),
+                    access_token: "access".into(),
+                    refresh_token: "refresh".into(),
+                    access_expires_at_unix: i64::MAX / 2,
+                    user_id: user_id.into(),
+                    email: Some(email.into()),
+                    offline: false,
+                    last_refresh_unix: 1_000,
+                    practice: false,
+                })
                 .unwrap();
                 body()
             },

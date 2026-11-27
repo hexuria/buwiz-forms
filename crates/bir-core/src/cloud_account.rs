@@ -864,14 +864,14 @@ pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
 /// Write the desktop account to the keychain and the private file.
 /// The file is always written: a keyring build without a real backend can
 /// report success and then forget the secret when the process exits.
-pub fn save_stored_account(stored: &StoredAccount) -> Result<(), CloudError> {
+pub(crate) fn save_stored_account(stored: &StoredAccount) -> Result<(), CloudError> {
     let raw = stored.encode()?;
     let _ = keyring_save(&raw);
     write_secret_file(&raw)
 }
 
 /// Remove the keychain entry and the private file.
-pub fn clear_stored_account() {
+pub(crate) fn clear_stored_account() {
     keyring_delete();
     let _ = std::fs::remove_file(account_file_path());
 }
@@ -879,7 +879,7 @@ pub fn clear_stored_account() {
 /// Remove the saved sign-in for a sign-out, and make sure it is gone: read back, removed once more, then
 /// overwritten with nothing where it still reads (an empty keychain entry or file is not a sign-in). An error
 /// means a sign-in still reads back on this device.
-pub fn forget_stored_account() -> Result<(), CloudError> {
+pub(crate) fn forget_stored_account() -> Result<(), CloudError> {
     clear_stored_account();
     if !sign_in_reads_back() {
         return Ok(());

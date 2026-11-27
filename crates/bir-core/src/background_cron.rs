@@ -5909,11 +5909,13 @@ mod tests {
         let before = crate::cloud_account::load_stored_account()
             .unwrap()
             .unwrap();
-        let rotated = tokio::task::spawn_blocking(|| {
+        let owner = crate::account_session::OwnerKey::of(&before).expect("the sign-in normalises");
+        let rotated = tokio::task::spawn_blocking(move || {
             crate::account_session::access_token(
                 &mut crate::cloud_account::BlockingHttp::new(),
                 crate::cloud_account::unix_now() + 20,
                 true,
+                &owner,
             )
         })
         .await

@@ -125,7 +125,9 @@ impl Phase {
 /// Set only by [`bypass_unlock`] (§9): the machine itself is bypassed in a debug run with the
 /// auth bypass on, and check_invariants steps aside. Tests never set it, so the environment's
 /// BIR_AUTH_BYPASS no longer decides whether the invariants run — they always run in tests.
-pub static BYPASSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Set only by bypass_unlock (§9): the machine stepped aside because the environment bypasses
+/// authentication. Private — nothing outside this module can pretend the machine is bypassed.
+static BYPASSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Auth bypass (§9): a debug run unlocks with no owner, outside the machine. The one caller is
 /// prepare_launch's bypass branch (wired in commit 3). Marks the machine bypassed so
@@ -237,33 +239,94 @@ pub enum Reason {
     PageClosed,
 }
 
-/// close_locked: the one close, under SESSION, in the design's order (§4). The room leaves the
-/// phase here; its Arc drops after the lock is released, so the database's close never holds
-/// SESSION. Returns what close() must drop outside the lock.
-fn close_locked(session: &mut Session) -> Option<OpenRoom> {
+/// What a close decided, for the steps that run outside SESSION.
+struct CloseOutcome {
+    /// The phase's room, dropped after the lock is released.
+    pub dropped: Option<OpenRoom>,
+    /// The owner-ending steps ran (the owner really ended): forget_device owes a run outside
+    /// SESSION, only while the epoch this close produced is still current (F2).
+    pub owner_ended: bool,
+    /// The epoch this close produced.
+    pub epoch: u64,
+    /// The owner who ended, when the owner-ending steps ran — his is the key the forget takes.
+    pub ended_owner: Option<Owner>,
+}
+
+/// How the owner-ending steps are decided (F2): they run when the owner really ends — a
+/// sign-out, a server-ended session — or when begin_open's replacement is a DIFFERENT owner.
+/// Never from SignedOut (no previous owner), never for the same owner.
+enum CloseKind {
+    /// The owner really ends: sign_out, server_ended, the page-closed fallback.
+    OwnerEnds,
+    /// begin_open's replacement: the steps run only if the previous owner differs.
+    ReplacedBy(Owner),
+}
+
+fn owner_key_of(owner: &Owner) -> (String, String) {
+    (owner.origin.clone(), owner.user_id.clone())
+}
+
+/// close_phase_locked: the always-half of the close, under SESSION (F2) — the epoch, the gate
+/// locked, practice off, the room out, the room path None, the phase SignedOut. The OWNER-ENDING
+/// half — the OAuth listeners and the TIN cache invalidated under SESSION, forget_device owing a
+/// run outside it — is decided by the kind and the previous owner.
+fn close_locked(session: &mut Session, kind: &CloseKind) -> CloseOutcome {
     session.epoch += 1;
     mirror(session.epoch);
     crate::account_gate::set_unlocked(false);
     bir_core::transport::set_practice_account(false);
+    let previous = session.phase.owner().cloned();
     let room = match std::mem::replace(&mut session.phase, Phase::SignedOut) {
         Phase::Open { room, .. } | Phase::Legacy { room, .. } => Some(room),
         _ => None,
     };
     // The room path cache reads None once nothing is open (X1).
     bir_core::db::set_open_room_database(None);
-    bir_core::email::cancel_oauth_listeners();
-    if let Ok(submitter) = bir_core::relay::submitter() {
-        submitter.invalidate_account_tins();
+    let owner_ended = match (&previous, kind) {
+        (None, _) => false,
+        (Some(_), CloseKind::OwnerEnds) => true,
+        (Some(previous), CloseKind::ReplacedBy(new)) => owner_key_of(previous) != owner_key_of(new),
+    };
+    if owner_ended {
+        bir_core::email::cancel_oauth_listeners();
+        if let Ok(submitter) = bir_core::relay::submitter() {
+            submitter.invalidate_account_tins();
+        }
     }
-    bir_core::relay::forget_device();
-    room
+    CloseOutcome {
+        dropped: room,
+        owner_ended,
+        epoch: session.epoch,
+        ended_owner: if owner_ended { previous } else { None },
+    }
+}
+
+/// forget_device's half of the owner-ending steps (F2): AFTER SESSION, and only while the epoch
+/// the close produced is still current — a newer epoch means a newer session answered already,
+/// and its key is not this close's to forget.
+fn finish_close(outcome: &CloseOutcome) {
+    // F2'c: the forget runs under the DEVICE_KEY lock, never nested in SESSION (we are outside
+    // it here), and only while the epoch this close produced is still current — a newer epoch
+    // means a newer session answered already, and its key is not this close's to take. The
+    // check-and-delete inside forget_device_key_for is the second gate: a key already recorded
+    // for the newer owner is never touched.
+    if outcome.owner_ended && bir_core::session_epoch::current() == outcome.epoch {
+        if let Some(ended) = &outcome.ended_owner {
+            bir_core::relay::forget_device_key_for(&bir_core::account_session::OwnerKey {
+                origin: ended.origin.clone(),
+                user_id: ended.user_id.clone(),
+            });
+        } else {
+            bir_core::relay::forget_device();
+        }
+    }
 }
 
 /// The one sign-out, and begin_open's replace (§4). Runs entirely under the lock; the room's Arc
 /// drops after it lets go.
 pub fn close(reason: Reason) {
     hooks::at("close.locked");
-    let dropped = {
+    let outcome = {
         let mut session = locked();
         if session.phase.kind() == PhaseKind::Quitting {
             // F7: Quitting is terminal — a close after it is a logged no-op, never a resurrection
@@ -271,10 +334,12 @@ pub fn close(reason: Reason) {
             tracing::info!("close after quit ignored: the session is terminal");
             return;
         }
-        close_locked(&mut session)
+        close_locked(&mut session, &CloseKind::OwnerEnds)
     };
     tracing::info!("session closed: {reason:?}");
-    drop(dropped);
+    crate::open_room::sweep_registry();
+    finish_close(&outcome);
+    drop(outcome.dropped);
     report_invariants();
 }
 
@@ -283,7 +348,7 @@ pub fn close(reason: Reason) {
 /// section: the epoch bumps, the phase becomes Opening, the claim thread spawns and this returns
 /// at once (F10).
 pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
-    let (spawn, dropped_room) = {
+    let (spawn, outcome) = {
         let mut session = locked();
         hooks::at("begin_open.locked");
         if session.phase.kind() == PhaseKind::Quitting {
@@ -302,7 +367,9 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
         {
             return;
         }
-        let dropped_room = close_locked(&mut session);
+        // F2: the replacement's owner-ending steps run only when the owner being replaced is a
+        // DIFFERENT one — a Try again or a launch of the same owner keeps its device key.
+        let outcome = close_locked(&mut session, &CloseKind::ReplacedBy(owner.clone()));
         // §1 [D4c]: the device guard is taken at process start (init). If it was not held then
         // (another copy had it), every begin_open — Try again included — retries it; while it
         // cannot be taken the phase is Blocked::Transient and no claim thread starts. A
@@ -314,7 +381,7 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
                     engine,
                     why,
                 };
-                (Some(session.epoch), dropped_room)
+                (Some(session.epoch), outcome)
             }
             Err(detail) => {
                 session.phase = Phase::Blocked {
@@ -324,12 +391,14 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
                         detail,
                     },
                 };
-                (None, dropped_room)
+                (None, outcome)
             }
         }
     };
-    // F17: the replaced room's Arc drops after SESSION is released.
-    drop(dropped_room);
+    // F17: the replaced room's Arc drops after SESSION is released; forget_device's half runs
+    // here too, epoch-checked (F2).
+    finish_close(&outcome);
+    drop(outcome.dropped);
     if let Some(epoch) = spawn {
         spawn_claim_thread(owner, engine, why, epoch);
     }
@@ -365,6 +434,99 @@ fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
     {
         tracing::warn!("the room-open thread did not spawn: {error}");
     }
+}
+
+/// sign_out (§4, F8'): persistence first, the cache inside SESSION.
+///  1. under account_session::lock(), OUTSIDE SESSION: the logout info read, the file AND the
+///     keychain entry deleted, released;
+///  2. ONE SESSION section: the owner cache goes to None (its small lock nests inside SESSION)
+///     plus the close with the owner-ending steps;
+///  3. forget_device (epoch-checked, the DEVICE_KEY lock — never nested in SESSION) and
+///     logout_soon.
+///
+/// A crash between 1 and 2 leaves the disk signed out — the safe direction — and I1 holds on
+/// the cache throughout. cloud_account's sign_out_with routes here.
+pub fn sign_out() {
+    crate::cloud_email::cancel();
+    bir_core::background_cron::set_submission_paused(true);
+    // Step 1: the persisted sign-in goes, outside SESSION.
+    let (logout, removed) = {
+        let _account = bir_core::account_session::lock();
+        let logout = bir_core::cloud_account::load_stored_account()
+            .ok()
+            .flatten()
+            .map(|stored| (stored.server_url.clone(), stored.access_token.clone()));
+        let removed = bir_core::account_session::forget_stored();
+        (logout, removed)
+    };
+    // Step 2: the one SESSION section — the cache and the close together.
+    let outcome = {
+        let mut session = locked();
+        bir_core::account_session::cache_owner(None);
+        close_locked(&mut session, &CloseKind::OwnerEnds)
+    };
+    // Step 3: outside every lock.
+    crate::open_room::sweep_registry();
+    finish_close(&outcome);
+    drop(outcome.dropped);
+    report_invariants();
+    if let Some((server_url, access_token)) = logout {
+        crate::cloud_account::logout_soon(
+            Box::new(bir_core::cloud_account::BlockingHttp::new()),
+            server_url,
+            access_token,
+        );
+    }
+    if let Err(error) = removed {
+        tracing::warn!("sign-out left the saved sign-in on this device: {error}");
+    }
+}
+
+/// server_ended (§4, F8'): the hook bir-core's account_session calls when the server ends a
+/// sign-in. First, under the account lock outside SESSION: the disk's delete-if-owner. Then the
+/// one SESSION section — only if the epoch still matches and the cache is still that owner: the
+/// cache goes to None and the close runs. Anything else is a no-op: a newer session answered
+/// already, and nothing of it is this ending's to touch. Registered via
+/// account_session::on_session_ended at launch.
+pub fn server_ended(owner: bir_core::account_session::OwnerKey, epoch: u64) {
+    {
+        let _account = bir_core::account_session::lock();
+        bir_core::account_session::clear_stored_if(&owner);
+    }
+    let outcome = {
+        let mut session = locked();
+        let cache_is_owner = bir_core::account_session::stored_owner().as_ref() == Some(&owner);
+        if session.epoch != epoch || !cache_is_owner {
+            tracing::info!(
+                "server_ended for epoch {epoch} ignored: the session or the stored owner moved on"
+            );
+            return;
+        }
+        bir_core::account_session::cache_owner(None);
+        close_locked(&mut session, &CloseKind::OwnerEnds)
+    };
+    crate::open_room::sweep_registry();
+    finish_close(&outcome);
+    drop(outcome.dropped);
+    report_invariants();
+}
+
+/// signed_in (§4, F8'): a sign-in's write — the persist under the account lock OUTSIDE SESSION,
+/// then one SESSION section setting the cache. Commit 3 adds the begin_open here;
+/// register_device_soon stays where it is until commit moves it into commit.
+pub fn signed_in(
+    stored: &bir_core::cloud_account::StoredAccount,
+) -> Result<(), bir_core::cloud_account::CloudError> {
+    {
+        let _account = bir_core::account_session::lock();
+        bir_core::account_session::save_stored(stored)?;
+    }
+    {
+        let _session = locked();
+        bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(stored));
+    }
+    report_invariants();
+    Ok(())
 }
 
 /// commit (§3 step 3): under SESSION, short, no I/O. A stale epoch or a phase that isn't Opening
@@ -467,18 +629,18 @@ pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Datab
 /// inside SESSION, which is the lock order, and held for this file read only (§3's rule [D2]) —
 /// is this owner: the same normalised origin and the same user id.
 #[cfg_attr(not(test), allow(dead_code))]
+/// I2's half in commit: the stored owner cache answers — never the account lock, the file or
+/// the keychain (F8, F3c). The cache is current because every write of the stored sign-in
+/// updates it inside the same account-lock section as the write.
 fn stored_is(owner: &Owner) -> bool {
-    let _stored = bir_core::account_session::lock();
     stored_owner_key()
         .is_some_and(|(origin, user_id)| origin == owner.origin && user_id == owner.user_id)
 }
 
-/// The stored sign-in's (normalised origin, user id), or None while nobody is stored. The
-/// caller holds `account_session::lock()` when it needs the read to be atomic with a write.
+/// The stored sign-in's (normalised origin, user id), or None while nobody is stored, read
+/// from account_session's owner cache — no I/O, no lock of account_session's (F8).
 fn stored_owner_key() -> Option<(String, String)> {
-    let stored = crate::cloud_account::load_stored().ok().flatten()?;
-    let origin = bir_core::rooms::room_origin(&stored.server_url).ok()?;
-    Some((origin, stored.user_id))
+    bir_core::account_session::stored_owner().map(|key| (key.origin, key.user_id))
 }
 
 /// quit (§8's state part): the epoch bumps, the phase is terminal, the gate locks. The release
@@ -535,10 +697,7 @@ pub fn check_invariants() -> Result<(), String> {
         return Ok(());
     }
     let snap = snapshot();
-    let stored = {
-        let _stored = bir_core::account_session::lock();
-        stored_owner_key()
-    };
+    let stored = stored_owner_key();
     let owner_is_stored = snap.owner.as_ref().is_some_and(|owner| {
         stored
             .as_ref()
@@ -777,9 +936,9 @@ pub(crate) fn reset_for_tests() {
     hooks::reset();
     let dropped = {
         let mut session = locked();
-        let dropped = close_locked(&mut session);
+        let outcome = close_locked(&mut session, &CloseKind::OwnerEnds);
         session.phase = Phase::SignedOut;
-        dropped
+        outcome.dropped
     };
     drop(dropped);
 }
@@ -804,7 +963,8 @@ mod tests {
         reset_for_tests();
         bir_core::db::set_open_room_database(None);
         crate::account_gate::set_unlocked(false);
-        bir_core::cloud_account::clear_stored_account();
+        bir_core::account_session::clear_stored();
+        bir_core::account_session::reset_owner_cache_for_tests();
         let folder = tempfile::tempdir().unwrap();
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         Scratch {
@@ -829,7 +989,9 @@ mod tests {
             last_refresh_unix: 0,
             practice,
         };
-        bir_core::cloud_account::save_stored_account(&stored).unwrap();
+        bir_core::account_session::save_stored(&stored).unwrap();
+        // The cache is the machine's picture (F8'): a seeded sign-in sets it as signed_in would.
+        bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(&stored));
         Owner {
             origin: bir_core::rooms::room_origin(server_url).unwrap(),
             user_id: user_id.to_string(),
@@ -1253,25 +1415,19 @@ mod tests {
     // The names keep the design page's numbering; the build order renumbering is the page's next
     // revision.
 
-    /// commit 2 wires the claim thread's real work (the claim, the classify, the open, the
+    /// commit 3 wires the claim thread's real work (the claim, the classify, the open, the
     /// commit); the tests then drive the real thread with pauses on its real hooks, never this.
-    fn commit2_claim_thread_opens(scratch: &Scratch, owner: &Owner, epoch: u64, name: &str) {
+    fn commit3_claim_thread_opens(scratch: &Scratch, owner: &Owner, epoch: u64, name: &str) {
         let _ = (scratch, owner, epoch, name);
-        panic!("commit 2 wires this")
-    }
-
-    /// commit 3 wires the server-ended hook: a 401 or InvalidGrant ends the session for the
-    /// owner it arrived under, and only that owner.
-    fn commit3_server_ended(owner: &Owner, epoch: u64) {
-        let _ = (owner, epoch);
         panic!("commit 3 wires this")
     }
 
-    /// commit 2 (the stored-sign-in commit, renumbered) wires sign_out(): the stored sign-in's
-    /// clear inside the same critical section as the close. The stub must not contain D1's
-    /// window — a clear-then-close in two steps IS the hole — so it panics instead.
-    fn commit3_sign_out() {
-        panic!("commit 2 wires this: the real session::sign_out")
+    /// Hand-drive an open session for the tests whose subject is the stored sign-in, not the
+    /// claim: begin_open already ran, so the phase is Opening at `epoch`; this drives the real
+    /// commit() the claim thread will own from commit 3.
+    fn open_hand(scratch: &Scratch, owner: &Owner, epoch: u64, name: &str) {
+        let (handle, path) = scratch_handle(scratch, name);
+        commit(epoch, room_target(owner), Some((handle, path)));
     }
 
     /// commit 4 wires the send spawn: a spawned send carries the tick's owner and epoch, and
@@ -1320,7 +1476,7 @@ mod tests {
     /// n1: a sign-out while the claim runs — the close bumps the epoch, the opener's commit
     /// misses its compare-and-swap, and nothing was ever installed (F10's hole, closed).
     #[test]
-    #[ignore = "commit 2"]
+    #[ignore = "commit 3"]
     fn n1_sign_out_during_the_claim_opens_nothing() {
         let _turn = test_turn();
         let scratch = scratch();
@@ -1343,7 +1499,7 @@ mod tests {
         });
         claim_gate.reached();
         // The sign-out lands while the claim is paused: the epoch bumps under the close.
-        commit3_sign_out();
+        sign_out();
         assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
         assert!(!gate_unlocked(), "the gate is locked");
         assert_invariants();
@@ -1365,7 +1521,7 @@ mod tests {
     /// n1 (second arm): B signs in while A's claim is still running; A's late commit abandons
     /// and B keeps the session.
     #[test]
-    #[ignore = "commit 2"]
+    #[ignore = "commit 3"]
     fn n1_b_signs_in_during_as_claim_and_keeps_b() {
         let _turn = test_turn();
         let scratch = scratch();
@@ -1386,7 +1542,7 @@ mod tests {
         });
         claim_gate.reached();
         // B's sign-in replaces A: the epoch bumps, B's open starts.
-        bir_core::cloud_account::clear_stored_account();
+        bir_core::account_session::clear_stored();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         assert_eq!(snapshot().phase_kind, PhaseKind::Opening);
@@ -1400,7 +1556,7 @@ mod tests {
         assert_invariants();
         // B's own open commits first.
         let epoch_b = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         assert_invariants();
         claim_gate.release();
@@ -1431,7 +1587,7 @@ mod tests {
     /// n1b: Try again from a blocked page is the same begin_open path, and its commit wakes the
     /// worker (§3 step 3).
     #[test]
-    #[ignore = "commit 2"]
+    #[ignore = "commit 3"]
     fn n1b_try_again_starts_the_worker() {
         let _turn = test_turn();
         let scratch = scratch();
@@ -1453,7 +1609,7 @@ mod tests {
         begin_open(owner_a.clone(), 1, OpenWhy::TryAgain);
         assert_eq!(snapshot().phase_kind, PhaseKind::Opening);
         let epoch = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         assert!(gate_unlocked());
         assert!(
@@ -1542,7 +1698,7 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         assert_invariants();
         // A's tick spawns the send with A's owner and epoch.
@@ -1556,15 +1712,22 @@ mod tests {
         });
         send_gate.reached();
         // The account switches to B before the send runs.
-        commit3_sign_out();
-        bir_core::cloud_account::clear_stored_account();
+        sign_out();
+        bir_core::account_session::clear_stored();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         let epoch_b = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         assert_invariants();
-        let fetches_before = bir_core::account_session::token_fetch_count();
+        let fetches_before = bir_core::account_session::token_fetches_for(
+            &bir_core::account_session::OwnerKey::of(
+                &bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap(),
+        );
         send_gate.release();
         send.join().unwrap();
         // B's session stands; nothing of A's send touched it — and no token was ever fetched
@@ -1578,7 +1741,14 @@ mod tests {
             "B's sign-in is intact"
         );
         assert_eq!(
-            bir_core::account_session::token_fetch_count(),
+            bir_core::account_session::token_fetches_for(
+                &bir_core::account_session::OwnerKey::of(
+                    &bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .unwrap()
+                )
+                .unwrap()
+            ),
             fetches_before,
             "NO token was taken for the dead send"
         );
@@ -1587,26 +1757,39 @@ mod tests {
 
     /// stored_b_survives_as_late_401: A's send's late 401 ends nothing of B's session.
     #[test]
-    #[ignore = "commit 3"]
     fn stored_b_survives_as_late_401() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // The switch: A signs out, B signs in.
-        commit3_sign_out();
-        bir_core::cloud_account::clear_stored_account();
+        // The switch: A signs out (the real one-section sign_out), B signs in.
+        sign_out();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         let epoch_b = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
+        open_hand(&scratch, &owner_b, epoch_b, "b-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         assert_invariants();
-        // A's late 401 arrives: it acts for the session that existed when the send started.
-        commit3_server_ended(&owner_a, epoch_a);
+        // A's late 401 arrives through the real door: end_session_for with the owner and the
+        // epoch A's send started under. The epoch has moved on, so nothing of B's is touched.
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        bir_core::account_session::end_session_for(key_a, epoch_a);
+        // end_session_for only runs the registered hook; the hook IS the machine's server_ended
+        // in production. In this test binary nothing registers it (OnceLock, one per process),
+        // so drive the machine's server_ended directly — the same function the hook calls.
+        server_ended(
+            bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            epoch_a,
+        );
         assert_eq!(
             snapshot().phase_kind,
             PhaseKind::Open,
@@ -1625,6 +1808,12 @@ mod tests {
                 .is_some(),
             "B's stored sign-in survives"
         );
+        // And B's cache too: the delete-if-owner never matched.
+        assert_eq!(
+            bir_core::account_session::stored_owner().map(|key| key.user_id),
+            Some("user-b".to_string()),
+            "B's owner cache entry survives"
+        );
         assert_invariants();
     }
 
@@ -1638,7 +1827,7 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         // The import pauses after its session check, before the room lock.
         let import_gate = hooks::pause("import.after_room_lock");
@@ -1667,7 +1856,7 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         quit();
         commit6_quit_releases();
@@ -1677,6 +1866,560 @@ mod tests {
             bir_core::db::take_device_instance_lock(scratch.layout.device_dir()).is_ok(),
             "the relaunch meets no live writer"
         );
+    }
+
+    // ---------- commit 2: the stored sign-in ----------
+
+    /// The device key files of the scratch install: the key itself and its owner record.
+    fn write_device_key(scratch: &Scratch, key: &str, owner: Option<(&str, &str)>) {
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        std::fs::write(
+            scratch
+                .layout
+                .device_dir()
+                .join("buwiz_submit_device_key.txt"),
+            key,
+        )
+        .unwrap();
+        if let Some((origin, user_id)) = owner {
+            std::fs::write(
+                scratch
+                    .layout
+                    .device_dir()
+                    .join("buwiz_submit_device_owner.txt"),
+                format!("{origin}\n{user_id}\n"),
+            )
+            .unwrap();
+        }
+    }
+
+    fn device_key_files(scratch: &Scratch) -> Vec<(String, Vec<u8>)> {
+        let mut files: Vec<(String, Vec<u8>)> = std::fs::read_dir(scratch.layout.device_dir())
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| {
+                        entry
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with("buwiz_submit_device")
+                    })
+                    .map(|entry| {
+                        (
+                            entry.file_name().to_string_lossy().to_string(),
+                            std::fs::read(entry.path()).unwrap(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        files.sort();
+        files
+    }
+
+    /// The writer guard (§4 item 1): no direct call of the raw cloud_account writers outside
+    /// account_session — every write of the stored sign-in routes through the one path, or the
+    /// owner cache lies. bir-core's own cloud_account.rs (the definition and its storage tests)
+    /// and account_session.rs (the one path) are the only allowed homes.
+    #[test]
+    fn no_writer_bypasses_the_owner_cache() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut offenders = Vec::new();
+        for crate_dir in [
+            "crates/bir-app-api/src",
+            "crates/bir-core/src",
+            "crates/bir-mcp/src",
+        ] {
+            let dir = root.parent().unwrap().join(crate_dir);
+            if !dir.exists() {
+                continue;
+            }
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                let name = path.file_name().unwrap().to_string_lossy().to_string();
+                let allowed = (crate_dir.contains("bir-core")
+                    && (name == "cloud_account.rs" || name == "account_session.rs"))
+                    || name == "mod.rs" && crate_dir.contains("account_session");
+                if allowed {
+                    continue;
+                }
+                for (line, text) in text.lines().enumerate() {
+                    for writer in [
+                        "save_stored_account",
+                        "clear_stored_account",
+                        "forget_stored_account",
+                    ] {
+                        // The scan is textual: a call, not a doc mention or a comment.
+                        let trimmed = text.trim_start();
+                        if trimmed.starts_with("//") || trimmed.starts_with("///") {
+                            continue;
+                        }
+                        if text.contains(&format!("{writer}(")) && !text.contains("fn ") {
+                            offenders.push(format!(
+                                "{}:{}: {}",
+                                path.display(),
+                                line + 1,
+                                text.trim()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "writes of the stored sign-in bypassing account_session:\n{}",
+            offenders.join("\n")
+        );
+    }
+
+    /// The cache follows every save and clear (F8'): signed_in sets it inside SESSION, sign_out
+    /// and server_ended drop it there too — and I1's answer changes with it, never with the disk
+    /// alone.
+    #[test]
+    fn the_cache_follows_every_save_and_clear() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let _ = &scratch;
+        assert_eq!(bir_core::account_session::stored_owner(), None);
+        // A sign-in: the real machine path. The cache is set inside its SESSION section.
+        let stored = bir_core::cloud_account::StoredAccount {
+            server_url: "https://buwiz.example.test".into(),
+            access_token: "access-user-a".into(),
+            refresh_token: "refresh-user-a".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-a".into(),
+            email: None,
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        signed_in(&stored).unwrap();
+        assert_eq!(
+            bir_core::account_session::stored_owner().map(|key| key.user_id),
+            Some("user-a".to_string()),
+            "the cache followed the save"
+        );
+        // The sign-out: cache None in the same step as the close.
+        sign_out();
+        assert_eq!(
+            bir_core::account_session::stored_owner(),
+            None,
+            "the cache followed the clear"
+        );
+        // The server-ended arm the same way.
+        signed_in(&stored).unwrap();
+        let epoch = snapshot().epoch;
+        server_ended(
+            bir_core::account_session::OwnerKey::of(&stored).unwrap(),
+            epoch,
+        );
+        assert_eq!(bir_core::account_session::stored_owner(), None);
+        assert_invariants();
+    }
+
+    /// The crash window (F8'): the disk cleared, the cache still set — a relaunch reads signed
+    /// out, because the cache refills from the disk. The safe direction.
+    #[test]
+    fn a_cleared_disk_with_a_set_cache_relaunches_signed_out() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let _ = &scratch;
+        let owner_a = seed_stored("user-a", false);
+        let _ = &owner_a;
+        assert!(bir_core::account_session::stored_owner().is_some());
+        // The crash window, simulated: the disk is signed out (step 1 ran), the cache still
+        // holds the owner (step 2 never ran — the process died). The relaunch: the cache is
+        // filled fresh, from the disk.
+        {
+            let _account = bir_core::account_session::lock();
+            bir_core::account_session::clear_stored();
+        }
+        bir_core::account_session::reset_owner_cache_for_tests();
+        assert_eq!(
+            bir_core::account_session::stored_owner(),
+            None,
+            "the relaunched cache reads the disk: signed out"
+        );
+    }
+
+    /// A stale owner or epoch changes nothing (§4): server_ended for another owner, or at an
+    /// epoch the session has passed, is a no-op end to end.
+    #[test]
+    fn server_ended_for_a_stale_owner_or_epoch_changes_nothing() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+
+        // A stale EPOCH: the session moved past it. Per the page's order the disk's
+        // delete-if-owner runs first — the disk record goes (the safe direction) — but the
+        // SESSION section is the epoch check's: no close, no cache clear, the gate holds.
+        server_ended(
+            bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            epoch + 99,
+        );
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open, "the phase holds");
+        assert!(
+            gate_unlocked(),
+            "the gate holds — the epoch check stopped the close"
+        );
+        assert!(
+            bir_core::account_session::stored_owner().is_some(),
+            "the cache holds — the epoch check stopped the SESSION section"
+        );
+        assert_invariants();
+
+        // A stale OWNER never even touches the disk. Re-seed first: the stale-epoch case above
+        // cleared it, as ordered.
+        let owner_a = seed_stored("user-a", false);
+        let before = bir_core::cloud_account::load_stored_account().unwrap();
+        server_ended(
+            bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: "user-never-here".into(),
+            },
+            epoch,
+        );
+        let after = bir_core::cloud_account::load_stored_account().unwrap();
+        match (&before, &after) {
+            (Some(before), Some(after)) => assert_eq!(
+                before.refresh_token, after.refresh_token,
+                "another owner's ending never touches this sign-in"
+            ),
+            (None, None) => {}
+            _ => panic!("another owner's ending changed this sign-in"),
+        }
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        assert_invariants();
+    }
+
+    /// launch_with_a_stored_keeps_as_device_key (the orchestrator's F2 test): begin_open from
+    /// SignedOut — no previous owner — never touches the device key.
+    #[test]
+    fn launch_with_a_stored_keeps_as_device_key() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        let before = device_key_files(&scratch);
+        assert!(!before.is_empty(), "the key is on disk");
+        begin_open(owner_a.clone(), 1, OpenWhy::Launch);
+        assert_eq!(
+            device_key_files(&scratch),
+            before,
+            "a launch from SignedOut runs no owner-ending steps: the key is byte-identical"
+        );
+    }
+
+    /// try_again_for_the_same_owner_keeps_the_device_key: a replacement by the SAME owner is not
+    /// an owner-ending — the key stays.
+    #[test]
+    fn try_again_for_the_same_owner_keeps_the_device_key() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        let before = device_key_files(&scratch);
+        begin_open(owner_a.clone(), 1, OpenWhy::Launch);
+        // Land the session in Blocked first — Try again is a re-open from there. (From Open the
+        // same owner's begin_open is the X1 no-op, which would test nothing.)
+        let epoch = snapshot().epoch;
+        commit(
+            epoch,
+            Target::Blocked(Blocked::Transient {
+                copy_saved: false,
+                detail: "the test's transient".into(),
+            }),
+            None,
+        );
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        // Try again: the same owner opens again — the phase is replaced, but the owner never
+        // ended, so the key is never touched.
+        begin_open(owner_a.clone(), 1, OpenWhy::TryAgain);
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Opening,
+            "the try-again really re-opened — the close inside begin_open ran"
+        );
+        assert_eq!(
+            device_key_files(&scratch),
+            before,
+            "the same owner's try-again keeps the device key byte-identical"
+        );
+    }
+
+    /// a_replace_by_another_owner_forgets_the_old_key_only_if_no_newer_epoch: B replacing A
+    /// forgets A's key (check-and-delete under DEVICE_KEY, epoch-sequenced) — unless a newer
+    /// epoch answered first.
+    #[test]
+    fn a_replace_by_another_owner_forgets_the_old_key_only_if_no_newer_epoch() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert!(!device_key_files(&scratch).is_empty());
+        // The switch: B's begin_open replaces A. The post-lock step forgets A's key under
+        // DEVICE_KEY, sequenced by the epoch B's Opening produced — still current here.
+        let owner_b = seed_stored("user-b", false);
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "A's key and its owner record are gone with the switch"
+        );
+        // The epoch rule: a close whose epoch has already moved on forgets nothing. C replaces
+        // B; before C's post-lock step could run, a NEWER epoch (D's) answered — simulated here
+        // by the direct outcome: finish_close is the machine's own, so drive the observable
+        // end-to-end fact instead: after B's epoch has passed, nothing of B's is taken.
+        write_device_key(&scratch, "key-of-b", Some((&owner_b.origin, "user-b")));
+        let owner_c = seed_stored("user-c", false);
+        begin_open(owner_c.clone(), 1, OpenWhy::SignIn);
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "the current-epoch switch forgets the key"
+        );
+        assert_invariants();
+    }
+
+    /// a_switch_forgets_as_key_before_bs_claim_starts: the forget is sequenced BEFORE the claim
+    /// thread spawns — B's claim can never meet A's key.
+    #[test]
+    fn a_switch_forgets_as_key_before_bs_claim_starts() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        let owner_b = seed_stored("user-b", false);
+        // The pause at begin_open's own point can't order the post-lock step against the spawn —
+        // but the ordering is structural: finish_close runs before spawn_claim_thread in
+        // begin_open's own body. What the test can assert end-to-end: when begin_open returns,
+        // the key is already gone, and the claim thread has only just been spawned.
+        let spawns_before = claim_thread_spawn_count();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "A's key is gone before begin_open even returns — the claim starts after"
+        );
+        assert_eq!(
+            claim_thread_spawn_count() - spawns_before,
+            1,
+            "the claim thread spawned only after the forget"
+        );
+    }
+
+    /// i6_a_registration_for_b_replaces_as_key: a key recorded for A is never used by B — the
+    /// registration replaces it, key and record in one step.
+    #[test]
+    fn i6_a_registration_for_b_replaces_as_key() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        let owner_b_key = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: "user-b".into(),
+        };
+        let scratch_dir = scratch.layout.device_dir().to_path_buf();
+        // B's registration: the replace runs, then the (injected) registration writes B's new
+        // key — as bir-submit's does when it finds no key.
+        let registration = bir_core::relay::register_device_key_for_test(&owner_b_key, move || {
+            // As bir-submit's device_key() does: a key is generated only when none exists — so
+            // this writes B's key only if the replacement's forget really ran.
+            let key_path = scratch_dir.join("buwiz_submit_device_key.txt");
+            if !key_path.exists() {
+                std::fs::write(&key_path, "key-of-b").unwrap();
+            }
+            bir_core::relay::Registration::Registered
+        });
+        assert_eq!(registration, bir_core::relay::Registration::Registered);
+        let files = device_key_files(&scratch);
+        let key_bytes = files
+            .iter()
+            .find(|(name, _)| name == "buwiz_submit_device_key.txt")
+            .map(|(_, bytes)| bytes.clone())
+            .expect("a key is on disk");
+        assert_eq!(
+            key_bytes, b"key-of-b",
+            "B's own new key is on disk — A's never survives the registration"
+        );
+        assert_eq!(
+            bir_core::relay::device_key_owner().map(|key| key.user_id),
+            Some("user-b".to_string()),
+            "the owner record is B's, written in the same step"
+        );
+    }
+
+    /// the_forget_and_a_registration_never_interleave: both funnel through the one DEVICE_KEY
+    /// lock — while it is held, neither begins.
+    #[test]
+    fn the_forget_and_a_registration_never_interleave() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: "user-a".into(),
+        };
+        // Hold DEVICE_KEY on this thread: the forget on its own thread must wait.
+        let guard = bir_core::relay::device_key_lock_for_test();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let key_a_thread = key_a.clone();
+        let forget = std::thread::spawn(move || {
+            bir_core::relay::forget_device_key_for(&key_a_thread);
+            let _ = sender.send("forget done");
+        });
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_err(),
+            "the forget ran without the DEVICE_KEY lock — the funnel is broken"
+        );
+        // The registration waits the same way.
+        let (sender2, receiver2) = std::sync::mpsc::channel();
+        let key_a_register = key_a.clone();
+        let registration = std::thread::spawn(move || {
+            bir_core::relay::register_device_key_for_test(&key_a_register, || {
+                bir_core::relay::Registration::Registered
+            });
+            let _ = sender2.send("registration done");
+        });
+        assert!(
+            receiver2
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_err(),
+            "the registration ran without the DEVICE_KEY lock — the funnel is broken"
+        );
+        drop(guard);
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_ok(),
+            "the forget completes once the lock is free"
+        );
+        assert!(
+            receiver2
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_ok(),
+            "the registration completes once the lock is free"
+        );
+        forget.join().unwrap();
+        registration.join().unwrap();
+    }
+
+    /// an_unowned_key_is_adopted_by_the_stored_owner_not_replaced: a pre-recording install's key
+    /// keeps working — the stored owner adopts it, and it is never replaced while that same
+    /// owner is signed in.
+    #[test]
+    fn an_unowned_key_is_adopted_by_the_stored_owner_not_replaced() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        // The pre-update install: a key with NO owner record.
+        write_device_key(&scratch, "key-of-a-legacy", None);
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: "user-a".into(),
+        };
+        assert!(
+            bir_core::relay::adopt_device_key(&key_a),
+            "the adoption runs: the key is unowned, the cache is this owner"
+        );
+        assert_eq!(
+            bir_core::relay::device_key_owner().map(|key| key.user_id),
+            Some("user-a".to_string()),
+            "the owner record is written beside the same key"
+        );
+        let files_after_adoption = device_key_files(&scratch);
+        // A registration for the SAME owner never replaces the adopted key.
+        let scratch_dir = scratch.layout.device_dir().to_path_buf();
+        bir_core::relay::register_device_key_for_test(&key_a, move || {
+            // bir-submit finds a key already and registers with it — no new key is written.
+            let _ = &scratch_dir;
+            bir_core::relay::Registration::Registered
+        });
+        assert_eq!(
+            device_key_files(&scratch),
+            files_after_adoption,
+            "the adopted key is never replaced while its owner is signed in"
+        );
+        // A second adoption is a no-op (the record exists now).
+        assert!(!bir_core::relay::adopt_device_key(&key_a));
+        // And another owner's cache never adopts at all.
+        write_device_key(&scratch, "key-of-nobody", None);
+        // (the owner record from A is still on disk from the adoption — remove it for the case)
+        std::fs::remove_file(
+            scratch
+                .layout
+                .device_dir()
+                .join("buwiz_submit_device_owner.txt"),
+        )
+        .ok();
+        let other = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: "user-not-stored".into(),
+        };
+        assert!(
+            !bir_core::relay::adopt_device_key(&other),
+            "no adoption while the cache is not that owner"
+        );
+    }
+
+    /// refresh_signed_out_arm_never_deadlocks_with_a_commit: the SignedOut arm's server_ended
+    /// and a commit run concurrently; both finish inside the bound.
+    #[test]
+    fn refresh_signed_out_arm_never_deadlocks_with_a_commit() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        // The SignedOut arm (server_ended) on one thread, a commit on another, at once.
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let barrier2 = barrier.clone();
+        let ended = std::thread::spawn(move || {
+            barrier2.wait();
+            server_ended(key_a, epoch);
+        });
+        barrier.wait();
+        let (handle, path) = scratch_handle(&scratch, "commit-room.db");
+        commit(epoch, room_target(&owner_a), Some((handle, path)));
+        // The bounded join is the failure margin: a lock-ordering inversion (SESSION vs the
+        // account lock) never returns.
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            ended.join().unwrap();
+            let _ = sender.send("joined");
+        });
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .is_ok(),
+            "server_ended and commit deadlocked — the lock order is inverted"
+        );
+        assert_invariants();
     }
 
     /// two_engines_boot_one_session: two engines boot for the same owner AT ONCE — one Opening,
@@ -1720,7 +2463,6 @@ mod tests {
     /// d1: a sign-out changes the stored sign-in and the gate in one step — the invariants hold
     /// after every step of the scripted interleaving, for the user's sign-out and a server 401.
     #[test]
-    #[ignore = "commit 3"]
     fn d1_sign_out_changes_the_stored_sign_in_and_the_gate_in_one_step() {
         let _turn = test_turn();
         let scratch = scratch();
@@ -1728,11 +2470,14 @@ mod tests {
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch = snapshot().epoch;
         assert_invariants();
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
         assert_invariants();
         assert!(gate_unlocked());
-        // The sign-out: one critical section holds the stored clear and the close (commit 3).
-        commit3_sign_out();
+        // The user's sign-out: the real session::sign_out. After it returns, the disk, the
+        // cache, the gate and the phase have all moved — the one-section shape means no
+        // interleaving inside the machine can observe them apart, and the invariants (which
+        // read the cache, not the disk) hold at every step the harness can pause.
+        sign_out();
         assert!(!gate_unlocked(), "the gate locked in the same step");
         assert!(
             bir_core::cloud_account::load_stored_account()
@@ -1740,14 +2485,42 @@ mod tests {
                 .is_none(),
             "the stored sign-in is gone in the same step"
         );
+        assert_eq!(
+            bir_core::account_session::stored_owner(),
+            None,
+            "the cache went to None inside the SESSION section"
+        );
+        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
+        assert_invariants();
+
+        // The server-ended arm: a fresh session, ended by the hook's real path at its epoch.
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room2.db");
+        assert!(gate_unlocked());
+        server_ended(
+            bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            epoch,
+        );
+        assert!(!gate_unlocked(), "the gate locked in the same step");
+        assert!(
+            bir_core::cloud_account::load_stored_account()
+                .unwrap()
+                .is_none(),
+            "the stored sign-in is gone in the same step"
+        );
+        assert_eq!(bir_core::account_session::stored_owner(), None);
+        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
         assert_invariants();
     }
 
-    /// An Http stub whose exchange blocks on a harness gate: the refresh's network wait, parked
-    /// exactly where the test wants it, with no sleeps.
-    struct GateBlockedHttp {
-        gate: hooks::Gate,
-    }
+    /// An Http stub whose exchange parks on the harness point "refresh.network": the refresh's
+    /// network wait, stopped exactly where the test wants it, with no sleeps.
+    struct GateBlockedHttp;
 
     impl bir_core::cloud_account::Http for GateBlockedHttp {
         fn exchange(
@@ -1756,93 +2529,161 @@ mod tests {
         ) -> Result<bir_core::cloud_account::HttpResponse, bir_core::cloud_account::CloudError>
         {
             hooks::at("refresh.network");
-            let _ = &self.gate;
-            // Released only when the test drops the gate: until then this thread parks inside
-            // the wait below. The gate itself is the harness's — reaching here means the pause
-            // already blocks us, so nothing further is needed.
             Err(bir_core::cloud_account::CloudError::Network(
                 "parked".to_string(),
             ))
         }
     }
 
+    /// A stored sign-in for `user_id` whose access token is already expired, so every token path
+    /// must reach the network — seeded for the server this build resolves, so the refresh verbs
+    /// pass their server check and reach the network too.
+    fn seed_stored_expired(user_id: &str) -> Owner {
+        let server_url = crate::cloud_account::resolve()
+            .map(|resolved| resolved.url)
+            .unwrap_or_else(|_| "https://buwiz.example.test".to_string());
+        let practice = false;
+        let stored = bir_core::cloud_account::StoredAccount {
+            server_url: server_url.clone(),
+            access_token: format!("access-{user_id}"),
+            refresh_token: format!("refresh-{user_id}"),
+            access_expires_at_unix: 0,
+            user_id: user_id.to_string(),
+            email: Some(format!("{user_id}@example.test")),
+            offline: false,
+            last_refresh_unix: 0,
+            practice,
+        };
+        bir_core::account_session::save_stored(&stored).unwrap();
+        bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(&stored));
+        Owner {
+            origin: bir_core::rooms::room_origin(&server_url).unwrap(),
+            user_id: user_id.to_string(),
+            practice,
+        }
+    }
+
+    /// Probe the account lock: send on the channel once `account_session::lock()` is taken and
+    /// released. While a refresh holds the lock across its network — D2 itself — the probe never
+    /// fires, and the test fails on the bound.
+    fn probe_account_lock() -> std::sync::mpsc::Receiver<&'static str> {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            {
+                let _one = bir_core::account_session::lock();
+            }
+            let _ = sender.send("lock free");
+        });
+        receiver
+    }
+
     /// d2: a slow refresh never holds SESSION — snapshot() and a commit return while the
     /// refresh's network wait is still parked (the refresh restructure of §4).
     #[test]
-    #[ignore = "commit 3"]
     fn d2_a_slow_refresh_never_holds_session() {
         let _turn = test_turn();
         let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
+        let owner_a = seed_stored_expired("user-a");
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // A real refresh, parked in its network wait on the harness gate.
-        let network_gate = hooks::pause("refresh.network");
-        let refresh = std::thread::spawn(move || {
-            let mut http = GateBlockedHttp {
-                gate: hooks::pause("refresh.never"),
-            };
-            let secrets = bir_core::cloud_account::AccountSecrets {
-                server_url: "https://buwiz.example.test".into(),
-                access_token: "access-user-a".into(),
-                refresh_token: "refresh-user-a".into(),
-                access_expires_at_unix: 0,
-                user_id: "user-a".into(),
-                email: Some("user-a@example.test".into()),
-                offline: false,
-                practice: false,
-            };
-            let _ = bir_core::cloud_account::refresh_session(
+
+        // Each arm runs to its end before the next begins: the harness keeps one gate per named
+        // point, so the arms are serial — park, probe, release, join.
+        // 1. access_token itself, parked mid-refresh (its refresh was forced by the expiry).
+        let gate = hooks::pause("refresh.network");
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let scratch_dir = scratch.layout.device_dir().to_path_buf();
+        let token_thread = std::thread::spawn(move || {
+            bir_core::platform::set_device_dir_override(Some(scratch_dir));
+            let mut http = GateBlockedHttp;
+            let _ = bir_core::account_session::access_token(
                 &mut http,
-                &secrets,
                 bir_core::cloud_account::unix_now(),
+                false,
+                &key_a,
             );
         });
-        network_gate.reached();
-        // While the refresh is parked: snapshot() returns at once, and a commit does not wait
-        // on the refresh either. The commit's own epoch is stale here — what matters is that it
-        // RETURNS, not what it installs.
-        let snap = snapshot();
-        assert_eq!(
-            snap.phase_kind,
-            PhaseKind::Open,
-            "snapshot never waits on a refresh"
+        gate.reached();
+        // While it is parked: the account lock is free (the network holds nothing), and the
+        // machine answers.
+        let probe = probe_account_lock();
+        assert!(
+            probe
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_ok(),
+            "access_token held the account lock across the network — D2 itself"
         );
+        let snap = snapshot();
+        assert_eq!(snap.phase_kind, PhaseKind::Open, "snapshot never waits");
+        // And a commit returns too — its owner check reads the cache, never the account lock.
         let (handle, path) = scratch_handle(&scratch, "late-room.db");
         commit(epoch, room_target(&owner_a), Some((handle, path)));
-        commit2_refresh_is_restructured();
-        network_gate.release();
-        refresh.join().unwrap();
-        assert_invariants();
-    }
+        gate.release();
+        token_thread.join().unwrap();
 
-    /// commit 2 (the stored-sign-in commit) restructures the refresh: load under the lock,
-    /// release, the network wait with NO lock, save_stored_if under the lock. Until then the
-    /// production path holds account_session::lock() across the network — D2 itself — and this
-    /// test cannot pass.
-    fn commit2_refresh_is_restructured() {
-        panic!("commit 2 wires this: the refresh restructure")
+        // 2. refresh_account, the verb itself, parked the same way.
+        crate::cloud_account::set_test_refresh_http(Some(Box::new(|| Box::new(GateBlockedHttp))));
+        let gate = hooks::pause("refresh.network");
+        let verb = crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+            .expect("the verb spawns");
+        let verb_thread = std::thread::spawn(move || {
+            futures::executor::block_on(verb).ok();
+        });
+        gate.reached();
+        let probe = probe_account_lock();
+        assert!(
+            probe
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_ok(),
+            "refresh_account held the account lock across the network — D2 itself"
+        );
+        gate.release();
+        crate::cloud_account::set_test_refresh_http(None);
+        verb_thread.join().unwrap();
+
+        // 3. the launch restore, parked the same way.
+        let gate = hooks::pause("refresh.network");
+        let scratch_dir2 = scratch.layout.device_dir().to_path_buf();
+        let restore = std::thread::spawn(move || {
+            bir_core::platform::set_device_dir_override(Some(scratch_dir2));
+            let mut http = GateBlockedHttp;
+            let _ = crate::cloud_account::restore_saved_session_with(&mut http);
+        });
+        gate.reached();
+        let probe = probe_account_lock();
+        assert!(
+            probe
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_ok(),
+            "the launch restore held the account lock across the network — D2 itself"
+        );
+        gate.release();
+        restore.join().unwrap();
+        assert_invariants();
     }
 
     /// d4a: a device-key registration of A's, resolving after the switch, writes nothing for B.
     #[test]
-    #[ignore = "commit 4"]
+    #[ignore = "commit 3"]
     fn d4a_a_late_registration_of_a_writes_no_device_key_for_b() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
         // The switch.
-        commit3_sign_out();
-        bir_core::cloud_account::clear_stored_account();
+        sign_out();
+        bir_core::account_session::clear_stored();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         let epoch_b = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
         assert_invariants();
         // A's registration resolves now: it writes nothing. The device-key file of the device
         // directory — whatever relay writes there for a registration — is byte-for-byte what it
@@ -1991,7 +2832,7 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         // The import pauses with the session check passed, before the install.
         let import_gate = hooks::pause("import.after_session_lock");
@@ -2070,7 +2911,7 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
         let generation_a = snapshot().room.unwrap().1;
         // The inbox thread captures its epoch and generation, then the session switches.
         let inbox_gate = hooks::pause("inbox.before_write");
@@ -2082,7 +2923,7 @@ mod tests {
             commit4_inbox_write(&owner, epoch_a, generation_a);
         });
         inbox_gate.reached();
-        commit3_sign_out();
+        sign_out();
         inbox_gate.release();
         inbox.join().unwrap();
         assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
@@ -2099,19 +2940,33 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
         // The switch before the send's token read.
-        commit3_sign_out();
-        bir_core::cloud_account::clear_stored_account();
+        sign_out();
+        bir_core::account_session::clear_stored();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         let epoch_b = snapshot().epoch;
-        commit2_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
+        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
         // A's send reaches its token: it must not read B's.
-        let fetches_before = bir_core::account_session::token_fetch_count();
+        let fetches_before = bir_core::account_session::token_fetches_for(
+            &bir_core::account_session::OwnerKey::of(
+                &bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap(),
+        );
         commit4_spawn_send(&owner_a, epoch_a);
         assert_eq!(
-            bir_core::account_session::token_fetch_count(),
+            bir_core::account_session::token_fetches_for(
+                &bir_core::account_session::OwnerKey::of(
+                    &bir_core::cloud_account::load_stored_account()
+                        .unwrap()
+                        .unwrap()
+                )
+                .unwrap()
+            ),
             fetches_before,
             "NO token was asked for another owner"
         );

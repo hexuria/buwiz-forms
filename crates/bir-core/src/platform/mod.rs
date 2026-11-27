@@ -250,6 +250,32 @@ pub fn set_device_dir_override(path: Option<std::path::PathBuf>) {
     DEVICE_DIR_OVERRIDE.with(|slot| *slot.borrow_mut() = path);
 }
 
+/// The device-folder override of this thread, captured for a spawned thread to resume — the
+/// same discipline as the database-path override's: a worker thread that reads the account file
+/// or the device key must read the same install as the thread that asked.
+pub struct DeviceDirOverride {
+    path: Option<std::path::PathBuf>,
+}
+
+impl DeviceDirOverride {
+    /// Run `work` with the captured override set on this thread, restoring the thread's own
+    /// after. In production there is no override and this is a pass-through.
+    pub fn run<T>(&self, work: impl FnOnce() -> T) -> T {
+        let previous = DEVICE_DIR_OVERRIDE.with(|slot| slot.borrow().clone());
+        DEVICE_DIR_OVERRIDE.with(|slot| *slot.borrow_mut() = self.path.clone());
+        let answer = work();
+        DEVICE_DIR_OVERRIDE.with(|slot| *slot.borrow_mut() = previous);
+        answer
+    }
+}
+
+/// Capture this thread's device-folder override for a spawned thread.
+pub fn capture_device_dir_override() -> DeviceDirOverride {
+    DeviceDirOverride {
+        path: DEVICE_DIR_OVERRIDE.with(|slot| slot.borrow().clone()),
+    }
+}
+
 /// Whether a test device-folder override is set (A3a's host tests): then the legacy single-file
 /// slot never opens — outside single-room mode the room is the only slot.
 pub fn device_dir_override_active() -> bool {

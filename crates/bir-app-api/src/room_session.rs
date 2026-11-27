@@ -1449,20 +1449,68 @@ mod a3a_tests {
         crate::open_room::close_room();
     }
 
-    /// F2: the server-ended sign-outs close the room too. A's device revoked, B signing in: nothing
-    /// of A stays in the slot, however the sign-in ended.
+    /// F2: the server-ended sign-outs close the room too. Rewritten against the machine in the
+    /// stored-sign-in commit: the hook is session::server_ended now, and the room it closes is
+    /// the machine's Open phase — the slot this test used to open through is the commit-3
+    /// wiring's to delete.
     #[test]
     fn the_server_ended_sign_outs_close_the_room() {
-        let _turn = turn();
-        let scratch = scratch();
-        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
-        let a = stored("user-a");
-        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
-        assert!(crate::open_room::current().is_some());
-        crate::cloud_account::session_ended_by_server();
-        assert!(
-            crate::open_room::current().is_none(),
-            "the server-ended sign-out left the room in the slot"
+        let _turn = crate::session::test_turn();
+        let _scratch = scratch();
+        // A stored sign-in, seeded as the machine's tests seed it: the write plus the cache.
+        let server_url = "https://buwiz.example.test";
+        let stored_account = bir_core::cloud_account::StoredAccount {
+            server_url: server_url.to_string(),
+            access_token: "access-user-a".into(),
+            refresh_token: "refresh-user-a".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-a".into(),
+            email: None,
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        bir_core::account_session::save_stored(&stored_account).unwrap();
+        bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+            &stored_account,
+        ));
+        let owner = crate::session::Owner {
+            origin: bir_core::rooms::room_origin(server_url).unwrap(),
+            user_id: "user-a".into(),
+            practice: false,
+        };
+        crate::session::begin_open(owner.clone(), 1, crate::session::OpenWhy::SignIn);
+        let epoch = crate::session::snapshot().epoch;
+        // Hand-drive the open the claim thread will own from commit 3.
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("a-room.db");
+        let handle = std::sync::Arc::new(std::sync::Mutex::new(
+            bir_core::db::Database::open(&path).unwrap(),
+        ));
+        crate::session::commit(
+            epoch,
+            crate::session::Target::Room(bir_core::rooms::room_id_for(
+                &owner.origin,
+                &owner.user_id,
+            )),
+            Some((handle, path)),
+        );
+        assert_eq!(
+            crate::session::snapshot().phase_kind,
+            crate::session::PhaseKind::Open
+        );
+        // The server ends the sign-in at this epoch: the machine closes in the same step.
+        crate::session::server_ended(
+            bir_core::account_session::OwnerKey {
+                origin: owner.origin.clone(),
+                user_id: owner.user_id.clone(),
+            },
+            epoch,
+        );
+        assert_eq!(
+            crate::session::snapshot().phase_kind,
+            crate::session::PhaseKind::SignedOut,
+            "the server-ended sign-out left the room open"
         );
         assert!(
             bir_core::db::open_room_id().is_none(),

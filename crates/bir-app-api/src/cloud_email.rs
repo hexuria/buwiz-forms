@@ -587,7 +587,7 @@ mod tests {
             );
             let again = json(verify_with(&mut fake, "246810", 1_011));
             assert_eq!(again["outcome"], "restart");
-            cloud_account::clear_stored_account();
+            bir_core::account_session::clear_stored();
         });
     }
 

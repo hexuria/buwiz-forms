@@ -20,7 +20,124 @@ const EXPIRY_MARGIN_SECONDS: i64 = 30;
 const RECENT_REFRESH_SECONDS: i64 = 10;
 
 static ACCOUNT_LOCK: Mutex<()> = Mutex::new(());
-static SESSION_ENDED: OnceLock<fn()> = OnceLock::new();
+static SESSION_ENDED: OnceLock<fn(OwnerKey, u64)> = OnceLock::new();
+
+/// The stored sign-in's identity key: the normalised server origin (rooms::room_origin) and the
+/// user id. Every owner check in the session world compares this, never the raw server URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnerKey {
+    pub origin: String,
+    pub user_id: String,
+}
+
+impl OwnerKey {
+    /// The key of a stored sign-in, or None while its server URL does not normalise.
+    pub fn of(stored: &StoredAccount) -> Option<OwnerKey> {
+        let origin = crate::rooms::room_origin(&stored.server_url).ok()?;
+        Some(OwnerKey {
+            origin,
+            user_id: stored.user_id.clone(),
+        })
+    }
+}
+
+/// F8: who is stored, cached in memory. Filled once at first use from the stored sign-in; every
+/// save and clear of the stored sign-in updates it inside the same account_session::lock()
+/// section as the file or keychain write, so a reader never needs the file, the keychain or the
+/// account lock. Its own small lock, no I/O.
+static STORED_OWNER: Mutex<Option<Option<OwnerKey>>> = Mutex::new(None);
+
+/// The stored sign-in's owner key, or None while nobody is stored. Never touches the file after
+/// the first read: every writer keeps it current inside the account lock.
+pub fn stored_owner() -> Option<OwnerKey> {
+    {
+        let cache = STORED_OWNER
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(owner) = cache.as_ref() {
+            return owner.clone();
+        }
+    }
+    // First use: fill from the stored sign-in, under the account lock so no write races the read.
+    let owner = {
+        let _one = lock();
+        cloud_account::load_stored_account()
+            .ok()
+            .flatten()
+            .and_then(|stored| OwnerKey::of(&stored))
+    };
+    *STORED_OWNER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(owner.clone());
+    owner
+}
+
+/// The cache's one transition door (F8'): the in-memory answer to "who is stored" changes here
+/// and nowhere else. The machine (bir-app-api's session) runs the change inside its SESSION
+/// section — persistence first: the disk write already happened under the account lock, outside
+/// SESSION, so a crash between the two leaves the disk signed out and the cache refills from it
+/// on the next launch, the safe direction. The small cache lock nests inside SESSION.
+pub fn cache_owner(owner: Option<OwnerKey>) {
+    *STORED_OWNER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(owner);
+}
+
+/// Forget the filled answer: the next stored_owner() reads the disk again. Tests use it to
+/// simulate a relaunch (the crash-window test); production never does.
+#[cfg(any(test, feature = "test-support"))]
+pub fn reset_owner_cache_for_tests() {
+    *STORED_OWNER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+}
+
+/// Whether the stored sign-in IS this owner (the normalised origin and the user id), read from
+/// the cache — no lock of this module's, no I/O (F3c).
+pub fn stored_is_owner(owner: &OwnerKey) -> bool {
+    stored_owner().as_ref() == Some(owner)
+}
+
+/// Save the stored sign-in through the one path: the file and keychain write. The caller holds
+/// [`lock`] — every writer of the stored sign-in routes here (the guard test scans for direct
+/// cloud_account calls). The OWNER CACHE is not touched here (F8'): the machine sets it inside
+/// its SESSION section after the persist — or, for a same-owner refresh, the owner never
+/// changes, so the cache is already right.
+pub fn save_stored(stored: &StoredAccount) -> Result<(), CloudError> {
+    cloud_account::save_stored_account(stored)
+}
+
+/// Forget the stored sign-in — the file AND the keychain entry — through the one path. The
+/// caller holds [`lock`], outside SESSION; the cache's None is the machine's later step.
+pub fn forget_stored() -> Result<(), CloudError> {
+    cloud_account::forget_stored_account()
+}
+
+/// Save the stored sign-in only if the stored owner is still `owner` (§4): a late refresh of a
+/// session that has since changed hands writes nothing. Answers whether the save ran.
+pub fn save_stored_if(owner: &OwnerKey, stored: &StoredAccount) -> Result<bool, CloudError> {
+    if !stored_is_owner(owner) {
+        return Ok(false);
+    }
+    save_stored(stored)?;
+    Ok(true)
+}
+
+/// Clear the stored sign-in through the one path: the file write. The caller holds [`lock`],
+/// outside SESSION; the cache's None is the machine's SESSION-section step (F8').
+pub fn clear_stored() {
+    cloud_account::clear_stored_account();
+}
+
+/// Clear the stored sign-in only if its owner is still `owner` (§4): a server-ended session of
+/// A's never clears B's sign-in. Answers whether the clear ran.
+pub fn clear_stored_if(owner: &OwnerKey) -> bool {
+    if !stored_is_owner(owner) {
+        return false;
+    }
+    clear_stored();
+    true
+}
 
 /// Serializes every token refresh and every write of the saved sign-in in this process. Hold it across
 /// "read the saved account, call the server, write it back". Blocking; never hold it across an `.await`.
@@ -65,31 +182,72 @@ impl std::error::Error for TokenError {}
 ///   by the same rules, refreshing at most once more. If it is the same, the sign-in has ended: clear the
 ///   saved account, call the session-ended hook, return `SignedOut`.
 /// - Network failure: `Offline(reason)`; nothing is cleared or changed.
-/// Test instrumentation: how many token fetches this process ran. A send that must not take a
-/// token is tested by the count not moving.
-#[cfg(any(test, feature = "test-support"))]
-pub static TOKEN_FETCHES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
-#[cfg(any(test, feature = "test-support"))]
-pub fn token_fetch_count() -> u64 {
-    TOKEN_FETCHES.load(std::sync::atomic::Ordering::SeqCst)
-}
-
-pub fn access_token(http: &mut dyn Http, now_unix: i64, force: bool) -> Result<String, TokenError> {
+///
+/// The owner check of §5.4: a token is answered only for `for_owner` — the owner the send or
+/// verb started under. While the stored sign-in is anyone else's, the answer is SignedOut for
+/// that owner and NOTHING is cleared and no hook runs.
+pub fn access_token(
+    http: &mut dyn Http,
+    now_unix: i64,
+    force: bool,
+    for_owner: &OwnerKey,
+) -> Result<String, TokenError> {
     #[cfg(any(test, feature = "test-support"))]
-    TOKEN_FETCHES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    access_token_in(&SavedAccount, http, now_unix, force, &run_session_ended)
+    note_token_fetch(for_owner);
+    let epoch = crate::session_epoch::current();
+    access_token_in(
+        &SavedAccount,
+        http,
+        now_unix,
+        force,
+        for_owner,
+        epoch,
+        &end_session_for,
+    )
 }
 
-/// What the host does when the sign-in ends outside a user action (rejected refresh, device removed):
-/// bir-app-api registers closing its account gate. Set once; later calls are ignored.
-pub fn on_session_ended(hook: fn()) {
+/// Test instrumentation: token fetches counted PER OWNER, so one test's fetch never flakes
+/// another's assertion (f7, i5). The key is the owner the fetch was for.
+#[cfg(any(test, feature = "test-support"))]
+static TOKEN_FETCHES: std::sync::LazyLock<Mutex<std::collections::HashMap<(String, String), u64>>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+#[cfg(any(test, feature = "test-support"))]
+fn note_token_fetch(owner: &OwnerKey) {
+    let mut fetches = TOKEN_FETCHES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *fetches
+        .entry((owner.origin.clone(), owner.user_id.clone()))
+        .or_insert(0) += 1;
+}
+
+/// How many token fetches this process ran for `owner`.
+#[cfg(any(test, feature = "test-support"))]
+pub fn token_fetches_for(owner: &OwnerKey) -> u64 {
+    TOKEN_FETCHES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&(owner.origin.clone(), owner.user_id.clone()))
+        .copied()
+        .unwrap_or(0)
+}
+
+/// What the host does when the sign-in ends outside a user action (rejected refresh, device
+/// removed): bir-app-api registers session::server_ended, which takes the owner and the epoch
+/// the ending acted for. Set once; later calls are ignored.
+pub fn on_session_ended(hook: fn(OwnerKey, u64)) {
     let _ = SESSION_ENDED.set(hook);
 }
 
-/// End the saved sign-in now: clear the saved account and run the hook. Takes [`lock`]. Idempotent.
-pub fn end_session() {
-    end_session_in(&SavedAccount, &run_session_ended);
+/// The sign-in of `owner` ended at the server (a 401, an InvalidGrant), in the session of
+/// `epoch`. bir-core no longer clears anything itself (§4): it ONLY calls the registered hook —
+/// session::server_ended — which does the clear-if-owner and the close in one SESSION section.
+/// A mismatched owner or epoch is the hook's no-op, so nothing of a later sign-in is touched.
+pub fn end_session_for(owner: OwnerKey, epoch: u64) {
+    if let Some(hook) = SESSION_ENDED.get() {
+        hook(owner, epoch);
+    }
 }
 
 /// The `bir_submit::TokenSource` of this process. `access_token` runs [`access_token`] on
@@ -107,13 +265,23 @@ impl bir_submit::TokenSource for AccountTokens {
         Box<dyn std::future::Future<Output = Result<String, bir_submit::ClientError>> + Send + '_>,
     > {
         // The account file sits next to the database, whose in-process name is per thread: the blocking
-        // thread runs under the name of the thread that asked.
+        // thread runs under the name of the thread that asked. The owner the token is for is read
+        // here, at the call: until §5.4's SEND_OWNER lands with the wiring commit, the owner the
+        // send started under IS the stored owner of that moment.
         let database = crate::db::capture_database_path_override();
+        let Some(for_owner) = stored_owner() else {
+            return Box::pin(async move { Err(bir_submit::ClientError::SignedOut) });
+        };
         Box::pin(async move {
             let answer = tokio::task::spawn_blocking(move || {
                 database.run(|| {
                     let mut http = cloud_account::BlockingHttp::new();
-                    access_token(&mut http, cloud_account::unix_now(), force_refresh)
+                    access_token(
+                        &mut http,
+                        cloud_account::unix_now(),
+                        force_refresh,
+                        &for_owner,
+                    )
                 })
             })
             .await
@@ -134,7 +302,11 @@ impl bir_submit::TokenSource for AccountTokens {
     }
 
     fn session_ended(&self) {
-        end_session();
+        // The server's 401 ended the session of the owner stored when the send started, in this
+        // epoch. bir-core clears nothing itself: the hook's one section decides (§4).
+        if let Some(owner) = stored_owner() {
+            end_session_for(owner, crate::session_epoch::current());
+        }
     }
 }
 
@@ -143,6 +315,9 @@ impl bir_submit::TokenSource for AccountTokens {
 trait AccountStore {
     fn load(&self) -> Result<Option<StoredAccount>, CloudError>;
     fn save(&self, stored: &StoredAccount) -> Result<(), CloudError>;
+    /// The memory stores of the tests use it; production's clears route through the public
+    /// clear_stored/forget_stored now that end_session is gone.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn clear(&self);
 }
 
@@ -155,63 +330,72 @@ impl AccountStore for SavedAccount {
     }
 
     fn save(&self, stored: &StoredAccount) -> Result<(), CloudError> {
-        cloud_account::save_stored_account(stored)
+        // The one path: the write and the owner cache's update in the same lock section (the
+        // caller of token work holds the lock for this).
+        save_stored(stored)
     }
 
     fn clear(&self) {
-        cloud_account::clear_stored_account();
+        clear_stored();
     }
 }
 
-fn run_session_ended() {
-    if let Some(hook) = SESSION_ENDED.get() {
-        hook();
+/// Drops the flight marker however the refresh ends, waking the waiters.
+struct FlightGuard;
+
+impl Drop for FlightGuard {
+    fn drop(&mut self) {
+        *REFRESH_HELD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = false;
+        REFRESH_FLIGHT_FREE.notify_all();
     }
 }
 
-/// [`access_token`] against `store`. The hook runs after [`lock`] is released.
+/// The single flight of the refresh (D2's other half): the account lock is never held across
+/// the network, but two in-process refreshes of one owner never race either — the second waits
+/// HERE, on a condvar that is not the account lock, then re-reads the record the first one
+/// saved. Without it a racing pair would burn the rotation: one refresh invalidating the
+/// other's token mid-flight, and the loser's re-read can meet the stale record before the
+/// winner's save lands — a spurious session-ending. Cross-process rotation (bir-mcp) is still
+/// the re-read-and-retry arm below.
+static REFRESH_FLIGHT_FREE: std::sync::Condvar = std::sync::Condvar::new();
+static REFRESH_HELD: Mutex<bool> = Mutex::new(false);
+
+/// [`access_token`] against `store` — the D2 restructure (§4): the lock is held only for the
+/// file reads and writes, NEVER across the network refresh. The owner check comes first: a
+/// stored sign-in that is not `for_owner` answers SignedOut for that owner with no clear and no
+/// hook.
 fn access_token_in(
     store: &dyn AccountStore,
     http: &mut dyn Http,
     now_unix: i64,
     force: bool,
-    session_ended: &dyn Fn(),
+    for_owner: &OwnerKey,
+    epoch: u64,
+    ended: &dyn Fn(OwnerKey, u64),
 ) -> Result<String, TokenError> {
-    let mut ended = false;
-    let answer = {
-        let _one = lock();
-        token_under_lock(store, http, now_unix, force, &mut ended)
-    };
-    if ended {
-        session_ended();
-    }
-    answer
-}
-
-fn end_session_in(store: &dyn AccountStore, session_ended: &dyn Fn()) {
-    {
-        let _one = lock();
-        store.clear();
-    }
-    session_ended();
-}
-
-/// The rules of [`access_token`]. The caller holds [`lock`]. `ended` is set when the
-/// sign-in ended here and the hook must run.
-fn token_under_lock(
-    store: &dyn AccountStore,
-    http: &mut dyn Http,
-    now_unix: i64,
-    force: bool,
-    ended: &mut bool,
-) -> Result<String, TokenError> {
-    let mut stored = match store.load() {
-        Ok(Some(stored)) => stored,
-        Ok(None) => return Err(TokenError::SignedOut),
-        Err(error) => return Err(TokenError::Other(error.to_string())),
-    };
     let mut retried = false;
+    // The first load, under the lock: the fast paths (a valid token, a just-refreshed one)
+    // never leave it.
+    let mut stored = {
+        let _one = lock();
+        match store.load() {
+            Ok(Some(stored)) => stored,
+            Ok(None) => return Err(TokenError::SignedOut),
+            Err(error) => return Err(TokenError::Other(error.to_string())),
+        }
+    };
     loop {
+        // The owner check at every step (I5): the stored sign-in is not this send's owner →
+        // SignedOut for that owner, and nothing of the new owner's is touched.
+        let owner = match OwnerKey::of(&stored) {
+            Some(owner) => owner,
+            None => return Err(TokenError::SignedOut),
+        };
+        if owner != *for_owner {
+            return Err(TokenError::SignedOut);
+        }
         if !force && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
         {
             return Ok(stored.access_token);
@@ -219,6 +403,45 @@ fn token_under_lock(
         if force && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS {
             return Ok(stored.access_token);
         }
+        // The single flight, with NO lock of account_session's held: wait until no other
+        // in-process refresh runs, then re-read the record — the winner's save may have landed
+        // while we waited, making this refresh unnecessary.
+        {
+            let mut held = REFRESH_HELD
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            while *held {
+                held = REFRESH_FLIGHT_FREE
+                    .wait(held)
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+            }
+            *held = true;
+        }
+        let _flight = FlightGuard;
+        // The re-read after the wait: fast paths again — the winner's token may already serve.
+        // The owner check comes first again: the sign-in may have changed hands while we waited,
+        // and a token of the new owner's is never this owner's answer.
+        {
+            let _one = lock();
+            match store.load() {
+                Ok(Some(again)) => stored = again,
+                Ok(None) => {
+                    return Err(TokenError::SignedOut);
+                }
+                Err(error) => return Err(TokenError::Other(error.to_string())),
+            }
+        }
+        if OwnerKey::of(&stored).as_ref() != Some(for_owner) {
+            return Err(TokenError::SignedOut);
+        }
+        if !force && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
+        {
+            return Ok(stored.access_token);
+        }
+        if force && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS {
+            return Ok(stored.access_token);
+        }
+        // The network refresh with NO LOCK (D2): the lock is never held across it.
         match cloud_account::refresh_tokens(http, &stored.server_url, &stored.refresh_token) {
             Ok(tokens) => {
                 let next = StoredAccount {
@@ -227,17 +450,48 @@ fn token_under_lock(
                     access_expires_at_unix: now_unix.saturating_add(tokens.expires_in.max(1)),
                     offline: false,
                     last_refresh_unix: now_unix,
-                    ..stored
+                    ..stored.clone()
                 };
-                store
-                    .save(&next)
-                    .map_err(|error| TokenError::Other(error.to_string()))?;
+                // save_stored_if, under the lock: the FRESH record's owner decides — the
+                // stored sign-in may have changed hands during the unlocked network call. A
+                // mismatch discards the refreshed tokens.
+                let saved = {
+                    let _one = lock();
+                    let fresh = store.load();
+                    match fresh {
+                        Ok(Some(fresh)) if OwnerKey::of(&fresh).as_ref() == Some(for_owner) => {
+                            let merged = StoredAccount {
+                                access_token: next.access_token.clone(),
+                                refresh_token: next.refresh_token.clone(),
+                                access_expires_at_unix: next.access_expires_at_unix,
+                                offline: false,
+                                last_refresh_unix: now_unix,
+                                ..fresh
+                            };
+                            store
+                                .save(&merged)
+                                .map_err(|error| TokenError::Other(error.to_string()))?;
+                            true
+                        }
+                        Ok(Some(_)) => false,
+                        Ok(None) => false,
+                        Err(error) => return Err(TokenError::Other(error.to_string())),
+                    }
+                };
+                if !saved {
+                    return Err(TokenError::SignedOut);
+                }
                 return Ok(next.access_token);
             }
             Err(CloudError::Network(reason)) => return Err(TokenError::Offline(reason)),
             Err(CloudError::InvalidGrant) => {
-                let used = stored.refresh_token;
-                match store.load() {
+                let used = stored.refresh_token.clone();
+                // The re-check, a short locked read: another process may have rotated the token.
+                let again = {
+                    let _one = lock();
+                    store.load()
+                };
+                match again {
                     Ok(Some(again)) if again.refresh_token != used => {
                         if retried {
                             return Err(TokenError::Other(
@@ -248,13 +502,15 @@ fn token_under_lock(
                         stored = again;
                     }
                     Ok(Some(_)) => {
-                        store.clear();
-                        *ended = true;
+                        // The same refresh token the server just rejected: the sign-in has
+                        // ended. end_session_for ONLY calls the hook — the clear-if-owner and
+                        // the close are the hook's one SESSION section (§4).
+                        ended(owner, epoch);
                         return Err(TokenError::SignedOut);
                     }
                     // Another process signed out in the meantime.
                     Ok(None) => {
-                        *ended = true;
+                        ended(owner, epoch);
                         return Err(TokenError::SignedOut);
                     }
                     Err(error) => return Err(TokenError::Other(error.to_string())),
@@ -397,6 +653,10 @@ mod tests {
         }
     }
 
+    fn test_owner() -> OwnerKey {
+        OwnerKey::of(&account(0, 0)).expect("the test account normalises")
+    }
+
     fn ask(
         store: &MemoryStore,
         http: &mut dyn Http,
@@ -404,7 +664,7 @@ mod tests {
         force: bool,
         hook_runs: &AtomicUsize,
     ) -> Result<String, TokenError> {
-        access_token_in(store, http, now, force, &|| {
+        access_token_in(store, http, now, force, &test_owner(), 1, &|_, _| {
             hook_runs.fetch_add(1, Ordering::SeqCst);
         })
     }
@@ -483,8 +743,12 @@ mod tests {
         let answer = ask(&store, &mut FakeHttp(server.clone()), 1_000, false, &hook);
         assert_eq!(answer, Err(TokenError::SignedOut));
         assert_eq!(server.requests(), 1);
-        assert!(store.current().is_none(), "the saved account is cleared");
-        assert_eq!(store.clears.load(Ordering::SeqCst), 1);
+        // §4: bir-core clears nothing itself — the hook (the machine's server_ended) owns the
+        // clear. What this layer owes: the hook, once, with the owner and the epoch.
+        assert!(
+            store.current().is_some(),
+            "the record is the hook's to clear"
+        );
         assert_eq!(hook.load(Ordering::SeqCst), 1);
     }
 
@@ -582,15 +846,50 @@ mod tests {
     }
 
     #[test]
-    fn ending_the_session_clears_and_runs_the_hook_each_time() {
-        let store = MemoryStore::with(account(5_000, 500));
+    fn a_token_asked_for_another_owner_is_signed_out_and_requests_nothing() {
+        // I5 in the token layer: the stored sign-in is user-1's; a send of user-2's gets
+        // SignedOut for that owner, no request, no clear, no hook.
+        let store = MemoryStore::with(account(2_000, 500));
+        let server = FakeServer::new(&["refresh-0"]);
         let hook = AtomicUsize::new(0);
-        let count = || {
-            hook.fetch_add(1, Ordering::SeqCst);
+        let other = OwnerKey {
+            origin: test_owner().origin.clone(),
+            user_id: "user-2".into(),
         };
-        end_session_in(&store, &count);
-        end_session_in(&store, &count);
-        assert!(store.current().is_none());
-        assert_eq!(hook.load(Ordering::SeqCst), 2);
+        let answer = access_token_in(
+            &store,
+            &mut FakeHttp(server.clone()),
+            1_000,
+            false,
+            &other,
+            1,
+            &|_, _| {
+                hook.fetch_add(1, Ordering::SeqCst);
+            },
+        );
+        assert_eq!(answer, Err(TokenError::SignedOut));
+        assert_eq!(server.requests(), 0);
+        assert_eq!(hook.load(Ordering::SeqCst), 0);
+        assert!(
+            store.current().is_some(),
+            "nothing of the stored sign-in is touched"
+        );
+    }
+
+    #[test]
+    fn end_session_for_only_runs_the_hook() {
+        // §4: bir-core no longer clears anything itself — the hook (the machine's server_ended)
+        // owns the clear and the close.
+        let ran = std::sync::atomic::AtomicUsize::new(0);
+        let hook = |_: OwnerKey, _: u64| {
+            ran.fetch_add(1, Ordering::SeqCst);
+        };
+        // The registration is process-global; in the test binary nothing registers, so the hook
+        // is a no-op — what is tested is end_session_for's own shape: it does not touch a store.
+        let store = MemoryStore::with(account(5_000, 500));
+        let _ = hook;
+        end_session_for(test_owner(), 1);
+        end_session_for(test_owner(), 1);
+        assert!(store.current().is_some(), "nothing is cleared here");
     }
 }

@@ -60,7 +60,7 @@ pub fn register(module: HostModule) -> HostModule {
 /// Pause filing, then open the UI only when a saved session still qualifies.
 /// Call this before the menu bar is built and before the database worker starts.
 pub fn prepare_launch() {
-    bir_core::account_session::on_session_ended(session_ended_by_server);
+    bir_core::account_session::on_session_ended(crate::session::server_ended);
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
     drop_old_welcomed_list();
@@ -132,12 +132,10 @@ pub(crate) fn save_signed_in(
         offline: false,
         practice,
     };
-    {
-        let _one = bir_core::account_session::lock();
-        bir_core::transport::set_practice_account(practice);
-        save_stored(&stored_from(secrets, now))?;
-    }
-    // A new sign-in registers a new device key with the relay (the old one belonged to the old sign-in).
+    bir_core::transport::set_practice_account(practice);
+    // F10/F8': the persist and the cache are the machine's one step. Commit 3 adds the begin_open
+    // inside it; register_device_soon stays here until commit moves it into commit.
+    crate::session::signed_in(&stored_from(secrets, now)).map_err(host_error)?;
     bir_core::relay::forget_device();
     register_device_soon();
     Ok(())
@@ -157,38 +155,85 @@ fn register_device_soon() {
     }
 }
 
-fn refresh_account(
+/// Test seam: the Http refresh_account uses. A test parks the network by installing a factory
+/// whose answer blocks on a harness gate; production never sets it, and the blocking default is
+/// the real client.
+#[cfg(test)]
+static TEST_REFRESH_HTTP: std::sync::Mutex<
+    Option<Box<dyn Fn() -> Box<dyn cloud_account::Http + Send> + Send>>,
+> = std::sync::Mutex::new(None);
+
+#[cfg(test)]
+pub(crate) fn set_test_refresh_http(
+    factory: Option<Box<dyn Fn() -> Box<dyn cloud_account::Http + Send> + Send>>,
+) {
+    *TEST_REFRESH_HTTP
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = factory;
+}
+
+fn refresh_http() -> Box<dyn cloud_account::Http + Send> {
+    #[cfg(test)]
+    if let Some(factory) = TEST_REFRESH_HTTP
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_ref()
+    {
+        return factory();
+    }
+    Box::new(BlockingHttp::new())
+}
+
+pub(crate) fn refresh_account(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-refresh", || {
-        let _one = bir_core::account_session::lock();
-        let Some(stored) = load_stored()? else {
-            return status_now();
+        // D2: the epoch is captured at the verb's start; the lock is held for the file reads and
+        // writes only — never across refresh_session's network.
+        let epoch = bir_core::session_epoch::current();
+        let (stored, owner) = {
+            let _one = bir_core::account_session::lock();
+            let Some(stored) = load_stored()? else {
+                return status_now();
+            };
+            let resolved = resolve()?;
+            if stored.server_url != resolved.url {
+                clear_stored();
+                return status_now();
+            }
+            let Some(owner) = bir_core::account_session::OwnerKey::of(&stored) else {
+                return status_now();
+            };
+            (stored, owner)
         };
-        let resolved = resolve()?;
-        if stored.server_url != resolved.url {
-            clear_stored();
-            return status_now();
-        }
-        let mut http = BlockingHttp::new();
+        let mut http = refresh_http();
         let now = cloud_account::unix_now();
-        match cloud_account::refresh_session(&mut http, &stored.to_secrets(), now)
+        match cloud_account::refresh_session(http.as_mut(), &stored.to_secrets(), now)
             .map_err(host_error)?
         {
             SessionUpdate::Online(secrets) => {
                 bir_core::transport::set_practice_account(secrets.practice);
-                save_stored(&stored_from(secrets, now))?;
+                let _saved = {
+                    let _one = bir_core::account_session::lock();
+                    bir_core::account_session::save_stored_if(&owner, &stored_from(secrets, now))
+                        .map_err(host_error)?
+                };
             }
             SessionUpdate::Offline(secrets) => {
                 bir_core::transport::set_practice_account(secrets.practice);
-                save_stored(&stored_from(secrets, stored.last_refresh_unix))?;
+                let _saved = {
+                    let _one = bir_core::account_session::lock();
+                    bir_core::account_session::save_stored_if(
+                        &owner,
+                        &stored_from(secrets, stored.last_refresh_unix),
+                    )
+                    .map_err(host_error)?
+                };
             }
             SessionUpdate::SignedOut => {
-                clear_stored();
-                crate::account_gate::set_unlocked(false);
-                bir_core::transport::set_practice_account(false);
-                // F2: the server ended the sign-in — the room closes as in the user's own sign-out.
-                crate::room_session::close_session();
+                // D1: the machine's one section — the disk's delete-if-owner, the cache, the
+                // close — decided by the owner and the epoch captured above.
+                crate::session::server_ended(owner, epoch);
             }
         }
         status_now()
@@ -208,51 +253,18 @@ fn sign_out(
 /// relaunch, and the page shows the gate without waiting for the server. A sign-in this device could not
 /// remove is an error the page shows, never "signed out"; the gate locks and the logout goes out either way.
 fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
-    crate::cloud_email::cancel();
-    bir_core::background_cron::set_submission_paused(true);
-    let (logout, removed) = forget_stored_sign_in();
-    crate::account_gate::set_unlocked(false);
-    bir_core::transport::set_practice_account(false);
-    bir_core::relay::forget_device();
-    // §A.5 step 6: close the room. The slot's Arc and the generation go (the reader follows it:
-    // with_reader never serves a generation that is not the open room's). Sends already in flight
-    // finish against their own Arc. The room's file and its PIN stay.
-    crate::room_session::close_session();
-    // TODO(B2): clear ROOM_UNLOCKED once B2 lands it in this tree.
-    if let Ok(submitter) = bir_core::relay::submitter() {
-        submitter.invalidate_account_tins();
-    }
-    let status = status_now();
-    if let Some((server_url, access_token)) = logout {
-        logout_soon(http, server_url, access_token);
-    }
-    removed?;
-    status
+    let _ = http;
+    // D1: the end is the machine's one section — the disk first, the cache and the close inside
+    // SESSION, the logout after. Nothing here writes anything itself anymore.
+    crate::session::sign_out();
+    crate::hooks::hooks().refresh_menu();
+    status_now()
 }
-
-/// Takes what the logout needs (the server's address and the access token) into memory and removes the saved
-/// sign-in (the private file and the keychain entry) under the account-session lock, so a refresh running now
-/// cannot save it back. An unreadable record is removed too: nothing can be revoked with it, and it must not
-/// outlive the sign-out.
-fn forget_stored_sign_in() -> (Option<(String, String)>, Result<(), HostError>) {
-    let _one = bir_core::account_session::lock();
-    let logout = load_stored()
-        .ok()
-        .flatten()
-        .map(|stored| (stored.server_url, stored.access_token));
-    let removed = cloud_account::forget_stored_account().map_err(|error| {
-        tracing::warn!("sign-out left the saved sign-in on this device: {error}");
-        HostError::new(SIGN_OUT_INCOMPLETE)
-    });
-    (logout, removed)
-}
-
-const SIGN_OUT_INCOMPLETE: &str = "Sign-out did not finish: this computer could not remove the saved sign-in. Try Sign out again.";
 
 /// Sends the logout on a thread of its own, without the account-session lock, so a new sign-in never waits on
 /// it. It carries the old sign-in's access token, which cannot end a newer sign-in, and nothing else of it. The
 /// answer changes nothing here (the sign-in is already gone on this device); it is logged, without the token.
-fn logout_soon(
+pub(crate) fn logout_soon(
     mut http: Box<dyn cloud_account::Http + Send>,
     server_url: String,
     access_token: String,
@@ -303,47 +315,56 @@ fn session_closed() -> HostResult {
     Ok(HostValue::Null)
 }
 
-/// The sign-in ended outside a user action (a rejected refresh, a removed
-/// device): `bir_core::account_session` has cleared the saved account.
-pub(crate) fn session_ended_by_server() {
-    crate::account_gate::set_unlocked(false);
-    bir_core::transport::set_practice_account(false);
-    // F2: the room closes here too — the account is gone, however it went.
-    crate::room_session::close_session();
-    crate::hooks::hooks().refresh_menu();
-}
-
 /// Whether the gate opens, and whether the account is a practice account.
 /// Offline, the saved value stands.
 fn restore_saved_session() -> (bool, bool) {
     restore_saved_session_with(&mut BlockingHttp::new())
 }
 
-fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> (bool, bool) {
-    let _one = bir_core::account_session::lock();
-    let Ok(Some(stored)) = load_stored() else {
-        return (false, false);
+pub(crate) fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> (bool, bool) {
+    // D2, the launch arm: the lock is held for the reads and writes, never across the network.
+    let epoch = bir_core::session_epoch::current();
+    let (stored, owner) = {
+        let _one = bir_core::account_session::lock();
+        let Ok(Some(stored)) = load_stored() else {
+            return (false, false);
+        };
+        let Ok(resolved) = resolve() else {
+            return (false, false);
+        };
+        if stored.server_url != resolved.url {
+            return (false, false);
+        }
+        let Some(owner) = bir_core::account_session::OwnerKey::of(&stored) else {
+            return (false, false);
+        };
+        (stored, owner)
     };
-    let Ok(resolved) = resolve() else {
-        return (false, false);
-    };
-    if stored.server_url != resolved.url {
-        return (false, false);
-    }
     let now = cloud_account::unix_now();
     let previous_refresh = stored.last_refresh_unix;
     let mut practice = stored.practice;
     let outcome = match cloud_account::refresh_session(http, &stored.to_secrets(), now) {
         Ok(SessionUpdate::Online(secrets)) => {
             practice = secrets.practice;
-            if save_stored(&stored_from(secrets, now)).is_err() {
+            let saved = {
+                let _one = bir_core::account_session::lock();
+                bir_core::account_session::save_stored_if(&owner, &stored_from(secrets, now))
+                    .unwrap_or(false)
+            };
+            if !saved {
                 return (false, false);
             }
             RefreshOutcome::Online
         }
         Ok(SessionUpdate::Offline(secrets)) => {
             practice = secrets.practice;
-            let _ = save_stored(&stored_from(secrets, previous_refresh));
+            let _ = {
+                let _one = bir_core::account_session::lock();
+                bir_core::account_session::save_stored_if(
+                    &owner,
+                    &stored_from(secrets, previous_refresh),
+                )
+            };
             RefreshOutcome::Offline
         }
         Ok(SessionUpdate::SignedOut) => RefreshOutcome::Revoked,
@@ -351,11 +372,18 @@ fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> (bool, bool
         Err(_) => RefreshOutcome::Offline,
     };
     match cloud_account::gate_after_refresh(outcome) {
-        GateDecision::Open { .. } => (true, practice),
+        GateDecision::Open { .. } => {
+            // The cache is the machine's picture of who is stored (F8'): the launch sets it from
+            // the sign-in just confirmed.
+            bir_core::account_session::cache_owner(Some(owner));
+            (true, practice)
+        }
         GateDecision::Closed {
             clear_secrets: true,
         } => {
-            clear_stored();
+            // D1 at the launch too: the delete-if-owner, the cache and the close are the
+            // machine's one section.
+            crate::session::server_ended(owner, epoch);
             (false, false)
         }
         GateDecision::Closed {
@@ -399,12 +427,14 @@ pub(crate) fn spawn_account(
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
     let (sender, receiver) = futures::channel::oneshot::channel();
     // The account file lives next to the database, so this thread must know the database's name as the host
-    // thread does: the in-process name is per thread, and a new thread is given it here.
+    // thread does: the in-process name is per thread, and a new thread is given it here. The device
+    // folder override rides with it, the same discipline — tests read their own scratch install.
     let database = bir_core::db::capture_database_path_override();
+    let device = bir_core::platform::capture_device_dir_override();
     std::thread::Builder::new()
         .name(name.into())
         .spawn(move || {
-            let _ = sender.send(database.run(work));
+            let _ = sender.send(database.run(move || device.run(work)));
         })
         .map_err(|error| HostError::new(error.to_string()))?;
     Ok(Box::pin(async move {
@@ -530,12 +560,15 @@ pub(crate) fn load_stored() -> Result<Option<StoredAccount>, HostError> {
     cloud_account::load_stored_account().map_err(host_error)
 }
 
-fn save_stored(stored: &StoredAccount) -> Result<(), HostError> {
-    cloud_account::save_stored_account(stored).map_err(host_error)
+fn clear_stored() {
+    bir_core::account_session::clear_stored();
 }
 
-fn clear_stored() {
-    cloud_account::clear_stored_account();
+/// Tests seed the stored sign-in through the one path — the guard test allows no raw call here
+/// either.
+#[cfg(test)]
+pub(crate) fn save_stored(stored: &StoredAccount) -> Result<(), HostError> {
+    bir_core::account_session::save_stored(stored).map_err(host_error)
 }
 
 #[cfg(test)]

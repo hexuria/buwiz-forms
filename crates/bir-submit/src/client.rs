@@ -25,8 +25,8 @@ pub const DEFAULT_SERVER_URL: &str = "https://api.buwiz.com";
 /// The header that names the app and its version on every request to the
 /// Buwiz server: `buwiz-forms/0.2.1`, `mini/0.5.0`.
 pub const CLIENT_HEADER: &str = "buwiz-client";
-const DEVICE_KEY: &str = "device_key";
-const DEVICE_ID: &str = "device_id";
+pub const DEVICE_KEY: &str = "device_key";
+pub const DEVICE_ID: &str = "device_id";
 
 /// The app's one Buwiz sign-in. This crate never signs in, refreshes or stores a token.
 pub trait TokenSource: Send + Sync {
