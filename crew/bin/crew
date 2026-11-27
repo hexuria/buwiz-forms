@@ -157,7 +157,7 @@ def load_settings(root):
     return Settings(
         state_dir=expand_path(state_value, root),
         state_remote=value("crew", "state_remote", ""),
-        state_branch=value("crew", "state_branch", "crew/state") or "crew/state",
+        state_branch=value("crew", "state_branch", "crew-state") or "crew-state",
         holder=value("crew", "holder", "conductor") or "conductor",
         engine=engine,
         devin_command=value("engine.devin", "command", "devin") or "devin",
@@ -1183,7 +1183,7 @@ def privacy_reasons(line, deny_words=(), allowed_repos=()):
             break
     without_urls = URL_RE.sub(" ", line)
     for match in REPO_TOKEN_RE.finditer(without_urls):
-        token = match.group(1).rstrip(".,;:)\]")
+        token = match.group(1).rstrip(".,;:)]")
         before = without_urls[match.start() - 1] if match.start() else ""
         after = without_urls[match.end()] if match.end() < len(without_urls) else ""
         owner = token.split("/", 1)[0]

@@ -670,7 +670,7 @@ class StateTests(unittest.TestCase):
         push = run_crew(self.repo, "state", "push")
 
         self.assertEqual(push.returncode, 0, push.stderr)
-        branch = subprocess.run(["git", "--git-dir", str(remote), "rev-parse", "crew/state"],
+        branch = subprocess.run(["git", "--git-dir", str(remote), "rev-parse", "crew-state"],
                                 capture_output=True, text=True, check=True).stdout.strip()
         author = subprocess.run(["git", "--git-dir", str(remote), "log", "-1", "--format=%an <%ae>", branch],
                                 capture_output=True, text=True, check=True).stdout.strip()
@@ -1705,7 +1705,7 @@ class RepoPlumbingTests(unittest.TestCase):
 
         self.assertEqual(parser["crew"]["state_dir"], ".crew/state")
         self.assertIn("state_remote", parser["crew"])
-        self.assertEqual(parser["crew"]["state_branch"], "crew/state")
+        self.assertEqual(parser["crew"]["state_branch"], "crew-state")
         self.assertEqual(parser["crew"]["holder"], "conductor")
         self.assertIn("engine", parser["crew"])
         self.assertIn("merge", parser["crew"])
