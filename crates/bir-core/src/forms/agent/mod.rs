@@ -493,17 +493,32 @@ pub fn save_draft(
     db: &crate::db::Database,
     draft: &mut Value,
 ) -> Result<i64, String> {
+    let incoming = draft.clone();
+    save_draft_with_clearance_context(kind, db, draft, incoming, BTreeSet::new())
+}
+
+/// [`save_draft`] with the draft as it was before the fill being saved and
+/// the gate keys that fill already showed inline. Hidden test/host plumbing:
+/// callers normally use [`save_draft`].
+#[doc(hidden)]
+pub fn save_draft_with_clearance_context(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &mut Value,
+    incoming: Value,
+    reported: BTreeSet<String>,
+) -> Result<i64, String> {
     // The caller's bytes are only the fallback before-image. When the row
     // already exists, the transactional save reads its stored bytes and those
     // decide whether this recompute clears a dormant gated value: an assistant
     // or page fill may already have recomputed its in-memory draft.
-    let incoming = draft.clone();
     compute(kind, draft)?;
     let after = draft.clone();
     if identity(kind, draft)?.status != FilingStatus::Draft {
         return Err("this return is no longer a draft".to_string());
     }
-    let writer = move || pending_settings_writer(kind, incoming.clone(), after.clone());
+    let writer =
+        move || pending_settings_writer(kind, incoming.clone(), after.clone(), reported.clone());
     let id = match kind {
         AgentFormKind::Form1601C => save_1601c(kind, db, draft, writer())?,
         AgentFormKind::Form2551Q => save_2551q(kind, db, draft, writer())?,
@@ -526,13 +541,14 @@ pub fn pending_settings_writer(
     kind: AgentFormKind,
     incoming: Value,
     after: Value,
+    reported: BTreeSet<String>,
 ) -> crate::db::SettingsWriter<'static> {
     Some(Box::new(move |draft_id, stored_json| {
         let before = stored_json
             .and_then(|stored| serde_json::from_str::<Value>(stored).ok())
             .unwrap_or_else(|| incoming.clone());
         Ok(draft_locks::pending_notices::settings_writes(
-            kind, &before, &after, draft_id,
+            kind, &before, &incoming, &after, draft_id, &reported,
         ))
     }))
 }

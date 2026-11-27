@@ -231,11 +231,11 @@ fn amended_return_previous_payment_unreported_yes_to_no_save_leaves_the_notice_p
     let id = stored_id(&saved);
 
     // A Yes-to-No transition saved without the page's inline-clearing report
-    // (for example after an open migration could not save) must stay pending
+    // with the amount still incoming must stay pending
     // for a later open rather than being marked unseen-and-seen by the save.
     let mut closed = saved["draft"].clone();
     closed["is_amended"] = json!(false);
-    closed[spec.path] = json!(0.0);
+    closed[spec.path] = json!(42.0);
     save("1600PT", &closed);
     let gate = gate_key(spec);
     assert_eq!(
@@ -333,5 +333,47 @@ fn amended_return_previous_payment_a_dormant_filed_original_is_not_revived_by_am
         )),
         1,
         "the amendment save records the dormant original's clearing"
+    );
+}
+
+#[test]
+fn previous_payment_zeroed_by_the_filer_before_closing_records_no_clearing_notice() {
+    setup();
+    let spec = previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.form_code == "1600PT")
+        .unwrap();
+    let yes = fill(
+        "1600PT",
+        &open("1600PT", 1)["draft"],
+        json!({spec.yes_key: "true"}),
+    );
+    let typed = fill("1600PT", &yes["draft"], json!({spec.key: "42"}));
+    let stored = save("1600PT", &typed["draft"]);
+    let id = stored_id(&stored);
+
+    // The filer clears the open box themselves. Closing the gate afterwards
+    // has nothing for the recompute to clear, so the save records no notice.
+    let zeroed = fill("1600PT", &stored["draft"], json!({spec.key: "0"}));
+    assert_eq!(zeroed["rejected"], json!({}));
+    assert_eq!(zeroed["draft"][spec.path], 0.0);
+    let closed = fill("1600PT", &zeroed["draft"], json!({spec.no_key: "true"}));
+    assert_ne!(closed["relock_notes"][spec.key], spec.cleared);
+    save("1600PT", &closed["draft"]);
+
+    let gate = gate_key(spec);
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key = 'notice_pending:{gate}:{id}'"
+        )),
+        0,
+        "a filer-cleared amount leaves no pending notice"
+    );
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key LIKE 'notice_seen:{gate}:{id}:%'"
+        )),
+        0,
+        "a filer-cleared amount records no clearing event"
     );
 }

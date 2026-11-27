@@ -1,7 +1,7 @@
 //! UI-thread host ops. Each one calls bir-core through the shell's database
 //! and, when the screen should move, pushes a command the script applies.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
@@ -520,7 +520,22 @@ impl Session {
             crate::screen_form_module::load_draft(&db, kind, &profile, year, period, false, None)?;
         let status = agent::identity(kind, &draft)?.status;
         if status == FilingStatus::Draft {
-            agent::save_draft(kind, &db, &mut draft)?;
+            // Loading some stored queueable drafts recomputes them for their
+            // penalty context before this open save. Use the still-stored row
+            // as the incoming image so a dormant value the open itself clears
+            // is not mistaken for one the filer cleared by hand.
+            let incoming = draft["id"]
+                .as_i64()
+                .and_then(|id| db.draft_summary_and_json(id).ok().flatten())
+                .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
+                .unwrap_or_else(|| draft.clone());
+            agent::save_draft_with_clearance_context(
+                kind,
+                &db,
+                &mut draft,
+                incoming,
+                BTreeSet::new(),
+            )?;
         }
         let facts = stored_send_facts(&db, draft.get("id").and_then(Value::as_i64))?;
         let status = facts.status.unwrap_or(status);
@@ -720,7 +735,13 @@ impl Session {
         };
         if !filled.is_empty() || !forgot.is_empty() {
             if asks.is_none() {
-                agent::save_draft(kind, &db, &mut draft)?;
+                agent::save_draft_with_clearance_context(
+                    kind,
+                    &db,
+                    &mut draft,
+                    before.clone(),
+                    BTreeSet::new(),
+                )?;
             }
             for key in &filled {
                 if not_shown.iter().any(|hidden| hidden == key) {

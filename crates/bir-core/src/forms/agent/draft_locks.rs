@@ -1735,7 +1735,7 @@ pub mod schedule1_1601fq {
         }
     }
 
-    fn typed_row(row: &Value) -> bool {
+    pub(crate) fn typed_row(row: &Value) -> bool {
         row["treaty_code"] != "NA"
             || row["atc_code"] != "NA"
             || row["income_payment"].as_f64().unwrap_or(0.0).abs() >= 0.005
@@ -2473,6 +2473,8 @@ pub mod pending_notices {
     //! pending key, so a later import or edit that newly clears the same gate
     //! creates a fresh event and is said again.
 
+    use std::collections::BTreeSet;
+
     use serde_json::{Value, json};
 
     use crate::db::Database;
@@ -2607,16 +2609,55 @@ pub mod pending_notices {
             .to_string()
     }
 
+    /// Whether the draft handed to the save still held this gate's value.
+    /// When it did, the save's own recompute is what cleared it. When it did
+    /// not, the filer had already cleared the open box before closing the
+    /// gate and the stored-to-zero comparison is not a gate clearing to
+    /// announce. A gate the page already reported inline is the recompute's
+    /// clearing even though that fill's output is zero by the time it saves.
+    fn incoming_held(kind: AgentFormKind, incoming: &Value, gate: &str) -> bool {
+        if gate == "2551q_item16" {
+            return incoming["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005;
+        }
+        if gate == "1606_installment" {
+            return super::installment_1606::AMOUNT_FIELDS
+                .iter()
+                .any(|field| incoming[field].as_f64().unwrap_or(0.0).abs() >= 0.005);
+        }
+        if let Some(spec) = super::previous_payment::spec(kind)
+            && gate == super::previous_payment::gate_key(spec)
+        {
+            return incoming[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005;
+        }
+        if let Some(id) = gate.strip_prefix("1601fq_schedule1:") {
+            return incoming["schedule1"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .enumerate()
+                .any(|(index, row)| {
+                    super::schedule1_1601fq::row_id(row, index) == id
+                        && super::schedule1_1601fq::typed_row(row)
+                });
+        }
+        true
+    }
+
     /// The settings rows one save writes for its clearings. One event names
     /// this save across every gate it cleared; a later clearing gets a later
     /// event, so an old seen key cannot acknowledge it.
     pub(crate) fn settings_writes(
         kind: AgentFormKind,
         before: &Value,
+        incoming: &Value,
         after: &Value,
         draft_id: i64,
+        reported: &BTreeSet<String>,
     ) -> Vec<(String, String)> {
-        let clearances = clearance(kind, before, after);
+        let clearances: Vec<(String, String)> = clearance(kind, before, after)
+            .into_iter()
+            .filter(|(gate, _)| reported.contains(gate) || incoming_held(kind, incoming, gate))
+            .collect();
         if clearances.is_empty() {
             return Vec::new();
         }

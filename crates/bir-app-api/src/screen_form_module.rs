@@ -2527,7 +2527,15 @@ fn save_open_gate_migration(
 ) -> Result<(), String> {
     refuse_replacing_a_stored_return(db, kind, draft)
         .and_then(|()| settle_trigger_flag(db, kind, draft))
-        .and_then(|()| agent::save_draft(kind, db, draft).map(|_| ()))
+        .and_then(|()| {
+            let incoming = draft["id"]
+                .as_i64()
+                .and_then(|id| db.draft_summary_and_json(id).ok().flatten())
+                .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
+                .unwrap_or_else(|| draft.clone());
+            agent::save_draft_with_clearance_context(kind, db, draft, incoming, BTreeSet::new())
+                .map(|_| ())
+        })
 }
 
 /// Before any write of a client's draft (save, queue, cancel, a followed
@@ -3382,23 +3390,23 @@ fn put_sample_mark(draft: &mut Value, mark: Option<&SampleMark>) {
     }
 }
 
-/// The gate keys whose clearing notes a page fill applied inline, kept on
-/// the host by draft id rather than in the draft. Validation rewrites the
-/// draft through its typed model, so a report inside the draft can be lost
-/// before the autosave. Host calls for one page run on its engine's thread;
-/// keeping the map thread-local also keeps independent editing sessions and
-/// test databases apart. A fresh open replaces the page's editing session
-/// and clears any report its closed predecessor never saved.
+// The gate keys whose clearing notes a page fill applied inline, kept on
+// the host by draft id rather than in the draft. Validation rewrites the
+// draft through its typed model, so a report inside the draft can be lost
+// before the autosave. Host calls for one page run on its engine's thread;
+// keeping the map thread-local also keeps independent editing sessions and
+// test databases apart. A fresh open replaces the page's editing session
+// and clears any report its closed predecessor never saved.
 thread_local! {
     static INLINE_CLEARANCE_REPORTS: RefCell<BTreeMap<i64, BTreeSet<String>>> =
         RefCell::new(BTreeMap::new());
 }
 
-fn remember_inline_clearances(draft: &Value, gates: &BTreeSet<String>) {
+fn remember_inline_clearances(id: Option<i64>, gates: &BTreeSet<String>) {
     if gates.is_empty() {
         return;
     }
-    let Some(id) = draft["id"].as_i64() else {
+    let Some(id) = id else {
         return;
     };
     INLINE_CLEARANCE_REPORTS.with(|reports| {
@@ -3410,8 +3418,8 @@ fn remember_inline_clearances(draft: &Value, gates: &BTreeSet<String>) {
     });
 }
 
-fn reported_inline_clearances(draft: &Value) -> BTreeSet<String> {
-    let Some(id) = draft["id"].as_i64() else {
+fn reported_inline_clearances(id: Option<i64>) -> BTreeSet<String> {
+    let Some(id) = id else {
         return BTreeSet::new();
     };
     INLINE_CLEARANCE_REPORTS
@@ -5039,6 +5047,9 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
     let amendment = take_amendment_mark(&mut draft);
+    let clearance_report_id = draft["id"]
+        .as_i64()
+        .or_else(|| amendment.as_ref().and_then(|mark| mark["id"].as_i64()));
     let mut inline_clearances = BTreeSet::new();
     let edits = arguments
         .value(2)?
@@ -5178,7 +5189,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             }
         }
     }
-    remember_inline_clearances(&draft, &inline_clearances);
+    remember_inline_clearances(clearance_report_id, &inline_clearances);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -6590,7 +6601,10 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
         Some(_) => return Err(host_error("expected must be a draft or null")),
     };
     let amendment = take_amendment_mark(&mut draft);
-    let inline_clearances = reported_inline_clearances(&draft);
+    let clearance_report_id = draft["id"]
+        .as_i64()
+        .or_else(|| amendment.as_ref().and_then(|mark| mark["id"].as_i64()));
+    let inline_clearances = reported_inline_clearances(clearance_report_id);
     let id = with_database(|db| {
         if amendment.is_none()
             && let Some(expected) = expected.as_ref()
@@ -6625,7 +6639,8 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
                 settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
                 reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
                 let before_notices = pending_notices_before_save(db, &draft);
-                let saved = save_amendment(db, kind, &mut draft, mark).map_err(host_error);
+                let saved = save_amendment(db, kind, &mut draft, mark, inline_clearances.clone())
+                    .map_err(host_error);
                 if let Ok(id) = saved {
                     mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
                     clear_inline_clearances(id);
@@ -6637,7 +6652,15 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
                 reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
                 refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
                 let before_notices = pending_notices_before_save(db, &draft);
-                let saved = agent::save_draft(kind, db, &mut draft).map_err(host_error);
+                let incoming = draft.clone();
+                let saved = agent::save_draft_with_clearance_context(
+                    kind,
+                    db,
+                    &mut draft,
+                    incoming,
+                    inline_clearances.clone(),
+                )
+                .map_err(host_error);
                 if let Ok(id) = saved {
                     mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
                     clear_inline_clearances(id);
@@ -6971,6 +6994,7 @@ fn save_amendment(
     kind: AgentFormKind,
     draft: &mut Value,
     mark: &Value,
+    reported: BTreeSet<String>,
 ) -> Result<i64, String> {
     use bir_core::db::AmendmentBase;
     let base = AmendmentBase {
@@ -6980,11 +7004,20 @@ fn save_amendment(
             .ok_or("this amendment does not say which filed return it amends; amend it again")?,
         updated_at: mark["updated_at"].as_str().unwrap_or("").to_string(),
     };
-    let incoming = draft.clone();
+    let incoming = mark["id"]
+        .as_i64()
+        .and_then(|id| db.draft_summary_and_json(id).ok().flatten())
+        .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
+        .unwrap_or_else(|| draft.clone());
     agent::compute(kind, draft)?;
     let after = draft.clone();
     let writer = move || {
-        bir_core::forms::agent::pending_settings_writer(kind, incoming.clone(), after.clone())
+        bir_core::forms::agent::pending_settings_writer(
+            kind,
+            incoming.clone(),
+            after.clone(),
+            reported.clone(),
+        )
     };
     let error = |error: bir_core::db::DbError| error.to_string();
     let draft_ref = &*draft;
@@ -7050,7 +7083,7 @@ fn screen_form_amend(
         u16::try_from(arguments.integer(2)?).map_err(|_| host_error("year is out of range"))?;
     let period = page_period(code, arguments.integer(3)?).map_err(host_error)?;
     let exact = arguments.get(4).and_then(|key| to_json(key).as_i64());
-    let (amended, from_profile, status, updated_at, carried) = with_database(|db| {
+    let (amended, from_profile, status, updated_at, filed_id, carried) = with_database(|db| {
         let profile = db
             .get_profile_for_year(&tin, year)
             .map_err(|error| host_error(error.to_string()))?
@@ -7081,7 +7114,14 @@ fn screen_form_amend(
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
         let carried = carry_forward::open_fields(db, kind, &tin, &amended);
-        Ok((amended, from_profile, status, updated_at, carried))
+        Ok((
+            amended,
+            from_profile,
+            status,
+            updated_at,
+            filed["id"].clone(),
+            carried,
+        ))
     })?;
     Ok(async move {
         let mut opened = on_large_stack(move || {
@@ -7099,7 +7139,11 @@ fn screen_form_amend(
         .map_err(host_error)?;
         put_amendment_mark(
             &mut opened["draft"],
-            Some(json!({ "status": status_name(&status), "updated_at": updated_at })),
+            Some(json!({
+                "status": status_name(&status),
+                "updated_at": updated_at,
+                "id": filed_id,
+            })),
         );
         opened["amends"] = json!(status_name(&status));
         for (field, value) in carried {
@@ -7749,8 +7793,16 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
         let before_notices = pending_notices_before_save(db, &draft);
-        let inline_clearances = reported_inline_clearances(&draft);
-        let saved = agent::save_draft(kind, db, &mut draft).map_err(host_error);
+        let inline_clearances = reported_inline_clearances(draft["id"].as_i64());
+        let incoming = draft.clone();
+        let saved = agent::save_draft_with_clearance_context(
+            kind,
+            db,
+            &mut draft,
+            incoming,
+            inline_clearances.clone(),
+        )
+        .map_err(host_error);
         if let Ok(id) = saved {
             mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
             clear_inline_clearances(id);
