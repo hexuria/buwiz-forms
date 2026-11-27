@@ -83,7 +83,8 @@
    "file": "queue.wants",
    "windows": "queue-windows.wants",
    "send": true,
-   "precondition": "Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog"
+   "precondition": "Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog",
+   "desktop": "queue-desktop.json"
   },
   {
    "name": "delete-row",
