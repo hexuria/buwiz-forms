@@ -8,8 +8,6 @@ key palette-input Enter
 wait_until tp-tabs-forms --timeout-ms 8000
 wait_until tp-tabs-forms --timeout-ms 5000
 click tp-tabs-forms
-wait_until tp-add-year-open --timeout-ms 5000
-click tp-add-year-open
 wait_until tp-add-year-add --timeout-ms 5000
 click tp-add-year-add
 wait_until tp-forms-edit --timeout-ms 5000
