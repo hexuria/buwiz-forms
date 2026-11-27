@@ -339,7 +339,15 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     }
     let stop = bir_core::background_cron::CronStop::new();
     let (done, finished) = std::sync::mpsc::channel();
-    let cron = bir_core::background_cron::run_cron_jobs(db, stop.clone());
+    // §A.4: the worker takes a room source, not the handle. In rooms mode each tick asks the open
+    // room (None — a migration page, the gate, a sign-out — skips the tick); in single-room mode the
+    // launch handle is the one room, as before.
+    let source: bir_core::background_cron::RoomSource = if bir_core::db::single_room_database().is_some() {
+        bir_core::background_cron::fixed_room_source(db)
+    } else {
+        std::sync::Arc::new(|| crate::open_room::current().map(|(handle, _generation)| handle))
+    };
+    let cron = bir_core::background_cron::run_cron_jobs(source, stop.clone());
     runtime.spawn(async move {
         cron.await;
         let _ = done.send(());

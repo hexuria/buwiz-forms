@@ -122,6 +122,13 @@ pub fn open_legacy_in_place(
     open_path(&layout.legacy_database(), None, user_id)
 }
 
+/// The open room's generation, or `None` while no room is open — and in single-room mode, where the
+/// slot is never populated. Threads started for a room carry it (§A.4): their result lives only while
+/// the open room's generation is still theirs.
+pub fn current_generation() -> Option<u64> {
+    lock(&SLOT).as_ref().map(|room| room.generation)
+}
+
 /// Close the room (§A.5 step 6): the slot's Arc and generation go. Sends already in flight finish
 /// against their own Arc; the registry reopens the same connection if the room is opened again
 /// before they finish. The room's file and its PIN stay.

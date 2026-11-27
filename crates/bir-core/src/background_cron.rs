@@ -181,9 +181,22 @@ impl Drop for WakeInstalled {
     }
 }
 
+/// What the worker opens each tick (PLAN §A.4): the open room's handle, or `None` while no room is
+/// open — a migration page, the gate, a sign-out — which the tick skips, as `submission_paused` skips.
+/// The source is asked again every tick, and everything the tick runs uses that tick's answer: the
+/// queue, the email poll, the generic jobs, the calendar sync. Tasks spawned for a tick keep the tick's
+/// handle, so a send in flight finishes against its own room after the room changes.
+pub type RoomSource = Arc<dyn Fn() -> Option<Arc<Mutex<Database>>> + Send + Sync>;
+
+/// A source that always answers the one handle: tests, `bir-headless serve` (its process never
+/// changes rooms), and single-room mode.
+pub fn fixed_room_source(db: Arc<Mutex<Database>>) -> RoomSource {
+    Arc::new(move || Some(db.clone()))
+}
+
 /// The queue worker loop until [`request_shutdown`] (the `bir` command line, `bir serve`).
-pub fn start_cron_jobs(db: Arc<Mutex<Database>>) -> impl Future<Output = ()> + Send {
-    run_cron_jobs(db, CronStop::new())
+pub fn start_cron_jobs(source: RoomSource) -> impl Future<Output = ()> + Send {
+    run_cron_jobs(source, CronStop::new())
 }
 
 /// The queue worker loop until `stop` is asked (or [`request_shutdown`]). The app's engine owns `stop`, so the next
@@ -191,34 +204,37 @@ pub fn start_cron_jobs(db: Arc<Mutex<Database>>) -> impl Future<Output = ()> + S
 ///
 /// The loop's place among [`request_shutdown`] calls is taken here, when it is called, not when it is first polled:
 /// a request made after this call stops it even if the runtime has not run it yet.
-pub fn run_cron_jobs(db: Arc<Mutex<Database>>, stop: CronStop) -> impl Future<Output = ()> + Send {
+pub fn run_cron_jobs(source: RoomSource, stop: CronStop) -> impl Future<Output = ()> + Send {
     let born = SHUTDOWN_GENERATION.load(Ordering::SeqCst);
     LATEST_WORKER_GENERATION.store(born, Ordering::SeqCst);
-    run_cron_loop(db, stop, born)
+    run_cron_loop(source, stop, born)
 }
 
-async fn run_cron_loop(db: Arc<Mutex<Database>>, stop: CronStop, born: u64) {
+async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
     info!("Background cron engine started");
-    requeue_jobs_left_running(&db);
 
     let stopping = || stop.is_stopped() || SHUTDOWN_GENERATION.load(Ordering::SeqCst) != born;
     let (tx, mut rx) = mpsc::channel(1);
     let _wake = WakeInstalled::new(tx);
+    // Crash recovery (jobs left Running) runs once per distinct room, the first time the worker
+    // opens it: never again while a send of an earlier sign-in could still be in flight against it.
+    let mut requeued: Vec<usize> = Vec::new();
 
     loop {
         if stopping() {
             break;
         }
-        if submission_paused() {
-            tokio::select! {
-                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
-                _ = rx.recv() => {}
-                _ = stop.stopped() => {}
+        // Each tick asks the source for the open room. None — no room open, or submissions paused —
+        // skips the tick, as submission_paused skipped it before.
+        let room = if submission_paused() { None } else { source() };
+        if let Some(db) = room {
+            let key = Arc::as_ptr(&db) as usize;
+            if !requeued.contains(&key) {
+                requeue_jobs_left_running(&db);
+                requeued.push(key);
             }
-            continue;
+            run_queue_tick_until(db.clone(), &stop).await;
         }
-        // We run a tick, then wait for either 60 seconds or a wake signal.
-        run_queue_tick_until(db.clone(), &stop).await;
         if stopping() {
             break;
         }
@@ -3165,7 +3181,7 @@ mod tests {
             .unwrap();
         runtime.block_on(async {
             let stop = CronStop::new();
-            let worker = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+            let worker = tokio::spawn(run_cron_jobs(fixed_room_source(db.clone()), stop.clone()));
             let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
             while status(&db).as_deref() == Some("Running") {
                 assert!(
@@ -3181,6 +3197,87 @@ mod tests {
                 Some("Queued"),
                 "queued again, and not run"
             );
+            stop.stop();
+            tokio::time::timeout(std::time::Duration::from_secs(5), worker)
+                .await
+                .expect("the loop stopped on its signal")
+                .unwrap();
+        });
+    }
+
+    /// §A.8: the worker's tick uses the room the source answers THAT tick — the queue, the email poll,
+    /// the generic jobs and the calendar all read it. The observable here is the generic jobs' cron
+    /// self-heal write (no external service needed): room A's legacy cron string is healed on A's tick,
+    /// room B's stays untouched until the source answers B — and B's heal never lands in A.
+    #[test]
+    fn email_poll_and_calendar_use_the_tick_room() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let db_a = Arc::new(Mutex::new(Database::open_ephemeral().unwrap()));
+            let db_b = Arc::new(Mutex::new(Database::open_ephemeral().unwrap()));
+            for db in [&db_a, &db_b] {
+                let guard = lock_timing::lock(db).unwrap();
+                guard
+                    .save_job(crate::db::Job {
+                        id: None,
+                        name: "poller".into(),
+                        job_type: "Custom".into(),
+                        cron_expr: Some("* * * * *".into()),
+                        command: None,
+                        status: "Queued".into(),
+                        retries: 0,
+                        last_run_at: None,
+                        // Never due: only the self-heal write matters here.
+                        next_run_at: Some("2999-01-01T00:00:00Z".into()),
+                        created_at: String::new(),
+                        output_log: None,
+                    })
+                    .unwrap();
+            }
+            // A source the test flips between the rooms, as a sign-out and sign-in flip the app's.
+            let current = Arc::new(Mutex::new(db_a.clone()));
+            let source_db = current.clone();
+            let source: RoomSource = Arc::new(move || Some(source_db.lock().unwrap().clone()));
+            let stop = CronStop::new();
+            let worker = tokio::spawn(run_cron_jobs(source, stop.clone()));
+            let expr_of = |db: &Arc<Mutex<Database>>| {
+                lock_timing::lock(db)
+                    .unwrap()
+                    .list_jobs()
+                    .unwrap()
+                    .into_iter()
+                    .find(|job| job.name == "poller")
+                    .and_then(|job| job.cron_expr)
+            };
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            while expr_of(&db_a).as_deref() == Some("* * * * *") {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the tick never healed room A's job"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            assert_eq!(
+                expr_of(&db_b).as_deref(),
+                Some("* * * * *"),
+                "room B's job was healed on room A's tick: the tick did not use the tick's room"
+            );
+            // The room changes; the next tick is room B's.
+            *current.lock().unwrap() = db_b.clone();
+            wake();
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(65);
+            while expr_of(&db_b).as_deref() == Some("* * * * *") {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the tick never healed room B's job after the room changed"
+                );
+                wake();
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
             stop.stop();
             tokio::time::timeout(std::time::Duration::from_secs(5), worker)
                 .await
@@ -7021,7 +7118,7 @@ mod tests {
             };
             for engine in 1..=3 {
                 let stop = CronStop::new();
-                let job = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+                let job = tokio::spawn(run_cron_jobs(fixed_room_source(db.clone()), stop.clone()));
                 until_woken().await;
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 assert!(!job.is_finished(), "engine {engine}: the loop runs");
@@ -7037,13 +7134,13 @@ mod tests {
                 );
             }
 
-            let job = tokio::spawn(start_cron_jobs(db.clone()));
+            let job = tokio::spawn(start_cron_jobs(fixed_room_source(db.clone())));
             until_woken().await;
             request_shutdown();
             assert!(shutdown_requested());
             tokio::time::timeout(bound, job).await.unwrap().unwrap();
             let stop = CronStop::new();
-            let job = tokio::spawn(run_cron_jobs(db.clone(), stop.clone()));
+            let job = tokio::spawn(run_cron_jobs(fixed_room_source(db.clone()), stop.clone()));
             until_woken().await;
             assert!(!shutdown_requested(), "a new loop starts unstopped");
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -7055,7 +7152,7 @@ mod tests {
             tokio::time::timeout(bound, job).await.unwrap().unwrap();
 
             // A loop called before a request and first polled after it is stopped by it.
-            let called = start_cron_jobs(db.clone());
+            let called = start_cron_jobs(fixed_room_source(db.clone()));
             request_shutdown();
             tokio::time::timeout(bound, called)
                 .await

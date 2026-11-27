@@ -542,7 +542,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         thread::spawn(move || {
             if let Ok(rt) = tokio::runtime::Runtime::new() {
                 rt.block_on(async move {
-                    bir_core::background_cron::start_cron_jobs(cron_db).await;
+                    bir_core::background_cron::start_cron_jobs(bir_core::background_cron::fixed_room_source(cron_db)).await;
                 });
             } else {
                 eprintln!("Failed to initialize Tokio runtime for headless background tasks");

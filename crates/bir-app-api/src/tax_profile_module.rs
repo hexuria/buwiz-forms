@@ -1776,11 +1776,40 @@ fn activate_tin(
     )
 }
 
+/// §A.4: a thread started for a room — the inbox OAuth, verify and check threads — returns its result
+/// only while the open room's generation is still the one it captured at spawn; after the room changed
+/// the result is dropped and logged, never written into the new room. `None` at spawn is single-room
+/// mode (no generations), and the guard does not apply. The account and email threads (`spawn_account`)
+/// carry no room.
+async fn finish_room_thread(
+    generation: Option<u64>,
+    receiver: futures::channel::oneshot::Receiver<HostResult>,
+    failed: &'static str,
+) -> HostResult {
+    let result = receiver
+        .await
+        .unwrap_or_else(|_| Err(HostError::new(failed)));
+    if let Some(captured) = generation
+        && crate::open_room::current_generation() != Some(captured)
+    {
+        tracing::warn!(
+            captured,
+            current = ?crate::open_room::current_generation(),
+            "room thread result dropped: the room changed while it ran"
+        );
+        return Err(HostError::new(
+            "the room changed while this ran; its result was dropped",
+        ));
+    }
+    result
+}
+
 fn connect_inbox_oauth(
     arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let tin = arguments.string(0)?.to_owned();
     let db = database_handle()?;
+    let generation = crate::open_room::current_generation();
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
         .name("inbox-oauth".into())
@@ -1788,11 +1817,7 @@ fn connect_inbox_oauth(
             let _ = sender.send(connect_inbox_oauth_run(&tin, &db));
         })
         .map_err(|error| HostError::new(error.to_string()))?;
-    Ok(async move {
-        receiver
-            .await
-            .unwrap_or_else(|_| Err(HostError::new("OAuth thread failed")))
-    })
+    Ok(async move { finish_room_thread(generation, receiver, "OAuth thread failed").await })
 }
 
 fn test_inbox_connection(
@@ -1800,6 +1825,7 @@ fn test_inbox_connection(
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let tin = arguments.string(0)?.to_owned();
     let db = database_handle()?;
+    let generation = crate::open_room::current_generation();
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
         .name("inbox-verify".into())
@@ -1807,11 +1833,7 @@ fn test_inbox_connection(
             let _ = sender.send(test_inbox_connection_run(&tin, &db));
         })
         .map_err(|error| HostError::new(error.to_string()))?;
-    Ok(async move {
-        receiver
-            .await
-            .unwrap_or_else(|_| Err(HostError::new("verify thread failed")))
-    })
+    Ok(async move { finish_room_thread(generation, receiver, "verify thread failed").await })
 }
 
 fn check_inbox_now(
@@ -1819,6 +1841,7 @@ fn check_inbox_now(
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let tin = arguments.string(0)?.to_owned();
     let db = database_handle()?;
+    let generation = crate::open_room::current_generation();
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
         .name("inbox-check".into())
@@ -1826,11 +1849,7 @@ fn check_inbox_now(
             let _ = sender.send(check_inbox_now_run(&tin, &db));
         })
         .map_err(|error| HostError::new(error.to_string()))?;
-    Ok(async move {
-        receiver
-            .await
-            .unwrap_or_else(|_| Err(HostError::new("inbox check thread failed")))
-    })
+    Ok(async move { finish_room_thread(generation, receiver, "inbox check thread failed").await })
 }
 
 #[cfg(test)]
@@ -3885,5 +3904,44 @@ mod tests {
             call_verb("account_tins", vec![json!(0)]),
             Err("The Buwiz account is not available in tests.".into())
         );
+    }
+
+    /// §A.8: an OAuth (or verify, or check) thread's result is dropped after the room changed — never
+    /// written into the new room — and passes through while the room is still the thread's own.
+    #[test]
+    fn oauth_result_dropped_after_the_room_changed() {
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        // The legacy-in-place open populates the slot without the claim guard (legacy mode); every
+        // open is a new generation, as a sign-out and sign-in makes one.
+        let (_handle, first) =
+            crate::open_room::open_legacy_in_place(&layout, "user-a".into()).unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            // The room is still the thread's own: the result passes through.
+            let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
+            sender.send(Ok(HostValue::Null)).unwrap();
+            let passed = finish_room_thread(Some(first), receiver, "x").await;
+            assert!(passed.is_ok(), "the result of the room's own thread dropped");
+            // The room changed (a close and an open: a new generation): the result is dropped.
+            crate::open_room::close_room();
+            let (_handle2, second) =
+                crate::open_room::open_legacy_in_place(&layout, "user-b".into()).unwrap();
+            assert_ne!(first, second);
+            let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
+            sender.send(Ok(HostValue::Null)).unwrap();
+            let dropped = finish_room_thread(Some(first), receiver, "x").await;
+            assert!(
+                dropped.is_err(),
+                "the result was written after the room changed"
+            );
+        });
+        crate::open_room::close_room();
+        bir_core::platform::set_device_dir_override(None);
     }
 }
