@@ -31,6 +31,11 @@ export const COLUMNS: readonly Column[] = [
   { id: "confirmed", title: "Confirmed", statuses: ["Confirmed", "Paid"] },
 ];
 
+/** The columns whose statuses the filter lets through. null means every status; Confirmed's column stays while either Confirmed or Paid is selected. */
+export function visibleColumns(statuses: ReadonlySet<string> | null): Column[] {
+  return COLUMNS.filter((c) => statuses === null || c.statuses.some((s) => statuses.has(s)));
+}
+
 /** "1 return", "3 returns". */
 export const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
 

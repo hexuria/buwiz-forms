@@ -2,9 +2,9 @@
 // They live in this module, not in the view, so they survive leaving Filings and coming back (the old app kept them in an
 // object made at boot and cleared them with Clear filters or a Home tile's preset). Signals are private; read the
 // accessors inside JSX or a closure.
-import { signal } from "nsh";
+import { batch, signal } from "nsh";
 import { app } from "../../shell";
-import { type FilingsPreset, type FilterValues, presetFilters } from "./model";
+import { type FilingsPreset, type FilterValues, presetFilters, visibleColumns } from "./model";
 
 const query = signal("");
 const tps = signal<ReadonlySet<string> | null>(null);
@@ -65,7 +65,13 @@ export const filters = {
   setTps: (v: ReadonlySet<string> | null) => tps.set(v),
   setForms: (v: ReadonlySet<string> | null) => forms.set(v),
   setPeriods: (v: ReadonlySet<string> | null) => periods.set(v),
-  setStatuses: (v: ReadonlySet<string> | null) => statuses.set(v),
+  setStatuses: (v: ReadonlySet<string> | null) => {
+    batch(() => {
+      statuses.set(v);
+      // A tab the filter hides cannot stay chosen: All is the one tab every selection keeps.
+      if (tab() !== "all" && !visibleColumns(v).some((c) => c.id === tab())) tab.set("all");
+    });
+  },
   setTab: (v: string) => tab.set(v),
   clearMonth: () => updatedMonth.set(null),
   clearFiledOnly: () => filedOnly.set(false),

@@ -4,7 +4,7 @@ import { expect, test } from "nsh/test";
 import type { ReturnRow, SendState } from "../../bir";
 import {
   cardLabel, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
-  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, whoLine,
+  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, visibleColumns, whoLine,
 } from "./model";
 
 const INDEX = [
@@ -150,6 +150,17 @@ test("the board's columns hold every status once, with Paid in Confirmed", () =>
   expect(COLUMNS.map((c) => c.title)).toEqual(["Draft", "Queued", "Submitted", "Confirmed"]);
   expect(COLUMNS.flatMap((c) => [...c.statuses])).toEqual([...STATUSES]);
   expect(COLUMNS[3].statuses).toEqual(["Confirmed", "Paid"]);
+});
+
+test("the statuses filter names the visible columns: null is all, empty is none, and Paid keeps Confirmed visible", () => {
+  const ids = (statuses: ReadonlySet<string> | null) => visibleColumns(statuses).map((c) => c.id);
+  expect(ids(null)).toEqual(["draft", "queued", "submitted", "confirmed"]);
+  expect(ids(new Set())).toEqual([]);
+  expect(ids(new Set(["Draft"]))).toEqual(["draft"]);
+  expect(ids(new Set(["Queued", "Submitted"]))).toEqual(["queued", "submitted"]);
+  expect(ids(new Set(["Paid"]))).toEqual(["confirmed"]);
+  expect(ids(new Set(["Confirmed"]))).toEqual(["confirmed"]);
+  expect(ids(new Set(["Draft", "Confirmed", "Paid"]))).toEqual(["draft", "confirmed"]);
 });
 
 test("plural", () => {

@@ -362,6 +362,40 @@ test("phone: a tab keeps the returns of its status; Confirmed holds Paid", async
   await app.waitFor(count("7 returns"));
 });
 
+test("phone: unticking a status hides its tab, ticking it again shows it, and a hidden current tab returns to All", async () => {
+  const app = await list();
+  await app.press(tab("Draft"));
+  await app.waitFor(count("3 returns"));
+
+  await app.press("id:filings-filters-open");
+  await app.waitFor("id:filings-sheet-done");
+  await app.press("id:filings-statuses-trigger");
+  await app.waitFor("id:filings-statuses-opt-Draft");
+  await app.press("id:filings-statuses-opt-Draft");
+  await app.waitFor("text:Show 4 returns");
+  await app.press("id:filings-sheet-done");
+  await app.waitFor("id:filings-sheet-done", { state: "gone" });
+
+  expect(app.shows(tab("Draft"))).toBe(false);
+  for (const name of ["All", "Queued", "Submitted", "Confirmed"]) expect(app.shows(tab(name))).toBe(true);
+  expect(app.shows(count("4 returns"))).toBe(true);
+  expect(seen(app, IDS.queued, IDS.submitted, IDS.confirmed, IDS.paid)).toBe(true);
+  expect(unseen(app, IDS.draft, IDS.cebu, IDS.second)).toBe(true);
+
+  await app.press("id:filings-filters-open");
+  await app.waitFor("id:filings-sheet-done");
+  await app.press("id:filings-statuses-trigger");
+  await app.waitFor("id:filings-statuses-opt-Draft");
+  await app.press("id:filings-statuses-opt-Draft");
+  await app.waitFor("text:Show 7 returns");
+  await app.press("id:filings-sheet-done");
+  await app.waitFor("id:filings-sheet-done", { state: "gone" });
+
+  expect(app.shows(tab("Draft"))).toBe(true);
+  expect(app.shows(count("7 returns"))).toBe(true);
+  expect(seen(app, IDS.draft, IDS.cebu, IDS.second)).toBe(true);
+});
+
 test("phone: search stays on the page and works inside a tab", async () => {
   const app = await list();
   await app.press(tab("Draft"));
