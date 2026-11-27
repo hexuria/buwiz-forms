@@ -208,7 +208,7 @@ def ci_ok_state(check_runs: Sequence[dict], head: str) -> str:
     at_head = [run for run in check_runs if run.get("name") == "ci-ok" and run.get("head_sha") == head]
     if not at_head:
         return "missing"
-    run = max(at_head, key=lambda r: (r.get("started_at") or "", r.get("completed_at") or "", r.get("id") or 0))
+    run = max(at_head, key=lambda r: (r.get("id") or 0, r.get("started_at") or "", r.get("completed_at") or ""))
     if run.get("status") != "completed":
         return "pending"
     return str(run.get("conclusion") or "no conclusion")
@@ -217,6 +217,9 @@ def ci_ok_state(check_runs: Sequence[dict], head: str) -> str:
 def enforce_ci_ok(github, pulls: Sequence[Pull], allow_unchecked: Sequence[int],
                   say: Callable[[str], None]) -> None:
     unchecked = set(allow_unchecked)
+    batched = {pull.number for pull in pulls}
+    for number in sorted(unchecked - batched):
+        say(f"*** WARNING: --allow-unchecked #{number} is not in the batch; the build goes on ***")
     refusals = []
     for pull in pulls:
         if pull.number in unchecked:
@@ -224,7 +227,9 @@ def enforce_ci_ok(github, pulls: Sequence[Pull], allow_unchecked: Sequence[int],
             continue
         state = ci_ok_state(github.check_runs(pull.head), pull.head)
         if state != "success":
-            refusals.append(f"#{pull.number} at {pull.head}: ci-ok is {state}; nothing was pushed")
+            wording = ("ci-ok is not reported at this head (a run still going, or none)" if state == "missing"
+                       else f"ci-ok is {state}")
+            refusals.append(f"#{pull.number} at {pull.head}: {wording}; nothing was pushed")
     if refusals:
         raise BatchError("refused by the ci-ok gate:\n  " + "\n  ".join(refusals))
 

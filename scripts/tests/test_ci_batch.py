@@ -202,7 +202,9 @@ class BuildTests(BatchTestCase):
         text = str(caught.exception)
         self.assertIn(f"#{number}", text)
         self.assertIn(head, text)
-        self.assertIn(f"ci-ok is {state}", text)
+        expected = ("ci-ok is not reported at this head (a run still going, or none)" if state == "missing"
+                    else f"ci-ok is {state}")
+        self.assertIn(expected, text)
         self.assertIn("nothing was pushed", text)
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
@@ -221,6 +223,36 @@ class BuildTests(BatchTestCase):
     def test_missing_ci_ok_refuses_and_pushes_nothing(self):
         self.assert_ci_ok_refused(19, [], "missing")
 
+    def test_green_then_pending_at_one_head_is_refused_as_pending(self):
+        self.assert_ci_ok_refused(23, [
+            dict(name="ci-ok", status="completed", conclusion="success", id=1,
+                 started_at="2026-11-27T10:00:00Z", completed_at="2026-11-27T10:05:00Z"),
+            dict(name="ci-ok", status="queued", conclusion=None, id=2, started_at=None, completed_at=None),
+        ], "pending")
+
+    def test_red_then_green_at_one_head_passes_even_when_the_timestamps_invert(self):
+        head = self.repos.pull_request(24, self.base, {"n24.txt": "x\n"})
+        self.github.check_runs_by_sha[head] = [dict(run, head_sha=head) for run in [
+            dict(name="ci-ok", status="completed", conclusion="failure", id=1,
+                 started_at="2026-11-27T10:10:00Z", completed_at="2026-11-27T10:15:00Z"),
+            dict(name="ci-ok", status="completed", conclusion="success", id=2,
+                 started_at="2026-11-27T10:00:00Z", completed_at="2026-11-27T10:05:00Z"),
+        ]]
+
+        self.build(24)
+
+        pushed = git(self.repos.origin, "for-each-ref", "--format=%(objectname)",
+                     "refs/heads/test/linux-windows/batch-24")
+        self.assertRegex(pushed, r"^[0-9a-f]{40}$")
+
+    def test_green_then_cancelled_at_one_head_is_refused(self):
+        self.assert_ci_ok_refused(25, [
+            dict(name="ci-ok", status="completed", conclusion="success", id=1,
+                 started_at="2026-11-27T10:00:00Z", completed_at="2026-11-27T10:05:00Z"),
+            dict(name="ci-ok", status="completed", conclusion="cancelled", id=2, started_at=None,
+                 completed_at="2026-11-27T10:10:00Z"),
+        ], "cancelled")
+
     def test_green_ci_ok_at_an_older_commit_refuses(self):
         old = self.repos.pull_request(20, self.base, {"n20.txt": "old\n"})
         head = self.repos.pull_request(20, old, {"n20.txt": "new\n"})
@@ -233,7 +265,7 @@ class BuildTests(BatchTestCase):
         text = str(caught.exception)
         self.assertIn("#20", text)
         self.assertIn(head, text)
-        self.assertIn("ci-ok is missing", text)
+        self.assertIn("ci-ok is not reported at this head (a run still going, or none)", text)
         self.assertIn("nothing was pushed", text)
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
@@ -263,6 +295,17 @@ class BuildTests(BatchTestCase):
         self.assertEqual(code, 0)
         self.assertRegex(pushed, r"^[0-9a-f]{40}$")
         self.assertIn(f"*** ALLOW-UNCHECKED: #22 at {head}; skipping the ci-ok gate ***", output)
+
+    def test_allow_unchecked_outside_the_batch_warns_and_the_build_goes_on(self):
+        self.repos.pull_request(26, self.base, {"n26.txt": "x\n"})
+
+        code, output = self.main("build", "26", "--allow-unchecked", "27")
+
+        branch = "test/linux-windows/batch-26"
+        pushed = git(self.repos.origin, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}")
+        self.assertEqual(code, 0)
+        self.assertRegex(pushed, r"^[0-9a-f]{40}$")
+        self.assertIn("*** WARNING: --allow-unchecked #27 is not in the batch; the build goes on ***", output)
 
     def test_order_matters_and_is_kept(self):
         self.repos.pull_request(3, self.base, {"b.txt": "three\n"})
