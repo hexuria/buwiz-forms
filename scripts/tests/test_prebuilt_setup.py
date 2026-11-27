@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -170,6 +171,8 @@ esac
         }
 
 
+# The helper is bash for Linux and macOS; Windows has its own (Prebuilt.ps1), checked by the text tests below.
+@unittest.skipIf(sys.platform == "win32", "prebuilt.sh is for Linux and macOS")
 class PrebuiltShellTests(unittest.TestCase):
     def test_binstall_success_skips_cargo_install_and_uses_the_exact_arguments(self):
         data = run_helper("install_prebuilt_or_build gpui-agent-cli 0.4.0\n")
