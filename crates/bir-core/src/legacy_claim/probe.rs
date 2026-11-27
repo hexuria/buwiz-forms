@@ -349,6 +349,7 @@ fn open_failure(error: crate::db::DbError) -> Failure {
                         | rusqlite::ErrorCode::SystemIoFailure
                         | rusqlite::ErrorCode::DatabaseBusy
                         | rusqlite::ErrorCode::DatabaseLocked
+                        | rusqlite::ErrorCode::OutOfMemory
                 ) =>
             {
                 sqlite_failure("open", sqlite)

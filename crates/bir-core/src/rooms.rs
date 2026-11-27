@@ -1052,6 +1052,9 @@ pub fn set_aside_unusable(layout: &Layout) -> Result<Option<PathBuf>, DeviceStor
             Err(error) => return Err(error.into()),
         }
     }
+    // Make the side-file renames durable before the main one: after a power cut the folder then shows either all
+    // of them moved or none, never a fresh device.db with a stray -wal or -shm at the old name.
+    crate::safe_fs::sync_dir(layout.device_dir())?;
     crate::safe_fs::rename_no_replace(&path, &aside)?;
     crate::safe_fs::sync_dir(layout.device_dir())?;
     tracing::warn!(aside = %aside.display(), "device store set aside: {reason}");

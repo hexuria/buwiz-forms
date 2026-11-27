@@ -553,6 +553,77 @@ fn computer_login_is_accepted_once_per_claim() {
     );
 }
 
+/// Ruling 1, the clearances: the computer login is spent once per claim, never once forever. Usable once, refused
+/// within the same claim, and usable again when that claim ends — at Done, and after a failure before the move (a
+/// pre-move resume needs a new unlock: the person is never left without their fallback).
+#[test]
+fn computer_login_is_usable_again_when_the_claim_ends() {
+    // Usable once, refused within the same claim, then the claim runs to Done.
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(locked.offers_computer_login(&claim), "offered first");
+    let ready = locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .unwrap();
+    drop(ready);
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    let refused = locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect_err("refused within the same claim");
+    let locked = refused.into_inner();
+    let ready = locked
+        .unlock(&claim, LegacyCredential::Pin("1357"))
+        .unwrap();
+    done_room(&ready.claim(&claim));
+    assert!(
+        !install.claim().os_login_used().unwrap(),
+        "the used mark is cleared at Done"
+    );
+
+    // A locked legacy file turning up after Done is a new round (offered, §A.3.6): the computer login opens it
+    // again, because the first claim's end cleared the used mark.
+    close(helpdesk(&install, "1357", None));
+    let Start::Offer(OfferStart::Locked(locked_offer)) = claim.start(&a) else {
+        panic!("not a locked offer for the new round")
+    };
+    locked_offer
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("usable again in a new round after Done");
+
+    // A failure before the move ends the claim: the computer login is not left spent.
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    let ready = locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .unwrap();
+    INJECT_AT.with(|at| at.set(Some(Inject::Zip)));
+    match ready.claim(&claim) {
+        Outcome::Transient(transient) => assert_eq!(transient.cause, TransientCause::DiskFull),
+        other => panic!("{other:?}"),
+    }
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked after the pre-move failure")
+    };
+    assert!(
+        locked.offers_computer_login(&claim),
+        "offered again after a pre-move failure"
+    );
+    locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("usable again after a pre-move failure");
+}
+
 // ---------------------------------------------------------------------------------------------- Not mine
 
 /// Ruled: "Not mine" gives that account an empty room (its own, the caller's) and leaves the file for the next account.
@@ -1620,4 +1691,31 @@ fn the_owner_pin_hash_is_never_printed() {
         serde_json::to_string(&record).unwrap().contains(phc),
         "stored as it is"
     );
+}
+
+/// N1 (delta review of A2): ext4 and f2fs reuse freed inode numbers. A's claim is cut after its copy, the legacy file
+/// is deleted, and A's new room file gets the freed inode, so its identity matches the recorded one: the room is still
+/// never finished on, because it is not byte for byte the raw file.
+#[test]
+fn a_reused_inode_never_finishes_on_the_accounts_own_room() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    std::fs::remove_file(install.legacy()).unwrap();
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    let own = Database::open(install.room_file(&room)).unwrap();
+    taxpayer(&own, "923456788", "A's own");
+    close(own);
+    let before = std::fs::read(install.room_file(&room)).unwrap();
+    SAME_ID.with(|same| same.set(true));
+    let started = claim.start(&a);
+    SAME_ID.with(|same| same.set(false));
+    assert!(matches!(started, Start::Nothing), "{started:?}");
+    assert_eq!(std::fs::read(install.room_file(&room)).unwrap(), before);
+    let record = claim.record().unwrap().unwrap();
+    assert_eq!(record.step, Step::Closed);
+    assert_eq!(record.failure, None);
 }

@@ -51,7 +51,10 @@ pub use probe::{CredentialKinds, LegacyProbe, probe_legacy};
 pub const RECORD_KEY: &str = "legacy";
 /// The `migration` row listing the rooms whose account said "Not mine" (a JSON array of room ids).
 pub const NOT_MINE_KEY: &str = "legacy.not_mine";
-/// The `migration` row that says "Use this computer's login" was used once for the claim (PLAN §A.3.1).
+/// The `migration` row that says "Use this computer's login" was used once for the claim (PLAN §A.3.1). Once per
+/// claim, never once forever: the row is deleted whenever the claim ends — at Done, at Closed, in
+/// [`LegacyClaim::clear_permanent`], and on any transient or permanent failure before the move (a pre-move resume
+/// needs a new unlock, so that counts as the claim ending: the person is never left without their fallback).
 pub const OS_LOGIN_USED_KEY: &str = "legacy.os_login_used";
 /// The scratch folder under the device folder: probe copies, swept at every launch.
 pub const SCRATCH_DIR: &str = "scratch";
@@ -119,7 +122,9 @@ pub enum LegacyCredential<'a> {
     AuthenticatorCode(&'a str),
     /// The recovery key, as typed.
     RecoveryKey(&'a str),
-    /// The OS confirmed the computer's owner (LocalAuthentication / Windows Hello, A3a-2). Accepted once per claim.
+    /// The OS confirmed the computer's owner (LocalAuthentication / Windows Hello, A3a-2). Accepted once per
+    /// claim: the used mark is cleared when the claim ends (at Done, at Closed, in `clear_permanent`, on any
+    /// failure before the move), so the fallback is never spent forever.
     ComputerLogin,
 }
 
@@ -545,8 +550,27 @@ impl LegacyClaim {
         Ok(self.migration_value(OS_LOGIN_USED_KEY)?.is_some())
     }
 
-    /// Let an account that said "Not mine" be offered the page again (its own choice, from Settings).
+    /// "Use this computer's login" is usable once per claim, never once forever (PLAN §A.3.1): the used mark goes
+    /// whenever the claim it was spent in ends — at Done, at Closed, in [`LegacyClaim::clear_permanent`], and on any
+    /// transient or permanent failure before the move (a pre-move resume needs a new unlock, so that counts as the
+    /// claim ending: the person must never be left without their fallback).
+    fn clear_os_login_used(&self) {
+        if let Err(error) = self.store.conn().execute(
+            "DELETE FROM migration WHERE key = ?1",
+            params![OS_LOGIN_USED_KEY],
+        ) {
+            tracing::warn!("legacy claim: the computer-login-used mark was not cleared: {error}");
+        }
+    }
+
+    /// Let an account that said "Not mine" be offered the page again (its own choice, from Settings). Takes the
+    /// claim guard ([`ClaimRun::begin`]): the `migration` rows are never written under a running claim.
     pub fn forget_not_mine(&self, who: &Claimant) -> Result<(), DeviceStoreError> {
+        let Some(_run) = ClaimRun::begin(&self.layout) else {
+            return Err(DeviceStoreError::Io(std::io::Error::other(
+                "another claim of this device folder is running in this process",
+            )));
+        };
         let room = self.claim_room(who).map_err(|error| match error {
             Failure::Transient(transient) => {
                 DeviceStoreError::Io(std::io::Error::other(transient.detail))
@@ -564,12 +588,20 @@ impl LegacyClaim {
     }
 
     /// Allow a permanent failure to be tried again (support, or a later build with a fix): the record keeps the rest.
+    /// The retry is a new claim, so the computer-login-used mark goes with the old one. Takes the claim guard
+    /// ([`ClaimRun::begin`]): the record is never written under a running claim.
     pub fn clear_permanent(&self) -> Result<(), DeviceStoreError> {
+        let Some(_run) = ClaimRun::begin(&self.layout) else {
+            return Err(DeviceStoreError::Io(std::io::Error::other(
+                "another claim of this device folder is running in this process",
+            )));
+        };
         if let Some(mut record) = self.record()?
             && matches!(record.failure, Some(RecordedFailure::Permanent { .. }))
         {
             record.failure = None;
             self.write_record(&record)?;
+            self.clear_os_login_used();
         }
         Ok(())
     }
@@ -672,9 +704,11 @@ impl LegacyClaim {
                 && !matches!(record.failure, Some(RecordedFailure::MovedNotOpened { .. }))
             {
                 // No legacy file, and no room file that is it: nothing to claim. Kept for support, never deleted.
+                // The claim is over: the computer login is the next claim's again.
                 tracing::warn!(step = ?record.step, "legacy claim closed: the legacy file is gone and no room file is it");
                 record.step = Step::Closed;
                 self.write_record(&record).map_err(store_failure)?;
+                self.clear_os_login_used();
             }
             return Ok(Start::Nothing);
         }
@@ -777,18 +811,34 @@ impl LegacyClaim {
         }
     }
 
-    /// Whether `room_file` is the legacy file moved (C1): the identity recorded at the probe (a link or a rename keeps
-    /// it), else, where no identity can be read, the raw SHA-256.
+    /// Whether `room_file` is the legacy file moved (C1). ext4 and f2fs reuse freed inode numbers (N1): a deleted
+    /// legacy file's inode can land on the account's own new room file, so the recorded identity alone never decides.
+    /// Required, all three: the record is cut at Copied (the only step the move can be done but unrecorded at — before
+    /// it there is no copy, after it the record says moved), an identity match (a link or a rename keeps it), and the
+    /// room file byte for byte the raw file: before step 6 the room is byte-equal to the raw file, so this never
+    /// rejects a real move, and a reused inode with any other content never passes.
     fn room_is_the_legacy(&self, record: &Record, room_file: &Path) -> bool {
-        match (record.legacy_file, crate::safe_fs::file_id(room_file)) {
-            (Some(recorded), Ok(id)) => recorded == id,
-            _ => record
-                .raw_sha256
-                .as_ref()
-                .is_some_and(|raw| files::sha256_file(room_file).is_ok_and(|hash| hash == *raw)),
+        if record.step != Step::Copied {
+            return false;
         }
+        let identity_matches = match (record.legacy_file, crate::safe_fs::file_id(room_file)) {
+            (Some(recorded), Ok(id)) => recorded == id,
+            _ => false,
+        };
+        #[cfg(test)]
+        let identity_matches = identity_matches || SAME_ID.with(std::cell::Cell::get);
+        if !identity_matches {
+            return false;
+        }
+        record
+            .raw_sha256
+            .as_ref()
+            .is_some_and(|raw| files::sha256_file(room_file).is_ok_and(|hash| hash == *raw))
     }
 
+    /// Record a permanent failure. Every one of these is before the move (the probe, the copy), so the claim is
+    /// over: a pre-move resume needs a new unlock, and the computer login must not stay spent — the person is never
+    /// left without their fallback.
     fn record_permanent(&self, permanent: &Permanent) -> Result<(), DeviceStoreError> {
         let mut record = self.record()?.unwrap_or_else(new_record);
         tracing::warn!(reason = ?permanent.reason, "legacy claim: permanent failure: {}", permanent.detail);
@@ -798,7 +848,11 @@ impl LegacyClaim {
             at: now_text(),
             build: BUILD.to_owned(),
         });
-        self.write_record(&record)
+        let written = self.write_record(&record);
+        if written.is_ok() {
+            self.clear_os_login_used();
+        }
+        written
     }
 
     fn record_transient(&self, transient: &Transient, step: Step) {
@@ -957,6 +1011,8 @@ impl LegacyClaim {
             );
         }
         let _ = self.set_migration_value(NOT_MINE_KEY, "[]");
+        // The claim is done: the computer login is the next claim's again, never spent forever.
+        self.clear_os_login_used();
         tracing::info!(room = %room.room_id, "legacy claim done");
         Outcome::Done {
             room: room.room_id.clone(),
@@ -1312,7 +1368,8 @@ impl Gate {
     /// recovery key each count in `pin_attempts('', 'legacy')`, in B1's order (refuse during a wait, check, commit,
     /// then answer), so no caller can try without limit. The check reads only the probe's values in memory; nothing
     /// inside it takes a store or another lock (B1's lock-order rule). "Use this computer's login" is the operating
-    /// system's own check, with its own limit, and once per claim: it is not counted here.
+    /// system's own check, with its own limit, and once per claim: it is not counted here. The once is cleared when
+    /// the claim ends (at Done, at Closed, in `clear_permanent`, on any failure before the move), never spent forever.
     fn try_credential(
         &self,
         claim: &LegacyClaim,
@@ -1438,7 +1495,9 @@ impl LockedClaim {
         self.gate.probe.kinds()
     }
 
-    /// Offer "Use this computer's login" (A3a-2): only until it was used once for this claim.
+    /// Offer "Use this computer's login" (A3a-2): only until it was used once for this claim. The used mark is
+    /// cleared when the claim ends — at Done, at Closed, in `clear_permanent`, on any failure before the move — so
+    /// it is offered again in the next claim.
     pub fn offers_computer_login(&self, claim: &LegacyClaim) -> bool {
         !claim.os_login_used().unwrap_or(true)
     }
@@ -1679,8 +1738,14 @@ impl Offer {
 // ------------------------------------------------------------------------------------------------ helpers
 
 impl LegacyClaim {
+    /// A transient failure of the claim run. Before the move the claim is over: a pre-move resume needs a new
+    /// unlock, so the computer-login-used mark goes with it — the person is never left without their fallback.
+    /// After the move the resume finishes from the files and needs no unlock, so the mark stays as it is.
     fn failed(&self, transient: Transient, step: Step) -> Outcome {
         self.record_transient(&transient, step);
+        if step < Step::Moved {
+            self.clear_os_login_used();
+        }
         Outcome::Transient(transient)
     }
 }
@@ -1778,9 +1843,9 @@ fn sqlite_cause(error: &rusqlite::Error) -> Option<TransientCause> {
     match error {
         rusqlite::Error::SqliteFailure(failure, _) => match failure.code {
             rusqlite::ErrorCode::DiskFull => Some(TransientCause::DiskFull),
-            rusqlite::ErrorCode::SystemIoFailure | rusqlite::ErrorCode::CannotOpen => {
-                Some(TransientCause::Io)
-            }
+            rusqlite::ErrorCode::SystemIoFailure
+            | rusqlite::ErrorCode::CannotOpen
+            | rusqlite::ErrorCode::OutOfMemory => Some(TransientCause::Io),
             rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked => {
                 Some(TransientCause::WalReturned)
             }
@@ -1846,6 +1911,12 @@ pub(crate) enum Inject {
 #[cfg(test)]
 thread_local! {
     pub(crate) static INJECT_AT: std::cell::Cell<Option<Inject>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's reused inode (N1): the room file reads as having the legacy file's recorded identity.
+    pub(crate) static SAME_ID: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// A test's full disk at `point`, once; nothing outside tests.
