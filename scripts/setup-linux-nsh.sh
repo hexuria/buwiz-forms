@@ -163,9 +163,10 @@ RANLIB="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
 # honours every allowed key baked into a development build (nsh/src/dev_env.rs), so each entry is checked here:
 # only keys that file allows, each at most once, EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1 both present and exactly 1,
 # and a server, account or relay address only when it is this machine's own. Anything else is refused and the safe
-# default is baked in.
+# default is baked in. (The function's body is in parentheses, not braces: this text sits inside a here-document of
+# a brace-bodied function, and scripts/tests/test_linux_nsh_setup.py reads that function up to its closing brace.)
 dev_env_default="EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1"
-dev_env_refusal() {
+dev_env_refusal() (
   local entry key value seen=";" test_env="" dry_run=""
   local local_url='^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/|$)'
   case "$1" in *$'\n'*|*$'\r'*) echo "a line break in the value"; return 0;; esac
@@ -188,7 +189,7 @@ dev_env_refusal() {
   [ -n "$test_env" ] || { echo "EBIR_TEST_ENV=1 is missing"; return 0; }
   [ -n "$dry_run" ] || { echo "BIR_SFTP_DRY_RUN=1 is missing"; return 0; }
   return 1
-}
+)
 dev_env="${BUWIZ_ANDROID_DEV_ENV:-$dev_env_default}"
 if why="$(dev_env_refusal "$dev_env")"; then
   echo "nsh2404: BUWIZ_ANDROID_DEV_ENV refused ($why); using the default" >&2
