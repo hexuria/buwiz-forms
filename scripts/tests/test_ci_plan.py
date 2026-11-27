@@ -81,6 +81,12 @@ class QuickLaneTests(unittest.TestCase):
                              "assets/brand/buwiz-forms.svg", "assets/badges/forms.svg", ".github/PULL_REQUEST.md"),
                           check=False, nsh_check=False)
 
+    def test_the_readme_and_its_pictures_are_docs(self):
+        # #494: README.md with assets/readme/showcase.png ran every quick check as app code.
+        self.assert_quick(pr("README.md", "assets/readme/showcase.png", "assets/readme/showcase/README.md",
+                             "assets/readme/showcase/iphone.jpg"), check=False, nsh_check=False)
+        self.assertEqual(ci_plan.classify("assets/readme/showcase/iphone.jpg"), "docs")
+
     def test_app_change_runs_the_quick_checks_on_linux(self):
         self.assert_quick(pr("crates/bir-cli/src/main.rs"), check=True, nsh_check=False)
 
@@ -111,7 +117,8 @@ class QuickLaneTests(unittest.TestCase):
         for path in ("installer.iss", "installer.iss.bak", "assets/windowsfoo/x.png", "packaging/linux2/x.sh",
                      "scripts/tests_helper.py", "scripts/setup-linux.sh.orig", ".github/workflows/cirelease.yml",
                      "crates/bir-shell/src/host.rs", "app/main.js", "assets/linux/dev.goldcoders.bir.desktop",
-                     "scripts/linux_candidate_certification.md", "crates/bir-core/README.md", "assets/brandx/a.svg"):
+                     "scripts/linux_candidate_certification.md", "crates/bir-core/README.md", "assets/brandx/a.svg",
+                     "assets/readmes/a.png", "assets/readme.png"):
             with self.subTest(path=path):
                 self.assertEqual(pr(path)["check_systems"], ["linux"])
 

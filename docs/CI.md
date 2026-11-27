@@ -225,7 +225,7 @@ the pull request's whole change.
 
 | Changed files | Pull request | `test/**` push |
 | --- | --- | --- |
-| Docs: `docs/`, top-level `*.md`, `crates/<crate>/docs/`, `.github/*.md`, Markdown under `nsh/`, `assets/brand/`, `assets/badges/` | `legacy-guard` only | nothing |
+| Docs: `docs/`, top-level `*.md`, `crates/<crate>/docs/`, `.github/*.md`, Markdown under `nsh/`, `assets/brand/`, `assets/badges/`, `assets/readme/` (the README's pictures) | `legacy-guard` only | nothing |
 | Screen tests only: `nsh/**/*.test.ts`, `nsh/**/*.test.tsx` | NSH type check | screen tests |
 | Other `nsh/` files, except `nsh/src/` and `nsh/Cargo.*` | NSH type check | app build, app Rust tests, screen tests |
 | `nsh/src/`, `nsh/Cargo.toml`, `nsh/Cargo.lock` | quick checks, NSH type check | workspace tests, app build, app Rust tests, screen tests |

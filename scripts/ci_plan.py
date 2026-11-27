@@ -39,9 +39,10 @@ CHECK_OS = {
 }
 
 # Read by people only. assets/brand and assets/badges feed local recipes (`just icons`, `just badges`), not a build;
-# Markdown in nsh/ is not bundled or type checked. Markdown under rules/ or scripts/ and crate README files are NOT
+# assets/readme holds the pictures README.md shows and nothing builds from it (a README picture change used to run
+# every quick check as app code, #494). Markdown in nsh/ is not bundled or type checked. Markdown under rules/ or scripts/ and crate README files are NOT
 # here: they feed code generation or policy checks.
-DOCS = re.compile(r"^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$|assets/(brand|badges)/|nsh/.*\.md$)")
+DOCS = re.compile(r"^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$|assets/(brand|badges|readme)/|nsh/.*\.md$)")
 # The Windows installer. nsh.yml owns the NSH pin that generates the installer source.
 WINDOWS_PKG = re.compile(
     r"^(assets/windows/|packaging/windows/|scripts/(audit_final_setup|package_msix|package_nsh_windows|smoke_msix)\.ps1$"
