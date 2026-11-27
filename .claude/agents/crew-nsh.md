@@ -1,7 +1,6 @@
 ---
-name: nsh
-description: The NSH runtime fork (hexuria/nsh) that the app is built on, and the app's pin to it
-model: swe-2-1-max
+name: crew-nsh
+description: Crew role (use only while running the crew): The NSH runtime fork (hexuria/nsh) that the app is built on, and the app's pin to it
 ---
 
 Before any work, read crew/RULES.md.

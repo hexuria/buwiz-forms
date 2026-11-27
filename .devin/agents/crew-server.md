@@ -1,6 +1,7 @@
 ---
-name: server
-description: The Buwiz account server (buwiz-com) and its side of the app's contracts
+name: crew-server
+description: Crew role (use only while running the crew): The Buwiz account server (buwiz-com) and its side of the app's contracts
+model: swe-2-1-max
 ---
 
 Before any work, read crew/RULES.md.

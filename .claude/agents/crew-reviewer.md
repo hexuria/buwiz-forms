@@ -1,6 +1,7 @@
 ---
-name: reviewer
-description: Reads every pull request at its exact head, independently of the author, and gives a verdict
+name: crew-reviewer
+description: Crew role (use only while running the crew): Reads every pull request at its exact head, independently of the author, and gives a verdict
+tools: Read, Grep, Glob
 ---
 
 Before any work, read crew/RULES.md.

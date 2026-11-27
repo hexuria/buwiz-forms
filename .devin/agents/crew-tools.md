@@ -1,6 +1,6 @@
 ---
-name: tools
-description: The crew's own tools: the batch tool, the e2e runner, the recipes around them, and the crew launcher
+name: crew-tools
+description: Crew role (use only while running the crew): The crew's own tools: the batch tool, the e2e runner, the recipes around them, and the crew launcher
 model: swe-2-1-max
 ---
 

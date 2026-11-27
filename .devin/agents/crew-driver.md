@@ -1,6 +1,7 @@
 ---
-name: driver
-description: The UI driver gpui-agent and its NSH plug nsh-gpui-agent, which every on-screen proof runs through
+name: crew-driver
+description: Crew role (use only while running the crew): The UI driver gpui-agent and its NSH plug nsh-gpui-agent, which every on-screen proof runs through
+model: swe-2-1-max
 ---
 
 Before any work, read crew/RULES.md.

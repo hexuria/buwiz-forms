@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import signal
 import urllib.parse
 from datetime import datetime
 from dataclasses import dataclass
@@ -52,14 +53,29 @@ class Settings:
     claude_command: str
     claude_model: str
     fleet_command: str
+    merge: str
+    tag: str
+    pass_env: list
+    gh_token_env: str
+    deny_words: list
 
 
 CLAUDE_ALLOWED_TOOLS = (
-    "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(python3:*),"
+    "Read,Edit,Write,Glob,Grep,"
+    "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),"
+    "Bash(git commit:*),Bash(git switch:*),Bash(git checkout:*),Bash(git fetch:*),Bash(git merge:*),"
+    "Bash(git rebase:*),Bash(git stash:*),Bash(git rev-parse:*),Bash(git ls-files:*),"
+    "Bash(git branch:*),Bash(git restore:*),Bash(python3 crew/bin/crew push:*),"
     "Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr checks:*),"
     "Bash(gh pr diff:*),Bash(gh pr create:*),Bash(gh run view:*),"
     "Bash(gh run list:*),Bash(gh issue list:*),Bash(gh issue view:*),"
     "Bash(gh issue create:*)"
+)
+
+CLAUDE_DISALLOWED_TOOLS = (
+    "Bash(git push:*),Bash(gh pr merge:*),Bash(gh pr close:*),"
+    "Bash(gh run cancel:*),Bash(gh release:*),Bash(git tag:*),"
+    "Bash(cargo:*),Bash(nsh:*)"
 )
 
 
@@ -150,6 +166,11 @@ def load_settings(root):
         claude_command=value("engine.claude", "command", "claude") or "claude",
         claude_model=value("engine.claude", "model", ""),
         fleet_command=value("fleet", "command", ""),
+        merge=value("crew", "merge", ""),
+        tag=value("crew", "tag", ""),
+        pass_env=comma_list(value("worker", "pass_env", "")),
+        gh_token_env=value("worker", "gh_token_env", ""),
+        deny_words=comma_list(value("lint", "deny_words", "")),
     )
 
 
@@ -173,7 +194,14 @@ def split_command(command):
 
 
 def command_line(argv):
-    return shlex.join([str(part) for part in argv])
+    parts = [str(part) for part in argv]
+    if os.name == "nt":
+        return subprocess.list2cmdline(parts)
+    return shlex.join(parts)
+
+
+def tool_path(name):
+    return shutil.which(name) or name
 
 
 def compose_prompt(root, settings, role_name, task_text=""):
@@ -189,6 +217,7 @@ def compose_prompt(root, settings, role_name, task_text=""):
         "You are the '{0}' worker of the launch crew.".format(role.name),
         "Repository root: {0}".format(root),
         "State folder: {0}".format(state_role),
+        "When a step needs the launcher, run the crew launcher (`crew/bin/crew`) with Python.",
     ])
     parts = [header, rules.rstrip("\n"), role.body.rstrip("\n")]
     state_file = state_role / "STATE.md"
@@ -254,6 +283,8 @@ def cmd_doctor(args):
     print("fleet: {0}".format("set" if settings.fleet_command else "not set"))
     print("sbx: {0}".format("found" if shutil.which("sbx") else "not found"))
     print("state: {0} ({1})".format(settings.state_dir, "exists" if settings.state_dir.exists() else "missing"))
+    print("merge: {0}".format(settings.merge or "not set"))
+    print("tag: {0}".format(settings.tag or "not set"))
     if found and settings.fleet_command:
         tier = "fleet"
     elif "devin" in found:
@@ -301,7 +332,7 @@ def run_logged(argv, cwd, log_path, env=None, input_text=None):
 
 
 def git_common_dir(tree):
-    result = subprocess.run(["git", "-C", str(tree), "rev-parse", "--git-common-dir"],
+    result = subprocess.run([tool_path("git"), "-C", str(tree), "rev-parse", "--git-common-dir"],
                             capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise CrewError("not a git worktree: {0}".format(tree))
@@ -313,19 +344,32 @@ def git_common_dir(tree):
 
 
 def devin_permissions(tree, role_dir, gitdir):
+    git_allow = [
+        "Write({0}/objects/**)".format(gitdir), "Write({0}/refs/**)".format(gitdir),
+        "Write({0}/index)".format(gitdir), "Write({0}/HEAD)".format(gitdir),
+        "Write({0}/logs/**)".format(gitdir), "Write({0}/worktrees/**)".format(gitdir),
+    ]
+    git_read_commit = ["Exec(git {0})".format(name) for name in (
+        "status", "diff", "log", "show", "add", "commit", "switch", "checkout", "fetch", "merge",
+        "rebase", "stash", "rev-parse", "ls-files", "branch", "restore")]
     return {
         "allow": [
-            "Write({0})".format(tree), "Write({0})".format(role_dir), "Write({0})".format(gitdir),
-            "Exec(git)", "Exec(python3)", "Exec(grep)", "Exec(sed)", "Exec(ls)", "Exec(cat)", "Exec(head)",
-            "Exec(tail)", "Exec(wc)", "Exec(find)", "Exec(diff)", "Exec(sort)", "Exec(uniq)", "Exec(mkdir)",
-            "Exec(date)", "Exec(gh pr view)", "Exec(gh pr list)", "Exec(gh pr checks)", "Exec(gh pr diff)",
-            "Exec(gh pr create)", "Exec(gh run view)", "Exec(gh run list)", "Exec(gh issue list)",
-            "Exec(gh issue view)", "Exec(gh issue create)",
+            "Write({0})".format(tree), "Write({0})".format(role_dir),
+        ] + git_allow + git_read_commit + [
+            # python3 remains a hole for a dishonest worker: the fence is the restricted token
+            # and branch protection, not this allow-list.
+            "Exec(python3 crew/bin/crew push)", "Exec(grep)", "Exec(sed)", "Exec(ls)", "Exec(cat)",
+            "Exec(head)", "Exec(tail)", "Exec(wc)", "Exec(find)", "Exec(diff)", "Exec(sort)",
+            "Exec(uniq)", "Exec(mkdir)", "Exec(date)", "Exec(gh pr view)", "Exec(gh pr list)",
+            "Exec(gh pr checks)", "Exec(gh pr diff)", "Exec(gh pr create)", "Exec(gh run view)",
+            "Exec(gh run list)", "Exec(gh issue list)", "Exec(gh issue view)", "Exec(gh issue create)",
         ],
         "deny": [
-            "Exec(gh pr merge)", "Exec(gh pr close)", "Exec(gh run cancel)", "Exec(gh release)",
-            "Exec(gh secret)", "Exec(gh auth)", "Exec(cargo)", "Exec(nsh)", "Exec(rm -rf)",
-            "Exec(git push --force)", "Exec(git tag)",
+            "Exec(git push)", "Exec(gh pr merge)", "Exec(gh pr close)", "Exec(gh run cancel)",
+            "Exec(gh release)", "Exec(gh secret)", "Exec(gh auth)", "Exec(cargo)", "Exec(nsh)",
+            "Exec(rm -rf)", "Exec(git tag)", "Exec(git config)",
+            "Write({0}/config)".format(gitdir), "Write({0}/config/**)".format(gitdir),
+            "Write({0}/hooks)".format(gitdir), "Write({0}/hooks/**)".format(gitdir),
         ],
     }
 
@@ -345,11 +389,51 @@ def write_devin_config(settings, tree, role_dir):
             data = json.loads(source.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise CrewError("cannot read Devin config {0}: {1}".format(source, exc))
-    data["permissions"] = devin_permissions(str(tree), str(role_dir), str(git_common_dir(tree)))
+    ours = devin_permissions(str(tree), str(role_dir), str(git_common_dir(tree)))
+    old_permissions = data.get("permissions") if isinstance(data.get("permissions"), dict) else {}
+    deny = []
+    for entry in list(old_permissions.get("deny", [])) + ours["deny"]:
+        if entry not in deny:
+            deny.append(entry)
+    permissions = dict(old_permissions)
+    permissions["allow"] = ours["allow"]
+    permissions["deny"] = deny
+    data["permissions"] = permissions
     fd, name = tempfile.mkstemp(prefix="crew-devin-")
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         json.dump(data, handle)
     return name
+
+
+# Engine sign-in configuration locations the CLI itself reads. Secrets and tokens are not in this list.
+WORKER_SIGNIN_ENV = ("CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "APPDATA", "USERPROFILE")
+WORKER_BASE_ENV = ("PATH", "HOME", "USER", "LANG", "TMPDIR", "TERM", "SHELL")
+
+
+def worker_environment(settings):
+    env = {}
+    for name in WORKER_BASE_ENV + WORKER_SIGNIN_ENV:
+        if name in os.environ:
+            env[name] = os.environ[name]
+    for name, value in os.environ.items():
+        if name.startswith("LC_"):
+            env[name] = value
+    for name in settings.pass_env:
+        if name in os.environ:
+            env[name] = os.environ[name]
+    if settings.gh_token_env and os.environ.get(settings.gh_token_env):
+        env["GH_TOKEN"] = os.environ[settings.gh_token_env]
+    env["GIT_LFS_SKIP_PUSH"] = "1"
+    return env
+
+
+def remove_quietly(name):
+    if not name:
+        return
+    try:
+        os.unlink(name)
+    except OSError:
+        pass
 
 
 def worker_choices(root, settings, role_name, args):
@@ -364,20 +448,23 @@ def worker_choices(root, settings, role_name, args):
 
 def sandbox_commands(role_name, name, tree, model, prompt_file):
     sandbox = "crew-{0}-{1}".format(role_name, name)
-    exec_argv = ["sbx", "exec", sandbox, "--", "devin", "-p"]
+    sbx = tool_path("sbx")
+    git = tool_path("git")
+    devin = tool_path("devin")
+    exec_argv = [sbx, "exec", sandbox, "--", devin, "-p"]
     if model:
         exec_argv += ["--model", model]
     exec_argv += ["--prompt-file", str(prompt_file)]
     return [
-        ["sbx", "create", "--name", sandbox, "--clone", "devin", str(tree)],
+        [sbx, "create", "--name", sandbox, "--clone", "devin", str(tree)],
         exec_argv,
-        ["git", "-C", str(tree), "fetch", "sandbox-" + sandbox],
-        ["sbx", "rm", "--force", sandbox],
+        [git, "-C", str(tree), "fetch", "sandbox-" + sandbox],
+        [sbx, "rm", "--force", sandbox],
     ]
 
 
-def run_sandbox(args, role, model, tree, name, prompt, log):
-    prompt_file = tree / (".crew-prompt-" + name + ".md")
+def run_sandbox(args, role, model, tree, name, prompt, log, settings):
+    prompt_file = (tree / ".crew" / "state" / "prompts" / (name + ".md")).resolve()
     commands = sandbox_commands(role.name, name, tree, model, prompt_file)
     if args.print_command:
         for argv in commands:
@@ -385,26 +472,34 @@ def run_sandbox(args, role, model, tree, name, prompt, log):
         return 0
     if not shutil.which("sbx"):
         raise CrewError("sbx not found on PATH; see crew/playbooks/sandbox.md")
+    env = worker_environment(settings)
     code = 0
+    created = False
     try:
+        prompt_file.parent.mkdir(parents=True, exist_ok=True)
         prompt_file.write_text(prompt, encoding="utf-8")
-        create = subprocess.run(commands[0], capture_output=True, text=True, check=False)
+        create = subprocess.run(commands[0], capture_output=True, text=True, check=False, env=env)
         if create.returncode != 0:
             log.parent.mkdir(parents=True, exist_ok=True)
             log.write_text((create.stdout or "") + (create.stderr or ""), encoding="utf-8")
             code = create.returncode
         else:
-            code = run_logged(commands[1], tree, log)
-            if code == 0:
-                fetch = subprocess.run(commands[2], capture_output=True, text=True, check=False)
-                if fetch.returncode != 0:
-                    with open(str(log), "a", encoding="utf-8") as handle:
-                        handle.write((fetch.stdout or "") + (fetch.stderr or ""))
-                    code = fetch.returncode
+            created = True
+            code = run_logged(commands[1], tree, log, env=env)
+            fetch = subprocess.run(commands[2], capture_output=True, text=True, check=False, env=env)
+            if fetch.returncode != 0 and code == 0:
+                code = fetch.returncode
+            if fetch.stdout or fetch.stderr:
+                with open(str(log), "a", encoding="utf-8") as handle:
+                    handle.write((fetch.stdout or "") + (fetch.stderr or ""))
     finally:
-        remove = subprocess.run(commands[3], capture_output=True, text=True, check=False)
-        if code == 0 and remove.returncode != 0:
-            code = remove.returncode
+        if created:
+            try:
+                remove = subprocess.run(commands[3], capture_output=True, text=True, check=False, env=env)
+                if code == 0 and remove.returncode != 0:
+                    code = remove.returncode
+            except OSError:
+                pass
         try:
             prompt_file.unlink()
         except OSError:
@@ -431,41 +526,64 @@ def cmd_run(args):
     if args.sandbox:
         if engine != "devin":
             raise CrewError("the sandbox worker is devin engine only")
-        return run_sandbox(args, role, model, tree, name, prompt, log)
+        return run_sandbox(args, role, model, tree, name, prompt, log, settings)
+    env = worker_environment(settings)
     if engine == "devin":
-        config = write_devin_config(settings, tree, role_dir.resolve())
-        prompt_file = temporary_text_file("crew-prompt-", prompt)
+        config = None
+        prompt_file = None
+
+        def cleanup_temp():
+            remove_quietly(config)
+            remove_quietly(prompt_file)
+
+        def signal_cleanup(signum, _frame):
+            cleanup_temp()
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+
+        old_handlers = {}
+        if os.name != "nt":
+            for signal_name in ("SIGTERM", "SIGHUP", "SIGINT"):
+                signum = getattr(signal, signal_name, None)
+                if signum is not None:
+                    old_handlers[signum] = signal.getsignal(signum)
+                    signal.signal(signum, signal_cleanup)
         try:
+            config = write_devin_config(settings, tree, role_dir.resolve())
+            prompt_file = temporary_text_file("crew-prompt-", prompt)
             argv = engine_command(settings, engine) + ["-p"]
             if model:
                 argv += ["--model", model]
             argv += ["--config", config, "--permission-mode", "accept-edits",
                      "--respect-workspace-trust", "false", "--prompt-file", prompt_file]
-            env = os.environ.copy()
-            env["GIT_LFS_SKIP_PUSH"] = "1"
             code = run_logged(argv, tree, log, env=env)
         finally:
-            for path in (config, prompt_file):
-                try:
-                    os.unlink(path)
-                except OSError:
-                    pass
+            cleanup_temp()
+            if os.name != "nt":
+                for signum, old in old_handlers.items():
+                    signal.signal(signum, old)
     else:
         argv = engine_command(settings, engine) + ["-p"]
         if model:
             argv += ["--model", model]
-        argv += ["--permission-mode", "acceptEdits", "--allowedTools", CLAUDE_ALLOWED_TOOLS]
-        code = run_logged(argv, tree, log, input_text=prompt)
+        argv += ["--permission-mode", "acceptEdits", "--allowedTools", CLAUDE_ALLOWED_TOOLS,
+                 "--disallowedTools", CLAUDE_DISALLOWED_TOOLS, "--setting-sources="]
+        code = run_logged(argv, tree, log, env=env, input_text=prompt)
     print("crew: {0} finished {1} (exit {2}); log {3}".format(role.name, name, code, log))
     return code
 
 
 def engine_command(settings, engine):
     if engine == "claude":
-        return split_command(settings.claude_command)
-    if engine == "devin":
-        return split_command(settings.devin_command)
-    raise CrewError("unknown engine: {0}".format(engine or "(none)"))
+        command = settings.claude_command
+    elif engine == "devin":
+        command = settings.devin_command
+    else:
+        raise CrewError("unknown engine: {0}".format(engine or "(none)"))
+    path, parts = executable_for(command)
+    if path:
+        parts = [path] + parts[1:]
+    return parts
 
 
 def cmd_start(args):
@@ -500,20 +618,86 @@ def cmd_start(args):
 
 
 def pr_check_rows(gh, number, repo):
-    result = subprocess.run([gh, "pr", "checks", str(number), "--repo", repo], capture_output=True, text=True,
+    result = subprocess.run([gh, "pr", "checks", str(number), "--repo", repo,
+                             "--json", "name,state,bucket,link"], capture_output=True, text=True,
                             check=False)
-    if result.returncode != 0:
+    # gh exits 1 for a failed check and 8 for a pending one; the JSON on stdout is still the data.
+    try:
+        rows = json.loads(result.stdout or "[]")
+    except ValueError:
         return []
-    rows = []
-    for line in result.stdout.splitlines():
-        parts = line.split("\t") if "\t" in line else line.split()
-        if len(parts) >= 2:
-            rows.append((parts[0], parts[1], line))
-    return rows
+    return [(row.get("name", ""), row.get("bucket", ""), row) for row in rows if isinstance(row, dict)]
+
+
+def verdict_file_name(repo, number):
+    return repo.strip("/").replace("/", "-") + "-" + str(number) + ".verdict"
+
+
+def read_verdict(settings, repo, number):
+    path = settings.state_dir / "roles" / "reviewer" / "outbox" / verdict_file_name(repo, number)
+    if not path.exists():
+        return path, {}
+    values = {}
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            values[key.strip()] = value.strip()
+    return path, values
+
+
+# The sensitive-path rule itself lives in crew/RULES.md; this list is the launcher's enforcement.
+SENSITIVE_WORDS = ("account", "auth", "signin", "sign_in", "session", "relay", "submit", "filing",
+                   "print", "os_login", "keychain")
+
+
+def sensitive_paths(paths):
+    found = []
+    for path in paths:
+        lowered = path.lower()
+        if not (lowered.startswith("crates/") or lowered.startswith("nsh/")):
+            continue
+        if lowered.startswith("crates/bir-core/src/account") or any(word in lowered for word in SENSITIVE_WORDS):
+            found.append(path)
+    return found
+
+
+def verdict_problem(settings, repo, number, head, files):
+    path, verdict = read_verdict(settings, repo, number)
+    if not verdict:
+        return "no verdict for {0} #{1} at {2}".format(repo, number, path)
+    if verdict.get("verdict") != "MERGE":
+        return "verdict for {0} #{1} is not MERGE".format(repo, number)
+    if verdict.get("head") != head:
+        return "stale verdict for {0} #{1}: verdict head {2}, pull request head {3}".format(
+            repo, number, verdict.get("head", ""), head)
+    sensitive = sensitive_paths(files)
+    if sensitive and verdict.get("engine") != "claude":
+        return "sensitive paths need a claude verdict: {0}".format(", ".join(sensitive))
+    return ""
+
+
+def rollup_ci_ok_passes(rollup):
+    for entry in rollup or []:
+        if not isinstance(entry, dict) or entry.get("name") != "ci-ok":
+            continue
+        if entry.get("conclusion") == "SUCCESS" or entry.get("bucket") == "pass" or entry.get("state") == "SUCCESS":
+            return True
+    return False
+
+
+def batch_running(state_dir):
+    try:
+        data = json.loads((Path(state_dir) / "queue.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(data.get("batch"))
 
 
 def cmd_automerge(args):
     root = repo_root()
+    settings = load_settings(root)
+    if settings.merge != "yes":
+        raise CrewError("automerge refuses: missing [crew] merge = yes in crew.local.ini")
     repo = args.repo or infer_repo(root)
     gh = shutil.which("gh")
     if not gh:
@@ -521,29 +705,52 @@ def cmd_automerge(args):
     if not repo:
         raise CrewError("pass --repo owner/name or set an origin remote")
     for _attempt in range(90):
+        repo_data = gh_json([gh, "repo", "view", "--json", "defaultBranchRef"]) or {}
+        default_branch = (repo_data.get("defaultBranchRef") or {}).get("name", "")
         data = gh_json([gh, "pr", "view", str(args.pr), "--repo", repo, "--json",
-                        "headRefOid,mergeStateStatus,state,mergeCommit"])
+                        "headRefOid,isDraft,state,baseRefName,mergeStateStatus,mergeCommit,files,statusCheckRollup"])
         if not data:
             time.sleep(args.interval)
             continue
         state = data.get("state", "")
-        if state != "OPEN":
-            print("#{0} is {1}".format(args.pr, state))
+        if state == "MERGED":
+            commit = data.get("mergeCommit") or {}
+            print("#{0} MERGED {1}".format(args.pr, commit.get("oid", "")))
             return 0
+        if state != "OPEN":
+            print("#{0} is {1}; not merging".format(args.pr, state))
+            return 5
+        if data.get("isDraft"):
+            print("#{0} is a draft; not merging".format(args.pr))
+            return 5
+        if default_branch and data.get("baseRefName") != default_branch:
+            print("#{0} targets {1}, not the default branch {2}; not merging".format(
+                args.pr, data.get("baseRefName", ""), default_branch))
+            return 5
         head = data.get("headRefOid", "")
         if head != args.sha:
             print("#{0} head moved to {1}; not merging".format(args.pr, head))
             return 2
+        if batch_running(settings.state_dir):
+            print("a batch is running; not merging #{0}".format(args.pr))
+            return 5
+        files = [entry.get("path", "") for entry in data.get("files") or [] if isinstance(entry, dict)]
+        problem = verdict_problem(settings, repo, args.pr, head, files)
+        if problem:
+            print(problem)
+            return 5
         rows = pr_check_rows(gh, args.pr, repo)
-        failing = [row for row in rows if row[1] == "fail"]
+        failing = [row for row in rows if row[1] not in ("pass", "pending")]
         pending = [row for row in rows if row[1] == "pending"]
         passing = [row for row in rows if row[1] == "pass"]
         if failing:
             print("#{0} has {1} failing checks; not merging".format(args.pr, len(failing)))
-            for _name, _state, line in failing:
-                print(line)
+            for name, _bucket, _row in failing:
+                print(name)
             return 3
-        # GitHub can call a pull request clean before any check reports; no pass means no proof.
+        if not rollup_ci_ok_passes(data.get("statusCheckRollup")):
+            print("ci-ok has not passed at {0}; not merging".format(head))
+            return 5
         if not pending and passing and data.get("mergeStateStatus") == "CLEAN":
             body = "Merged by the orchestrator: reviewed, GitHub clean and green at this head."
             merge = capture_combined([gh, "pr", "merge", str(args.pr), "--repo", repo, "--squash",
@@ -606,6 +813,7 @@ def merge_commands(text):
 
 def cmd_batchwatch(args):
     root = repo_root()
+    settings = load_settings(root)
     output = batch_status(root, args.branch)
     print(datetime.utcnow().strftime("%H:%M UTC"))
     print_lines(last_lines(output, 8))
@@ -623,27 +831,54 @@ def cmd_batchwatch(args):
     just = shutil.which("just") or "just"
     env = os.environ.copy()
     env["GIT_LFS_SKIP_PUSH"] = "1"
-    merge_out = capture_combined([just, "ci-batch-merge", args.branch], root, env=env).stdout or ""
-    print_lines(last_lines(merge_out, 5))
+    merge_result = capture_combined([just, "ci-batch-merge", args.branch], root, env=env)
+    merge_out = merge_result.stdout or ""
     commands = merge_commands(merge_out)
+    if settings.merge != "yes":
+        print("merge authority is missing: [crew] merge = yes")
+        for argv in commands:
+            print(command_line(argv))
+        return 0 if merge_result.returncode == 0 else merge_result.returncode
+    print_lines(last_lines(merge_out, 5))
+    if merge_result.returncode != 0:
+        return merge_result.returncode
+    gh = shutil.which("gh")
+    if not gh:
+        raise CrewError("gh not found on PATH")
+
     body = "Merged by the orchestrator: reviewed; proven with main in one batch ({0}).".format(args.branch)
-    for index, argv in enumerate(commands):
-        argv = argv + ["--body", body]
+    merged = []
+    remaining = []
+    for index, original in enumerate(commands):
+        number = original[3] if len(original) > 3 else ""
+        repo = original[original.index("--repo") + 1] if "--repo" in original else infer_repo(root)
+        sha = original[original.index("--match-head-commit") + 1] if "--match-head-commit" in original else ""
+        data = gh_json([gh, "pr", "view", str(number), "--repo", repo, "--json", "files"]) or {}
+        files = [entry.get("path", "") for entry in data.get("files") or [] if isinstance(entry, dict)]
+        problem = verdict_problem(settings, repo, number, sha, files)
+        if problem:
+            print(problem)
+            return 5
+        argv = [gh] + original[1:] + ["--body", body]
         result = capture_combined(argv, root)
         print_lines(last_lines(result.stdout or "", 1))
         if result.returncode != 0:
+            remaining = [command[3] for command in commands[index:] if len(command) > 3]
+            print("merged: {0}".format(", ".join("#" + item for item in merged) if merged else "none"))
+            print("not merged: {0}".format(", ".join("#" + item for item in remaining)))
             return result.returncode
+        merged.append(number)
         if index + 1 < len(commands):
             time.sleep(8)
 
-    repo = infer_repo(root)
-    gh = shutil.which("gh")
-    if gh and repo:
-        for number in args.prs:
-            data = gh_json([gh, "pr", "view", str(number), "--repo", repo, "--json", "state,mergeCommit"])
-            if data:
-                commit = data.get("mergeCommit") or {}
-                print("#{0} {1} {2}".format(number, data.get("state", ""), commit.get("oid", "")))
+    for number in args.prs:
+        repo = infer_repo(root) or "owner/repo"
+        data = gh_json([gh, "pr", "view", str(number), "--repo", repo, "--json", "state,mergeCommit"])
+        if data:
+            commit = data.get("mergeCommit") or {}
+            print("#{0} {1} {2}".format(number, data.get("state", ""), commit.get("oid", "")))
+            if data.get("state") != "MERGED":
+                return 1
     verify = capture_combined([just, "ci-batch-verify", args.branch], root)
     print_lines(last_lines(verify.stdout or "", 2))
     return verify.returncode
@@ -691,7 +926,7 @@ def infer_repo(root):
 
 def git_text_optional(cwd, argv):
     try:
-        result = subprocess.run(["git"] + argv, cwd=str(cwd), capture_output=True, text=True, check=False)
+        result = subprocess.run([tool_path("git")] + argv, cwd=str(cwd), capture_output=True, text=True, check=False)
     except OSError:
         return None
     return result.stdout if result.returncode == 0 else None
@@ -747,14 +982,9 @@ def gh_json(argv):
 
 
 def ci_ok_state(gh, number, repo):
-    result = subprocess.run([gh, "pr", "checks", str(number), "--repo", repo], capture_output=True, text=True,
-                            check=False)
-    if result.returncode != 0:
-        return ""
-    for line in result.stdout.splitlines():
-        parts = line.split()
-        if len(parts) >= 2 and parts[0] == "ci-ok":
-            return parts[1]
+    for name, bucket, _row in pr_check_rows(gh, number, repo):
+        if name == "ci-ok":
+            return bucket
     return ""
 
 
@@ -870,7 +1100,53 @@ DEVIN_HEX_RE = re.compile("devin" + r"-[0-9a-fA-F]{20,}")
 DIGIT_RUN_RE = re.compile(r"\d{4,}")
 
 
-def privacy_reasons(line):
+TIN_RE = re.compile(r"(?<!\d)(\d{3}-\d{3}-\d{3}(?:-\d{3,5})?)(?!\d)")
+AWS_KEY_RE = re.compile(r"(?<![A-Z0-9])" + "AK" + r"IA[A-Z0-9]{16}(?![A-Z0-9])")
+GOOGLE_KEY_RE = re.compile(r"(?<![A-Za-z0-9_-])" + "AI" + r"za[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])")
+JWT_RE = re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+SLACK_RE = re.compile(r"xox[baprs]-[A-Za-z0-9-]+")
+STRIPE_RE = re.compile(r"(sk|rk)_" + "live" + r"_[A-Za-z0-9]+")
+BEARER_RE = re.compile(r"Bearer\s+[A-Za-z0-9._-]{20,}")
+PRIVATE_WORD_RE = re.compile(r"\b(pin|otp|passcode|password|sign-in code)\b", re.IGNORECASE)
+PRIVATE_DIGITS_RE = re.compile(r"(?<!\d)\d{4,8}(?!\d)")
+REPO_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?![A-Za-z0-9_.-])")
+
+SECRET_MARKERS.extend([
+    "gh" + "o_", "gh" + "s_", "gh" + "u_", "gh" + "r_",
+])
+HOME_PREFIXES.append("/" + "private/var/")
+HOME_PREFIXES.append("C:" + "/" + "Users/")
+
+
+def repository_allowlist(root):
+    allowed = set()
+    path = Path(root) / "crew" / "REPOS.md"
+    if path.exists():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line.startswith("|"):
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if cells and re.match(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", cells[0]):
+                allowed.add(cells[0])
+    allowed.update([
+        "owner/" + "repo", "owner/" + "name",
+        "hexuria/" + "buwiz-forms-html",
+    ])
+    return allowed
+
+
+def repository_token_flagged(token, allowed):
+    owner, _name = token.split("/", 1)
+    if token in allowed or owner.isupper():
+        return False
+    if owner in ("crew", "scripts", "docs", "crates", "nsh", "forms", "rules", "html-frozen",
+                 "agent-recipes", "packaging", "assets", "fix", "feat", "ci", "test", "chore",
+                 "try", "docs", "origin", "private"):
+        return False
+    return True
+
+
+def privacy_reasons(line, deny_words=(), allowed_repos=()):
     reasons = []
     for match in EMAIL_RE.finditer(line):
         address = match.group(0)
@@ -889,8 +1165,33 @@ def privacy_reasons(line):
     lowered = line.lower()
     if any(marker in lowered for marker in SECRET_MARKERS) or DEVIN_HEX_RE.search(line) or SK_KEY_RE.search(line):
         reasons.append("secret marker")
-    if any(word in lowered for word in ("password", "passcode", "sign-in code")) and DIGIT_RUN_RE.search(line):
+    for tin in TIN_RE.findall(line):
+        if tin not in ("000-000-000", "123-456-789"):
+            reasons.append("TIN shape")
+            break
+    if (AWS_KEY_RE.search(line) or GOOGLE_KEY_RE.search(line) or JWT_RE.search(line) or
+            SLACK_RE.search(line) or STRIPE_RE.search(line) or BEARER_RE.search(line)):
+        reasons.append("key or token shape")
+    if ("-" * 5 + "BEGIN") in line:
+        reasons.append("PEM block")
+    if PRIVATE_WORD_RE.search(line) and PRIVATE_DIGITS_RE.search(line):
         reasons.append("password or sign-in code with digits")
+    for word in deny_words:
+        pattern = re.compile(r"(?<![A-Za-z0-9])" + re.escape(word) + r"(?![A-Za-z0-9])", re.IGNORECASE)
+        if pattern.search(line):
+            reasons.append("private word {0} ({1} characters)".format(word[:2].lower(), len(word)))
+            break
+    without_urls = URL_RE.sub(" ", line)
+    for match in REPO_TOKEN_RE.finditer(without_urls):
+        token = match.group(1).rstrip(".,;:)\]")
+        before = without_urls[match.start() - 1] if match.start() else ""
+        after = without_urls[match.end()] if match.end() < len(without_urls) else ""
+        owner = token.split("/", 1)[0]
+        if before == "/" or after == "/" or owner.startswith("."):
+            continue
+        if repository_token_flagged(token, set(allowed_repos)):
+            reasons.append("private repository name")
+            break
     return reasons
 
 
@@ -922,13 +1223,15 @@ def lint_candidate_files(root):
 def lint_tree(root):
     findings = []
     root = Path(root)
+    settings = load_settings(root)
+    allowed_repos = repository_allowlist(root)
     for path in lint_candidate_files(root):
         try:
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             continue
         for number, line in enumerate(lines, 1):
-            for reason in privacy_reasons(line):
+            for reason in privacy_reasons(line, settings.deny_words, allowed_repos):
                 findings.append((path, number, reason))
     return findings
 
@@ -956,7 +1259,19 @@ def agent_body(role):
 
 
 def agent_file_text(role, devin=False):
-    lines = ["---", "name: {0}".format(role.name), "description: {0}".format(role.title)]
+    agent_name = "crew-" + role.name
+    lines = ["---", "name: {0}".format(agent_name),
+             "description: Crew role (use only while running the crew): {0}".format(role.title)]
+    tools = role.values.get("tools", "")
+    if not tools and role.name == "reviewer":
+        tools = "Read, Grep, Glob"
+    if tools:
+        if devin:
+            lines.append("allowed-tools:")
+            for tool in comma_list(tools):
+                lines.append("  - {0}".format(tool.lower()))
+        else:
+            lines.append("tools: {0}".format(tools))
     if devin and role.engine == "devin":
         lines.append("model: {0}".format(role.model or "swe-2-1-max"))
     lines.extend(["---", "", agent_body(role).rstrip("\n")])
@@ -968,9 +1283,22 @@ def sync_targets(root):
     roles = [parse_role(path) for path in sorted(roles_dir.glob("*.md"))] if roles_dir.is_dir() else []
     targets = {}
     for role in roles:
-        targets[Path(".claude") / "agents" / (role.name + ".md")] = agent_file_text(role, devin=False)
-        targets[Path(".devin") / "agents" / (role.name + ".md")] = agent_file_text(role, devin=True)
+        targets[Path(".claude") / "agents" / ("crew-" + role.name + ".md")] = agent_file_text(role, devin=False)
+        targets[Path(".devin") / "agents" / ("crew-" + role.name + ".md")] = agent_file_text(role, devin=True)
     return targets
+
+
+def skill_guard_lines(root):
+    path = Path(root) / ".claude" / "skills" / "crew" / "SKILL.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    missing = []
+    for line in ("disable-model-invocation: true", "triggers: [user]"):
+        if line not in text:
+            missing.append(line)
+    return path, missing
 
 
 def cmd_sync(args):
@@ -984,7 +1312,20 @@ def cmd_sync(args):
     if args.check:
         for relative in different:
             print(relative.as_posix())
-        return 1 if different else 0
+        skill, missing = skill_guard_lines(root)
+        for line in missing:
+            print("{0}: missing {1}".format(skill.relative_to(root).as_posix(), line))
+        return 1 if different or missing else 0
+    roles_dir = root / "crew" / "roles"
+    if roles_dir.is_dir():
+        for role_path in roles_dir.glob("*.md"):
+            role = parse_role(role_path)
+            for folder in (root / ".claude" / "agents", root / ".devin" / "agents"):
+                legacy = folder / (role.name + ".md")
+                try:
+                    legacy.unlink()
+                except OSError:
+                    pass
     for relative, text in targets.items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -994,7 +1335,7 @@ def cmd_sync(args):
 
 
 def git_text(cwd, argv, check=True):
-    result = subprocess.run(["git"] + argv, cwd=str(cwd) if cwd else None, capture_output=True, text=True,
+    result = subprocess.run([tool_path("git")] + argv, cwd=str(cwd) if cwd else None, capture_output=True, text=True,
                             check=False)
     if check and result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
@@ -1012,7 +1353,47 @@ def resolve_state_remote(root, remote):
     return remote
 
 
+def validate_state_branch(settings):
+    branch = settings.state_branch
+    if not (branch.startswith("crew-state") or branch.startswith("crew/")):
+        raise CrewError("state_branch must start with crew-state or crew/: {0}".format(branch))
+
+
+def remote_identity(value):
+    text = value.strip()
+    match = re.match(r"^(?:[^@\s]+@)?([^:\s]+):([^/\s]+)/(.+?)(?:\.git)?/?$", text)
+    if match:
+        return "git:" + match.group(2) + "/" + match.group(3)
+    parsed = urllib.parse.urlparse(text)
+    if parsed.scheme in ("http", "https", "ssh", "git"):
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) >= 2:
+            name = parts[-1]
+            if name.endswith(".git"):
+                name = name[:-4]
+            return "git:" + parts[-2] + "/" + name
+    expanded = os.path.expanduser(text)
+    if expanded.endswith(".git"):
+        expanded = expanded[:-4]
+    return "path:" + os.path.normpath(os.path.abspath(expanded))
+
+
+def validate_state_remote(root, settings):
+    if not settings.state_remote:
+        return
+    resolved = resolve_state_remote(root, settings.state_remote)
+    state_identity = remote_identity(resolved)
+    remotes = git_text(root, ["remote"], check=False)
+    if remotes.returncode != 0:
+        return
+    for name in remotes.stdout.splitlines():
+        url = git_text(root, ["remote", "get-url", name], check=False)
+        if url.returncode == 0 and remote_identity(url.stdout.strip()) == state_identity:
+            raise CrewError("state_remote must not be the code repository remote: {0}".format(settings.state_remote))
+
+
 def ensure_state_checkout(root, settings):
+    validate_state_remote(root, settings)
     state = settings.state_dir
     if (state / ".git").exists():
         return
@@ -1020,13 +1401,13 @@ def ensure_state_checkout(root, settings):
         raise CrewError("state folder exists but is not a git checkout: {0}".format(state))
     remote = resolve_state_remote(root, settings.state_remote)
     branch = settings.state_branch
-    probe = subprocess.run(["git", "ls-remote", "--heads", remote, branch], capture_output=True, text=True,
+    probe = subprocess.run([tool_path("git"), "ls-remote", "--heads", remote, branch], capture_output=True, text=True,
                            check=False)
     if probe.returncode != 0:
         raise CrewError("cannot read state remote {0}".format(settings.state_remote))
     state.parent.mkdir(parents=True, exist_ok=True)
     if probe.stdout.strip():
-        result = subprocess.run(["git", "clone", "--branch", branch, "--single-branch", remote, str(state)],
+        result = subprocess.run([tool_path("git"), "clone", "--branch", branch, "--single-branch", remote, str(state)],
                                 capture_output=True, text=True, check=False)
         if result.returncode != 0:
             raise CrewError("cannot clone the crew state branch {0}".format(branch))
@@ -1038,10 +1419,7 @@ def ensure_state_checkout(root, settings):
     readme = state / "README.md"
     if not readme.exists():
         readme.write_text("# crew state\n", encoding="utf-8")
-    git_text(state, ["add", "README.md"])
-    git_text(state, ["-c", "user.name=hexuria", "-c",
-                     "user.email=295542929+hexuria@users.noreply.github.com", "commit", "-q", "-m",
-                     "Start crew state"])
+    # The first commit is made by state push with the checkout's own configured identity.
 
 
 def write_once(path, text):
@@ -1051,10 +1429,12 @@ def write_once(path, text):
 
 
 def init_state(root, settings):
+    validate_state_branch(settings)
     if settings.state_remote:
         ensure_state_checkout(root, settings)
     state = settings.state_dir
     (state / "roles").mkdir(parents=True, exist_ok=True)
+    write_once(state / ".gitignore", "*.run.log\n.watch-seen\n*.tmp\n")
     roles_dir = Path(root) / "crew" / "roles"
     if roles_dir.is_dir():
         for path in sorted(roles_dir.glob("*.md")):
@@ -1076,21 +1456,39 @@ def require_state_checkout(settings):
     return state
 
 
-def state_push(settings):
+def state_push(root, settings):
+    validate_state_branch(settings)
     if not settings.state_remote:
         raise CrewError("state push needs state_remote in crew.local.ini")
+    validate_state_remote(root, settings)
     state = require_state_checkout(settings)
     email = git_text(state, ["config", "user.email"], check=False)
     address = email.stdout.strip() if email.returncode == 0 else ""
-    if not address.endswith("users.noreply.github.com"):
+    if not address.endswith("@users.noreply.github.com"):
         raise CrewError("state push refuses: git user.email in {0} is not a users.noreply.github.com address".format(state))
     branch = settings.state_branch
     git_text(state, ["add", "-A"])
+    names = git_text(state, ["diff", "--cached", "--name-only"], check=False)
+    if names.returncode != 0:
+        raise CrewError("git diff failed in the state checkout")
+    allowed_repos = repository_allowlist(root)
+    findings = []
+    for relative in names.stdout.splitlines():
+        path = state / relative
+        if not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for number, line in enumerate(lines, 1):
+            for reason in privacy_reasons(line, settings.deny_words, allowed_repos):
+                findings.append("{0}:{1}: {2}".format(relative.replace(os.sep, "/"), number, reason))
+    if findings:
+        raise CrewError("state push privacy check failed\n" + "\n".join(findings))
     diff = git_text(state, ["diff", "--cached", "--quiet"], check=False)
     if diff.returncode == 1:
-        git_text(state, ["-c", "user.name=hexuria", "-c",
-                         "user.email=295542929+hexuria@users.noreply.github.com", "commit", "-q", "-m",
-                         "crew state"])
+        git_text(state, ["commit", "-q", "-m", "crew state"])
     elif diff.returncode != 0:
         raise CrewError("git diff failed in the state checkout")
     push = git_text(state, ["push", "origin", branch], check=False)
@@ -1104,9 +1502,11 @@ def state_push(settings):
             raise CrewError("git push failed{0}".format(": " + detail_text if detail_text else ""))
 
 
-def state_pull(settings):
+def state_pull(root, settings):
+    validate_state_branch(settings)
     if not settings.state_remote:
         raise CrewError("state pull needs state_remote in crew.local.ini")
+    validate_state_remote(root, settings)
     state = require_state_checkout(settings)
     git_text(state, ["pull", "--rebase", "origin", settings.state_branch])
 
@@ -1122,14 +1522,45 @@ def cmd_state(args):
         print("state {0}".format(settings.state_dir))
         return 0
     if args.state_command == "pull":
-        state_pull(settings)
+        state_pull(root, settings)
         print("state pulled {0}".format(settings.state_dir))
         return 0
     if args.state_command == "push":
-        state_push(settings)
+        state_push(root, settings)
         print("state pushed {0}".format(settings.state_dir))
         return 0
     raise CrewError("unknown state command: {0}".format(args.state_command))
+
+
+def cmd_verdict(args):
+    root = repo_root()
+    settings = load_settings(root)
+    path = settings.state_dir / "roles" / "reviewer" / "outbox" / verdict_file_name(args.repo, args.pr)
+    if not path.exists():
+        raise CrewError("missing verdict: {0}".format(path))
+    sys.stdout.write(path.read_text(encoding="utf-8"))
+    return 0
+
+
+def cmd_push(args):
+    root = repo_root()
+    branch_result = git_text(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], check=False)
+    if branch_result.returncode != 0 or not branch_result.stdout.strip():
+        raise CrewError("crew push refuses a detached HEAD")
+    branch = branch_result.stdout.strip()
+    allowed = ("feat/", "fix/", "chore/", "ci/", "try/", "docs/", "test/")
+    if branch in ("main", "master", "buwiz-next") or not branch.startswith(allowed) or "+" in branch:
+        raise CrewError("crew push refuses branch {0}".format(branch))
+    tag = git_text(root, ["rev-parse", "--quiet", "--verify", "refs/tags/" + branch], check=False)
+    if tag.returncode == 0:
+        raise CrewError("crew push refuses a branch name that is also a tag: {0}".format(branch))
+    push = git_text(root, ["push", "origin", branch], check=False)
+    if push.returncode != 0:
+        detail = (push.stderr or push.stdout).strip()
+        detail = re.sub(r"(https?://)[^/@\s]+@", r"\1<credentials>@", detail)
+        raise CrewError("git push failed{0}".format(": " + detail if detail else ""))
+    print("pushed {0} to origin".format(branch))
+    return 0
 
 
 def build_parser():
@@ -1184,6 +1615,11 @@ def build_parser():
     state_sub.add_parser("init", help="create the state folder layout").set_defaults(func=cmd_state)
     state_sub.add_parser("pull", help="pull the shared state branch").set_defaults(func=cmd_state)
     state_sub.add_parser("push", help="commit and push the shared state branch").set_defaults(func=cmd_state)
+    verdict = sub.add_parser("verdict", help="print the reviewer's verdict for a pull request")
+    verdict.add_argument("repo")
+    verdict.add_argument("pr")
+    verdict.set_defaults(func=cmd_verdict)
+    sub.add_parser("push", help="push the current feature branch to origin").set_defaults(func=cmd_push)
     return parser
 
 

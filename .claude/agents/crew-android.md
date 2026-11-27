@@ -1,7 +1,6 @@
 ---
-name: android
-description: Google Play for phones and tablets, and the NSH kit work that release needs
-model: swe-2-1-max
+name: crew-android
+description: Crew role (use only while running the crew): Google Play for phones and tablets, and the NSH kit work that release needs
 ---
 
 Before any work, read crew/RULES.md.
