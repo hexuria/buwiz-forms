@@ -76,6 +76,7 @@ A pull request is **ready** when all three hold at its exact head:
 - Orders are self-contained (`crew/playbooks/machine-order.md`). The first line of every machine report is its free disk in GB; under 20 GB it cleans its own checkouts before it builds.
 - A machine keeps a state file on its own disk and pushes after every finished step. Work that exists only on a machine is not done.
 - A machine whose account forces another commit address pushes nothing. The role that holds it carries the commits.
+- A machine cleans only what its own jobs made: folders this job or an earlier job of the same session created, listed before they are deleted. It never deletes a shared tool or build folder the setup made, anything under Cargo's home, or any folder of another repository on the same account. If that does not free enough, it stops and reports what is large.
 - Keep a machine working: it cleans its disk and keeps its state file. Only a session that no longer answers at all reaches the maintainer.
 
 ## Files, not chat
