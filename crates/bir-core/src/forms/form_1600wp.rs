@@ -556,6 +556,44 @@ impl Form1600WpDraft {
         put("att_tin2", b);
         put("att_tin3", c);
         put("att_branch", d);
+        // Schedule 1.1 prints 6 rows with a Seq. No. column not carried in the
+        // upload XML.
+        for index in 0..6 {
+            let n = index + 1;
+            let has_row = self.schedule.get(index).is_some_and(|row| !row.is_blank());
+            put(
+                &format!("sched_seq{n}"),
+                if has_row {
+                    n.to_string()
+                } else {
+                    String::new()
+                },
+            );
+        }
+        let sched_total_amount: f64 = self.schedule.iter().map(|row| row.amount).sum();
+        put("sched_total_amount", official_amount(sched_total_amount));
+        // Item 11 (Tax relief under Special Law/Treaty) is fixed to "No" in
+        // eBIRForms 1600WP; the upload XML template already supplies these
+        // defaults, so emit them print-only for the sheet to tick "No".
+        fields.insert("frm1600WP:SpecialLaw_1".to_string(), "false".to_string());
+        fields.insert("frm1600WP:SpecialLaw_2".to_string(), "true".to_string());
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1600WP:DateWithholdingMonth",
+                "frm1600WP:DateWithholdingDay",
+                "frm1600WP:DateWithholdingYear",
+                "frm1600WP:DateWithholdingToMonth",
+                "frm1600WP:DateWithholdingToDay",
+                "frm1600WP:DateWithholdingToYear",
+                "derived:att_from_mm",
+                "derived:att_from_dd",
+                "derived:att_from_yyyy",
+                "derived:att_to_mm",
+                "derived:att_to_dd",
+                "derived:att_to_yyyy",
+            ],
+        );
         fields
     }
 
@@ -1175,5 +1213,27 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    #[test]
+    fn field_and_print_maps_include_item_11_no_and_schedule_seq_numbers() {
+        let mut draft = sample();
+        draft.schedule.push(draft.schedule[0].clone());
+        let upload = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        assert!(!upload.contains_key("frm1600WP:SpecialLaw_1"));
+        assert!(!upload.contains_key("frm1600WP:SpecialLaw_2"));
+        assert_eq!(print["frm1600WP:SpecialLaw_1"], "false");
+        assert_eq!(print["frm1600WP:SpecialLaw_2"], "true");
+        assert!(!upload.contains_key("derived:sched_seq1"));
+        assert_eq!(print["derived:sched_seq1"], "1");
+        assert_eq!(print["derived:sched_seq2"], "2");
+        assert_eq!(print["derived:sched_seq3"], "");
+        assert_eq!(print["derived:sched_total_amount"], "5,000.00");
+        draft.schedule.clear();
+        draft.recompute();
+        let zero_print = draft.to_print_field_map();
+        assert_eq!(zero_print["derived:sched_total_amount"], "0.00");
+        assert_eq!(zero_print["frm1600WP:dtSched:TotaltaxWithheld"], "0.00");
     }
 }

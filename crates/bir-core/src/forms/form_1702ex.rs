@@ -429,16 +429,16 @@ fn print_lines(text: &str, widths: &[usize]) -> Vec<String> {
         .collect()
 }
 
-/// A whole-peso amount (50 centavos or more round up) right-aligned in a
-/// 12-slot comb; a negative amount prints in parentheses.
-fn print_whole_pesos(amount: f64) -> String {
-    let pesos = (amount.abs() + 0.5 + 1e-9).floor();
-    let text = if amount < 0.0 && pesos > 0.0 {
-        format!("({pesos:.0})")
-    } else {
-        format!("{pesos:.0}")
-    };
-    format!("{text:>12}")
+/// An upload amount as its 12-slot comb prints it
+/// ([`super::print_map::whole_peso_comb_text`]): whole pesos right-aligned,
+/// any centavos the upload carries kept (the official page shows them), and
+/// a negative with a minus, as the official page shows it
+/// (`BIR-Form1702EXv2018C.hta` writes the Part II amounts with
+/// `formatCurrency`; its upload holds `txtPg1Pt2I20TotalOverpmt=-1,000.00`).
+/// A blank control prints `0`, as before.
+fn print_whole_pesos(text: &str) -> String {
+    let text = if text.trim().is_empty() { "0" } else { text };
+    super::print_map::whole_peso_comb_text(text, 12).unwrap_or_else(|| text.trim().to_string())
 }
 
 /// The amount controls the frozen sheet prints, each with the description
@@ -1295,7 +1295,7 @@ impl Form1702ExDraft {
             let text = if unused_row {
                 String::new()
             } else {
-                print_whole_pesos(amount)
+                print_whole_pesos(&value)
             };
             put(&format!("amount:{amount_key}"), text);
         }
@@ -2044,12 +2044,10 @@ mod tests {
                 .all(|k| k.starts_with("derived:"))
         );
         let get = |key: &str| print[&format!("derived:{key}")].clone();
-        // 5,000,000.50 rounds up to whole pesos; right-aligned in 12 slots.
-        assert_eq!(
-            get("amount:txtPg2Pt4I28SalesReceiptsRevFees"),
-            "     5000001"
-        );
-        assert_eq!(get("amount:txtPg1Pt2I22TotalAmtPayable"), "      (1000)");
+        // 5,000,000.50 keeps its centavos (it was rounded to 5000001); a
+        // whole amount is right-aligned in the 12 slots.
+        assert_eq!(get("amount:txtPg2Pt4I28SalesReceiptsRevFees"), "5000000.50");
+        assert_eq!(get("amount:txtPg1Pt2I22TotalAmtPayable"), "       -1000");
         assert_eq!(
             get("amount:txtPg2Pt4I38OptionalStandardDeduc"),
             "           0"

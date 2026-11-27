@@ -12,7 +12,8 @@
 /// CSS for the span stand-ins. `.fi` already gives position:absolute;inset:0
 /// plus the font; `fhN` gives size/line-height.
 pub const STATIC_CSS: &str = ".fi.fs{display:flex;align-items:center;justify-content:flex-start;\
-white-space:pre;overflow:hidden;box-sizing:border-box}.fi.fs.fc{justify-content:center}";
+white-space:pre;overflow:hidden;box-sizing:border-box}.fi.fs.fc{justify-content:center}\
+.fi.fs[data-overflow-of]{inset:0.75pt 1pt 0.75pt 1pt}";
 
 pub fn staticize(html: &str) -> String {
     let html = strip_scripts(html);
@@ -66,7 +67,13 @@ fn inputs_to_spans(html: &str) -> String {
         out.push_str("<span class=\"");
         out.push_str(class);
         out.push_str(" fs\"");
-        for a in ["id", "style", "data-slot-index"] {
+        for a in [
+            "id",
+            "style",
+            "data-slot-index",
+            "data-overflow-warning",
+            "data-overflow-of",
+        ] {
             if let Some(v) = attr(tag, a) {
                 out.push_str(&format!(" {a}=\"{v}\""));
             }
@@ -89,7 +96,11 @@ fn page_starts(html: &str) -> Vec<(usize, bool)> {
         let rest = &html[at + "<div class=\"page".len()..];
         if rest.starts_with('"') || rest.starts_with(' ') {
             let cls_end = rest.find('"').unwrap_or(0);
-            v.push((at, rest[..cls_end].contains("page-receipt")));
+            let cls = &rest[..cls_end];
+            v.push((
+                at,
+                cls.contains("page-receipt") || cls.contains("page-continuation"),
+            ));
         }
         from = at + 4;
     }
@@ -190,5 +201,23 @@ mod tests {
         // Balanced: every sheet closes before </body>.
         let body = &out[out.find("<body>").unwrap()..out.find("</body>").unwrap()];
         assert_eq!(body.matches("<div").count(), body.matches("</div>").count());
+    }
+    #[test]
+    fn overflow_spans_keep_marker_without_white_knockout_rule() {
+        let doc = r##"<html><head></head><body><div class="page page-1"><input type="text" class="fi" readonly value="LONG TEXT" style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-of="p1c10"><input type="text" class="fi" readonly value="CLONED LONG TEXT" style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-of="cont2-p1c10"></div></body></html>"##;
+        let out = super::staticize(doc);
+        assert!(out.contains(r#"data-overflow-of="p1c10""#));
+        assert!(out.contains(r#"data-overflow-of="cont2-p1c10""#));
+        assert!(out.contains(".fi.fs[data-overflow-of]{inset:0.75pt 1pt 0.75pt 1pt}"));
+        assert!(!out.contains("background:#fff;"));
+        assert!(!out.contains("white-space:pre-line"));
+    }
+
+    #[test]
+    fn continuation_page_gets_sheet_flow() {
+        let doc = r##"<html><head></head><body><div class="page page-1"><input type="text" class="fi" id="p1c1" value="X"></div><div class="page page-continuation" id="page-continuation"><table><tr><td>Row 6</td></tr></table></div></body></html>"##;
+        let out = super::staticize(doc);
+        assert_eq!(out.matches(r#"<div class="sheet"#).count(), 2);
+        assert!(out.contains(r#"<div class="sheet sheet-flow" data-preview-label="Page 2 of 2">"#));
     }
 }

@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use super::print_map::{whole_peso_comb_figure, whole_peso_comb_text};
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -992,10 +993,13 @@ impl Form1700Draft {
     /// never submitted.
     ///
     /// - `derived:amount_<item><A|B>` / `derived:amount_36` /
-    ///   `derived:amount_sched1_<row><c|d|e>`: whole pesos (`toFixed(0)`; the
-    ///   sheet says "DO NOT enter Centavos"), right-aligned in the sheet's
-    ///   comb; an overpayment prints in parentheses. Zero, column B of a
-    ///   non-joint return, and amounts wider than the comb stay blank. The
+    ///   `derived:amount_sched1_<row><c|d|e>`: the amount as the upload holds
+    ///   it, without separators ([`whole_peso_comb_text`]): whole pesos
+    ///   right-aligned in the sheet's comb, and any centavos the upload
+    ///   carries kept (the sheet says "DO NOT enter Centavos", but the
+    ///   official page shows them; such an amount prints as one rectangle
+    ///   over the comb). An overpayment keeps its minus. Zero and column B
+    ///   of a non-joint return stay blank. The
     ///   sheet prints Item 31 Surcharge and Item 32 Interest (the page's own
     ///   controls are the other way round).
     /// - `derived:address_line1/2`: the address over the 40- and 32-slot
@@ -1014,18 +1018,14 @@ impl Form1700Draft {
             self.email.trim().to_string(),
         );
         let mut derived = BTreeMap::new();
+        // The upload's own figure (`official_amount`), centavos kept.
         let whole = |value: f64, slots: usize| -> Option<String> {
-            let value = fixed0(value);
-            if value == 0.0 {
+            let text = official_amount(value);
+            let (_, figure) = whole_peso_comb_figure(&text)?;
+            if figure == "0" {
                 return None;
             }
-            let digits = format!("{:.0}", value.abs());
-            let printed = if value < 0.0 {
-                format!("({digits})")
-            } else {
-                digits
-            };
-            (printed.len() <= slots).then(|| format!("{printed:>slots$}"))
+            whole_peso_comb_text(&text, slots)
         };
         let mut columns = vec![("A", &self.taxpayer)];
         if self.is_joint() {
@@ -2043,9 +2043,12 @@ mod tests {
         assert_eq!(p["derived:amount_31A"], "    1000");
         assert!(!p.contains_key("derived:amount_32A"));
         assert!(!p.contains_key("derived:amount_42B"));
-        assert_eq!(p["derived:amount_sched1_1c"], "  600001");
-        assert_eq!(p["derived:amount_sched1_4c"], "  175001");
-        assert_eq!(p["derived:amount_sched1_4e"], "   8500");
+        // Centavos the upload carries print as they are (they were rounded
+        // to 600001, 175001 and 8500): the print engine lays such an amount
+        // over the comb as one rectangle.
+        assert_eq!(p["derived:amount_sched1_1c"], "600000.50");
+        assert_eq!(p["derived:amount_sched1_4c"], "175000.65");
+        assert_eq!(p["derived:amount_sched1_4e"], "8500.10");
         assert_eq!(p["derived:amount_sched1_5Ae"], "  48500");
         assert_eq!(p["derived:employer1_tin"], "12345678800000");
         assert!(!p.contains_key("derived:employer4_tin"));
