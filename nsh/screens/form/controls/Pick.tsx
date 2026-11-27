@@ -478,7 +478,11 @@ function FieldPick(props: { p: SearchPickProps }) {
   // the next turn, as Tab settles it, so the box never shows typed words over a value they are not.
   const settleLeaving = () =>
     setTimeout(() => {
-      if (leaving && !pressHeld() && !focused()) commit();
+      if (!leaving || focused()) return;
+      // A press still down holds it off, but only for what is left of PRESS_HOLDS_MS: then it is tried again, so a press-up that
+      // never comes (its row gone) cannot leave the list open under a box that has lost the keys.
+      if (pressHeld()) return void setTimeout(settleLeaving, PRESS_HOLDS_MS - (Date.now() - pressAt) + 10);
+      commit();
     }, 0);
   const pressHeld = () => pressing && Date.now() - pressAt < PRESS_HOLDS_MS;
   const pressDown = () => {
@@ -551,6 +555,8 @@ function FieldPick(props: { p: SearchPickProps }) {
         }}
         onChange={(v) => {
           selectOnCaret = false;
+          // Keys in the box: no press on a row is going on any more, whatever became of its press-up.
+          pressing = false;
           batch(() => {
             typed.set(v);
             dirty.set(true);
