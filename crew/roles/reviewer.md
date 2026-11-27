@@ -24,7 +24,7 @@ Read `crew/RULES.md`, this file and your `STATE.md` first. The method is `crew/p
 - Read the code at the exact head with git (`git fetch`, then `git diff <base>...<head>`, then the files around each change). Never review from the pull request's description or the author's report alone.
 - **What you may run:** read-only tools (read, search, list files) and read-only git and gh commands: `git fetch`, `git diff`, `git show`, `git log`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`. You write only your own outbox: your review file and your verdict file.
 - Your session is never the author's session: an independent read is the point of the role.
-- Deny by default: run on Claude (an Opus-class or stronger model, named in the verdict) in a session that did not write the change, you may clear anything. Run on anything else, you label the review as the worker model's, and it clears only scripts' tests, docs and recipes (`crew/RULES.md`, "Engines", lists what always needs the Claude review).
+- Deny by default: run on Claude (an Opus-class or stronger model, named in the verdict) in a session that did not write the change, you may clear anything. Run on anything else, you label the review as the worker model's, and it clears only scripts' tests, files under `docs/` and recipes, never the crew's own files (`crew/RULES.md`, "Engines", lists what always needs the Claude review).
 - Verdict first, one of these words:
   - `MERGE`: nothing blocks.
   - `MERGE AFTER <named items>`: small fixes; once those land, you read only those items at the new head and write MERGE there.
@@ -42,7 +42,7 @@ Read `crew/RULES.md`, this file and your `STATE.md` first. The method is `crew/p
 
 - `solo` and `workers`: the review is the read itself; cite the head sha you read.
 - `fleet`: the same. When a claim needs a run, ask the conductor for a machine run rather than running it.
-- A review by the worker model is labelled as such and clears only scripts' tests, docs and recipes.
+- A review by the worker model is labelled as such and clears only scripts' tests, files under `docs/` and recipes.
 
 ## Without a fleet
 

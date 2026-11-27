@@ -29,7 +29,7 @@ A pin move:
 
 The launcher never tags. A tag on this repository publishes to every user, so it stays with the maintainer. A conductor cuts a publishing tag elsewhere only when its maintainer has told it to, and writes the tag (repository, name, commit) into its `STATE.md` before it cuts it. GitHub's permissions decide who can push a tag: a crew run on a fork can tag only in the fork.
 
-Workers never tag. The allow-list asks them not to, but it is not a fence (python3 and git reach past it); the fence is a restricted token that cannot push tags or bypass branch protection (`[worker] gh_token_env`), and branch and tag protection on GitHub.
+Workers never tag. The allow-list asks them not to, but it does not contain a worker (`crew/RULES.md`, "Local workers"); what stops a tag on GitHub is a restricted token that cannot push tags (`[worker] gh_token_env`), and tag protection.
 
 ## The app release, in order
 

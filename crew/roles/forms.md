@@ -17,7 +17,7 @@ Read `crew/RULES.md`, this file and your `STATE.md` first.
 - Form rules: gated boxes (a box the official form disables until an answer opens it), the "cleared" notices, computed and locked boxes, schedule gates.
 - Typing: money, number, percentage and integer boxes, schedule rows, Delete row and Undo, period choices.
 - Print: `crates/bir-print` (the frozen-sheet engine, bands, overflow, the additional sheet, negative styles, TIN and ATC identifiers), the frozen sheets in `html-frozen/`, their golden files, and the parity of print with upload over the official samples.
-- The source of the frozen sheets, hexuria/buwiz-forms-html. Its merges need the maintainer's tag.
+- The source of the frozen sheets, hexuria/buwiz-forms-html. Only the maintainer merges there; the conductor prepares the pull request and passes it on.
 - A list of every forms task, sorted by what a filed or printed return gets wrong, kept in your `STATE.md`.
 
 ## How to work

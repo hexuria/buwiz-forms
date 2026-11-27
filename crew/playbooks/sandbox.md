@@ -24,6 +24,7 @@ starts the worker inside a Docker `sbx` sandbox instead of on the computer itsel
 - Pushes from the sandbox use the identity the conductor's settings name (`[crew] commit_identity`), checked before the push, as anywhere else.
 - No allow-list applies inside the sandbox, so what the sandbox can push with is the fence: give it only the restricted token that cannot bypass branch protection (`[worker] gh_token_env`). Know what is mounted and what environment is passed in before you start one.
 - A result from the sandbox says so in its first line, so the reader knows what it was proven on.
+- The sandbox works on a clone of the worktree. That the worker inside it reads its prompt file correctly is not yet proven: check the first lines of the run log before you trust a result.
 
 ## When to use the allow-list instead
 

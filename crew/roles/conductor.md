@@ -1,6 +1,6 @@
 ---
 name: conductor
-title: Orders the work, gates it, batches it and merges it; decides what reaches the maintainer
+title: Orders, gates and batches the work; runs the merge commands when its maintainer has told it to and GitHub lets it
 engine: claude
 model:
 needs:

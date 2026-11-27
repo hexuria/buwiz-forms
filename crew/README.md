@@ -1,7 +1,7 @@
 # The crew
 
 The crew is a set of AI agents that ships eBIRForms from this repository.
-One conductor orders the work, gates it, batches it and merges it. One reviewer reads every pull request.
+One conductor orders the work, gates it and batches it, and runs the merge commands when its maintainer has told it to and GitHub lets it. One reviewer reads every pull request.
 Workers do the tasks of one track each (forms, accounts, the stores, the driver, the runtime, the tools).
 Every role is a file in `crew/roles/`, every rule is in `crew/RULES.md`, and the live state is a folder of files.
 So one session can run everything, and closing every session loses nothing: a new conductor starts again from the files.
@@ -16,6 +16,7 @@ So one session can run everything, and closing every session loses nothing: a ne
 
 The `/crew` skill runs `crew doctor` first, then follows `crew/playbooks/restart.md` as the conductor.
 Both engines read the root `AGENTS.md` (Claude Code through `CLAUDE.md`) and the skill in `.claude/skills/crew/`.
+Where these files say `python3`, use `python` on Windows.
 
 ## Three tiers
 
@@ -64,7 +65,8 @@ crew/REPOS.md              the five repositories, their pins and the order of a 
 crew/roles/<role>.md       one file per role: what it owns, how it works, its proof, its state, its hand-back
 crew/playbooks/            how to do the recurring jobs: restart, batch, review, worker-task, machine-order,
                            ui-proof, release, state, sandbox
-crew/bin/crew              the launcher: doctor, prompt, start, run, status, watch, batchwatch, state, sync, lint
+crew/bin/crew              the launcher: doctor, prompt, start, run, status, watch, batchwatch, state, verdict,
+                           push, sync, lint
 ```
 
 ## Live state
@@ -81,7 +83,7 @@ HELD.md                    what is waiting for the maintainer; never re-sent
 ```
 
 It is not on `main` because it changes every few minutes, and `main` changes only by reviewed pull request.
-A state remote must be a different repository from the code, and its branch name starts with `crew-state`.
+A state remote must be a different repository from the code, and its branch is `crew-state` (or a name starting with `crew-state` or `crew/`).
 `crew state pull` and `crew state push` move it to and from a separate remote, if you set one.
 `crew/playbooks/state.md` says what each file holds.
 

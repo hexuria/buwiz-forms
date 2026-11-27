@@ -31,6 +31,8 @@ python3 -m unittest discover -s scripts/tests -v   # the script tests
 just e2e check smoke                               # checks the e2e suite's recipes; no app is started
 ```
 
+Where these files say `python3`, use `python` on Windows.
+
 Everything else may build the app: read `docs/DEVELOPMENT.md` and `CONTRIBUTING.md` first.
 
 ## Safety: every run of the app by an agent

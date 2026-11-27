@@ -1,6 +1,6 @@
 # Playbook: the state folder
 
-The live state is a folder of files, `.crew/state` by default (`crew state path` prints it). It is not on `main`: it changes every few minutes, and `main` changes only by reviewed pull request. `crew state pull` and `crew state push` move it to and from a separate remote, if `crew.local.ini` names one. That remote must be a different repository from the code, and its branch name starts with `crew-state`: the state never goes into the code repository, and never onto a default branch.
+The live state is a folder of files, `.crew/state` by default (`crew state path` prints it). It is not on `main`: it changes every few minutes, and `main` changes only by reviewed pull request. `crew state pull` and `crew state push` move it to and from a separate remote, if `crew.local.ini` names one. That remote must be a different repository from the code, and its branch is `crew-state` (or a name starting with `crew-state` or `crew/`): the state never goes into the code repository, and never onto a default branch.
 
 ```
 roles/<role>/STATE.md      what the role has open and what comes next
@@ -71,7 +71,7 @@ The conductor edits it. `waiting` lists pull requests that may enter the next ba
 
 ## KNOWN-FLAKES.md
 
-One entry per flaky test: where it was seen, the cause if known, and what to do until the fix lands. A batch whose only red matches an entry is re-run once, and the run is added to the entry.
+The launcher does not create this file: the conductor creates it the first time it records a flake. One entry per flaky test, three lines under its heading: where it was seen, the cause if known, and what to do until the fix lands. A batch whose only red matches an entry is re-run once, and the run is added to the entry as a fourth line.
 
 ```markdown
 ## `screens/auth/setup.test.tsx` › "<test name>": "<error text>" (Windows, shard 1)

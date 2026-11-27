@@ -24,7 +24,7 @@ Never point `--worktree` at a checkout of a pull request from outside the projec
 5. **Tests first:** which test to add for each point, and that it must be seen failing before the fix.
 6. **Commands to run,** each a plain single command with no environment variable in front, so the allow-list matches it. A worker runs only git, python3, read-only shell tools, the read-only `gh` subset and `python3 crew/bin/crew push`. A step that needs a `just` recipe, cargo, `nsh` or a test run on GitHub is not a worker task: make it a machine order or the conductor's step. Give the exact test commands and what their last line must say.
 7. **The commit:** the identity the conductor's settings name (`[crew] commit_identity`, `crew/RULES.md`), checked with `git log -1 --format='%an <%ae> | %cn <%ce>'`; then `python3 crew/bin/crew push`, which pushes the worker's own branch only and refuses a commit whose author or committer is not that identity.
-8. **What not to do,** only where a worker could reasonably do it: open, merge or close pull requests; touch another branch.
+8. **Pull requests:** say whether the worker opens one (`gh pr create`, as a draft). A worker opens one only when the task says so, and never merges, closes, or marks one ready. Also say what else not to do where a worker could reasonably do it, such as touching another branch.
 9. **The result file:** what it must contain.
 
 ## What a result file holds
@@ -60,7 +60,7 @@ Run, in this order:
 
 Commit with the identity your settings name; check `git log -1 --format='%an <%ae> | %cn <%ce>'`.
 Then `python3 crew/bin/crew push` (it pushes `fix/batch-draft-reason` only).
-Do not open, merge or close any pull request.
+Do not open a pull request; never merge, close or mark one ready.
 
 Result file: the pushed sha read back with `git ls-remote origin fix/batch-draft-reason`,
 the last lines of both test commands, how the new test failed first, and anything refused.

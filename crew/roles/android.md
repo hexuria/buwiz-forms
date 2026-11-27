@@ -17,7 +17,7 @@ Read `crew/RULES.md`, this file and your `STATE.md` first.
 - The Play release: packaging (`just play-bundle`), signing steps the maintainer runs (`just play-sign`, `just play-upload-key`), the Play Console setup, a listing written fresh for Android, Google's forms (data safety, content rating, the government and financial declarations, app access), and testing on the emulator.
 - The app id on Google Play, `com.buwiz.ebirforms` (`docs/platforms/android.md`); other systems keep `dev.goldcoders.bir`.
 - The move of the app's NSH pin that Android's release needs. The 1.0.0 cut stays on the current pin.
-- Kit pull requests on hexuria/nsh, opened from `buwiz-next`. The conductor merges them when ready (`crew/RULES.md`).
+- Kit pull requests on hexuria/nsh, opened from `buwiz-next`. When they are ready (`crew/RULES.md`), the conductor runs the merge commands when its maintainer has told it to and GitHub lets it.
 
 ## How to work
 

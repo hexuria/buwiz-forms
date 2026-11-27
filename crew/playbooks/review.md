@@ -50,7 +50,7 @@ When the author pushes fixes, the next request names the old head and the new on
 
 - The reviewer is never the session that wrote the change. A pull request written in one session is read in another.
 - The reviewer reads the code with git, never from the description or the author's report alone.
-- A review by the worker model (Devin's `swe-2-1` family) is labelled as such. It clears only scripts' tests, docs and recipes.
+- A review by the worker model (Devin's `swe-2-1` family) is labelled as such. It clears only scripts' tests (`scripts/tests/`), docs (files under `docs/` only) and recipes (`agent-recipes/`). The crew's own files (`crew/**`, `AGENTS.md`, `CLAUDE.md`, `.claude/**`, `.devin/**`) are instructions to agents and always need the Claude review.
 - Everything else is deny-by-default: it is cleared only by the reviewer role run on Claude (an Opus-class or stronger model, named in the verdict) in a session that did not write the change. `crew/RULES.md` ("Engines") lists what that always covers, from accounts and filing to the crew's own launcher. When no such review is available, the change waits. The conductor checks this before it runs any merge command.
 - The reviewer runs nothing that builds. When a claim needs a run, the reviewer asks for one through the conductor.
 

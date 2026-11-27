@@ -17,7 +17,7 @@ grep -n NSH_PINNED_REF .github/workflows/nsh.yml
 grep -n 'gpui-agent' Cargo.toml nsh/Cargo.toml
 ```
 
-One more repository feeds the app: hexuria/buwiz-forms-html, the source of the frozen print sheets, owned by the `forms` role. CI checks out its default branch (`.github/workflows/ci.yml`). Its merges need the maintainer's tag.
+One more repository feeds the app: hexuria/buwiz-forms-html, the source of the frozen print sheets, owned by the `forms` role. CI checks out its default branch (`.github/workflows/ci.yml`). Only the maintainer merges there.
 
 ## The order of a cross-repo change
 

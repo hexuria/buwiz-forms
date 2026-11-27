@@ -29,7 +29,7 @@ Read `crew/RULES.md`, this file, your `STATE.md` and `docs/CI.md` first.
 - Keep the batch gate strict: a tool that refuses wrongly is a bug to fix; a tool that passes wrongly is worse.
 - The safety checks in `scripts/e2e/runner.py` only grow stricter. A change that loosens one needs the reviewer's MERGE and the conductor's ruling.
 - Write commands plainly, with no environment variable in front, so the allow-list matches them.
-- Push with `python3 crew/bin/crew push`, which pushes the task's own branch only. Never open, merge or close a pull request unless the task says so.
+- Push with `python3 crew/bin/crew push`, which pushes the task's own branch only. Open a pull request only when the task says so; never merge, close or mark one ready.
 - A flake you are asked to fix gets a reproducing loop first, then the cause, then the fix.
 
 ## Proof
