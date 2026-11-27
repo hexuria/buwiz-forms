@@ -5558,6 +5558,35 @@ fn shift_page_and_insert_rule6(
 
     let body_start = if let Some(se) = svg_end {
         let svg_part = &page_html[..se];
+        // Vertical frame lines (column dividers, table edges) are drawn in
+        // per-row segments that exactly abut at a row boundary: one segment
+        // ends at the boundary, the next row's segment starts there. A strip
+        // inserted at that boundary opens a gap in the line unless the upper
+        // segment is stretched through the strip. Comb ticks abut nothing
+        // below the boundary, so the same-x pairing keeps them out.
+        let mut verticals: Vec<(f64, f64, f64)> = Vec::new();
+        for m in svg_part.match_indices("<rect ") {
+            let start = m.0;
+            let Some(end_rel) = svg_part[start..].find('>') else {
+                continue;
+            };
+            let tag = &svg_part[start..start + end_rel + 1];
+            if let (Some(x), Some(y), Some(w), Some(h)) = (
+                attr(tag, "x").and_then(|s| s.parse::<f64>().ok()),
+                attr(tag, "y").and_then(|s| s.parse::<f64>().ok()),
+                attr(tag, "width").and_then(|s| s.parse::<f64>().ok()),
+                attr(tag, "height").and_then(|s| s.parse::<f64>().ok()),
+            ) {
+                if w <= 1.6 && h >= 3.0 {
+                    verticals.push((x, y, h));
+                }
+            }
+        }
+        let continues_below = |x: f64, cut: f64| {
+            verticals
+                .iter()
+                .any(|&(vx, vy, _vh)| (vx - x).abs() <= 1.0 && (vy - cut).abs() <= 0.75)
+        };
         let mut cursor = 0;
         while let Some(rel) = svg_part[cursor..].find("<rect ") {
             let start = cursor + rel;
@@ -5573,14 +5602,27 @@ fn shift_page_and_insert_rule6(
                 attr(tag, "y").and_then(|s| s.parse::<f64>().ok()),
                 attr(tag, "height").and_then(|s| s.parse::<f64>().ok()),
             ) {
+                let x_val = attr(tag, "x").and_then(|s| s.parse::<f64>().ok());
+                let w_val = attr(tag, "width").and_then(|s| s.parse::<f64>().ok());
                 let d_top = rule6_delta_top(y_val, insertions, elastic_cut_y, elastic_shrink);
-                let d_bot = rule6_delta_bot(
+                let mut d_bot = rule6_delta_bot(
                     y_val,
                     y_val + h_val,
                     insertions,
                     elastic_cut_y,
                     elastic_shrink,
                 );
+                if let (Some(x), Some(w)) = (x_val, w_val) {
+                    if w <= 1.6 && h_val >= 3.0 && d_top.abs() <= 1e-4 {
+                        for ins in insertions {
+                            if ((y_val + h_val) - ins.cut_y).abs() <= 0.75
+                                && continues_below(x, ins.cut_y)
+                            {
+                                d_bot += ins.dh;
+                            }
+                        }
+                    }
+                }
                 if d_top.abs() > 1e-4 || (d_bot - d_top).abs() > 1e-4 {
                     let new_y = y_val + d_top;
                     let new_h = (h_val + d_bot - d_top).max(0.1);
@@ -11286,6 +11328,75 @@ mod tests {
             wrong[1].starts_with("p2c153: rows between") && wrong[1].contains(&next_id),
             "{wrong:?}"
         );
+    }
+
+    /// The strip a Rule 6 band inserts at a row boundary must not break the
+    /// frame lines running down the sheet's columns: on 1701MS page 2 the
+    /// amount-column dividers abut the item-9 cut (one segment ends exactly
+    /// at it, the next row's starts exactly at it), so the insertion
+    /// stretches the upper segment through the strip; comb ticks, which
+    /// abut nothing below the boundary, stay inside their own row.
+    #[test]
+    fn a_rule6_strip_keeps_the_frame_lines_it_crosses() {
+        let slug = "1701ms-2024";
+        let cells = writer_cells(slug).unwrap();
+        let mut fields: BTreeMap<String, String> = BTreeMap::new();
+        for key in cells.joins.keys() {
+            if key.contains("description") || key.contains("specify") {
+                fields.insert(key.clone(), words_of(200));
+            } else {
+                fields.insert(key.clone(), "1000".to_string());
+            }
+        }
+        let doc = filled_document(slug, &fields).unwrap();
+
+        let band_marker = "data-rule6-of=\"p2c179\" style=\"";
+        let at = doc.find(band_marker).unwrap() + band_marker.len();
+        let style = &doc[at..at + 120];
+        let pt = |name: &str| -> f64 {
+            let key = format!("{name}:");
+            let from = style.find(&key).unwrap() + key.len();
+            style[from..].split("pt").next().unwrap().parse().unwrap()
+        };
+        let band_top = pt("top");
+        let band_bottom = band_top + pt("height");
+
+        let rects = |f: &dyn Fn(f64, f64, f64, f64) -> bool| -> Vec<(f64, f64, f64, f64)> {
+            let mut out = Vec::new();
+            let mut cursor = 0;
+            while let Some(rel) = doc[cursor..].find("<rect ") {
+                let start = cursor + rel;
+                let Some(end_rel) = doc[start..].find('>') else {
+                    break;
+                };
+                let tag = &doc[start..start + end_rel + 1];
+                let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    if f(x, y, w, h) {
+                        out.push((x, y, w, h));
+                    }
+                }
+                cursor = start + end_rel + 1;
+            }
+            out
+        };
+
+        // Both amount-column dividers run continuously from above the strip
+        // to below the band's bottom edge.
+        for divider_x in [327.45, 461.58] {
+            let bridging = rects(&|x, y, w, h| {
+                w <= 1.6
+                    && (x - divider_x).abs() <= 1.0
+                    && y < band_top - 1.0
+                    && y + h >= band_bottom - 0.75
+            });
+            assert!(
+                !bridging.is_empty(),
+                "no frame line at x~{divider_x} bridges the strip (band {band_top}..{band_bottom})"
+            );
+        }
     }
 
     /// D1's negative: 1700's band for p2c153 moved sideways under the
