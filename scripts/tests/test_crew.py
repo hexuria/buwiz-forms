@@ -1071,8 +1071,7 @@ class RunTests(unittest.TestCase):
             for suffix in ("-m unittest", "scripts/tests/", "crew/bin/crew lint",
                            "crew/bin/crew sync --check", "crew/bin/crew push"):
                 self.assertIn("Exec({0} {1})".format(python, suffix), permissions["allow"])
-        self.assertIn("Exec(sed -n)", permissions["allow"])
-        self.assertNotIn("Exec(sed)", permissions["allow"])
+        self.assertFalse(any(entry.startswith("Exec(sed") for entry in permissions["allow"]))
         self.assertNotIn("Exec(find)", permissions["allow"])
         self.assertFalse(any(entry.startswith("Write({0}".format(common)) for entry in permissions["allow"]))
         self.assertNotIn("Exec(git)", permissions["allow"])

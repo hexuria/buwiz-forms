@@ -589,7 +589,7 @@ def devin_permissions(tree, role_dir, gitdir, common_dir):
         "allow": [
             "Write({0})".format(tree), "Write({0})".format(role_dir),
         ] + git_read_commit + python_rules + [
-            "Exec(grep)", "Exec(sed -n)", "Exec(ls)", "Exec(cat)",
+            "Exec(grep)", "Exec(ls)", "Exec(cat)",
             "Exec(head)", "Exec(tail)", "Exec(wc)", "Exec(diff)", "Exec(sort)",
             "Exec(uniq)", "Exec(mkdir)", "Exec(date)", "Exec(gh pr view)", "Exec(gh pr list)",
             "Exec(gh pr checks)", "Exec(gh pr diff)", "Exec(gh pr create)", "Exec(gh run view)",
