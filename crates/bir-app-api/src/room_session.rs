@@ -95,6 +95,25 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
         }
     };
     let started = claim.start(&who);
+    // §A.3.8, wired at launch: count today toward the zip's launch days, then delete the pre-rooms
+    // zip when the rule says it goes (30 days, 5 distinct launch days, both checks, no failure
+    // state). Never in legacy mode's way: a locked file has no record and nothing is written.
+    if !matches!(started, Start::Locked(_)) {
+        let today = chrono::Local::now().date_naive();
+        if let Err(error) = claim.note_launch(today) {
+            tracing::warn!("launch day not counted: {error}");
+        }
+        match claim.delete_zip_if_due(chrono::Utc::now()) {
+            Ok(deleted) => {
+                for path in &deleted {
+                    tracing::info!(?path, "pre-rooms safety zip deleted by the 30-day rule");
+                }
+            }
+            Err(kept) => {
+                tracing::info!(?kept, "pre-rooms safety zip kept");
+            }
+        }
+    }
     match started {
         Start::Nothing | Start::DeclinedHere => open_lookup_room(&layout, stored),
         Start::NotHere(NotHere::SingleRoom) | Start::NotHere(NotHere::DevDatabase) => {

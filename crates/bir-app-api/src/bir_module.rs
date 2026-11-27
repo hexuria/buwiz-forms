@@ -3083,6 +3083,31 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// §A.3.8: the newest 3 import safety copies per room are kept; the older ones go. The copies are
+/// `bir_data.safety-<stamp>.db` of the one folder — the room's own in rooms mode — so pruning the
+/// folder is pruning the room.
+fn prune_safety_copies(folder: &std::path::Path) {
+    let mut copies: Vec<std::path::PathBuf> = std::fs::read_dir(folder)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.file_name()
+                        .is_some_and(|name| name.to_string_lossy().starts_with("bir_data.safety-"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    copies.sort();
+    while copies.len() > 3 {
+        let eldest = copies.remove(0);
+        if let Err(error) = std::fs::remove_file(&eldest) {
+            tracing::warn!(?eldest, "old import safety copy not pruned: {error}");
+        }
+    }
+}
+
 /// Steps 2 and 3 of [`restore_database_archive`] for a database already
 /// staged and checked. The staged file is removed on every path out.
 fn restore_staged_database(
@@ -3131,6 +3156,7 @@ fn restore_staged_database(
                 "Could not save a safety copy of the current database ({error}), so nothing was imported. The current database was left as it is."
             )));
         }
+        prune_safety_copies(parent);
         // What `reset_database` does, under the lock already held: the
         // database a folder was scanned against for the eBIRForms import
         // goes away here, so that scan is let go and never imported into the
