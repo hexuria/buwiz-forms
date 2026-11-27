@@ -149,7 +149,7 @@ class AptUpdateRetryDecisionTests(unittest.TestCase):
         result = self.run_decision(0, output)
         self.assertEqual(result.returncode, 1, result.stderr)
 
-    def test_the_update_retries_a_zero_exit_failed_fetch(self) -> None:
+    def test_a_zero_exit_failed_fetch_is_retried_then_accepted_with_a_warning(self) -> None:
         command = """
 source "$1"
 apt-get() {
@@ -170,9 +170,37 @@ printf 'status=%s\\n' "$status"
             text=True,
             check=False,
         )
+        # The bare call passed a partial update; after three tries so does this one, with a warning: the install
+        # that follows fails loudly by itself if the missing index mattered.
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("status=0", result.stdout)
+        self.assertEqual(result.stdout.count("W: Failed to fetch"), 3)
+        self.assertIn("::warning::", result.stdout + result.stderr)
+
+    def test_a_nonzero_exit_still_fails_after_three_tries(self) -> None:
+        command = """
+source "$1"
+apt-get() {
+  printf '%s\\n' 'E: The repository is no longer signed.'
+  return 100
+}
+sleep() { :; }
+if apt_update_with_retries; then
+  status=0
+else
+  status=$?
+fi
+printf 'status=%s\\n' "$status"
+"""
+        result = subprocess.run(
+            ["bash", "-c", command, "_", str(SCRIPT)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("status=1", result.stdout)
-        self.assertEqual(result.stdout.count("W: Failed to fetch"), 3)
+        self.assertEqual(result.stdout.count("no longer signed"), 3)
 
 
 class WorkflowAptPolicyTests(unittest.TestCase):

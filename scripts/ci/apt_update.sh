@@ -167,6 +167,12 @@ apt_update_with_retries() {
       sleep "$pause"
     fi
   done
+  if [ "$status" -eq 0 ]; then
+    # apt returned 0 with an index it could not fetch, three times: a partial update, which the bare call always
+    # passed. Go on with a warning; the install that follows fails by itself if the missing index mattered.
+    echo "::warning::apt-get update could not fetch every Ubuntu index after 3 attempts; going on with a partial update"
+    return 0
+  fi
   echo "apt-get update failed after 3 attempts; the remaining sources are Ubuntu's" >&2
   return 1
 }
