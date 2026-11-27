@@ -1,6 +1,6 @@
 # nsh-run-agent Windows timing evidence
 
-Before CSVs are the loops from the first timing investigation. justfile, scripts/tests/test_nsh_run_agent_windows.py, and .github/workflows/ci.yml are byte-identical between that checkout (0265dc6103482b201d017ea512f3700918fb927e) and this branch base (97a96fb70c78a9681318d52396c0c7b938c75b6d). After CSVs are this branch. Loaded rows are four concurrent fresh worker loops, 30 full-class runs each.
+Before CSVs are the loops from the first timing investigation. justfile, scripts/tests/test_nsh_run_agent_windows.py, and .github/workflows/ci.yml are byte-identical between that checkout (0265dc6103482b201d017ea512f3700918fb927e) and this branch base (97a96fb70c78a9681318d52396c0c7b938c75b6d). After CSVs are this branch. Loaded rows are four concurrent fresh worker loops, 30 full-class runs each. The timeouts seen on GitHub's Windows runners (issue #480) were not reproduced and are not claimed fixed by this change; the new failure message (process tree, partial output, step timeline) is how the next one will be diagnosed.
 
 | evidence | class runs | test invocations | failed tests | runs with failures | slowest test (s) |
 |---|---:|---:|---:|---:|---:|

@@ -1394,12 +1394,27 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }
     $writer = $null
     $plugger = $null
-    function Stop-AgentJob($job) {
+    function Stop-AgentJob($job, $name) {
         # Stop-Job returns before the job's runspace has finished closing; receiving it in that state can either
         # throw or wait while the still-open runspace keeps this shell (and therefore the job's liveness check) alive.
         Stop-Job $job -ErrorAction SilentlyContinue
         $stopped = Wait-Job $job -Timeout 10 -ErrorAction SilentlyContinue
-        if ($stopped) { Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { [Console]::Error.WriteLine($_) } }
+        if ($env:NSH_RUN_AGENT_TEST_JOB_NO_STOP) { $stopped = $null }
+        if ($stopped) {
+            $jobErrors = @()
+            Receive-Job $job -ErrorVariable jobErrors -ErrorAction SilentlyContinue | ForEach-Object {
+                [Console]::Error.WriteLine(([string]$_) -replace [regex]::Escape($env:GPUI_AGENT_TOKEN), '<GPUI_AGENT_TOKEN>')
+            }
+            foreach ($jobError in $jobErrors) {
+                $message = ([string]$jobError) -replace [regex]::Escape($env:GPUI_AGENT_TOKEN), '<GPUI_AGENT_TOKEN>'
+                if ($jobError.Exception -isnot [System.Management.Automation.PipelineStoppedException] -and
+                        $message -notmatch 'The remote pipeline has been stopped') {
+                    [Console]::Error.WriteLine($message)
+                }
+            }
+        } else {
+            [Console]::Error.WriteLine("nsh-run-agent: the $name job did not stop within 10 seconds and was removed")
+        }
         Remove-Job $job -Force -ErrorAction SilentlyContinue
     }
     # The parameter arrives as an environment variable (PowerShell cannot read just's quoting of an apostrophe); a relative
@@ -1450,6 +1465,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         Trace-Step 'writer-job-start'
         $writer = Start-Job -ScriptBlock {
             param($adb, $serial, $token, $pkg, $dir, $launcher, $launcherStarted)
+            if ($env:NSH_RUN_AGENT_TEST_WRITER_ERROR) { Write-Error 'injected adb failure in token writer'; return }
             for ($i = 0; $i -lt 1800; $i++) {
                 $alive = Get-Process -Id $launcher -ErrorAction SilentlyContinue
                 if (-not $alive -or $alive.StartTime.Ticks -ne $launcherStarted) { return }
@@ -1552,11 +1568,11 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
             # The launch is over, however it ended (a failed build, a failed install, Ctrl+C): the writers must not go
             # on polling the device, and a token the app never read must not stay in the host's files.
             Trace-Step 'writer-cleanup-start'
-            Stop-AgentJob $writer
+            Stop-AgentJob $writer 'token writer'
             Trace-Step 'writer-cleanup-done'
             if ($plugger) {
                 Trace-Step 'plugger-cleanup-start'
-                Stop-AgentJob $plugger
+                Stop-AgentJob $plugger 'window-plane plugger'
                 Trace-Step 'plugger-cleanup-done'
             }
             Trace-Step 'adb-cleanup-start'

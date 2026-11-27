@@ -122,6 +122,10 @@ mode = os.environ['FAKE_NSH']
 if mode == 'fail':
     trace('mode-fail')
     sys.exit(3)
+if mode == 'slow-fail':
+    trace('mode-slow-fail')
+    time.sleep(1)
+    sys.exit(3)
 if mode == 'hang':
     trace('mode-hang')
     time.sleep(600)
@@ -176,10 +180,6 @@ sys.exit(subprocess.call(sys.argv[1:]))
 TWO_DEVICES = 'emulator-5554\toffline\nemulator-5556\tdevice\nR58M123ABC\tdevice'
 
 
-# Quarantined on GitHub's Windows runners only (issue #480): since 2026-11-27 one to three of these tests time out
-# in most runs there, a different one each time, with nothing changed in the recipe, the test or the runner image.
-# The class still runs on every other Windows machine. Remove this line in the pull request that fixes the cause.
-@unittest.skipIf(os.environ.get('GITHUB_ACTIONS') == 'true', 'flaky on GitHub Windows runners: issue #480')
 @unittest.skipUnless(os.name == 'nt' and shutil.which('pwsh') and shutil.which('just') and shutil.which('rustc'),
                      'Windows, pwsh, just and rustc required')
 class NshRunAgentWindowsTests(unittest.TestCase):
@@ -331,8 +331,9 @@ class NshRunAgentWindowsTests(unittest.TestCase):
             subprocess.run(['taskkill', '/T', '/F', '/PID', str(process.pid)], capture_output=True)
             self.fail('the recipe did not return\n' + evidence)
         output = self.output_after_wait(process)
-        self.assertFalse(process.output_reader.is_alive(),
-                         'the recipe output pipe did not close; output may be incomplete\n' + self.timeout_evidence(process, output))
+        if process.output_reader.is_alive():
+            self.fail('the recipe output pipe did not close; output may be incomplete\n'
+                      + self.timeout_evidence(process, output))
         self.assertNotIn(TOKEN, output, 'the token is never printed')
         return process.returncode, output
 
@@ -426,6 +427,27 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         self.assertEqual(code, 3, output)
         self.assertFalse((self.state / 'token-emulator-5556').exists(), 'the unread token is removed from the device')
         self.assert_the_writer_has_stopped()
+
+    def test_writer_job_errors_are_printed_without_stop_noise_or_the_token(self):
+        code, output = self.run_recipe(self.env('slow-fail', NSH_RUN_AGENT_TEST_WRITER_ERROR='1'))
+        self.assertEqual(code, 3, output)
+        self.assertIn('injected adb failure in token writer', output)
+        self.assertNotIn('The remote pipeline has been stopped', output)
+        self.assertNotIn(TOKEN, output)
+
+        shutil.rmtree(self.state)
+        self.state.mkdir()
+        code, output = self.run_recipe(self.env('fail'))
+        self.assertEqual(code, 3, output)
+        self.assertNotIn('injected adb failure in token writer', output)
+        self.assertNotIn('The remote pipeline has been stopped', output)
+
+    def test_a_job_that_does_not_stop_is_reported(self):
+        code, output = self.run_recipe(self.env('slow-fail', NSH_RUN_AGENT_TEST_JOB_NO_STOP='1'))
+        self.assertEqual(code, 3, output)
+        self.assertIn('the token writer job did not stop within 10 seconds and was removed', output)
+        self.assertIn('the window-plane plugger job did not stop within 10 seconds and was removed', output)
+        self.assertNotIn(TOKEN, output)
 
     def test_a_cancelled_launch_stops_the_token_writer(self):
         # Cancelled the hard way: the recipe's own PowerShell is ended while nsh runs, so nothing of its own cleans up.
