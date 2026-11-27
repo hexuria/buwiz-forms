@@ -95,6 +95,17 @@ export function refusalSentence(ctx: RefusalContext): string {
   }
   if (raw === "date conflicts with a locked part") return `${at} use the date set by the return.`;
   if (raw === "calendar year ends in December") return "A calendar year ends in December. Choose Fiscal to pick another month.";
+  // Notes under an amount box (they hold nothing; the box shows what the return holds).
+  const typedNote = /^amount typed\|([^|]*)\|([\s\S]*)$/.exec(raw);
+  if (typedNote) return `${at} you typed ${typedNote[2]}; the return holds ${typedNote[1]}.`;
+  const unreadable = /^amount unreadable\|([^|]*)\|([\s\S]*)$/.exec(raw);
+  if (unreadable) {
+    const hint = unreadable[2].includes(",") ? " Use a point for centavos, and commas only between thousands." : "";
+    return `${at} ${unreadable[2]} is not an amount. The box kept ${unreadable[1]}.${hint}`;
+  }
+  const refused = /^amount refused\|([^|]*)\|([^|]*)\|([\s\S]*)$/.exec(raw);
+  if (refused) return `${at} you typed ${refused[2]}; the return holds ${refused[1]}. ${refusalSentence({ ...ctx, raw: refused[3] })}`;
+
 
   // A gate: the box is shut by another answer ("Needs item 4 = Yes", the off tag).
   if (/^needs\b/i.test(raw) || /^item\s+\S+\s+is checked\.?$/i.test(raw)) return gateSentence(ctx, raw);

@@ -278,7 +278,7 @@ export function groupThousands(int: string): string {
 
 /** A plain amount's parts: its sign, whole digits and decimals; null when the text is not an amount. */
 function amountParts(text: string): { neg: boolean; int: string; frac: string } | null {
-  const m = /^(-?)(\d*)(?:\.(\d*))?$/.exec(String(text ?? "").replace(/[₱,\s]/g, ""));
+  const m = /^(-?)(\d*)(?:\.(\d*))?$/.exec(moneyPlain(text));
   if (!m || (m[2] === "" && !m[3])) return null;
   return { neg: m[1] === "-", int: m[2], frac: m[3] ?? "" };
 }
@@ -404,6 +404,108 @@ export function moneyMask(o?: MoneyMaskOptions): Mask {
   };
 }
 
+
+/** Strictly read an amount as typed, or null when it is not one. Group commas must be valid thousands groups. */
+export function readAmount(text: string, negative = false): string | null {
+  let t = String(text ?? "").trim();
+  // Currency marks and spaces around the amount are presentation, never digits; spaces inside it are not.
+  const prefix = /^(?:₱|PHP)\s*/i.exec(t);
+  if (prefix) t = t.slice(prefix[0].length).trim();
+  const suffix = /(?:₱|PHP)\s*$/i.exec(t);
+  if (suffix && suffix.index > 0) t = t.slice(0, suffix.index).trim();
+  if (t === "") return null;
+  let neg = false;
+  if (t.startsWith("(") && t.endsWith(")")) {
+    if (!negative) return null;
+    neg = true;
+    t = t.slice(1, -1);
+  } else if (t.startsWith("-")) {
+    if (!negative) return null;
+    neg = true;
+    t = t.slice(1);
+  }
+  if (!/^[\d,]*(?:\.\d*)?$/.test(t) || !/\d/.test(t)) return null;
+  const [whole, frac] = t.split(".");
+  if (whole.includes(",") && !/^\d{1,3}(?:,\d{3})+$/.test(whole)) return null;
+  const plainWhole = whole.replace(/,/g, "");
+  if (plainWhole !== "" && !/^\d+$/.test(plainWhole)) return null;
+  return `${neg ? "-" : ""}${plainWhole}${frac !== undefined ? `.${frac}` : ""}`;
+}
+
+/** Whether focused money text reads as an amount. Empty is zero and valid. */
+export function validAmountText(text: string, negative = false): boolean {
+  return String(text ?? "").trim() === "" || readAmount(text, negative) !== null;
+}
+
+/** Whose comma a money text holds for this focus: the box's grouping, the filer's own, none yet, or not attributable. */
+export type CommaState = "none" | "ours" | "filer" | "unsure";
+
+/** The comma state of the text a money box has when it takes focus. */
+export function initialCommaState(text: string): CommaState {
+  return String(text ?? "").includes(",") ? "ours" : "none";
+}
+
+function shapedEdit(before: string, after: string): { inserted: string; removed: number } {
+  let p = 0;
+  while (p < before.length && p < after.length && before[p] === after[p]) p++;
+  let s = 0;
+  while (s < before.length - p && s < after.length - p && before[before.length - 1 - s] === after[after.length - 1 - s]) s++;
+  return { inserted: after.slice(p, after.length - s), removed: before.length - p - s };
+}
+
+/**
+ * Whose comma the text holds after an edit, decided only from the edit's shape (no key events). A comma inserted into
+ * text with no comma is the filer's; one inserted into or pasted over text that already has one is unsure. Deleting
+ * keeps the state, except that a text with no comma starts again at none.
+ */
+export function nextCommaState(state: CommaState, before: string, after: string): CommaState {
+  before = String(before ?? "");
+  after = String(after ?? "");
+  if (!after.includes(",")) return "none";
+  const edit = shapedEdit(before, after);
+  if (edit.inserted.length === 0) return state;
+  if (!edit.inserted.includes(",")) return state;
+  const beforeHadComma = before.includes(",");
+  if (edit.inserted.length === 1) return beforeHadComma ? "unsure" : "filer";
+  return before === "" || !beforeHadComma ? "filer" : "unsure";
+}
+
+function unsignedAmountBody(text: string): string | null {
+  let t = String(text ?? "").trim();
+  const prefix = /^(?:₱|PHP)\s*/i.exec(t);
+  if (prefix) t = t.slice(prefix[0].length).trim();
+  const suffix = /(?:₱|PHP)\s*$/i.exec(t);
+  if (suffix && suffix.index > 0) t = t.slice(0, suffix.index).trim();
+  if (t.startsWith("(") && t.endsWith(")")) t = t.slice(1, -1);
+  else if (t.startsWith("-")) t = t.slice(1);
+  return t === "" ? null : t;
+}
+
+/**
+ * Read amount text by comma attribution. The box's own separators (and none yet) are ignored wherever editing moved
+ * them. A filer comma is strict while focused; only on leaving, a single comma with one or two digits after it and no
+ * point is the decimal mark. An unsure comma is strict always.
+ */
+export function readAmountWithCommas(text: string, state: CommaState, negative = false, leaving = false): string | null {
+  const raw = String(text ?? "");
+  if (state === "ours" || state === "none") return readAmount(raw.replace(/,/g, ""), negative);
+  const strict = readAmount(raw, negative);
+  if (strict !== null || state !== "filer" || !leaving) return strict;
+  const body = unsignedAmountBody(raw);
+  if (!body || body.includes(".") || (body.match(/,/g) ?? []).length !== 1) return null;
+  const [whole, frac] = body.split(",");
+  if (!/^\d+$/.test(whole) || !/^\d{1,2}$/.test(frac)) return null;
+  const at = raw.indexOf(",");
+  let converted = `${raw.slice(0, at)}.${raw.slice(at + 1)}`;
+  if (frac.length === 1) converted = `${converted.slice(0, at + 2)}0${converted.slice(at + 2)}`;
+  return readAmount(converted, negative);
+}
+
+/** Whether amount text reads under its comma attribution. Empty is zero and valid. */
+export function validAmountWithCommas(text: string, state: CommaState, negative = false, leaving = false): boolean {
+  return String(text ?? "").trim() === "" || readAmountWithCommas(text, state, negative, leaving) !== null;
+}
+
 /** The money mask with no minus to type. */
 export const MONEY_MASK = moneyMask();
 
@@ -418,7 +520,50 @@ export function isZeroAmount(text: string): boolean {
 
 /** The plain numeric string of a money text: "1,250,000.50" -> "1250000.50", "₱ -12" -> "-12"; "" stays "". */
 export function moneyPlain(text: string): string {
-  return String(text ?? "").replace(/[₱,\s]/g, "");
+  const raw = String(text ?? "").trim();
+  const paren = /^\((.*)\)$/.exec(raw);
+  const body = (paren ? paren[1] : raw).replace(/[₱,\s]/g, "");
+  return `${paren ? "-" : ""}${body}`;
+}
+
+/**
+ * The money mask's validation while a box has the keys: the same characters and paste rules, but no grouping and no
+ * leading-zero rewrite. Commas already in the amount (or typed as separators) stay while focused and are stripped with
+ * the other grouping on blur; digits and one decimal point leave the text exactly as typed.
+ */
+export function moneyEntryMask(o?: MoneyMaskOptions): Mask {
+  const base = moneyMask(o);
+  return {
+    // Commas are separators already in a filled amount (or typed as one); the digits and one decimal point are the number.
+    significant: (ch) => base.significant(ch) || ch === ",",
+    insert: base.insert,
+    format(sig) {
+      const keep: boolean[] = new Array(sig.length).fill(false);
+      let neg = false;
+      let dot = false;
+      let out = "";
+      for (let i = 0; i < sig.length; i++) {
+        const ch = sig[i];
+        if (ch === "-") {
+          if (i === 0 && !neg) {
+            neg = true;
+            out += ch;
+            keep[i] = true;
+          }
+        } else if (ch === ".") {
+          if (!dot) {
+            dot = true;
+            out += ch;
+            keep[i] = true;
+          }
+        } else {
+          out += ch;
+          keep[i] = true;
+        }
+      }
+      return { keep, text: out };
+    },
+  };
 }
 
 /** The digits of `int`.`frac` rounded to `places` decimals, half up, on the digits themselves. */
@@ -460,13 +605,12 @@ export function formatMoney(text: string, whole = false, round = true): string {
 }
 
 /**
- * What a money box shows for a value, never another number than the value: a plain amount as typed while the box has the
- * keys (separators, any sign) and laid out by formatMoney (grouped, two decimals at least, none rounded away) when it does
- * not; anything else (a stored "1e21", text) exactly as it is.
+ * What a money box shows for a value, never another number than the value: grouped by formatMoney (two decimals at least,
+ * none rounded away); anything else (a stored "1e21", text) exactly as it is.
  */
-export function shownMoney(value: string, focused: boolean, whole = false): string {
+export function shownMoney(value: string, whole = false): string {
   if (!isPlainAmount(value)) return String(value ?? "");
-  return focused ? applyMask(value, moneyMask({ negative: true })) : formatMoney(value, whole, false);
+  return formatMoney(value, whole, false);
 }
 
 // ---------------------------------------------------------------- percent and integers
