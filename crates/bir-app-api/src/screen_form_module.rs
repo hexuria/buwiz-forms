@@ -5114,6 +5114,7 @@ pub(crate) fn page_gate_refusal(
 ) -> Option<String> {
     if value.is_null()
         || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || value.as_f64() == Some(0.0)
         || is_unticked(value)
     {
         return None;
@@ -5457,6 +5458,7 @@ fn apply_screen_edits_here(
             && value
                 .as_str()
                 .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && value.as_f64() != Some(0.0)
             && !is_unticked(value)
             && let Some(reason) = bir_core::forms::agent::gated_rows::lock_reason(kind, draft, &key)
         {

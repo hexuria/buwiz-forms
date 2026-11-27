@@ -71,6 +71,12 @@ fn form_2552_tax_relief_specification_is_gated_and_said_once() {
         json!("Item 10 tax relief is Yes.")
     );
     assert_eq!(refused["draft"]["tax_relief_specification"], "");
+    let numeric_zero = fill("2552", &opened["draft"], json!({ spec: 0 }));
+    assert!(
+        numeric_zero["rejected"].get(spec).is_none(),
+        "a JSON numeric zero is the same clear as the string zero: {:?}",
+        numeric_zero["rejected"]
+    );
     let mut assistant_draft = opened["draft"].clone();
     let refusal = bir_core::forms::agent::fill(
         kind_of("2552").expect("2552 kind"),
