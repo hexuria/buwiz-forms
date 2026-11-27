@@ -1847,7 +1847,10 @@ mod tests {
         assert_invariants();
     }
 
-    /// stored_b_survives_as_late_401: A's send's late 401 ends nothing of B's session.
+    /// stored_b: a late 401 of A's send, arriving after B signed in, touches nothing of B's —
+    /// driven through the REAL path (revision 5's BUG 3): the send's context carries A's owner,
+    /// epoch and the credential its token came from, and TokenSource::session_ended reads only
+    /// those. Under the bug it read "now" — B's owner, epoch and credential — and signed B out.
     #[test]
     fn stored_b_survives_as_late_401() {
         let _turn = test_turn();
@@ -1857,36 +1860,53 @@ mod tests {
         let epoch_a = snapshot().epoch;
         open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // The switch: A signs out (the real one-section sign_out), B signs in.
+        // The hook registration is once per process; every test that needs it registers the
+        // same machine door, so sharing it is exact.
+        bir_core::account_session::on_session_ended(server_ended);
+        // The send's task, spawned with A's owner and epoch. Its token fetch — the real
+        // AccountTokens::access_token — records the credential of A's record in the context.
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a, epoch_a);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(
+            bir_core::account_session::SEND_CONTEXT.scope(context.clone(), async {
+                let tokens = bir_core::account_session::AccountTokens;
+                let token = bir_core::bir_submit::TokenSource::access_token(&tokens, false)
+                    .await
+                    .expect("A's token, fetched as the send does");
+                assert_eq!(token, "access-user-a");
+            }),
+        );
+        assert_eq!(
+            context.credential().as_deref(),
+            Some("refresh-user-a"),
+            "the fetch recorded the credential the send's token came from"
+        );
+        // The switch: A signs out (the real one-section sign_out), B signs in — the persist,
+        // the cache, the epoch bump.
         sign_out();
+        join_device_forget_threads();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         let epoch_b = snapshot().epoch;
         open_hand(&scratch, &owner_b, epoch_b, "b-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         assert_invariants();
-        // A's late 401 arrives through the real door: end_session_for with the owner and the
-        // epoch A's send started under. The epoch has moved on, so nothing of B's is touched.
-        let key_a = bir_core::account_session::OwnerKey {
-            origin: owner_a.origin.clone(),
-            user_id: owner_a.user_id.clone(),
-        };
-        bir_core::account_session::end_session_for(
-            key_a,
-            epoch_a,
-            format!("refresh-{}", owner_a.user_id),
+        // A's send gets its late 401: the real TokenSource::session_ended, inside the send's
+        // own context.
+        runtime.block_on(
+            bir_core::account_session::SEND_CONTEXT.scope(context, async {
+                let tokens = bir_core::account_session::AccountTokens;
+                bir_core::bir_submit::TokenSource::session_ended(&tokens);
+            }),
         );
-        // end_session_for only runs the registered hook; the hook IS the machine's server_ended
-        // in production. In this test binary nothing registers it (OnceLock, one per process),
-        // so drive the machine's server_ended directly — the same function the hook calls.
-        server_ended(
-            bir_core::account_session::OwnerKey {
-                origin: owner_a.origin.clone(),
-                user_id: owner_a.user_id.clone(),
-            },
-            epoch_a,
-            format!("refresh-{}", owner_a.user_id),
-        );
+        // Everything of B's stands: the stored sign-in, the cache, the room, the gate.
         assert_eq!(
             snapshot().phase_kind,
             PhaseKind::Open,
@@ -1899,18 +1919,16 @@ mod tests {
                 .map(|owner| owner.user_id.as_str()),
             Some("user-b")
         );
-        assert!(
-            bir_core::cloud_account::load_stored_account()
-                .unwrap()
-                .is_some(),
-            "B's stored sign-in survives"
-        );
-        // And B's cache too: the delete-if-owner never matched.
+        let stored = bir_core::cloud_account::load_stored_account()
+            .unwrap()
+            .expect("B's stored sign-in survives");
+        assert_eq!(stored.refresh_token, "refresh-user-b");
         assert_eq!(
             bir_core::account_session::stored_owner().map(|key| key.user_id),
             Some("user-b".to_string()),
             "B's owner cache entry survives"
         );
+        assert!(gate_unlocked(), "B's gate holds");
         assert_invariants();
     }
 
@@ -2574,6 +2592,72 @@ mod tests {
             None,
             "the relaunched cache reads the disk: signed out"
         );
+    }
+
+    /// The same-owner case of BUG 3: A signs in again with a NEW credential while A's old send
+    /// is still in flight; the old send's 401 names the OLD credential, and the new sign-in —
+    /// same owner, newer token — survives. Driven through the real send path, as stored_b is.
+    #[test]
+    fn a_resigned_in_same_owner_survives_the_old_sends_401() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch_a = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        bir_core::account_session::on_session_ended(server_ended);
+        // The send's fetch records A's ORIGINAL credential.
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a, epoch_a);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(
+            bir_core::account_session::SEND_CONTEXT.scope(context.clone(), async {
+                let tokens = bir_core::account_session::AccountTokens;
+                let _ = bir_core::bir_submit::TokenSource::access_token(&tokens, false)
+                    .await
+                    .expect("A's token");
+            }),
+        );
+        assert_eq!(context.credential().as_deref(), Some("refresh-user-a"));
+        // A signs in again: the same owner, a NEW credential on disk and in the cache's owner.
+        {
+            let _account = bir_core::account_session::lock();
+            let mut stored = bir_core::cloud_account::load_stored_account()
+                .unwrap()
+                .unwrap();
+            stored.access_token = "access-user-a-new".into();
+            stored.refresh_token = "refresh-user-a-new".into();
+            bir_core::account_session::save_stored(&stored).unwrap();
+        }
+        // The old send's 401: the real session_ended in the send's own context.
+        runtime.block_on(
+            bir_core::account_session::SEND_CONTEXT.scope(context, async {
+                let tokens = bir_core::account_session::AccountTokens;
+                bir_core::bir_submit::TokenSource::session_ended(&tokens);
+            }),
+        );
+        // The new sign-in survives whole: the disk's credential is not the failed one.
+        let stored = bir_core::cloud_account::load_stored_account()
+            .unwrap()
+            .expect("the new sign-in survives");
+        assert_eq!(stored.refresh_token, "refresh-user-a-new");
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the room stays open"
+        );
+        assert!(gate_unlocked(), "the gate holds");
+        assert!(
+            bir_core::account_session::stored_owner().is_some(),
+            "the cache holds"
+        );
+        assert_invariants();
     }
 
     /// A stale owner or epoch changes nothing (§4): server_ended for another owner, or at an

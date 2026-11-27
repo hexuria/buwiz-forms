@@ -22,6 +22,54 @@ const RECENT_REFRESH_SECONDS: i64 = 10;
 static ACCOUNT_LOCK: Mutex<()> = Mutex::new(());
 static SESSION_ENDED: OnceLock<fn(OwnerKey, u64, String)> = OnceLock::new();
 
+/// The send's context (revision 5's BUG 3): who the send is for, the session epoch it was
+/// spawned in, and — recorded at the token fetch — the credential its access token came from.
+/// A late 401 ends exactly that: never the owner, epoch or credential of NOW. This is the slot
+/// SEND_OWNER's spawn wiring fills from commit 4; the sends of today are scoped by the tests
+/// and the hosts that already know their owner.
+pub struct SendContext {
+    /// The owner the task was spawned for.
+    pub owner: OwnerKey,
+    /// The session epoch at the spawn.
+    pub epoch: u64,
+    credential: Mutex<Option<String>>,
+}
+
+impl SendContext {
+    /// The spawn's record: owner and epoch fixed, the credential empty until the token fetch.
+    pub fn new(owner: OwnerKey, epoch: u64) -> Arc<Self> {
+        Arc::new(Self {
+            owner,
+            epoch,
+            credential: Mutex::new(None),
+        })
+    }
+
+    /// The token fetch's record: the refresh token of the stored sign-in the access token came
+    /// from — the credential a later 401 of this send is about.
+    pub fn record_credential(&self, credential: String) {
+        *self
+            .credential
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(credential);
+    }
+
+    /// The recorded credential, if the fetch ran.
+    pub fn credential(&self) -> Option<String> {
+        self.credential
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+}
+
+tokio::task_local! {
+    /// The send's context, scoped when the send's task is spawned. `session_ended` reads ONLY
+    /// this — with no task-local (a caller outside a send) it does nothing and logs, never a
+    /// guess built from "now".
+    pub static SEND_CONTEXT: Arc<SendContext>;
+}
+
 /// The stored sign-in's identity key: the normalised server origin (rooms::room_origin) and the
 /// user id. Every owner check in the session world compares this, never the raw server URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,6 +261,18 @@ pub fn access_token(
     force: bool,
     for_owner: &OwnerKey,
 ) -> Result<String, TokenError> {
+    access_token_with_credential(http, now_unix, force, for_owner).map(|(token, _credential)| token)
+}
+
+/// [`access_token`], answering also the credential the token came from: the refresh token of the
+/// stored sign-in whose access token this is — the value a send records in its [`SendContext`],
+/// so a late 401 is matched against the credential that failed, never against "now".
+pub fn access_token_with_credential(
+    http: &mut dyn Http,
+    now_unix: i64,
+    force: bool,
+    for_owner: &OwnerKey,
+) -> Result<(String, String), TokenError> {
     #[cfg(any(test, feature = "test-support"))]
     note_token_fetch(for_owner);
     let epoch = crate::session_epoch::current();
@@ -358,28 +418,42 @@ impl bir_submit::TokenSource for AccountTokens {
         // here, at the call: until §5.4's SEND_OWNER lands with the wiring commit, the owner the
         // send started under IS the stored owner of that moment.
         let database = crate::db::capture_database_path_override();
+        let device = crate::platform::capture_device_dir_override();
         let Some(for_owner) = stored_owner() else {
             return Box::pin(async move { Err(bir_submit::ClientError::SignedOut) });
         };
+        // The send's context, if this fetch is a send's: the credential it produced the token
+        // from is recorded HERE, in the task's own async frame — the task-local does not reach
+        // the blocking thread, and the record must be the send's, not "now".
+        let context = SEND_CONTEXT.try_with(|context| context.clone()).ok();
         Box::pin(async move {
             let answer = tokio::task::spawn_blocking(move || {
-                database.run(|| {
-                    let mut http = cloud_account::BlockingHttp::new();
-                    access_token(
-                        &mut http,
-                        cloud_account::unix_now(),
-                        force_refresh,
-                        &for_owner,
-                    )
+                device.run(|| {
+                    database.run(|| {
+                        let mut http = cloud_account::BlockingHttp::new();
+                        access_token_with_credential(
+                            &mut http,
+                            cloud_account::unix_now(),
+                            force_refresh,
+                            &for_owner,
+                        )
+                    })
                 })
             })
             .await
             .map_err(|error| bir_submit::ClientError::Other(error.to_string()))?;
-            answer.map_err(|error| match error {
-                TokenError::SignedOut => bir_submit::ClientError::SignedOut,
-                TokenError::Offline(reason) => bir_submit::ClientError::Network(reason),
-                TokenError::Other(message) => bir_submit::ClientError::Other(message),
-            })
+            answer
+                .map(|(token, credential)| {
+                    if let Some(context) = &context {
+                        context.record_credential(credential);
+                    }
+                    token
+                })
+                .map_err(|error| match error {
+                    TokenError::SignedOut => bir_submit::ClientError::SignedOut,
+                    TokenError::Offline(reason) => bir_submit::ClientError::Network(reason),
+                    TokenError::Other(message) => bir_submit::ClientError::Other(message),
+                })
         })
     }
 
@@ -391,20 +465,21 @@ impl bir_submit::TokenSource for AccountTokens {
     }
 
     fn session_ended(&self) {
-        // The server's 401 ended the session of the owner stored when the send started, in this
-        // epoch. The credential is the stored refresh token of this moment: the hook clears only
-        // if the disk still holds exactly it, so a newer sign-in is never taken by an old 401.
-        if let Some(owner) = stored_owner() {
-            let credential = {
-                let _one = lock();
-                cloud_account::load_stored_account()
-                    .ok()
-                    .flatten()
-                    .map(|stored| stored.refresh_token)
-                    .unwrap_or_default()
-            };
-            end_session_for(owner, crate::session_epoch::current(), credential);
-        }
+        // The server's 401 ended the session of THE SEND'S owner, at the send's epoch, on the
+        // credential the send's token came from — all three read from the send's task-local,
+        // never from "now": a late 401 of A's send after B signed in names A's owner, A's epoch
+        // and A's credential, and every check of the hook's fails for B. With no task-local —
+        // a caller outside a send — this does NOTHING and logs; it never falls back to "now".
+        let context = SEND_CONTEXT.try_with(|context| context.clone()).ok();
+        let Some(context) = context else {
+            tracing::warn!("session_ended outside a send's context: nothing is ended");
+            return;
+        };
+        let Some(credential) = context.credential() else {
+            tracing::warn!("session_ended with no token fetch recorded: nothing is ended");
+            return;
+        };
+        end_session_for(context.owner.clone(), context.epoch, credential);
     }
 }
 
@@ -458,7 +533,7 @@ fn access_token_in(
     for_owner: &OwnerKey,
     epoch: u64,
     ended: &dyn Fn(OwnerKey, u64, String),
-) -> Result<String, TokenError> {
+) -> Result<(String, String), TokenError> {
     let mut retried = false;
     loop {
         // The load under the lock — the fast paths (a valid token, a just-refreshed one)
@@ -482,10 +557,12 @@ fn access_token_in(
         }
         if !force && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
         {
-            return Ok(stored.access_token);
+            let credential = stored.refresh_token.clone();
+            return Ok((stored.access_token, credential));
         }
         if force && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS {
-            return Ok(stored.access_token);
+            let credential = stored.refresh_token.clone();
+            return Ok((stored.access_token, credential));
         }
         // The keyed flight: join the credential's flight or become its leader. The map lock is
         // never held while waiting or networking.
@@ -565,11 +642,13 @@ fn access_token_in(
         if !force && stored.access_expires_at_unix > now_unix.saturating_add(EXPIRY_MARGIN_SECONDS)
         {
             leader.outcome = Some(FlightOutcome::ReRead);
-            return Ok(stored.access_token);
+            let credential = stored.refresh_token.clone();
+            return Ok((stored.access_token, credential));
         }
         if force && now_unix.saturating_sub(stored.last_refresh_unix) < RECENT_REFRESH_SECONDS {
             leader.outcome = Some(FlightOutcome::ReRead);
-            return Ok(stored.access_token);
+            let credential = stored.refresh_token.clone();
+            return Ok((stored.access_token, credential));
         }
         // The network refresh with NO LOCK (D2): the lock is never held across it.
         match cloud_account::refresh_tokens(http, &stored.server_url, &stored.refresh_token) {
@@ -613,7 +692,8 @@ fn access_token_in(
                 if !saved {
                     return Err(TokenError::SignedOut);
                 }
-                return Ok(next.access_token);
+                let credential = next.refresh_token.clone();
+                return Ok((next.access_token, credential));
             }
             Err(CloudError::Network(reason)) => {
                 // (c): a network error signs nobody out — not the leader, not a waiter.
@@ -829,6 +909,7 @@ mod tests {
         access_token_in(store, http, now, force, &test_owner(), 1, &|_, _, _| {
             hook_runs.fetch_add(1, Ordering::SeqCst);
         })
+        .map(|(token, _credential)| token)
     }
 
     #[test]
@@ -1066,6 +1147,7 @@ mod tests {
                         hook2.fetch_add(1, Ordering::SeqCst);
                     },
                 )
+                .map(|(token, _credential)| token)
             }));
         }
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -1081,6 +1163,81 @@ mod tests {
             assert_eq!(answer.as_deref(), Ok("access-new"));
         }
         assert_eq!(hook.load(Ordering::SeqCst), 0);
+    }
+
+    /// (a), the rotated case scripted explicitly: the leader is parked refreshing T1; the store
+    /// rotates to T2 by another path; the next refresh — for T2 now — must NOT join T1's flight.
+    /// It leads its own, and its network call arrives while T1's is still parked.
+    #[test]
+    fn a_rotation_starts_a_newer_credential_its_own_flight() {
+        let _turn = turn();
+        // The leader's http parks inside the network call until released.
+        struct ParkedHttp {
+            inside: std::sync::mpsc::Sender<()>,
+            go: std::sync::mpsc::Receiver<()>,
+        }
+        impl Http for ParkedHttp {
+            fn exchange(&mut self, _request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                let _ = self.inside.send(());
+                let _ = self.go.recv();
+                Ok(HttpResponse {
+                    status: 200,
+                    body: r#"{"access_token":"access-t1","refresh_token":"refresh-t1-next","expires_in":900}"#.into(),
+                })
+            }
+        }
+        // The newer refresh's http announces its arrival and answers at once.
+        struct AnnouncingHttp(std::sync::mpsc::Sender<()>);
+        impl Http for AnnouncingHttp {
+            fn exchange(&mut self, _request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+                let _ = self.0.send(());
+                Ok(HttpResponse {
+                    status: 200,
+                    body: r#"{"access_token":"access-t2","refresh_token":"refresh-t2-next","expires_in":900}"#.into(),
+                })
+            }
+        }
+        let mut account = account(0, 0);
+        account.refresh_token = "refresh-t1".into();
+        let store = Arc::new(MemoryStore::with(account));
+        let hook = Arc::new(AtomicUsize::new(0));
+        let (inside_sender, inside_receiver) = std::sync::mpsc::channel();
+        let (go_sender, go_receiver) = std::sync::mpsc::channel();
+        let (leader_store, leader_hook) = (store.clone(), hook.clone());
+        let leader = std::thread::spawn(move || {
+            let mut http = ParkedHttp {
+                inside: inside_sender,
+                go: go_receiver,
+            };
+            ask(&leader_store, &mut http, 1_000, false, &leader_hook)
+        });
+        inside_receiver
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the leader is parked inside T1's refresh");
+        // The rotation by another path: the stored sign-in now holds T2, still expired.
+        {
+            let mut rotated = store.current().unwrap();
+            rotated.refresh_token = "refresh-t2".into();
+            rotated.access_token = "access-stale".into();
+            rotated.access_expires_at_unix = 0;
+            store.save(&rotated).unwrap();
+        }
+        // The newer ask: it reads T2, and T2's refresh must be its own flight — its network
+        // call arrives while T1's is still parked.
+        let (arrived_sender, arrived_receiver) = std::sync::mpsc::channel();
+        let (waiter_store, waiter_hook) = (store.clone(), hook.clone());
+        let waiter = std::thread::spawn(move || {
+            let mut http = AnnouncingHttp(arrived_sender);
+            ask(&waiter_store, &mut http, 1_000, false, &waiter_hook)
+        });
+        arrived_receiver
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("T2's refresh reached the network on its own flight — keyed by owner only, it would still be waiting on T1's");
+        let answer = waiter.join().unwrap();
+        assert_eq!(answer.as_deref(), Ok("access-t2"));
+        // Let the leader finish; the flight map is clean afterwards.
+        let _ = go_sender.send(());
+        let _ = leader.join().unwrap();
     }
 
     /// (c): the rejection of one credential ends the session EXACTLY ONCE however many waiters
@@ -1116,6 +1273,7 @@ mod tests {
                             hook_store.clear();
                         },
                     )
+                    .map(|(token, _credential)| token)
                 })
             })
             .collect();
