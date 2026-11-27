@@ -266,6 +266,102 @@ fn kind_of(key: &str, official: &str, amounts: &BTreeSet<String>) -> Kind {
     }
 }
 
+/// Every amount `pages` print in a type the print sized (an inline
+/// `font-size`): right-aligned figures and two-decimal amounts, with
+/// whether it is marked `amount-small` (carried to the additional sheet).
+fn amount_sizes(pages: &str) -> Vec<(f64, String, bool)> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(rel) = pages[from..].find("<input") {
+        let start = from + rel;
+        let Some(end) = pages[start..].find('>') else {
+            break;
+        };
+        let tag = &pages[start..=start + end];
+        from = start + end + 1;
+        let value = unescape(attr(tag, "value").unwrap_or(""))
+            .trim()
+            .to_string();
+        let style = attr(tag, "style").unwrap_or("");
+        let Some(size) = style
+            .rfind("font-size:")
+            .and_then(|at| style[at + "font-size:".len()..].split("pt").next())
+            .and_then(|v| v.parse::<f64>().ok())
+        else {
+            continue;
+        };
+        let amount = norm_numeric(&value).is_some()
+            && (style.contains("text-align:right") || is_currency_text(&value));
+        if amount && !value.is_empty() {
+            let small = attr(tag, "data-overflow-warning") == Some("amount-small");
+            out.push((size, value, small));
+        }
+    }
+    out
+}
+
+/// The smallest type (pt) an amount prints in on each sheet over the 79
+/// official samples (`RENDERED_PARITY_DUMP=1` prints them): the sheets
+/// where some sample amount is sized (a rectangle over a comb, or a box
+/// it does not fit at its class size); on every other sheet each sample
+/// amount prints at its box's own size. A sheet missing here, or an
+/// amount smaller than its entry, fails the parity test.
+const SMALLEST_AMOUNT_PT: &[(&str, f64)] = &[
+    ("1700-2018", 9.0),
+    ("1701-2018", 9.0),
+    ("1701a-2018", 9.0),
+    ("1701ms-2024", 9.0),
+    ("1701q-2018", 9.0),
+    ("1702ex-2018", 9.0),
+    ("1702q-2018", 9.0),
+    ("2200p-2020", 7.76),
+];
+
+/// frozen_html.rs `is_identifier_cell`: a TIN (or a part of one, its
+/// branch code included) or an ATC, never shortened on the page. Read from
+/// the writer key's last segment (`TIN`/`ATC` in capitals, `Tin`/`Atc` or
+/// `tin`/`atc` as a word, `branch`), else the sheet's caption for the cell
+/// ending in the word TIN or ATC; an ATC description and a TIN-and-name
+/// header are text.
+fn is_identifier(writer_key: &str, caption: Option<&str>) -> bool {
+    let key = writer_key.split("__cont_").next().unwrap_or(writer_key);
+    let last = key.rsplit(':').next().unwrap_or(key);
+    let lower = last.to_ascii_lowercase();
+    if lower.contains("description") || lower.contains("page_header") {
+        return false;
+    }
+    if last.contains("TIN") || last.contains("ATC") || lower.contains("branch") {
+        return true;
+    }
+    let word = |needle: &str, lowercase: bool| {
+        last.match_indices(needle).any(|(at, _)| {
+            let before = at == 0 || !lowercase || last.as_bytes()[at - 1] == b'_';
+            let after = match last.as_bytes().get(at + needle.len()) {
+                None => true,
+                Some(b) if lowercase => *b == b'_' || b.is_ascii_uppercase() || b.is_ascii_digit(),
+                Some(b) => !b.is_ascii_lowercase(),
+            };
+            before && after
+        })
+    };
+    if word("Tin", false) || word("Atc", false) || word("tin", true) || word("atc", true) {
+        return true;
+    }
+    let Some(caption) = caption else {
+        return false;
+    };
+    let caption = caption.trim();
+    let caption = caption
+        .strip_suffix(')')
+        .and_then(|c| c.rfind('(').map(|at| c[..at].trim()))
+        .unwrap_or(caption);
+    !caption.to_ascii_lowercase().contains("description")
+        && caption
+            .rsplit(|c: char| !c.is_ascii_alphanumeric())
+            .find(|w| !w.is_empty())
+            .is_some_and(|w| w == "TIN" || w == "ATC")
+}
+
 /// frozen_html.rs `is_attachment_count_key`: a count printed in digit boxes.
 fn is_attachment_count(key: &str) -> bool {
     let key = key.to_ascii_lowercase();
@@ -694,6 +790,7 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
     let mut failures = Vec::new();
     let mut checked = 0;
     let samples = official_samples();
+    let mut smallest: BTreeMap<&str, (f64, String)> = BTreeMap::new();
     for (stem, map) in &samples {
         let slug = frozen_slug_for_sample(stem);
         let xml = std::fs::read_to_string(samples_dir().join(format!("{stem}.official.xml")))
@@ -775,10 +872,29 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
                 if stacked_cells.contains(&cell) {
                     continue;
                 }
-                // An amount is never cut on the page: only a text shortened
-                // with "..." may count its full text on the additional sheet.
+                // An amount or an identifier (a TIN, an ATC) is never cut on
+                // the page: only long text shortened with "..." may count its
+                // full text on the additional sheet.
                 let raw = printed.cell(&cell);
-                let shown = full_text(&cell, raw.clone());
+                let identifier = is_identifier(key, row["printed"].as_str());
+                if identifier {
+                    check.compare(
+                        &format!("identifier printed whole -> {cell}"),
+                        key,
+                        "",
+                        if raw.contains("...") || printed.truncated.contains_key(&cell) {
+                            raw.as_str()
+                        } else {
+                            ""
+                        },
+                        Kind::Text,
+                    );
+                }
+                let shown = if identifier {
+                    raw.clone()
+                } else {
+                    full_text(&cell, raw.clone())
+                };
                 if key.starts_with("derived:") {
                     let value = map.get(key).map(String::as_str).unwrap_or("");
                     // A nine-box TIN comb before a preprinted branch prints
@@ -1057,6 +1173,22 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
                 continue;
             }
             continued.push(writer.clone());
+            // The value a cloned cell was given is an upload value: the
+            // cloned row's own control, or the TOTAL row's total.
+            let from_upload = official.values().any(|off| {
+                off.trim().eq_ignore_ascii_case(writer.trim())
+                    || matches!(
+                        (norm_numeric(off), norm_numeric(writer)),
+                        (Some(a), Some(b)) if (a - b).abs() < 1e-9
+                    )
+            });
+            check.compare(
+                "continuation value is an upload value",
+                cell,
+                writer,
+                if from_upload { writer.as_str() } else { "" },
+                Kind::Text,
+            );
             // `cont_<schedule>_<page>_<band>_<row>_<cell>` (a cloned row) or
             // `cont_tot_<schedule>_<cell>` (the cloned TOTAL row).
             let (prefix, orig) = match cell.rfind("_p") {
@@ -1084,6 +1216,13 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
             } else {
                 Kind::Text
             };
+            if key_of_cell
+                .get(orig)
+                .is_some_and(|key| is_identifier(key, None))
+                && shown.contains("...")
+            {
+                check.compare("identifier printed whole", cell, writer, &shown, Kind::Text);
+            }
             check.compare("continuation", cell, writer, &shown, kind);
         }
 
@@ -1164,8 +1303,43 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
             }
         }
 
+        // N1: every amount printed in a shrunk type: its size, and below
+        // 5 pt it is also on the additional sheet.
+        for (size, value, small) in amount_sizes(&pages).into_iter().chain(amount_sizes(&band)) {
+            let entry = smallest.entry(slug).or_insert((size, stem.to_string()));
+            if size < entry.0 {
+                *entry = (size, stem.to_string());
+            }
+            if size < 5.0 {
+                let carried = small && plain_cells.iter().any(|c| shows(&value, c, Kind::Amount));
+                check.compare(
+                    &format!("amount at {size} pt also on the additional sheet"),
+                    &value,
+                    &value,
+                    if carried { value.as_str() } else { "" },
+                    Kind::Text,
+                );
+            }
+        }
         checked += check.checked;
         failures.extend(check.failures);
+    }
+    // N1: the smallest type any amount prints in, per sheet, over the 79
+    // samples. A change that shrinks an amount further fails here.
+    for (slug, (size, stem)) in &smallest {
+        if dump {
+            println!("smallest amount {slug}: {size} pt ({stem})");
+        }
+        let named = SMALLEST_AMOUNT_PT
+            .iter()
+            .find(|(sheet, _)| sheet == slug)
+            .map(|(_, pt)| *pt);
+        match named {
+            Some(pt) if *size + 0.005 >= pt => {}
+            _ => failures.push(format!(
+                "{slug}: an amount prints at {size} pt ({stem}); SMALLEST_AMOUNT_PT names {named:?}"
+            )),
+        }
     }
     assert!(
         failures.is_empty(),
@@ -1254,4 +1428,44 @@ fn form_1701q_item_42_prints_the_uploads_centavos() {
             .all(|input| input.value.is_empty())
     );
     assert_eq!(printed.cell("p2c34"), "-1,000.51");
+}
+
+/// TINs and ATCs are identifiers: they print whole on the page, shrunk to
+/// their cell, never shortened with "..." (the 1600-PT/1600-VT Schedule 1
+/// payee TINs printed `987654...` and `111222...`; 2200-P's Others ATCs
+/// `9...`, 2200-AN's Schedule 1B Others ATC `X...`).
+#[test]
+fn tins_and_atcs_print_whole_on_the_page() {
+    let cases: [(&str, &str, &[(&str, &str)]); 4] = [
+        (
+            "1600PT-062025",
+            "1600-pt-2018",
+            &[("p2c16", "987654321000"), ("p2c23", "111222339000")],
+        ),
+        (
+            "1600VT-062025",
+            "1600-vt-2018",
+            &[("p2c16", "987654321000"), ("p2c23", "111222339000")],
+        ),
+        (
+            "2200P-03132025",
+            "2200p-2020",
+            &[("p2c376", "999"), ("p2c390", "998")],
+        ),
+        ("2200AN-06302025", "2200an-2018", &[("p2c245", "XG130")]),
+    ];
+    let samples = official_samples();
+    for (stem, slug, cells) in cases {
+        let map = &samples.iter().find(|(s, _)| *s == stem).expect(stem).1;
+        let rendered = filled_document_with_report(slug, map, None).expect("render");
+        let (pages, _, _) = split_pages(&rendered.html);
+        let printed = Printed::of(&pages);
+        for (cell, value) in cells {
+            assert_eq!(printed.cell(cell), *value, "{stem} {cell}");
+            assert!(
+                !printed.truncated.contains_key(*cell),
+                "{stem} {cell} is marked for the additional sheet"
+            );
+        }
+    }
 }
