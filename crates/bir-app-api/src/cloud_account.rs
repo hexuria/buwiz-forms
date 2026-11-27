@@ -191,22 +191,30 @@ pub(crate) fn refresh_account(
         // D2: the epoch is captured at the verb's start; the lock is held for the file reads and
         // writes only — never across refresh_session's network.
         let epoch = bir_core::session_epoch::current();
+        // F1: only DECIDE inside the lock. sign_out's own first step takes the account lock, so
+        // calling it here wedged every token fetch, sign-in and sign-out of the process.
         let (stored, owner) = {
             let _one = bir_core::account_session::lock();
             let Some(stored) = load_stored()? else {
                 return status_now();
             };
             let resolved = resolve()?;
-            if stored.server_url != resolved.url {
-                // The stored sign-in belongs to another server deployment: it ends here, through
-                // the machine — the disk outside SESSION, the cache and the close inside it.
-                crate::session::sign_out();
-                return status_now();
+            let another_server = stored.server_url != resolved.url;
+            if another_server {
+                (stored, None)
+            } else {
+                let Some(owner) = bir_core::account_session::OwnerKey::of(&stored) else {
+                    return status_now();
+                };
+                (stored, Some(owner))
             }
-            let Some(owner) = bir_core::account_session::OwnerKey::of(&stored) else {
-                return status_now();
-            };
-            (stored, owner)
+        };
+        let Some(owner) = owner else {
+            // The stored sign-in belongs to another server deployment: it ends here, through the
+            // machine — the disk outside SESSION, the cache and the close inside it. The lock is
+            // released: sign_out's own steps take it.
+            crate::session::sign_out();
+            return status_now();
         };
         let mut http = refresh_http();
         let now = cloud_account::unix_now();
@@ -775,6 +783,38 @@ mod tests {
             );
             bir_core::db::set_database_path_override(None);
             result
+        }
+
+        /// F1: the verb's changed-server arm must not deadlock — the decision is made inside the
+        /// account lock, the sign-out runs after it is released. The join is bounded: at the
+        /// deadlock the verb never returns, and the margin is what fails.
+        #[test]
+        fn refresh_account_with_a_changed_server_signs_out_without_deadlock() {
+            let _turn = crate::open_room::room_test_turn();
+            signed_in(|_file| {
+                // The stored sign-in belongs to another deployment than the build resolves.
+                let mut moved = stored("old-access", "old-refresh");
+                moved.server_url = "https://elsewhere.example.test".into();
+                save_stored(&moved).unwrap();
+                let verb = crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+                    .expect("the verb spawns");
+                let ran = std::thread::spawn(move || futures::executor::block_on(verb));
+                let (done, finished) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let _ = ran.join();
+                    let _ = done.send(());
+                });
+                finished
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("refresh_account wedged on the changed-server arm — the F1 deadlock");
+                assert!(
+                    bir_core::cloud_account::load_stored_account()
+                        .ok()
+                        .flatten()
+                        .is_none(),
+                    "the ended sign-in is still on disk"
+                );
+            });
         }
 
         fn stored(access: &str, refresh: &str) -> StoredAccount {
