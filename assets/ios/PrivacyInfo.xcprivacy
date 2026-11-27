@@ -6,8 +6,10 @@
   - UserDefaults: NSH reads the system's temperature unit (nsh-platform-ios surface.rs), CA92.1.
   - System boot time: mach_absolute_time for elapsed time (nsh-platform-ios synth.rs, Rust's Instant), 35F9.1.
   - File timestamps: the app reads modification times of its own files (database, drafts, print output), C617.1.
+    It also reads the modification times of the files in a folder the person picks to import from the old BIR
+    eBIRForms program (Settings > Import, crates/bir-app-api/src/legacy_import_module.rs source_files), 3B52.1.
   Also copied to Contents/Resources of the Mac App Store app by `just app`. For that Mac copy only the collected-data
-  half applies; the required-reason API list above describes the iOS binary.
+  half applies; the required-reason API list above describes the iOS binary (the import reason 3B52.1 holds on both).
   Collected data must say the same as the App Privacy answers in App Store Connect (listing folder, review-notes.README,
   PRIVACY LABEL). Everything is linked to the person, none of it is used for tracking, and all of it is for app
   functionality:
@@ -164,6 +166,7 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>C617.1</string>
+				<string>3B52.1</string>
 			</array>
 		</dict>
 	</array>
