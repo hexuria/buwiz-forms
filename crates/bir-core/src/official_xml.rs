@@ -219,6 +219,56 @@ impl OfficialLayout {
     }
 }
 
+/// The official layout id for a BIR form code (e.g. `"2551Q"` -> `"2551q-v2018"`).
+/// For forms with multiple official layout variants (`1600PT`, `1600VT`, `1600WP`),
+/// returns the primary layout whose zero defaults match every variant.
+pub fn primary_layout_id_for_form_code(form_code: &str) -> Option<&'static str> {
+    let lower = form_code.to_ascii_lowercase();
+    let prefix = format!("{lower}-");
+    LAYOUTS
+        .iter()
+        .map(|(id, _)| *id)
+        .find(|id| id.starts_with(&prefix))
+}
+
+/// RULES 7: ensure every printed box whose official BIR HTA control defaults to
+/// `"0.00"` or `"0"` prints that official zero when the print map leaves it
+/// blank or absent, and clear bogus `"0"` / `"0.00"` placeholders on printed
+/// non-numeric text boxes whose official default is `""`. Only touches keys in
+/// `printed_keys` (boxes that actually print on the sheet), never unprinted or
+/// internal keys and never the upload XML.
+pub fn apply_print_zero_defaults(
+    form_code: &str,
+    printed_keys: &BTreeMap<String, bool>,
+    fields: &mut BTreeMap<String, String>,
+) {
+    let Some(layout_id) = primary_layout_id_for_form_code(form_code) else {
+        return;
+    };
+    let Ok(layout) = layout(layout_id) else {
+        return;
+    };
+    for entry in &layout.entries {
+        if let Entry::Value { key, default, .. } = entry {
+            let Some(&is_text_only) = printed_keys.get(key) else {
+                continue;
+            };
+            if matches!(default.as_str(), "0.00" | "0")
+                && fields.get(key).is_none_or(|v| v.trim().is_empty())
+            {
+                fields.insert(key.clone(), default.clone());
+            } else if default.is_empty()
+                && is_text_only
+                && fields
+                    .get(key)
+                    .is_some_and(|v| matches!(v.trim(), "0" | "0.00"))
+            {
+                fields.insert(key.clone(), String::new());
+            }
+        }
+    }
+}
+
 /// Write the official plaintext for `values`, keyed by official control id.
 ///
 /// A control with no value keeps the official page default. A key that is not
@@ -728,6 +778,41 @@ mod tests {
         let back = read(&layout, &plain).unwrap();
         assert_eq!(back["a"], "0");
         assert_eq!(write(&layout, &back).unwrap(), plain);
+    }
+
+    #[test]
+    fn rules7_apply_print_zero_defaults_fills_official_zeros_and_keeps_typed_blanks() {
+        // 1601C: unused Schedule I boxes default to "0.00" in BIR's official HTA.
+        let mut printed_1601c = BTreeMap::new();
+        printed_1601c.insert("frm1601c:sched1:txtTaxPaid0".to_string(), false);
+        printed_1601c.insert("frm1601c:sched1:txtAdjustments0".to_string(), false);
+        let mut f1601c = BTreeMap::new();
+        f1601c.insert("frm1601c:sched1:txtTaxPaid0".to_string(), String::new());
+        apply_print_zero_defaults("1601C", &printed_1601c, &mut f1601c);
+        assert_eq!(f1601c["frm1601c:sched1:txtTaxPaid0"], "0.00");
+        assert_eq!(f1601c["frm1601c:sched1:txtAdjustments0"], "0.00");
+        // Unprinted keys must never be inserted.
+        assert!(!f1601c.contains_key("frm1601c:sched1:txtTaxPaid1"));
+
+        // 1600PT: unused typed tax base stays blank; computed tax withheld gets "0.00".
+        let mut printed_1600pt = BTreeMap::new();
+        printed_1600pt.insert("frm1600PT:txtPg1P2TaxBase4".to_string(), false);
+        printed_1600pt.insert("frm1600PT:txtPg1P2TaxWithheld4".to_string(), false);
+        let mut f1600pt = BTreeMap::new();
+        f1600pt.insert("frm1600PT:txtPg1P2TaxBase4".to_string(), String::new());
+        apply_print_zero_defaults("1600PT", &printed_1600pt, &mut f1600pt);
+        assert_eq!(f1600pt["frm1600PT:txtPg1P2TaxBase4"], "");
+        assert_eq!(f1600pt["frm1600PT:txtPg1P2TaxWithheld4"], "0.00");
+
+        // 1702MX: descriptive text box with official default "" clears bogus "0".
+        let mut printed_1702mx = BTreeMap::new();
+        printed_1702mx.insert("frm1702MX:txtPg2Pt4I32CA".to_string(), true);
+        printed_1702mx.insert("frm1702MX:txtPg2Sc2Itm1A".to_string(), false);
+        let mut f1702mx = BTreeMap::new();
+        f1702mx.insert("frm1702MX:txtPg2Pt4I32CA".to_string(), "0".to_string());
+        apply_print_zero_defaults("1702MX", &printed_1702mx, &mut f1702mx);
+        assert_eq!(f1702mx["frm1702MX:txtPg2Pt4I32CA"], "");
+        assert_eq!(f1702mx["frm1702MX:txtPg2Sc2Itm1A"], "0");
     }
 
     #[test]

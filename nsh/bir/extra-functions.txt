@@ -29,3 +29,6 @@ cloud_account_email_pending
 # Track D: the account's TINs for the tax-profile page, the picker and Queue (chips, Activate this TIN to send).
 account_tins
 activate_tin
+
+# accounts-and-lock W3: the welcome line's "first time", the host's answer for the signed-in account (no account named).
+welcome_first_time

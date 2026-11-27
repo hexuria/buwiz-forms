@@ -886,6 +886,14 @@ impl Form2200TDraft {
                 fields.insert(format!("derived:line:item{item}_{level}"), name);
             }
         }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200Tv2020:txtDateMonth",
+                "frm2200Tv2020:txtDateDay",
+                "frm2200Tv2020:txtDateYear",
+            ],
+        );
         fields
     }
 

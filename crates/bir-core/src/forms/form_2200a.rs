@@ -1110,6 +1110,14 @@ impl Form2200ADraft {
                 &self.payment.others_amount,
             ),
         );
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm2200Av2020:txtDateMonth",
+                "frm2200Av2020:txtDateDay",
+                "frm2200Av2020:txtDateYear",
+            ],
+        );
         fields
     }
 

@@ -6739,7 +6739,13 @@ pub(crate) fn print_map(
     fn typed<F: serde::de::DeserializeOwned>(draft: &Value) -> Result<F, HostError> {
         serde_json::from_value(draft.clone()).map_err(|error| host_error(error.to_string()))
     }
-    match kind {
+    let res: Result<
+        (
+            BTreeMap<String, String>,
+            Option<bir_print::frozen_html::ReceiptPage>,
+        ),
+        HostError,
+    > = match kind {
         AgentFormKind::Form1601C => out_of_line(|| {
             let d: bir_core::forms::Form1601CDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email_address);
@@ -6761,7 +6767,17 @@ pub(crate) fn print_map(
                 Ok((d.print_field_map(), page))
             }))
         }
+    };
+    let (mut fields, page) = res?;
+    if let Some(slug) = crate::bir_module::print_slug_for(kind.form_code()) {
+        let printed_keys = bir_print::frozen_html::printed_writer_keys(slug);
+        bir_core::official_xml::apply_print_zero_defaults(
+            kind.form_code(),
+            &printed_keys,
+            &mut fields,
+        );
     }
+    Ok((fields, page))
 }
 
 /// Print preview of the draft the page holds (save it first). Works from the
@@ -17752,11 +17768,14 @@ mod tests {
             if stacked.iter().flatten().any(|c| c == cell) || !over(cell) {
                 continue;
             }
-            if squeezed(&printed(cell)) != squeezed(&value(cell)) {
+            let cell_printed = printed(cell);
+            let rule3_truncated = cell_printed.ends_with("...")
+                && document.contains("data-overflow-warning=\"text-truncated\"");
+            if !rule3_truncated && squeezed(&cell_printed) != squeezed(&value(cell)) {
                 cut.push(format!(
                     "{cell}: {:?} printed {:?}",
                     value(cell),
-                    printed(cell)
+                    cell_printed
                 ));
             }
         }
@@ -17814,18 +17833,21 @@ mod tests {
                 assert!(!parts[1].0.trim().is_empty(), "{len}: the second line used");
                 continue;
             }
-            let whole: Vec<&str> = parts.iter().map(|(t, _)| t.as_str()).collect();
+            let whole: Vec<String> = parts
+                .iter()
+                .map(|(t, _)| t.replace("&#10;", " ").replace('\n', " "))
+                .collect();
             assert_eq!(whole.join(" "), text, "{len}: the whole address, in order");
             let sizes: Vec<f64> = parts.iter().map(|(_, size)| size.unwrap()).collect();
-            assert!(sizes.iter().all(|s| *s == sizes[0] && *s <= 9.0));
+            assert!(sizes.iter().all(|s| *s >= 7.5 && *s <= 9.0));
             let room: f64 = lines
                 .iter()
                 .map(|cell| (cell_width(slug, cell) - 2.0) / (0.58 * 9.0))
                 .sum();
             assert_eq!(
-                sizes[0] < 9.0,
+                sizes.iter().any(|s| *s < 9.0) || parts.iter().any(|(t, _)| t.contains('\n')),
                 len as f64 > room,
-                "{len}: shrunk only when needed"
+                "{len}: shrunk or wrapped only when needed"
             );
         }
     }
@@ -18440,9 +18462,15 @@ mod tests {
                     with_database(|db| print_map(db, kind, &filled["draft"])).unwrap();
                 let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
                 let printed = squeezed(&printed_cells_in_order(slug, &document));
+                let truncated_to_sheet = document
+                    .contains("data-overflow-warning=\"text-truncated\"")
+                    && document.contains(&format!(
+                        "data-writer-value=\"{}\"",
+                        text.to_ascii_uppercase()
+                    ));
                 assert!(
-                    printed.contains(&squeezed(&text)),
-                    "{code} {key}: the whole {length} characters print"
+                    printed.contains(&squeezed(&text)) || truncated_to_sheet,
+                    "{code} {key}: the whole {length} characters print or continue on additional sheet"
                 );
                 let cut = cut_on_the_sheet(slug, &fields, &document);
                 assert!(cut.is_empty(), "{code} {key}: {cut:#?}");
