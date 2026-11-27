@@ -78,6 +78,7 @@ pub fn prepare_launch() {
     if crate::account_gate::auth_bypass_enabled() {
         // §9: the bypass is the machine's own door, so check_invariants knows to step aside.
         crate::session::bypass_unlock();
+        bir_core::background_cron::set_submission_paused(!crate::account_gate::is_unlocked());
         return;
     }
     let (qualifies, _practice) = restore_saved_session();
@@ -93,6 +94,10 @@ pub fn prepare_launch() {
             crate::session::OpenWhy::Launch,
         );
     }
+    // A second engine's boot must not pause a live session's sending for the whole process:
+    // the boot's own pause above is the safety while the restore runs; what stands at the end
+    // is the gate's truth — unlocked sends, locked pauses.
+    bir_core::background_cron::set_submission_paused(!crate::account_gate::is_unlocked());
 }
 
 pub(crate) fn status_now() -> HostResult {
@@ -461,7 +466,16 @@ pub(crate) fn refresh_account(
             VerbRefresh::Online { practice } => {
                 bir_core::transport::set_practice_account(practice);
             }
-            VerbRefresh::Offline | VerbRefresh::Ended | VerbRefresh::Gone => {}
+            VerbRefresh::Ended => {
+                // Finding 10: an Ended on an EMPTY disk means server_ended cleared nothing —
+                // some other path already emptied it — and the machine still shows the open
+                // session of an owner nobody stores. While the cache names the owner that is
+                // the signed-in-elsewhere shape: the session closes, as main's sign-out closed.
+                if bir_core::account_session::stored_owner().is_some() {
+                    crate::session::close(crate::session::Reason::SignedInElsewhere);
+                }
+            }
+            VerbRefresh::Offline | VerbRefresh::Gone => {}
         }
         status_now()
     })
@@ -1698,6 +1712,139 @@ mod tests {
                     crate::session::snapshot().phase_kind,
                     crate::session::PhaseKind::Open,
                     "the same-owner re-sign-in did not reopen the room"
+                );
+            });
+        }
+
+        /// Finding 10: an Ended on an EMPTY disk — bir-mcp signed out meanwhile, so the
+        /// ending's own clear matched nothing — still closes the machine's open session as
+        /// signed in elsewhere. Driven through the production refresh_account.
+        #[test]
+        fn an_ended_on_an_empty_disk_closes_the_open_session() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            let device = tempfile::tempdir().unwrap();
+            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1_000;
+                save_stored(&expired).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &expired,
+                ));
+                let owner = crate::session::Owner::of_stored(&expired).expect("a room owner");
+                open_machine_room(&owner);
+                assert_eq!(
+                    crate::session::snapshot().phase_kind,
+                    crate::session::PhaseKind::Open
+                );
+                // The token endpoint parks, then answers invalid_grant: the flight's hook runs
+                // with the disk ALREADY emptied by the other process's sign-out.
+                struct Parked {
+                    parked_tx: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>>,
+                    gate: std::sync::Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+                }
+                struct ParkedHttp(std::sync::Arc<Parked>);
+                impl cloud_account::Http for ParkedHttp {
+                    fn exchange(
+                        &mut self,
+                        request: &HttpRequest,
+                    ) -> Result<HttpResponse, CloudError> {
+                        if request.url.ends_with("/oauth/token") {
+                            let parked = self.0.parked_tx.lock().unwrap().take();
+                            let gate = self.0.gate.lock().unwrap().take();
+                            if let (Some(parked), Some(gate)) = (parked, gate) {
+                                let _ = parked.send(());
+                                let _ = gate.recv();
+                            }
+                            return Ok(HttpResponse {
+                                status: 400,
+                                body: r#"{"error":"invalid_grant"}"#.into(),
+                            });
+                        }
+                        Ok(HttpResponse {
+                            status: 200,
+                            body: r#"{"user_id":"u1","email":"filer@example.test","practice":false}"#.into(),
+                        })
+                    }
+                }
+                let (parked_tx, parked_rx) = std::sync::mpsc::channel();
+                let (gate_tx, gate_rx) = std::sync::mpsc::channel();
+                let parked = std::sync::Arc::new(Parked {
+                    parked_tx: std::sync::Mutex::new(Some(parked_tx)),
+                    gate: std::sync::Mutex::new(Some(gate_rx)),
+                });
+                let factory_parked = std::sync::Arc::clone(&parked);
+                set_test_refresh_http(Some(Box::new(move || {
+                    Box::new(ParkedHttp(std::sync::Arc::clone(&factory_parked)))
+                })));
+                let verb = crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+                    .expect("the refresh verb spawns");
+                let driver = std::thread::spawn(move || {
+                    let _ = futures::executor::block_on(verb);
+                });
+                parked_rx
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("the token fetch never parked");
+                // bir-mcp's sign-out: the disk empties outside this process's machine.
+                bir_core::account_session::clear_stored();
+                let _ = gate_tx.send(());
+                driver.join().expect("the refresh thread panicked");
+                set_test_refresh_http(None);
+                let snapshot = crate::session::snapshot();
+                assert_eq!(
+                    snapshot.phase_kind,
+                    crate::session::PhaseKind::SignedOut,
+                    "an Ended on the empty disk left the machine open and unlocked — the finding-10 hole"
+                );
+                assert!(snapshot.room.is_none(), "the room survived");
+            });
+        }
+
+        /// Item 3: a second engine's boot does not pause a live session's sending. The first
+        /// engine's session is Open and unlocked; the boot's own pause is the restore-time
+        /// safety only, and what stands at the end is the gate's truth.
+        #[test]
+        fn a_second_engines_boot_does_not_pause_sending() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            let device = tempfile::tempdir().unwrap();
+            bir_core::platform::set_device_dir_override(Some(device.path().to_path_buf()));
+            signed_in(|_file| {
+                let stored = stored("access-a", "refresh-a");
+                save_stored(&stored).unwrap();
+                bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(
+                    &stored,
+                ));
+                let owner = crate::session::Owner::of_stored(&stored).expect("a room owner");
+                open_machine_room(&owner);
+                assert_eq!(
+                    crate::session::snapshot().phase_kind,
+                    crate::session::PhaseKind::Open
+                );
+                assert!(
+                    !bir_core::background_cron::submission_paused(),
+                    "sending is paused while the session is open — the setup is wrong"
+                );
+                // The second engine boots: prepare_launch on its own thread, as a scene
+                // reconnect or a relaunch does.
+                let (server, _) = scripted();
+                *server.mes.lock().unwrap() = [
+                    ("*".to_string(), 200u16),
+                    ("*".to_string(), 200u16),
+                    ("*".to_string(), 200u16),
+                ]
+                .into_iter()
+                .collect();
+                let factory_server = std::sync::Arc::clone(&server);
+                set_test_refresh_http(Some(Box::new(move || {
+                    Box::new(ScriptHttp(std::sync::Arc::clone(&factory_server)))
+                })));
+                prepare_launch();
+                set_test_refresh_http(None);
+                assert!(
+                    !bir_core::background_cron::submission_paused(),
+                    "the second engine's boot paused the live session's sending — the item-3 hole"
                 );
             });
         }

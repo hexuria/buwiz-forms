@@ -298,7 +298,17 @@ pub fn submission_worker_refused() -> bool {
 /// worker no longer ends with it: shutdown_at_engine_end leaves it in rooms mode, and only quit
 /// stops it (§8).
 pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
-    start_submission_worker(db);
+    start_submission_worker(db.clone());
+    // Item 9: launch log maintenance runs here, at the machine's commit, not only at the
+    // launch's open — in rooms mode the launch's is_unlocked check is false until the commit,
+    // so the maintenance never started. Same shape as launch_on's.
+    let days = bir_core::lock_timing::lock(&db)
+        .ok()
+        .map(|guard| bir_core::log_files::retention_days(&guard));
+    if let Some(days) = days {
+        bir_core::log_files::remember_retention(days);
+        let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
+    }
 }
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,
@@ -3606,6 +3616,9 @@ fn agent_take() -> HostResult {
 
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
+    // F11: the door's dispatch choke point drains the machine's menu-and-chrome notice onto
+    // whatever engine thread the dispatch arrived on (the shim runs it at every call).
+    gpui_shell::host_modules::set_dispatch_hook(Box::new(crate::session::drain_menu_notice));
     let module = HostModule::new("bir")
         .function("system_info", |_| system_info())
         .function("set_global_hotkey", set_global_hotkey)

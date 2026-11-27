@@ -442,6 +442,14 @@ pub fn close(reason: Reason) {
             tracing::info!("close after quit ignored: the session is terminal");
             return;
         }
+        if session.phase.kind() == PhaseKind::SignedOut {
+            // Item 6: a close of an already-signed-out session is a no-op — above all it must
+            // NOT bump the epoch. lockCloud's close raced the sign-out's backgrounded key
+            // forget: the bump made the forget's epoch re-check lose, and the key survived
+            // every UI sign-out.
+            tracing::info!("close of a signed-out session ignored: nothing is open");
+            return;
+        }
         close_locked(&mut session, &CloseKind::OwnerEnds, None)
     };
     tracing::info!("session closed: {reason:?}");
@@ -463,7 +471,14 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
         return;
     }
     if same_owner_open(&session, &owner) {
-        return;
+        // Item 5: a same-owner Opening whose claim thread is GONE is stale — nothing will ever
+        // commit it. Try again replaces it; any other same-owner phase is still a no-op (X1).
+        let stale_opening = matches!(session.phase, Phase::Opening { .. })
+            && !claim_thread_alive(session.epoch);
+        if !stale_opening {
+            return;
+        }
+        tracing::info!("a stale same-owner Opening is replaced: its claim thread is gone");
     }
     let (spawn, outcome) = begin_open_locked(&mut session, owner.clone(), engine, why);
     drop(session);
@@ -544,12 +559,79 @@ static CLAIM_RUN: Mutex<()> = Mutex::new(());
 pub(crate) static CLAIM_THREAD_SPAWNS: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
+/// Test seam: the next claim thread panics right after its guard is armed, so the guard's
+/// Blocked commit is exercised. One shot.
+#[cfg(test)]
+pub(crate) static PANIC_CLAIM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Test seam (item 10): the claim-thread spawn is suppressed, so the tests that drive commit()
+/// by hand — the open_hand idiom — never race the real thread. scratch() suppresses; a test
+/// whose subject IS the real thread (the panicking claim, the spawn counts) permits it again.
+#[cfg(test)]
+pub(crate) static CLAIM_SPAWN_SUPPRESSED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(test)]
+pub(crate) fn permit_claim_threads() {
+    CLAIM_SPAWN_SUPPRESSED.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
 #[cfg(test)]
 pub(crate) fn claim_thread_spawn_count() -> u64 {
     CLAIM_THREAD_SPAWNS.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+/// The epochs whose claim threads are alive. A dead thread's epoch leaves the set — the drop
+/// guard below — so a same-owner Opening whose thread is gone is stale and a Try again
+/// replaces it instead of no-oping into a phase nothing will ever commit (item 5).
+static LIVE_CLAIMS: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+
+/// Whether the epoch's claim thread is still alive.
+fn claim_thread_alive(epoch: u64) -> bool {
+    lock(&LIVE_CLAIMS).contains(&epoch)
+}
+
+
+/// The claim thread's drop guard: however the thread ends — a panic in the claim, the open or
+/// the commit itself — the Opening it served does not stand forever. A normal completion
+/// disarms the guard after its commit; any other end commits Blocked::Transient, which the
+/// commit's own staleness check discards if a newer session has already replaced this one.
+struct ClaimGuard {
+    epoch: u64,
+    disarmed: bool,
+}
+
+impl ClaimGuard {
+    fn disarm(mut self) {
+        self.disarmed = true;
+    }
+}
+
+impl Drop for ClaimGuard {
+    fn drop(&mut self) {
+        lock(&LIVE_CLAIMS).retain(|live| *live != self.epoch);
+        if !self.disarmed {
+            commit(
+                self.epoch,
+                Target::Blocked(Blocked::Transient {
+                    copy_saved: false,
+                    detail: "the claim thread ended without committing".to_string(),
+                }),
+                None,
+            );
+        }
+    }
+}
+
 fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
+    lock(&LIVE_CLAIMS).push(epoch);
+    #[cfg(test)]
+    if CLAIM_SPAWN_SUPPRESSED.load(std::sync::atomic::Ordering::SeqCst) {
+        // Item 10's seam: the hand-driven tests drive commit() themselves. The epoch still reads
+        // as a LIVE claim — the hand drive is one — so the stale-Opening check never misfires,
+        // and reset_for_tests clears the set for the next test.
+        return;
+    }
     #[cfg(test)]
     CLAIM_THREAD_SPAWNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let database = bir_core::db::capture_database_path_override();
@@ -561,8 +643,59 @@ fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
                 device.run(move || claim_thread_work(owner, engine, why, epoch));
             });
         });
-    if let Err(error) = spawn {
+    #[cfg(test)]
+    let spawn = spawn.map(|thread| {
+        // The tests join every claim thread before they end (join_claim_threads), so nothing
+        // leaks into the next test's hook arrivals.
+        claim_thread_handles()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(thread);
+    });
+    #[cfg(not(test))]
+    let spawn = spawn.map(|thread| drop(thread));
+    if spawn.is_err() {
+        lock(&LIVE_CLAIMS).retain(|live| *live != epoch);
+        let error = spawn.err().unwrap();
         tracing::warn!("the room-open thread did not spawn: {error}");
+        // A spawn failure only logged left the Opening standing forever (item 5): the phase
+        // becomes Blocked::Transient instead, which a Try again can leave.
+        commit(
+            epoch,
+            Target::Blocked(Blocked::Transient {
+                copy_saved: false,
+                detail: format!("the claim thread did not spawn: {error}"),
+            }),
+            None,
+        );
+    }
+}
+
+/// The claim threads' join handles, test builds only: a test ends with every claim thread it
+/// spawned JOINED, so a late commit hook never lands in the next test's window.
+#[cfg(test)]
+fn claim_thread_handles() -> &'static Mutex<Vec<std::thread::JoinHandle<()>>> {
+    static HANDLES: std::sync::OnceLock<Mutex<Vec<std::thread::JoinHandle<()>>>> =
+        std::sync::OnceLock::new();
+    HANDLES.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Join every claim thread spawned so far. Test-only; never a sleep.
+#[cfg(test)]
+pub(crate) fn join_claim_threads() {
+    loop {
+        let thread = {
+            claim_thread_handles()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .pop()
+        };
+        match thread {
+            Some(thread) => {
+                let _ = thread.join();
+            }
+            None => return,
+        }
     }
 }
 
@@ -611,7 +744,7 @@ pub(crate) fn sign_out_inner(
     // Step 3: outside every lock. Until the machine is wired the production room lives in the
     // old slot: a real sign-out closes it here, exactly as main did — never left open behind a
     // sign-out, the standing rule — and the menu shows the gate.
-    crate::hooks::hooks().refresh_menu();
+    post_menu_notice();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
     drop(outcome.dropped);
@@ -665,7 +798,7 @@ pub fn end_changed_server(server_url: &str, refresh_token: &str) {
         bir_core::account_session::cache_owner(None);
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
-    crate::hooks::hooks().refresh_menu();
+    post_menu_notice();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
     drop(outcome.dropped);
@@ -693,7 +826,7 @@ pub fn close_signed_in_elsewhere(disk_owner: &bir_core::account_session::OwnerKe
         bir_core::account_session::cache_owner(None);
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
-    crate::hooks::hooks().refresh_menu();
+    post_menu_notice();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
     drop(outcome.dropped);
@@ -760,7 +893,7 @@ pub fn server_ended(
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
     // The real path's close, as in sign_out (F2): the old slot's room goes and the menu shows it.
-    crate::hooks::hooks().refresh_menu();
+    post_menu_notice();
     crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
     drop(outcome.dropped);
@@ -841,6 +974,14 @@ fn claimant_of(stored: &StoredAccount) -> Claimant {
 /// ending in the compare-and-swap commit. Only the commit writes anything visible (§5.9).
 fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
     let _ = (engine, why);
+    let guard = ClaimGuard {
+        epoch,
+        disarmed: false,
+    };
+    #[cfg(test)]
+    if PANIC_CLAIM.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        panic!("the test's injected claim panic");
+    }
     let (target, spec) = {
         let _claim_run = lock(&CLAIM_RUN);
         hooks::at("claim.before_start");
@@ -864,6 +1005,7 @@ fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
         }
     };
     commit(epoch, target, handle);
+    guard.disarm();
 }
 
 /// Open what the claim decided, answering the commit's (handle, path). The handle is installed
@@ -1211,7 +1353,7 @@ pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Datab
             // room (never the claim's own Done); a failed count is logged, never fatal.
             crate::bir_module::ensure_worker(handle);
             bir_core::background_cron::wake();
-            crate::hooks::hooks().refresh_menu();
+            post_menu_notice();
             if let Some(room_id) = count_opened
                 && let Ok(claim) = LegacyClaim::here()
                 && let Err(error) = claim.note_room_opened(&room_id)
@@ -1382,6 +1524,41 @@ pub fn clear_offer_note() {
         *note = Note::None;
     }
 }
+
+/// F11: the menu-and-chrome notice. The machine's threads never drive the UI directly — the
+/// menu refresh and the chrome are the engine thread's. A close or commit posts the notice
+/// (one bump); the door's dispatch choke point drains it onto the engine thread: each engine
+/// thread tracks the generation it last drained, and a dispatch that finds a newer one runs
+/// the refresh and the chrome sync HERE, on that thread.
+static MENU_NOTICE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+thread_local! {
+    static MENU_NOTICE_SEEN: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Post the menu-and-chrome notice: every engine thread drains it at its next dispatch.
+pub(crate) fn post_menu_notice() {
+    MENU_NOTICE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// The drain, installed in the door's dispatch hook: a newer notice runs the menu refresh and
+/// the chrome sync on the calling (engine) thread.
+pub fn drain_menu_notice() {
+    let current = MENU_NOTICE.load(std::sync::atomic::Ordering::SeqCst);
+    let seen = MENU_NOTICE_SEEN.with(std::cell::Cell::get);
+    if current == seen {
+        return;
+    }
+    MENU_NOTICE_SEEN.with(|cell| cell.set(current));
+    crate::hooks::hooks().refresh_menu();
+    crate::hooks::hooks().set_shell_chrome_open(!crate::account_gate::is_unlocked());
+    #[cfg(test)]
+    DRAIN_RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// How many times a drain actually ran the refresh — the tests' evidence, never a sleep.
+#[cfg(test)]
+pub(crate) static DRAIN_RUNS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 static NEXT_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
@@ -1655,6 +1832,7 @@ pub fn test_turn() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 pub(crate) fn reset_for_tests() {
     hooks::reset();
+    lock(&LIVE_CLAIMS).clear();
     let dropped = {
         let mut session = locked();
         let outcome = close_locked(&mut session, &CloseKind::OwnerEnds, None);
@@ -1683,6 +1861,8 @@ mod tests {
         // Isolation: a backgrounded device-key forget of an earlier test never leaks into this
         // one — the tests are serial, so joining here never waits on this test's own threads.
         join_device_forget_threads();
+        join_claim_threads();
+        CLAIM_SPAWN_SUPPRESSED.store(true, std::sync::atomic::Ordering::SeqCst);
         crate::open_room::reset_for_tests();
         reset_for_tests();
         bir_core::db::set_open_room_database(None);
@@ -1759,6 +1939,9 @@ mod tests {
     fn close_bumps_the_epoch_and_the_mirror() {
         let _turn = test_turn();
         let _scratch = scratch();
+        // Item 6: a close of an already-signed-out session is a no-op — the session must be
+        // opening or open for the close to bump.
+        begin_open(owner("user-a"), 1, OpenWhy::Launch);
         let before = snapshot().epoch;
         close(Reason::SignOut);
         assert_eq!(snapshot().epoch, before + 1, "close bumps the epoch");
@@ -2436,6 +2619,150 @@ mod tests {
         assert_invariants();
     }
 
+    /// Item 5: a panicking claim thread leaves no Opening standing — its drop guard commits
+    /// Blocked::Transient — and Try again opens for real through the real claim thread.
+    #[test]
+    fn a_panicking_claim_is_blocked_and_try_again_opens() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        permit_claim_threads();
+        let owner_a = seed_stored("user-a", false);
+        PANIC_CLAIM.store(true, std::sync::atomic::Ordering::SeqCst);
+        // commit.done is the synchronization: the guard's commit, driven by the real (dying)
+        // thread, passes it before the assertion — no sleeps.
+        let done_gate = hooks::pause("commit.done");
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        done_gate.reached();
+        done_gate.release();
+        let epoch = snapshot().epoch;
+        // The paused commit is the guard's: it must finish installing Blocked before we read.
+        // A second arrival is not coming — the commit is past its phase write already (the hook
+        // sits after it), so the phase is observable now.
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Blocked,
+            "a panicking claim thread left the phase at {:?} — the drop guard did not commit",
+            snapshot().phase_kind
+        );
+        assert!(!gate_unlocked(), "the gate stays locked");
+        assert_invariants();
+        // Try again: the same owner, no panic this time — the real claim thread commits Open.
+        let done_gate2 = hooks::pause("commit.done");
+        begin_open(owner_a.clone(), 1, OpenWhy::TryAgain);
+        done_gate2.reached();
+        done_gate2.release();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "Try again after the panicking claim did not open: {:?}",
+            snapshot().phase_kind
+        );
+        assert!(snapshot().room.is_some(), "the room is installed");
+        assert!(gate_unlocked(), "the gate is unlocked");
+        assert_invariants();
+        join_claim_threads();
+        let _ = (scratch, epoch);
+    }
+
+    /// Item 5, the stale half: a same-owner Opening whose claim thread is already gone is
+    /// replaced by Try again instead of no-oping. The thread is dead but its guard commit is
+    /// paused, so the phase still reads Opening when the retry arrives.
+    #[test]
+    fn try_again_replaces_a_stale_same_owner_opening() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        permit_claim_threads();
+        let owner_a = seed_stored("user-a", false);
+        PANIC_CLAIM.store(true, std::sync::atomic::Ordering::SeqCst);
+        // Park the dying thread INSIDE its guard commit, before the phase write: the claim
+        // thread is as good as gone (its epoch left LIVE_CLAIMS at the guard's drop) but the
+        // phase still reads Opening.
+        let enter_gate = hooks::pause("commit.enter");
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        enter_gate.reached();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Opening);
+        // Try again while the first thread is parked mid-commit: the stale Opening is replaced.
+        let spawns_before = claim_thread_spawn_count();
+        begin_open(owner_a.clone(), 1, OpenWhy::TryAgain);
+        assert_eq!(
+            claim_thread_spawn_count() - spawns_before,
+            1,
+            "Try again did not spawn a fresh claim thread — the stale Opening no-oped"
+        );
+        enter_gate.release();
+        join_claim_threads();
+        let _ = scratch;
+    }
+
+    /// Item 6: a close of an already-signed-out session is a no-op — no epoch bump. The UI's
+    /// lockCloud close raced the sign-out's backgrounded key forget: the bump made the forget's
+    /// epoch re-check lose and the device key survived every UI sign-out.
+    #[test]
+    fn close_from_signed_out_is_a_no_op_without_a_bump() {
+        let _turn = test_turn();
+        let _scratch = scratch();
+        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
+        let epoch_before = snapshot().epoch;
+        close(Reason::SignOut);
+        assert_eq!(
+            snapshot().epoch,
+            epoch_before,
+            "a close of the signed-out session bumped the epoch — the forget's re-check loses"
+        );
+        assert_invariants();
+    }
+
+    /// Item 1b: the page sees the move. migration_state answers Moving for the whole Opening,
+    /// the gate answers unlocked only after the commit, and the F11 drain — the pending menu
+    /// notice — runs on the thread that drains it (the engine thread in production), refreshing
+    /// the menu there.
+    #[test]
+    fn the_page_sees_opening_and_the_drain_runs_on_the_engine_thread() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        assert!(
+            matches!(migration_state(), Some(MigrationState::Moving)),
+            "migration_state does not answer Moving during Opening: {:?}",
+            migration_state()
+        );
+        assert!(
+            !gate_unlocked(),
+            "the gate is unlocked before the commit — the page would poll an open session"
+        );
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert!(
+            gate_unlocked(),
+            "the gate is still locked after the commit"
+        );
+        assert!(
+            migration_state().is_none(),
+            "a clean open carries no migration state: {:?}",
+            migration_state()
+        );
+        // The drain: a commit posted the notice; draining on THIS thread runs the menu refresh
+        // HERE — the engine thread in production. The hooks fake counts the refreshes and the
+        // thread they ran on.
+        let before = DRAIN_RUNS.load(std::sync::atomic::Ordering::SeqCst);
+        drain_menu_notice();
+        let after = DRAIN_RUNS.load(std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(
+            after,
+            before + 1,
+            "the drain did not refresh the menu on the draining thread"
+        );
+        // Draining again is a no-op: the notice is seen.
+        drain_menu_notice();
+        assert_eq!(
+            DRAIN_RUNS.load(std::sync::atomic::Ordering::SeqCst),
+            after,
+            "the drain ran twice for one notice"
+        );
+        assert_invariants();
+    }
+
     /// n1 (second arm): B signs in while A's claim is still running; A's late commit abandons
     /// and B keeps the session.
     #[test]
@@ -3001,6 +3328,35 @@ mod tests {
             real_dir_key.join("buwiz_submit_device_key.txt").exists(),
             before_in_real,
             "the real data folder was touched by the test's forget"
+        );
+    }
+
+    /// The same leak check with ONLY the database override set: the device override is cleared,
+    /// so the forget thread's resolution rides the database capture alone — the variant the
+    /// device-override test cannot see.
+    #[test]
+    fn the_forget_thread_resolves_the_database_override_alone() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        // Clear the device override and point the database at the scratch device dir: resolution
+        // must fall to the database override alone — the device dir is then the database's parent.
+        bir_core::platform::set_device_dir_override(None);
+        bir_core::db::set_database_path_override(Some(
+            scratch.layout.device_dir().join("device.db"),
+        ));
+        bir_core::relay::lazy_first_key_for_test();
+        let keys_before = device_key_files(&scratch);
+        assert!(
+            !keys_before.is_empty(),
+            "the seeded key is not in the database-resolved folder — vacuous"
+        );
+        let _ = &owner_a;
+        sign_out();
+        join_device_forget_threads();
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "the forget never reached the database-resolved folder — the database override did not ride the thread"
         );
     }
 
@@ -3975,6 +4331,7 @@ mod tests {
     fn a_switch_forgets_as_key_before_bs_claim_starts() {
         let _turn = test_turn();
         let scratch = scratch();
+        permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
         write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
@@ -4215,6 +4572,7 @@ mod tests {
     fn two_engines_boot_one_session() {
         let _turn = test_turn();
         let _scratch = scratch();
+        permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
         let before_epoch = snapshot().epoch;
         let before_spawns = claim_thread_spawn_count();
@@ -4550,6 +4908,7 @@ mod tests {
     fn d4c_a_second_copy_refused_before_any_room_opens() {
         let _turn = test_turn();
         let scratch = scratch();
+        permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
         std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
         // The child copy: this same test binary, running only the holder, its guard taken before

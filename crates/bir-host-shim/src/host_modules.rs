@@ -331,6 +331,22 @@ pub struct HostModule {
     declarations: Option<String>,
 }
 
+/// The dispatch hook, run at the top of every registered host function on the calling
+/// thread. The host (bir-app-api) installs it once per process: it is the drain of the
+/// machine's menu-and-chrome notices onto the engine thread (F11). The default does nothing.
+static DISPATCH_HOOK: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+/// Installs the dispatch hook. The first install wins; a test process installs once.
+pub fn set_dispatch_hook(hook: Box<dyn Fn() + Send + Sync>) {
+    let _ = DISPATCH_HOOK.set(hook);
+}
+
+fn dispatch_drain() {
+    if let Some(hook) = DISPATCH_HOOK.get() {
+        hook();
+    }
+}
+
 impl HostModule {
     /// Names a module a script may import.
     ///
@@ -363,7 +379,13 @@ impl HostModule {
     ) -> Self {
         let name = name.into();
         self.async_functions.remove(&name);
-        self.functions.insert(name, Rc::new(body));
+        self.functions.insert(
+            name,
+            Rc::new(move |arguments| {
+                dispatch_drain();
+                body(arguments)
+            }),
+        );
         self
     }
 
