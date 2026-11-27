@@ -14,6 +14,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("e2e_runner", ROOT / "scripts" / "e2e" / "runner.py")
@@ -222,6 +223,30 @@ class FileTests(unittest.TestCase):
             E2E.remove_scratch(db, log)
             self.assertEqual(sorted(p.name for p in folder.iterdir()), ["receipt.json"])
 
+    def test_on_windows_a_scratch_database_still_held_is_retried_elsewhere_reported_at_once(self):
+        real_unlink = Path.unlink
+        for system, removed, tries in (("nt", True, 3), ("posix", False, 1)):
+            with tempfile.TemporaryDirectory() as folder:
+                db = Path(folder) / "e2e.db"
+                db.write_text("x")
+                calls = []
+
+                def unlink(path, *args, **kwargs):
+                    if path.name == "e2e.db":
+                        calls.append(path)
+                        if len(calls) < 3:
+                            raise PermissionError("used by another process")
+                    return real_unlink(path, *args, **kwargs)
+
+                log = E2E.RunLog(None, echo=False)
+                with mock.patch.object(Path, "unlink", unlink), mock.patch.object(E2E.time, "sleep"), \
+                        mock.patch.object(E2E, "os", mock.Mock(name=system)) as fake_os:
+                    fake_os.name = system
+                    E2E.remove_scratch(db, log)
+                self.assertEqual((db.exists(), len(calls)), (not removed, tries), system)
+                self.assertEqual(any("scratch database removed" in line for line in log.lines), removed, system)
+                self.assertEqual(any("not removed" in line for line in log.lines), not removed, system)
+
     def test_app_database_reads_app_info(self):
         class Data:
             def json(self, *args, timeout=0):
@@ -241,7 +266,7 @@ class SuiteTests(unittest.TestCase):
         suite = E2E.load_suite("smoke")
         self.assertEqual(E2E.check_suite(suite), [])
         names = [entry["name"] for entry in suite["recipes"]]
-        for flow in ("sign-up", "navigate", "birth-date", "money-boxes", "delete-row", "queue", "sign-out"):
+        for flow in ("sign-up", "tax-year", "navigate", "birth-date", "money-boxes", "delete-row", "queue", "sign-out"):
             self.assertIn(flow, names)
         queue = next(entry for entry in suite["recipes"] if entry["name"] == "queue")
         self.assertTrue(queue["send"])
@@ -269,12 +294,14 @@ class SuiteTests(unittest.TestCase):
             self.assertIn(expected, problems)
 
     def test_variants_and_fallbacks_follow_the_host(self):
-        entry = {"name": "m", "desktop": "d.json", "phone": "p.json", "windows": "w.json", "needs_cli": "0.4.1",
-                 "needs_feature": {"phone": "software_keyboard"}, "fallback": "plain.wants"}
+        entry = {"name": "m", "desktop": "d.json", "phone": "p.json", "windows": "w.json", "linux": "narrow.json",
+                 "needs_cli": "0.4.1", "needs_feature": {"phone": "software_keyboard"}, "fallback": "plain.wants"}
         base = {"features": [], "allow_send": False, "env": {}}
         cases = [
             ({"target": "macos", "form_factor": "desktop", "cli_version": "0.4.1"}, "d.json", None),
             ({"target": "windows", "form_factor": "desktop", "cli_version": "0.4.1"}, "w.json", None),
+            # The Linux window opens 420 px wide: a desktop host showing the narrow layout takes its own variant.
+            ({"target": "linux", "form_factor": "desktop", "cli_version": "0.4.1"}, "narrow.json", None),
             ({"target": "macos", "form_factor": "desktop", "cli_version": "0.4.0"}, "plain.wants", "fallback"),
             ({"target": "ios", "form_factor": "phone", "cli_version": "0.4.1"}, "plain.wants", "fallback"),
             ({"target": "ios", "form_factor": "phone", "cli_version": "0.4.1", "features": ["software_keyboard"]},
@@ -292,6 +319,15 @@ class SuiteTests(unittest.TestCase):
         self.assertIn("needs gpui-agent-cli 0.4.1", note)
         self.assertEqual(E2E.plan_entry({"name": "x", "desktop": "d"}, {}, {**base, "target": "ios",
                                                                          "form_factor": "phone"})[2], "skipped")
+        # Any target may have its own file (Android's sign-up has no picker sheets), and a fallback may differ by form factor.
+        own = {"name": "s", "desktop": "d.wants", "phone": "p.json", "android": "a.wants"}
+        self.assertEqual(E2E.plan_entry(own, {}, {**base, "target": "android", "form_factor": "phone"})[0], "a.wants")
+        self.assertEqual(E2E.plan_entry(own, {}, {**base, "target": "ios", "form_factor": "phone"})[0], "p.json")
+        split = {**entry, "fallback": {"phone": "phone.json", "file": "plain.wants"}}
+        for target, factor, file in (("android", "phone", "phone.json"), ("macos", "desktop", "plain.wants")):
+            self.assertEqual(E2E.plan_entry(split, {}, {**base, "target": target, "form_factor": factor,
+                                                        "cli_version": "0.4.0"})[0], file, target)
+        self.assertEqual(sorted(E2E.entry_files(own)), ["a.wants", "d.wants", "p.json"])
 
 
 class SnapshotTests(unittest.TestCase):

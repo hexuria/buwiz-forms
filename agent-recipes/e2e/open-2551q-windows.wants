@@ -1,0 +1,21 @@
+# Smoke 5, windows: New return > 2551Q, the default period, opened (tax-year.wants gave the branch its year and 2551Q),
+# then the facts 2551Q's validation reads, so Queue gets past its to-do list. A fresh profile lacks the branch's business
+# start date and the year's income-tax election, and the return's For-the is unset: set them through the form's own
+# prerequisite banners, as FormPagePrerequisites.test.tsx does, while the form top is still in view. Proven on Windows
+# only (proof/e2e-fixes-windows); the other desktops keep open-2551q.wants until it is proven there.
+click sb-new
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-open
+wait_until form-page --timeout-ms 20000 --screenshot
+click fp-set-profile-business_start_date
+wait_until tp-branch-business_start_date --timeout-ms 8000
+type tp-branch-business_start_date 01/01/2026
+click tp-branch-save
+wait_until fp-set-profile-income_tax_election --timeout-ms 10000
+click fp-set-profile-income_tax_election
+wait_until tp-fact-income_tax_election-choice --timeout-ms 8000
+click tp-fact-income_tax_election-choice-EightPercent
+click tp-fact-income_tax_election-save
+wait_until fp-queue --timeout-ms 10000
+click fp-frm2551Qv2018:forThe_1

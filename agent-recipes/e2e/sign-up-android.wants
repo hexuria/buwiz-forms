@@ -1,0 +1,20 @@
+# Smoke 2, android: first-run sign-up on the phone layout without the ZIP and RDO pickers. On Android no node inside a
+# bottom sheet is pressable through gpui-agent (gap 1: a visible option row and the search box both refuse "offscreen",
+# semantic delivery too; proof/e2e-fixes-linux-android/README.md), and an empty ZIP and RDO are valid, so the taxpayer
+# is made without them. The pickers stay covered on iOS (sign-up-phone.json) and on every desktop. Every box is
+# filled with set_value: typing raises the keyboard, and the next press then only puts it away. After Create the
+# app is on the taxpayer's own page; Home is tab-home. $tin_field is the TIN's text box (NSH's OtpInput puts
+# new-tp-tin on the group of cells): the runner reads it from a snapshot first.
+wait_until new-tp-name --timeout-ms 5000
+click new-tp-start-trigger
+wait_until $start_option --timeout-ms 5000
+click $start_option
+wait_until $start_option --absent --timeout-ms 5000
+set_value $tin_field $tin
+set_value new-tp-name $name
+set_value new-tp-registered_address $address
+click new-tp-save --screenshot
+wait_until tp-tabs-profile --timeout-ms 10000
+click tab-home
+wait_until home-tp-$tin_root --timeout-ms 5000
+assert home-tp-$tin_root --screenshot

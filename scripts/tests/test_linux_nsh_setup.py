@@ -152,6 +152,61 @@ bash "$WORK/nsh2404.sh" nsh run --target android
             self.assertIn("BUWIZ_ANDROID_DEV_ENV=EBIR_TEST_ENV=1;"
                           "BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1", args)
 
+    def test_wrapper_bakes_only_safe_test_settings_and_local_addresses(self):
+        # Review of #452 (W1, W2b): a caller's address or Android test settings reach the build only when they keep it
+        # a dry-run test build that talks to this machine alone.
+        default = "BUWIZ_ANDROID_DEV_ENV=EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1"
+        local = "EBIR_TEST_ENV=1;BIR_SFTP_DRY_RUN=1;BUWIZ_SERVER_URL=http://localhost:3008;GPUI_AGENT=1"
+        cases = (
+            # (dev env, server url, the baked dev env, is the server url passed)
+            (local, "http://127.0.0.1:3008", "BUWIZ_ANDROID_DEV_ENV=" + local, True),
+            (local, "https://api.buwiz.com", "BUWIZ_ANDROID_DEV_ENV=" + local, False),
+            (local, "http://localhost:80@evil.example", "BUWIZ_ANDROID_DEV_ENV=" + local, False),
+            ("EBIR_TEST_ENV=1;BIR_SFTP_DRY_RUN=1;BUWIZ_SERVER_URL=https://api.buwiz.com", "", default, False),
+            ("EBIR_TEST_ENV=1;BIR_SFTP_DRY_RUN=1;BIR_SFTP_DRY_RUN=0", "", default, False),
+            ("EBIR_TEST_ENV=1;BIR_SFTP_DRY_RUN=1;BIR_SFTP_LIVE=1", "", default, False),
+            ("EBIR_TEST_ENV=1;BIR_SFTP_DRY_RUN=0", "", default, False),
+            ("BIR_SFTP_DRY_RUN=1", "", default, False),
+            ("EBIR_TEST_ENV=1;BIR_SFTP_DRY_RUN=1;BUWIZ_RELAY_SEND=1", "", default, False),
+            ("EBIR_TEST_ENV=1;BIR_SFTP_DRY_RUN=1;BIR_DATABASE_PATH=x\nBUWIZ_SERVER_URL=https://api.buwiz.com", "",
+             default, False),
+        )
+        for dev_env, url, baked, passed in cases:
+            with self.subTest(dev_env=dev_env, url=url), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "repo" / "nsh").mkdir(parents=True)
+                (root / "sdk").mkdir()
+                (root / "bin").mkdir()
+                docker = root / "bin" / "docker"
+                docker.write_text('#!/bin/bash\nprintf "%s\\n" "$@"\n')
+                docker.chmod(0o755)
+                result = self.run_shell(
+                    "\n".join(function(name) for name in
+                              ("outside_home", "sdk_mount", "write_wrapper")) + r'''
+export HOME="$PWD/home" PATH="$PWD/bin:$PATH"
+REPO="$PWD/repo"
+ANDROID_HOME="$PWD/sdk"
+NDK_VERSION=27
+WORK="$PWD"
+MOUNTS=(-v "$HOME:$HOME")
+write_wrapper
+export BUWIZ_ANDROID_DEV_ENV="$(printf '%b' "$1")"
+if [ -n "$2" ]; then export BUWIZ_SERVER_URL="$2"; else unset BUWIZ_SERVER_URL; fi
+unset BUWIZ_ACCOUNT_URL
+bash "$WORK/nsh2404.sh" nsh run --target android
+''',
+                    tmp, dev_env, url,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = result.stdout.splitlines()
+                self.assertIn(baked, args)
+                self.assertEqual("BUWIZ_SERVER_URL" in args, passed, args)
+                self.assertNotIn("BUWIZ_ACCOUNT_URL", args)
+                if baked == default:
+                    self.assertIn("BUWIZ_ANDROID_DEV_ENV refused", result.stderr)
+                if url and not passed:
+                    self.assertIn("BUWIZ_SERVER_URL is not a local address", result.stderr)
+
     def test_a_host_git_proxy_is_left_outside_the_container(self):
         # buwiz-forms-linux-6: the Devin git proxy's rewrite in ~/.gitconfig failed Cargo's first fetch in the image.
         settings = ("CARGO_NET_GIT_FETCH_WITH_CLI=true", "GIT_CONFIG_GLOBAL=/dev/null")
