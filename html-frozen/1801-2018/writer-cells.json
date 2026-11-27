@@ -1,7 +1,7 @@
 {
   "form_id": "1801-v2018",
   "html_slug": "1801-2018",
-  "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. Schedule rows are matched by the printed column header and row order (layout _1 and _2 are the first and second printed rows). Amounts print the writer official text: a peso comb plus a 2-slot centavo comb, or one text cell. Booleans fill X in the box left of the printed option; Yes is the left box, No the right one. Left out: the item 1 MMDDYY comb, the TIN rows and executor TIN (mixed cells), the item 12 contact cell (caption inside the slots), item 14A specify (option code), frequency boxes (no labels in the text layer), the item 16 and 24 peso combs (mixed or mismatched cents). The Part III payment dates print through date_joins (one writer date across the MM, DD and YYYY combs). The page 2 TIN prints from derived:tin_digits (Form1801Draft::to_print_field_map). Since #113 every value the print map carries has a box or a reviewed not_joined reason (schedule rows past the second belong on an attached sheet).",
+  "rule": "Fill-path only, mapped by sheet geometry: each join targets the fillable cell whose printed caption (from the frozen page text layer) sits beside or just above it. Schedule rows are matched by the printed column header and row order (layout _1 and _2 are the first and second printed rows). Amounts print the writer official text: a peso comb plus a 2-slot centavo comb, or one text cell. Booleans fill X in the box left of the printed option; Yes is the left box, No the right one. Left out: the item 1 MMDDYY comb, the executor TIN (mixed cells), the item 12 contact cell (caption inside the slots), item 14A specify (option code), frequency boxes (no labels in the text layer), the item 16 and 24 peso combs (mixed or mismatched cents). The Part III payment dates print through date_joins (one writer date across the MM, DD and YYYY combs). The page 2 TIN prints from derived:tin_digits (Form1801Draft::to_print_field_map). Since #113 every value the print map carries has a box or a reviewed not_joined reason (schedule rows past the second belong on an attached sheet).",
   "joins": [
     {
       "writer_key": "frm1801v2018:txtSheets",
@@ -810,20 +810,26 @@
     {
       "writer_key": "frm1801v2018:tinA_1",
       "html_id": "p1c13",
-      "printed": "5 TIN (digits 1-3)",
-      "reason": "item 5 Decedent TIN first 3-digit comb (p1c13-s0..s2 past printed caption)"
+      "printed": "5 Estate TIN (1-3)",
+      "reason": "the three editable slots at the end of the mixed item-5 label cell align with the first TIN group"
     },
     {
       "writer_key": "frm1801v2018:tinB_1",
       "html_id": "p1c14",
-      "printed": "5 TIN (digits 4-6)",
-      "reason": "item 5 Decedent TIN middle 3-digit comb (p1c14-s1..s3; slot 0 is the printed dash)"
+      "printed": "5 Estate TIN (4-6)",
+      "reason": "the first slot is the preprinted dash box and has no input; slots 1-3 are the second TIN group"
     },
     {
       "writer_key": "frm1801v2018:tinC_1",
       "html_id": "p1c15",
-      "printed": "5 TIN (digits 7-9)",
-      "reason": "item 5 Decedent TIN last 3-digit comb (p1c15-s1..s3; slot 0 is the printed dash)"
+      "printed": "5 Estate TIN (7-9)",
+      "reason": "the first slot is the preprinted dash box and has no input; slots 1-3 are the third TIN group"
+    },
+    {
+      "writer_key": "frm1801v2018:branchCode_1",
+      "html_id": "p1c17",
+      "printed": "5 TIN branch code",
+      "reason": "five-slot branch comb after the third TIN dash; the sheet now exposes all five slots"
     },
     {
       "writer_key": "frm1801v2018:txtOtherDed_Specify",
@@ -1200,10 +1206,6 @@
     {
       "writer_key": "frm1801v2018:txtAtc",
       "reason": "no fillable cell on the frozen sheet for this key (ES 010 ATC is preprinted)"
-    },
-    {
-      "writer_key": "frm1801v2018:branchCode_1",
-      "reason": "TIN row (item 5): mixed cells with printed captions inside; the slot counts (3/4/4/5) do not give a clean 3-3-3 plus branch split"
     },
     {
       "writer_key": "frm1801v2018:txtTINE1",
@@ -1955,17 +1957,13 @@
     },
     {
       "writer_key": "frm1801v2018:branchCode_2",
-      "reason": "page 2 branch: the mixed page 2 TIN comb preprints the branch slots"
+      "reason": "prints inside derived:tin_digits: the page-2 header is one 14-slot comb whose branch slots are now editable"
     }
   ],
   "not_joined_cells": [
     {
       "html_id": "p1c4",
       "reason": "item 1 Date of Death: one 6-slot comb for MMDDYY (see txtDateMonth)"
-    },
-    {
-      "html_id": "p1c17",
-      "reason": "TIN branch cell (5 slots, mixed) on the TIN row (see branchCode_1)"
     },
     {
       "html_id": "p1c25",
