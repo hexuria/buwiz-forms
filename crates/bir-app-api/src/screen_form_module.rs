@@ -5131,6 +5131,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         if cleared
             && bir_core::forms::agent::draft_locks::installment_1606::lock_reason(&draft).is_some()
         {
+            inline_clearances.insert("1606_installment".to_string());
             for key in bir_core::forms::agent::draft_locks::installment_1606::KEYS {
                 relock_notes.insert(
                     key.to_string(),
@@ -5155,6 +5156,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     if kind.form_code() == "1601FQ" {
         use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
         for clearance in gate::row_clearances(kind, &before, &draft) {
+            inline_clearances.insert(clearance.gate.clone());
             if let Some(row) = gate::row_index(&before, &clearance.id) {
                 for key in gate::keys_for_row(row) {
                     relock_notes.insert(key, json!(clearance.text.clone()));
@@ -7885,6 +7887,8 @@ mod tests {
     // Every form's RDO box offers the RDO catalog, never 1601C's leftover
     // "000" option script; "000" is no RDO.
     mod rdo_lists;
+    // Inline clearings shown by a fill are acknowledged by its save.
+    mod inline_clearances;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;

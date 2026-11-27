@@ -7,7 +7,7 @@
 //! the desktop assistant read one implementation: the page draws them and
 //! [`super::fill`] refuses them.
 //!
-//! [`draft_locks`] applies nine layers, in this order, each named after the
+//! [`draft_locks`] applies ten layers, in this order, each named after the
 //! page's row module it came from (the last after the rule it carries):
 //!
 //! 1. [`dst_pt_vat`] (PR 4): 2000's 15B and 15C, computed; 2553's
@@ -32,6 +32,8 @@
 //!    Item 20 is an installment sale.
 //! 9. [`previous_payment`]: the previous-payment box of an unamended
 //!    return, shut with its item's amended-return reason.
+//! 10. [`schedule1_1601fq`]: 1601FQ Schedule 1 rows, shut until item 13 is
+//!     Yes and cleared row by stable row id when it closes.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -50,7 +52,7 @@ use serde_json::{Map, Value};
 use super::AgentFormKind;
 
 /// Lay the draft-dependent locks over `locks`, the base map
-/// ([`super::locks`]), the way the page's open does: the nine layers of this
+/// ([`super::locks`]), the way the page's open does: the ten layers of this
 /// module's note, in that order, with their own reasons. A layer may replace
 /// a base reason with an exact one (2000's 15B, which the probe calls
 /// derived, is computed), and the last one takes 1701Q's spouse penalty
@@ -80,7 +82,7 @@ pub fn draft_lock(
     locks.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-/// The nine layers; `only` limits the penalty layer to that key's group.
+/// The ten layers; `only` limits the penalty layer to that key's group.
 fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, only: Option<&str>) {
     dst_pt_vat::relock(kind, draft, locks);
     annual_corporate::relock(kind, draft, locks);
