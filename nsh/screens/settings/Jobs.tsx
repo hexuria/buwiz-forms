@@ -1,10 +1,10 @@
-// Settings > Jobs (old cron_tasks.js renderJobsBody): queued filing submissions and scheduled jobs in one feed, and a Logs tab that
-// tails today's ebirforms.*.log. The old "Background tasks" page, and go("cron_tasks"), open this section.
+// Settings > Jobs (old cron_tasks.js renderJobsBody): queued filing submissions and scheduled jobs in one feed. The old
+// "Background tasks" page, and go("cron_tasks"), open this section. Today's log is the Logs section beside it.
 import { signal, View } from "nsh";
 import type { BackgroundJob } from "../../bir";
 import { AppButton, Chip, EmptyRow, ListGroup, ListRow, Segmented, Text } from "../../ui";
-import { archiveJob, cancelQueued, deleteJob, jobsUi, purgeArchived, refreshLog, setFilter, setLogFilter, setTab } from "./jobsState";
-import { filterJobs, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_FILTERS, logHeadline, logView, STATUS_FILTERS } from "./logic";
+import { archiveJob, cancelQueued, deleteJob, jobsUi, purgeArchived, setFilter } from "./jobsState";
+import { filterJobs, jobActions, jobKey, jobSub, jobTone, STATUS_FILTERS } from "./logic";
 
 /** From this many points of section width the row's buttons sit beside its words; under it they go under them. */
 const ROW_BUTTONS_BESIDE = 560;
@@ -51,12 +51,13 @@ function JobRow(props: { job: BackgroundJob; beside: () => boolean }) {
   );
 }
 
-function JobsTab() {
+/** The Jobs section: the status filters, Purge archived, and the feed of queued filings and scheduled jobs. */
+export function JobsSection() {
   const width = signal(0);
   const beside = () => width() === 0 || width() >= ROW_BUTTONS_BESIDE;
   const visible = () => filterJobs(jobsUi.jobs(), jobsUi.filter());
   return (
-    <View testID="jobs-tab" class="w-full gap-4" onLayout={(e) => e.bounds.size.width > 0 && width.set(Math.round(e.bounds.size.width))}>
+    <View testID="jobs-section" class="w-full gap-4" onLayout={(e) => e.bounds.size.width > 0 && width.set(Math.round(e.bounds.size.width))}>
       <View class="flex-row flex-wrap items-center gap-2">
         <View class="min-w-0 max-w-full">
           <Segmented
@@ -81,65 +82,6 @@ function JobsTab() {
           </Each>
         </If>
       </ListGroup>
-    </View>
-  );
-}
-
-function LogsTab() {
-  const log = () => jobsUi.log();
-  const view = () => logView(log().content, jobsUi.logFilter());
-  return (
-    <View testID="logs-tab" class="w-full gap-4">
-      <View class="flex-row flex-wrap items-center gap-3">
-        <View class="min-w-0 max-w-full">
-          <Segmented testID="logs-filter" label="Log level" wrap options={[...LOG_FILTERS]} value={jobsUi.logFilter()} onChange={setLogFilter} />
-        </View>
-        <Text testID="logs-headline" variant="meta" tone="fg2" class="min-w-0 shrink">{logHeadline(log().file_name, log().lines, view().matching)}</Text>
-        <View class="flex-1" />
-        <AppButton testID="logs-refresh" label="Refresh" size="sm" onPress={refreshLog} />
-      </View>
-      <If when={log().error}>
-        <Text testID="logs-error" variant="meta" tone="danger">{log().error ?? ""}</Text>
-      </If>
-      <View testID="log-box" class="w-full gap-0.5 rounded-(--radius-card) border border-border bg-background p-3">
-        <If
-          when={view().shown.length}
-          else={
-            <Text testID="logs-empty" variant="meta" tone="fg2">
-              {jobsUi.logFilter() === "All Logs" ? "No log entries yet today." : "No lines at this level."}
-            </Text>
-          }
-        >
-          <Each of={view().shown} key={(l) => l.index}>
-            {(l) => (
-              <Text testID={`log-line-${l().index}`} variant="cap" tone={levelTone(l().level)} class="font-mono font-normal leading-4">
-                {l().line || " "}
-              </Text>
-            )}
-          </Each>
-        </If>
-      </View>
-    </View>
-  );
-}
-
-/** The Jobs section: a Jobs / Logs switch over the tab. */
-export function JobsSection() {
-  return (
-    <View testID="jobs-section" class="w-full gap-4">
-      <Segmented
-        testID="jobs-tabs"
-        label="Background tasks view"
-        options={[
-          { value: "jobs", label: "Jobs" },
-          { value: "logs", label: "Logs" },
-        ]}
-        value={jobsUi.tab()}
-        onChange={(v) => setTab(v === "logs" ? "logs" : "jobs")}
-      />
-      <If when={jobsUi.tab() === "logs"} else={<JobsTab />}>
-        <LogsTab />
-      </If>
     </View>
   );
 }

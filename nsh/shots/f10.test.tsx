@@ -44,7 +44,7 @@ for (const scheme of ["light", "dark"] as const) {
     if (!png || scheme === "dark") return;
     const r = decodePng(png, 440);
     const scale = r.width / 1440;
-    // The tile row (Overdue ... Filed this month): from 432 to 1244 points in the old app (x 432-1246 measured), not 400 to 1280.
+    // The tile row (Overdue ... Waiting to send): from 432 to 1244 points in the old app (x 432-1246 measured), not 400 to 1280.
     const span = inkSpan(r, scale, 170, 210, 300, 1400);
     expect(span.left).toBeGreaterThanOrEqual(430);
     expect(span.left).toBeLessThanOrEqual(434);

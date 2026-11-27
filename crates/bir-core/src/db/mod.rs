@@ -535,7 +535,7 @@ pub struct Database {
     pub(crate) conn: Connection,
     /// Sidecar exclusive lock for painted `bir` / `bir-headless serve`.
     /// `None` for ephemeral fixtures and `Database::open` test helpers.
-    _owner_lock: Option<File>,
+    _owner_lock: Option<OwnerLock>,
     /// The key [`Database::open`] read, kept so [`Database::open_reader`]
     /// can key a second connection without reading the keychain again.
     /// That call drops it; zeroed on drop. Never logged: `Database` has no
@@ -639,22 +639,104 @@ pub fn test_environment() -> bool {
     })
 }
 
+/// Whether single-room mode may exist in this process: a debug build, or a
+/// test environment ([`test_environment`]). Accounts-and-lock PLAN §A.2, I3.
+pub fn single_room_allowed() -> bool {
+    single_room_allowed_in(cfg!(debug_assertions), test_environment())
+}
+
+/// [`single_room_allowed`] with the build kind and the test switch given.
+pub(crate) fn single_room_allowed_in(debug_build: bool, test_environment: bool) -> bool {
+    debug_build || test_environment
+}
+
+/// The database a caller named explicitly: [`set_database_path_override`]
+/// on this thread, else `BIR_DATABASE_PATH` (the configuration store first,
+/// then the launch environment). Read in every build; obeyed only where
+/// [`single_room_allowed`].
+fn named_database() -> Option<PathBuf> {
+    database_path_override().or_else(|| match crate::config::var("BIR_DATABASE_PATH") {
+        Ok(path) if !path.is_empty() => Some(PathBuf::from(path)),
+        _ => None,
+    })
+}
+
+/// A database a caller named ([`set_database_path_override`] or `BIR_DATABASE_PATH`) that this process does
+/// **not** obey, because single-room mode is not allowed here (a release build outside a test environment). A host
+/// that would otherwise run on the live data instead (`bir-headless serve`) refuses with it.
+pub fn ignored_database_path() -> Option<PathBuf> {
+    (!single_room_allowed()).then(named_database).flatten()
+}
+
+/// Single-room mode (PLAN §A.2): one file, named by an explicit override
+/// ([`set_database_path_override`] or `BIR_DATABASE_PATH`), *is* the room.
+/// Only in a debug build or a test environment (I3). In a release build
+/// outside a test environment the name is ignored, with one warning line, so
+/// every account gets its own room.
+pub fn single_room_database() -> Option<PathBuf> {
+    let named = named_database()?;
+    if single_room_allowed() {
+        return Some(named);
+    }
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    WARNED.call_once(|| {
+        tracing::warn!(
+            "BIR_DATABASE_PATH is ignored in a release build outside a test environment (EBIR_TEST_ENV)"
+        );
+    });
+    None
+}
+
+thread_local! {
+    /// The open room's database file on this thread, once a room is open
+    /// (PLAN §A.4). Nothing in A1 opens a room, so outside tests it stays
+    /// `None` and [`app_database_path`] answers the legacy file as before.
+    static OPEN_ROOM_DATABASE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Name the open room's database file for this thread (`None`: no room is
+/// open). [`app_database_path`] answers it unless single-room mode names a
+/// file. The device-wide files never follow it: they live in
+/// [`crate::platform::device_dir`].
+pub fn set_open_room_database(path: Option<PathBuf>) {
+    OPEN_ROOM_DATABASE.with(|slot| *slot.borrow_mut() = path);
+}
+
+fn open_room_database() -> Option<PathBuf> {
+    OPEN_ROOM_DATABASE.with(|slot| slot.borrow().clone())
+}
+
+/// The id of the room open on this thread ([`set_open_room_database`]): its folder's name under `rooms/`.
+/// `None` while no room is open (the legacy file, single-room mode, or before A3a opens one).
+pub fn open_room_id() -> Option<crate::rooms::RoomId> {
+    let file = open_room_database()?;
+    let folder = file.parent()?;
+    let rooms = folder.parent()?;
+    if rooms.file_name()? != crate::rooms::ROOMS_DIR {
+        return None;
+    }
+    crate::rooms::RoomId::parse(folder.file_name()?.to_str()?)
+}
+
 /// Live DB file painted `bir` and `bir-headless serve` open.
 ///
-/// `BIR_DATABASE_PATH` overrides for tests / CI. Empty or unset uses
-/// [`default_database_path`] (`platform::data_dir()/bir_data.db`).
-///
-/// Debug builds: the Dev Mode "Use a separate dev database" switch picks
-/// `bir_data.dev.db` through this same function (env still wins).
+/// In order:
+/// - single-room mode ([`single_room_database`]): the file a debug or test
+///   run named with [`set_database_path_override`] or `BIR_DATABASE_PATH`;
+/// - debug builds: the Dev Mode "Use a separate dev database" switch picks
+///   `bir_data.dev.db` (an explicit name still wins);
+/// - the open room's file ([`set_open_room_database`]), once a room is open;
+/// - else [`default_database_path`] (`platform::data_dir()/bir_data.db`), the
+///   legacy file.
 pub fn app_database_path() -> PathBuf {
-    if let Some(path) = database_path_override() {
+    if let Some(path) = single_room_database() {
         return path;
     }
-    // The configuration store (an Android development build's dev list) first, then the launch environment.
-    match crate::config::var("BIR_DATABASE_PATH") {
-        Ok(path) if !path.is_empty() => PathBuf::from(path),
-        _ => crate::dev_mode::dev_database_path().unwrap_or_else(default_database_path),
+    if let Some(path) = crate::dev_mode::dev_database_path() {
+        return path;
     }
+    open_room_database().unwrap_or_else(default_database_path)
 }
 
 /// Create the parent directory and, in the SQLCipher build, copy a non-empty
@@ -692,14 +774,101 @@ pub fn live_owner_lock_path(db_path: &Path) -> PathBuf {
     PathBuf::from(raw)
 }
 
-/// Exclusive non-blocking lock so painted `bir` and `bir-headless` cannot
-/// both own the live file. There is no protocol `Op::Yield`.
-pub fn try_acquire_live_owner_lock(db_path: &Path) -> Result<File, DbError> {
+/// A taken owner lock (`<database>.owner.lock`). The system lock goes when
+/// the last copy of it is dropped (or the process ends).
+#[derive(Clone, Debug)]
+pub struct OwnerLock {
+    _file: std::sync::Arc<File>,
+}
+
+/// The owner locks this process holds for a whole stretch of work
+/// ([`hold_owner_lock`]), by lock path: the one holder per path. A `Weak`, so
+/// the lock goes once every holder dropped it.
+static HELD_OWNER_LOCKS: std::sync::Mutex<
+    std::collections::BTreeMap<PathBuf, std::sync::Weak<File>>,
+> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// The key of a lock path in [`HELD_OWNER_LOCKS`]: its folder resolved, so two
+/// spellings of one file are one key.
+fn held_key(lock_path: &Path) -> PathBuf {
+    let Some(name) = lock_path.file_name() else {
+        return lock_path.to_path_buf();
+    };
+    // A bare name is in the current folder, as `./name` is.
+    let parent = lock_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    parent
+        .canonicalize()
+        .map(|parent| parent.join(name))
+        .unwrap_or_else(|_| lock_path.to_path_buf())
+}
+
+/// The lock this process already holds for `db_path` with
+/// [`hold_owner_lock`], if it is still held.
+fn held_owner_lock(
+    held: &std::collections::BTreeMap<PathBuf, std::sync::Weak<File>>,
+    key: &Path,
+) -> Option<OwnerLock> {
+    held.get(key)
+        .and_then(std::sync::Weak::upgrade)
+        .map(|file| OwnerLock { _file: file })
+}
+
+/// Take `db_path`'s owner lock and register this process as its one holder
+/// for a whole stretch of work (the legacy claim's steps 1 to 4, a whole-run
+/// hold). While it is held, every take of the same lock in this process
+/// ([`try_acquire_live_owner_lock`], [`open_live_database`], a database
+/// import's reopen, a second [`hold_owner_lock`]) gets this lock back, never a
+/// second system lock, which would refuse the process its own file. Another
+/// process is still refused ([`DbError::LiveDatabaseInUse`]).
+pub fn hold_owner_lock(db_path: &Path) -> Result<OwnerLock, DbError> {
     let lock_path = live_owner_lock_path(db_path);
     if let Some(parent) = lock_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let file = open_live_owner_lock_file(&lock_path, db_path)?;
+    let key = held_key(&lock_path);
+    let mut held = HELD_OWNER_LOCKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(lock) = held_owner_lock(&held, &key) {
+        return Ok(lock);
+    }
+    let file = std::sync::Arc::new(take_owner_lock_file(&lock_path, db_path)?);
+    held.retain(|_, weak| weak.strong_count() > 0);
+    held.insert(key, std::sync::Arc::downgrade(&file));
+    Ok(OwnerLock { _file: file })
+}
+
+/// Exclusive non-blocking lock so painted `bir` and `bir-headless` cannot
+/// both own the live file. There is no protocol `Op::Yield`.
+///
+/// While this process holds the lock with [`hold_owner_lock`], the held lock
+/// is answered. Otherwise each take is a lock of its own, so a second take
+/// in this process is refused while the first is alive (two engines of one
+/// process never both own the file).
+pub fn try_acquire_live_owner_lock(db_path: &Path) -> Result<OwnerLock, DbError> {
+    let lock_path = live_owner_lock_path(db_path);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    {
+        let held = HELD_OWNER_LOCKS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(lock) = held_owner_lock(&held, &held_key(&lock_path)) {
+            return Ok(lock);
+        }
+    }
+    Ok(OwnerLock {
+        _file: std::sync::Arc::new(take_owner_lock_file(&lock_path, db_path)?),
+    })
+}
+
+/// Open `lock_path` and take the system lock on it.
+fn take_owner_lock_file(lock_path: &Path, db_path: &Path) -> Result<File, DbError> {
+    let file = open_live_owner_lock_file(lock_path, db_path)?;
     acquire_exclusive_owner_lock(&file, db_path)?;
     Ok(file)
 }
@@ -773,11 +942,15 @@ pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbEr
 /// Open the live SQLCipher file without quarantining. `bir-headless serve`
 /// must not recreate a taxpayer DB on a transient key/WAL error.
 pub fn open_serve_database() -> Result<(Database, PathBuf), DbError> {
-    let path = app_database_path();
-    prepare_app_database_file(&path);
-    let lock = try_acquire_live_owner_lock(&path)?;
-    let db = Database::open(&path)?;
-    Ok((db.with_owner_lock(lock), path))
+    open_serve_database_at(&app_database_path())
+}
+
+/// [`open_serve_database`] on `path`, the file `bir-headless serve` chose.
+pub fn open_serve_database_at(path: &Path) -> Result<(Database, PathBuf), DbError> {
+    prepare_app_database_file(path);
+    let lock = try_acquire_live_owner_lock(path)?;
+    let db = Database::open(path)?;
+    Ok((db.with_owner_lock(lock), path.to_path_buf()))
 }
 
 /// Setting key for [`Database::list_send_grants`].
@@ -804,7 +977,7 @@ fn grant_form(form: &str) -> String {
 }
 
 impl Database {
-    fn with_owner_lock(mut self, lock: File) -> Self {
+    fn with_owner_lock(mut self, lock: OwnerLock) -> Self {
         self._owner_lock = Some(lock);
         self
     }
@@ -1398,6 +1571,15 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    /// Replace the setting `key` with `new` only while it still holds `old` (a rehash of the same secret: a value
+    /// changed meanwhile is never overwritten). Answers whether it was replaced.
+    pub fn replace_setting_if(&self, key: &str, old: &str, new: &str) -> Result<bool, DbError> {
+        Ok(self.conn.execute(
+            "UPDATE settings SET value = ?3 WHERE key = ?1 AND value = ?2",
+            params![key, old, new],
+        )? == 1)
     }
 
     /// Set a global setting value.
@@ -2118,6 +2300,81 @@ mod tests {
         });
     }
 
+    /// Accounts-and-lock A1 (I3): an explicit database path is a single room
+    /// only in a debug build or a test environment. Here (a debug test build)
+    /// it is obeyed, and the device folder is its folder; the rule itself is
+    /// checked for every build kind.
+    #[test]
+    fn an_explicit_database_path_is_a_single_room_in_debug_and_test_builds_only() {
+        assert!(single_room_allowed_in(true, false));
+        assert!(single_room_allowed_in(false, true));
+        assert!(single_room_allowed_in(true, true));
+        assert!(
+            !single_room_allowed_in(false, false),
+            "a release build outside a test environment has no single-room mode"
+        );
+
+        let named = tempfile::tempdir().expect("temporary directory");
+        let from_env = named.path().join("env").join("bir_data.db");
+        let in_process = named.path().join("thread").join("bir_data.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(&from_env), || {
+            if cfg!(debug_assertions) || test_environment() {
+                assert_eq!(single_room_database(), Some(from_env.clone()));
+                assert_eq!(app_database_path(), from_env);
+                assert_eq!(crate::platform::device_dir(), named.path().join("env"));
+                set_database_path_override(Some(in_process.clone()));
+                assert_eq!(single_room_database(), Some(in_process.clone()));
+                assert_eq!(crate::platform::device_dir(), named.path().join("thread"));
+                set_database_path_override(None);
+            }
+        });
+    }
+
+    /// Accounts-and-lock A1 (I3): in a release build outside a test
+    /// environment, `BIR_DATABASE_PATH` and the in-process name are ignored:
+    /// the legacy file and the real data folder answer. As account_gate's
+    /// release test, this runs only under `cargo test --release`.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn database_path_override_is_ignored_in_release() {
+        let named = tempfile::tempdir().expect("temporary directory");
+        let path = named.path().join("bir_data.db");
+        temp_env::with_vars(
+            [
+                ("EBIR_TEST_ENV", None),
+                ("BIR_DATABASE_PATH", Some(path.to_str().expect("utf8"))),
+            ],
+            || {
+                assert!(!single_room_allowed());
+                assert_eq!(single_room_database(), None);
+                assert_eq!(app_database_path(), default_database_path());
+                set_database_path_override(Some(path.clone()));
+                assert_eq!(app_database_path(), default_database_path());
+                assert_eq!(crate::platform::device_dir(), crate::platform::data_dir());
+                set_database_path_override(None);
+            },
+        );
+    }
+
+    /// An open room's file answers `app_database_path` on its thread; an
+    /// explicit single-room name still wins, and closing the room gives the
+    /// legacy file back.
+    #[test]
+    fn an_open_room_answers_the_database_path_until_it_closes() {
+        let folder = tempfile::tempdir().expect("temporary directory");
+        let room = folder.path().join("rooms").join("a").join("bir_data.db");
+        let named = folder.path().join("named.db");
+        temp_env::with_var("BIR_DATABASE_PATH", None::<&str>, || {
+            set_open_room_database(Some(room.clone()));
+            assert_eq!(app_database_path(), room);
+            set_database_path_override(Some(named.clone()));
+            assert_eq!(app_database_path(), named, "single-room mode wins");
+            set_database_path_override(None);
+            set_open_room_database(None);
+            assert_eq!(app_database_path(), default_database_path());
+        });
+    }
+
     /// An in-process database path answers on the thread that named it, wins
     /// over `BIR_DATABASE_PATH` there, and clearing it gives the environment
     /// back. (It used to answer for every thread of the process; a second
@@ -2823,6 +3080,146 @@ mod tests {
             drop(second);
             open_serve_database().expect("serve after GUI drop");
         });
+    }
+
+    /// X1: the owner lock held for a whole stretch of work (`hold_owner_lock`, the claim's steps 1 to 4 or a
+    /// whole-run hold) is the process's one holder. Opening the database in the same process gets it back, never a
+    /// second system lock, so the app is not refused its own file; and the lock stays until the last holder goes.
+    /// Without a hold, two takes in one process still refuse each other (two engines never both own the file).
+    #[test]
+    fn owner_lock_taken_twice_in_one_process_reuses_it() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let db_path = directory.path().join("bir_data.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(db_path.as_os_str()), || {
+            let hold = hold_owner_lock(&db_path).expect("the whole-run hold");
+            let again = hold_owner_lock(&db_path).expect("a second hold is the same lock");
+            let (db, opened, _) = open_live_database().expect("the app opens its own file");
+            assert_eq!(opened, db_path);
+            let (serve, _) = open_serve_database().expect("so does a serve open in this process");
+            let take = try_acquire_live_owner_lock(&db_path).expect("a plain take reuses the hold");
+            // Another spelling of the same file is the same lock.
+            let spelled = directory.path().join(".").join("bir_data.db");
+            let spelled =
+                try_acquire_live_owner_lock(&spelled).expect("the same file, spelled apart");
+            // A database import's reopen: the live file is let go (swapped for a placeholder) and opened again. The hold
+            // spans it, so no other process can take the file in between, and the reopen gets the hold back.
+            drop(db);
+            assert!(
+                matches!(
+                    take_owner_lock_file(&live_owner_lock_path(&db_path), &db_path),
+                    Err(DbError::LiveDatabaseInUse(_))
+                ),
+                "held between the release and the reopen"
+            );
+            let (reopened, _, _) = open_live_database().expect("the import's reopen");
+            drop((reopened, serve, take, spelled, again));
+            assert!(
+                matches!(
+                    take_owner_lock_file(&live_owner_lock_path(&db_path), &db_path),
+                    Err(DbError::LiveDatabaseInUse(_))
+                ),
+                "the hold is still held"
+            );
+            drop(hold);
+
+            // Nothing held: each take is its own lock, as before.
+            let first = try_acquire_live_owner_lock(&db_path).expect("free once every holder went");
+            assert!(matches!(
+                try_acquire_live_owner_lock(&db_path),
+                Err(DbError::LiveDatabaseInUse(_))
+            ));
+            drop(first);
+            drop(try_acquire_live_owner_lock(&db_path).expect("free again"));
+        });
+    }
+
+    /// X1: a bare file name and `./name` are one key, as they are one file.
+    #[test]
+    fn held_key_treats_a_bare_name_as_the_current_folder() {
+        assert_eq!(
+            held_key(Path::new("bir_data.db.owner.lock")),
+            held_key(Path::new("./bir_data.db.owner.lock"))
+        );
+        assert!(held_key(Path::new("bir_data.db.owner.lock")).is_absolute());
+    }
+
+    /// X1: the holder is keyed by lock path, so two files (the legacy file and a room, later each room) are held at
+    /// once in one process, each reused by its own takes and neither by the other's.
+    #[test]
+    fn two_owner_lock_paths_are_held_at_once() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let legacy = directory.path().join("bir_data.db");
+        let room = directory.path().join("rooms").join("a").join("bir_data.db");
+        let legacy_hold = hold_owner_lock(&legacy).expect("the legacy file");
+        let room_hold = hold_owner_lock(&room).expect("a room, at the same time");
+        drop(try_acquire_live_owner_lock(&legacy).expect("the legacy hold reused"));
+        drop(try_acquire_live_owner_lock(&room).expect("the room hold reused"));
+        drop(room_hold);
+        let room_again =
+            try_acquire_live_owner_lock(&room).expect("the room is free once its hold went");
+        assert!(
+            matches!(
+                try_acquire_live_owner_lock(&room),
+                Err(DbError::LiveDatabaseInUse(_))
+            ),
+            "unheld, a second take refuses as before"
+        );
+        drop(
+            try_acquire_live_owner_lock(&legacy)
+                .expect("the legacy file is still held, and reused"),
+        );
+        drop((room_again, legacy_hold));
+    }
+
+    /// X1: a hold refuses every other process. The test runs itself as a child (another process) that tries the
+    /// lock each way while this one holds it. (Unix flock here; the Windows share-mode path is proven on a Windows
+    /// machine.)
+    #[test]
+    fn owner_lock_still_refuses_another_process() {
+        const CHILD: &str = "BIR_CORE_OWNER_LOCK_CHILD";
+        if let Some(path) = std::env::var_os(CHILD) {
+            let db_path = PathBuf::from(path);
+            assert!(matches!(
+                try_acquire_live_owner_lock(&db_path),
+                Err(DbError::LiveDatabaseInUse(_))
+            ));
+            assert!(matches!(
+                hold_owner_lock(&db_path),
+                Err(DbError::LiveDatabaseInUse(_))
+            ));
+            assert!(matches!(
+                open_serve_database_at(&db_path),
+                Err(DbError::LiveDatabaseInUse(_))
+            ));
+            return;
+        }
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let db_path = directory.path().join("bir_data.db");
+        let hold = hold_owner_lock(&db_path).expect("the hold");
+        let status = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+            .args([
+                "--exact",
+                "db::tests::owner_lock_still_refuses_another_process",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD, &db_path)
+            .env("EBIR_TEST_ENV", "1")
+            .env("BUWIZ_NO_KEYCHAIN", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .env_remove("BIR_SFTP_LIVE")
+            .env_remove("BIR_DATABASE_PATH")
+            .status()
+            .expect("the child process");
+        assert!(status.success(), "another process took the held lock");
+        // A second file handle on the lock file, as another process opens it, is refused too.
+        let lock_path = live_owner_lock_path(&db_path);
+        assert!(matches!(
+            take_owner_lock_file(&lock_path, &db_path),
+            Err(DbError::LiveDatabaseInUse(_))
+        ));
+        drop(hold);
+        drop(take_owner_lock_file(&lock_path, &db_path).expect("free once the hold went"));
     }
 
     #[test]

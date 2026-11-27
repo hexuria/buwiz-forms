@@ -1,7 +1,7 @@
 // Layers: Tooltip, Dialog (centred, or top-anchored for the palette), Sheet (bottom when narrow, side drawer when
 // wide), Popover, Menu with MenuItem and MenuSeparator, toasts (toast, undoToast and the Toaster that shows them),
 // SidePanel, Disclosure and DisclosureGroup. Each is nsh/base's own overlay (focus, Escape, dismissal, roles), styled.
-import type { JSX } from "nsh";
+import type { JSX, ViewRef } from "nsh";
 import { cleanup, keyboardFrame, Overlay, safeArea, Scroll, signal, View, windowSize } from "nsh";
 import {
   Button, Collapsible, Dialog as BaseDialog, Menu as BaseMenu, MenuItem as BaseMenuItem, MenuSeparator as BaseMenuSeparator,
@@ -89,6 +89,12 @@ export interface SheetProps {
    * (a search field pinned over its own list: SearchPick). Its content must fit `sheetBodyRoom()`.
    */
   scroll?: boolean;
+  /**
+   * Test seams (SearchPick's watchSheetFrames): the header's view, and the `scroll={false}` body's, so a test measures the room the
+   * body really has against sheetBodyRoom(). Left out, nothing is measured.
+   */
+  headerRef?: (ref: ViewRef) => void;
+  bodyRef?: (ref: ViewRef) => void;
   testID?: string;
   children?: JSX.Element;
 }
@@ -112,15 +118,22 @@ export function sheetMaxHeight(): number {
   return Math.max(160, windowSize().height - safeArea().top - keyboard - 24);
 }
 
+/** The tallest our bottom sheet's panel is: 90% of the window, and never past sheetMaxHeight. Sheet's popupStyle. */
+export function sheetPanelMaxHeight(): number {
+  return Math.min(windowSize().height * 0.9, sheetMaxHeight());
+}
+
 /**
  * The height a bottom sheet's body may take (padding included) once the grabber, the header and the bottom inset are drawn: what
  * a `scroll={false}` body sizes its own scrolling part to. It shrinks while the software keyboard is up (sheetMaxHeight), so the
  * last rows of a list in it stay above the keyboard.
+ * The grabber and header heights below are Sheet's own layout as numbers (mt-2 h-1; the header's row, py-2 and its border):
+ * pick.test.tsx measures the sheet and fails when they drift from it ("the list's room is the sheet's real body").
  */
 export function sheetBodyRoom(): number {
   const grabber = 12;
   const header = (TOUCH ? T_PX : 28) + 16 + 1;
-  return Math.min(windowSize().height * 0.9, sheetMaxHeight()) - grabber - header - safeArea().bottom;
+  return sheetPanelMaxHeight() - grabber - header - safeArea().bottom;
 }
 
 /**
@@ -145,14 +158,14 @@ export function Sheet(props: SheetProps) {
       }
       popupStyle={
         narrow()
-          ? { maxHeight: Math.min(windowSize().height * 0.9, sheetMaxHeight()), ...sheetSides() }
+          ? { maxHeight: sheetPanelMaxHeight(), ...sheetSides() }
           : { width: Math.min(props.width ?? 480, windowSize().width - 48) }
       }
     >
       <If when={narrow()}>
         <View class="mt-2 h-1 w-9 self-center rounded-full bg-border-strong" />
       </If>
-      <View class="flex-row items-center gap-2 border-b border-border py-2 pr-2 pl-4">
+      <View ref={props.headerRef} class="flex-row items-center gap-2 border-b border-border py-2 pr-2 pl-4">
         <Text variant="emph" class="flex-1" lines={1}>{props.title ?? ""}</Text>
         <IconButton icon="x" tooltip="Close" onPress={() => props.onOpenChange(false)} />
       </View>
@@ -164,7 +177,7 @@ export function Sheet(props: SheetProps) {
           </Scroll>
         }
       >
-        <View class="min-h-0 shrink gap-3 p-4">{props.children}</View>
+        <View ref={props.bodyRef} class="min-h-0 shrink gap-3 p-4">{props.children}</View>
       </If>
       <If when={props.footer}>
         <View class="flex-row justify-end gap-2 border-t border-border px-4 py-3">{props.footer}</View>

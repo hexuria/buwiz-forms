@@ -2,8 +2,8 @@
 import { expect, test } from "nsh/test";
 import {
   applyMask, DATE_ERROR, digitsOnly, editBase, formatIso, formatLongDate, formatMDY, formatMoney, formatTin, formatTinDigits, intMask,
-  isPlainAmount, isZeroAmount, MONEY_MASK, moneyMask, moneyPlain, parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownDate, shownMoney,
-  TIN_MASK,
+  isPlainAmount, isZeroAmount, MONEY_MASK, moneyEntryMask, moneyMask, moneyPlain, parseTypedDate, PERCENT_MASK, readAmount, readAmountWithCommas, reconcile, sameAmount, shownDate, shownMoney, validAmountText,
+  TIN_MASK, initialCommaState, nextCommaState,
 } from "./mask";
 
 test("TIN: partial input groups as it goes, no trailing dash", () => {
@@ -199,18 +199,15 @@ test("money: no 'Infinity.undefined', no '-0.00', every digit of a long amount s
 });
 
 test("money: what a box shows for a stored value (negatives shown, non-amounts verbatim)", () => {
-  expect(shownMoney("-250", false)).toBe("-250.00");
-  expect(shownMoney("-250", true)).toBe("-250");
-  expect(shownMoney("1250000.5", true)).toBe("1,250,000.5");
-  expect(shownMoney("1250000.5", false)).toBe("1,250,000.50");
-  expect(shownMoney("1234.5", false, true)).toBe("1234.5");
-  expect(shownMoney("-0", false)).toBe("0.00");
-  expect(shownMoney("", false)).toBe("");
+  expect(shownMoney("-250")).toBe("-250.00");
+  expect(shownMoney("1250000.5")).toBe("1,250,000.50");
+  expect(shownMoney("1234.5", true)).toBe("1234.5");
+  expect(shownMoney("-0")).toBe("0.00");
+  expect(shownMoney("")).toBe("");
   // Wave 1 showed "1e21" as "121".
-  expect(shownMoney("1e21", false)).toBe("1e21");
-  expect(shownMoney("1e21", true)).toBe("1e21");
-  expect(shownMoney("Infinity", false)).toBe("Infinity");
-  expect(shownMoney("abc", true)).toBe("abc");
+  expect(shownMoney("1e21")).toBe("1e21");
+  expect(shownMoney("Infinity")).toBe("Infinity");
+  expect(shownMoney("abc")).toBe("abc");
   expect(isPlainAmount("1,250.50")).toBe(true);
   expect(isPlainAmount("1e21")).toBe(false);
   expect(isPlainAmount("")).toBe(false);
@@ -335,9 +332,9 @@ test("money: a stored value is laid out, never rounded away; rounding is for wha
   expect(formatMoney("1234.5678", false, false)).toBe("1,234.5678");
   expect(formatMoney("1.5", false, false)).toBe("1.50");
   expect(formatMoney("-0.001", false, false)).toBe("-0.001");
-  expect(shownMoney("1.255", false)).toBe("1.255");
-  expect(shownMoney("1234.5678", false)).toBe("1,234.5678");
-  expect(shownMoney("1234.5", false)).toBe("1,234.50");
+  expect(shownMoney("1.255")).toBe("1.255");
+  expect(shownMoney("1234.5678")).toBe("1,234.5678");
+  expect(shownMoney("1234.5")).toBe("1,234.50");
 });
 
 // ---------------------------------------------------------------- selections: one edit, however the text lost its range
@@ -439,4 +436,113 @@ test("editBase: fast keys are typed on the box's own text; a deletion from the s
   expect(editBase("12", undefined, "123", at(2))).toEqual(["12", at(2)]);
   // A selected leading zero deleted from the box's own text is not a deletion of the shown comma.
   expect(editBase("1,234", "01234", "1234", { start: 0, end: 1 })).toEqual(["01234", { start: 0, end: 1 }]);
+});
+
+
+test("money entry accepts mid-text digits and Backspace exactly, without reformatting", () => {
+  const mask = moneyEntryMask();
+  const digit = reconcile("12345678.90", "123456778.90", mask, undefined, { start: 7, end: 7 }, true);
+  expect(digit).toEqual({ text: "123456778.90", caret: 8 });
+  const back = reconcile("123456778.90", "12345678.90", mask, undefined, { start: 8, end: 8 }, false);
+  expect(back).toEqual({ text: "12345678.90", caret: 7 });
+  const decimal = reconcile("12345678.90", "12345678.905", mask, undefined, { start: 11, end: 11 }, true);
+  expect(decimal.text).toBe("12345678.905");
+  // 1234567890, Left, Left, Backspace: the caret is after digit 8, so Backspace removes exactly that digit.
+  const leftBack = reconcile("1234567890", "123456790", mask, undefined, { start: 8, end: 8 }, false);
+  expect(leftBack).toEqual({ text: "123456790", caret: 7 });
+  // An adjacent repeated digit stays exactly where typed; no separator insertion can make the edit ambiguous.
+  const repeated = reconcile("9999", "99999", mask, undefined, { start: 4, end: 4 }, true);
+  expect(repeated).toEqual({ text: "99999", caret: 5 });
+  // Separators already in a filled amount are insignificant to the amount but valid text while focused.
+  const beforeComma = reconcile("1,234.56", "91,234.56", mask, undefined, { start: 0, end: 0 }, true);
+  expect(beforeComma).toEqual({ text: "91,234.56", caret: 1 });
+  const middle = reconcile("1,234.56", "1,2934.56", mask, undefined, { start: 3, end: 3 }, true);
+  expect(middle).toEqual({ text: "1,2934.56", caret: 4 });
+  const end = reconcile("1,234.56", "1,234.569", mask, undefined, { start: 8, end: 8 }, true);
+  expect(end).toEqual({ text: "1,234.569", caret: 9 });
+  const typedComma = reconcile("1234.56", "1234,.56", mask, undefined, { start: 4, end: 4 }, true);
+  expect(typedComma.text).toBe("1234,.56");
+  const wholeSelection = reconcile("1,234.56", "9", mask, undefined, { start: 0, end: 8 }, true);
+  expect(wholeSelection).toEqual({ text: "9", caret: 1 });
+  const pastedGrouped = reconcile("", "1,234.56", mask, undefined, undefined, false);
+  expect(pastedGrouped).toEqual({ text: "1234.56", caret: 7 }); // a paste is normalized at once
+});
+
+
+test("comma state machine: whose comma each edit made", () => {
+  expect(initialCommaState("1,234.56")).toBe("ours");
+  expect(initialCommaState("1234.56")).toBe("none");
+  for (const [name, state, before, after, wanted] of [
+    ["a digit inserted in our grouping keeps it ours", "ours", "1,234.56", "1,2934.56", "ours"],
+    ["deleting digits but not the comma keeps it ours", "ours", "1,234.56", "1,23", "ours"],
+    ["a whole-peso deletion keeps it ours", "ours", "12,345", "12,34", "ours"],
+    ["losing every comma starts again at none", "ours", "1,234", "1234", "none"],
+    ["one typed comma in comma-free text is the filer's", "none", "1500", "1500,", "filer"],
+    ["one typed comma where one already is is unsure", "ours", "1,234.56", "1,23,4.56", "unsure"],
+    ["a paste without a comma keeps ours", "ours", "1,234.56", "1,27234.56", "ours"],
+    ["a pasted comma into an empty box is the filer's", "none", "", "1500,50", "filer"],
+    ["a pasted comma into comma-free text is the filer's", "none", "1500", "1500,50", "filer"],
+    ["a pasted comma over text with a comma is unsure", "ours", "1,234.56", "1500,50", "unsure"],
+    // Backspacing our comma away resets NONE by the no-comma rule; typing it back is therefore FILER by the literal
+    // one-comma rule, although the review example called for UNSURE. The amount itself reads strictly either way.
+    ["typing our comma back after deleting it is filer by the literal rules", "none", "1234.56", "1,234.56", "filer"],
+    // KNOWN LIMIT of the prefix/suffix cut: replacing all of 1,234 with 1,5 looks like inserting 5 after the shared
+    // prefix 1,, so the comma stays ours and reads as 15. Shown as 15.00, the invariant holds; no machinery for it.
+    ["known limit: replacement sharing the comma prefix stays ours", "ours", "1,234", "1,5", "ours"],
+  ] as const) {
+    expect(nextCommaState(state, before, after)).toBe(wanted);
+  }
+  expect(readAmountWithCommas("1,5", "ours", false, true)).toBe("15");
+});
+
+test("comma reading: ours are ignored, a filer decimal comma reads only on leaving, unsure is strict", () => {
+  expect(readAmountWithCommas("1,2934.56", "ours")).toBe("12934.56");
+  expect(readAmountWithCommas("1,23", "ours")).toBe("123");
+  expect(readAmountWithCommas("12,34", "ours")).toBe("1234");
+  for (const [text, plain] of [["1500,50", "1500.50"], ["1500,5", "1500.50"], ["1,50", "1.50"], ["0,5", "0.50"]]) {
+    expect(readAmountWithCommas(text, "filer", false, false)).toBeNull();
+    expect(readAmountWithCommas(text, "filer", false, true)).toBe(plain);
+    expect(readAmountWithCommas(text, "unsure", false, true)).toBeNull();
+  }
+  expect(readAmountWithCommas("1,500", "filer", false, false)).toBe("1500");
+  expect(readAmountWithCommas("12,500", "filer", false, true)).toBe("12500");
+  expect(readAmountWithCommas("-1500,50", "filer", true, true)).toBe("-1500.50");
+  expect(readAmountWithCommas("-1500,50", "filer", false, true)).toBeNull();
+  expect(readAmountWithCommas("₱ 1500,50", "filer", false, true)).toBe("1500.50");
+});
+
+test("strict focused amount reading accepts only unambiguous grouped amounts", () => {
+  expect(readAmount("15,000.50")).toBe("15000.50");
+  expect(readAmount("₱ 15,000.50")).toBe("15000.50");
+  expect(readAmount("PHP 15000.50")).toBe("15000.50");
+  expect(readAmount(" 15000.50 ")).toBe("15000.50");
+  expect(readAmount("₱15000.50")).toBe("15000.50");
+  expect(readAmount("15000.50 PHP")).toBe("15000.50");
+  expect(readAmount(".5")).toBe(".5");
+  for (const bad of ["1500,50", "1.234,56", "1,2,3", "1e5", "0x10", "1 234,50", "15000..50", "15000.50.25", "₱ 15,000.50x", "."]) {
+    expect(readAmount(bad)).toBeNull();
+    expect(validAmountText(bad)).toBe(false);
+  }
+});
+
+for (const [name, pasted, expected] of [
+  ["peso-prefixed paste", "₱ 15,000.50", "15000.50"],
+  ["space-padded paste", " 15000.50 ", "15000.50"],
+  ["grouped paste", "15,000.50", "15000.50"],
+  ["PHP-prefixed paste", "PHP 15000.50", "15000.50"],
+] as const) {
+  test(`money paste reading: ${name} reads as 15000.50`, () => {
+    expect(readAmount(pasted)).toBe(expected);
+    expect(validAmountText(pasted)).toBe(true);
+  });
+}
+
+test("money paste reading: a second point is not an amount", () => {
+  expect(readAmount("(1,000.00)", true)).toBe("-1000.00");
+  expect(validAmountText("(1,000.00)", true)).toBe(true);
+  expect(readAmount("(1,000.00)", false)).toBeNull();
+  expect(validAmountText("(1,000.00)", false)).toBe(false);
+  expect(validAmountText(" ")).toBe(true);
+  expect(readAmount("15000.50.25")).toBeNull();
+  expect(validAmountText("15000.50.25")).toBe(false);
 });

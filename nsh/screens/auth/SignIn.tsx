@@ -44,7 +44,7 @@ export function SignIn() {
   return (
     <View testID="sign-in" class="min-h-0 flex-1">
       <AuthCard testID="auth-card">
-        <Heading icon="lock" title="Sign in" line={line()} testID="auth-title" />
+        <Heading title="Sign in" line={line()} testID="auth-title" />
         <Labelled label="TIN">
           <DigitCells
             testID="auth-tin"

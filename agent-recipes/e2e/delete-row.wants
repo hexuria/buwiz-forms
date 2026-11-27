@@ -1,0 +1,7 @@
+# Smoke 7: a schedule row added, its drawer opened, the row deleted. $table is the schedule's id (fp-table-<first key>),
+# read from a snapshot first. On a phone the drawer is a sheet: the presses in it are gpui-agent gap 1.
+click $table-add
+wait_until $table-drawer --timeout-ms 5000 --screenshot
+click $table-delete
+wait_until $table-drawer --absent --timeout-ms 5000
+assert $table-none --screenshot

@@ -75,6 +75,11 @@ FAKE_NSH = r'''
 import os, sys, time
 from pathlib import Path
 state = Path(os.environ['FAKE_STATE'])
+# The recipe's build line asks `nsh --version` before anything runs (#357): answer it as the real nsh does, without
+# counting it as a launch, or every "nothing was launched" check sees nsh.args and the hang mode hangs right there.
+if sys.argv[1:] == ['--version']:
+    print('nsh 0.6.1 (fake)')
+    sys.exit(0)
 (state / 'nsh.args').write_text(' '.join(sys.argv[1:]))
 (state / 'nsh.pid').write_text(str(os.getppid()))
 mode = os.environ['FAKE_NSH']

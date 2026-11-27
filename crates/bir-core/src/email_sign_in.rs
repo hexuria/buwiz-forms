@@ -239,7 +239,7 @@ pub fn local_sentence(code: &str, retry_after: Option<i64>, attempts_left: Optio
             Some(n) if n > 1 => format!("That code is not right. {n} tries left."),
             _ => "That code is not right. Check the email and try again.".into(),
         },
-        "code_expired" => "This code has expired. Press Resend for a new one.".into(),
+        "code_expired" => "This code has expired. Send a new code to try again.".into(),
         "too_many_attempts" => "Too many wrong codes. Send a new code to try again.".into(),
         "link_used" => "That sign-in link was already used. Start again.".into(),
         "invalid_request" => "This sign-in request has ended. Start again.".into(),
@@ -553,15 +553,12 @@ pub fn clear_pending() {
     let _ = std::fs::remove_file(pending_file_path());
 }
 
-fn pending_file_path() -> PathBuf {
+/// The pending email sign-in's file: in the device folder (`platform::device_dir`), whichever room is open.
+pub(crate) fn pending_file_path() -> PathBuf {
     if let Some(path) = std::env::var_os(ENV_PENDING_FILE) {
         return PathBuf::from(path);
     }
-    crate::db::app_database_path()
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."))
-        .join(PENDING_FILE_NAME)
+    crate::platform::device_dir().join(PENDING_FILE_NAME)
 }
 
 fn write_private(path: &Path, raw: &str) -> std::io::Result<()> {
@@ -1073,7 +1070,7 @@ mod tests {
             (
                 r#"{"error":"code_expired"}"#,
                 "code_expired",
-                "This code has expired. Press Resend for a new one.",
+                "This code has expired. Send a new code to try again.",
             ),
             (
                 r#"{"error":"too_many_attempts"}"#,

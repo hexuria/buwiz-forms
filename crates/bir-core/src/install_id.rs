@@ -231,11 +231,11 @@ pub(crate) struct OsSources;
 
 impl Sources for OsSources {
     fn test_environment(&self) -> bool {
-        cfg!(test) || crate::db::test_environment()
+        cfg!(any(test, feature = "test-support")) || crate::db::test_environment()
     }
 
     fn machine_id(&self) -> Option<String> {
-        if cfg!(test) {
+        if cfg!(any(test, feature = "test-support")) {
             return None;
         }
         #[cfg(target_os = "android")]
@@ -275,11 +275,7 @@ impl Sources for OsSources {
     }
 
     fn folder(&self) -> PathBuf {
-        crate::db::app_database_path()
-            .parent()
-            .filter(|path| !path.as_os_str().is_empty())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."))
+        crate::platform::device_dir()
     }
 }
 
