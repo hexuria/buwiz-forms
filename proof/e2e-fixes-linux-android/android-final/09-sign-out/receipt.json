@@ -1,14 +1,14 @@
 {
   "v": 1,
   "ok": false,
-  "recipe": "open-2551q-phone",
-  "fingerprint": "fnv1a64:885953945c16b037",
+  "recipe": "sign-out-phone",
+  "fingerprint": "fnv1a64:b6342a6d535c63d7",
   "session_reused": true,
   "steps": [
     {
       "id": "s1",
       "ok": false,
-      "error": "occluded_by: 453",
+      "error": "occluded_by: 583",
       "error_code": "host_error",
       "delivery_status": "delivery_uncertain",
       "elapsed_ms": 335

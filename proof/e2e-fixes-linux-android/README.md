@@ -54,4 +54,51 @@ Safety on every run: EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BUWIZ_NO_KEYCHAIN=1 BIR_S
 2. The Linux window is 420 px wide regardless of the 1440x900 window config — the app is well-behaved (responsive),
    but every Linux run is effectively the phone layout.
 
-## Final results — see report.md in each evidence folder for the authoritative tables.
+
+## Final results — one full run per platform after the fixes (evidence folders here; gpui-agent-cli 0.4.1 rev 5867457a ran BOTH)
+
+### Android (KVM emulator, API 35 x86_64, phone layout)
+| recipe | result | time | failing step |
+|---|---|---|---|
+| setup-start | pass | 3.1 s | |
+| sign-up | pass | 11.0 s | |
+| navigate | pass | 5.8 s | |
+| open-2551q | pass | 14.4 s | |
+| money-boxes | fail | 4.0 s | s2 target_gone fp-frm2551Qv2018:txt16 |
+| delete-row | setup | | $table regex matched nothing (no fp-table in the culled tree) |
+| queue | fail | 15.6 s | queue-continue never appears: the empty return stops at its to-do list, as the suite's own precondition warns |
+| birth-date | known gap | 12.2 s | s14 sheet-done click offscreen (gap 1) |
+| sign-out | known gap | 2.4 s | s1 occluded_by the date sheet birth-date left open |
+
+### Linux desktop (GTK window, but 420 px wide so the NARROW layout)
+| recipe | result | time | failing step |
+|---|---|---|---|
+| setup-start | pass | 0.5 s | |
+| sign-up | pass | 9.7 s | |
+| navigate | pass | 2.0 s | |
+| open-2551q | pass | 7.4 s | |
+| money-boxes | fail | 1.0 s | s2 target_gone fp-frm2551Qv2018:txt16 |
+| delete-row | setup | | same culling |
+| queue | fail | 12.9 s | same to-do stop |
+| birth-date | FAIL | 5.1 s | s14 sheet-done click offscreen — gap 1 is NOT phone-only, Linux sheets have it too |
+| sign-out | fail | 0.3 s | occluded_by the leftover date sheet |
+
+## Remaining root causes (all (b) agent-cannot unless noted)
+
+1. THE one blocker behind money-boxes/delete-row/queue on both platforms: the adapter's tree culls nodes outside the
+   viewport's reach and the recipe engine has NO scroll/swipe op (the host features list scroll/swipe/drag, the recipe
+   language cannot use them). txt15/txt16 sit far down the long form, behind the profile-prerequisite banners
+   (evidence: android-final/05-money-boxes/failure-tree.json stops at fp-set-profile-business_start_date; the form
+   fields never enter the tree). Until recipes can scroll, long forms are unreachable on any narrow viewport.
+   queue's failure is a CASCADE: with no amounts typed the return fails Check and Queue stops at the to-do list —
+   the suite's own precondition sentence predicts exactly this.
+2. Gap 1 (sheet presses) is real on BOTH platforms, not only phones: the birth-date sheet input takes set_value but
+   every press inside the sheet refuses "offscreen". Sheets left open by a gap-ending recipe occlude the next recipe
+   (sign-out's occluded_by). On Android sign-up's ZIP/RDO sheets are entirely unpressable (even a visible option row,
+   even semantic delivery); on Linux the desktop comboboxes work because they are popovers, not sheets.
+3. (c) app: the TIN digit cells reorder fast-typed digits on Linux (typed 12345678800000 -> 124-567-880 in the cells,
+   check-digit error blocks Create; linux-20261127-083229/02-sign-up/failure.png in the run history). Worked around in
+   the recipe with set_value; the reordering itself looks like the same key race the money-box work targeted.
+4. (c) or infra: the Linux window is 420x834 although nsh.json asks 1440x900 — every Linux desktop run is the narrow
+   layout. Wide-desktop recipes (nav-home, tb-panel, sb-new) can never run there; the suite now picks narrow variants
+   for linux through the new runner variant key.

@@ -8,93 +8,93 @@
     {
       "id": "s1",
       "ok": true,
-      "elapsed_ms": 41
+      "elapsed_ms": 31
     },
     {
       "id": "s2",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 779
+      "elapsed_ms": 772
     },
     {
       "id": "s3",
       "ok": true,
-      "elapsed_ms": 29
+      "elapsed_ms": 30
     },
     {
       "id": "s4",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 665
+      "elapsed_ms": 621
     },
     {
       "id": "s5",
       "ok": true,
-      "elapsed_ms": 29
+      "elapsed_ms": 24
     },
     {
       "id": "s6",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 1231
+      "elapsed_ms": 1086
     },
     {
       "id": "s7",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 1699
+      "elapsed_ms": 1577
     },
     {
       "id": "s8",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 800
+      "elapsed_ms": 840
     },
     {
       "id": "s9",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 1883,
+      "elapsed_ms": 2638,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/02-sign-up/009-s9.png",
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/009-s9.png",
         "ok": true
       }
     },
     {
       "id": "s10",
       "ok": true,
-      "elapsed_ms": 891
+      "elapsed_ms": 20
     },
     {
       "id": "s11",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 546
+      "elapsed_ms": 589
     },
     {
       "id": "s12",
       "ok": true,
-      "elapsed_ms": 372
+      "elapsed_ms": 412
     },
     {
       "id": "s13",
       "ok": true,
-      "elapsed_ms": 252,
+      "elapsed_ms": 175,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/02-sign-up/013-s13.png",
+        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/013-s13.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/02-sign-up/009-s9.png",
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/009-s9.png",
       "ok": true
     },
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-083229/02-sign-up/013-s13.png",
+      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/02-sign-up/013-s13.png",
       "ok": true
     }
   ],
-  "elapsed_ms": 9221
+  "elapsed_ms": 8821
 }
