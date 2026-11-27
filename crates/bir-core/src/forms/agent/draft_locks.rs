@@ -100,6 +100,7 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     installment_1606::relock(kind, draft, locks);
     // Previous payment applies only to an amended return.
     previous_payment::relock(kind, draft, locks);
+    schedule1_1601fq::relock(kind, draft, locks);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -114,6 +115,7 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     relocks.extend(item16_2551q::live_locks(kind, draft));
     relocks.extend(installment_1606::live_locks(kind, draft));
     relocks.extend(previous_payment::live_locks(kind, draft));
+    relocks.extend(schedule1_1601fq::live_locks(kind, draft));
     relocks
 }
 
@@ -1682,6 +1684,188 @@ pub mod item_13 {
     }
 }
 
+/// 1601FQ Schedule 1 while Item 13 is not Yes. The official page clears and
+/// disables the schedule (`disableSelTreaty`) and tells the filer there is no
+/// need to fill it up while they are not availing of tax relief.
+pub mod schedule1_1601fq {
+    use serde_json::{Map, Value, json};
+
+    use super::AgentFormKind;
+
+    pub const ROWS: usize = 5;
+    pub const STEMS: [&str; 6] = [
+        "drpTreatyCode",
+        "drpATCCode",
+        "txtNatIncPayment",
+        "txtAmtIncomePay",
+        "txtRate",
+        "txtReqWithheld",
+    ];
+    const EDITABLE_STEMS: [&str; 4] = ["drpTreatyCode", "drpATCCode", "txtAmtIncomePay", "txtRate"];
+    const COMPUTED_STEMS: [&str; 2] = ["txtNatIncPayment", "txtReqWithheld"];
+    const COMPUTED_LOCK: &str = "computed by BIR's own formulas";
+    pub const LOCK: &str = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
+    pub const CLEARED_NOTE: &str = "Schedule 1 was cleared: it applies only when item 13 is Yes.";
+
+    fn stem_keys(stems: &[&str]) -> Vec<String> {
+        (0..ROWS)
+            .flat_map(|row| stems.iter().map(move |stem| format!("{stem}{row}")))
+            .collect()
+    }
+
+    pub fn keys() -> Vec<String> {
+        stem_keys(&STEMS)
+    }
+
+    pub fn is_key(key: &str) -> bool {
+        STEMS.iter().any(|stem| {
+            key.strip_prefix(stem)
+                .and_then(|row| row.parse::<usize>().ok())
+                .is_some_and(|row| row < ROWS)
+        })
+    }
+
+    pub fn lock_reason(draft: &Value) -> Option<&'static str> {
+        if draft["tax_relief"].is_null() {
+            Some(LOCK)
+        } else {
+            None
+        }
+    }
+
+    fn typed_row(row: &Value) -> bool {
+        row["treaty_code"] != "NA"
+            || row["atc_code"] != "NA"
+            || row["income_payment"].as_f64().unwrap_or(0.0).abs() >= 0.005
+            || row["tax_rate"].as_f64().unwrap_or(0.0).abs() >= 0.005
+    }
+
+    pub fn typed_rows(draft: &Value) -> bool {
+        draft["schedule1"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().any(typed_row))
+    }
+
+    pub fn dormant_rows(draft: &Value) -> bool {
+        lock_reason(draft).is_some() && typed_rows(draft)
+    }
+
+    /// A row's stable identity. Rows written by this build carry
+    /// `instance_id`; a pre-identity draft is seeded once in its stored
+    /// order, after which the id travels with the row object through a
+    /// Delete row compaction.
+    pub fn row_id(row: &Value, legacy_index: usize) -> String {
+        row["instance_id"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("row-{:020}", legacy_index + 1))
+    }
+
+    /// The current vector position of a stable row id in `draft`.
+    pub fn row_index(draft: &Value, id: &str) -> Option<usize> {
+        draft["schedule1"]
+            .as_array()?
+            .iter()
+            .position(|row| row["instance_id"].as_str() == Some(id))
+    }
+
+    /// The six keys of the row currently at `row`.
+    pub fn keys_for_row(row: usize) -> Vec<String> {
+        STEMS.iter().map(|stem| format!("{stem}{row}")).collect()
+    }
+
+    #[derive(Debug)]
+    pub struct RowClearance {
+        pub id: String,
+        pub gate: String,
+        pub text: String,
+    }
+
+    /// Every typed Schedule 1 row a closing Item 13 gate cleared, keyed by
+    /// the row's stable id rather than its transient vector index.
+    pub fn row_clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<RowClearance> {
+        if kind.form_code() != "1601FQ" || lock_reason(after).is_none() {
+            return Vec::new();
+        }
+        let empty_after = |id: &str| {
+            after["schedule1"]
+                .as_array()
+                .and_then(|rows| {
+                    rows.iter()
+                        .find(|row| row["instance_id"].as_str() == Some(id))
+                })
+                .is_none_or(|row| !typed_row(row))
+        };
+        before["schedule1"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .filter(|(_, row)| typed_row(row))
+            .filter_map(|(index, row)| {
+                let id = row_id(row, index);
+                if !empty_after(&id) {
+                    return None;
+                }
+                let gate = format!("1601fq_schedule1:{id}");
+                let text = format!(
+                    "Schedule 1 row {id} was cleared: it applies only when item 13 is Yes."
+                );
+                Some(RowClearance { id, gate, text })
+            })
+            .collect()
+    }
+
+    /// The helper interface's owned `(gate, sentence)` pairs.
+    pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
+        row_clearances(kind, before, after)
+            .into_iter()
+            .map(|row| (row.gate, row.text))
+            .collect()
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        if kind.form_code() != "1601FQ" {
+            return;
+        }
+        match lock_reason(draft) {
+            Some(reason) => {
+                for key in keys() {
+                    locks.insert(key, json!(reason));
+                }
+            }
+            None => {
+                for key in keys() {
+                    locks.remove(&key);
+                }
+            }
+        }
+    }
+
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if kind.form_code() != "1601FQ" {
+            return locks;
+        }
+        if let Some(reason) = lock_reason(draft) {
+            for key in keys() {
+                locks.insert(key, json!(reason));
+            }
+        } else {
+            // Opening Item 13 unlocks only the row's writable cells. Its two
+            // ATC-derived columns stay computed, as the base lock map draws
+            // them on a return that opens with Item 13 already Yes.
+            for key in stem_keys(&EDITABLE_STEMS) {
+                locks.insert(key, Value::Null);
+            }
+            for key in stem_keys(&COMPUTED_STEMS) {
+                locks.insert(key, json!(COMPUTED_LOCK));
+            }
+        }
+        locks
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! The assistant's half of the draft-dependent layer: [`super::super::fill`]
@@ -2228,6 +2412,50 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn deleting_an_earlier_1601fq_schedule_row_keeps_the_notice_on_its_stable_row() {
+        use super::schedule1_1601fq as gate;
+        let row = |id: &str, amount: f64| {
+            json!({
+                "instance_id": id,
+                "treaty_code": "NA",
+                "atc_code": "NA",
+                "income_payment": amount,
+                "tax_rate": 10.0,
+                "tax_withheld": amount,
+            })
+        };
+        let first = row("row-00000000000000000001", 11.0);
+        let second = row("row-00000000000000000002", 22.0);
+        let mut before = json!({
+            "tax_relief": "special_rate",
+            "schedule1": [first, second],
+        });
+        // Delete row removes the first backing object; the second row moves
+        // to index 0 but keeps the stable identity stored on its object.
+        before["schedule1"].as_array_mut().unwrap().remove(0);
+        assert_eq!(
+            before["schedule1"][0]["instance_id"],
+            "row-00000000000000000002"
+        );
+        assert_eq!(
+            gate::row_index(&before, "row-00000000000000000002"),
+            Some(0)
+        );
+
+        let mut after = before.clone();
+        after["tax_relief"] = Value::Null;
+        after["schedule1"] = json!([]);
+        let clearances = gate::row_clearances(kind("1601FQ"), &before, &after);
+        assert_eq!(clearances.len(), 1, "{clearances:?}");
+        assert_eq!(clearances[0].id, "row-00000000000000000002");
+        assert_eq!(
+            clearances[0].gate,
+            "1601fq_schedule1:row-00000000000000000002"
+        );
+        assert!(clearances[0].text.contains("row-00000000000000000002"));
+    }
 }
 
 pub mod pending_notices {
@@ -2285,6 +2513,7 @@ pub mod pending_notices {
                 item16_2551q_clearance,
                 installment_1606_clearance,
                 previous_payment_clearance,
+                schedule1_1601fq_clearance,
             ],
         )
     }
@@ -2301,6 +2530,14 @@ pub mod pending_notices {
             .iter()
             .flat_map(|check| check(kind, before, after))
             .collect()
+    }
+
+    fn schedule1_1601fq_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        super::schedule1_1601fq::clearances(kind, before, after)
     }
 
     fn item16_2551q_clearance(
