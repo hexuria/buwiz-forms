@@ -7,25 +7,6 @@
  ],
  "steps": [
   {
-   "id": "s1",
-   "op": "wait_until",
-   "target": "setup-solo",
-   "timeout_ms": 30000,
-   "exists": true
-  },
-  {
-   "id": "s2",
-   "op": "click",
-   "target": "setup-solo"
-  },
-  {
-   "id": "s3",
-   "op": "wait_until",
-   "target": "new-tp-name",
-   "timeout_ms": 8000,
-   "exists": true
-  },
-  {
    "id": "s4",
    "op": "type",
    "target": "$tin_field",
@@ -40,15 +21,20 @@
   {
    "id": "s6",
    "op": "scroll",
-   "target": "$tin_field",
    "dy": 300,
-   "screenshot": true
+   "screenshot": true,
+   "x": 185,
+   "y": 369
   },
   {
    "id": "s7",
    "op": "click",
    "target": "$tin_field",
    "screenshot": true
+  },
+  {
+   "id": "s8",
+   "op": "snapshot"
   }
  ]
 }

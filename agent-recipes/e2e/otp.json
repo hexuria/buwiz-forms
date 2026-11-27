@@ -7,6 +7,12 @@
  },
  "recipes": [
   {
+   "name": "prep",
+   "file": "otp-prep.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-prep.json"
+  },
+  {
    "name": "tin-first",
    "file": "otp-tin-first.json",
    "needs_cli": "0.4.1",
@@ -41,6 +47,21 @@
    "file": "otp-tin-scroll.json",
    "needs_cli": "0.4.1",
    "fallback": "otp-tin-scroll.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "probe",
+   "file": "otp-probe.json",
+   "needs_cli": "0.4.1",
+   "fallback": "otp-probe.json",
    "resolve": {
     "tin_field": {
      "role": [
