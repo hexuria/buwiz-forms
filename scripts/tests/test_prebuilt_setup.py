@@ -794,7 +794,11 @@ class PrebuiltSetupTextTests(unittest.TestCase):
         self.assertNotIn("downloads the sibling", docs)
 
 
-@unittest.skipIf(PWSH is None, "pwsh is not on PATH")
+# These run Prebuilt.ps1's functions against FAKE curl, tar, unzip and cargo, which are POSIX scripts: PowerShell on
+# Windows cannot start them ("Cannot run a document in the middle of a pipeline"), so there the class is skipped.
+# On Windows the helper was proven on a real machine instead (the direct download, the tamper check, the source
+# route and check mode, 2026-11-28); the text tests below still run everywhere.
+@unittest.skipIf(PWSH is None or sys.platform == "win32", "needs pwsh and POSIX fake tools")
 class PrebuiltPowerShellRunTests(unittest.TestCase):
     def test_download_success_returns_one_boolean_and_writes_the_stamp(self):
         pin = read_pin("GPUI_AGENT_CLI_SHA256_x86_64_pc_windows_msvc")
