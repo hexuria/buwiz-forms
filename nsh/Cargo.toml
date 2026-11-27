@@ -107,11 +107,13 @@ objc2-core-foundation = { version = "0.3.2", default-features = false, features 
 nsh-gpui-agent = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", features = ["ios"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-# The window's own control plane (semantic tree, press, type, screenshot) is the plug's, in nsh-gpui-agent-macos:
-# feature `gpui-agent-server`, a second listener (the in-process server, as NSH's own was). Only under `agent`;
-# see nsh/AGENTS.md "Agent remote control". The plug's NSH pin is redirected to this app's checkout by the
+# The window's own control plane (semantic tree, press, type, paste, scroll, screenshot) is the plug's, in
+# nsh-gpui-agent-macos: its default `dev-agent`, the strict adapter every other platform uses (a debug build only,
+# which nsh-run-agent is). Not `gpui-agent-server`, the older in-process listener: it lists no `press`, `paste` or
+# `scroll`, and each `type` or `key` presses the box again, which moved the caret in a filled money box. Only under
+# `agent`; see nsh/AGENTS.md "Agent remote control". The plug's NSH pin is redirected to this app's checkout by the
 # [patch] below.
-nsh-gpui-agent-macos = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", default-features = false, features = ["gpui-agent-server"], optional = true }
+nsh-gpui-agent-macos = { git = "https://github.com/hexuria/nsh-gpui-agent", rev = "a6bb130a544198b26b3fb22d7f4d89dd38758725", optional = true }
 
 [features]
 default = []

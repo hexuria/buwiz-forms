@@ -1,8 +1,9 @@
 // The Buwiz sign-in, drawn on the account gate only (Settings > Account's Sign in shows the gate). One owner: this module's
 // signals. The gate draws its state (signInCards.tsx) and calls its actions; it keeps no copy.
 //
-// The flow is: the email page (one page for signing in and creating an account), the code page (six boxes that check by
-// themselves), Home (or, on a first run, the app's first-run setup). Nothing else, and nothing switches to a browser. The first
+// The flow is: the first page (the logo and "Continue with email"), the email page (one page for signing in and creating an
+// account), the code page (six boxes that check by themselves), Home (or, on a first run, the app's first-run setup). The
+// back control on the email and code pages, and Android's back button, step back one page (`back`). Nothing else, and nothing switches to a browser. The first
 // tokens come through EmailPath (the address, then the emailed code; the host keeps the pending request, so a gate made anew,
 // after a relaunch or a new engine, opens on the code page). TokenPath is the seam
 // for a second way to the first tokens (a later change); nothing implements or draws one now. Every way ends in `approve`.
@@ -67,6 +68,11 @@ export interface TokenPath {
 }
 
 const state = signal<SignInState>({ kind: "idle" });
+/**
+ * The email page was opened ("Continue with email", Change email, or a code page shown): it shows rather than the first page
+ * whenever the code page does not. Back on the email page closes it; sign-out (reset) too.
+ */
+const emailOpen = signal(false);
 /** The address as typed on the email page (kept for Change email). */
 const emailText = signal("");
 /** The code as typed in the boxes. */
@@ -89,7 +95,10 @@ const approvedHooks: ((status: CloudAccountStatus) => void)[] = [];
 
 /** The state, with the code page's clock running only while it shows. */
 function setState(next: SignInState): void {
-  if (next.kind === "code") held = { request: next.request, tooMany: next.tooMany };
+  if (next.kind === "code") {
+    held = { request: next.request, tooMany: next.tooMany };
+    emailOpen.set(true);
+  }
   else if (next.kind === "approved" || next.kind === "idle") held = null;
   state.set(next);
   if (next.kind === "code") now.set(Date.now());
@@ -149,6 +158,7 @@ export function sameAddress(a: string, b: string): boolean {
 }
 
 const TOO_MANY = "Too many wrong codes. Send a new code to try again.";
+const EXPIRED = "This code has expired. Send a new code to try again.";
 
 /**
  * Continue on the email page. The address of the code page left with Change email, while its code still works: that code page
@@ -226,7 +236,7 @@ async function checkCode(digits: string): Promise<void> {
     if (checked.outcome === "expired") {
       const at = Date.now();
       const request = { ...page.request, expiresAt: Math.min(page.request.expiresAt, at), resendAt: Math.min(page.request.resendAt, at) };
-      setState(codePage(request, said("This code has expired. Press Resend for a new one.")));
+      setState(codePage(request, said(EXPIRED)));
     } else if (checked.outcome === "too-many") setState(codePage(page.request, said(TOO_MANY), true));
     else if (checked.outcome === "wait") setState(codePage(page.request, said("Sign-in is busy right now. Try again in a moment.")));
     else setState(codePage(page.request, said(checked.outcome === "wrong" ? "That code is not right. Try again." : "No connection. Check your internet and try again.")));
@@ -294,7 +304,35 @@ function changeEmail(): void {
   run++;
   codeText.set("");
   reselect = true;
+  emailOpen.set(true);
   setState({ kind: "email", said: null });
+}
+
+/** "Continue with email" on the first page: the email page. */
+function openEmail(): void {
+  emailOpen.set(true);
+}
+
+/**
+ * One page back (the pages' back control, Android's back button): the code page goes back to the email page with the address
+ * kept (Change email); the email page to the first page (its address, and the request Change email keeps, stay; a sentence
+ * goes). True when it stepped back; false on the first page, where back leaves as it does elsewhere. While Continue sends,
+ * it stays (the request is on its way) and says it handled the press. Signed in (`approved`) with the email page still open,
+ * it closes the email page as well. Android's button reaches this only while the email or code page shows (Gate.tsx).
+ */
+function back(): boolean {
+  const now = state();
+  if (now.kind === "code") {
+    changeEmail();
+    return true;
+  }
+  if (!emailOpen()) return false;
+  if (now.kind === "sending") return true;
+  batch(() => {
+    emailOpen.set(false);
+    if (now.kind === "email") setState({ kind: "email", said: null });
+  });
+  return true;
 }
 
 /**
@@ -315,20 +353,20 @@ function restore(): void {
 }
 
 /**
- * The one "get a new code" control's label: "Resend in 4:59" while locked, "Resend code" once the code has expired, "Send a new
- * code" after too many wrong tries.
+ * The one "get a new code" line under the boxes: "Send a new code in 4:59" while locked, "Send a new code" once the code has
+ * expired (a new code for the same request) and after too many wrong tries (a new request).
  */
 export function resendLabel(request: CodeRequest, at: number, tooMany = false): string {
   if (tooMany) return "Send a new code";
   const left = Math.ceil((request.resendAt - at) / 1000);
-  if (left <= 0) return "Resend code";
-  return `Resend in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  if (left <= 0) return "Send a new code";
+  return `Send a new code in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
 }
 
 /** The code page's sentence under the boxes: what the state says, or the expiry once the clock passes it. */
 export function codeSaid(page: Extract<SignInState, { kind: "code" }>, at: number): Said | null {
   if (page.said) return page.said;
-  if (at >= page.request.expiresAt) return { text: "This code has expired. Press Resend for a new one.", danger: true };
+  if (at >= page.request.expiresAt) return { text: EXPIRED, danger: true };
   return null;
 }
 
@@ -356,6 +394,10 @@ export const signInFlow = {
   resendCode,
   newCode,
   changeEmail,
+  openEmail,
+  back,
+  /** Whether the email page was opened (pageOf). */
+  emailOpen: (): boolean => emailOpen(),
   restore,
   signInWith,
   /** Hears every approval (Settings > Account shows the account). */
@@ -367,7 +409,10 @@ export const signInFlow = {
     run++;
     reselect = false;
     codeText.set("");
-    setState({ kind: "idle" });
+    batch(() => {
+      emailOpen.set(false);
+      setState({ kind: "idle" });
+    });
   },
   /** Another email path (a test). */
   useEmailPath: (next: EmailPath): void => {
@@ -380,7 +425,12 @@ export function emailSaid(now: SignInState): Said | null {
   return now.kind === "email" ? now.said : null;
 }
 
-/** Which page the state draws. */
-export function pageOf(now: SignInState): "email" | "code" {
-  return now.kind === "code" ? "code" : "email";
+/** Which page the state draws: the code page, else the email page once it was opened, else the first page. */
+export function pageOf(now: SignInState, emailOpened: boolean): "start" | "email" | "code" {
+  if (now.kind === "code") return "code";
+  return emailOpened ? "email" : "start";
 }
+
+// Every way the account gate comes back (the menu's Sign Out, Settings' Sign out and Sign in) starts the sign-in over on its
+// first page: nothing of the last sign-in (an open email page, an approval) is left behind it.
+app.onCloudLock(() => signInFlow.reset());

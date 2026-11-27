@@ -8,7 +8,7 @@ import { effect, signal, Text as NText, untracked, View } from "nsh";
 import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
-import { cx, T_H, T_MIN_H, T_MIN_W, T_SIZE, TOUCH } from "./look";
+import { cx, T_H, T_MIN_H, T_MIN_W, T_PX, T_SIZE, TOUCH } from "./look";
 import {
   DATE_ERROR, digitsOnly, editBase, formatIso, formatLongDate, formatMDY, formatMoney, formatTinDigits, intMask, type Mask, moneyMask, moneyPlain,
   isZeroAmount, parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownMoney, TIN_LENGTH, TIN_MASK, type TextSelection,
@@ -47,6 +47,8 @@ export interface TextFieldProps {
    * in a row of its own (the command palette's, whose icon and Esc key are beside it); the row draws the frame.
    */
   bare?: boolean;
+  /** The sign-in pages' field: 46 points tall (48 on Android), radius 10, a 13-point label and 14-point text. */
+  large?: boolean;
   /** Right-aligned text (amounts, percents), centred (the phone TIN grid's digits). */
   align?: "left" | "right" | "center";
   /** Tabular figures (TINs, amounts, dates). */
@@ -88,7 +90,7 @@ export function TextField(props: TextFieldProps) {
   return (
     <View class="min-w-0 gap-1" style={{ width: props.width }}>
       <If when={props.label}>
-        <Text variant="meta" tone="fg2">{props.label}</Text>
+        <Text variant={props.large ? "body" : "meta"} tone="fg2">{props.label}</Text>
       </If>
       <View
         class={cx(
@@ -96,11 +98,12 @@ export function TextField(props: TextFieldProps) {
           props.bare
             ? TOUCH ? T_MIN_H : "h-8"
             : cx(
-                "rounded-(--radius-row) border",
+                props.large ? "rounded-[10px] border" : "rounded-(--radius-row) border",
                 // A centred box is a cell of the phone TIN grid: 47 pt wide on a 320 pt phone, where 10 pt sides cut
                 // the third digit. It keeps 4 pt, like the locked cell (controls/model.ts readBoxPad).
-                props.align === "center" ? "px-1" : "px-2.5",
-                TOUCH ? T_MIN_H : sm() ? "h-7" : "h-8",
+                props.align === "center" ? "px-1" : props.large ? "px-0" : "px-2.5",
+                // The large field is one fixed height, so its input (h-full) fills it: a press anywhere in the box focuses it.
+                props.large ? (T_PX > 46 ? "h-12" : "h-11.5") : TOUCH ? T_MIN_H : sm() ? "h-7" : "h-8",
                 flat() ? "border-border bg-hover" : "bg-card",
                 props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
               ),
@@ -138,7 +141,9 @@ export function TextField(props: TextFieldProps) {
           onKeyPress={props.onKeyPress}
           class={cx(
             "h-full min-w-0 flex-1 bg-transparent caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
-            props.bare ? "text-emph font-normal" : "text-body",
+            props.bare || props.large ? "text-emph font-normal" : "text-body",
+            // The large field's sides are the input's own, so the whole box takes the press.
+            props.large && "px-3",
             flat() ? "text-muted-foreground" : "text-foreground",
             props.align === "right" && "text-right",
             props.align === "center" && "text-center",
@@ -747,6 +752,11 @@ export interface PinCellsProps {
   focusRef?: (focus: () => void) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  /**
+   * The sign-in code page's large boxes: this many points wide, 56 tall, 23-point digits, 6 apart and 14 between the two
+   * groups. Unset: the kit's boxes.
+   */
+  large?: { width: number };
 }
 
 /** PIN and one-time-code cells: 32-point boxes (44 on touch), radius 8, the accent on the cell that takes the next digit. */
@@ -765,14 +775,15 @@ export function PinCells(props: PinCellsProps) {
       disabled={props.disabled}
       groups={props.length === 6 ? 2 : 1}
       accessibilityLabel={`${props.label}, ${props.length} digits`}
-      class="flex-row gap-3 disabled:opacity-50"
+      class={cx("flex-row disabled:opacity-50", props.large ? "gap-3.5" : "gap-3")}
       groupClass="flex-row gap-1.5"
       cellClass={cx(
-        "items-center justify-center rounded-(--radius-row) border bg-card text-emph font-semibold tabular-nums text-foreground focus:border-accent-blue",
+        "items-center justify-center rounded-(--radius-row) border bg-card font-semibold tabular-nums text-foreground focus:border-accent-blue",
         props.error ? "border-danger" : "border-border-strong",
-        TOUCH ? "h-12 w-11" : "size-8",
+        props.large ? undefined : cx("text-emph", TOUCH ? "h-12 w-11" : "size-8"),
       )}
-      caretClass="h-4 w-0.5 rounded-full bg-foreground"
+      cellStyle={props.large ? { width: props.large.width, height: 56, fontSize: 23 } : undefined}
+      caretClass={props.large ? "h-6 w-0.5 rounded-full bg-foreground" : "h-4 w-0.5 rounded-full bg-foreground"}
     />
   );
 }

@@ -8,7 +8,7 @@ import { AuthCard, Heading } from "./parts";
 export function AccessError() {
   return (
     <AuthCard testID="access-error-card">
-      <Heading icon="lock" title="eBIRForms is locked" line="This computer's sign-in could not be checked, so nothing opens." testID="access-error-title" />
+      <Heading title="eBIRForms is locked" line="This computer's sign-in could not be checked, so nothing opens." testID="access-error-title" />
       <Text variant="meta" tone="danger" testID="access-error-detail">{app.accessError() ?? ""}</Text>
       <AppButton testID="access-error-retry" label="Try again" variant="primary" block onPress={() => app.retryAccess()} />
     </AuthCard>
