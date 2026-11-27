@@ -201,7 +201,8 @@ test("a card's send chip: Checking, Held, Retrying, Needs attention and Not sent
   expect(sendChip(row({ status: "Queued", send: send("needs_attention") }))).toEqual({ label: "Needs attention", tone: "warning", line: "line of needs_attention" });
   expect(sendChip(row({ status: "Queued", send: send("checking") }))).toEqual({ label: "Checking", tone: "neutral", line: "line of checking" });
   expect(sendChip(row({ status: "Draft", send: send("refused") }))).toEqual({ label: "Not sent", tone: "danger", line: "line of refused" });
-  for (const stage of ["queued", "sending", "sent", "test_sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
+  for (const stage of ["queued", "sending", "sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
+  expect(sendChip(row({ send: send("test_sent") }))?.label).toBe("Test send: not filed");
   expect(sendChip(row({}))).toBe(null);
 });
 

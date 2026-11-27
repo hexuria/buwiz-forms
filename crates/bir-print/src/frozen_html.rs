@@ -6357,6 +6357,33 @@ pub fn filled_document_with_receipt(
     Ok(filled_document_with_report(slug, fields, receipt)?.html)
 }
 
+/// A print of a relay dry run. It is never confirmed and never carries a receipt; the sheet itself says so, because
+/// the paper must not read as a filed return away from the app.
+pub fn filled_document_test_send(
+    slug: &str,
+    fields: &BTreeMap<String, String>,
+) -> Result<String, String> {
+    Ok(prepend_after_body_start(
+        &filled_document_with_receipt(slug, fields, None)?,
+        "<div style=\"position:absolute;top:2mm;left:0;right:0;z-index:9999;text-align:center;color:#9f1239;font:bold 10pt sans-serif\">Test send: not filed. Nothing reached the BIR.</div>",
+    ))
+}
+
+fn prepend_after_body_start(document: &str, fragment: &str) -> String {
+    let Some(body) = document.find("<body") else {
+        return format!("{fragment}{document}");
+    };
+    let Some(open_end) = document[body..].find('>').map(|at| body + at + 1) else {
+        return format!("{fragment}{document}");
+    };
+    format!(
+        "{}{}{}",
+        &document[..open_end],
+        fragment,
+        &document[open_end..]
+    )
+}
+
 /// `@page { size:612pt 936pt; … }` from the bundle's form.css, so the receipt
 /// sheet matches the form's sheet; letter-long fallback if a bundle omits it.
 fn page_size_from_css(css: &str) -> (String, String) {
@@ -8618,6 +8645,15 @@ mod tests {
         );
         assert!(!with_text.contains("class=\"receipt-html\""));
         assert!(with_text.contains("class=\"receipt-text\""));
+    }
+
+    #[test]
+    fn a_test_send_print_says_it_is_not_filed_and_has_no_receipt() {
+        let fields = std::collections::BTreeMap::new();
+        let html =
+            super::filled_document_test_send("1601c-2018", &fields).expect("test-send print");
+        assert!(html.contains("Test send: not filed. Nothing reached the BIR."));
+        assert!(!html.contains("page-receipt"));
     }
 
     #[test]

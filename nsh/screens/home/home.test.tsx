@@ -255,8 +255,9 @@ for (const { name, size } of SIZES) {
     // A filed return with its template (so its row shows its chip) and an undated as-needed return, both sent.
     const dry = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "dry" }) });
     await dry.waitFor("id:home-dashboard", { timeout: 60000 });
-    await dry.waitUntil(() => shown(dry.texts(), "Dry run") === 2, { timeout: 20000 });
+    await dry.waitUntil(() => shown(dry.texts(), "Dry run") === 1, { timeout: 20000 });
     expect(shown(dry.texts(), "Filed")).toBe(0);
+    expect(dry.texts()).toContain("Filed returns show here.");
     const real = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "real" }) });
     await real.waitFor("id:home-dashboard", { timeout: 60000 });
     await real.waitUntil(() => shown(real.texts(), "Filed") === 2, { timeout: 20000 });

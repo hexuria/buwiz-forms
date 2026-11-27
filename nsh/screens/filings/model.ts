@@ -94,6 +94,7 @@ export const SEND_CHIPS: Readonly<Record<string, { label: string; tone: "neutral
   waiting: { label: "Retrying", tone: "warning" },
   needs_attention: { label: "Needs attention", tone: "warning" },
   refused: { label: "Not sent", tone: "danger" },
+  test_sent: { label: "Test send: not filed", tone: "neutral" },
 };
 
 /** A card's send chip and its line (the host's `send.line`), or null where the card says only its status. */

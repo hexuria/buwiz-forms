@@ -6981,36 +6981,29 @@ fn screen_form_filed_original(
 }
 
 /// The print sheet's field map and receipt page for a draft as saved.
-pub(crate) fn print_map(
-    db: &Database,
-    kind: AgentFormKind,
-    draft: &Value,
-) -> Result<
+type PrintMapResult = Result<
     (
         BTreeMap<String, String>,
         Option<bir_print::frozen_html::ReceiptPage>,
+        bool,
     ),
     HostError,
-> {
+>;
+
+pub(crate) fn print_map(db: &Database, kind: AgentFormKind, draft: &Value) -> PrintMapResult {
     fn typed<F: serde::de::DeserializeOwned>(draft: &Value) -> Result<F, HostError> {
         serde_json::from_value(draft.clone()).map_err(|error| host_error(error.to_string()))
     }
-    let res: Result<
-        (
-            BTreeMap<String, String>,
-            Option<bir_print::frozen_html::ReceiptPage>,
-        ),
-        HostError,
-    > = match kind {
+    let res: PrintMapResult = match kind {
         AgentFormKind::Form1601C => out_of_line(|| {
             let d: bir_core::forms::Form1601CDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email_address);
-            Ok((d.to_print_field_map(), page))
+            Ok((d.to_print_field_map(), page, d.submitted_dry_run))
         }),
         AgentFormKind::Form2551Q => out_of_line(|| {
             let d: bir_core::forms::Form2551QDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email);
-            Ok((d.to_print_field_map(), page))
+            Ok((d.to_print_field_map(), page, d.submitted_dry_run))
         }),
         AgentFormKind::Queueable(queueable) => {
             bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
@@ -7020,11 +7013,11 @@ pub(crate) fn print_map(
                     d.lifecycle().receipt_id,
                     d.submission_email(),
                 );
-                Ok((d.print_field_map(), page))
+                Ok((d.print_field_map(), page, d.lifecycle().submitted_dry_run))
             }))
         }
     };
-    let (mut fields, page) = res?;
+    let (mut fields, page, test_send) = res?;
     if let Some(slug) = crate::bir_module::print_slug_for(kind.form_code()) {
         let printed_keys = bir_print::frozen_html::printed_writer_keys(slug);
         bir_core::official_xml::apply_print_zero_defaults(
@@ -7033,7 +7026,7 @@ pub(crate) fn print_map(
             &mut fields,
         );
     }
-    Ok((fields, page))
+    Ok((fields, page, test_send))
 }
 
 /// Print preview of the draft the page holds (save it first). Works from the
@@ -7049,7 +7042,7 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let identity = agent::identity(kind, &draft).map_err(host_error)?;
     let year = identity.taxable_year;
     with_database(|db| {
-        let (fields, receipt) = print_map(db, kind, &draft)?;
+        let (fields, receipt, test_send) = print_map(db, kind, &draft)?;
         let profile = db
             .get_profile_by_tin(&identity.tin)
             .ok()
@@ -7061,6 +7054,7 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
             year,
             &fields,
             receipt.as_ref(),
+            test_send,
             profile,
         )
     })
@@ -7100,14 +7094,8 @@ fn page_print_map(
     kind: AgentFormKind,
     draft: &Value,
     sample: Option<&SampleMark>,
-) -> Result<
-    (
-        BTreeMap<String, String>,
-        Option<bir_print::frozen_html::ReceiptPage>,
-    ),
-    HostError,
-> {
-    let (mut fields, receipt) = print_map(db, kind, draft)?;
+) -> PrintMapResult {
+    let (mut fields, receipt, test_send) = print_map(db, kind, draft)?;
     if let Some(mark) = sample {
         for key in &mark.blank {
             if let Some(value) = fields.get_mut(key) {
@@ -7115,7 +7103,7 @@ fn page_print_map(
             }
         }
     }
-    Ok((fields, receipt))
+    Ok((fields, receipt, test_send))
 }
 
 /// Print preview of a Form library sample as the page holds it (decided
@@ -7135,7 +7123,7 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
     let identity = agent::identity(kind, &draft).map_err(host_error)?;
     with_database(|db| {
-        let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
+        let (fields, receipt, test_send) = page_print_map(db, kind, &draft, sample.as_ref())?;
         let profile = db
             .get_profile_by_tin(&identity.tin)
             .ok()
@@ -7147,6 +7135,7 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
             identity.taxable_year,
             &fields,
             receipt.as_ref(),
+            test_send,
             profile,
         )
     })
@@ -7167,15 +7156,19 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     let slug = crate::bir_module::print_slug_for(kind.form_code())
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
     with_database(|db| {
-        let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
+        let (fields, receipt, test_send) = page_print_map(db, kind, &draft, sample.as_ref())?;
         let slug = slug.to_string();
         // Template fill + prepare + staticize run off the UI thread.
         let produce = Box::new(move || {
-            let html = bir_print::frozen_html::filled_document_with_receipt(
-                &slug,
-                &fields,
-                receipt.as_ref(),
-            )
+            let html = if test_send {
+                bir_print::frozen_html::filled_document_test_send(&slug, &fields)
+            } else {
+                bir_print::frozen_html::filled_document_with_receipt(
+                    &slug,
+                    &fields,
+                    receipt.as_ref(),
+                )
+            }
             .unwrap_or_default();
             crate::static_html::staticize(&crate::print_sheet::prepare_html_for(&slug, &html, true))
         });
@@ -14199,7 +14192,7 @@ mod tests {
                         ),
                     };
                     let slug = crate::bir_module::print_slug_for(code).expect("a print sheet");
-                    let (fields, _) =
+                    let (fields, _, _) =
                         with_database(|db| print_map(db, kind, &saved["draft"])).unwrap();
                     bir_print::frozen_html::filled_document(slug, &fields).expect("prints");
                     done.push(code);
@@ -18101,7 +18094,7 @@ mod tests {
                 draft["registered_address"] = json!(text);
                 draft
             };
-            let (fields, _) = with_database(|db| print_map(db, kind, &draft)).unwrap();
+            let (fields, _, _) = with_database(|db| print_map(db, kind, &draft)).unwrap();
             let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
             let printed = bir_print::frozen_html::printed_cells(&document);
             let parts: Vec<&(String, Option<f64>)> =
@@ -18748,7 +18741,7 @@ mod tests {
                     continue;
                 }
                 assert_eq!(filled["rejected"], json!({}), "{code} {key}");
-                let (fields, _) =
+                let (fields, _, _) =
                     with_database(|db| print_map(db, kind, &filled["draft"])).unwrap();
                 let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
                 let printed = squeezed(&printed_cells_in_order(slug, &document));
@@ -18824,7 +18817,7 @@ mod tests {
                     assert_eq!(filled["rejected"], json!({}), "{code} {len}");
                     let draft = &filled["draft"];
                     let kept = squeezed(&xml_pool(kind, draft, &pool.keys));
-                    let (fields, _) = with_database(|db| print_map(db, kind, draft)).unwrap();
+                    let (fields, _, _) = with_database(|db| print_map(db, kind, draft)).unwrap();
                     let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
                     let printed: Vec<(String, Option<f64>)> = cells
                         .iter()
