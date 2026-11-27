@@ -1,0 +1,56 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "probe-a",
+  "fingerprint": "fnv1a64:0b62d0d5d457b12a",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 398
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 54
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 406
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 52
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 736
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 53
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 413
+    },
+    {
+      "id": "s8",
+      "ok": false,
+      "error": "node `new-tp-name` value: expected \"E2E SMOKE TAXPAYER\", got Some(\"\")",
+      "error_code": "assert_failed",
+      "elapsed_ms": 44
+    }
+  ],
+  "elapsed_ms": 2160
+}

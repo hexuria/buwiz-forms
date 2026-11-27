@@ -1,0 +1,20 @@
+# Smoke prerequisite: the new taxpayer has no tax year, and New return is refused without one ("Head office has no
+# tax year yet"). Starts on the taxpayer page right after sign-up, gives the branch $year, chooses 2551Q in Edit
+# forms, ends on the Forms tab. A year-less taxpayer's Forms tab renders the Add year band open already (there is no
+# tp-add-year-open button until a year exists). The year picker shows its few years without the search, and the forms
+# list is filtered inline, so nothing here needs a sheet's clipped search box.
+click tp-tabs-forms
+wait_until tp-add-year-select-trigger --timeout-ms 5000
+click tp-add-year-select-trigger
+wait_until tp-add-year-select-opt-$year --timeout-ms 5000
+click tp-add-year-select-opt-$year
+wait_until tp-add-year-add --timeout-ms 5000
+click tp-add-year-add
+wait_until tp-years-$year --timeout-ms 5000
+click tp-forms-edit
+wait_until tp-forms-search --timeout-ms 5000
+set_value tp-forms-search 2551
+wait_until tp-form-2551Q --timeout-ms 5000
+click tp-form-2551Q
+click tp-forms-save
+wait_until tp-forms-save --absent --timeout-ms 5000 --screenshot

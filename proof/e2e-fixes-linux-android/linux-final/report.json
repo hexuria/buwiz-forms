@@ -1,0 +1,116 @@
+{
+ "suite": "smoke",
+ "target": "linux",
+ "started": "20261127-085515",
+ "out": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515",
+ "cli_version": "0.4.1",
+ "app_commit": "85dd0097",
+ "platform": "desktop",
+ "os": "linux",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 481,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 9728,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 2017,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 7377,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "fail",
+   "ms": 969,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced.json",
+   "step": "s2",
+   "error": "target_gone: fp-frm2551Qv2018:txt16",
+   "error_code": "target_gone",
+   "line": null,
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 22,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 12913,
+   "note": "precondition: Queue validates first: a 2551Q holding only Items 15 and 16 may stop at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "step": "s2",
+   "error": "wait_until timed out: node `queue-continue` not found",
+   "error_code": "timeout",
+   "line": "wait_until queue-continue --timeout-ms 10000 --screenshot",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/07-queue/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/07-queue/failure-tree.json"
+  },
+  {
+   "name": "birth-date",
+   "status": "fail",
+   "ms": 5131,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.wants",
+   "step": "s14",
+   "error": "`node 9282` is offscreen",
+   "error_code": "host_error",
+   "line": "click tp-taxpayer-birth_date-sheet-done",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/failure-tree.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "fail",
+   "ms": 325,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "step": "s1",
+   "error": "occluded_by: 555",
+   "error_code": "host_error",
+   "line": "click nb-avatar",
+   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/09-sign-out/failure.png",
+   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/09-sign-out/failure-tree.json"
+  }
+ ]
+}

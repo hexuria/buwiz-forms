@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tax-year",
+  "fingerprint": "fnv1a64:b5adf073e096fa36",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 475
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 4
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 727
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 630
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 3
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 922
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 7
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 481
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1017
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 494
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1451
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 570,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/03-tax-year/015-s15.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/03-tax-year/015-s15.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 6825
+}

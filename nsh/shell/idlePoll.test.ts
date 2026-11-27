@@ -2,6 +2,7 @@ import { effect } from "nsh";
 import { expect, test } from "nsh/test";
 import { Door } from "ebirforms/native";
 import { bir } from "../bir";
+import { createDemoTaxpayer } from "../bir/testing";
 import { boot, pollSteps } from "./app";
 import { store } from "./store";
 
@@ -45,7 +46,13 @@ test("the real database token keeps an empty returns read until a write", async 
   for (let i = 0; i < 20; i++) pollSteps.events();
   console.log(`SPEED idle: 20 unchanged polls; reactive evaluations=${evaluations - before}; wall=${Date.now() - start}ms`);
   expect(evaluations - before).toBe(0);
+  // The theme is a device setting since accounts-and-lock A1 (device.db): the database token does not follow it, and no
+  // screen needs it to (the preference is read once at boot and set directly by its toggle).
   bir.set_setting("theme_preference", "dark");
+  pollSteps.events();
+  expect(evaluations - before).toBe(0);
+  // A write to the database moves the token.
+  createDemoTaxpayer();
   pollSteps.events();
   expect(evaluations - before).toBe(1);
 });

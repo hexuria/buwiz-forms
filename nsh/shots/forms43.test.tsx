@@ -45,7 +45,7 @@ const FORMS: [code: string, parts: number][] = [
   ["2200M",7],
   ["2200P",7],
   ["2200S",6],
-  ["2200T",7],
+  ["2200T",6],  // 6 not 7: the official paper is January 2020 (2200-T Jan 2020 ENCS Final version2.pdf, the only 2200T paper in the official offline package v7.9.6.2.1). It prints Schedule 1's rows for the rates effective 2020-2023 that the August 2022 sheet no longer printed, so what was the seventh part "Not on the printed sheet" is empty: all 87 of its keys now sit in Part V with print cells on the sheet.
   ["2550M",12],
   ["2550Q",6],
   ["2551Q",5],

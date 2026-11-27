@@ -144,6 +144,8 @@ nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos" }
 nsh-platform-windows = { path = "../../nsh/crates/nsh-platform-windows" }
 
 [dev-dependencies]
+# Tests keep out of the real data folder and keychain (bir-core's test-build rule).
+bir-core = { path = "../crates/bir-core", default-features = false, features = ["test-support"] }
 futures = "0.3"
 temp-env = "0.3"
 tempfile = "3"

@@ -294,6 +294,9 @@ mod tests {
             [
                 ("HOME", Some(home.path().as_os_str())),
                 ("XDG_DATA_HOME", None),
+                // Windows reads the data folder from LOCALAPPDATA: point it at the temp home too, so bir-core's
+                // test-build rule keeps this temp folder instead of its own scratch one.
+                ("LOCALAPPDATA", Some(home.path().as_os_str())),
                 ("BIR_DATABASE_PATH", None),
             ],
             || {

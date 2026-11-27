@@ -6,4 +6,4 @@ wait_until filings-search --timeout-ms 5000 --screenshot
 click tab-calendar
 wait_until calendar-narrow --timeout-ms 5000 --screenshot
 click tab-home
-wait_until home-tp-$tin --timeout-ms 5000 --screenshot
+wait_until home-tp-$tin_root --timeout-ms 5000 --screenshot
