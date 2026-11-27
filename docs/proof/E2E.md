@@ -145,11 +145,12 @@ A suite is `agent-recipes/e2e/<name>.json`:
 `id`, `id_regex` (with `group`), `role` (one or a list), `name`, `name_regex`, `visible`.
 
 A spec may add `"after": "<step id>"` when the node can exist only after the recipe has run for a while. JSON recipes
-use their own step ids; a `.wants` recipe's steps are `s1`, `s2`, ... in file order. The runner writes the slices into
-the run's evidence folder (never the repository), runs the steps through that step, takes a fresh snapshot and resolves,
-then runs the rest in the same app session. The report and the merged receipt are still one recipe with the original
-step ids. A node not found there is `setup` at that step, with the screenshot and tree kept. A parameter used at or
-before its `after` step is refused by `just e2e check <suite>`.
+use their own step ids; a `.wants` recipe's steps are `s1`, `s2`, ... in file order. The runner writes the slice files
+into the run's evidence folder (never the repository), runs the steps through that step, takes a fresh snapshot and
+resolves, then runs the rest in the same app session. `.wants` slicing assumes one step per non-comment line, the same
+shape gpui-agent parses; that is what maps a slice line number back to the original step id. The report and the merged
+receipt are still one recipe with the original step ids. A node not found there is `setup` at that step, with the
+screenshot and tree kept. A parameter used at or before its `after` step is refused by `just e2e check <suite>`.
 
 The delete-row case: 2551Q's Schedule 1 is the collapsed part 3 (`fp-part-3-toggle`), and its Add row can be culled
 until that part is expanded or scrolled to. If `delete-row.wants` first takes a step that makes the table visible (that
@@ -179,6 +180,7 @@ step must not use `$table`) and only then clicks `$table-add`, the entry's spec 
 - every file exists and parses;
 - every param it uses is supplied;
 - a param resolved `after` a step is not used at or before that step;
+- in a JSON recipe, the cut after that step does not separate a step from a step it `needs`;
 - send steps are marked;
 - no secret box is typed into;
 - `key_delay_ms` appears only on `type`, and only in entries with `needs_cli`;

@@ -306,6 +306,23 @@ class SuiteTests(unittest.TestCase):
                 problems = "\n".join(E2E.check_suite(suite))
             self.assertIn(f"uses $table at {used_at}, at or before its resolve's after step s2", problems)
 
+    def test_a_json_after_that_cuts_a_needs_edge_is_refused_by_check(self):
+        recipe = {"v": 1, "name": "cut", "steps": [
+            {"id": "expose", "op": "click", "target": "expose-table"},
+            {"id": "prepare", "op": "click", "target": "prepare-table"},
+            {"id": "use", "op": "click", "target": "$table-add", "needs": ["prepare"]},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "cut.json", json.dumps(recipe))
+            suite = suite_of(folder, [{"name": "cut", "file": "cut.json", "resolve": {
+                "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "prepare"}}}])
+            problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn("$table resolves after 'prepare', cutting the needs edge prepare -> use", problems)
+
+            suite = suite_of(folder, [{"name": "cut", "file": "cut.json", "resolve": {
+                "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "expose"}}}])
+            self.assertEqual(E2E.check_suite(suite), [])
+
     def test_variants_and_fallbacks_follow_the_host(self):
         entry = {"name": "m", "desktop": "d.json", "phone": "p.json", "windows": "w.json", "linux": "narrow.json",
                  "needs_cli": "0.4.1", "needs_feature": {"phone": "software_keyboard"}, "fallback": "plain.wants"}
@@ -428,7 +445,10 @@ elif op == "recipe":
         bodies = lines
     done = []
     failure = None
-    for step_id, body in zip(ids, bodies):
+    for index, (step_id, body) in enumerate(zip(ids, bodies), 1):
+        if "die-before-receipt" in body:
+            print(f"error: {path}: line {index}: died before receipt", file=sys.stderr)
+            sys.exit(1)
         failed = "fail-here" in body
         done.append({"id": step_id, "ok": not failed, "elapsed_ms": 1})
         if failed:
@@ -436,7 +456,9 @@ elif op == "recipe":
             done[-1]["error_code"] = "no_node"
             failure = done[-1]
             break
-    receipt = {"v": 1, "ok": failure is None, "recipe": path.name, "steps": done}
+    receipt = {"v": 1, "ok": failure is None, "recipe": path.name, "steps": done,
+               "fingerprint": f"fp-{path.stem}-{len(ids)}", "session_reused": True,
+               "elapsed_ms": 5 + len(ids)}
     print(json.dumps(receipt))
     sys.exit(1 if failure else 0)
 '''
@@ -624,6 +646,36 @@ class RunEntryTests(unittest.TestCase):
             self.assertEqual(result["line"], "click fail-here")
             receipt = json.loads((out / "01-report-ids" / "receipt.json").read_text())
             self.assertEqual([step["id"] for step in receipt["steps"]], ["s1", "s2", "s3"])
+
+    def test_a_merged_split_receipt_lists_fingerprints_sums_elapsed_and_marks_split(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, tree_with_table())
+            entry = self.late_entry(name="merged-receipt")
+            result, suite, out, log = self.run_late_entry(
+                folder, fake, entry, "click expose-table\nclick $table-add\nclick done\n")
+            self.assertEqual(result["status"], "pass")
+            receipt = json.loads((out / "01-merged-receipt" / "receipt.json").read_text())
+            self.assertEqual(receipt["fingerprints"], ["fp-slice-1-1", "fp-slice-2-2"])
+            self.assertEqual(receipt["fingerprint"], "fp-slice-2-2")
+            self.assertEqual(receipt["elapsed_ms"], 13)
+            self.assertIs(receipt["split"], True)
+            self.assertIn("session_reused", receipt)
+
+    def test_a_slice_that_dies_before_its_receipt_reports_the_original_step_and_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, tree_with_table())
+            entry = self.late_entry(name="lost-receipt")
+            result, suite, out, log = self.run_late_entry(
+                folder, fake, entry, "click expose-table\nclick $table-add\nclick die-before-receipt\n")
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["step"], "s3")
+            self.assertEqual(result["line"], "click die-before-receipt")
+            self.assertIn("late.wants", result["error"])
+            self.assertIn("step s3", result["error"])
+            self.assertNotIn("slice-2.wants", result["error"])
+            self.assertNotIn("line 2", result["error"])
 
 
 if __name__ == "__main__":

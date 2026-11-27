@@ -220,6 +220,21 @@ def step_ids(path):
     return [f"s{index}" for index, _ in enumerate(steps, 1)]
 
 
+def needs_edges_cut(steps, ids, cut):
+    """The `(needed, dependent)` JSON step edges a cut after position `cut` would separate."""
+    positions = {step_id: position for position, step_id in enumerate(ids, 1)}
+    edges = []
+    for position, step in enumerate(steps, 1):
+        needs = step.get("needs") or []
+        if isinstance(needs, str):
+            needs = [needs]
+        for need in needs:
+            need_position = positions.get(str(need))
+            if need_position is not None and (need_position <= cut) != (position <= cut):
+                edges.append((str(need), ids[position - 1]))
+    return edges
+
+
 def bind(text, params):
     """`text` with $name / ${name} replaced from `params` (unknown names stay as written)."""
     if not isinstance(text, str):
@@ -437,11 +452,16 @@ def check_suite(suite):
                 if after not in ids:
                     problems.append(f"{where}: {file}: ${param} resolves after {after!r}, which is not a step id")
                     continue
-                for index in range(ids.index(after) + 1):
+                cut = ids.index(after) + 1
+                for index in range(cut):
                     if param in used_by_step[index]:
                         problems.append(f"{where}: {file} uses ${param} at {ids[index]}, at or before its resolve's "
                                         f"after step {after}")
                         break
+                if is_json_recipe(path):
+                    for needed, dependent in needs_edges_cut(steps, ids, cut):
+                        problems.append(f"{where}: {file}: ${param} resolves after {after!r}, cutting the needs edge "
+                                        f"{needed} -> {dependent}")
             problems += [f"{where}: {problem}" for problem in step_problems(steps, bound, file, entry)]
             if any(step.get("key_delay_ms") is not None for step in steps) and not entry.get("needs_cli"):
                 problems.append(f"{where}: {file} paces typing (key_delay_ms): mark it \"needs_cli\": \"0.4.1\" "
@@ -688,12 +708,20 @@ def run_recipe_file(agent, path, params, entry, folder, log, receipt_name="recei
 def write_merged_receipt(path, parts, runs, folder):
     """One receipt for a split recipe, with every `.wants` step id mapped back to its original sN."""
     merged = {}
+    fingerprints = []
+    elapsed_ms = 0
     for run in runs:
         receipt = run["receipt"]
         if isinstance(receipt, dict):
             for key, value in receipt.items():
                 if key not in ("steps", "ok", "recipe"):
                     merged[key] = value
+            if receipt.get("fingerprint") is not None:
+                fingerprints.append(receipt["fingerprint"])
+            try:
+                elapsed_ms += int(receipt.get("elapsed_ms") or 0)
+            except (TypeError, ValueError):
+                pass
     steps = []
     for run in runs:
         receipt = run["receipt"]
@@ -703,13 +731,50 @@ def write_merged_receipt(path, parts, runs, folder):
             item = dict(step)
             item["id"] = run["part"]["id_map"].get(item.get("id"), item.get("id"))
             steps.append(item)
-    merged.update(v=1, recipe=Path(path).name, steps=steps,
+    merged.update(v=1, recipe=Path(path).name, steps=steps, fingerprints=fingerprints, elapsed_ms=elapsed_ms,
+                  split=True,
                   ok=len(runs) == len(parts) and all(
                       run["code"] == 0 and isinstance(run["receipt"], dict) and run["receipt"].get("ok")
                       for run in runs))
     receipt_path = Path(folder) / "receipt.json"
     receipt_path.write_text(json.dumps(merged, indent=1), encoding="utf-8")
     return merged, receipt_path
+
+
+def map_slice_stderr(path, part, stderr):
+    """Map a dead slice's stderr back to the original recipe: `(text, original step id or None)`.
+
+    gpui-agent reports `.wants` parse errors by line. A written slice has exactly one step on each non-comment line,
+    so that local line number is the local step number; `part["id_map"]` takes either form back to the original id.
+    """
+    text = stderr or ""
+    if not text:
+        return text, None
+    candidates = []
+    for match in re.finditer(r"step\s+`([^`]+)`", text):
+        candidates.append((match.start(), match.group(1), None))
+    for match in re.finditer(r"\bstep\s+([A-Za-z0-9][\w:.-]*)\b", text):
+        candidates.append((match.start(), match.group(1), None))
+    if not str(part["path"]).endswith(".json"):
+        for match in re.finditer(r"\bline\s+(\d+)\b", text):
+            candidates.append((match.start(), f"s{int(match.group(1))}", match.group(1)))
+    local = line = original_step = None
+    for _, candidate, candidate_line in sorted(candidates, key=lambda item: item[0]):
+        if candidate in part["id_map"]:
+            local, line = candidate, candidate_line
+            original_step = part["id_map"][candidate]
+            break
+    original_path = Path(path)
+    text = text.replace(str(part["path"]), str(original_path))
+    if part["path"].name != original_path.name:
+        text = text.replace(part["path"].name, original_path.name)
+    if original_step:
+        if line is not None:
+            text = re.sub(rf"\bline\s+{re.escape(line)}\b", f"step {original_step}", text)
+        else:
+            text = re.sub(rf"step\s+`{re.escape(local)}`", f"step {original_step}", text)
+            text = re.sub(rf"\bstep\s+{re.escape(local)}\b", f"step {original_step}", text)
+    return text, original_step
 
 
 def capture_failure_evidence(result, folder, agent, log):
@@ -730,7 +795,8 @@ def capture_failure_evidence(result, folder, agent, log):
         pass
 
 
-def finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, started, context, agent, log, folder):
+def finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, started, context, agent, log, folder,
+                  step_hint=None):
     """Fill `result` from a recipe's terminal receipt, exactly as an unsplit run reports it."""
     result["ms"] = round((time.monotonic() - started) * 1000)
     if code == 0 and isinstance(receipt, dict) and receipt.get("ok"):
@@ -738,6 +804,8 @@ def finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, star
         log.line("recipe", entry["name"], "pass" + (f" ({note})" if note else ""), result["ms"])
         return result
     step, error, error_code = failing_step(receipt)
+    if step is None:
+        step = step_hint
     if not error:
         error = log.redact(stderr.strip() or stdout.strip() or f"exit {code}")[-500:]
     result.update(step=step, error=log.redact(error), error_code=error_code, line=wants_line_of(path, step))
@@ -884,12 +952,16 @@ def run_entry(index, entry, suite, context, agent, log, out):
                 return result
     if terminal is None:
         terminal = runs[-1]
+    step_hint = None
+    if terminal["receipt"] is None:
+        mapped_stderr, step_hint = map_slice_stderr(path, terminal["part"], terminal["stderr"])
+        terminal = {**terminal, "stderr": mapped_stderr}
     if recorder:
         result["video"] = recorder.stop()
     merged, merged_path = write_merged_receipt(path, parts, runs, folder)
     redact_file(merged_path, log)
     return finish_recipe(result, entry, path, terminal["code"], terminal["stdout"], terminal["stderr"], merged, note,
-                         started, context, agent, log, folder)
+                         started, context, agent, log, folder, step_hint=step_hint)
 
 
 # --- The app ------------------------------------------------------------------------------------------------------
