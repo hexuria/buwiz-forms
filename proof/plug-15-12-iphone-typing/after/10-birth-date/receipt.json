@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-birth-date-phone",
+  "fingerprint": "fnv1a64:4e782350b8988d3a",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "occluded_by: 429",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 359
+    }
+  ],
+  "elapsed_ms": 359
+}

@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "sign-out-phone",
+  "fingerprint": "fnv1a64:4314f8fb843043cc",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "occluded_by: 429",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 356
+    }
+  ],
+  "elapsed_ms": 356
+}

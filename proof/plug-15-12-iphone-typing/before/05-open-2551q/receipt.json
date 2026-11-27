@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "open-2551q-phone",
+  "fingerprint": "fnv1a64:f3d4a0e21f11a476",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1010
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 439
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1039
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 146,
+      "screenshot": {
+        "path": "/Users/devin/plugjob/out-before/05-open-2551q/005-s5.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/plugjob/out-before/05-open-2551q/005-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2652
+}

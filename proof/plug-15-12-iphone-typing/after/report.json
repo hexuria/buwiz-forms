@@ -1,0 +1,145 @@
+{
+ "suite": "smoke",
+ "target": "ios",
+ "started": "20261127-142707",
+ "out": "/Users/devin/plugjob/out-after",
+ "cli_version": "0.4.1",
+ "app_commit": "58621b4f",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 2238,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/Users/devin/plugjob/out-after/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 22677,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json",
+   "video": "/Users/devin/plugjob/out-after/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 7795,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants",
+   "video": "/Users/devin/plugjob/out-after/03-tax-year/recording.mp4"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 3559,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": "/Users/devin/plugjob/out-after/04-navigate/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 3807,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "/Users/devin/plugjob/out-after/05-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes",
+   "status": "known gap",
+   "ms": 2816,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced-phone.json",
+   "video": "/Users/devin/plugjob/out-after/06-money-boxes/recording.mp4",
+   "step": "s2",
+   "error": "target_gone: fp-frm2551Qv2018:txt16",
+   "error_code": "target_gone",
+   "line": null,
+   "known_gap": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have",
+   "screenshot": "/Users/devin/plugjob/out-after/06-money-boxes/failure.png",
+   "tree": "/Users/devin/plugjob/out-after/06-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 26,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 9301,
+   "note": "precondition: Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "video": "/Users/devin/plugjob/out-after/09-queue/recording.mp4",
+   "step": "s5",
+   "error": "occluded_by: 537",
+   "error_code": "host_error",
+   "line": "click tp-branch-business_start_date",
+   "screenshot": "/Users/devin/plugjob/out-after/09-queue/failure.png",
+   "tree": "/Users/devin/plugjob/out-after/09-queue/failure-tree.json"
+  },
+  {
+   "name": "birth-date",
+   "status": "known gap",
+   "ms": 1393,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "video": "/Users/devin/plugjob/out-after/10-birth-date/recording.mp4",
+   "step": "s1",
+   "error": "occluded_by: 429",
+   "error_code": "host_error",
+   "line": null,
+   "known_gap": "gap 1: the date is set in a date sheet",
+   "screenshot": "/Users/devin/plugjob/out-after/10-birth-date/failure.png",
+   "tree": "/Users/devin/plugjob/out-after/10-birth-date/failure-tree.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 1391,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "video": "/Users/devin/plugjob/out-after/11-sign-out/recording.mp4",
+   "step": "s1",
+   "error": "occluded_by: 429",
+   "error_code": "host_error",
+   "line": "click nb-avatar",
+   "known_gap": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
+   "screenshot": "/Users/devin/plugjob/out-after/11-sign-out/failure.png",
+   "tree": "/Users/devin/plugjob/out-after/11-sign-out/failure-tree.json"
+  }
+ ]
+}
