@@ -795,7 +795,7 @@ impl Form1701MsColumn {
     }
 
     /// The radio rules: what each Item 11/12 click forces and clears.
-    fn normalize(&mut self, spouse: bool, previously_filed_open: bool) {
+    fn normalize(&mut self, spouse: bool) {
         if !spouse && self.source == Form1701MsSource::Compensation {
             self.source = Form1701MsSource::Unanswered;
         }
@@ -848,9 +848,6 @@ impl Form1701MsColumn {
         }
         if !self.form_2316_open() {
             self.cwt_2316 = 0.0;
-        }
-        if !previously_filed_open {
-            self.previously_filed = 0.0;
         }
     }
 
@@ -1162,12 +1159,6 @@ impl Form1701MsDraft {
             && self.filing == Form1701MsFiling::Jointly
     }
 
-    /// Part V Item 6 opens for amended and short period returns; the spouse
-    /// column only on a joint return.
-    fn previously_filed_open(&self, spouse: bool) -> bool {
-        (self.is_amended || self.is_short_period) && (!spouse || self.is_joint())
-    }
-
     /// Item 31 is open only while Item 30 is negative.
     pub fn overpayment_open(&self) -> bool {
         self.aggregate_amount_payable < 0.0
@@ -1186,12 +1177,10 @@ impl Form1701MsDraft {
             self.spouse = Form1701MsColumn::default();
             self.spouse_info = Form1701MsSpouseInfo::default();
         }
-        let taxpayer_previous = self.previously_filed_open(false);
-        let spouse_previous = self.previously_filed_open(true);
         self.taxpayer.round_inputs();
         self.spouse.round_inputs();
-        self.taxpayer.normalize(false, taxpayer_previous);
-        self.spouse.normalize(true, spouse_previous);
+        self.taxpayer.normalize(false);
+        self.spouse.normalize(true);
         self.taxpayer.compute();
         self.spouse.compute();
         // Each column's penalty items file their override, else the
@@ -2746,5 +2735,42 @@ mod tests {
             !fields.contains_key("derived:sp_tin"),
             "empty spouse TIN must not format as ---00000"
         );
+    }
+    #[test]
+    fn disabled_short_period_item_6_is_kept_and_computed() {
+        let mut d = sample();
+        d.is_short_period = true;
+        d.taxpayer.previously_filed = 444.0;
+        d.spouse.previously_filed = 555.0;
+        d.recompute();
+        let taxpayer_before = d.taxpayer.total_credits - 444.0;
+        let spouse_before = d.spouse.total_credits - 555.0;
+        let reopened: Form1701MsDraft =
+            serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(reopened.taxpayer.previously_filed, 444.0);
+        assert_eq!(reopened.spouse.previously_filed, 555.0);
+        d.is_short_period = false;
+        d.recompute();
+        assert_eq!(d.taxpayer.previously_filed, 444.0);
+        assert_eq!(d.spouse.previously_filed, 555.0);
+        assert_eq!(d.taxpayer.total_credits, taxpayer_before + 444.0);
+        assert_eq!(d.spouse.total_credits, spouse_before + 555.0);
+        assert_eq!(
+            d.to_bir_field_map()["frm1701MS:txtTaxPaidPreviouslyFiledNo6a"],
+            "444"
+        );
+        assert_eq!(
+            d.to_bir_field_map()["frm1701MS:txtTaxPaidPreviouslyFiledNo6b"],
+            "555"
+        );
+        assert_eq!(d.to_print_field_map()["derived:tp_p5_6"].trim(), "444");
+        assert_eq!(d.to_print_field_map()["derived:sp_p5_6"].trim(), "555");
+        let payload = d.official_payload().unwrap();
+        assert!(payload.contains(
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6a=444frm1701MS:txtTaxPaidPreviouslyFiledNo6a="
+        ));
+        assert!(payload.contains(
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6b=555frm1701MS:txtTaxPaidPreviouslyFiledNo6b="
+        ));
     }
 }

@@ -1121,6 +1121,17 @@ const GATED_ENTRY: &[(&str, &str)] = &[
     ),
 ];
 
+/// Gates whose dependent leaf cannot echo until the gate is opened, but
+/// whose first pass no longer moves an unresolved box. The probe opens these
+/// explicitly in its second pass; `(form code, draft path, evidence)`.
+const PROBE_OPEN_GATE: &[(&str, &str, &str)] = &[(
+    "1701A",
+    "/spouse/foreign_tax_credits",
+    "official BIR-Form1701A.hta processSpouseFTC enables txtSpouseFTN only \
+     when the spouse foreign-tax-credit answer is yes; the joint sample answers \
+     no, so no leaf can echo the foreign tax number until this gate is opened",
+)];
+
 /// Why each 1702Q schedule entry is in [`GATED_ENTRY`].
 const GATED_1702Q_SCHEDULE: &str = "1702Q schedule entry the filer types once its schedule is open \
      (rules/forms/1702q-v2018c/fields.json enabled_when: 'Enabled only by the official \
@@ -2034,6 +2045,17 @@ pub fn derive(
             }),
         })
         .collect();
+    for (_, path, _) in PROBE_OPEN_GATE
+        .iter()
+        .filter(|(form, ..)| *form == def.form_code)
+    {
+        evidence.gates.entry((*path).to_string()).or_default();
+    }
+    let forced = |path: &str| {
+        PROBE_OPEN_GATE
+            .iter()
+            .any(|(form, gate, _)| *form == def.form_code && *gate == path)
+    };
     let mut gates: Vec<((usize, usize), &String)> = evidence
         .gates
         .iter()
@@ -2043,19 +2065,21 @@ pub fn derive(
         })
         .collect();
     gates.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(b.1)));
+    gates.sort_by_key(|gate| std::cmp::Reverse(forced(gate.1)));
     let mut variants = Vec::new();
     for ((open, _), path) in gates.into_iter().take(MAX_GATES) {
         // A flag that moved a box still unbound is opened on every real
         // sample; a merely busy one on the first sample that has it.
+        let opened_gate = open > 0 || forced(path);
         let reals = probed_seeds
             .iter()
             .filter(|(seed, grown)| !grown && seed.pointer(path).is_some())
-            .take(if open > 0 { usize::MAX } else { 1 });
+            .take(if opened_gate { usize::MAX } else { 1 });
         for (seed, _) in reals {
             let leaf = seed.pointer(path).expect("filtered above");
             for candidate in candidates(kind, seed, path, leaf)
                 .into_iter()
-                .take(if open > 0 { MAX_GATE_VALUES } else { 1 })
+                .take(if opened_gate { MAX_GATE_VALUES } else { 1 })
             {
                 if let Candidate::Choice(value) = candidate {
                     let mut variant = seed.clone();

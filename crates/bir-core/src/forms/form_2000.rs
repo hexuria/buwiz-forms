@@ -759,9 +759,6 @@ impl Form2000Draft {
     /// `round(this,2)` leaves it; each derived item is the formatted value of
     /// the items it reads.
     pub fn recompute(&mut self) {
-        if !self.is_amended {
-            self.balance_carried_over = 0.0;
-        }
         if !self.other_party.has_other_party() {
             // processOtherParty clears Items 11 and 12.
             self.other_party_name.clear();
@@ -1390,12 +1387,6 @@ impl FormValidator for Form2000Draft {
                 err(field, "Enter a non-negative amount in pesos and centavos.");
             }
         }
-        if !self.is_amended && self.balance_carried_over != 0.0 {
-            err(
-                "balance_carried_over",
-                "Item 15A is open only on an amended return.",
-            );
-        }
         if !email_is_plausible(&self.email) {
             err(
                 "email",
@@ -1886,5 +1877,25 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+    #[test]
+    fn disabled_item_15a_is_kept_and_computed() {
+        let mut d = sample();
+        d.is_amended = true;
+        d.recompute();
+        let baseline_credits = d.total_credits;
+        d.balance_carried_over = 123.45;
+        d.recompute();
+        let reopened: Form2000Draft =
+            serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(reopened.balance_carried_over, 123.45);
+        d.is_amended = false;
+        d.recompute();
+        assert_eq!(d.balance_carried_over, 123.45);
+        assert_eq!(d.total_credits, baseline_credits + 123.45);
+        assert_eq!(d.to_bir_field_map()["frm2000:txtTax15A"], "123.45");
+        assert_eq!(d.to_print_field_map()["frm2000:txtTax15A"], "123.45");
+        let payload = d.to_bir_xml_payload().unwrap();
+        assert!(payload.contains("frm2000:txtTax15A=123.45frm2000:txtTax15A="));
     }
 }

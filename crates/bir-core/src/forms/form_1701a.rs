@@ -620,10 +620,14 @@ impl Form1701ADraft {
         if self.spouse_has_income != Some(true) {
             self.filing_status = Form1701AFilingStatus::Unanswered;
         }
-        if !self.is_joint() {
-            // disableSpouse: Part V and the spouse entries reset.
+        let joint_off = !self.is_joint();
+        let kept_spouse_previously_filed = self.spouse_column.previously_filed;
+        if joint_off {
+            // disableSpouse resets Part V and the spouse entries. It does not
+            // write Item 61B; processFTC clears Item 62B when its radio is off.
             self.spouse = Form1701ASpouse::default();
             self.spouse_column = Form1701AColumn::default();
+            self.spouse_column.previously_filed = kept_spouse_previously_filed;
         }
         if !self.spouse.atc.allowed_for(self.spouse.filer_type) {
             self.spouse.atc = Form1701AAtc::Unanswered;
@@ -633,6 +637,7 @@ impl Form1701ADraft {
             self.spouse_column.foreign_tax_credits = 0.0;
         }
         if !self.is_amended {
+            // processAmend zeroes Items 61A and 61B even while they are disabled.
             self.taxpayer.previously_filed = 0.0;
             self.spouse_column.previously_filed = 0.0;
         }
@@ -1307,6 +1312,13 @@ impl Form1701ADraft {
                     derived.insert(format!("amount_{item}{column}"), printed);
                 }
             }
+        }
+        // Item 61B is the one spouse-column value the official runtime keeps
+        // after joint filing closes; it still prints in column B on a separate return.
+        if !self.is_joint()
+            && let Some(printed) = fields.get("frm1701A:txt61B").and_then(|text| whole(text))
+        {
+            derived.insert("amount_61B".to_string(), printed);
         }
         if let Some(printed) = fields.get("frm1701A:txt30").and_then(|text| whole(text)) {
             derived.insert("amount_30".to_string(), printed);
@@ -2307,5 +2319,64 @@ mod tests {
         d.taxpayer.surcharge = 99.0;
         d.keep_entered_penalties();
         assert!(d.revalidate_queued_before_submission().is_err());
+    }
+    #[test]
+    fn disabled_joint_off_item_61b_is_kept_and_computed() {
+        let mut d = sample();
+        d.civil_status = Form1701ACivilStatus::Married;
+        d.spouse_has_income = Some(true);
+        d.filing_status = Form1701AFilingStatus::Joint;
+        d.is_amended = true;
+        d.spouse = Form1701ASpouse {
+            tin: "12345678800000".into(),
+            rdo_code: "039".into(),
+            filer_type: Form1701AFilerType::Professional,
+            atc: Form1701AAtc::II017,
+            name: "Dummy, Sample Spouse".into(),
+            foreign_tax_credits: Some(true),
+            ..Form1701ASpouse::default()
+        };
+        d.spouse_column.previously_filed = 666.0;
+        d.spouse_column.foreign_tax_credits = 777.0;
+        d.recompute();
+        let reopened: Form1701ADraft =
+            serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(reopened.spouse_column.previously_filed, 666.0);
+        assert_eq!(reopened.spouse_column.foreign_tax_credits, 777.0);
+        d.filing_status = Form1701AFilingStatus::Separate;
+        d.recompute();
+        assert_eq!(d.spouse_column.previously_filed, 666.0);
+        assert_eq!(d.spouse_column.foreign_tax_credits, 0.0);
+        assert_eq!(d.spouse_column.total_credits, 666.0);
+        assert_eq!(d.to_bir_field_map()["frm1701A:txt61B"], "666.00");
+        assert_eq!(d.to_print_field_map()["derived:amount_61B"].trim(), "666");
+        let payload = d.official_payload().unwrap();
+        assert!(payload.contains("frm1701A:txt61B=666.00frm1701A:txt61B="));
+        d.is_amended = false;
+        d.recompute();
+        assert_eq!(
+            d.spouse_column.previously_filed, 0.0,
+            "processAmend still zeroes Item 61B when Amended Return becomes No"
+        );
+        assert_eq!(d.spouse_column.foreign_tax_credits, 0.0);
+    }
+
+    #[test]
+    fn reopened_separate_return_with_spouse_ftc_off_zeroes_item_62b() {
+        let mut d = sample();
+        d.civil_status = Form1701ACivilStatus::Married;
+        d.spouse_has_income = Some(true);
+        d.filing_status = Form1701AFilingStatus::Separate;
+        d.is_amended = true;
+        d.spouse = Form1701ASpouse {
+            foreign_tax_credits: Some(false),
+            ..Form1701ASpouse::default()
+        };
+        d.spouse_column.foreign_tax_credits = 777.0;
+        let mut reopened: Form1701ADraft =
+            serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        reopened.recompute();
+        assert_eq!(reopened.spouse_column.foreign_tax_credits, 0.0);
+        assert_eq!(reopened.to_bir_field_map()["frm1701A:txt62B"], "0.00");
     }
 }

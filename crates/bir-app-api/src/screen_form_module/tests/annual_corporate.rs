@@ -186,6 +186,13 @@ fn document(code: &str, draft: &Value) -> String {
     bir_print::frozen_html::filled_document(slug_of(code), &printed(code, draft)).unwrap()
 }
 
+/// `document` after the app's own print preparation and static field render.
+fn app_print_document(code: &str, draft: &Value) -> String {
+    let slug = slug_of(code);
+    let html = document(code, draft);
+    crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true))
+}
+
 /// The html cell a writer key's join targets.
 fn html_cell(slug: &str, key: &str) -> String {
     let cells = writer_cells(slug);
@@ -2340,9 +2347,88 @@ fn pr8_form_1702rt_answers_that_clear_typed_boxes_ask_first() {
     );
 }
 
+/// 1702MX Schedule 3 Item 27 is typed while Amended Return is Yes, shut by
+/// Amended Return No, and kept through the app's save, reopen, print and upload.
+#[test]
+fn mx_disabled_schedule_3_item_27_is_kept_through_reopen_print_and_payload() {
+    setup();
+    let opened = open("1702MX", 0);
+    let amended = typed(
+        "1702MX",
+        &opened["draft"],
+        json!({ mx("rdoPg1I3Amended"): "Yes" }),
+    );
+    let item_27 = [
+        mx("txtPg2Sc3It27A"),
+        mx("txtPg2Sc3It27B"),
+        mx("txtPg2Sc3It27C"),
+    ];
+    let typed_27 = typed(
+        "1702MX",
+        &amended["draft"],
+        json!({ &item_27[0]: "111", &item_27[1]: "222", &item_27[2]: "333" }),
+    );
+    let totals_open: Vec<Value> = ["A", "B", "C"]
+        .into_iter()
+        .map(|column| typed_27["values"][mx(&format!("txtPg2Sc3It32{column}"))].clone())
+        .collect();
+    let closed = typed(
+        "1702MX",
+        &typed_27["draft"],
+        json!({ mx("rdoPg1I3Amended"): "No" }),
+    );
+    let totals_closed: Vec<Value> = ["A", "B", "C"]
+        .into_iter()
+        .map(|column| closed["values"][mx(&format!("txtPg2Sc3It32{column}"))].clone())
+        .collect();
+    assert_eq!(
+        totals_closed, totals_open,
+        "totals keep the disabled values"
+    );
+
+    let saved = save("1702MX", &closed["draft"]);
+    let reopened = open("1702MX", 0);
+    assert_eq!(reopened["draft"], saved["draft"], "reopens as stored");
+    let html = app_print_document("1702MX", &reopened["draft"]);
+    for (index, key) in item_27.iter().enumerate() {
+        assert_eq!(
+            reopened["draft"]["schedule_3"]["items_20_to_33"][7]
+                [["exempt", "special", "regular"][index]]["amount"],
+            json!((index + 1) * 111),
+            "stored {key}"
+        );
+        let cell = html_cell(slug_of("1702MX"), key);
+        assert_eq!(
+            crate::static_html::cell_text(&html, &cell),
+            ((index + 1) * 111).to_string(),
+            "print cell for {key}"
+        );
+    }
+    let stored: bir_core::forms::form_1702mx::Form1702MXDraft =
+        serde_json::from_value(reopened["draft"].clone()).unwrap();
+    let payload = bir_core::official_xml::write(
+        bir_core::official_xml::layout(
+            bir_core::forms::form_1702mx_official::FORM_1702MX_LAYOUT_ID,
+        )
+        .unwrap(),
+        &stored.to_official_field_map(),
+    )
+    .unwrap();
+    for (key, amount) in [
+        ("frm1702MX:txtPg2Sc3It27A", "111"),
+        ("frm1702MX:txtPg2Sc3It27B", "222"),
+        ("frm1702MX:txtPg2Sc3It27C", "333"),
+    ] {
+        assert!(
+            payload.contains(&format!("{key}={amount}{key}=")),
+            "{key} payload"
+        );
+    }
+}
+
 /// PR 8 review H2 (1702MX): the Optional Standard Deduction clears column C
-/// of Schedules 5, 6 and 7.1; Amended Return No clears item 27; MCIT no
-/// longer applying clears Schedule 9 (oracle: form_1702mx_official.rs
+/// of Schedules 5, 6 and 7.1; Amended Return No keeps item 27 while disabled;
+/// MCIT no longer applying clears Schedule 9 (oracle: form_1702mx_official.rs
 /// official_recompute).
 #[test]
 fn pr8_form_1702mx_answers_that_clear_typed_boxes_ask_first() {
@@ -2373,14 +2459,57 @@ fn pr8_form_1702mx_answers_that_clear_typed_boxes_ask_first() {
         &opened["draft"],
         json!({ mx("rdoPg1I3Amended"): "Yes" }),
     );
-    let item_27 = mx("txtPg2Sc3It27C");
-    let typed_27 = typed("1702MX", &amended["draft"], json!({ &item_27: "700" }));
-    asks_then_undoes(
+    let item_27 = [
+        mx("txtPg2Sc3It27A"),
+        mx("txtPg2Sc3It27B"),
+        mx("txtPg2Sc3It27C"),
+    ];
+    let typed_27 = typed(
         "1702MX",
-        &typed_27,
-        json!({ mx("rdoPg1I3Amended"): "No" }),
-        &[item_27],
+        &amended["draft"],
+        json!({ &item_27[0]: "111", &item_27[1]: "222", &item_27[2]: "333" }),
     );
+    let totals_open: Vec<Value> = ["A", "B", "C"]
+        .into_iter()
+        .map(|column| typed_27["values"][mx(&format!("txtPg2Sc3It32{column}"))].clone())
+        .collect();
+    let closed = typed(
+        "1702MX",
+        &typed_27["draft"],
+        json!({ mx("rdoPg1I3Amended"): "No" }),
+    );
+    for (index, key) in item_27.iter().enumerate() {
+        assert_eq!(
+            closed["draft"]["schedule_3"]["items_20_to_33"][7]
+                [["exempt", "special", "regular"][index]]["amount"],
+            json!((index + 1) * 111),
+            "closed gate keeps {key}"
+        );
+    }
+    let totals_closed: Vec<Value> = ["A", "B", "C"]
+        .into_iter()
+        .map(|column| closed["values"][mx(&format!("txtPg2Sc3It32{column}"))].clone())
+        .collect();
+    assert_eq!(
+        totals_closed, totals_open,
+        "totals keep the disabled values"
+    );
+    let saved = save("1702MX", &closed["draft"]);
+    let reopened = open("1702MX", 0);
+    assert_eq!(reopened["draft"], saved["draft"], "reopens as stored");
+    let html = app_print_document("1702MX", &reopened["draft"]);
+    for (index, key) in item_27.iter().enumerate() {
+        assert!(
+            !shows_nothing(&reopened["values"], key),
+            "stored {key} is shown"
+        );
+        let cell = html_cell(slug_of("1702MX"), key);
+        assert_eq!(
+            crate::static_html::cell_text(&html, &cell),
+            ((index + 1) * 111).to_string(),
+            "print cell for {key}"
+        );
+    }
 
     let schedule_9 = mx("txtPg7Sc9I1CB");
     let typed_9 = typed(
