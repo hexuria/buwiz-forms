@@ -648,6 +648,16 @@ impl LegacyClaim {
         })?;
         let legacy = self.layout.legacy_database();
         let record = self.record().map_err(store_failure)?;
+        // L1: a kill or a dropped ReadyClaim between the used mark's write and the Unlocked record must not hide
+        // the computer login for the rest of that claim. No record — or one still at Started with no failure —
+        // means no claim is mid-move, so a spent mark belongs to a claim that never began and goes. A claim that
+        // began keeps its mark spent until it ends (the clears at Done, Closed, and the pre-move failures).
+        if record
+            .as_ref()
+            .is_none_or(|record| record.step == Step::Started && record.failure.is_none())
+        {
+            self.clear_os_login_used();
+        }
         let legacy_present = files::exists(&legacy).map_err(io_failure)?;
 
         // The rows the record's room decides: moved, and the link window (N2). They finish whoever is signed in now:

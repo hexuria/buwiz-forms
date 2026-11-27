@@ -538,7 +538,11 @@ fn computer_login_is_accepted_once_per_claim() {
         .unlock(&claim, LegacyCredential::ComputerLogin)
         .unwrap();
     assert_eq!(ready.unlocked_by(), UnlockedBy::ComputerLogin);
-    drop(ready); // the claim was cut before it moved anything
+    // The claim it was spent in is mid-move (cut after the copy's record): the same claim never spends it twice.
+    CUT_AT.with(|at| at.set(Some(Cut::AfterCopyRecorded)));
+    let cut = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
+    CUT_AT.with(|at| at.set(None));
+    assert!(cut.is_err(), "the claim was not cut");
     let Start::Locked(locked) = claim.start(&account("a")) else {
         panic!("not locked")
     };
@@ -570,7 +574,13 @@ fn computer_login_is_usable_again_when_the_claim_ends() {
     let ready = locked
         .unlock(&claim, LegacyCredential::ComputerLogin)
         .unwrap();
-    drop(ready);
+    // Refused within the same claim: the claim it was spent in is mid-move (cut after the copy's record), so a
+    // re-unlock of the same claim never spends it twice. (A drop before the record is L1's dead claim: the login
+    // is offered again — computer_login_offered_again_when_the_unlock_died_before_the_record.)
+    CUT_AT.with(|at| at.set(Some(Cut::AfterCopyRecorded)));
+    let cut = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
+    CUT_AT.with(|at| at.set(None));
+    assert!(cut.is_err(), "the claim was not cut");
     let Start::Locked(locked) = claim.start(&a) else {
         panic!("not locked")
     };
@@ -1749,5 +1759,105 @@ fn a_read_error_at_the_room_check_is_transient_not_closed() {
     assert!(
         matches!(finished, Start::Finished(Outcome::Done { .. })),
         "the move does not finish once the error is gone: {finished:?}"
+    );
+}
+
+/// PLAN §A.8 reviewer pass, L1: a kill or a dropped ReadyClaim between the used mark's write and the Unlocked
+/// record must not hide the computer login for the rest of that claim: the next start() offers it again.
+#[test]
+fn computer_login_offered_again_when_the_unlock_died_before_the_record() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(locked.offers_computer_login(&claim), "offered first");
+    let ready = locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .unwrap();
+    // The kill window: the mark is written, the Unlocked record never is.
+    drop(ready);
+    assert!(
+        claim.os_login_used().unwrap(),
+        "the mark was written at the unlock"
+    );
+    let claim = install.claim();
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(
+        locked.offers_computer_login(&claim),
+        "the computer login must be offered again: the claim it was spent in never began"
+    );
+}
+
+// ------------------------------------------------------------------------- T1: the used-mark clears, one test each
+
+fn write_used_mark(claim: &LegacyClaim) {
+    claim
+        .set_migration_value(OS_LOGIN_USED_KEY, &now_text())
+        .unwrap();
+    assert!(claim.os_login_used().unwrap(), "the mark is set");
+}
+
+/// T1: the used mark is gone after the claim closes (nothing to claim).
+#[test]
+fn the_used_mark_is_cleared_at_closed() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    std::fs::remove_file(install.legacy()).unwrap();
+    let claim = install.claim();
+    write_used_mark(&claim);
+    let started = claim.start(&a);
+    assert!(matches!(started, Start::Nothing), "{started:?}");
+    assert_eq!(claim.record().unwrap().unwrap().step, Step::Closed);
+    assert!(
+        !claim.os_login_used().unwrap(),
+        "the used mark is cleared at Closed"
+    );
+}
+
+/// T1: the used mark is gone after clear_permanent.
+#[test]
+fn the_used_mark_is_cleared_in_clear_permanent() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    let claim = install.claim();
+    claim
+        .record_permanent(&Permanent {
+            reason: PermanentReason::NotPlainSqlite,
+            detail: "a test's permanent failure".into(),
+        })
+        .unwrap();
+    write_used_mark(&claim);
+    claim.clear_permanent().unwrap();
+    assert!(
+        !claim.os_login_used().unwrap(),
+        "the used mark is cleared in clear_permanent"
+    );
+}
+
+/// T1: the used mark is gone after record_permanent.
+#[test]
+fn the_used_mark_is_cleared_in_record_permanent() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let claim = install.claim();
+    write_used_mark(&claim);
+    claim
+        .record_permanent(&Permanent {
+            reason: PermanentReason::NotPlainSqlite,
+            detail: "a test's permanent failure".into(),
+        })
+        .unwrap();
+    assert!(
+        !claim.os_login_used().unwrap(),
+        "the used mark is cleared in record_permanent"
     );
 }
