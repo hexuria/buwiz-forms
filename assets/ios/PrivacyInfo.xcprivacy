@@ -6,15 +6,22 @@
   - UserDefaults: NSH reads the system's temperature unit (nsh-platform-ios surface.rs), CA92.1.
   - System boot time: mach_absolute_time for elapsed time (nsh-platform-ios synth.rs, Rust's Instant), 35F9.1.
   - File timestamps: the app reads modification times of its own files (database, drafts, print output), C617.1.
-  Also copied to Contents/Resources of the Mac App Store app by `just app`, since the Mac build collects the same data.
-  Collected data must say the same as the App Privacy answers in App Store Connect. None of it is used for tracking,
-  and all of it is for app functionality:
-  - Email address and user id of the Buwiz account (sign-in, crates/bir-core/src/cloud_account.rs), linked to the person.
-  - Other financial info, linked: the send record Buwiz keeps for each return sent through the relay while the account
-    exists (TIN, form, period, outcome, receipt), and the sealed return while it passes through.
-  - Device id, linked: the app-made device id and public key registered at sign-in and used to sign relay requests.
-  - Other diagnostic data, NOT linked: the reachability record of each relay send (times, outcome, failure classes,
-    app version, and day-keyed hashes whose key is dropped within a day).
+  Also copied to Contents/Resources of the Mac App Store app by `just app`. For that Mac copy only the collected-data
+  half applies; the required-reason API list above describes the iOS binary.
+  Collected data must say the same as the App Privacy answers in App Store Connect (listing folder, review-notes.README,
+  PRIVACY LABEL). Everything is linked to the person, none of it is used for tracking, and all of it is for app
+  functionality:
+  - Email address and user id of the Buwiz account (sign-in, crates/bir-core/src/cloud_account.rs).
+  - The return's contact fields: name, physical (registered) address, phone number and email, and on some forms a
+    date of birth (Other data types). The relay opens the sealed return to file it and keeps it until the send ends
+    (PRIVACY_POLICY.md section 3: up to about 70 minutes if never sent, plus up to 6 hours in the database provider's
+    history), which is longer than Apple's real-time exception allows.
+  - Other financial info: the return itself while it passes through, and the send record Buwiz keeps for each return
+    sent while the account exists (TIN, form, period, outcome, receipt).
+  - Device id: the app-made device id and public key registered at sign-in and used to sign relay requests.
+  - Other diagnostic data: the reachability record of each relay send (times, outcome, failure classes, app version).
+    Declared as linked: its account code is an HMAC under a daily key the server holds, so it is pseudonymous within
+    the day, not de-identified when collected.
 -->
 <plist version="1.0">
 <dict>
@@ -76,7 +83,55 @@
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhysicalAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhoneNumber</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
