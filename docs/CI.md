@@ -156,10 +156,13 @@ complete run, on exactly the tree `main` will have once they are all merged, and
 
 - Its `ci-ok` check is green at its exact head. `--allow-unchecked <pr>` skips this gate only when the conductor
   means it.
-- If it changes `nsh/` or `crates/`, or the top-level `Cargo.toml`, `Cargo.lock` or `justfile`, the newest
-  `NSH app` workflow run at its exact head is green, whatever branch or event started it (a skipped or cancelled
-  newest run is no proof). `just ci-test` from the pull request's checkout starts that run. `--allow-unsuited <pr>`
-  skips this gate only when the conductor means it, and its use is written in the batch's record.
+- If the planner would run the app suite for its changed files, the `NSH app` suite must have run at that exact head.
+  "The suite ran" is judged per system the batch asks for: that system's app jobs are present in a run, none is
+  skipped, and every shard is green. Different systems may be proved by different runs, but a manual run narrowed by a
+  suite, screen or shard filter is partial proof and does not count. `just ci-test-pr <n> [system]` reads the pull
+  request's head from GitHub, fetches exactly that object, pushes it to `test/<system>/pr-<n>` and prints the Actions
+  page. `--allow-unsuited <pr>` skips this gate only when the conductor means it, and its use is written in the
+  batch's record.
 
 Use it for a queue of pull requests that are each reviewed and ready: not drafts, based on `main`, with both gates
 green. Leave out a pull request you still expect to push to: any push to it voids the batch.

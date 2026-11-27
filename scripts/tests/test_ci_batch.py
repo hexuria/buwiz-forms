@@ -27,6 +27,11 @@ assert spec.loader is not None
 sys.modules["ci_batch"] = ci_batch  # dataclasses look their module up here
 spec.loader.exec_module(ci_batch)
 
+plan_spec = importlib.util.spec_from_file_location("ci_plan_for_batch_test", ROOT / "scripts/ci_plan.py")
+ci_plan = importlib.util.module_from_spec(plan_spec)
+assert plan_spec.loader is not None
+plan_spec.loader.exec_module(ci_plan)
+
 
 class FakeGitHub(ci_batch.GitHub):
     repo = "hexuria/buwiz-forms"
@@ -40,8 +45,8 @@ class FakeGitHub(ci_batch.GitHub):
         self.check_runs_by_sha: dict = {}
         self.check_run_reads: list = []
         self.workflow_runs_by_sha: dict = {}
-        self.files_by_pr: dict = {}
-        self.files_pages_by_pr: dict = {}
+        self.job_pages: dict = {}
+        self.job_logs: dict = {}
         self.api_reads: list = []
 
     def sha(self, ref: str) -> str:
@@ -52,20 +57,21 @@ class FakeGitHub(ci_batch.GitHub):
         if len(args) >= 2 and args[0] == "api":
             endpoint = args[1]
             self.api_reads.append(endpoint)
-            runs_prefix = f"repos/{self.repo}/actions/runs?head_sha="
+            runs_prefix = f"repos/{self.repo}/actions/workflows/nsh.yml/runs?head_sha="
             if endpoint.startswith(runs_prefix) and endpoint.endswith("&per_page=100"):
                 sha = endpoint[len(runs_prefix):-len("&per_page=100")]
                 return json.dumps({"workflow_runs": self.workflow_runs_by_sha.get(sha, [])})
-            files = re.fullmatch(rf"repos/{re.escape(self.repo)}/pulls/(\d+)/files\?per_page=100&page=(\d+)",
-                                 endpoint)
-            if files:
-                number, page = int(files.group(1)), int(files.group(2))
-                if number in self.files_pages_by_pr:
-                    pages = self.files_pages_by_pr[number]
-                else:
-                    pages = [self.files_by_pr.get(number, [])]
+            jobs = re.fullmatch(rf"repos/{re.escape(self.repo)}/actions/runs/(\d+)/jobs\?per_page=100&page=(\d+)",
+                                endpoint)
+            if jobs:
+                run_id, page = int(jobs.group(1)), int(jobs.group(2))
+                pages = self.job_pages.get(run_id, [self.job_lists.get(run_id, [])])
                 entries = pages[page - 1] if page <= len(pages) else []
-                return json.dumps([entry if isinstance(entry, dict) else {"filename": entry} for entry in entries])
+                total = sum(len(part) for part in pages)
+                return json.dumps({"total_count": total, "jobs": entries})
+            log = re.fullmatch(rf"repos/{re.escape(self.repo)}/actions/jobs/(\d+)/logs", endpoint)
+            if log:
+                return self.job_logs[int(log.group(1))]
         raise AssertionError(f"the fake GitHub does not know: {' '.join(args)}")
 
     def pull(self, number: int) -> dict:
@@ -185,65 +191,137 @@ class BatchTestCase(unittest.TestCase):
 
 
 class BuildTests(BatchTestCase):
-    def suite_run(self, head: str, run_id: int, status: str = "completed", conclusion: str = "success",
-                  name: str = "NSH app", event: str = "push", branch: str = "test/linux-windows/change"):
-        return dict(id=run_id, name=name, head_sha=head, status=status, conclusion=conclusion, event=event,
-                    head_branch=branch)
+    LABELS = {"macos": "macOS", "linux": "Linux", "windows": "Windows"}
 
-    def test_workflow_runs_reads_the_runs_for_the_exact_head_sha(self):
+    def suite_run(self, head: str, run_id: int, status: str = "completed", conclusion: str = "success",
+                  name: str = "NSH app", event: str = "push", branch: str = "test/linux-windows/change",
+                  path: str = ".github/workflows/nsh.yml"):
+        return dict(id=run_id, name=name, head_sha=head, status=status, conclusion=conclusion, event=event,
+                    head_branch=branch, path=path)
+
+    def shard_job(self, run_id: int, system: str, shard: int, status: str = "completed",
+                  conclusion: str = "success"):
+        job_id = run_id * 1000 + shard * 10 + ("macos", "linux", "windows").index(system) + 1
+        return dict(id=job_id, name=f"NSH app ({self.LABELS[system]}, shard {shard})", status=status,
+                    conclusion=conclusion, steps=[])
+
+    def green_jobs(self, run_id: int, systems=("linux", "windows"), shards=None):
+        jobs = [dict(id=run_id * 1000 + 999, name="plan", status="completed", conclusion="success", steps=[])]
+        wanted = list(range(ci_plan.SHARDS)) if shards is None else list(shards)
+        for system in systems:
+            jobs.extend(self.shard_job(run_id, system, shard) for shard in wanted)
+        return jobs
+
+    def branch_for(self, systems) -> str:
+        chosen = tuple(systems)
+        if set(chosen) == {"linux", "windows"}:
+            return "test/linux-windows/change"
+        if set(chosen) == {"macos", "linux", "windows"}:
+            return "test/all/change"
+        return f"test/{chosen[0]}/change"
+
+    def add_suite_run(self, head: str, run_id: int, systems=("linux", "windows"), branch: str = None,
+                      event: str = "push", status: str = "completed", conclusion: str = "success",
+                      jobs=None, log: str = None, name: str = "NSH app",
+                      path: str = ".github/workflows/nsh.yml"):
+        branch = branch or self.branch_for(systems)
+        run = self.suite_run(head, run_id, status=status, conclusion=conclusion, event=event, branch=branch,
+                             name=name, path=path)
+        self.github.workflow_runs_by_sha.setdefault(head, []).append(run)
+        if jobs is None:
+            jobs = self.green_jobs(run_id, systems) if status == "completed" and conclusion == "success" else []
+        self.github.job_lists[run_id] = jobs
+        if log is not None:
+            self.github.job_logs[run_id * 1000 + 999] = log
+        return run
+
+    def manual_log(self, systems=("linux", "windows"), suites: str = "all", screens: str = "",
+                   shard: str = "all") -> str:
+        """The plan job's real log shape: its summary lines, without the workflow's inputs."""
+        plan = ci_plan.decide(event="workflow_dispatch", ref="refs/heads/feat/change",
+                              systems=",".join(systems), suites=suites, screens=screens, shard=shard)
+        values = ci_plan.outputs(plan)
+        lines = [f"lane: {plan['lane']}", *plan["reasons"]]
+        lines += [f"{name}: {value}" for name, value in values.items()]
+        return "\n".join("2026-11-28T00:00:00.0000000Z " + line for line in lines) + "\n"
+
+    def test_workflow_runs_reads_the_nsh_workflow_file_runs_for_the_exact_head_sha(self):
         head = self.repos.pull_request(30, self.base, {"nsh/src/app.tsx": "app\n"})
         run = self.suite_run(head, 456)
         self.github.workflow_runs_by_sha[head] = [run]
 
         self.assertEqual(self.github.workflow_runs(head), [run])
-        self.assertIn(f"repos/hexuria/buwiz-forms/actions/runs?head_sha={head}&per_page=100",
+        self.assertIn(f"repos/hexuria/buwiz-forms/actions/workflows/nsh.yml/runs?head_sha={head}&per_page=100",
                       self.github.api_reads)
 
-    def test_suite_state_uses_the_newest_exactly_named_run_at_the_head(self):
-        head = "a" * 40
-        older = self.suite_run(head, 10, conclusion="success", event="pull_request", branch="main")
-        newer = self.suite_run(head, 11, conclusion="failure", event="workflow_dispatch", branch="any-branch")
-        wrong_name = self.suite_run(head, 12, conclusion="success", name="CI")
-        other_head = self.suite_run("b" * 40, 13, conclusion="success")
-        self.github.workflow_runs_by_sha[head] = [older, newer, wrong_name, other_head]
+    def test_suite_jobs_are_read_past_the_first_page(self):
+        first = [dict(id=1000 + i, name=f"job {i}", status="completed", conclusion="success", steps=[])
+                 for i in range(100)]
+        second = [dict(id=2000, name="job 100", status="completed", conclusion="success", steps=[])]
+        self.github.job_pages[777] = [first, second]
 
-        self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(31, head)), ("failure", 11))
+        jobs = self.github.suite_jobs(777)
 
-    def test_suite_state_running_missing_and_skipped_or_cancelled(self):
-        for conclusion in ("skipped", "cancelled"):
-            with self.subTest(conclusion=conclusion):
-                head = "c" * 40
-                self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 19, conclusion="success"),
-                                                          self.suite_run(head, 20, conclusion=conclusion)]
-                self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(32, head)), ("missing", 20))
-        head = "d" * 40
-        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 21, status="in_progress", conclusion=None)]
-        self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(33, head)), ("running", 21))
-        self.assertEqual(ci_batch.suite_state(self.github, ci_batch.Pull(34, "e" * 40)), ("missing", None))
+        self.assertEqual(len(jobs), 101)
+        self.assertEqual(jobs[-1]["name"], "job 100")
+        self.assertIn("repos/hexuria/buwiz-forms/actions/runs/777/jobs?per_page=100&page=1", self.github.api_reads)
+        self.assertIn("repos/hexuria/buwiz-forms/actions/runs/777/jobs?per_page=100&page=2", self.github.api_reads)
 
-    def test_needs_suite_path_rules(self):
+    def test_needs_suite_agrees_with_the_planner(self):
         cases = [
-            (["nsh/src/app.tsx"], True),
+            (["forms/2556.json"], True),
+            (["rust-toolchain.toml"], True),
+            ([".github/workflows/nsh.yml"], True),
+            (["scripts/ci_plan.py"], True),
+            (["scripts/nsh_screen_tests.sh"], True),
             (["crates/bir-core/src/lib.rs"], True),
-            (["Cargo.toml"], True),
-            (["Cargo.lock"], True),
+            (["crates/bir-app-api/src/lib.rs"], True),
+            (["nsh/src/app.tsx"], True),
+            (["nsh/screens/form.test.tsx"], True),
             (["justfile"], True),
+            (["crates/bir-cli/src/main.rs"], False),
+            (["crates/bir-mcp/src/main.rs"], False),
+            (["nsh/README.md"], False),
+            (["nsh/docs/guide.md"], False),
             (["scripts/ci_batch.py"], False),
             (["agent-recipes/smoke.json"], False),
             (["docs/CI.md"], False),
-            (["x/Cargo.toml"], False),
-            (["xnsh/src/app.tsx"], False),
         ]
-        for index, (files, expected) in enumerate(cases):
+        for files, expected in cases:
             with self.subTest(files=files):
-                number = 100 + index
-                self.github.files_by_pr[number] = files
-                self.assertIs(ci_batch.needs_suite(self.github, ci_batch.Pull(number, "f" * 40)), expected)
+                plan = ci_plan.decide(event="push", ref="refs/heads/test/linux-windows/x", changed=list(files))
+                self.assertEqual(bool(plan["nsh_systems"]), expected)
+                self.assertIs(ci_batch.needs_suite(files), expected)
+
+    def test_changed_files_come_from_the_git_diff_and_count_both_names_of_a_rename(self):
+        content = "# just\n"
+        base = self.repos.advance_main({"justfile": content})
+        head = self.repos.pull_request(47, base, {"justfile": None, "x/justfile": content})
+
+        names = self.git.changed_files(base, head)
+
+        self.assertIn("x/justfile", names)
+        self.assertIn("justfile", names)
+        self.assertTrue(ci_batch.needs_suite(names))
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(47)
+        self.assertIn("missing", str(caught.exception))
+
+    def test_suite_runs_are_chosen_by_workflow_file_not_display_name(self):
+        head = self.repos.pull_request(52, self.base, {"nsh/src/app.tsx": "app\n"})
+        wrong = self.suite_run(head, 450, name="NSH app", path=".github/workflows/ci.yml")
+        right = self.suite_run(head, 451, name="Renamed workflow")
+        self.github.workflow_runs_by_sha[head] = [wrong, right]
+        self.github.job_lists[451] = self.green_jobs(451)
+
+        code, output = self.main("build", "--dry-run", "52")
+
+        self.assertEqual(code, 0)
+        self.assertIn(f"#52      {head}  suite 451  Change 52", output)
 
     def test_suite_green_at_the_head_passes_and_the_dry_run_prints_the_run_id(self):
         head = self.repos.pull_request(35, self.base, {"nsh/src/app.tsx": "app\n"})
-        self.github.files_by_pr[35] = ["nsh/src/app.tsx"]
-        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 456)]
+        self.add_suite_run(head, 456)
 
         code, output = self.main("build", "--dry-run", "35")
 
@@ -251,9 +329,8 @@ class BuildTests(BatchTestCase):
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
         self.assertIn(f"#35      {head}  suite 456  Change 35", output)
 
-    def test_suite_missing_refuses_with_the_ci_test_command(self):
+    def test_suite_missing_refuses_with_the_ci_test_pr_command(self):
         head = self.repos.pull_request(36, self.base, {"nsh/src/app.tsx": "app\n"})
-        self.github.files_by_pr[36] = ["nsh/src/app.tsx"]
 
         with self.assertRaises(ci_batch.BatchError) as caught:
             self.build(36)
@@ -261,30 +338,31 @@ class BuildTests(BatchTestCase):
         text = str(caught.exception)
         self.assertIn("refused by the NSH app suite gate", text)
         self.assertIn(f"#36 at {head}", text)
-        self.assertIn("missing", text)
-        self.assertIn("start it with: just ci-test", text)
+        self.assertIn("linux missing (no run)", text)
+        self.assertIn("windows missing (no run)", text)
+        self.assertIn("start it with: just ci-test-pr 36 linux-windows", text)
         self.assertIn("nothing was pushed", text)
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
     def test_suite_newest_failed_while_an_older_one_passed_refuses(self):
         head = self.repos.pull_request(37, self.base, {"crates/bir-core/src/lib.rs": "core\n"})
-        self.github.files_by_pr[37] = ["crates/bir-core/src/lib.rs"]
-        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 10, conclusion="success"),
-                                                  self.suite_run(head, 11, conclusion="failure")]
+        self.add_suite_run(head, 10)
+        failed_jobs = self.green_jobs(11)
+        failed_jobs[1]["conclusion"] = "failure"
+        self.add_suite_run(head, 11, conclusion="failure", jobs=failed_jobs)
 
         with self.assertRaises(ci_batch.BatchError) as caught:
             self.build(37)
 
         text = str(caught.exception)
         self.assertIn("#37", text)
-        self.assertIn("failure", text)
+        self.assertIn("failed", text)
         self.assertIn("run 11", text)
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
     def test_suite_in_progress_refuses_as_running(self):
         head = self.repos.pull_request(38, self.base, {"Cargo.toml": "[workspace]\n"})
-        self.github.files_by_pr[38] = ["Cargo.toml"]
-        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 12, status="in_progress", conclusion=None)]
+        self.add_suite_run(head, 12, status="in_progress", conclusion=None, jobs=[])
 
         with self.assertRaises(ci_batch.BatchError) as caught:
             self.build(38)
@@ -300,11 +378,10 @@ class BuildTests(BatchTestCase):
         self.assertEqual(code, 0)
         self.assertIn(f"#39      {head}  Change 39", output)
         self.assertNotIn("suite", output)
-        self.assertFalse(any("/actions/runs?" in endpoint for endpoint in self.github.api_reads))
+        self.assertFalse(any("actions/workflows/nsh.yml" in endpoint for endpoint in self.github.api_reads))
 
     def test_allow_unsuited_lets_one_through_prints_it_and_records_it(self):
         head = self.repos.pull_request(40, self.base, {"nsh/src/app.tsx": "app\n"})
-        self.github.files_by_pr[40] = ["nsh/src/app.tsx"]
 
         code, output = self.main("build", "40", "--allow-unsuited", "40")
 
@@ -315,7 +392,7 @@ class BuildTests(BatchTestCase):
         self.assertIn(f"*** ALLOW-UNSUITED: #40 at {head}; skipping the NSH app suite gate ***", output)
         message = git(self.repos.work, "log", "-1", "--format=%B", pushed)
         self.assertIn(f"Batch-Allow-Unsuited: 40 {head}", message)
-        self.assertFalse(any("/actions/runs?" in endpoint for endpoint in self.github.api_reads))
+        self.assertFalse(any("actions/workflows/nsh.yml" in endpoint for endpoint in self.github.api_reads))
 
     def test_allow_unsuited_outside_the_batch_warns_and_the_build_goes_on(self):
         self.repos.pull_request(41, self.base, {"scripts/ci_batch.py": "# batch\n"})
@@ -325,26 +402,12 @@ class BuildTests(BatchTestCase):
         self.assertEqual(code, 0)
         self.assertIn("*** WARNING: --allow-unsuited #42 is not in the batch; the build goes on ***", output)
 
-    def test_suite_files_are_read_past_the_first_page(self):
-        head = self.repos.pull_request(43, self.base, {"nsh/src/app.tsx": "app\n"})
-        self.github.files_pages_by_pr[43] = [[f"scripts/file{i}.py" for i in range(100)], ["nsh/src/app.tsx"]]
-        self.github.workflow_runs_by_sha[head] = [self.suite_run(head, 678)]
-
-        code, output = self.main("build", "--dry-run", "43")
-
-        first = "repos/hexuria/buwiz-forms/pulls/43/files?per_page=100&page=1"
-        second = "repos/hexuria/buwiz-forms/pulls/43/files?per_page=100&page=2"
-        self.assertEqual(code, 0)
-        self.assertIn(first, self.github.api_reads)
-        self.assertIn(second, self.github.api_reads)
-        self.assertIn(f"#43      {head}  suite 678  Change 43", output)
-
     def test_suite_refusals_name_every_pull_request_in_one_message(self):
         missing = self.repos.pull_request(44, self.base, {"nsh/src/app.tsx": "app\n"})
         failed = self.repos.pull_request(45, self.base, {"justfile": "# just\n"})
-        self.github.files_by_pr[44] = ["nsh/src/app.tsx"]
-        self.github.files_by_pr[45] = ["justfile"]
-        self.github.workflow_runs_by_sha[failed] = [self.suite_run(failed, 99, conclusion="failure")]
+        failed_jobs = self.green_jobs(99)
+        failed_jobs[1]["conclusion"] = "failure"
+        self.add_suite_run(failed, 99, conclusion="failure", jobs=failed_jobs)
 
         with self.assertRaises(ci_batch.BatchError) as caught:
             self.build(44, 45)
@@ -354,7 +417,130 @@ class BuildTests(BatchTestCase):
         self.assertIn(f"#44 at {missing}", text)
         self.assertIn(f"#45 at {failed}", text)
         self.assertIn("missing", text)
-        self.assertIn("failure", text)
+        self.assertIn("failed", text)
+        self.assertIn("just ci-test-pr 44 linux-windows", text)
+        self.assertIn("just ci-test-pr 45 linux-windows", text)
+
+    def test_a_newer_other_system_run_does_not_hide_a_red_needed_system(self):
+        head = self.repos.pull_request(60, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 10, systems=("linux",))
+        windows_jobs = self.green_jobs(11, ("windows",))
+        windows_jobs[1]["conclusion"] = "failure"
+        self.add_suite_run(head, 11, systems=("windows",), conclusion="failure", jobs=windows_jobs)
+        self.add_suite_run(head, 12, systems=("macos",))
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(60)
+
+        text = str(caught.exception)
+        self.assertIn("windows failed (run 11)", text)
+        self.assertNotIn("linux failed", text)
+        self.assertNotIn("macos failed", text)
+
+    def test_a_newer_other_system_run_does_not_hide_a_missing_needed_system(self):
+        head = self.repos.pull_request(61, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 20, systems=("linux",))
+        self.add_suite_run(head, 21, systems=("macos",))
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(61)
+
+        self.assertIn("windows missing (no run)", str(caught.exception))
+
+    def test_a_success_with_every_app_job_skipped_is_missing(self):
+        head = self.repos.pull_request(62, self.base, {"nsh/src/app.tsx": "app\n"})
+        jobs = [dict(job, conclusion="skipped") for job in self.green_jobs(30)]
+        self.add_suite_run(head, 30, jobs=jobs)
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(62)
+
+        text = str(caught.exception)
+        self.assertIn("linux missing (run 30)", text)
+        self.assertIn("windows missing (run 30)", text)
+
+    def test_a_partial_manual_run_is_refused_as_partial(self):
+        head = self.repos.pull_request(63, self.base, {"nsh/src/app.tsx": "app\n"})
+        log = self.manual_log(screens="screens/form/**")
+        self.add_suite_run(head, 40, event="workflow_dispatch", branch="feat/change", log=log)
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(63)
+
+        text = str(caught.exception)
+        self.assertIn("linux partial (run 40)", text)
+        self.assertIn("windows partial (run 40)", text)
+
+    def test_a_full_manual_run_passes(self):
+        head = self.repos.pull_request(64, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 41, event="workflow_dispatch", branch="feat/change", log=self.manual_log())
+
+        code, output = self.main("build", "--dry-run", "64")
+
+        self.assertEqual(code, 0)
+        self.assertIn(f"#64      {head}  suite 41  Change 64", output)
+
+    def test_two_runs_together_covering_both_systems_pass(self):
+        head = self.repos.pull_request(65, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 42, systems=("linux",))
+        self.add_suite_run(head, 43, systems=("windows",))
+        self.add_suite_run(head, 44, systems=("macos",))
+
+        code, output = self.main("build", "--dry-run", "65")
+
+        self.assertEqual(code, 0)
+        self.assertIn("suite 42,43", output)
+
+    def test_a_missing_shard_is_missing(self):
+        head = self.repos.pull_request(66, self.base, {"nsh/src/app.tsx": "app\n"})
+        jobs = [job for job in self.green_jobs(50)
+                if job["name"] != f"NSH app (Windows, shard {ci_plan.SHARDS - 1})"]
+        self.add_suite_run(head, 50, jobs=jobs)
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(66)
+
+        self.assertIn("windows missing (run 50)", str(caught.exception))
+
+    def test_a_completed_run_without_the_systems_jobs_is_not_the_systems_newest_run(self):
+        head = self.repos.pull_request(68, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 70)
+        self.add_suite_run(head, 71, jobs=[])
+
+        code, output = self.main("build", "--dry-run", "68")
+
+        self.assertEqual(code, 0)
+        self.assertIn("suite 70", output)
+        self.assertNotIn("suite 70,71", output)
+
+    def test_a_newer_running_run_names_the_older_green_one(self):
+        head = self.repos.pull_request(67, self.base, {"nsh/src/app.tsx": "app\n"})
+        self.add_suite_run(head, 60)
+        self.add_suite_run(head, 61, systems=("windows",), status="in_progress", conclusion=None, jobs=[])
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(67)
+
+        self.assertIn("windows running (run 61, older green run 60)", str(caught.exception))
+
+    def test_ci_test_pr_pushes_the_exact_github_head_and_prints_the_actions_url(self):
+        head = self.repos.pull_request(70, self.base, {"x70.txt": "x\n"})
+
+        ci_batch.test_pr(self.git, self.github, 70, say=self.lines.append)
+
+        branch = "test/linux-windows/pr-70"
+        self.assertEqual(git(self.repos.origin, "rev-parse", f"refs/heads/{branch}"), head)
+        self.assertIn("https://github.com/hexuria/buwiz-forms/actions?query=branch%3Atest%2Flinux-windows%2Fpr-70",
+                      "\n".join(self.lines))
+
+    def test_ci_test_pr_refuses_when_the_fetched_sha_is_not_the_github_head(self):
+        self.repos.pull_request(71, self.base, {"x71.txt": "x\n"})
+        self.github.overrides[71] = {"headRefOid": self.base}
+
+        with self.assertRaisesRegex(ci_batch.BatchError, "not the head GitHub reports"):
+            ci_batch.test_pr(self.git, self.github, 71, say=self.lines.append)
+
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
     def test_clean_batch_is_the_tree_the_squash_merges_give(self):
         # #1 edits a.txt in two commits; #2 started before main moved and edits another line of a.txt and adds a
@@ -671,7 +857,8 @@ class JustfileTests(unittest.TestCase):
     def test_recipes_call_the_script(self):
         justfile = (ROOT / "justfile").read_text(encoding="utf-8")
         for recipe, command in (("ci-batch *args", "build"), ("ci-batch-status branch", "status"),
-                                ("ci-batch-merge branch", "merge"), ("ci-batch-verify branch", "verify")):
+                                ("ci-batch-merge branch", "merge"), ("ci-batch-verify branch", "verify"),
+                                ("ci-test-pr number system=\"\"", "test-pr")):
             with self.subTest(recipe=recipe):
                 self.assertIn(f"\n{recipe}:\n    {{{{PYTHON}}}} scripts/ci_batch.py {command} ", justfile)
 
@@ -681,7 +868,8 @@ class BatchDocsTests(unittest.TestCase):
         docs = (ROOT / "docs/CI.md").read_text(encoding="utf-8")
         self.assertIn("### What a pull request needs before a batch", docs)
         section = docs.split("### What a pull request needs before a batch", 1)[1].split("\n## ", 1)[0]
-        for wording in ("ci-ok", "NSH app", "just ci-test", "--allow-unchecked", "--allow-unsuited"):
+        for wording in ("ci-ok", "NSH app", "just ci-test-pr", "--allow-unchecked", "--allow-unsuited",
+                        "per system", "every shard"):
             self.assertIn(wording, section)
 
 

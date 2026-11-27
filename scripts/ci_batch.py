@@ -4,13 +4,14 @@
   build  [system] [--dry-run] [--allow-unchecked <pr>] [--allow-unsuited <pr>] <pr> <pr> ...
                                   main plus the squash of each pull request, in that order, pushed to
                                   test/<system>/batch-<pr>-<pr>... (default system linux-windows)
+  test-pr <pr> [system]           fetch and push the exact head GitHub reports to test/<system>/pr-<pr>
   status <branch>                 green or red per workflow run of the batch; for red, the failed jobs and a bisect
   merge  <branch>                 prints (never runs) the merge commands, after checking nothing moved
   verify <branch>                 after the merges: is main's tree the batch's tree?
 
 Every pull request's required `ci-ok` must be `success` at its current head; pending, missing or not green refuses,
-and nothing is pushed. A pull request that changes `nsh/`, `crates/`, top-level `Cargo.toml`, `Cargo.lock` or
-`justfile` must also have a green `NSH app` run at that head. `--dry-run` proves the same batch without pushing.
+and nothing is pushed. When the planner says the pull request's changed files need the app suite, each system the
+batch asks for must have every `NSH app` shard green at that head. `--dry-run` proves the same batch without pushing.
 `--allow-unchecked <pr>` and `--allow-unsuited <pr>` (repeatable) are the hand-run escape hatches.
 
 The batch is built with git plumbing only (`git merge-tree`, `git commit-tree`) in the checkout's own object store:
@@ -32,18 +33,25 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
+SCRIPT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIRECTORY not in sys.path:
+    sys.path.insert(0, SCRIPT_DIRECTORY)
+
+import ci_plan  # noqa: E402
+
 REPO = "hexuria/buwiz-forms"
 SYSTEMS = ("linux-windows", "linux", "windows", "macos", "all")
 DEFAULT_SYSTEM = "linux-windows"
 SUITE_WORKFLOW = "NSH app"
+SUITE_WORKFLOW_FILE = "nsh.yml"
+SUITE_WORKFLOW_PATH = ".github/workflows/nsh.yml"
 # The workflows a push to test/** starts (ci.yml and nsh.yml).
 WORKFLOWS = ("CI", SUITE_WORKFLOW)
 SHA = re.compile(r"^[0-9a-f]{40}$")
 FAILED = ("failure", "timed_out", "cancelled", "startup_failure", "action_required", "stale")
 # Where a batch's record commit is also kept locally, in case its branch was deleted (`just ci-test-clean`).
 LOCAL_REF = "refs/ci-batch/"
-SUITE_TOP_LEVEL = {"Cargo.toml", "Cargo.lock", "justfile"}
-SUITE_PREFIXES = ("nsh/", "crates/")
+SYSTEM_LABELS = {"macos": "macOS", "linux": "Linux", "windows": "Windows"}
 
 
 class BatchError(Exception):
@@ -55,7 +63,14 @@ class Pull:
     number: int
     head: str
     title: str = ""
-    suite_run: Optional[int] = field(default=None, compare=False)
+    suite_runs: List[int] = field(default_factory=list, compare=False)
+
+
+@dataclass
+class SuiteProof:
+    state: str
+    run_id: Optional[int] = None
+    older_green: Optional[int] = None
 
 
 @dataclass
@@ -195,21 +210,28 @@ class GitHub:
         return data.get("check_runs", [])
 
     def workflow_runs(self, sha: str) -> List[dict]:
-        """The workflow runs reported for one head sha."""
-        data = json.loads(self._gh("api", f"repos/{self.repo}/actions/runs?head_sha={sha}&per_page=100"))
-        return data.get("workflow_runs", [])
+        """The nsh.yml workflow runs reported for one head sha."""
+        data = json.loads(self._gh("api", f"repos/{self.repo}/actions/workflows/{SUITE_WORKFLOW_FILE}/runs"
+                                          f"?head_sha={sha}&per_page=100"))
+        return [run for run in data.get("workflow_runs", [])
+                if run.get("path") == SUITE_WORKFLOW_PATH and run.get("head_sha") == sha]
 
-    def pull_files(self, number: int) -> List[dict]:
-        """Every changed file of one pull request, one page at a time."""
-        files: List[dict] = []
+    def suite_jobs(self, run_id: int) -> List[dict]:
+        """Every job of one workflow run, one page at a time."""
+        jobs: List[dict] = []
         page = 1
         while True:
-            data = json.loads(self._gh("api", f"repos/{self.repo}/pulls/{number}/files"
+            data = json.loads(self._gh("api", f"repos/{self.repo}/actions/runs/{run_id}/jobs"
                                               f"?per_page=100&page={page}"))
-            files.extend(data)
-            if len(data) < 100:
-                return files
+            batch = data.get("jobs", [])
+            jobs.extend(batch)
+            total = data.get("total_count")
+            if len(batch) < 100 or (isinstance(total, int) and len(jobs) >= total):
+                return jobs
             page += 1
+
+    def job_log(self, job_id: int) -> str:
+        return self._gh("api", f"repos/{self.repo}/actions/jobs/{job_id}/logs")
 
     def main(self) -> Tuple[str, str]:
         """main's commit sha and tree hash, in one read."""
@@ -271,59 +293,197 @@ def enforce_ci_ok(github, pulls: Sequence[Pull], allow_unchecked: Sequence[int],
         raise BatchError("refused by the ci-ok gate:\n  " + "\n  ".join(refusals))
 
 
-def suite_path(path: str) -> bool:
-    return path.startswith(SUITE_PREFIXES) or path in SUITE_TOP_LEVEL
+def needs_suite(changed: Sequence[str]) -> bool:
+    """True when the planner would run the NSH app jobs for these changed files."""
+    return bool(ci_plan.what_changed(list(changed))["nsh"])
 
 
-def needs_suite(github, pull: Pull) -> bool:
-    """True when the pull request changes something the NSH app suite proves."""
-    for entry in github.pull_files(pull.number):
-        names = [entry.get("filename") or ""]
-        if entry.get("previous_filename"):
-            names.append(entry["previous_filename"])
-        if any(suite_path(name) for name in names):
-            return True
-    return False
+def batch_systems(system: str) -> List[str]:
+    """The systems a test/<system>/... branch asks the planner for."""
+    return ci_plan.branch_systems(f"refs/heads/test/{system}/batch")
 
 
-def suite_state(github, pull: Pull) -> Tuple[str, Optional[int]]:
-    """(success, failure, running or missing, run id) of the newest NSH app run at the pull request's head."""
-    runs = [run for run in github.workflow_runs(pull.head)
-            if run.get("name") == SUITE_WORKFLOW and run.get("head_sha") == pull.head]
-    if not runs:
-        return "missing", None
-    run = max(runs, key=lambda r: r.get("id") or 0)
-    run_id = run.get("id")
+def shard_jobs(jobs: Sequence[dict], system: str) -> Dict[int, dict]:
+    label = re.escape(SYSTEM_LABELS[system])
+    pattern = re.compile(rf"^NSH app \({label}, shard (\d+)\)$")
+    found = {}
+    for job in jobs:
+        match = pattern.match(job.get("name") or "")
+        if match:
+            found[int(match.group(1))] = job
+    return found
+
+
+def infer_job_systems(jobs: Sequence[dict]) -> List[str]:
+    return [system for system in ci_plan.SYSTEMS if shard_jobs(jobs, system)]
+
+
+def plan_log_values(log: str) -> Dict[str, str]:
+    """The `name: value` lines ci_plan prints, read from a plan job log with its timestamps stripped."""
+    values = {}
+    for line in log.splitlines():
+        text = line.lstrip("\ufeff")
+        text = re.sub(r"^\d{4}-\d{2}-\d{2}T\S+Z\s+", "", text)
+        text = re.sub(r"\x1b\[[0-9;]*m", "", text).strip()
+        key, colon, value = text.partition(":")
+        if colon and re.fullmatch(r"[A-Za-z_]+", key):
+            values[key] = value.strip()
+    return values
+
+
+def manual_suite_context(github, jobs: Sequence[dict]) -> dict:
+    """What a workflow_dispatch run planned, as far as its plan job log proves it."""
+    values: Dict[str, str] = {}
+    plan_job = next((job for job in jobs if job.get("name") == "plan"), None)
+    if plan_job is not None and isinstance(plan_job.get("id"), int):
+        try:
+            values = plan_log_values(github.job_log(plan_job["id"]))
+        except BatchError:
+            values = {}
+    if all(f"nsh_{system}" in values for system in ci_plan.SYSTEMS):
+        systems = [system for system in ci_plan.SYSTEMS if values.get(f"nsh_{system}") == "true"]
+    else:
+        systems = infer_job_systems(jobs)
+    try:
+        shard_count = int(values.get("shard_count") or ci_plan.SHARDS)
+    except ValueError:
+        shard_count = ci_plan.SHARDS
+
+    try:
+        selected_shards = json.loads(values.get("shards") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        selected_shards = []
+    every_shard = (isinstance(selected_shards, list)
+                   and sorted(shard for shard in selected_shards if isinstance(shard, int)) == list(range(shard_count))
+                   and len(selected_shards) == shard_count)
+    complete_outputs = all(values.get(name) == "true" for name in ("screens", "build", "nsh_rust", "validation"))
+    if "windows" in systems:
+        complete_outputs = complete_outputs and values.get("installer") == "true"
+    complete = (complete_outputs and every_shard and not values.get("screens_filter", "").strip())
+    return {"systems": systems, "shard_count": shard_count, "partial": not complete}
+
+
+def push_suite_context(run: dict, changed: Sequence[str]) -> dict:
+    branch = run.get("head_branch") or ""
+    if not branch.startswith("test/"):
+        return {"systems": [], "shard_count": ci_plan.SHARDS, "partial": False}
+    plan = ci_plan.decide(event="push", ref=f"refs/heads/{branch}", branch=branch, changed=list(changed))
+    return {"systems": plan["nsh_systems"], "shard_count": plan["shard_count"], "partial": False}
+
+
+def suite_run_context(github, run: dict, jobs: Sequence[dict], changed: Sequence[str]) -> dict:
+    if run.get("event") == "push":
+        return push_suite_context(run, changed)
+    if run.get("event") == "workflow_dispatch":
+        return manual_suite_context(github, jobs)
+    if run.get("event") == "schedule":
+        plan = ci_plan.decide(event="schedule", ref="refs/heads/main")
+        return {"systems": plan["nsh_systems"], "shard_count": plan["shard_count"], "partial": False}
+    return {"systems": [], "shard_count": ci_plan.SHARDS, "partial": False}
+
+
+def classify_suite_run(run: dict, system: str, jobs: Sequence[dict], context: dict) -> str:
+    """success, failed, running, missing or partial for one system in one run."""
     if run.get("status") != "completed":
-        return "running", run_id
+        return "running"
     conclusion = run.get("conclusion")
-    if conclusion == "success":
-        return "success", run_id
     if conclusion in ("skipped", "cancelled"):
-        return "missing", run_id
-    return "failure", run_id
+        return "missing"
+    if conclusion != "success":
+        return "failed"
+    if context["partial"]:
+        return "partial"
+
+    shards = shard_jobs(jobs, system)
+    if not shards:
+        return "missing"
+    missing = False
+    for shard in range(int(context["shard_count"])):
+        job = shards.get(shard)
+        if job is None or job.get("conclusion") in (None, "skipped"):
+            missing = True
+            continue
+        if job.get("status") != "completed":
+            return "running"
+        if job.get("conclusion") != "success":
+            return "failed"
+    return "missing" if missing else "success"
 
 
-def enforce_suite(github, pulls: Sequence[Pull], allow_unsuited: Sequence[int],
-                  say: Callable[[str], None]) -> None:
+def suite_states(github, pull: Pull, systems: Sequence[str], changed: Sequence[str]) -> Dict[str, SuiteProof]:
+    """The proof state of each needed system, judging the newest run covering that system."""
+    runs = sorted((run for run in github.workflow_runs(pull.head) if isinstance(run.get("id"), int)),
+                  key=lambda run: run["id"], reverse=True)
+    cache: Dict[int, Tuple[List[dict], dict]] = {}
+
+    def info(run: dict) -> Tuple[List[dict], dict]:
+        run_id = run["id"]
+        if run_id not in cache:
+            jobs = github.suite_jobs(run_id)
+            cache[run_id] = (jobs, suite_run_context(github, run, jobs, changed))
+        return cache[run_id]
+
+    def covers(run: dict, jobs: Sequence[dict], context: dict, system: str) -> bool:
+        if system not in context["systems"]:
+            return False
+        # A finished run without one of the system's app jobs is not a run of that system at all.
+        return run.get("status") != "completed" or bool(shard_jobs(jobs, system))
+
+    proofs: Dict[str, SuiteProof] = {}
+    for system in systems:
+        proof = SuiteProof("missing")
+        for index, run in enumerate(runs):
+            jobs, context = info(run)
+            if not covers(run, jobs, context, system):
+                continue
+            state = classify_suite_run(run, system, jobs, context)
+            older_green = None
+            if state == "running":
+                for older in runs[index + 1:]:
+                    older_jobs, older_context = info(older)
+                    if covers(older, older_jobs, older_context, system) and classify_suite_run(
+                            older, system, older_jobs, older_context) == "success":
+                        older_green = older["id"]
+                        break
+            proof = SuiteProof(state, run["id"], older_green)
+            break
+        proofs[system] = proof
+    return proofs
+
+
+def enforce_suite(github, pulls: Sequence[Pull], system: str, changed_by_pr: Dict[int, List[str]],
+                  allow_unsuited: Sequence[int], say: Callable[[str], None]) -> None:
     unsuited = set(allow_unsuited)
     batched = {pull.number for pull in pulls}
     for number in sorted(unsuited - batched):
         say(f"*** WARNING: --allow-unsuited #{number} is not in the batch; the build goes on ***")
+    needed = batch_systems(system)
     refusals = []
     for pull in pulls:
-        pull.suite_run = None
+        pull.suite_runs = []
         if pull.number in unsuited:
             say(f"*** ALLOW-UNSUITED: #{pull.number} at {pull.head}; skipping the NSH app suite gate ***")
             continue
-        if not needs_suite(github, pull):
+        if not needs_suite(changed_by_pr[pull.number]):
             continue
-        state, run_id = suite_state(github, pull)
-        pull.suite_run = run_id
-        if state != "success":
-            run = f" (run {run_id})" if run_id is not None else ""
-            refusals.append(f"#{pull.number} at {pull.head}: NSH app suite is {state}{run}; "
-                            "start it with: just ci-test; nothing was pushed")
+        proofs = suite_states(github, pull, needed, changed_by_pr[pull.number])
+        pull.suite_runs = sorted({proof.run_id for proof in proofs.values() if proof.run_id is not None})
+        problems = []
+        for name in needed:
+            proof = proofs[name]
+            if proof.state == "success":
+                continue
+            if proof.run_id is None:
+                where = "no run"
+            else:
+                where = f"run {proof.run_id}"
+                if proof.older_green is not None:
+                    where += f", older green run {proof.older_green}"
+            problems.append(f"{name} {proof.state} ({where})")
+        if problems:
+            refusals.append(f"#{pull.number} at {pull.head}: NSH app suite is not green: "
+                            + "; ".join(problems)
+                            + f"; start it with: just ci-test-pr {pull.number} {system}; nothing was pushed")
     if refusals:
         raise BatchError("refused by the NSH app suite gate:\n  " + "\n  ".join(refusals))
 
@@ -369,6 +529,30 @@ class Git:
     def has_commit(self, sha: str) -> bool:
         return self.run("cat-file", "-e", f"{sha}^{{commit}}", ok=(0, 1, 128))[0] == 0
 
+    def changed_files(self, base: str, head: str) -> List[str]:
+        """The full diff's paths, with both names of every rename."""
+        span = f"{base}...{head}"
+        names = [part for part in self.run("diff", "--name-only", "-M", "-z", span)[1].split("\0") if part]
+        status = self.run("diff", "--name-status", "-M", "-z", "--diff-filter=R", span)[1]
+        parts = [part for part in status.split("\0") if part]
+        old_names = []
+        index = 0
+        while index < len(parts):
+            marker = parts[index]
+            index += 1
+            if marker.startswith("R"):
+                if index + 1 >= len(parts):
+                    raise BatchError(f"git diff gave a bad rename entry for {span}")
+                old_names.append(parts[index])
+                index += 2
+            else:
+                index += 1
+        changed = []
+        for name in names + old_names:
+            if name not in changed:
+                changed.append(name)
+        return changed
+
     def squash(self, onto: str, head: str) -> Tuple[Optional[str], List[str]]:
         """Merges head onto `onto` (merge base found by git, as GitHub does). Returns (tree, []) or (None, files)."""
         code, output = self.run("merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", onto, head,
@@ -394,7 +578,6 @@ def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool =
         raise BatchError(f"GitHub gave no full sha for main ({main_sha!r})")
     pulls = read_pulls(github, numbers)
     enforce_ci_ok(github, pulls, allow_unchecked, say)
-    enforce_suite(github, pulls, allow_unsuited, say)
 
     # What the remote serves must be what GitHub just said; otherwise something moved between the two reads.
     refs = ["refs/heads/main", *[f"refs/pull/{pull.number}/head" for pull in pulls]]
@@ -412,6 +595,8 @@ def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool =
     for sha in [main_sha, *[pull.head for pull in pulls]]:
         if not git.has_commit(sha):
             raise BatchError(f"fetched, but commit {sha} is not here")
+    changed_by_pr = {pull.number: git.changed_files(main_sha, pull.head) for pull in pulls}
+    enforce_suite(github, pulls, system, changed_by_pr, allow_unsuited, say)
 
     tip = main_sha
     for pull in pulls:
@@ -436,8 +621,8 @@ def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool =
     say(f"main     {main_sha}")
     for pull in pulls:
         line = f"#{pull.number:<7} {pull.head}"
-        if pull.suite_run is not None:
-            line += f"  suite {pull.suite_run}"
+        if pull.suite_runs:
+            line += "  suite " + ",".join(str(run_id) for run_id in pull.suite_runs)
         say(f"{line}  {pull.title}")
     say(f"tree     {record.tree}")
     if push:
@@ -445,6 +630,45 @@ def build(git: Git, github, system: str, numbers: Sequence[int], *, push: bool =
             + branch.replace("/", "%2F"))
         say(f"then     just ci-batch-status {branch}")
     return branch, sha, record
+
+
+def parse_test_pr_args(args: Sequence[str]) -> Tuple[int, str]:
+    words = [arg for arg in args if arg]
+    if len(words) not in (1, 2):
+        raise BatchError("test-pr takes a pull request number and optionally a system")
+    value = words[0].lstrip("#")
+    if not value.isdigit():
+        raise BatchError(f"not a pull request number: {words[0]}")
+    system = words[1] if len(words) == 2 else DEFAULT_SYSTEM
+    if system not in SYSTEMS:
+        raise BatchError(f"unknown system {system}: use {', '.join(SYSTEMS)}")
+    return int(value), system
+
+
+def test_pr(git: Git, github, number: int, system: str = DEFAULT_SYSTEM,
+            say: Callable[[str], None] = print) -> str:
+    """Push the exact head GitHub reports for one pull request to its test branch."""
+    if system not in SYSTEMS:
+        raise BatchError(f"unknown system {system}: use {', '.join(SYSTEMS)}")
+    data = github.pull(number)
+    head = data.get("headRefOid") or ""
+    if not SHA.match(head):
+        raise BatchError(f"#{number}: GitHub gave no full head sha ({head!r})")
+    remote_ref = f"refs/pull/{number}/head"
+    local_ref = f"refs/ci-test-pr/{number}"
+    try:
+        git.run("fetch", "--quiet", "--no-tags", git.remote, f"+{remote_ref}:{local_ref}")
+        fetched = git.out("rev-parse", local_ref)
+    finally:
+        git.run("update-ref", "-d", local_ref, ok=(0, 1, 128))
+    if fetched != head:
+        raise BatchError(f"#{number}: fetched {fetched}, which is not the head GitHub reports ({head}); "
+                         "nothing was pushed")
+    branch = f"test/{system}/pr-{number}"
+    git.run("push", "--force", "--quiet", git.remote, f"{head}:refs/heads/{branch}")
+    say(f"{head} on {branch}")
+    say(f"https://github.com/{getattr(github, 'repo', REPO)}/actions?query=branch%3A" + branch.replace("/", "%2F"))
+    return head
 
 
 def read_batch(git: Git, branch: str) -> Tuple[str, Record]:
@@ -557,7 +781,7 @@ def verify(git: Git, github, branch: str, say: Callable[[str], None] = print) ->
 
 
 def main(argv: Sequence[str]) -> int:
-    if not argv or argv[0] not in ("build", "status", "merge", "verify"):
+    if not argv or argv[0] not in ("build", "test-pr", "status", "merge", "verify"):
         print(__doc__.strip().split("\n\n")[1], file=sys.stderr)
         return 2
     command, args = argv[0], list(argv[1:])
@@ -568,6 +792,10 @@ def main(argv: Sequence[str]) -> int:
             system, numbers, dry_run, allow_unchecked, allow_unsuited = parse_build_args(args)
             build(git, github, system, numbers, push=not dry_run, allow_unchecked=allow_unchecked,
                   allow_unsuited=allow_unsuited)
+            return 0
+        if command == "test-pr":
+            number, system = parse_test_pr_args(args)
+            test_pr(git, github, number, system)
             return 0
         if len(args) != 1:
             raise BatchError(f"{command} takes the batch branch, test/<system>/batch-...")
