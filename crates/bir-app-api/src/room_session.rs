@@ -293,8 +293,11 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
 
 /// The account's room by the device-store lookup (rooms A1): known, or new and empty.
 fn open_lookup_room(layout: &Layout, stored: &StoredAccount) -> SessionRoom {
+    // F16: the store, never None — with None the Known branch is dead, and a sign-in after a
+    // restart never finds the room the account already has.
+    let store = bir_core::rooms::DeviceStore::open(layout).ok();
     let lookup = bir_core::rooms::room_for(
-        None,
+        store.as_ref(),
         &stored.server_url,
         &stored.user_id,
     );
