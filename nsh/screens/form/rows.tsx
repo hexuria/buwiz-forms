@@ -395,12 +395,23 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
           <If when={!hid().includes(f.k)}>
             <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
               {sub && f.t !== "chk" ? <Text variant="meta" tone="fg2">{f.l}</Text> : null}
-              <View class="flex-row items-center gap-1.5">
-                <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
-                {/* A penalty box whose component the filer never typed shows the computed
-                    amounts; the mark says so. A typed component carries no mark. */}
-                {s.penaltyComputed(f.k) ? <Mark icon="lock" id={f.k} tip="Computed from other items" /> : null}
-              </View>
+              {/* A penalty box of an open group keeps the mark's row wrapper whether or not its
+                  component was typed, so the mark lifting never remounts the box mid-edit; every
+                  other box draws bare and keeps the row's full width on a phone. The mark shows
+                  only while the box is open and untyped — a shut box's own lock and reason already
+                  say the amounts are computed, and the screen reader hears that once — an info
+                  sign, never a lock beside a box the filer can type in. */}
+              <If
+                when={s.inPenaltyGroup(f.k) && !s.box(f.k).locked()}
+                else={<FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />}
+              >
+                <View testID={`fp-penrow-${f.k}`} class="flex-row items-center gap-1.5">
+                  <View class="min-w-0 flex-1">
+                    <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
+                  </View>
+                  {s.penaltyComputed(f.k) ? <Mark icon="info" id={f.k} tip="Computed from other items" /> : null}
+                </View>
+              </If>
             </View>
           </If>
         );

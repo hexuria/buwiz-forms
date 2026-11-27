@@ -1093,6 +1093,17 @@ fn form_1701_penalties_are_computed_and_kept_ones_say_so() {
         .find(|g| strings(&g["keys"]).contains("frm1701:txtPg1I27A"))
         .unwrap();
     assert_eq!(group["kept"], true);
+    // A kept group's boxes are not computed: they show what the filer entered
+    // before the model, so the page marks none of them "computed from other items".
+    assert_eq!(
+        group["typed"],
+        json!([
+            "frm1701:txtPg1I27A",
+            "frm1701:txtPg1I28A",
+            "frm1701:txtPg1I29A"
+        ]),
+        "a kept group's boxes show what the filer entered, not computed amounts"
+    );
     let computed = fill_unlocked(
         "1701",
         &checked["draft"],

@@ -2343,6 +2343,11 @@ export class FormSession {
     return this.sPenaltyComputed.get(k)();
   }
 
+  /** The box belongs to a penalty group, its component typed or not (the membership is static). */
+  inPenaltyGroup(k: string): boolean {
+    return Boolean(this.penaltyGroupOf(k));
+  }
+
   /** The same state, straight from the penalties the host last sent: publishBoxes feeds the signal. */
   private penaltyComputedOf(k: string): boolean {
     const g = this.penaltyGroupOf(k);
