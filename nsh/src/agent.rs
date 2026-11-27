@@ -439,7 +439,8 @@ mod live {
             return Ok(None);
         };
         // The record names the executable `bir`: see RECORD_EXECUTABLE.
-        drop(started.discovery);
+        // `try_start` has already waited out the serve thread's one write,
+        // so this correct record is the last write the hosts folder sees.
         let identity = discovery::detect_identity();
         let record = HostRecord {
             addr: started.addr.to_string(),

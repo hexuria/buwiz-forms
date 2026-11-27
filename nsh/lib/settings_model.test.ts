@@ -37,7 +37,7 @@ const rowsOf = (view: ReturnType<typeof settingsView>, id: string) => view.find(
 describe("settingsView", () => {
   test("phones omit desktop-only sections and rows before searching", () => {
     const view = settingsView("", true, true);
-    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "computer"]);
+    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "logs", "computer"]);
     // Recent returns show on Home on a phone or tablet (no sidebar), so its switch is there too.
     expect(rowsOf(view, "general")).toEqual(["theme", "recent"]);
     expect(rowsOf(view, "computer")).toEqual(["data", "logs", "setup", "version"]);
@@ -50,7 +50,7 @@ describe("settingsView", () => {
   });
   test("an admin sees every section and every row", () => {
     const view = settingsView("", true);
-    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "keyboard", "computer"]);
+    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "logs", "keyboard", "computer"]);
     expect(rowsOf(view, "keyboard")).toEqual(["quit", "hide", "close"]);
     expect(rowsOf(view, "general")).toEqual(["theme", "recent", "compact", "updates"]);
     expect(rowsOf(view, "transfer")).toContain("import");

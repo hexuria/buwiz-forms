@@ -1,10 +1,9 @@
-// Home's dashboard, pure data (round-two plan, claim 5): the numbers the five tiles show, the 30-day deadline strip, the
+// Home's dashboard, pure data (round-two plan, claim 5): the numbers the four tiles show, the 30-day deadline strip, the
 // list the picked tile or day narrows to, and each taxpayer's progress and next deadline. The element builders stay with
 // the screen; this file computes what they draw. Every number comes from one named read, through DashboardReads:
 //   Overdue, Due in 7 days   deadlines(today - 366 days, today + 7 days)
 //   Drafts                   savedReturns()
 //   Waiting to send          returns("filed"), status Queued
-//   Filed this month         returns("filed") that count as filed (countsAsFiled: a dry run does not), updated this calendar month
 //   30-day strip             deadlines(today, today + 29 days)
 //   Taxpayer progress        deadlines(January 1, today): filed of due (a dry run's deadline is due and not filed)
 // A deadline is open while nobody queued or filed it, and while its return was only a dry run (it sent nothing).
@@ -82,7 +81,6 @@ export interface DashboardData {
   week: DashboardDeadline[];
   drafts: number;
   waiting: number;
-  filedMonth: number;
   strip: StripDay[];
   upcoming: DashboardDeadline[];
   /** With nothing open on the strip: the first open deadline after it (within about 13 months), else null. */
@@ -111,14 +109,14 @@ export interface Picked {
 }
 
 /** The part of the dashboard the tiles read. */
-export type TileSource = Pick<DashboardData, "today" | "in7" | "overdue" | "week" | "drafts" | "waiting" | "filedMonth">;
+export type TileSource = Pick<DashboardData, "in7" | "overdue" | "week" | "drafts" | "waiting">;
 
 /** The tones a tile is drawn in (theme tokens). */
-export type TileTone = "danger" | "warning" | "accent" | "fg2" | "success";
+export type TileTone = "danger" | "warning" | "accent" | "fg2";
 
 /** One tile: its key, its texts, its icon, its tone and its count. */
 export interface TileSpec {
-  key: "overdue" | "week" | "drafts" | "waiting" | "filed";
+  key: "overdue" | "week" | "drafts" | "waiting";
   label: string;
   sub: string;
   tone: TileTone;
@@ -136,17 +134,6 @@ function isOpen(d: DashboardDeadline): boolean {
   return isOpenDeadline(d);
 }
 
-/** [year, month 1-12] of a return's update, in local time (SQLite timestamps are UTC). */
-function localMonth(text: string | null | undefined): [number, number] {
-  const ts = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(text || ""));
-  if (ts) {
-    const local = new Date(Date.UTC(+ts[1], +ts[2] - 1, +ts[3], +ts[4], +ts[5]));
-    return [local.getFullYear(), local.getMonth() + 1];
-  }
-  const [y, m] = String(text || "").split("-").map(Number);
-  return [y, m];
-}
-
 /** Everything the dashboard shows, from the reads listed at the top. */
 export function loadDashboard(store: DashboardReads, at: Date = new Date()): DashboardData {
   const now = new Date(at.getTime());
@@ -161,12 +148,6 @@ export function loadDashboard(store: DashboardReads, at: Date = new Date()): Das
   const drafts = store.savedReturns().length;
   const filed = store.returns("filed");
   const waiting = filed.filter((r) => r.status === "Queued").length;
-  const month = [now.getFullYear(), now.getMonth() + 1];
-  const filedMonth = filed.filter((r) => {
-    if (!countsAsFiled(r)) return false;
-    const [y, m] = localMonth(r.updated_at);
-    return y === month[0] && m === month[1];
-  }).length;
 
   const stripAll = store.deadlines(today, isoDate(addDays(now, STRIP_DAYS - 1)));
   const upcoming = stripAll.filter(isOpen);
@@ -204,7 +185,6 @@ export function loadDashboard(store: DashboardReads, at: Date = new Date()): Das
     week,
     drafts,
     waiting,
-    filedMonth,
     strip,
     upcoming,
     later,
@@ -213,24 +193,14 @@ export function loadDashboard(store: DashboardReads, at: Date = new Date()): Das
   };
 }
 
-/** The five tiles: their keys, texts, icons, tones and counts, in the order they show. */
+/** The four tiles: their keys, texts, icons, tones and counts, in the order they show. */
 export function tileSpecs(data: TileSource): TileSpec[] {
   const [, m, d] = data.in7.split("-").map(Number);
-  // Short month: a tile is 121 to 156 px wide (five across from 640 to the 816 px column), "submitted in September" is not.
-  const monthName = MONTHS[Number(data.today.split("-")[1]) - 1];
   return [
     { key: "overdue", label: "Overdue", sub: "past the due date", tone: "danger", icon: "triangle-alert", n: data.overdue.length },
     { key: "week", label: "Due in 7 days", sub: `by ${MONTHS[m - 1]} ${d}`, tone: "warning", icon: "calendar", n: data.week.length },
     { key: "drafts", label: "Drafts", sub: "started, not queued", tone: "accent", icon: "pencil", n: data.drafts },
     { key: "waiting", label: "Waiting to send", sub: "queued to send", tone: "fg2", icon: "send", n: data.waiting },
-    {
-      key: "filed",
-      label: "Filed this month",
-      sub: `submitted in ${monthName}`,
-      tone: "success",
-      icon: "circle-check",
-      n: data.filedMonth,
-    },
   ];
 }
 

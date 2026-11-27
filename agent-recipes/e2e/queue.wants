@@ -1,0 +1,6 @@
+# Smoke 8, SEND: Queue on the open return, in the dry-run test build only (the runner refuses it without --allow-send,
+# EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1). Queue validates first: a return that does not pass Check stops at its to-do.
+click fp-queue --screenshot
+wait_until queue-continue --timeout-ms 10000 --screenshot
+click queue-continue
+wait_until fp-cancel-queue --timeout-ms 20000 --screenshot

@@ -5665,9 +5665,11 @@ fn apply_screen_edits_here(
             *draft = next;
             continue;
         }
-        // What the batch wrote, for PR 11's host refusals below.
+        // What the batch wrote, for PR 11's host refusals below. 2551Q's
+        // money boxes normalize through the official cent rounding before the
+        // write, as the official page does on blur.
         let written = match &step {
-            ChoiceStep::Fill(value) => Some(value.clone()),
+            ChoiceStep::Fill(value) => Some(form_2551q_amount_entry_value(kind, &key, value)),
             ChoiceStep::Set(_) | ChoiceStep::Untick => None,
         };
         let result = match step {
@@ -5684,10 +5686,11 @@ fn apply_screen_edits_here(
                         .bindings
                         .get(&key)
                         .is_some_and(|bound| matches!(bound.binding, Binding::Whole { .. }));
+                let normalized = written.as_ref().expect("a fill step writes").clone();
                 let value = if numeric_date_clear {
                     json!("0")
                 } else {
-                    value
+                    normalized
                 };
                 catalogs::fill(kind, &mut next, &key, &value, lift(&key))
             }
@@ -5742,6 +5745,53 @@ fn apply_screen_edits_here(
         penalty_groups.into_iter().map(|(group, _)| group).collect();
     rows_excise::join_if_group_blanked(kind, draft, &groups, &blanked, &rejected);
     Ok(rejected)
+}
+
+/// Whether a 2551Q key is one of the money boxes covered by the official
+/// cent normalization and the amount-limit entry check.
+fn is_2551q_amount_entry_key(key: &str) -> bool {
+    matches!(
+        key,
+        "txtATCAmt1"
+            | "txtATCAmt2"
+            | "txtATCAmt3"
+            | "txtATCAmt4"
+            | "txtATCAmt5"
+            | "txtATCAmt6"
+            | "frm2551Qv2018:txt15"
+            | "frm2551Qv2018:txt16"
+            | "frm2551Qv2018:txt17"
+            | "frm2551Qv2018:txt20"
+            | "frm2551Qv2018:txt21"
+            | "frm2551Qv2018:txt22"
+    )
+}
+
+/// The value a 2551Q money box holds once the official page's blur formatting
+/// has run: centavos, rounded half up. Non-numeric text is left to the box's
+/// ordinary amount validation.
+fn form_2551q_amount_entry_value(kind: AgentFormKind, key: &str, value: &Value) -> Value {
+    if kind != AgentFormKind::Form2551Q || !is_2551q_amount_entry_key(key) {
+        return value.clone();
+    }
+    let amount = match value {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => {
+            let clean = s.trim().replace(',', "");
+            if clean.is_empty() {
+                return value.clone();
+            }
+            clean.parse::<f64>().ok()
+        }
+        _ => None,
+    };
+    amount
+        .filter(|amount| amount.is_finite())
+        .and_then(|amount| {
+            serde_json::Number::from_f64(bir_core::forms::official_inputs::cents(amount))
+        })
+        .map(Value::Number)
+        .unwrap_or_else(|| value.clone())
 }
 
 /// Refuse 2551Q amount edits at entry when they exceed the official 12-char
@@ -9825,6 +9875,71 @@ mod tests {
             "expected no amount-limit errors, got {errs:?}"
         );
 
+        // A third decimal is not refused: the official money blur formats it
+        // to centavos, half up. The stored draft, the box values and the
+        // upload-facing amounts all hold the rounded amount.
+        for (typed, expected) in [
+            ("2000.005", 2000.01),
+            ("2000.5", 2000.5),
+            ("2000.50", 2000.5),
+        ] {
+            let rounded = fill("2551Q", &opened["draft"], json!({"txtATCAmt1": typed}));
+            assert_eq!(rounded["rejected"], json!({}), "{typed}: {rounded}");
+            assert_eq!(
+                rounded["draft"]["schedule_1"][0]["taxable_amount"].as_f64(),
+                Some(expected),
+                "{typed} stored"
+            );
+            assert_eq!(
+                amount(&rounded["values"], "txtATCAmt1"),
+                expected,
+                "{typed} shown"
+            );
+            if typed == "2000.005" {
+                let map = agent::field_map(AgentFormKind::Form2551Q, &rounded["draft"]).unwrap();
+                assert_eq!(map["txtATCAmt1"], "2,000.01", "{typed} upload");
+            }
+        }
+        let mut amended = opened["draft"].clone();
+        set_draft_path(&mut amended, "/is_amended", json!(true));
+        for (key, path) in [
+            ("frm2551Qv2018:txt15", "creditable_tax_withheld"),
+            ("frm2551Qv2018:txt16", "tax_paid_previous"),
+            ("frm2551Qv2018:txt17", "other_tax_credit"),
+        ] {
+            let rounded = fill("2551Q", &amended, json!({key: "2000.005"}));
+            assert_eq!(rounded["rejected"], json!({}), "{key}: {rounded}");
+            assert_eq!(
+                rounded["draft"][path].as_f64(),
+                Some(2000.01),
+                "{key} stored"
+            );
+            assert_eq!(amount(&rounded["values"], key), 2000.01, "{key} shown");
+            let map = agent::field_map(AgentFormKind::Form2551Q, &rounded["draft"]).unwrap();
+            assert_eq!(map[key], "2,000.01", "{key} upload");
+        }
+        let penalty_keys = [
+            ("frm2551Qv2018:txt20", "surcharge"),
+            ("frm2551Qv2018:txt21", "interest"),
+            ("frm2551Qv2018:txt22", "compromise"),
+        ];
+        let unlocked = penalty_keys.map(|(key, _)| key);
+        let late = open_for(TIN, "2551Q", 2024, 1);
+        let sold = fill("2551Q", &late["draft"], json!({"txtATCAmt1": "500000"}));
+        for (key, component) in penalty_keys {
+            let rounded =
+                fill_unlocked("2551Q", &sold["draft"], json!({key: "2000.005"}), &unlocked);
+            assert_eq!(rounded["rejected"], json!({}), "{key}: {rounded}");
+            assert_eq!(
+                rounded["draft"]["penalty_overrides"][component].as_f64(),
+                Some(2000.01),
+                "{key} stored"
+            );
+            assert_eq!(amount(&rounded["values"], key), 2000.01, "{key} shown");
+            let map = agent::field_map(AgentFormKind::Form2551Q, &rounded["draft"]).unwrap();
+            assert_eq!(map[key], "2,000.01", "{key} upload");
+        }
+
         // Over 12-char typed limit with centavos (13 chars): refused AT ENTRY with actionable words
         let over_cents = fill(
             "2551Q",
@@ -9837,6 +9952,15 @@ mod tests {
         assert!(
             msg.contains("12-character") && msg.contains("enter a smaller amount"),
             "{msg}"
+        );
+
+        // A negative amount is still refused for its real reason.
+        let negative = fill("2551Q", &opened["draft"], json!({"txtATCAmt1": "-100"}));
+        assert!(
+            negative["rejected"]["txtATCAmt1"]
+                .as_str()
+                .is_some_and(|m| m.contains("non-negative")),
+            "{negative}"
         );
 
         // Over 12-char typed limit without centavos (13 digits): refused AT ENTRY
@@ -17960,6 +18084,33 @@ mod tests {
             .unwrap()
     }
 
+    /// A sheet's HTML without its `<template>` contents: the band rows kept
+    /// for cloning are never drawn, so their cells are not the sheet's.
+    fn drawn_html(html: &str) -> String {
+        let mut out = String::with_capacity(html.len());
+        let mut rest = html;
+        while let Some(open) = rest.find("<template") {
+            out.push_str(&rest[..open]);
+            match rest[open..].find("</template>") {
+                Some(close) => rest = &rest[open + close + "</template>".len()..],
+                None => return out,
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// The `id` attribute of a `<div` tag's attributes (`tag` follows
+    /// `"<div "`): the attribute named `id` itself, not `data-cell-id`.
+    fn div_id(tag: &str) -> Option<&str> {
+        let at = if tag.starts_with("id=\"") {
+            4
+        } else {
+            tag.find(" id=\"")? + 5
+        };
+        Some(&tag[at..at + tag[at..].find('"')?])
+    }
+
     /// Every comb cell of a filled sheet, page by page in cell order, as it
     /// prints (`printed_cell`): its boxes, or the plain line over them.
     fn printed_cells_in_order(slug: &str, document: &str) -> String {
@@ -17967,13 +18118,13 @@ mod tests {
             "{}/../../html-frozen/{slug}/index.html",
             env!("CARGO_MANIFEST_DIR")
         );
-        let html = std::fs::read_to_string(path).unwrap();
+        let html = drawn_html(&std::fs::read_to_string(path).unwrap());
         let mut cells: Vec<(u32, u32, String)> = html
-            .split("<div id=\"")
+            .split("<div ")
             .skip(1)
             .filter_map(|rest| {
-                let id = &rest[..rest.find('"')?];
                 let tag = &rest[..rest.find('>')?];
+                let id = div_id(tag)?;
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
@@ -17996,15 +18147,15 @@ mod tests {
             "{}/../../html-frozen/{slug}/index.html",
             env!("CARGO_MANIFEST_DIR")
         );
-        let html = std::fs::read_to_string(path).unwrap();
-        html.split("<div id=\"")
+        let html = drawn_html(&std::fs::read_to_string(path).unwrap());
+        html.split("<div ")
             .skip(1)
             .filter_map(|rest| {
                 let tag = &rest[..rest.find('>')?];
                 if !tag.contains("data-field-kind=\"comb\"") {
                     return None;
                 }
-                let id = &tag[..tag.find('"')?];
+                let id = div_id(tag)?;
                 let at = tag.find("data-comb-slots=\"")? + "data-comb-slots=\"".len();
                 let slots = tag[at..].split('"').next()?.parse().ok()?;
                 Some((id.to_string(), slots))

@@ -1,8 +1,9 @@
-// The Buwiz account gate, at phone size and at desktop size. It opens on the email page (one page for signing in and creating an
-// account): "Continue with email" sends a code and the code page opens (six boxes that check by themselves, Resend with its
-// countdown, Change email); the right code goes Home (or the first-run setup on a first run). Nothing else, and never a browser. A test never reaches the network: the
-// host's answers are the fixture's (screens/auth/testEmail.ts). The dev environment's own bypass (EBIR_TEST_ENV with
-// BIR_AUTH_BYPASS) is what every other test runs on.
+// The Buwiz account gate, at phone size and at desktop size. It opens on the first page (the Buwiz Forms logo, one line,
+// "Continue with email"), which opens the email page (one page for signing in and creating an account): Continue sends a code
+// and the code page opens (six boxes that check by themselves, "Send a new code" with its countdown, the back control that is
+// Change email); the right code goes Home (or the first-run setup on a first run), with a welcome line the first time. Nothing
+// else, and never a browser. A test never reaches the network: the host's answers are the fixture's (screens/auth/testEmail.ts).
+// The dev environment's own bypass (EBIR_TEST_ENV with BIR_AUTH_BYPASS) is what every other test runs on.
 import { type App, expect, open, test } from "nsh/test";
 
 const ENTRY = "../../AuthDemo.tsx";
@@ -13,7 +14,7 @@ const SIZES = [
 ] as const;
 
 const EMAIL_SENTENCE = "Enter your email and we will send you a 6-digit code to sign in, or to create your Buwiz account if you are new.";
-const EXPIRED_CODE = "This code has expired. Press Resend for a new one.";
+const EXPIRED_CODE = "This code has expired. Send a new code to try again.";
 const TOO_MANY = "Too many wrong codes. Send a new code to try again.";
 
 function calls(app: App): string {
@@ -29,12 +30,24 @@ function expectClean(texts: string[]): void {
   }
 }
 
-/** Types the address and presses Continue with email; the code page opens. */
+/** The first page's "Continue with email": the email page opens. */
+async function toEmail(app: App): Promise<void> {
+  await app.waitFor("id:gate-start");
+  await app.press("id:gate-start-continue");
+  await app.waitFor("id:gate-email-page");
+}
+
+/** The code page says where the code went: the sentence, then the address on its own line. */
+function sentTo(app: App, address: string): boolean {
+  return app.texts().includes("We sent a 6-digit code to") && app.texts().includes(address);
+}
+
+/** Opens the email page, types the address and presses Continue; the code page opens. */
 async function toCode(app: App, address = "juana@example.com"): Promise<void> {
-  await app.waitFor("id:gate-card");
+  await toEmail(app);
   await app.type("id:gate-email", address);
   await app.press("id:gate-continue");
-  await app.waitFor("id:gate-code-card", { timeout: 15000 });
+  await app.waitFor("id:gate-code-page", { timeout: 15000 });
 }
 
 /**
@@ -48,42 +61,121 @@ async function typeKeys(app: App, digits: string): Promise<void> {
 for (const { name, size, device } of SIZES) {
   const at = (params: Record<string, unknown> = {}) => open(ENTRY, { ...size, host: { params: { gate: true, readout: true, ...params } } });
 
-  test(`${name}: the gate opens on the email page: its title, one sentence, the field and one button, nothing else`, async () => {
+  test(`${name}: the gate opens on the first page: the logo, one line and one button, nothing else`, async () => {
     const app = await at();
-    await app.waitFor("id:gate-card");
-    for (const t of ["Sign in to eBIRForms", EMAIL_SENTENCE, "Email", "Continue with email"]) expect(app.texts()).toContain(t);
+    await app.waitFor("id:gate-start");
+    expect(app.shows("id:brand-logo")).toBe(true);
+    expect(app.count("id:brand-logo")).toBe(1);
+    for (const t of ["Prepare, file and print your BIR returns.", "Continue with email"]) expect(app.texts()).toContain(t);
+    // No name line (the logo carries it), no other way to sign in, no field yet.
+    for (const t of ["eBIRForms", "Sign in with Apple", "Sign in with Google", "Ways to sign in"]) expect(app.texts()).not.toContain(t);
+    expect(app.shows("id:gate-email")).toBe(false);
+    expect(app.shows("id:gate-back")).toBe(false);
+    expect(app.shows("id:frame")).toBe(false);
+    expectClean(app.texts());
+    expect(calls(app)).toBe("calls: none");
+  }, 60_000);
+
+  test(`${name}: Continue with email opens the email page: the logo, its title, one sentence, the field and one button`, async () => {
+    const app = await at();
+    await toEmail(app);
+    expect(app.shows("id:brand-logo")).toBe(true);
+    for (const t of ["Enter your email", EMAIL_SENTENCE, "Email", "Continue", "Back"]) expect(app.texts()).toContain(t);
+    expect(app.shows("id:gate-start")).toBe(false);
     expect(app.shows("id:frame")).toBe(false);
     expect(app.shows("id:setup-card")).toBe(false);
-    expect(app.shows("id:gate-code-card")).toBe(false);
+    expect(app.shows("id:gate-code-page")).toBe(false);
     expect(app.enabled("id:gate-continue")).toBe(true);
     expect(app.texts()).not.toContain("or");
     expectClean(app.texts());
     expect(calls(app)).toBe("calls: none");
   }, 60_000);
 
+  test(`${name}: the logo is on the first page, the email page and the code page`, async () => {
+    const app = await at();
+    await app.waitFor("id:gate-start");
+    expect(app.shows("id:brand-logo")).toBe(true);
+    await toEmail(app);
+    expect(app.shows("id:brand-logo")).toBe(true);
+    await app.type("id:gate-email", "juana@example.com");
+    await app.press("id:gate-continue");
+    await app.waitFor("id:gate-code-page", { timeout: 15000 });
+    expect(app.shows("id:brand-logo")).toBe(true);
+    expect(app.count("id:brand-logo")).toBe(1);
+  }, 60_000);
+
+  test(`${name}: the email page's back control goes to the first page; Continue with email comes back with the address kept`, async () => {
+    const app = await at();
+    await toEmail(app);
+    await app.type("id:gate-email", "juana@example");
+    await app.press("id:gate-continue");
+    await app.waitFor("text:That email address does not look right. Check it and try again.");
+    await app.press("id:gate-back");
+    await app.waitFor("id:gate-start");
+    expect(app.shows("id:gate-email-page")).toBe(false);
+    await app.press("id:gate-start-continue");
+    await app.waitFor("id:gate-email-page");
+    expect(app.value("id:gate-email")).toBe("juana@example");
+    // The sentence went with the page.
+    expect(app.shows("id:gate-email-said")).toBe(false);
+    expect(calls(app)).toBe("calls: none");
+  }, 60_000);
+
+  test(`${name}: the code page's back control (Change email) returns to the email page with the address kept`, async () => {
+    const app = await at();
+    await toCode(app);
+    expect(app.texts()).toContain("Change email");
+    await app.press("id:gate-change-email");
+    await app.waitFor("id:gate-email-page");
+    expect(app.shows("id:gate-code-page")).toBe(false);
+    expect(app.value("id:gate-email")).toBe("juana@example.com");
+    expect(calls(app)).toBe("calls: cloud_account_email_start");
+  }, 60_000);
+
+  test(`${name}: the welcome line shows on the first page after the first sign-in, and not after the second`, async () => {
+    const app = await at({ demo: true, mode: "solo", firstRun: false, signOut: true });
+    await toCode(app);
+    await app.type("id:gate-code-boxes", "246810");
+    await app.waitFor("id:frame", { timeout: 15000 });
+    await app.waitFor("id:welcome-note");
+    expect(app.texts()).toContain("Welcome. Your Buwiz account is ready.");
+    // Signed out and in again on this device: no welcome.
+    await app.press("id:demo-sign-out");
+    await app.waitFor("id:gate-start", { timeout: 15000 });
+    await toEmail(app);
+    await app.clear("id:gate-email");
+    await app.type("id:gate-email", "juana@example.com");
+    await app.press("id:gate-continue");
+    await app.waitFor("id:gate-code-page", { timeout: 15000 });
+    await app.type("id:gate-code-boxes", "246810");
+    await app.waitFor("id:frame", { timeout: 15000 });
+    await app.wait(500);
+    expect(app.shows("id:welcome-note")).toBe(false);
+  }, 90_000);
+
   test(`${name}: an empty or bad address is said under the field without a request`, async () => {
     const app = await at();
-    await app.waitFor("id:gate-card");
+    await toEmail(app);
     await app.press("id:gate-continue");
     await app.waitFor("text:Enter your email address.");
     await app.type("id:gate-email", "juana@example");
     await app.waitFor("text:Enter your email address.", { state: "gone" });
     await app.press("id:gate-continue");
     await app.waitFor("text:That email address does not look right. Check it and try again.");
-    expect(app.shows("id:gate-card")).toBe(true);
+    expect(app.shows("id:gate-email-page")).toBe(true);
     expect(calls(app)).toBe("calls: none");
   }, 60_000);
 
   test(`${name}: Continue is busy only while it sends; a refusal is said and the page stays`, async () => {
     const app = await at({ email: "refuse" });
-    await app.waitFor("id:gate-card");
+    await toEmail(app);
     await app.type("id:gate-email", "juana@example.com");
     await app.press("id:gate-continue");
-    await app.waitFor("label:Continue with email…");
+    await app.waitFor("label:Continue…");
     expect(app.texts()).not.toContain("Waiting…");
     await app.waitFor("text:A sign-in code was already sent to this address. You can ask for a new one in 4 minutes.");
-    expect(app.shows("label:Continue with email…")).toBe(false);
-    expect(app.shows("id:gate-card")).toBe(true);
+    expect(app.shows("label:Continue…")).toBe(false);
+    expect(app.shows("id:gate-email-page")).toBe(true);
     expect(app.enabled("id:gate-continue")).toBe(true);
     expect(calls(app)).toBe("calls: cloud_account_email_start");
   }, 60_000);
@@ -95,22 +187,23 @@ for (const { name, size, device } of SIZES) {
   ] as const) {
     test(`${name}: ${kind}: the email page says so and stays; nothing opens`, async () => {
       const app = await at({ email: kind });
-      await app.waitFor("id:gate-card");
+      await toEmail(app);
       await app.type("id:gate-email", "juana@example.com");
       await app.press("id:gate-continue");
       await app.waitFor(`text:${sentence}`);
       await app.wait(500);
-      expect(app.shows("id:gate-card")).toBe(true);
+      expect(app.shows("id:gate-email-page")).toBe(true);
       expect(calls(app)).toBe("calls: cloud_account_email_start");
       expect(app.openedUrls()).toEqual([]);
       expectClean(app.texts());
     }, 60_000);
   }
 
-  test(`${name}: the code page: where the code went, Resend locked with its countdown, Change email, and no promise about the mail's button yet`, async () => {
+  test(`${name}: the code page: where the code went, Send a new code locked with its countdown, Change email, and no promise about the mail's button yet`, async () => {
     const app = await at();
     await toCode(app);
-    for (const t of ["Enter the code", "We sent a 6-digit code to juana@example.com.", "Resend in 5:00", "Change email"]) {
+    expect(sentTo(app, "juana@example.com")).toBe(true);
+    for (const t of ["Check your email", "Send a new code in 5:00", "Change email"]) {
       expect(app.texts()).toContain(t);
     }
     // The button in the mail is not handled by the app yet: the page must not promise it.
@@ -119,7 +212,7 @@ for (const { name, size, device } of SIZES) {
     expect(app.shows("id:gate-continue")).toBe(false);
     expectClean(app.texts());
     await app.wait(1200);
-    expect(app.texts()).toContain("Resend in 4:59");
+    expect(app.texts()).toContain("Send a new code in 4:59");
   }, 60_000);
 
   test(`${name}: a wrong code checks by itself on the sixth digit, says the tries left, and the boxes empty`, async () => {
@@ -161,7 +254,7 @@ for (const { name, size, device } of SIZES) {
     await app.type("id:gate-code-boxes", "111111");
     await app.waitFor(`text:${EXPIRED_CODE}`);
     await app.waitUntil(() => app.enabled("id:gate-resend"));
-    expect(app.texts()).toContain("Resend code");
+    expect(app.texts()).toContain("Send a new code");
     const again = await at();
     await toCode(again);
     await again.type("id:gate-code-boxes", "999999");
@@ -176,7 +269,7 @@ for (const { name, size, device } of SIZES) {
     await again.press("id:gate-resend");
     await again.waitFor("text:We sent a new code to juana@example.com.");
     expect(again.shows("id:gate-code-boxes")).toBe(true);
-    expect(again.texts()).toContain("Resend in 5:00");
+    expect(again.texts()).toContain("Send a new code in 5:00");
     expect(again.enabled("id:gate-resend")).toBe(false);
     expect(calls(again)).toBe("calls: cloud_account_email_start,cloud_account_email_verify 999999,cloud_account_email_start");
   }, 90_000);
@@ -184,14 +277,14 @@ for (const { name, size, device } of SIZES) {
   test(`${name}: Resend unlocks when the code expires, sends a new one and locks again`, async () => {
     const app = await at({ expiresIn: 3 });
     await toCode(app);
-    expect(app.texts()).toContain("Resend in 0:03");
+    expect(app.texts()).toContain("Send a new code in 0:03");
     expect(app.enabled("id:gate-resend")).toBe(false);
     await app.waitFor(`text:${EXPIRED_CODE}`, { timeout: 8000 });
-    expect(app.texts()).toContain("Resend code");
+    expect(app.texts()).toContain("Send a new code");
     expect(app.enabled("id:gate-resend")).toBe(true);
     await app.press("id:gate-resend");
     await app.waitFor("text:We sent a new code to juana@example.com.");
-    expect(app.texts()).toContain("Resend in 0:03");
+    expect(app.texts()).toContain("Send a new code in 0:03");
     expect(app.texts()).not.toContain(EXPIRED_CODE);
     expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_resend");
   }, 60_000);
@@ -202,7 +295,7 @@ for (const { name, size, device } of SIZES) {
     await app.waitUntil(() => app.enabled("id:gate-resend"), { timeout: 5000 });
     await app.press("id:gate-resend");
     await app.waitFor("text:A new code can be sent once this one has expired.");
-    expect(app.texts().some((t) => /^Resend in (1:00|0:59)$/.test(t))).toBe(true);
+    expect(app.texts().some((t) => /^Send a new code in (1:00|0:59)$/.test(t))).toBe(true);
     expect(app.enabled("id:gate-resend")).toBe(false);
   }, 60_000);
 
@@ -216,12 +309,12 @@ for (const { name, size, device } of SIZES) {
       await app.type("id:gate-code-boxes", "123456");
       await app.waitFor(`text:${sentence}`);
       expect(app.value("id:gate-code-boxes")).toBe("123456");
-      expect(app.shows("id:gate-code-card")).toBe(true);
+      expect(app.shows("id:gate-code-page")).toBe(true);
       await app.waitUntil(() => app.enabled("id:gate-resend"), { timeout: 5000 });
       await app.press("id:gate-resend");
       await app.waitUntil(() => calls(app).includes("cloud_account_email_resend"));
       await app.waitFor(`text:${sentence}`);
-      expect(app.shows("id:gate-code-card")).toBe(true);
+      expect(app.shows("id:gate-code-page")).toBe(true);
       expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_verify 123456,cloud_account_email_resend");
     }, 60_000);
   }
@@ -257,21 +350,21 @@ for (const { name, size, device } of SIZES) {
     await toCode(app);
     await app.wait(2200);
     await app.press("id:gate-change-email");
-    await app.waitFor("id:gate-card");
+    await app.waitFor("id:gate-email-page");
     // The address it was sent to, editable.
     expect(app.value("id:gate-email")).toBe("juana@example.com");
     expect(app.enabled("id:gate-email")).toBe(true);
     await app.press("id:gate-continue");
-    await app.waitFor("id:gate-code-card");
-    expect(app.texts().some((t) => /^Resend in 4:5\d$/.test(t))).toBe(true);
-    expect(app.texts()).not.toContain("Resend in 5:00");
+    await app.waitFor("id:gate-code-page");
+    expect(app.texts().some((t) => /^Send a new code in 4:5\d$/.test(t))).toBe(true);
+    expect(app.texts()).not.toContain("Send a new code in 5:00");
     // The same address typed again in another case, with spaces: the same request.
     await app.press("id:gate-change-email");
     await app.clear("id:gate-email");
     await app.type("id:gate-email", "  Juana@Example.COM ");
     await app.press("id:gate-continue");
-    await app.waitFor("id:gate-code-card");
-    expect(app.texts()).toContain("We sent a 6-digit code to juana@example.com.");
+    await app.waitFor("id:gate-code-page");
+    expect(sentTo(app, "juana@example.com")).toBe(true);
     // One start, never a cancel: no second mail, nothing thrown away.
     expect(calls(app)).toBe("calls: cloud_account_email_start");
     // The kept code still signs in.
@@ -286,21 +379,23 @@ for (const { name, size, device } of SIZES) {
     await app.clear("id:gate-email");
     await app.type("id:gate-email", "pedro@example.com");
     await app.press("id:gate-continue");
-    await app.waitFor("text:We sent a 6-digit code to pedro@example.com.", { timeout: 15000 });
-    expect(app.texts()).toContain("Resend in 5:00");
+    await app.waitFor("id:gate-code-page", { timeout: 15000 });
+    expect(sentTo(app, "pedro@example.com")).toBe(true);
+    expect(app.texts()).toContain("Send a new code in 5:00");
     expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_start");
     await app.press("id:gate-change-email");
     await app.clear("id:gate-email");
     await app.type("id:gate-email", "juana@example.com");
     await app.press("id:gate-continue");
-    await app.waitFor("text:We sent a 6-digit code to juana@example.com.", { timeout: 15000 });
-    expect(app.texts()).toContain("Resend in 5:00");
+    await app.waitFor("id:gate-code-page", { timeout: 15000 });
+    expect(sentTo(app, "juana@example.com")).toBe(true);
+    expect(app.texts()).toContain("Send a new code in 5:00");
     expect(calls(app)).toBe("calls: cloud_account_email_start,cloud_account_email_start,cloud_account_email_start");
   }, 60_000);
 
   test(`${name}: code_already_sent with no request kept here: the sentence with its time, the field still editable, Continue still there`, async () => {
     const app = await at({ email: "refuse" });
-    await app.waitFor("id:gate-card");
+    await toEmail(app);
     await app.type("id:gate-email", "juana@example.com");
     await app.press("id:gate-continue");
     await app.waitFor("text:A sign-in code was already sent to this address. You can ask for a new one in 4 minutes.");
@@ -316,7 +411,7 @@ for (const { name, size, device } of SIZES) {
 
   test(`${name}: the line under the field and under the boxes keeps its room before and after a sentence`, async () => {
     const app = await at();
-    await app.waitFor("id:gate-card");
+    await toEmail(app);
     expect(app.shows("id:gate-email-slot")).toBe(true);
     expect(app.shows("id:gate-email-said")).toBe(false);
     await app.press("id:gate-continue");
@@ -324,7 +419,7 @@ for (const { name, size, device } of SIZES) {
     expect(app.shows("id:gate-email-slot")).toBe(true);
     await app.type("id:gate-email", "juana@example.com");
     await app.press("id:gate-continue");
-    await app.waitFor("id:gate-code-card", { timeout: 15000 });
+    await app.waitFor("id:gate-code-page", { timeout: 15000 });
     expect(app.shows("id:gate-code-slot")).toBe(true);
     expect(app.shows("id:gate-code-said")).toBe(false);
     await app.type("id:gate-code-boxes", "123456");
@@ -339,9 +434,9 @@ for (const { name, size, device } of SIZES) {
     const app = await at({ expiresIn: 2 });
     await toCode(app);
     expect(app.count("id:gate-resend")).toBe(1);
-    expect(app.texts()).toContain("Resend in 0:02");
+    expect(app.texts()).toContain("Send a new code in 0:02");
     expect(app.enabled("id:gate-resend")).toBe(false);
-    await app.waitFor("text:Resend code", { timeout: 8000 });
+    await app.waitFor("text:Send a new code", { timeout: 8000 });
     expect(app.count("id:gate-resend")).toBe(1);
     expect(app.enabled("id:gate-resend")).toBe(true);
     const many = await at();
@@ -353,7 +448,6 @@ for (const { name, size, device } of SIZES) {
     expect(many.enabled("id:gate-resend")).toBe(true);
     expect(many.shows("id:gate-new-code")).toBe(false);
     for (const page of [app, many]) {
-      expect(page.shows("id:gate-code-actions")).toBe(true);
       expect(page.shows("id:gate-change-email")).toBe(true);
     }
   }, 60_000);
@@ -366,10 +460,10 @@ for (const { name, size, device } of SIZES) {
     const before = reads();
     // The flow's state in memory is gone (as in an engine made anew): the gate asks the host, once, and the code page is back.
     await app.press("id:demo-drop-sign-in");
-    await app.waitFor("id:gate-code-card");
+    await app.waitFor("id:gate-code-page");
     expect(reads()).toBe(before + 1);
-    expect(app.texts().some((t) => /^Resend in 4:5\d$/.test(t))).toBe(true);
-    expect(app.texts()).toContain("We sent a 6-digit code to juana@example.com.");
+    expect(app.texts().some((t) => /^Send a new code in 4:5\d$/.test(t))).toBe(true);
+    expect(sentTo(app, "juana@example.com")).toBe(true);
     // Nothing reached the server again.
     expect(calls(app)).toBe("calls: cloud_account_email_start");
   }, 60_000);
@@ -379,17 +473,17 @@ for (const { name, size, device } of SIZES) {
     await toCode(app);
     await app.type("id:gate-code-boxes", "555555");
     await app.waitFor("text:This sign-in request has ended. Start again.");
-    expect(app.shows("id:gate-card")).toBe(true);
+    expect(app.shows("id:gate-email-page")).toBe(true);
   }, 60_000);
 
   test(`${name}: after a relaunch the gate opens straight on the code page with what is left of the countdown`, async () => {
     const app = await at({ pending: 125, demo: true, mode: "solo", firstRun: false });
-    await app.waitFor("id:gate-code-card");
+    await app.waitFor("id:gate-code-page");
     expect(app.texts()).toContain("pending reads: 1");
     expect(calls(app)).toBe("calls: none");
-    expect(app.texts()).toContain("We sent a 6-digit code to juana@example.com.");
-    expect(app.texts()).toContain("Resend in 2:05");
-    expect(app.shows("id:gate-card")).toBe(false);
+    expect(sentTo(app, "juana@example.com")).toBe(true);
+    expect(app.texts()).toContain("Send a new code in 2:05");
+    expect(app.shows("id:gate-email-page")).toBe(false);
     await app.type("id:gate-code-boxes", "246810");
     await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);
@@ -429,7 +523,7 @@ for (const { name, size, device } of SIZES) {
     const app = await at();
     await toCode(app);
     await app.press("id:gate-change-email");
-    await app.waitFor("id:gate-card");
+    await app.waitFor("id:gate-email-page");
     expect(app.value("id:gate-email")).toBe("juana@example.com");
     // A key goes to the focused input, and the field was not pressed: it has the focus. Headless inputs keep no selection
     // (nsh test docs, app.type), so here the key is added at the end; on a device it replaces the selected address.
@@ -464,6 +558,10 @@ for (const { name, size, device } of SIZES) {
     await app.waitUntil(() => app.enabled("id:gate-resend"), { timeout: 5000 });
     await app.press("id:gate-resend");
     await app.waitFor("text:We sent a new code to juana@example.com.");
+    // The boxes take the focus one tick after the new code is out (focusWhenOpen): a person reads the line before typing, so the
+    // test lets the app run that tick (no tap, no press on the boxes) rather than typing in the same instant.
+    await app.waitUntil(() => app.enabled("id:gate-code-boxes"));
+    await app.wait(50);
     await typeKeys(app, "246810");
     await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);
@@ -475,6 +573,10 @@ for (const { name, size, device } of SIZES) {
     await app.waitFor(`text:${TOO_MANY}`);
     await app.press("id:gate-resend");
     await app.waitFor("text:We sent a new code to juana@example.com.");
+    // The boxes take the focus one tick after the new code is out (focusWhenOpen): a person reads the line before typing, so the
+    // test lets the app run that tick (no tap, no press on the boxes) rather than typing in the same instant.
+    await app.waitUntil(() => app.enabled("id:gate-code-boxes"));
+    await app.wait(50);
     await typeKeys(app, "246810");
     await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);
@@ -485,13 +587,17 @@ for (const { name, size, device } of SIZES) {
     await app.type("id:gate-code-boxes", "999999");
     await app.waitFor(`text:${TOO_MANY}`);
     await app.press("id:gate-change-email");
-    await app.waitFor("id:gate-card");
+    await app.waitFor("id:gate-email-page");
     await app.press("id:gate-continue");
     await app.waitFor(`text:${TOO_MANY}`);
     // The page opened spent: nothing took the focus then.
     expect(app.enabled("id:gate-code-boxes")).toBe(false);
     await app.press("id:gate-resend");
     await app.waitFor("text:We sent a new code to juana@example.com.");
+    // The boxes take the focus one tick after the new code is out (focusWhenOpen): a person reads the line before typing, so the
+    // test lets the app run that tick (no tap, no press on the boxes) rather than typing in the same instant.
+    await app.waitUntil(() => app.enabled("id:gate-code-boxes"));
+    await app.wait(50);
     await typeKeys(app, "246810");
     await app.waitFor("id:frame", { timeout: 15000 });
   }, 60_000);
@@ -527,4 +633,19 @@ test("desktop: a signed-in owner with a PIN gets the PIN sign-in next", async ()
   await app.type("id:gate-code-boxes", "246810");
   await app.waitFor("id:auth-card", { timeout: 15000 });
   expect(app.shows("id:frame")).toBe(false);
+}, 60_000);
+
+test("desktop: signed out as the menu's Sign Out does, the gate opens on its first page; Continue, then Back, returns to it", async () => {
+  const app = await open(ENTRY, { ...WIDE, host: { params: { gate: true, demo: true, mode: "solo", firstRun: false, signOut: true, readout: true } } });
+  await toCode(app);
+  await app.type("id:gate-code-boxes", "246810");
+  await app.waitFor("id:frame", { timeout: 15000 });
+  // The host's sign-out, then app.lockCloud: nothing else resets the sign-in (shell/desktop/actions.ts signOutOfTheAccount).
+  await app.press("id:demo-sign-out");
+  await app.waitFor("id:gate-start", { timeout: 15000 });
+  expect(app.shows("id:gate-email-page")).toBe(false);
+  await app.press("id:gate-start-continue");
+  await app.waitFor("id:gate-email-page");
+  await app.press("id:gate-back");
+  await app.waitFor("id:gate-start");
 }, 60_000);
