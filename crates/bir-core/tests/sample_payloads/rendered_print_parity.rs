@@ -40,7 +40,6 @@ use crate::{
     frozen_slug_for_sample, is_currency_text, norm_numeric, official_amount_keys, official_samples,
     parse_official_xml_fields, samples_dir,
 };
-use bir_print::continuation::detect_overflow;
 use bir_print::frozen_html::{
     filled_document_with_report, merged_writer_cells_json, stacked_lines,
 };
@@ -317,49 +316,66 @@ const SMALLEST_AMOUNT_PT: &[(&str, f64)] = &[
     ("2200p-2020", 7.76),
 ];
 
-/// frozen_html.rs `is_identifier_cell`: a TIN (or a part of one, its
-/// branch code included) or an ATC, never shortened on the page. Read from
-/// the writer key's last segment (`TIN`/`ATC` in capitals, `Tin`/`Atc` or
-/// `tin`/`atc` as a word, `branch`), else the sheet's caption for the cell
-/// ending in the word TIN or ATC; an ATC description and a TIN-and-name
-/// header are text.
-fn is_identifier(writer_key: &str, caption: Option<&str>) -> bool {
-    let key = writer_key.split("__cont_").next().unwrap_or(writer_key);
-    let last = key.rsplit(':').next().unwrap_or(key);
-    let lower = last.to_ascii_lowercase();
-    if lower.contains("description") || lower.contains("page_header") {
-        return false;
-    }
-    if last.contains("TIN") || last.contains("ATC") || lower.contains("branch") {
-        return true;
-    }
-    let word = |needle: &str, lowercase: bool| {
-        last.match_indices(needle).any(|(at, _)| {
-            let before = at == 0 || !lowercase || last.as_bytes()[at - 1] == b'_';
-            let after = match last.as_bytes().get(at + needle.len()) {
-                None => true,
-                Some(b) if lowercase => *b == b'_' || b.is_ascii_uppercase() || b.is_ascii_digit(),
-                Some(b) => !b.is_ascii_lowercase(),
-            };
-            before && after
+/// The TIN and ATC joins (sheet, writer key), pinned in
+/// `fixtures/identifier-joins.tsv`: read whole from the page, never from the
+/// additional sheet, and never shortened. bir-print's
+/// `identifier_classing_matches_the_pinned_list` checks the print classes
+/// exactly these, so a change to the classing is a diff of the list.
+fn pinned_identifiers() -> BTreeSet<(String, String)> {
+    include_str!("fixtures/identifier-joins.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+        .map(|line| {
+            let (sheet, key) = line.split_once('\t').expect("sheet<TAB>key");
+            (sheet.to_string(), key.to_string())
         })
-    };
-    if word("Tin", false) || word("Atc", false) || word("tin", true) || word("atc", true) {
-        return true;
+        .collect()
+}
+
+/// Cloned continuation cell id -> the upload key it prints
+/// (`data-upload-key` on the cell's `<div>`).
+fn upload_keys(pages: &str) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    let mut from = 0;
+    while let Some(rel) = pages[from..].find("<div id=\"") {
+        let start = from + rel;
+        let end = pages[start..].find('>').map_or(pages.len(), |e| start + e);
+        let tag = &pages[start..end];
+        from = end;
+        if let (Some(id), Some(key)) = (attr(tag, "id"), attr(tag, "data-upload-key")) {
+            out.insert(id.to_string(), unescape(key));
+        }
     }
-    let Some(caption) = caption else {
-        return false;
-    };
-    let caption = caption.trim();
-    let caption = caption
-        .strip_suffix(')')
-        .and_then(|c| c.rfind('(').map(|at| c[..at].trim()))
-        .unwrap_or(caption);
-    !caption.to_ascii_lowercase().contains("description")
-        && caption
-            .rsplit(|c: char| !c.is_ascii_alphanumeric())
-            .find(|w| !w.is_empty())
-            .is_some_and(|w| w == "TIN" || w == "ATC")
+    out
+}
+
+/// The additional sheet's schedule tables: (schedule heading, row number)
+/// -> the row's cells in column order.
+fn plain_table_rows(plain: &str) -> BTreeMap<(String, usize), Vec<String>> {
+    let mut out = BTreeMap::new();
+    let marker = " (continued)</div>";
+    let mut from = 0;
+    while let Some(rel) = plain[from..].find(marker) {
+        let at = from + rel;
+        let heading = unescape(&plain[plain[..at].rfind('>').map_or(0, |g| g + 1)..at]);
+        from = at + marker.len();
+        let Some(body_rel) = plain[from..].find("<tbody>") else {
+            break;
+        };
+        let body_start = from + body_rel;
+        let body_end = plain[body_start..]
+            .find("</tbody>")
+            .map_or(plain.len(), |e| body_start + e);
+        for row in plain[body_start..body_end].split("<tr").skip(1) {
+            let cells = plain_cells(row);
+            let Some(number) = cells.first().and_then(|n| n.parse::<usize>().ok()) else {
+                continue;
+            };
+            out.insert((heading.clone(), number), cells[1..].to_vec());
+        }
+        from = body_end;
+    }
+    out
 }
 
 /// frozen_html.rs `is_attachment_count_key`: a count printed in digit boxes.
@@ -790,6 +806,7 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
     let mut failures = Vec::new();
     let mut checked = 0;
     let samples = official_samples();
+    let identifiers = pinned_identifiers();
     let mut smallest: BTreeMap<&str, (f64, String)> = BTreeMap::new();
     for (stem, map) in &samples {
         let slug = frozen_slug_for_sample(stem);
@@ -876,7 +893,7 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
                 // the page: only long text shortened with "..." may count its
                 // full text on the additional sheet.
                 let raw = printed.cell(&cell);
-                let identifier = is_identifier(key, row["printed"].as_str());
+                let identifier = identifiers.contains(&(slug.to_string(), key.to_string()));
                 if identifier {
                     check.compare(
                         &format!("identifier printed whole -> {cell}"),
@@ -1157,8 +1174,10 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
             }
         }
 
-        // 8. Continuation pages: every cloned cell prints the value it was
-        //    given (the row's upload value, or the TOTAL row's total).
+        // 8. Continuation pages: every cloned cell prints the upload's value
+        //    for the control it holds (`data-upload-key`: the cloned row's
+        //    own key, or the TOTAL row's total); a cell with no key of its
+        //    own (a row number, a centavo half) prints what it was given.
         let mut cent_of: BTreeMap<String, String> = BTreeMap::new();
         let mut decimal_cells: BTreeSet<String> = BTreeSet::new();
         for row in rows("money_joins") {
@@ -1167,28 +1186,11 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
             cent_of.extend(pesos.into_iter().zip(cents));
             decimal_cells.extend(ids(&row, "decimal_html_id", "decimal_html_ids"));
         }
-        let mut continued: Vec<String> = Vec::new();
+        let upload_keys = upload_keys(&band);
         for (cell, writer) in &band_printed.writers {
             if !cell.starts_with("cont_") {
                 continue;
             }
-            continued.push(writer.clone());
-            // The value a cloned cell was given is an upload value: the
-            // cloned row's own control, or the TOTAL row's total.
-            let from_upload = official.values().any(|off| {
-                off.trim().eq_ignore_ascii_case(writer.trim())
-                    || matches!(
-                        (norm_numeric(off), norm_numeric(writer)),
-                        (Some(a), Some(b)) if (a - b).abs() < 1e-9
-                    )
-            });
-            check.compare(
-                "continuation value is an upload value",
-                cell,
-                writer,
-                if from_upload { writer.as_str() } else { "" },
-                Kind::Text,
-            );
             // `cont_<schedule>_<page>_<band>_<row>_<cell>` (a cloned row) or
             // `cont_tot_<schedule>_<cell>` (the cloned TOTAL row).
             let (prefix, orig) = match cell.rfind("_p") {
@@ -1211,67 +1213,87 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
             } else {
                 band_printed.cell(cell)
             };
-            let kind = if norm_numeric(writer).is_some() {
-                Kind::Amount
-            } else {
-                Kind::Text
-            };
             if key_of_cell
                 .get(orig)
-                .is_some_and(|key| is_identifier(key, None))
-                && shown.contains("...")
+                .is_some_and(|key| identifiers.contains(&(slug.to_string(), key.clone())))
             {
-                check.compare("identifier printed whole", cell, writer, &shown, Kind::Text);
+                check.compare(
+                    "identifier printed whole",
+                    cell,
+                    "",
+                    if shown.contains("...") {
+                        shown.as_str()
+                    } else {
+                        ""
+                    },
+                    Kind::Text,
+                );
             }
-            check.compare("continuation", cell, writer, &shown, kind);
+            match upload_keys.get(cell) {
+                Some(key) => {
+                    let off = get(key);
+                    check.compare(
+                        &format!("continuation -> {cell}"),
+                        key,
+                        off,
+                        &shown,
+                        kind_of(key, off, &amounts),
+                    );
+                }
+                None => {
+                    let kind = if norm_numeric(writer).is_some() {
+                        Kind::Amount
+                    } else {
+                        Kind::Text
+                    };
+                    check.compare("continuation (no key)", cell, writer, &shown, kind);
+                }
+            }
         }
 
-        // 9. Upload values no official cell holds (pop-up rows, rows past the
-        //    sheet's last line): each prints on a continuation page or the
-        //    additional sheet.
-        let report = detect_overflow(slug, map).expect("overflow report");
-        let overflow_values: BTreeSet<String> = report
-            .schedules
-            .iter()
-            .flat_map(|s| s.rows.iter().flat_map(|r| r.values.iter().cloned()))
-            .collect();
-        for (key, off) in &official {
-            if covered.contains(key) {
-                continue;
+        // 9. Every row no official cell holds (pop-up rows, rows past the
+        //    sheet's last line), by its own keys: the print map holds the
+        //    upload's value for each key, and the row prints on a
+        //    continuation page (its cells carry the key, checked above) or
+        //    on the additional sheet's table for its schedule, in its own
+        //    row and column.
+        let report = &rendered.overflow;
+        let plain_rows = plain_table_rows(&plain);
+        let on_band: BTreeSet<&String> = upload_keys.values().collect();
+        for schedule in &report.schedules {
+            for row in &schedule.rows {
+                for (index, key) in row.keys.iter().enumerate() {
+                    let off = get(key).trim();
+                    if off.is_empty()
+                        || matches!(off, "false" | "true")
+                        || norm_numeric(off) == Some(0.0)
+                    {
+                        continue;
+                    }
+                    let kind = kind_of(key, off, &amounts);
+                    let value = row.values.get(index).map(String::as_str).unwrap_or("");
+                    check.compare("continued row: print map", key, off, value, kind);
+                    if on_band.contains(key) {
+                        continue;
+                    }
+                    let printed = plain_rows
+                        .get(&(schedule.heading.clone(), row.row_number))
+                        .and_then(|cells| cells.get(index))
+                        .map(String::as_str)
+                        .unwrap_or("");
+                    check.compare(
+                        &format!("continued row {} on the additional sheet", row.row_number),
+                        key,
+                        off,
+                        printed,
+                        kind,
+                    );
+                }
             }
-            let Some(value) = map.get(key) else {
-                continue;
-            };
-            let off_t = off.trim();
-            if off_t.is_empty()
-                || matches!(off_t, "false" | "true")
-                || norm_numeric(off_t) == Some(0.0)
-                || !overflow_values.contains(value.trim())
-            {
-                continue;
-            }
-            let kind = kind_of(key, off_t, &amounts);
-            check.compare(
-                "upload vs print map (continued row)",
-                key,
-                off_t,
-                value,
-                kind,
-            );
-            let on_band = continued
-                .iter()
-                .any(|w| w.trim().eq_ignore_ascii_case(value.trim()));
-            let on_plain = plain_cells.iter().any(|c| shows(off_t, c, kind));
-            check.compare(
-                "continued row printed",
-                key,
-                off_t,
-                if on_band || on_plain { off_t } else { "" },
-                Kind::Text,
-            );
         }
 
-        // 10. The additional sheet's subtotals equal the sum of their rows.
+        // 10. The additional sheet's subtotals equal the sum of the upload's
+        //     values for their rows' keys.
         for schedule in &report.schedules {
             for (index, column) in schedule.columns.iter().enumerate() {
                 let Some(subtotal) = &column.subtotal else {
@@ -1280,7 +1302,7 @@ fn every_official_sample_prints_its_upload_on_the_rendered_sheet() {
                 let sum: f64 = schedule
                     .rows
                     .iter()
-                    .filter_map(|r| r.values.get(index).and_then(|v| norm_numeric(v)))
+                    .filter_map(|r| r.keys.get(index).and_then(|k| norm_numeric(get(k))))
                     .sum();
                 let expected = format!("{sum:.2}");
                 check.compare(
