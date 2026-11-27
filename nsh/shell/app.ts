@@ -1414,7 +1414,18 @@ async function finishUnlock(): Promise<boolean> {
   return true;
 }
 
-/** Signed out of the Buwiz account (the host already dropped the refresh token): the account gate comes back. */
+/** What runs each time the account gate comes back (lockCloud): the sign-in flow starts over on its first page. */
+const cloudLockHooks: (() => void)[] = [];
+
+/** Hears every lockCloud, before the gate shows (screens/auth/signInFlow.ts puts the sign-in back on its first page). */
+function onCloudLock(hook: () => void): void {
+  cloudLockHooks.push(hook);
+}
+
+/**
+ * Signed out of the Buwiz account (the host already dropped the refresh token), or Settings' Sign in: the account gate comes
+ * back, on its first page, whichever way it was asked for (the menu's Sign Out, Settings).
+ */
 function lockCloud(): void {
   try {
     bir.cloud_account_session_closed();
@@ -1422,6 +1433,7 @@ function lockCloud(): void {
     // The host already locked the process.
   }
   batch(() => {
+    for (const hook of cloudLockHooks) hook();
     gateError.set(null);
     cloudLocked.set(true);
   });
@@ -1549,6 +1561,7 @@ export const app = {
   setGateError: (message: string | null) => gateError.set(message),
   finishUnlock,
   lockCloud,
+  onCloudLock,
   signOutAfterSetupChange,
   /** The sign-in and setup screens' dev start-route steps (keys the frame does not know). */
   setAccessSteps: (run: ((key: string, value: string) => void) | null) => {

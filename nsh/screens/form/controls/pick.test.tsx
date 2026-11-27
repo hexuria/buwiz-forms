@@ -31,15 +31,37 @@ async function scrollTo(app: App, list: string, step: number, selector: string) 
 /** How many times the sheet reported its frames ("frames reports: 4"). */
 const reports = (app: App) => Number((app.texts().find((t) => t.startsWith("frames reports:")) ?? "frames reports: 0").slice(16));
 
-/** "search=120-164 list=176-760 panel=104-760 window=844" as numbers. */
+/**
+ * "search=173-217 list=229-828 panel=173-828 window=844 header=96.4~157.4 body=157.4~844 sheet=84.4 room=686.6 max=759.6" as
+ * numbers: the pick's own parts in whole points, the sheet's (its header and body views, its panel's top, what sheetBodyRoom() and
+ * sheetPanelMaxHeight() said) to a tenth.
+ */
 function frames(app: App, which: "first" | "last") {
   const text = app.texts().find((t) => t.startsWith(`frames ${which}:`)) ?? "";
   const part = (name: string) => {
     const m = new RegExp(`${name}=(-?\\d+)-(-?\\d+)`).exec(text);
     return m ? { top: Number(m[1]), bottom: Number(m[2]) } : null;
   };
+  const fine = (name: string) => {
+    const m = new RegExp(`${name}=(-?[\\d.]+)~(-?[\\d.]+)`).exec(text);
+    return m ? { top: Number(m[1]), bottom: Number(m[2]) } : null;
+  };
+  const num = (name: string) => {
+    const m = new RegExp(`${name}=(-?[\\d.]+)`).exec(text);
+    return m ? Number(m[1]) : null;
+  };
   const w = /window=(\d+)/.exec(text);
-  return { search: part("search"), list: part("list"), panel: part("panel"), window: w ? Number(w[1]) : 0 };
+  return {
+    search: part("search"),
+    list: part("list"),
+    panel: part("panel"),
+    window: w ? Number(w[1]) : 0,
+    header: fine("header"),
+    body: fine("body"),
+    sheetTop: num("sheet"),
+    room: num("room"),
+    max: num("max"),
+  };
 }
 
 // ---------------------------------------------------------------- phone
@@ -150,6 +172,31 @@ test("phone: the search field stays where it is, inside the sheet, while the lis
   expect(line(app, "rdo")).toBe("rdo: 138 | picks: 1 | opens: 1");
 });
 
+test("phone: the list's room is the sheet's real body: sheetBodyRoom() is the body Sheet draws, and the list ends inside it", async () => {
+  const app = await probe();
+  await app.press("id:pp-rdo-trigger");
+  await app.waitFor("id:pp-rdo-search");
+  await app.waitUntil(() => frames(app, "last").header !== null);
+  const f = frames(app, "last");
+  expect(f.list).not.toBeNull();
+  expect(f.body).not.toBeNull();
+  expect(f.sheetTop).not.toBeNull();
+  expect(f.room).not.toBeNull();
+  expect(f.max).not.toBeNull();
+  const header = f.header!;
+  const body = f.body!;
+  // The body starts where Sheet's header ends.
+  expect(Math.abs(body.top - header.bottom)).toBeLessThanOrEqual(1);
+  // The list ends inside the body (a header taller than sheetBodyRoom() counts makes the list taller than the room it has).
+  expect(f.list!.bottom).toBeLessThanOrEqual(body.bottom);
+  // sheetBodyRoom() is the body's measured height: its grabber and header numbers are Sheet's real layout. A taller header
+  // clamps the panel and leaves the body less than the room the list was sized to.
+  expect(Math.abs(body.bottom - body.top - f.room!)).toBeLessThanOrEqual(1);
+  // And the panel is as tall as it may be (sheetPanelMaxHeight), from its measured top to the window's bottom (no keyboard, no
+  // inset): a shorter header would leave the panel short of it, the room unused.
+  expect(Math.abs(f.window - f.sheetTop! - f.max!)).toBeLessThanOrEqual(1);
+});
+
 // ---------------------------------------------------------------- desktop
 
 test("desktop: the box is the search; typing opens the list under it; a row picks and the box shows code and name", async () => {
@@ -246,6 +293,114 @@ test("desktop: an emptied box clears the choice on leaving; a required one goes 
   await required.waitFor("text:This choice can't be left empty. The box kept 050 — South Makati.");
   expect(required.value("id:pp-rdo-search")).toBe("050 — South Makati");
   expect(line(required, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+});
+
+test("desktop: the window going inactive (Alt+Tab) closes the list and settles the typed text, as a native popup", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.setLifecycle("inactive");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  expect(app.value("id:pp-rdo-search")).toBe("050 — South Makati");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+  await app.setLifecycle("active");
+  // Back in the window the box shows what it holds, and says why the words went.
+  await app.waitFor("text:“makati” fits 2 choices. Pick one from the list. The box kept 050 — South Makati.");
+});
+
+test("desktop: the focus moved away with no press (the form's focus()) closes the list and puts the last pick back with a sentence", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  expect(app.shows("id:pp-rdo-list")).toBe(true);
+  // The page's own focus() into another box (a pill step, Queue's jump): no press, so the list's onPressOutside hears nothing.
+  await app.host.send("focus-other");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  expect(app.value("id:pp-rdo-search")).toBe("050 — South Makati");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+  // Two choices fit "makati": not taken, as Tab would not take it (resolveTyped), and the line under the box says so.
+  await app.waitFor("text:“makati” fits 2 choices. Pick one from the list. The box kept 050 — South Makati.");
+  expect(app.shows("id:pp-rdo-note")).toBe(true);
+});
+
+test("desktop: a row pressed while the list is open picks it; the settling of the box's leaving does not undo it", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  // "makati" alone names no one choice: had the leaving been settled, the box would go back to 050 with a sentence.
+  await app.press("id:pp-rdo-opt-047");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  // Past the turn the deferred settling runs on.
+  await app.wait(50);
+  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 1");
+  expect(app.value("id:pp-rdo-search")).toBe("047 — East Makati");
+  expect(app.shows("id:pp-rdo-note")).toBe(false);
+  // The chevron still closes the list it opened (its press takes the focus too).
+  await app.press("id:pp-rdo-trigger");
+  await app.waitFor("id:pp-rdo-list");
+  await app.press("id:pp-rdo-trigger");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  await app.wait(50);
+  expect(app.shows("id:pp-rdo-list")).toBe(false);
+  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 2");
+});
+
+test("desktop: a press whose row goes away under it never keeps a later leaving from settling", async () => {
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  // A finger goes down on a row and stays down: the press holds off the settling, as it should while it lasts.
+  await app.dragAndHold("id:pp-rdo-opt-047", { y: 1 });
+  // The keys come back to the box and change the words: the row the finger is on goes away, so its press-up never comes.
+  await app.type("id:pp-rdo-search", "zzz");
+  await app.waitFor("id:pp-rdo-opt-047", { state: "gone" });
+  await app.drop();
+  // A later leaving with the list open (the form's focus(), no press): the box settles at once, not after the lost press.
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.host.send("focus-other");
+  await app.waitFor("id:pp-rdo-list", { state: "gone", timeout: 1000 });
+  expect(app.value("id:pp-rdo-search")).toBe("050 — South Makati");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+});
+
+test("desktop: a box that goes away under a press picks and settles nothing afterwards", async () => {
+  const app = await probe({ rdo: "050" }, { ...DESKTOP, clock: {} });
+  await app.clear("id:pp-rdo-search");
+  // A code typed whole: settled, it would pick 047.
+  await app.type("id:pp-rdo-search", "047");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.dragAndHold("id:pp-rdo-opt-047", { y: 1 });
+  // The focus leaves with the list open while the press is down: the settling waits for the press.
+  await app.host.send("focus-other");
+  // The pick goes away (its page, the lock) before the press ends.
+  await app.host.send("hide-rdo");
+  await app.waitFor("id:pp-rdo-search", { state: "gone" });
+  await app.wait(31_000);
+  await app.drop();
+  await app.wait(100);
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
+});
+
+test("desktop: a slow press held three seconds still picks its row", async () => {
+  const app = await probe({ rdo: "050" }, { ...DESKTOP, clock: {} });
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.dragAndHold("id:pp-rdo-opt-047", {});
+  await app.wait(3_000);
+  // Still open under the finger: no backstop cut the press short.
+  expect(app.shows("id:pp-rdo-opt-047")).toBe(true);
+  await app.drop();
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  await app.wait(50);
+  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 1");
+  expect(app.value("id:pp-rdo-search")).toBe("047 — East Makati");
 });
 
 test("desktop: the clear row clears a chosen value from the whole list", async () => {

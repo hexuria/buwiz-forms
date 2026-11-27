@@ -1,0 +1,189 @@
+{
+ "v": 2,
+ "id": "1",
+ "ok": true,
+ "tree": {
+  "app": "bir",
+  "platform": "mobile",
+  "ready": true,
+  "nodes": [
+   {
+    "id": "narrow-bar",
+    "role": "generic",
+    "name": "",
+    "enabled": true,
+    "focused": false,
+    "bounds": {
+     "x": 0,
+     "y": 47,
+     "w": 390,
+     "h": 56
+    },
+    "children": [
+     {
+      "id": "nb-avatar",
+      "role": "button",
+      "name": "Account",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 338,
+       "y": 51,
+       "w": 44,
+       "h": 44
+      },
+      "states": [
+       "grouped"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "form-page",
+    "role": "generic",
+    "name": "",
+    "enabled": true,
+    "focused": false,
+    "bounds": {
+     "x": 0,
+     "y": 103,
+     "w": 390,
+     "h": 741
+    },
+    "children": [
+     {
+      "id": "form-scroll",
+      "role": "scroll",
+      "name": "",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 0,
+       "y": 103,
+       "w": 390,
+       "h": 741
+      },
+      "children": [
+       {
+        "id": "fp-frm2551Qv2018:amendedRtn_1",
+        "role": "button",
+        "name": "Yes",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 16,
+         "y": 180,
+         "w": 80,
+         "h": 44
+        },
+        "checked": false
+       },
+       {
+        "id": "fp-frm2551Qv2018:amendedRtn_2",
+        "role": "button",
+        "name": "No",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 100,
+         "y": 180,
+         "w": 80,
+         "h": 44
+        },
+        "checked": true
+       },
+       {
+        "id": "fp-frm2551Qv2018:txt15",
+        "role": "textbox",
+        "name": "Item 15",
+        "enabled": true,
+        "focused": true,
+        "bounds": {
+         "x": 16,
+         "y": 300,
+         "w": 358,
+         "h": 44
+        },
+        "value": "1234.56"
+       },
+       {
+        "id": "fp-frm2551Qv2018:txt16",
+        "role": "textbox",
+        "name": "Item 16",
+        "enabled": false,
+        "focused": false,
+        "bounds": {
+         "x": 16,
+         "y": 360,
+         "w": 358,
+         "h": 44
+        },
+        "value": ""
+       },
+       {
+        "id": "fp-table-frm2551Qv2018:txtSched1Atc1",
+        "role": "generic",
+        "name": "Schedule 1",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 16,
+         "y": 700,
+         "w": 358,
+         "h": 120
+        },
+        "visible": false,
+        "children": [
+         {
+          "id": "fp-table-frm2551Qv2018:txtSched1Atc1-none",
+          "role": "note",
+          "name": "No rows yet.",
+          "enabled": true,
+          "focused": false,
+          "bounds": {
+           "x": 16,
+           "y": 720,
+           "w": 200,
+           "h": 20
+          },
+          "visible": false
+         },
+         {
+          "id": "fp-table-frm2551Qv2018:txtSched1Atc1-add",
+          "role": "button",
+          "name": "Add row",
+          "enabled": true,
+          "focused": false,
+          "bounds": {
+           "x": 16,
+           "y": 760,
+           "w": 120,
+           "h": 44
+          },
+          "visible": false
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "system-keyboard",
+    "role": "keyboard",
+    "name": "Software keyboard",
+    "enabled": false,
+    "focused": false,
+    "bounds": {
+     "x": 0,
+     "y": 508,
+     "w": 390,
+     "h": 336
+    },
+    "states": [
+     "system"
+    ]
+   }
+  ]
+ }
+}

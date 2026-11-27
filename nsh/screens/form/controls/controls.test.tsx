@@ -74,15 +74,15 @@ for (const size of SIZES) {
     expect(edit(app, "email")).toBe("juana@example.test" + "x");
   });
 
-  test(`${size.name}: money groups while typing, reports the plain number, two decimals on leaving`, async () => {
+  test(`${size.name}: money stays plain while typing, reports the plain number, groups with two decimals on leaving`, async () => {
     const app = await gallery(size.options);
     expect(app.value("id:fp-money")).toBe("1,250,000.50");
     await app.clear("id:fp-money");
     await app.type("id:fp-money", "1250000");
-    expect(app.value("id:fp-money")).toBe("1,250,000");
+    expect(app.value("id:fp-money")).toBe("1250000");
     expect(edit(app, "money")).toBe("1250000");
     await app.type("id:fp-money", ".5");
-    expect(app.value("id:fp-money")).toBe("1,250,000.5");
+    expect(app.value("id:fp-money")).toBe("1250000.5");
     expect(edit(app, "money")).toBe("1250000.5");
     await app.type("id:fp-name", " ");
     expect(blurs(app, "money")).toBe(1);
@@ -145,6 +145,17 @@ for (const size of SIZES) {
     expect(edit(app, "disabled")).toBe("");
     // A box another answer turns off is drawn (faded) and still shows.
     expect(app.count("id:fp-off")).toBe(1);
+  });
+
+  test(`${size.name}: V5: zero TIN parts and branch codes keep their text on focus`, async () => {
+    if (size.name !== "phone") return; // the grid is the TIN-part layout under 600 pt
+    const app = await gallery(size.options);
+    for (const [id, text] of [["fp-gtin1", "000"], ["fp-gbranch", "00000"]] as const) {
+      expect(app.value(`id:${id}`)).toBe(text);
+      await app.type(`id:${id}`, "");
+      await app.wait(150);
+      expect(app.value(`id:${id}`)).toBe(text);
+    }
   });
 
   test(`${size.name}: a TIN keeps its dashes while typing and reports its digits`, async () => {

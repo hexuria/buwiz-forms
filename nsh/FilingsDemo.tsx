@@ -3,7 +3,7 @@
 //   seed   "full" (default): the demo taxpayer, her Cebu branch, a second taxpayer and seven returns (screens/filings/seed.ts IDS)
 //          "none": the demo taxpayer alone, no returns
 //   start  the dev route (default "view=filings")
-//   go     params to open Filings with once the frame is up, as Home's tiles do: { statuses: ["Draft"], updatedMonth: "2026-11" }
+//   go     params to open Filings with once the frame is up, as a navigation preset: { statuses: ["Draft"], updatedMonth: "2026-11" }
 //   generated  true: one generated Queued return joins the list in the store's cache a moment after the start. Real-window shots only:
 //          the dry-run submission worker sends a queued return at once (a headless test pins the worker elsewhere, see Filings.test.tsx)
 //   legacy "rows": bir.list_legacy_filed_returns answers the returns imported from the old program (LEGACY below: the demo taxpayer's head

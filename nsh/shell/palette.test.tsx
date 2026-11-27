@@ -165,12 +165,25 @@ test("desktop: the showRecent preference hides Recent", async () => {
   expect(app.texts()).not.toContain("Recent");
 }, 60_000);
 
-test("phone: the palette opens from the header and a taxpayer opens its profile", async () => {
-  const app = await open(ENTRY, asking());
+test("phone: search lists only tax profiles, and a taxpayer opens its profile", async () => {
+  const app = await open(ENTRY, asking({ branch: true }));
   await app.waitFor("id:narrow-bar");
-  await app.press("id:nb-avatar");
-  await app.press("id:nb-menu-search");
+  await app.press("id:nb-search");
   await app.waitFor("id:palette-input");
+  expect(app.texts()).toContain("TAXPAYERS");
+  expect(app.texts()).toContain("Juana Santos");
+  for (const word of ["BRANCHES", "GO TO", "ACTIONS", "Toggle sidebar", "Change theme"]) expect(app.texts()).not.toContain(word);
+  expect(app.shows("id:palette-item-1")).toBe(false);
+
+  await app.type("id:palette-input", "00012345300001");
+  await app.waitFor("text:Juana Santos · Cebu branch");
+  await app.clear("id:palette-input");
+
+  await app.type("id:palette-input", "2551");
+  await app.waitFor("text:No tax profiles match.");
+  expect(app.texts()).not.toContain("2551Q · Quarterly Percentage Tax Return");
+
+  await app.clear("id:palette-input");
   await app.type("id:palette-input", "juana");
   await app.press("id:palette-item-0");
   await app.waitFor("id:tp-page-profile");

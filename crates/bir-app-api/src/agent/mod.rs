@@ -29,7 +29,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gpui_agent::discovery::{self, PublishedHost};
+use gpui_agent::discovery;
 use gpui_agent::mailbox::{AgentMailbox, MailboxRequest};
 use gpui_agent::protocol::PlatformKind;
 use gpui_agent::security::{AgentConfig, SecurityError, authorize_bind, from_env};
@@ -57,10 +57,31 @@ pub fn pop_command() -> Option<Value> {
 pub struct Started {
     pub mailbox: AgentMailbox,
     pub shutdown: Arc<AtomicBool>,
-    pub discovery: Option<PublishedHost>,
     pub commands: session::UiQueue,
     /// The address the listener bound (an ephemeral port is the real one).
     pub addr: std::net::SocketAddr,
+}
+
+/// Wait for the record the serve thread of the library publishes for this
+/// listener: `spawn_mailbox_named`'s serve loop writes exactly one discovery
+/// record when it starts — naming the running binary — into the same
+/// `hosts/<pid>-<port>.json` path the app's record uses, at a time it
+/// chooses. The app's correct record must be written only after that write
+/// has landed, or a late serve-thread write overwrites it and names the
+/// binary instead of the app's executable. The serve thread writes once, so
+/// the record written after it is the last write. Returns as soon as the
+/// record exists, or after two seconds (a record the thread never wrote —
+/// a read-only runtime dir — cannot overwrite the app's either).
+pub fn wait_for_serve_record(addr: &std::net::SocketAddr) {
+    let serve_record = discovery::runtime_root().join("hosts").join(format!(
+        "{}-{}.json",
+        std::process::id(),
+        addr.port()
+    ));
+    let until = std::time::Instant::now() + Duration::from_secs(2);
+    while !serve_record.exists() && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 /// Start the listener when `GPUI_AGENT=1`, on the address the environment
@@ -159,33 +180,16 @@ pub fn try_start_config(
             say(&format!(
                 "gpui-agent listening on {addr} (platform=desktop, app={APP})"
             ));
-            // The serve thread publishes its own record for this same
-            // `hosts/<pid>-<port>.json` path (naming the binary it runs in)
-            // at a time it chooses; a record published here before it lands
-            // is overwritten by it. Wait for that record first — the host's
-            // record must be the last write, or a late serve-thread write
-            // names the executable of the binary instead of the app's.
-            let serve_record = discovery::runtime_root().join("hosts").join(format!(
-                "{}-{}.json",
-                std::process::id(),
-                addr.port()
-            ));
-            let until = std::time::Instant::now() + Duration::from_secs(2);
-            while !serve_record.exists() && std::time::Instant::now() < until {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            let discovery = match discovery::publish_current(addr, APP) {
-                Ok(published) => Some(published),
-                Err(error) => {
-                    tracing::warn!(%error, "gpui-agent discovery record not written");
-                    None
-                }
-            };
+            // The serve thread writes the only record the library ever
+            // writes; the app's correct record must come after it. Nothing
+            // is published here: a record written now would name this
+            // binary, and the executable the record must carry is the
+            // host's (`bir`, `bir-headless`), which only the caller knows.
+            wait_for_serve_record(&addr);
             install_queue(commands.clone());
             Ok(Some(Started {
                 mailbox,
                 shutdown,
-                discovery,
                 commands,
                 addr,
             }))
@@ -411,9 +415,130 @@ fn canonical(path: &Path) -> PathBuf {
     }
 }
 
+/// Publish a host's discovery record, retrying when the final rename is
+/// refused because another process holds the record file open without delete
+/// sharing (Windows: ERROR_SHARING_VIOLATION 32, ERROR_ACCESS_DENIED 5, both
+/// surfacing as [`ErrorKind::PermissionDenied`]). A reader that keeps the file
+/// open for a moment must not cost the host its record: the rename is tried
+/// again up to five times with 50 ms between tries. Every other error fails
+/// at once, exactly as `gpui_agent::discovery::publish_record` does.
+pub fn publish_record_retrying(
+    root: &Path,
+    record: &discovery::HostRecord,
+) -> std::io::Result<discovery::PublishedHost> {
+    const RETRIES: u32 = 5;
+    const BETWEEN: Duration = Duration::from_millis(50);
+    let mut attempt = 0;
+    loop {
+        match discovery::publish_record(root, record) {
+            Ok(published) => return Ok(published),
+            Err(error) if attempt < RETRIES && publish_sharing_error(&error) => {
+                attempt += 1;
+                std::thread::sleep(BETWEEN);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// Whether a publish failure is the sharing class a retry can outlast.
+fn publish_sharing_error(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    #[cfg(windows)]
+    if matches!(error.raw_os_error(), Some(32) | Some(5)) {
+        return true;
+    }
+    let _ = error;
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    fn publish_test_record(port: u16) -> discovery::HostRecord {
+        discovery::HostRecord {
+            addr: format!("127.0.0.1:{port}"),
+            pid: std::process::id(),
+            app: "bir-shell".to_owned(),
+            executable: "bir".to_owned(),
+            bundle_id: None,
+            connect_id: None,
+        }
+    }
+
+    /// Windows: a reader holding the record file open without delete sharing
+    /// for ~120 ms must not cost the host its record — the retry outlasts it.
+    #[cfg(windows)]
+    #[test]
+    fn a_sharing_reader_is_outlasted_by_the_publish_retry() {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_DELETE: u32 = 0x00000004;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let record = publish_test_record(48901);
+        let first = publish_record_retrying(root, &record).expect("first publish");
+        let path = first.path().to_path_buf();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0x00000001 | 0x00000002 & !FILE_SHARE_DELETE)
+            .open(&path)
+            .expect("open without delete sharing");
+        let released = std::sync::Arc::new(std::sync::Mutex::new(Some(held)));
+        let thread_release = released.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(120));
+            thread_release.lock().expect("lock").take();
+        });
+        let mut rewritten = record.clone();
+        rewritten.app = "bir-shell-retried".to_owned();
+        let published =
+            publish_record_retrying(root, &rewritten).expect("publish retried past the reader");
+        let body = std::fs::read_to_string(published.path()).expect("read record");
+        assert!(
+            body.contains("bir-shell-retried"),
+            "the record holds the new publish: {body}"
+        );
+    }
+
+    /// Windows: a reader holding the file open for two full seconds outlasts
+    /// the retries — the publish fails instead of hanging.
+    #[cfg(windows)]
+    #[test]
+    fn a_held_reader_fails_the_publish_after_the_retries() {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_DELETE: u32 = 0x00000004;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let record = publish_test_record(48902);
+        let first = publish_record_retrying(root, &record).expect("first publish");
+        let path = first.path().to_path_buf();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0x00000001 | 0x00000002 & !FILE_SHARE_DELETE)
+            .open(&path)
+            .expect("open without delete sharing");
+        let released = std::sync::Arc::new(std::sync::Mutex::new(Some(held)));
+        let thread_release = released.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(2));
+            thread_release.lock().expect("lock").take();
+        });
+        let started = std::time::Instant::now();
+        let result = publish_record_retrying(root, &record);
+        assert!(
+            result.is_err(),
+            "the publish gives up while the file is held"
+        );
+        assert!(
+            started.elapsed() < Duration::from_millis(1500),
+            "no hang: gave up in {:?}",
+            started.elapsed()
+        );
+    }
 
     #[test]
     fn debug_tree_ids_become_nodes_with_zero_bounds() {

@@ -71,10 +71,9 @@ describe("loadDashboard", () => {
     expect(data.overdue.map((d) => d.due_date)).toEqual(["2026-10-10", "2026-04-15"]);
     expect(data.week.map((d) => d.due_date)).toEqual(["2026-10-17"]);
   });
-  test("the counts: drafts are the saved returns; waiting is Queued; filed this month is Submitted, Confirmed or Paid this month", () => {
+  test("the counts: drafts are the saved returns; waiting is Queued", () => {
     expect(data.drafts).toBe(2);
     expect(data.waiting).toBe(1);
-    expect(data.filedMonth).toBe(2);
   });
   test("the strip is 30 days from today, each with the open deadlines that day", () => {
     expect(data.strip.length).toBe(30);
@@ -103,18 +102,10 @@ describe("loadDashboard", () => {
 describe("loadDashboard: a dry run sent nothing, so it is not filed and its deadline stays open", () => {
   const dryD = (due: string): DashboardDeadline => ({ ...deadline("T1", "1601C", due, "Submitted"), submitted_dry_run: true });
   const realD = (due: string): DashboardDeadline => ({ ...deadline("T1", "0619E", due, "Submitted"), submitted_dry_run: false });
-  const send = (stage: string) => ({ stage });
   const data = loadDashboard(
     fakeStore({
       // Past and still due this year, due within a week, and later on the strip: each as a dry run and as a real send.
       deadlines: [dryD("2026-10-10"), realD("2026-10-10"), dryD("2026-10-17"), realD("2026-10-17"), dryD("2026-10-30"), realD("2026-10-30")],
-      filed: [
-        { tin_root: "T1", status: "Submitted", send: send("test_sent"), updated_at: "2026-10-05 12:00:00" },
-        { tin_root: "T1", status: "Submitted", send: null, updated_at: "2026-10-05 12:00:00" },
-        { tin_root: "T1", status: "Submitted", send: send("sent"), updated_at: "2026-10-05 12:00:00" },
-        { tin_root: "T1", status: "Confirmed", updated_at: "2026-10-05 12:00:00" },
-        { tin_root: "T1", status: "Paid", updated_at: "2026-10-05 12:00:00" },
-      ],
       taxpayers: [{ tin_root: "T1", name: "Example One" }],
     }),
     NOW,
@@ -123,9 +114,6 @@ describe("loadDashboard: a dry run sent nothing, so it is not filed and its dead
     expect(data.overdue.map((d) => d.form_code)).toEqual(["1601C"]);
     expect(data.week.map((d) => d.form_code)).toEqual(["1601C"]);
     expect(data.upcoming.map((d) => `${d.form_code} ${d.due_date}`)).toEqual(["1601C 2026-10-17", "1601C 2026-10-30"]);
-  });
-  test("Filed this month leaves the dry run out; a real send, a relay send, Confirmed and Paid count", () => {
-    expect(data.filedMonth).toBe(4);
   });
   test("the taxpayer's progress: the dry run's past deadline is due and not done; its next deadline is the dry run", () => {
     expect(data.taxpayers[0]).toMatchObject({ due: 2, done: 1 });
@@ -140,19 +128,9 @@ describe("loadDashboard edges", () => {
     expect(data.week).toEqual([]);
     expect(data.drafts).toBe(0);
     expect(data.waiting).toBe(0);
-    expect(data.filedMonth).toBe(0);
     expect(data.upcoming).toEqual([]);
     expect(data.anyDeadlines).toBe(false);
     expect(data.taxpayers).toEqual([]);
-  });
-  test("a month boundary: a filing on the 1st counts, a filing on the 30th of the month before does not", () => {
-    const store = fakeStore({
-      filed: [
-        { tin_root: "T1", status: "Submitted", updated_at: "2026-10-01 12:00:00" },
-        { tin_root: "T1", status: "Submitted", updated_at: "2026-09-30 12:00:00" },
-      ],
-    });
-    expect(loadDashboard(store, NOW).filedMonth).toBe(1);
   });
   test("the strip and the window cross New Year", () => {
     const data = loadDashboard(fakeStore({}), new Date(2026, 11, 28, 9, 0));
@@ -172,27 +150,23 @@ describe("loadDashboard edges", () => {
 });
 
 describe("tileSpecs", () => {
-  test("five tiles, in order, with their captions, icons, tones and counts", () => {
+  test("four tiles, in order, with their captions, icons, tones and counts", () => {
     expect(tileSpecs(loadDashboard(fakeStore(FIXTURES), NOW))).toEqual([
       { key: "overdue", label: "Overdue", sub: "past the due date", tone: "danger", icon: "triangle-alert", n: 2 },
       { key: "week", label: "Due in 7 days", sub: "by Oct 21", tone: "warning", icon: "calendar", n: 1 },
       { key: "drafts", label: "Drafts", sub: "started, not queued", tone: "accent", icon: "pencil", n: 2 },
       { key: "waiting", label: "Waiting to send", sub: "queued to send", tone: "fg2", icon: "send", n: 1 },
-      { key: "filed", label: "Filed this month", sub: "submitted in Oct", tone: "success", icon: "circle-check", n: 2 },
     ]);
   });
-  test("a due-by date in the next month and the filed month of today (a month boundary)", () => {
+  test("a due-by date in the next month (a month boundary)", () => {
     const specs = tileSpecs({
-      today: "2026-10-28",
       in7: "2026-11-04",
       overdue: [],
       week: [],
       drafts: 0,
       waiting: 0,
-      filedMonth: 0,
     });
     expect(specs[1].sub).toBe("by Nov 4");
-    expect(specs[4].sub).toBe("submitted in Oct");
   });
 });
 

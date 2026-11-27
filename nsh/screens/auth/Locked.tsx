@@ -7,6 +7,7 @@ import { AccessError } from "./AccessError";
 import { AccountGate } from "./Gate";
 import { Setup, SoloTaxpayer } from "./Setup";
 import { SignIn } from "./SignIn";
+import { WelcomeNote } from "./welcome";
 
 /** True while first launch (or its recovery key) is in front. */
 const setupShows = () => app.needsSetup() || app.setup().step === "helpdesk-key";
@@ -21,6 +22,8 @@ const soloPending = () => app.setup().pending === "solo" && (setupShows() || !ap
 export function LockedScreen() {
   return (
     <View testID="locked-screen" class="min-h-0 flex-1">
+      {/* After the first sign-in, when a page before the app comes first (first-run setup, the PIN sign-in). */}
+      <WelcomeNote centred when={() => !app.cloudLocked() && !app.chromeVisible()} />
       <If when={app.cloudLocked()}>
         <AccountGate />
       </If>

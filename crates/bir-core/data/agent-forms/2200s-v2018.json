@@ -243,7 +243,7 @@
 {"computed":true,"item":"Schedule 1","key":"frm2200S:txtBasicTaxDue9","kind":"text","label":"Item Schedule 1","required":"computed"},
 {"item":"Schedule 1","key":"frm2200S:sched1Chk0","kind":"checkbox","label":"Item Schedule 1","options":[{"value":"true"},{"value":"false"}],"required":"optional"},
 {"item":"Schedule 1","key":"frm2200S:txtsched1Atc0","kind":"text","label":"Item Schedule 1","required":"optional"},
-{"item":"Schedule 1","key":"frm2200S:txtsched1Desc0","kind":"text","label":"Item Schedule 1","required":"optional"},
+{"item":"Schedule 1","key":"frm2200S:txtsched1Desc0","kind":"text","label":"Schedule 1 Others row 1 description","required":"optional"},
 {"item":"Schedule 1","key":"frm2200S:txtsched1TaxBracket0","kind":"text","label":"Item Schedule 1","required":"optional"},
 {"item":"Schedule 1","key":"frm2200S:txtsched1AppTaxRate0","kind":"text","label":"Item Schedule 1","required":"optional"},
 {"item":"Schedule 1","key":"frm2200S:txtsched1SalesValue0","kind":"text","label":"Item Schedule 1","required":"optional"},

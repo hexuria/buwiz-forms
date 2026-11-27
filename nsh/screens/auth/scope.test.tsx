@@ -45,9 +45,8 @@ test("phone: the other taxpayer signs in to its own data only; the admin sees bo
   expect(app.texts()).toContain("returns: 000111225 | deadlines: 000111225 | taxpayers: 000111225");
   expect(app.texts().some((t) => /Juana Santos/.test(t))).toBe(false);
   await app.press("id:nb-avatar");
-  await app.press("id:nb-menu-profile");
-  await app.waitFor("id:sheet-logout");
-  await app.press("id:sheet-logout");
+  await app.waitFor("id:nb-menu-logout");
+  await app.press("id:nb-menu-logout");
   await signIn(app, "000000000", "1234");
   await app.waitFor("text:session: admin");
   expect(app.texts()).toContain("returns: 000111225,000123453 | deadlines: 000111225,000123453 | taxpayers: 000111225,000123453");
