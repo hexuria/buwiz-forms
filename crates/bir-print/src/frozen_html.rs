@@ -10879,8 +10879,9 @@ mod tests {
     }
 
     /// Every overflow line a fill writes (`data-overflow-of="X"`) lies inside
-    /// the drawn cell `<div id="X">` itself (or the Rule 6 band drawn over it,
-    /// `data-rule6-of="X"`), never inside a `<template>` (the
+    /// the drawn cell `<div id="X">` itself (or the Rule 6 band printing X's
+    /// value, `data-rule6-of="X"`, which must sit directly below X:
+    /// [`bands_not_below_their_cell`]), never inside a `<template>` (the
     /// band rows a sheet keeps for cloning, which are never drawn) nor in
     /// another element. Otherwise a long value prints nowhere while
     /// `printed_cells`, which reads the text, still counts it, and a golden
@@ -10888,6 +10889,7 @@ mod tests {
     #[test]
     fn every_overflow_line_lies_in_its_drawn_cell() {
         let mut misplaced = Vec::new();
+        let mut bands = 0;
         for slug in sheet_slugs() {
             let cells = writer_cells(&slug).unwrap();
             for len in [200, 90, 12] {
@@ -10902,8 +10904,17 @@ mod tests {
                         misplaced.push(format!("{slug} ({len}): {cell} in {place:?}"));
                     }
                 }
+                bands += doc.matches("data-rule6-of=\"").count();
+                misplaced.extend(
+                    bands_not_below_their_cell(&doc)
+                        .into_iter()
+                        .map(|w| format!("{slug} ({len}): {w}")),
+                );
             }
         }
+        // Every Rule 6 band the long fills print (14 sheets), counted so a
+        // change that drops them cannot pass by checking none.
+        assert_eq!(bands, 62, "Rule 6 bands printed by the long fills");
         misplaced.dedup();
         assert!(
             misplaced.is_empty(),
@@ -10958,6 +10969,184 @@ mod tests {
             }
         }
         out
+    }
+
+    /// A drawn `<div>` of a filled document (outside every `<template>`)
+    /// with a position: its page's id, its own `id`, the cell it is the
+    /// Rule 6 band of, whether it is a value cell (`field` or `mixed`), and
+    /// its box in points within the page.
+    #[derive(Clone, Debug)]
+    struct DrawnDiv {
+        page: Option<String>,
+        id: Option<String>,
+        band_of: Option<String>,
+        value_cell: bool,
+        left: f64,
+        top: f64,
+        width: f64,
+        height: f64,
+    }
+
+    fn drawn_divs(doc: &str) -> Vec<DrawnDiv> {
+        let mut out = Vec::new();
+        let mut pages: Vec<Option<String>> = Vec::new();
+        let mut templates = 0usize;
+        let mut from = 0;
+        while let Some(rel) = doc[from..].find('<') {
+            let at = from + rel;
+            let Some(end_rel) = doc[at..].find('>') else {
+                break;
+            };
+            let tag = &doc[at..=at + end_rel];
+            from = at + end_rel + 1;
+            if tag.starts_with("<template") {
+                templates += 1;
+            } else if tag.starts_with("</template") {
+                templates = templates.saturating_sub(1);
+            } else if tag.starts_with("<div") {
+                let id = tag
+                    .find(" id=\"")
+                    .map(|at| &tag[at + 5..])
+                    .and_then(|rest| rest.split('"').next())
+                    .map(str::to_string);
+                let page = match &id {
+                    Some(id) if id.starts_with("page-") => Some(id.clone()),
+                    _ => pages.last().cloned().flatten(),
+                };
+                pages.push(page.clone());
+                let geometry = ["left", "top", "width", "height"].map(|p| style_pt_prop(tag, p));
+                if let (0, [Some(left), Some(top), Some(width), Some(height)]) =
+                    (templates, geometry)
+                {
+                    let kind = attr(tag, "data-cell-kind");
+                    out.push(DrawnDiv {
+                        page,
+                        id,
+                        band_of: attr(tag, "data-rule6-of").map(str::to_string),
+                        value_cell: matches!(kind, Some("field" | "mixed")),
+                        left,
+                        top,
+                        width,
+                        height,
+                    });
+                }
+            } else if tag.starts_with("</div") {
+                pages.pop();
+            }
+        }
+        out
+    }
+
+    /// How far a Rule 6 band's top may lie below its cell's bottom (pt):
+    /// the band starts 0.5 pt under its cut, and the cut moves down to the
+    /// sheet band's edge when that is within 6 pt ([`apply_rule6_specify_bands`]).
+    /// Measured over every sheet: 0.50 to 5.33 pt. A row is 11 pt or more.
+    const BAND_GAP_BELOW: f64 = 6.5;
+    /// How far a Rule 6 band's top may lie above its cell's bottom (pt):
+    /// none, it never overlaps its cell.
+    const BAND_GAP_ABOVE: f64 = 0.0;
+
+    /// Every Rule 6 band of `doc` not directly below its own cell: on the
+    /// cell's page, its top at or just under the cell's bottom
+    /// ([`BAND_GAP_ABOVE`] above to [`BAND_GAP_BELOW`] below), and no other
+    /// value cell or band starting between the two (overlapping the band
+    /// across), so a band that drifted onto another row fails.
+    fn bands_not_below_their_cell(doc: &str) -> Vec<String> {
+        let divs = drawn_divs(doc);
+        let mut wrong = Vec::new();
+        for band in divs.iter().filter(|d| d.band_of.is_some()) {
+            let of = band.band_of.as_deref().unwrap();
+            let Some(cell) = divs.iter().find(|d| {
+                d.band_of.is_none() && d.id.as_deref() == Some(of) && d.page == band.page
+            }) else {
+                wrong.push(format!(
+                    "{of}: band on {:?}, its cell not on that page",
+                    band.page
+                ));
+                continue;
+            };
+            let bottom = cell.top + cell.height;
+            let gap = band.top - bottom;
+            if !(-BAND_GAP_ABOVE..=BAND_GAP_BELOW).contains(&gap) {
+                wrong.push(format!(
+                    "{of}: band top {:.2} is {gap:.2} pt from its cell's bottom {bottom:.2}",
+                    band.top
+                ));
+            }
+            let between: Vec<&str> = divs
+                .iter()
+                .filter(|d| !std::ptr::eq(*d, band) && !std::ptr::eq(*d, cell))
+                .filter(|d| d.page == band.page && (d.value_cell || d.band_of.is_some()))
+                .filter(|d| d.top >= bottom - 0.5 && d.top < band.top - 0.5)
+                .filter(|d| {
+                    d.left.max(band.left) + 1.0 < (d.left + d.width).min(band.left + band.width)
+                })
+                .map(|d| d.id.as_deref().or(d.band_of.as_deref()).unwrap_or("?"))
+                .collect();
+            if !between.is_empty() {
+                wrong.push(format!(
+                    "{of}: rows between the cell and its band: {between:?}"
+                ));
+            }
+        }
+        wrong
+    }
+
+    /// The band check fails a band that drifted a row down: 1700's band for
+    /// p2c153, moved below the next value row under its cell (same gap),
+    /// is too far from its cell and has that row between them; in place it
+    /// passes.
+    #[test]
+    fn a_rule6_band_moved_down_a_row_fails() {
+        let slug = "1700-2018";
+        let cells = writer_cells(slug).unwrap();
+        let fields: BTreeMap<String, String> = cells
+            .joins
+            .keys()
+            .map(|key| (key.clone(), words_of(200)))
+            .collect();
+        let doc = filled_document(slug, &fields).unwrap();
+        assert_eq!(bands_not_below_their_cell(&doc), Vec::<String>::new());
+
+        let divs = drawn_divs(&doc);
+        let band = divs
+            .iter()
+            .find(|d| d.band_of.as_deref() == Some("p2c153"))
+            .unwrap();
+        let cell = divs
+            .iter()
+            .find(|d| d.band_of.is_none() && d.id.as_deref() == Some("p2c153"))
+            .unwrap();
+        let bottom = cell.top + cell.height;
+        let next = divs
+            .iter()
+            .filter(|d| d.page == band.page && d.value_cell && d.id != cell.id)
+            .filter(|d| d.top >= bottom - 0.5)
+            .filter(|d| {
+                d.left.max(band.left) + 1.0 < (d.left + d.width).min(band.left + band.width)
+            })
+            .min_by(|a, b| a.top.total_cmp(&b.top))
+            .unwrap();
+        let moved_top = band.top + (next.top + next.height - bottom);
+        let marker = "data-rule6-of=\"p2c153\" style=\"";
+        let at = doc.find(marker).unwrap() + marker.len();
+        let old_top = format!("top:{:.2}pt", band.top);
+        assert!(doc[at..].starts_with(&format!("left:{:.2}pt;{old_top}", band.left)));
+        let mut moved = doc.clone();
+        let top_at = at + doc[at..].find(&old_top).unwrap();
+        moved.replace_range(
+            top_at..top_at + old_top.len(),
+            &format!("top:{moved_top:.2}pt"),
+        );
+
+        let wrong = bands_not_below_their_cell(&moved);
+        let next_id = next.id.clone().unwrap();
+        assert_eq!(wrong.len(), 2, "{wrong:?}");
+        assert!(wrong[0].starts_with("p2c153: band top "), "{wrong:?}");
+        assert!(
+            wrong[1].starts_with("p2c153: rows between") && wrong[1].contains(&next_id),
+            "{wrong:?}"
+        );
     }
 
     /// Goldens: every sheet's long-text print pinned exactly
