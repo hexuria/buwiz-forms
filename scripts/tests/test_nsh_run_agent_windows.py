@@ -1,12 +1,14 @@
 """The `[windows] nsh-run-agent` recipe's Android hand-off, run for real through `just` against a fake SDK `adb`
 and a fake `nsh` (no device, no build): which device the data plane's token goes to, where `adb` is looked for,
 and what the token writer does when the launch fails or is cancelled."""
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -33,14 +35,26 @@ fn main() {
 # `adb`: answers `devices` from FAKE_DEVICES and keeps each device's "private files" in FAKE_STATE. Like the real
 # one, it refuses a command that names no device when several are online.
 FAKE_ADB = r'''
-import os, sys
+import atexit
+import os, sys, time
 from pathlib import Path
 state = Path(os.environ['FAKE_STATE'])
 args = sys.argv[1:]
+def trace(step):
+    path = os.environ.get('NSH_RUN_AGENT_TRACE')
+    if path:
+        try:
+            with open(path, 'a') as timeline:
+                timeline.write(f'{time.time():.3f}\tadb\t{step}\t' + ' '.join(args) + '\n')
+        except OSError:
+            pass
+trace('start')
+atexit.register(lambda: trace('exit'))
 with open(state / 'adb.log', 'a') as log:
     log.write('\t'.join(args) + '\n')
 devices = [line.split('\t') for line in os.environ['FAKE_DEVICES'].split('\n') if line]
 if args == ['devices']:
+    trace('devices')
     print('List of devices attached')
     for serial, status in devices:
         print(f'{serial}\t{status}')
@@ -50,21 +64,30 @@ online = [serial for serial, status in devices if status == 'device']
 if args[:1] == ['-s']:
     serial, args = args[1], args[2:]
     if serial not in online:
+        trace('device-missing')
         sys.exit(f"adb: device '{serial}' not found")
 elif len(online) == 1:
     serial = online[0]
 else:
+    trace('device-ambiguous')
     sys.exit('adb: more than one device/emulator')
+trace('device-selected')
 command = ' '.join(args)
 if 'run-as' not in command:
+    trace('not-run-as')
     sys.exit(0)
 if not (state / f'installed-{serial}').exists():
+    trace('package-missing')
     sys.exit(f'run-as: unknown package: {os.environ["FAKE_HOST"]}')
 token = state / f'token-{serial}'
 if 'cat >' in command:
+    trace('token-write')
     token.write_bytes(sys.stdin.buffer.read())
 elif 'rm -f' in command:
+    trace('token-remove')
     token.unlink(missing_ok=True)
+else:
+    trace('run-as-other')
 '''
 
 # `nsh run`: FAKE_NSH says how the launch goes. `ok` installs the host on the device nsh picks (the first online one)
@@ -72,35 +95,57 @@ elif 'rm -f' in command:
 # the token and fails without reading it; `hang` never installs and never returns; `hold` installs, waits for the
 # token and keeps running without reading it (an app still starting when the developer presses Ctrl+C).
 FAKE_NSH = r'''
+import atexit
 import os, sys, time
 from pathlib import Path
 state = Path(os.environ['FAKE_STATE'])
+def trace(step):
+    path = os.environ.get('NSH_RUN_AGENT_TRACE')
+    if path:
+        try:
+            with open(path, 'a') as timeline:
+                timeline.write(f'{time.time():.3f}\tnsh\t{step}\t' + ' '.join(sys.argv[1:]) + '\n')
+        except OSError:
+            pass
+trace('start')
+atexit.register(lambda: trace('exit'))
 # The recipe's build line asks `nsh --version` before anything runs (#357): answer it as the real nsh does, without
 # counting it as a launch, or every "nothing was launched" check sees nsh.args and the hang mode hangs right there.
 if sys.argv[1:] == ['--version']:
+    trace('version')
     print('nsh 0.6.1 (fake)')
     sys.exit(0)
 (state / 'nsh.args').write_text(' '.join(sys.argv[1:]))
 (state / 'nsh.pid').write_text(str(os.getppid()))
+trace('launch-recorded')
 mode = os.environ['FAKE_NSH']
 if mode == 'fail':
+    trace('mode-fail')
     sys.exit(3)
 if mode == 'hang':
+    trace('mode-hang')
     time.sleep(600)
 serial = next(l.split('\t')[0] for l in os.environ['FAKE_DEVICES'].split('\n') if l.endswith('\tdevice'))
 (state / f'installed-{serial}').write_text('')
+trace('installed')
 token = state / f'token-{serial}'
+trace('token-wait')
 for _ in range(400):
     if token.exists() and token.stat().st_size:
         break
     time.sleep(0.05)
 else:
+    trace('token-timeout')
     sys.exit('fake nsh: the token never arrived on ' + serial)
+trace('token-seen')
 if mode == 'fail-late':
+    trace('mode-fail-late')
     sys.exit(3)
 if mode == 'hold':
+    trace('mode-hold')
     (state / 'nsh.holding').write_text('')
     time.sleep(600)
+trace('consume-token')
 (state / 'consumed').write_bytes(token.read_bytes())
 token.unlink()
 '''
@@ -173,23 +218,111 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         env.update(PATH=path, USERPROFILE=str(self.home), HOMEDRIVE=self.home.drive, HOMEPATH=str(self.home)[2:],
                    TEMP=str(self.temp), TMP=str(self.temp), LOCALAPPDATA=str(self.local),
                    GPUI_AGENT_TOKEN=TOKEN, FAKE_STATE=str(self.state), FAKE_DEVICES=devices, FAKE_NSH=mode,
-                   FAKE_HOST=HOST, FAKE_PYTHON=sys.executable)
+                   FAKE_HOST=HOST, FAKE_PYTHON=sys.executable, NSH_RUN_AGENT_TRACE=str(self.state / 'timeline.log'))
         if sdk:
             env['ANDROID_HOME'] = str(self.sdk)
         env.update(extra)
         return env
 
     def start(self, env, through=(), **how):
-        return subprocess.Popen([*through, 'just', '--justfile', str(REPO / 'justfile'), 'nsh-run-agent', 'android'],
-                                cwd=REPO, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **how)
+        if env.get('NSH_RUN_AGENT_TRACE'):
+            with open(env['NSH_RUN_AGENT_TRACE'], 'a') as timeline:
+                timeline.write(f'{time.time():.3f}\ttest\tstart\n')
+        process = subprocess.Popen([*through, 'just', '--justfile', str(REPO / 'justfile'), 'nsh-run-agent', 'android'],
+                                   cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **how)
+        process.output_parts = []
+        process.output_lock = threading.Lock()
+
+        def read_output():
+            try:
+                while True:
+                    chunk = process.stdout.read1(4096)
+                    if not chunk:
+                        break
+                    with process.output_lock:
+                        process.output_parts.append(chunk)
+            except (OSError, ValueError):
+                pass
+
+        process.output_reader = threading.Thread(target=read_output, daemon=True)
+        process.output_reader.start()
+        return process
+
+    def output_so_far(self, process):
+        with process.output_lock:
+            return b''.join(process.output_parts).decode('utf-8', errors='replace')
+
+    def output_after_wait(self, process):
+        process.output_reader.join(timeout=5)
+        process.stdout.close()
+        return self.output_so_far(process)
+
+    def masked(self, text):
+        return text.replace(TOKEN, '<GPUI_AGENT_TOKEN>')
+
+    def process_tree_text(self, pid):
+        powershell = shutil.which('pwsh')
+        if not powershell:
+            return 'pwsh not found; process tree unavailable'
+        script = "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine | ConvertTo-Json -Compress"
+        try:
+            ran = subprocess.run([powershell, '-NoProfile', '-Command', script], capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return f'process tree capture failed: {error}'
+        if ran.returncode != 0:
+            return 'process tree capture failed: ' + ran.stderr.strip()
+        try:
+            rows = json.loads(ran.stdout or '[]')
+        except json.JSONDecodeError as error:
+            return f'process tree capture was not json: {error}'
+        if isinstance(rows, dict):
+            rows = [rows]
+        children = {}
+        by_pid = {}
+        for row in rows:
+            by_pid[row['ProcessId']] = row
+            children.setdefault(row.get('ParentProcessId'), []).append(row)
+        lines = ['pid	parent	started	name	command line']
+
+        def walk(one_pid, depth):
+            row = by_pid.get(one_pid)
+            if row is None:
+                if depth == 0:
+                    lines.append(f'{one_pid}	?	?	?	<already exited>')
+                return
+            command = (row.get('CommandLine') or '').replace('\r', ' ').replace('\n', ' ')
+            lines.append('\t'.join([
+                str(row['ProcessId']), str(row.get('ParentProcessId')), str(row.get('CreationDate')),
+                '  ' * depth + row.get('Name', '?'), command]))
+            for child in sorted(children.get(one_pid, []), key=lambda item: item['ProcessId']):
+                walk(child['ProcessId'], depth + 1)
+
+        walk(pid, 0)
+        return self.masked('\n'.join(lines))
+
+    def timeline_text(self):
+        path = self.state / 'timeline.log'
+        if not path.exists():
+            return '<no timeline file>'
+        return self.masked(path.read_text(errors='replace'))
+
+    def timeout_evidence(self, process=None, output=''):
+        parts = []
+        if process is not None:
+            parts.append('process tree at timeout:\n' + self.process_tree_text(process.pid))
+        parts.append('partial output so far:\n' + (self.masked(output) or '<empty>'))
+        parts.append('step timeline:\n' + self.timeline_text())
+        return '\n'.join(parts)
 
     def run_recipe(self, env, timeout=120):
         process = self.start(env)
         try:
-            output, _ = process.communicate(timeout=timeout)
+            process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
+            evidence = self.timeout_evidence(process, self.output_so_far(process))
             subprocess.run(['taskkill', '/T', '/F', '/PID', str(process.pid)], capture_output=True)
-            self.fail('the recipe did not return: ' + process.communicate()[0])
+            self.fail('the recipe did not return\n' + evidence)
+        output = self.output_after_wait(process)
         self.assertNotIn(TOKEN, output, 'the token is never printed')
         return process.returncode, output
 
@@ -202,13 +335,14 @@ class NshRunAgentWindowsTests(unittest.TestCase):
             if path.is_file():
                 self.assertNotIn(TOKEN.encode(), path.read_bytes(), f'{path} holds the token')
 
-    def wait_for(self, what, condition, seconds=60):
+    def wait_for(self, what, condition, seconds=60, process=None):
         until = time.monotonic() + seconds
         while time.monotonic() < until:
             if condition():
                 return
             time.sleep(0.1)
-        self.fail(what)
+        evidence = '\n' + self.timeout_evidence(process, self.output_so_far(process) if process else '') if process else ''
+        self.fail(what + evidence)
 
     def test_with_two_devices_the_token_goes_to_the_one_nsh_launches(self):
         code, output = self.run_recipe(self.env('ok'))
@@ -288,8 +422,8 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         process = self.start(self.env('hang'))
         self.addCleanup(lambda: subprocess.run(['taskkill', '/T', '/F', '/PID', str(process.pid)], capture_output=True))
         self.wait_for('nsh was not launched', lambda: (self.state / 'nsh.pid').exists()
-                      and (self.state / 'nsh.pid').read_text())
-        self.wait_for('the token writer never polled', lambda: len(self.adb_calls()) > 2)
+                      and (self.state / 'nsh.pid').read_text(), process=process)
+        self.wait_for('the token writer never polled', lambda: len(self.adb_calls()) > 2, process=process)
         # While it waits for the host, the writer keeps the token in memory only: a file would outlive a writer that is
         # ended with the launch.
         self.assert_no_token_left_on_this_machine()
@@ -303,7 +437,7 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         # The fake nsh outlives its shell here (it is what would be the real, interrupted one): end it too.
         subprocess.run(['taskkill', '/T', '/F', '/PID', (self.state / 'nsh.pid').read_text()], capture_output=True)
         process.wait(timeout=60)
-        process.stdout.close()
+        self.output_after_wait(process)
         time.sleep(2)
         self.assert_the_writer_has_stopped()
 
@@ -316,15 +450,16 @@ class NshRunAgentWindowsTests(unittest.TestCase):
         process = self.start(self.env('hold'), through=(sys.executable, '-c', HEEDS_CTRL_C),
                              creationflags=subprocess.CREATE_NEW_CONSOLE)
         self.addCleanup(lambda: subprocess.run(['taskkill', '/T', '/F', '/PID', str(process.pid)], capture_output=True))
-        self.wait_for('nsh never saw the token', lambda: (self.state / 'nsh.holding').exists())
+        self.wait_for('nsh never saw the token', lambda: (self.state / 'nsh.holding').exists(), process=process)
         stored = self.state / 'token-emulator-5556'
         self.assertEqual(stored.read_bytes(), TOKEN.encode(), 'stored on the launched device, unread')
         sent = subprocess.run([sys.executable, '-c', CTRL_C, str(process.pid)], capture_output=True, text=True)
         self.assertEqual(sent.returncode, 0, sent.stderr)
         try:
-            output, _ = process.communicate(timeout=60)
+            process.wait(timeout=60)
         except subprocess.TimeoutExpired:
-            self.fail('the recipe did not end on Ctrl+C')
+            self.fail('the recipe did not end on Ctrl+C\n' + self.timeout_evidence(process, self.output_so_far(process)))
+        output = self.output_after_wait(process)
         self.assertNotIn(TOKEN, output)
         self.assertFalse(stored.exists(), 'the unread token is removed from the device: ' + output)
         # Both planes' tokens go: the data plane's, and the window plane's the recipe stores beside it (#293).
