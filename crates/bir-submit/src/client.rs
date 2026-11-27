@@ -36,7 +36,8 @@ pub trait TokenSource: Send + Sync {
         &self,
         force_refresh: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>>;
-    /// Who is signed in (the email, empty when unknown); `None` when no one is. No request.
+    /// Who is signed in, as the cache key of the account — the user id, never the email (PLAN §A.5:
+    /// the TIN-list cache is keyed by user id); empty when unknown, `None` when no one is. No request.
     fn login(&self) -> Option<String>;
     /// The server ended the sign-in (`403 device_revoked`): the host signs the user out.
     fn session_ended(&self);

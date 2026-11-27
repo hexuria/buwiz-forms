@@ -115,8 +115,10 @@ impl bir_submit::TokenSource for AccountTokens {
     }
 
     fn login(&self) -> Option<String> {
+        // §A.5: the user id, not the email — the TIN-list cache is keyed by it, and two sign-ins of
+        // one person never share a read across accounts.
         let stored = cloud_account::load_stored_account().ok().flatten()?;
-        Some(stored.email.unwrap_or_default())
+        Some(stored.user_id)
     }
 
     fn session_ended(&self) {
