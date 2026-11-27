@@ -198,7 +198,9 @@ pub(crate) fn refresh_account(
             };
             let resolved = resolve()?;
             if stored.server_url != resolved.url {
-                clear_stored();
+                // The stored sign-in belongs to another server deployment: it ends here, through
+                // the machine — the disk outside SESSION, the cache and the close inside it.
+                crate::session::sign_out();
                 return status_now();
             }
             let Some(owner) = bir_core::account_session::OwnerKey::of(&stored) else {
@@ -231,9 +233,10 @@ pub(crate) fn refresh_account(
                 };
             }
             SessionUpdate::SignedOut => {
-                // D1: the machine's one section — the disk's delete-if-owner, the cache, the
-                // close — decided by the owner and the epoch captured above.
-                crate::session::server_ended(owner, epoch);
+                // D1 + revision 5's A: the machine's one section — the disk's
+                // delete-if-credential, the cache, the close — decided by the owner, the epoch
+                // captured above, and the exact refresh token the server rejected.
+                crate::session::server_ended(owner, epoch, stored.refresh_token.clone());
             }
         }
         status_now()
@@ -381,9 +384,9 @@ pub(crate) fn restore_saved_session_with(http: &mut dyn cloud_account::Http) -> 
         GateDecision::Closed {
             clear_secrets: true,
         } => {
-            // D1 at the launch too: the delete-if-owner, the cache and the close are the
-            // machine's one section.
-            crate::session::server_ended(owner, epoch);
+            // D1 at the launch too, with revision 5's credential: the delete matches only the
+            // exact refresh token the server rejected, so a newer sign-in is never taken by it.
+            crate::session::server_ended(owner, epoch, stored.refresh_token.clone());
             (false, false)
         }
         GateDecision::Closed {
@@ -560,20 +563,20 @@ pub(crate) fn load_stored() -> Result<Option<StoredAccount>, HostError> {
     cloud_account::load_stored_account().map_err(host_error)
 }
 
-fn clear_stored() {
-    bir_core::account_session::clear_stored();
-}
-
-/// Tests seed the stored sign-in through the one path — the guard test allows no raw call here
-/// either.
-#[cfg(test)]
-pub(crate) fn save_stored(stored: &StoredAccount) -> Result<(), HostError> {
-    bir_core::account_session::save_stored(stored).map_err(host_error)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Test fixtures write through the door directly; production's clears are the machine's.
+    fn clear_stored() {
+        bir_core::account_session::clear_stored();
+    }
+
+    /// Tests seed the stored sign-in through the one path — the guard test allows no raw call
+    /// in production code, so the fixtures live in here.
+    pub(crate) fn save_stored(stored: &StoredAccount) -> Result<(), HostError> {
+        bir_core::account_session::save_stored(stored).map_err(host_error)
+    }
     use crate::bir_module::{use_ephemeral_database, with_account_database};
 
     /// The in-process database name is per thread; the account file lives next to the database, so a thread

@@ -235,14 +235,54 @@ fn forget_device_key_local() {
 /// is made and registered, and key plus owner are written in this one step. So a failed, skipped
 /// or crashed forget never hands A's key to B. A key already this owner's is kept (signing in
 /// again as the same owner breaks no sends).
-pub fn register_device_key_for(owner: &crate::account_session::OwnerKey) -> Registration {
-    register_device_key_with(owner, register_after_sign_in)
+pub fn register_device_key_for(
+    owner: &crate::account_session::OwnerKey,
+    epoch: u64,
+) -> Registration {
+    register_device_key_with(owner, epoch, register_after_sign_in)
+}
+
+/// The registration's wall-clock bound: the DEVICE_KEY lock is held across the register step's
+/// network, so that step must be bounded. bir-submit's reqwest client carries a 30 s per-request
+/// timeout (client.rs), and register_device is the one POST — the network is already inside this
+/// bound. The elapsed check here is the belt: a register step that comes back past the bound,
+/// however it ended, is discarded — no key, no owner record.
+const REGISTER_BOUND: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The tests' shorter bound, so `a_registration_past_its_timeout_writes_nothing` does not wait
+/// 30 s. Zero means every registration is past it.
+#[cfg(any(test, feature = "test-support"))]
+static REGISTER_BOUND_OVERRIDE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(u64::MAX);
+
+/// Override the registration's wall-clock bound (milliseconds) for a test.
+#[cfg(any(test, feature = "test-support"))]
+pub fn set_register_bound_for_test(milliseconds: u64) {
+    REGISTER_BOUND_OVERRIDE.store(milliseconds, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn register_bound() -> std::time::Duration {
+    #[cfg(any(test, feature = "test-support"))]
+    {
+        let over = REGISTER_BOUND_OVERRIDE.load(std::sync::atomic::Ordering::SeqCst);
+        if over != u64::MAX {
+            return std::time::Duration::from_millis(over);
+        }
+    }
+    REGISTER_BOUND
 }
 
 /// The registration's decision logic, with the register step injected: the tests drive it with
 /// a registration that needs no server, so the replace-and-write is proven file by file.
+///
+/// The DEVICE_KEY lock IS held across the register step's network: bir-submit writes the key
+/// inside it, and the write of key plus owner record must stay one step, or a forget can
+/// interleave and hand the new key no owner — or the old key a new one. DEVICE_KEY is never
+/// nested inside SESSION, so the only other waiter is a forget; the network is bounded (see
+/// [`REGISTER_BOUND`]), so the wait is too.
 fn register_device_key_with(
     owner: &crate::account_session::OwnerKey,
+    epoch: u64,
     register: impl FnOnce() -> Registration,
 ) -> Registration {
     let _device_key = DEVICE_KEY
@@ -252,12 +292,30 @@ fn register_device_key_with(
         forget_device_key_local();
         clear_device_owner();
     }
+    let started = std::time::Instant::now();
     let registration = register();
+    let elapsed = started.elapsed();
     if matches!(
         registration,
         Registration::Registered | Registration::AlreadyDone
     ) {
-        write_device_owner(owner);
+        // The write gate (the page, revision 5's C): before the owner record is written —
+        // the cache is still this owner AND the session is still at the registration's epoch
+        // AND the register step came back inside its bound. Otherwise the registration is
+        // discarded: no owner record, and no key either — nothing of it outlives the session
+        // it was made for.
+        let cache_is_owner = crate::account_session::stored_owner().as_ref() == Some(owner);
+        let epoch_current = crate::session_epoch::current() == epoch;
+        let inside_bound = elapsed < register_bound();
+        if cache_is_owner && epoch_current && inside_bound {
+            write_device_owner(owner);
+        } else {
+            forget_device_key_local();
+            clear_device_owner();
+            tracing::info!(
+                "device registration discarded: the session moved on or the register step overran (cache {cache_is_owner}, epoch {epoch_current}, elapsed {elapsed:?})"
+            );
+        }
     }
     registration
 }
@@ -266,9 +324,10 @@ fn register_device_key_with(
 #[cfg(any(test, feature = "test-support"))]
 pub fn register_device_key_for_test(
     owner: &crate::account_session::OwnerKey,
+    epoch: u64,
     register: impl FnOnce() -> Registration,
 ) -> Registration {
-    register_device_key_with(owner, register)
+    register_device_key_with(owner, epoch, register)
 }
 
 /// Test instrumentation: the DEVICE_KEY lock itself, so the funnel test can hold it and prove

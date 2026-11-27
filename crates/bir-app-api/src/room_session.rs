@@ -1506,6 +1506,7 @@ mod a3a_tests {
                 user_id: owner.user_id.clone(),
             },
             epoch,
+            "refresh-user-a".to_string(),
         );
         assert_eq!(
             crate::session::snapshot().phase_kind,

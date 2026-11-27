@@ -3177,7 +3177,7 @@ mod tests {
                 Some(account_path.to_str().unwrap().to_owned()),
             )],
             async {
-                crate::cloud_account::save_stored_account(
+                crate::account_session::save_stored(
                     &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-a")),
                 )
                 .unwrap();
@@ -3186,7 +3186,7 @@ mod tests {
                 let profile = reviewed_profile();
                 process_submission_queue(&profile, db.clone(), FIXED_ROOM_KEY).await;
                 // The switch happens before the spawned task's first poll.
-                crate::cloud_account::save_stored_account(
+                crate::account_session::save_stored(
                     &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-b")),
                 )
                 .unwrap();
@@ -5791,7 +5791,7 @@ mod tests {
                 practice,
             });
         stored.last_refresh_unix = now;
-        cloud_account::save_stored_account(&stored).expect("save the sign-in");
+        crate::account_session::save_stored(&stored).expect("save the sign-in");
     }
 
     /// The claims of a relay receipt, unverified (the client verified it before the queue kept it).

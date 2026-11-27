@@ -845,7 +845,20 @@ pub fn open_browser(url: &str) -> Result<(), String> {
 
 /// Load the desktop account. The keychain wins when it holds a complete
 /// record. Otherwise the private file is used. `Ok(None)` means signed out.
+/// Test instrumentation: how many times the stored account was read from the disk or keychain,
+/// so the owner cache's tests can prove a read never happened.
+#[cfg(any(test, feature = "test-support"))]
+static STORED_ACCOUNT_LOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many stored-account loads this process ran.
+#[cfg(any(test, feature = "test-support"))]
+pub fn stored_account_loads() -> u64 {
+    STORED_ACCOUNT_LOADS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
+    #[cfg(any(test, feature = "test-support"))]
+    STORED_ACCOUNT_LOADS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     if let Some(raw) = keyring_load()
         && let Ok(stored) = StoredAccount::decode(&raw)
     {
