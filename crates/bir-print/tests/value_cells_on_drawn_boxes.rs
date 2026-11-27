@@ -520,7 +520,12 @@ fn a_self_boxed_row_is_checked_against_the_longest_line_at_its_height() {
         .find(|e| (e.at - tin.rect.y).abs() <= TOL + e.half && row_spans(&tin, &tiles, e))
         .map(|e| (e.at, e.half, e.from, e.to))
         .unwrap();
-    across.push(Edge { at, half, from: from - 20.0, to: to + 20.0 });
+    across.push(Edge {
+        at,
+        half,
+        from: from - 20.0,
+        to: to + 20.0,
+    });
     let why = misplacement(&tin, &across, &down, &tiles).unwrap();
     assert!(why.contains("top"), "{why}");
 }
