@@ -20,7 +20,7 @@
 // its rows' last measured height as an empty box, and its list is made again as it comes near.
 // The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
-import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, View, windowSize } from "nsh";
+import { cleanup, computed, effect, keymap, List, openUrl, Scroll, signal, untracked, View, windowSize } from "nsh";
 import { BREAK, SIZE } from "../../theme/tokens";
 import {
   AppButton,
@@ -47,6 +47,7 @@ import {
   dismissToast as kitDismissToast,
 } from "../../ui";
 import { app, store } from "../../shell";
+import { returnedFromAccountSite } from "../taxpayer/tins";
 import { DRY_RUN_WORD } from "../../lib/statusWord";
 import { ItemRow, ProfileFold } from "./rows";
 import { ACCOUNT_FIX, existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, profileChangedNote, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
@@ -923,6 +924,10 @@ function Dialogs(props: { s: FormSession }) {
     const v = o();
     return v?.kind === "queue-confirm" ? v.warns : [];
   };
+  const blocked = () => {
+    const v = o();
+    return v?.kind === "tin-blocked" ? v.row : null;
+  };
   const resolving = () => {
     const v = o();
     return v?.kind === "resolve-confirm" ? v : null;
@@ -993,6 +998,34 @@ function Dialogs(props: { s: FormSession }) {
                   }}
                 />
               </If>
+            </View>
+          )}
+        </If>
+      </Dialog>
+      <Dialog testID="tin-queue-blocked" width={420} open={kind("tin-blocked")} onOpenChange={(open) => !open && s.dismissTinBlocked()}>
+        <If when={blocked()}>
+          {(row) => (
+            <View class="gap-3 p-5">
+              <Text variant="title">{row().state === "pending" ? "This TIN is waiting to be verified" : row().state === "fix" ? "This TIN needs a step on your account" : "This TIN is not activated"}</Text>
+              <If when={row().message}>
+                <Text testID="tin-blocked-message" variant="control">{row().message}</Text>
+              </If>
+              <If when={row().test_only}>
+                <Text variant="meta" tone="fg2">A test TIN sends nothing to the BIR.</Text>
+              </If>
+              <If when={row().state === "fix" && row().action_url}>
+                <AppButton
+                  testID="tin-blocked-action"
+                  variant="primary"
+                  block
+                  label="Fix on your account"
+                  onPress={() => {
+                    void openUrl(row().action_url!);
+                    void returnedFromAccountSite();
+                  }}
+                />
+              </If>
+              <AppButton testID="tin-blocked-close" block label="Close" onPress={() => s.dismissTinBlocked()} />
             </View>
           )}
         </If>

@@ -5,6 +5,7 @@ import { Button } from "nsh/base";
 import type { Taxpayer } from "../bir";
 import { shortDate } from "../lib/dates";
 import { Avatar, AppButton, Chip, Code, EmptyRow, GroupLabel, Icon, NavRow, SidePanel, StepCircle, Text } from "../ui";
+import { TinChip } from "../screens/taxpayer/TinChip";
 import { app, type Notification } from "./app";
 import { FactRow } from "./parts";
 import { store } from "./store";
@@ -100,6 +101,11 @@ function ProfileSummary(props: { tp: Taxpayer }) {
         <Avatar name={props.tp.name} size={56} hueKey={props.tp.tin_root} />
         <Text variant="title" class="mt-1 text-center">{props.tp.name}</Text>
         <Code tone="fg2">{b()?.tin_display ?? props.tp.tin_display}</Code>
+        <If when={b()}>
+          <View class="items-center">
+            <TinChip testID="panel-tin-status" tinRoot={props.tp.tin_root} branch={b()!.code} tinFull={b()!.tin} />
+          </View>
+        </If>
       </View>
       <View testID="panel-summary" class="mx-2 mb-1 gap-2 border-y border-border py-3">
         <FactRow icon="git-branch" label="Branch">
@@ -154,7 +160,14 @@ function ProfileLists(props: { tp: Taxpayer }) {
             leading={<Code class="w-11">{br().code}</Code>}
             label={br().name}
             current={br().code === app.branch()?.code}
-            trailing={br().code === app.branch()?.code ? <Icon name="check" tone="fg3" /> : undefined}
+            trailing={
+              <View class="flex-row items-center gap-1">
+                <TinChip compact testID={`panel-branch-tin-${br().code}`} tinRoot={props.tp.tin_root} branch={br().code} tinFull={br().tin} />
+                <If when={br().code === app.branch()?.code}>
+                  <Icon name="check" tone="fg3" />
+                </If>
+              </View>
+            }
             onPress={() => app.selectBranch(br().code)}
           />
         )}
@@ -171,6 +184,17 @@ function ProfileLists(props: { tp: Taxpayer }) {
               leading={<Avatar name={x().name} size={20} hueKey={x().tin_root} />}
               label={x().name}
               count={x().tin_root.slice(0, 3)}
+              trailing={
+                <If when={x().branches.find((br) => br.is_head_office)}>
+                  <TinChip
+                    compact
+                    testID={`panel-tp-tin-${x().tin_root}`}
+                    tinRoot={x().tin_root}
+                    branch={x().branches.find((br) => br.is_head_office)!.code}
+                    tinFull={x().branches.find((br) => br.is_head_office)!.tin}
+                  />
+                </If>
+              }
               onPress={() => app.selectTaxpayer(x().tin_root)}
             />
           )}

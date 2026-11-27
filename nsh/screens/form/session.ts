@@ -35,6 +35,7 @@ import {
   type ScreenFormStatus,
   type SendState,
 } from "../../bir";
+import { refreshTins, returnedFromAccountSite, tinRow } from "../taxpayer/tins";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
 import { statusWord } from "../../lib/statusWord";
@@ -273,6 +274,7 @@ export type Overlay =
   | { kind: "removal"; message: string }
   | { kind: "existing"; existing: ScreenFormExisting }
   | { kind: "queue-confirm"; warns: string[] }
+  | { kind: "tin-blocked"; row: { state: string; message: string | null; action_url: string | null; test_only: boolean; stale: boolean; fetched_at: number } }
   | { kind: "resolve-confirm"; answer: "received" | "not_received"; question: string; button: string }
   | { kind: "profile-ask"; ask: ProfileAsk }
   | { kind: "sample-period"; parts: { key: string; part: ScreenFormPeriodPart["part"]; quarter: number | null; value: string }[]; error: string };
@@ -3904,8 +3906,34 @@ export class FormSession {
     this.publish();
   }
 
+  /** Closes the TIN-status sheet Queue stopped on; nothing was queued. */
+  dismissTinBlocked() {
+    if (this.st.overlay?.kind !== "tin-blocked") return;
+    this.st.overlay = null;
+    this.publish();
+  }
+
   private queueNow() {
     const s = this.st;
+    // D2: Queue asks the account first (max_age 0). A fresh, complete list naming this TIN and branch as not activated
+    // stops Queue on a sheet and queues nothing; a stale, incomplete or unreadable list goes ahead as today.
+    const tinText = String(s.target.tin).replace(/\D/g, "");
+    void (async () => {
+      const list = await refreshTins(0);
+      if (list && !list.stale && list.complete) {
+        const row = tinRow(tinText.slice(0, 9), tinText.slice(9));
+        if (row && row.state !== "activated") {
+          if (this.st !== s) return;
+          s.overlay = { kind: "tin-blocked", row };
+          this.publish();
+          return;
+        }
+      }
+      if (this.st === s) this.queueNowHost(s);
+    })();
+  }
+
+  private queueNowHost(s: St) {
     try {
       if (this.usesPeriodPath()) bir.queue_form_draft(s.target.tin, s.target.formCode, s.target.year, s.target.period || null);
       else bir.screen_form_queue(s.target.formCode, s.draft!);

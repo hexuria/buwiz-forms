@@ -4,7 +4,7 @@
 import { cleanup, host, mount, signal, Text, View } from "nsh";
 import { bir } from "../../bir";
 import "../../theme/fonts";
-import { createDemoTaxpayer, DEMO } from "../../bir/testing";
+import { createDemoTaxpayer, DEMO, installFakeTins, type FakeActivateKind, type FakeTinsKind } from "../../bir/testing";
 import { app, store } from "../../shell";
 import { FormPage, type FormTarget } from "./FormPage";
 import { boxFrames, pollBoxFrames, watchBoxFrames } from "./layoutProbe";
@@ -29,6 +29,12 @@ interface Params {
   openParts?: number[] | "all";
   /** A form key whose host-held value the fixture republishes as `probe <value>`. */
   probeKey?: string;
+  /** The account's TIN list faked for the queue gate (D2); the calls are published as `tinscalls ...` lines. */
+  tins?: FakeTinsKind;
+  /** The refusal activate_tin throws. */
+  activate?: FakeActivateKind;
+  /** Year facts set for the demo taxpayer before the page opens (e.g. the EOPT tier a queue needs answered). */
+  facts?: Record<string, string>;
 }
 
 async function seedParity(tin: string) {
@@ -47,10 +53,19 @@ const sessionFields = signal("");
 const probeValue = signal("");
 let count = 0;
 
+const tinsCalls = signal<string[]>([]);
+
 function Fixture() {
   watchBoxFrames(true);
   createDemoTaxpayer();
   const p = (host.params || {}) as Params;
+  if (p.tins) installFakeTins(bir as unknown as Record<string, unknown>, p.tins, p.activate, (line) => tinsCalls.set([...tinsCalls(), line]));
+  if (p.facts) {
+    const tin = DEMO.tin;
+    const year = p.year ?? 2025;
+    if (!bir.list_tax_years(tin).includes(year)) bir.add_tax_year(tin, year, false);
+    bir.set_year_facts(tin, year, p.facts as never);
+  }
   let probeTimer: ReturnType<typeof setInterval> | undefined;
   cleanup(() => {
     if (probeTimer !== undefined) clearInterval(probeTimer);
@@ -98,6 +113,7 @@ function Fixture() {
         <Text>{`probe ${probeValue()}`}</Text>
         <Text testID="fx-box-xs">{`boxx ${JSON.stringify(boxFrames())}`}</Text>
         <Each of={toasts()}>{(t) => <Text>{t()}</Text>}</Each>
+        <Each of={tinsCalls()}>{(t) => <Text>{`tins ${t()}`}</Text>}</Each>
       </View>
     </View>
   );

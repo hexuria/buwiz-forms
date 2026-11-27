@@ -5,8 +5,9 @@
 import type { JSX } from "nsh";
 import { cleanup, computed, effect, ErrorBoundary, keymap, platform, safeArea, Scroll, untracked, View } from "nsh";
 import { Button } from "nsh/base";
-import { isAvailable as desktopAvailable, currentWindow, titleBar } from "nsh/desktop";
+import { isAvailable as desktopAvailable, currentWindow, focusedWindow, titleBar } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
+import { refreshTins } from "../screens/taxpayer/tins";
 import { errorText } from "../lib/errors";
 import { LockedScreen } from "../screens/auth/Locked";
 import { SIZE } from "../theme/tokens";
@@ -273,6 +274,14 @@ const toastSpot = () => toastPlace(app.view(), app.layout.narrow(), TOUCH);
 
 export function Shell(props: ShellProps) {
   void boot(props.start, { firstRun: props.firstRun === true });
+  // D2: the account's TINs are asked at start and when the app becomes active (never on a timer).
+  void refreshTins(0);
+  let tinWasFocused = untracked(() => focusedWindow() !== null);
+  effect(() => {
+    const focused = focusedWindow() !== null;
+    if (focused && !tinWasFocused) void refreshTins(0);
+    tinWasFocused = focused;
+  });
   // The app draws its own 40-point title bar where the platform has windows (the traffic lights and caption buttons stay).
   // Two rows (Windows, Linux without a Global Menu): the title bar is the 32-point menu row, whose end holds the window's buttons.
   if (desktopAvailable && platform.desktop) {
