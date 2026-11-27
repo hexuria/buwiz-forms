@@ -49,10 +49,11 @@ export interface ChoiceRowProps {
   testID?: string;
   /** Picks it; a disabled row has none. */
   onPress?: () => void;
-  /** A press went down on it (before the focus it takes leaves the box that opened the list: SearchPick's combobox). */
-  onPressDown?: () => void;
-  /** That press ended: released, moved away or cancelled. */
-  onPressUp?: () => void;
+  /**
+   * A press leaves the keyboard focus where it is, as a native combobox's list does: the row is no focus stop, so pressing it never
+   * blurs the box that opened the list (SearchPick's wide field). The keys reach the rows through that box (Up, Down, Enter).
+   */
+  keepsFocus?: boolean;
   disabled?: boolean;
   /** The current value: a check at the end. */
   chosen?: boolean;
@@ -71,6 +72,39 @@ export interface ChoiceRowProps {
  * each row's bottom border, not the group's `first:` rule.
  */
 export function ChoiceRow(props: ChoiceRowProps) {
+  const look = () =>
+    cx(
+      "w-full flex-row items-center gap-3 disabled:opacity-50",
+      TOUCH ? "min-h-13 border-b border-border px-1 py-1.5 active:bg-selected" : "h-8 rounded-(--radius-ctl) px-2 enabled:hover:bg-hover",
+      props.lit && "bg-hover",
+    );
+  const tooltip = () => (props.tooltip ? <Tooltip label={props.tooltip} /> : undefined);
+  const content = () => (
+    <>
+      <View class="min-w-0 flex-1">{props.children}</View>
+      <If when={props.chosen}>
+        <Icon name="check" tone="fg" />
+      </If>
+    </>
+  );
+  // A Button is always a focus stop; a view that takes presses is not one with focusable={false}.
+  if (props.keepsFocus)
+    return (
+      <View
+        testID={props.testID}
+        role="option"
+        accessibilityLabel={props.label}
+        accessibilityState={{ selected: props.chosen === true, disabled: props.disabled === true }}
+        focusable={false}
+        disabled={props.disabled}
+        onPress={props.onPress ? () => props.onPress?.() : undefined}
+        onMouseEnter={() => props.onHover?.()}
+        tooltip={tooltip()}
+        class={look()}
+      >
+        {content()}
+      </View>
+    );
   return (
     <Button
       testID={props.testID}
@@ -79,20 +113,11 @@ export function ChoiceRow(props: ChoiceRowProps) {
       selected={props.chosen}
       disabled={props.disabled}
       onPress={props.onPress}
-      onPressDown={props.onPressDown}
-      onPressUp={props.onPressUp}
       onMouseEnter={() => props.onHover?.()}
-      tooltip={props.tooltip ? <Tooltip label={props.tooltip} /> : undefined}
-      class={cx(
-        "w-full flex-row items-center gap-3 disabled:opacity-50",
-        TOUCH ? "min-h-13 border-b border-border px-1 py-1.5 active:bg-selected" : "h-8 rounded-(--radius-ctl) px-2 enabled:hover:bg-hover",
-        props.lit && "bg-hover",
-      )}
+      tooltip={tooltip()}
+      class={look()}
     >
-      <View class="min-w-0 flex-1">{props.children}</View>
-      <If when={props.chosen}>
-        <Icon name="check" tone="fg" />
-      </If>
+      {content()}
     </Button>
   );
 }
