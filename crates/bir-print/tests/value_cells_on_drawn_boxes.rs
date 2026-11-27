@@ -344,15 +344,17 @@ fn misplacement(cell: &Cell, across: &[Edge], down: &[Edge], tiles: &[Tile]) -> 
     let Rect { x, y, w, h } = cell.rect;
     let (x1, y1) = (x + w, y + h);
     let on_across = |at: f64| {
-        across.iter().any(|e| {
-            (e.at - at).abs() <= TOL + e.half
-                && if cell.self_boxed {
-                    // A self-boxed cell's row spans the printed line.
-                    row_spans(cell, tiles, e)
-                } else {
-                    overlap(x, x1, e.from, e.to) >= 0.5 * w
-                }
-        })
+        let mut near = across.iter().filter(|e| (e.at - at).abs() <= TOL + e.half);
+        if cell.self_boxed {
+            // A self-boxed cell's row spans the printed line: the LONGEST horizontal under it at
+            // that height, so a short line the boxes happen to cover, beside a longer one at the
+            // same height, cannot leave the longer line's ends unchecked.
+            near.filter(|e| overlap(x, x1, e.from, e.to) > 0.0)
+                .max_by(|a, b| (a.to - a.from).total_cmp(&(b.to - b.from)))
+                .is_some_and(|e| row_spans(cell, tiles, e))
+        } else {
+            near.any(|e| overlap(x, x1, e.from, e.to) >= 0.5 * w)
+        }
     };
     // A self-boxed cell's own sides are its box.
     let on_down = |at: f64| {
@@ -500,4 +502,25 @@ fn a_self_boxed_cell_shrunk_inside_its_row_fails() {
     tin.rect.w /= 2.0;
     let why = misplacement(&tin, &across, &down, &tiles).unwrap();
     assert!(why.contains("top, bottom"), "{why}");
+}
+
+/// The row is checked against the longest printed line at its height: 0605's TIN 4-6 row tiles its
+/// line exactly, but with a longer line at the same height (reaching 20 pt past each end) the row
+/// no longer spans what is printed there and fails; the short line alone does not save it.
+#[test]
+fn a_self_boxed_row_is_checked_against_the_longest_line_at_its_height() {
+    let html = std::fs::read_to_string(frozen_root().join("0605-1999/index.html")).unwrap();
+    let joined = bir_print::frozen_html::joined_cell_ids("0605-1999");
+    let (mut across, down, cells, tiles) = pages(&html, &joined).into_iter().next().unwrap();
+    let tin = cells.into_iter().find(|c| c.id == "p1c25").unwrap();
+    assert!(tin.self_boxed);
+    assert_eq!(misplacement(&tin, &across, &down, &tiles), None);
+    let (at, half, from, to) = across
+        .iter()
+        .find(|e| (e.at - tin.rect.y).abs() <= TOL + e.half && row_spans(&tin, &tiles, e))
+        .map(|e| (e.at, e.half, e.from, e.to))
+        .unwrap();
+    across.push(Edge { at, half, from: from - 20.0, to: to + 20.0 });
+    let why = misplacement(&tin, &across, &down, &tiles).unwrap();
+    assert!(why.contains("top"), "{why}");
 }
