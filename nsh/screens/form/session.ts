@@ -3775,6 +3775,8 @@ export class FormSession {
     const s = this.st;
     this.retireRefusal();
     // B8-2: the filer accepted exactly these warnings with Continue before the box's leave made Queue run again: not asked twice.
+    // The warnings are compared by their text, which today never holds an amount; if a fact's label ever includes one, key the
+    // accepted warnings by the fact's id instead, or a warning whose amount changed during the settle would pass unasked.
     if (warns.length && !(accepted && sameJson(warns, accepted))) {
       s.queueWarn = { warns };
       s.overlay = { kind: "queue-confirm", warns };
