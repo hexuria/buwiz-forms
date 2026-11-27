@@ -4008,6 +4008,10 @@ mod tests {
     /// written into the new room — and passes through while the room is still the thread's own.
     #[test]
     fn oauth_result_dropped_after_the_room_changed() {
+        // The room slot and its generation are process-wide: without the turn any other test's
+        // open or close moves the generation under this one, and the pass-through arm drops a
+        // result that was never stale — the flake the suites saw.
+        let _turn = crate::open_room::room_test_turn();
         let folder = tempfile::tempdir().unwrap();
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
