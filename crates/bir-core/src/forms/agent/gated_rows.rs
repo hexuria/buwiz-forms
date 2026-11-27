@@ -574,6 +574,9 @@ pub struct Clearance {
     pub keys: Vec<&'static str>,
 }
 
+type RowLine = (&'static str, &'static str);
+type ClearanceUnit = (String, Gate, Vec<&'static str>, Option<RowLine>);
+
 /// The stable printed-line identity of a row box, never its transient vector
 /// index. These schedules have fixed printed lines; when a row moves in a
 /// compacting table the identity belongs to the row content, not to the key
@@ -641,12 +644,7 @@ fn row_cleared_text(gate: Gate, line: &str) -> String {
 /// clearance unit of its own, keyed by its stable printed-line id; scalar
 /// boxes of one gate stay one unit.
 pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Clearance> {
-    let mut units: Vec<(
-        String,
-        Gate,
-        Vec<&'static str>,
-        Option<(&'static str, &'static str)>,
-    )> = Vec::new();
+    let mut units: Vec<ClearanceUnit> = Vec::new();
     for key in kind.definition().bindings.keys() {
         let Some(gate) = gate_of(kind.form_code(), key) else {
             continue;
