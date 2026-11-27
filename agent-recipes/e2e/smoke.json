@@ -1,6 +1,6 @@
 {
  "v": 1,
- "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, a tax year with 2551Q, every screen, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), Queue in the dry-run test build, a schedule row deleted, the birth date, Log out. Variants per target where a platform needs its own steps (the Linux window shows the narrow layout). Run with `just e2e <target> smoke --allow-send` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
+ "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, a tax year with 2551Q, every screen, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), Queue in the dry-run test build, a schedule row deleted, the birth date, Log out. Variants per target where a platform needs its own steps (the Linux window shows the narrow layout). Run with `just e2e <target> smoke` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
  "params": {
   "tin": "12345678800000",
   "name": "E2E SMOKE TAXPAYER",
@@ -73,9 +73,6 @@
    "fallback": {
     "phone": "money-boxes-phone.json",
     "file": "money-boxes.wants"
-   },
-   "known_gap": {
-    "phone": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have"
    }
   },
   {
@@ -101,8 +98,8 @@
    "name": "queue",
    "file": "queue.wants",
    "windows": "queue-windows.wants",
-   "send": true,
-   "precondition": "Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog"
+   "precondition": "Stops before the Queue control after validating the return. The runner treats fp-queue itself as a send control, so the confirm-dialog send rehearsal is the separate queue-send recipe outside this suite.",
+   "desktop": "queue-desktop.json"
   },
   {
    "name": "birth-date",

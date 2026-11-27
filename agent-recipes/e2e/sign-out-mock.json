@@ -1,0 +1,17 @@
+{
+ "v": 1,
+ "description": "No-bypass sign-out against the local mock account server. Kept outside smoke because just e2e's launcher always sets BIR_AUTH_BYPASS=1; run it as documented in docs/proof/e2e-recipes-refresh/sign-out-mock.md.",
+ "recipes": [
+  {
+   "name": "sign-in-mock",
+   "file": "sign-in-mock.wants",
+   "sign_in": true,
+   "required": true
+  },
+  {
+   "name": "sign-out-mock",
+   "file": "sign-out.wants",
+   "phone": "sign-out-phone.wants"
+  }
+ ]
+}

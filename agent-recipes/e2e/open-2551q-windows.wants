@@ -15,7 +15,7 @@ click tp-branch-save
 wait_until fp-set-profile-income_tax_election --timeout-ms 10000
 click fp-set-profile-income_tax_election
 wait_until tp-fact-income_tax_election-choice --timeout-ms 8000
-click tp-fact-income_tax_election-choice-GraduatedUnspecified
+click tp-fact-income_tax_election-choice-EightPercent
 click tp-fact-income_tax_election-save
 wait_until fp-queue --timeout-ms 10000
 click fp-frm2551Qv2018:forThe_1

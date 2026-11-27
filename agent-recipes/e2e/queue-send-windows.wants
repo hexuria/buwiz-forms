@@ -1,0 +1,21 @@
+# Smoke 8, SEND, windows: Queue on the open return, in the dry-run test build only (the runner refuses it without --allow-send,
+# EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1). Queue validates first: a return that does not pass Check stops at its to-do.
+# (open-2551q-windows.wants already set the profile facts and For-the this return validates against.)
+# What validation still wants is in the to-do list and in Part I: capture the list, jump to Part I and answer its
+# items (income type goes to the profile inline, exactly what the box says).
+click fp-pill-list --screenshot
+click fp-nav-attention --screenshot
+click 'fp-ask-tax_classification-choices-"SelfEmployed"'
+type fp-frm2551Qv2018:telNo 09170000000
+type fp-txtEmail#occurrence-1 e2e@example.com
+click fp-frm2551Qv2018:taxTreaty_2 --screenshot
+# Item 13 must be Not applicable (Q4 is not an initial quarter and the election was 8%; money-boxes re-zeroes
+# Items 15/16 after its asserts so they validate). Then jump back to the top: deep in the scroll the toolbar is
+# culled from the tree and fp-queue is gone. fp-cancel-queue is not awaited: the dry-run worker sends a queued
+# return within seconds, so the queued state races the wait; fp-send-line exists only once the return is sent.
+click fp-frm2551Qv2018:taxRateNA --screenshot
+click fp-nav-0 --screenshot
+click fp-queue --screenshot
+wait_until queue-continue --timeout-ms 10000 --screenshot
+click queue-continue
+wait_until fp-send-line --timeout-ms 20000 --screenshot

@@ -1,0 +1,8 @@
+# Sign in through the local mock account server, with no BIR_AUTH_BYPASS. This recipe is intentionally outside smoke:
+# scripts/e2e launches every suite with BIR_AUTH_BYPASS=1, so it must be driven by gpui-agent-cli against a separately
+# launched no-bypass app. Run `just mock-account --auto-approve` first; see docs/proof/e2e-recipes-refresh/sign-out-mock.md.
+click gate-start-continue
+wait_until gate-email --timeout-ms 5000
+type gate-email e2e@example.com
+click gate-continue
+wait_until frame --timeout-ms 20000 --screenshot

@@ -1,9 +1,13 @@
-# Smoke 8, SEND: Queue on the open return, in the dry-run test build only (the runner refuses it without --allow-send,
-# EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1). Queue validates first: a 2551Q on a profile without the business start
+# Smoke 8, pre-send: Queue on the open return, in the dry-run test build only (the default suite never presses it). Queue validates first: a 2551Q on a profile without the business start
 # date and the annual income-tax election stops at its prerequisite banners. So this recipe first records both
-# prerequisites through the banners' own Set buttons (each opens the profile editor and returns to the form on
-# save), then queues for real.
-click fp-queue
+# through the banners' own Set buttons (each opens the profile editor and returns to the form on save). The election
+# is 8%: it makes Item 13 Not applicable for a Q4 non-initial quarter, the combination the Windows machine proved
+# end to end. Then the remaining to-dos are answered in the form itself (income type inline to the profile,
+# telephone, email at fp-txtEmail#occurrence-1 - the bare id resolves to nothing where the form holds the same test
+# id more than once - tax relief No, Item 13 Not applicable), jumping back to the top before Queue because deep in
+# the scroll the toolbar is culled from the tree and fp-queue is gone. fp-cancel-queue is not awaited: the dry-run
+# worker sends a queued return within seconds, so the queued state races the wait; fp-send-line exists only once
+# the return is sent.
 wait_until fp-set-profile-business_start_date --timeout-ms 8000 --screenshot
 click fp-set-profile-business_start_date
 wait_until tp-branch-business_start_date --timeout-ms 5000
@@ -13,14 +17,16 @@ assert tp-branch-business_start_date value=$bstart
 click tp-branch-save
 wait_until fp-set-profile-income_tax_election --timeout-ms 8000 --screenshot
 click fp-set-profile-income_tax_election
-wait_until tp-fact-income_tax_election-choice-GraduatedUnspecified --timeout-ms 5000
-click tp-fact-income_tax_election-choice-GraduatedUnspecified
+wait_until tp-fact-income_tax_election-choice-EightPercent --timeout-ms 5000
+click tp-fact-income_tax_election-choice-EightPercent
 click tp-fact-income_tax_election-save
-wait_until fp-queue --timeout-ms 8000 --screenshot
-click fp-queue
-wait_until queue-continue --timeout-ms 10000 --screenshot
-click queue-continue
-# fp-cancel-queue is not awaited: the dry-run worker sends a queued return within seconds, so the queued state
-# races the wait (seen on Windows, where the same wait timed out until it was changed; on macOS this wait timed out
-# too after queue-continue was pressed). fp-send-line exists only once the return is sent.
-wait_until fp-send-line --timeout-ms 20000 --screenshot
+wait_until fp-pill-list --timeout-ms 8000 --screenshot
+click fp-pill-list --screenshot
+click fp-nav-attention --screenshot
+click 'fp-ask-tax_classification-choices-"SelfEmployed"'
+type fp-frm2551Qv2018:telNo 09170000000
+type fp-txtEmail#occurrence-1 e2e@example.com
+click fp-frm2551Qv2018:taxTreaty_2 --screenshot
+click fp-frm2551Qv2018:taxRateNA --screenshot
+click fp-nav-0 --screenshot
+wait_until fp-queue --timeout-ms 5000 --screenshot
