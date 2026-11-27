@@ -408,8 +408,11 @@ class LintRuleTests(unittest.TestCase):
         self.assert_good("token prefix github pat example")
 
     def test_sk_rule(self):
-        self.assert_bad("token prefix sk-example")
+        self.assert_bad("key " + "s" + "k-" + "abcdefghijklmnop1234")
         self.assert_good("token prefix sk example")
+        # Ordinary words that hold the same letters are not keys.
+        self.assert_good("crew run <role> <task-file> --sandbox")
+        self.assert_good("a risk-free change to the task-name")
 
     def test_x_access_token_rule(self):
         self.assert_bad("header x-access-token present")

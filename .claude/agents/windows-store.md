@@ -1,0 +1,10 @@
+---
+name: windows-store
+description: The Microsoft Store package and the Windows installers
+---
+
+Before any work, read crew/RULES.md.
+Before any work, read crew/roles/windows-store.md.
+Before any work, run `python3 crew/bin/crew state path` and read `<state>/roles/windows-store/STATE.md` there.
+Follow those files in that order before any work.
+Before you stop, write `<state>/roles/windows-store/STATE.md` with what is open and what comes next.

@@ -1,0 +1,11 @@
+---
+name: driver
+description: The UI driver gpui-agent and its NSH plug nsh-gpui-agent, which every on-screen proof runs through
+model: swe-2-1-max
+---
+
+Before any work, read crew/RULES.md.
+Before any work, read crew/roles/driver.md.
+Before any work, run `python3 crew/bin/crew state path` and read `<state>/roles/driver/STATE.md` there.
+Follow those files in that order before any work.
+Before you stop, write `<state>/roles/driver/STATE.md` with what is open and what comes next.

@@ -850,9 +850,12 @@ SECRET_MARKERS = [
     "ch" + "an_",
     "gh" + "p_",
     "github" + "_pat_",
-    "s" + "k-",
     "x-access" + "-token",
 ]
+
+# An API key of the "sk-" family: the prefix at a word start and a long run after it. A bare "sk-" would also
+# match ordinary words such as "task-file".
+SK_KEY_RE = re.compile(r"(?<![A-Za-z0-9])" + "s" + r"k-[A-Za-z0-9_-]{16,}")
 
 HOME_PREFIXES = [
     "/" + "Volumes/",
@@ -884,7 +887,7 @@ def privacy_reasons(line):
             reasons.append("Devin or Claude URL")
             break
     lowered = line.lower()
-    if any(marker in lowered for marker in SECRET_MARKERS) or DEVIN_HEX_RE.search(line):
+    if any(marker in lowered for marker in SECRET_MARKERS) or DEVIN_HEX_RE.search(line) or SK_KEY_RE.search(line):
         reasons.append("secret marker")
     if any(word in lowered for word in ("password", "passcode", "sign-in code")) and DIGIT_RUN_RE.search(line):
         reasons.append("password or sign-in code with digits")
