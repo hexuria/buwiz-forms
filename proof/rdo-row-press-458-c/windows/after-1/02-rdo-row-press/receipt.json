@@ -1,0 +1,477 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "rdo-row-press",
+  "fingerprint": "fnv1a64:4809f7b3d13ef3a3",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 460
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 483
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2398
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 34
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 572,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\005-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 26
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 428
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 458
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2392
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 32
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 421
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 26
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 429
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 446
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2362
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 424
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "elapsed_ms": 22
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "elapsed_ms": 21
+    },
+    {
+      "id": "s25",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 402
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 480
+    },
+    {
+      "id": "s27",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2351
+    },
+    {
+      "id": "s28",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s29",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 387
+    },
+    {
+      "id": "s30",
+      "ok": true,
+      "elapsed_ms": 36
+    },
+    {
+      "id": "s31",
+      "ok": true,
+      "elapsed_ms": 23
+    },
+    {
+      "id": "s32",
+      "ok": true,
+      "elapsed_ms": 35
+    },
+    {
+      "id": "s33",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 410
+    },
+    {
+      "id": "s34",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 477
+    },
+    {
+      "id": "s35",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2309
+    },
+    {
+      "id": "s36",
+      "ok": true,
+      "elapsed_ms": 32
+    },
+    {
+      "id": "s37",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 553,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\037-s37.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s38",
+      "ok": true,
+      "elapsed_ms": 26
+    },
+    {
+      "id": "s39",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s40",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s41",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1430
+    },
+    {
+      "id": "s42",
+      "ok": true,
+      "elapsed_ms": 41
+    },
+    {
+      "id": "s43",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 406
+    },
+    {
+      "id": "s44",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s45",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s46",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1433
+    },
+    {
+      "id": "s47",
+      "ok": true,
+      "elapsed_ms": 42
+    },
+    {
+      "id": "s48",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 416
+    },
+    {
+      "id": "s49",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s50",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s51",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1380
+    },
+    {
+      "id": "s52",
+      "ok": true,
+      "elapsed_ms": 46
+    },
+    {
+      "id": "s53",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 538,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\053-s53.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s54",
+      "ok": true,
+      "elapsed_ms": 30
+    },
+    {
+      "id": "s55",
+      "ok": true,
+      "elapsed_ms": 22
+    },
+    {
+      "id": "s56",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 448
+    },
+    {
+      "id": "s57",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 459
+    },
+    {
+      "id": "s58",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2292
+    },
+    {
+      "id": "s59",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s60",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 449
+    },
+    {
+      "id": "s61",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s62",
+      "ok": true,
+      "elapsed_ms": 27
+    },
+    {
+      "id": "s63",
+      "ok": true,
+      "elapsed_ms": 23
+    },
+    {
+      "id": "s64",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 381
+    },
+    {
+      "id": "s65",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 491
+    },
+    {
+      "id": "s66",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2340
+    },
+    {
+      "id": "s67",
+      "ok": true,
+      "elapsed_ms": 34
+    },
+    {
+      "id": "s68",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 397
+    },
+    {
+      "id": "s69",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s70",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s71",
+      "ok": true,
+      "elapsed_ms": 22
+    },
+    {
+      "id": "s72",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 388
+    },
+    {
+      "id": "s73",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 481
+    },
+    {
+      "id": "s74",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2290
+    },
+    {
+      "id": "s75",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s76",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 397
+    },
+    {
+      "id": "s77",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s78",
+      "ok": true,
+      "elapsed_ms": 26
+    },
+    {
+      "id": "s79",
+      "ok": true,
+      "elapsed_ms": 178,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\079-s79.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\005-s5.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\037-s37.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\053-s53.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\repos\\rdo-row-press-458c\\evidence\\after-1\\02-rdo-row-press\\079-s79.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 36436
+}

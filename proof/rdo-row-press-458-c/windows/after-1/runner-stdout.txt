@@ -1,0 +1,9 @@
+2026-11-27T16:59:34.685Z	wait	window plane	ready	17ms
+2026-11-27T16:59:34.716Z	wait	data plane	ready	30ms
+2026-11-27T16:59:34.763Z	app.info	database	test	44ms
+2026-11-27T16:59:35.483Z	recipe	setup-start	pass	719ms
+2026-11-27T17:00:11.940Z	recipe	rdo-row-press	pass	36457ms
+2026-11-27T17:00:11.992Z	resolve	$tin_field	n11	51ms
+2026-11-27T17:00:20.532Z	recipe	sign-up	pass	8592ms
+2026-11-27T17:01:56.830Z	recipe	profile-pick-press	pass	96299ms
+e2e rdo-row-press on windows: 4 pass. Report: C:\Users\Administrator\repos\rdo-row-press-458c\evidence\after-1\report.md
