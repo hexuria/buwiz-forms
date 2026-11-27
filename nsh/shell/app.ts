@@ -17,6 +17,8 @@ import { batch, computed, effect, platform, setColorScheme, signal, Storage, unt
 import { Application, isAvailable } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
+import { migrationPage, rereadMigration, migrationPermanent } from "../screens/auth/migration";
+import { loadMigrationNoteShown } from "../screens/auth/migrationNote";
 import { errorText } from "../lib/errors";
 import { DRY_RUN_WORD, isDryRun } from "../lib/statusWord";
 import { POLL, startPolls } from "../lib/poll";
@@ -209,6 +211,7 @@ const canAddTaxpayer = () => !store.taxpayers().length || (isAdmin() && isHelpde
 const chromeVisible = computed(
   () =>
     booted() &&
+    migrationPage() === null &&
     shellChromeVisible({
       booted: true,
       cloudLocked: cloudLocked(),
@@ -1312,6 +1315,8 @@ function runStartRoute(raw: string): void {
 /** What the app keeps (theme, selection, Recent, read notifications, prefs), and whether sign-in comes first: read once the account gate is open. */
 async function loadKept(start?: string): Promise<void> {
   keptLoaded = true;
+  // The permanent failure note's once-per-account memory is kept per room like everything else (I4).
+  loadMigrationNoteShown();
   // Anything read before the frame mounted (a computed made at import, a fixture's own writes) is read again.
   store.bump();
   databasePath = store.systemInfo().database_path ?? "";
@@ -1393,6 +1398,9 @@ export function boot(requested?: string, opts: { firstRun?: boolean; testEnviron
 async function finishUnlock(): Promise<boolean> {
   try {
     bir.cloud_account_session_opened();
+    // A3a: what the claim did with the legacy file decides whether a migration page stands in front
+    // of the frame (screens/auth/migration.tsx reads it).
+    rereadMigration();
   } catch (error) {
     batch(() => {
       gateError.set(errorText(error));
@@ -1407,7 +1415,12 @@ async function finishUnlock(): Promise<boolean> {
     if (bootStart) runStartRoute(bootStart);
   } else {
     // The gate opening again is a new session; a sign-in from Settings while the app is already open is not.
-    if (cloudLocked()) sessionChanged();
+    if (cloudLocked()) {
+      sessionChanged();
+      // I4 (§A.6): loadKept runs again for every room. It re-reads databasePath after the room opened,
+      // so Recent, the selection and read notifications are read and written under the new room's path.
+      await loadKept();
+    }
     store.bump();
     cloudLocked.set(false);
   }
@@ -1439,6 +1452,9 @@ function lockCloud(): void {
   });
   store.cancelRereads();
   dismissToast();
+  // I4: the room is closed, so the kept values have no database path — storageKey answers null while
+  // it is empty, and nothing is read or written between rooms.
+  databasePath = "";
   sessionChanged();
 }
 

@@ -4,7 +4,7 @@
 // code.
 import { openUrl, signal, View } from "nsh";
 import { AppButton, Card, deviceCopy, Dialog, Line, SettingRow, Text } from "../../ui";
-import { cloud, openAccount, signIn, signOut } from "./cloud";
+import { cloud, openAccount, returnsWaitingCount, signIn, signOut } from "./cloud";
 import { accountHint, deletionPageUrl, serverHint, showsServer } from "./logic";
 
 /** What signing out of Buwiz does, said before it does it ("this device" on touch). */
@@ -56,6 +56,12 @@ export function BuwizCard() {
       <Dialog testID="settings-sign-out-confirm" width={420} open={asking()} onOpenChange={(open) => !open && asking.set(false)}>
         <View class="gap-3 p-5">
           <Text variant="title" testID="settings-sign-out-sentence">{deviceCopy(SIGN_OUT_SENTENCE)}</Text>
+          {/* §A.5: the count, and no names, while returns wait to send. */}
+          <If when={returnsWaitingCount() > 0}>
+            <Text variant="meta" tone="fg2" testID="sign-out-waiting-count">
+              {`${returnsWaitingCount()} returns are waiting to send. They send when you sign in again.`}
+            </Text>
+          </If>
           <AppButton
             testID="settings-sign-out-yes"
             variant="primary"

@@ -6,6 +6,7 @@ import { ProfileExportCard } from "../taxpayer";
 import { Labeled } from "./parts";
 import { importing, runImport } from "./importState";
 import { EbirFormsImport } from "./EbirFormsImport";
+import { safetyCopyLine, safetyCopyStatus } from "../auth/migrationNote";
 
 export function TransferSection(props: { rows: string[] }) {
   const has = (id: string) => props.rows.includes(id);
@@ -26,6 +27,17 @@ export function TransferSection(props: { rows: string[] }) {
               />
             </SettingRow>
             <EbirFormsImport />
+          {/* The safety copy of the move to this account, while it is kept (§A.3.4). */}
+          <If when={safetyCopyStatus() !== null}>
+            {(() => {
+              const row = safetyCopyStatus();
+              return row === null ? null : (
+                <SettingRow testID="settings-safety-copy" title="Safety copy" hint="">
+                  <Text variant="meta" tone="fg2" testID="settings-safety-copy-line">{safetyCopyLine(row)}</Text>
+                </SettingRow>
+              );
+            })()}
+          </If>
           </Card>
         </Labeled>
       </If>
