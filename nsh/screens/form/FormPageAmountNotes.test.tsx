@@ -255,6 +255,41 @@ test("note in a row drawer: with the drawer closed and its part folded, Queue op
   expect(checked(app)).toBe(true);
 }, 40_000);
 
+test("[Z1] unreadable text in a NEW 2551Q Schedule 1 row: the row was never stored, so the note says the box was left blank", async () => {
+  const pay = "txtATCAmt2";
+  const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2021, period: 1, probeKey: pay, openParts: [4], edits: { txtATCAmt1: "1234.56" } } } });
+  await app.waitFor("text:BIR Form 2551Q");
+  await app.waitFor(ROW, { timeout: 8000 });
+  // Add row opens row 2, nothing in it yet: its Taxable Amount holds no amount.
+  await app.press("text:Add row");
+  await app.waitFor(`id:fp-${pay}`, { timeout: 5000 });
+  for (const ch of "abc") {
+    await app.type(`id:fp-${pay}`, ch);
+    await app.wait(40);
+  }
+  await app.keyboard.press("tab");
+  await app.waitUntil(() => app.texts().some((t) => t.includes("abc is not an amount")), { timeout: 5000 });
+  expect(app.texts().some((t) => t.endsWith("Taxable Amount: abc is not an amount. The box was left blank."))).toBe(true);
+  expect(app.texts().some((t) => t.includes("The box kept 0.00"))).toBe(false);
+  expect(app.texts()).toContain("1 row");
+}, 40_000);
+
+test("[Z1] unreadable text in a stored zero 2551Q Schedule 1 amount: the note still says the box kept 0.00", async () => {
+  const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2021, period: 2, probeKey: "txtATCAmt1", openParts: [4], edits: { txtATCAmt1: "0" } } } });
+  await app.waitFor("text:BIR Form 2551Q");
+  await app.waitFor(ROW, { timeout: 8000 });
+  await app.press(ROW);
+  await app.waitFor(CELL);
+  for (const ch of "abc") {
+    await app.type(CELL, ch);
+    await app.wait(40);
+  }
+  await app.keyboard.press("tab");
+  await app.waitUntil(() => app.texts().some((t) => t.includes("abc is not an amount")), { timeout: 5000 });
+  expect(app.texts().some((t) => t.endsWith("Taxable Amount: abc is not an amount. The box kept 0.00."))).toBe(true);
+  expect(probe(app)).toBe("0.00");
+}, 40_000);
+
 // 2550Q Schedule 3 (a nullable schedule: the cells of a row not started hold no amount, not zero).
 const S3_TABLE = "fp-table-txtDateCovered30";
 

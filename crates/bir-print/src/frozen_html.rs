@@ -90,17 +90,17 @@ fn fill_by_name_with_cells(
 
 /// [`fill_by_name_with_cells`] with a value longer than its boxes measured
 /// in `sheet`'s type.
-fn fill_by_name_set(
+fn try_fill_by_name_set(
     html: &str,
     fields: &BTreeMap<String, String>,
     cells: &BTreeMap<String, Vec<String>>,
     captions: &BTreeMap<String, String>,
     plan: &BTreeMap<String, CellFill>,
     sheet: &SheetType,
-) -> String {
+) -> Result<String, String> {
     let tags = input_tags(html);
     if tags.is_empty() {
-        return html.to_string();
+        return Ok(html.to_string());
     }
 
     let mut replacements: Vec<(usize, usize, String)> = Vec::new();
@@ -167,7 +167,22 @@ fn fill_by_name_set(
         }
     }
 
-    apply_replacements(html, replacements)
+    apply_replacements_checked(html, replacements)
+}
+
+/// [`fill_by_name_with_cells`] with a value longer than its boxes measured
+/// in `sheet`'s type, for tests and internal callers outside the fallible
+/// document fill. Production document filling calls `try_fill_by_name_set`.
+fn fill_by_name_set(
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &BTreeMap<String, Vec<String>>,
+    captions: &BTreeMap<String, String>,
+    plan: &BTreeMap<String, CellFill>,
+    sheet: &SheetType,
+) -> String {
+    try_fill_by_name_set(html, fields, cells, captions, plan, sheet)
+        .expect("test/internal print replacements overlap")
 }
 
 /// How one stacked-line cell prints when its item's text overflows the
@@ -1069,6 +1084,17 @@ fn truncate_with_ellipsis(
     text: &str,
     size: f64,
 ) -> Option<String> {
+    truncate_with_ellipsis_mode(sheet, letter, room, text, size, false)
+}
+
+fn truncate_with_ellipsis_mode(
+    sheet: &SheetType,
+    letter: Spacing,
+    room: f64,
+    text: &str,
+    size: f64,
+    whole_words: bool,
+) -> Option<String> {
     if sheet.width(letter, "...", size) > room {
         return None;
     }
@@ -1083,6 +1109,22 @@ fn truncate_with_ellipsis(
         }
     }
     let prefix = text[..best_end].trim_end();
+    // A Rule 6 band ends on a whole word: a fragment cut mid-word prints as
+    // if it were a word of its own. Back off to the last word boundary the
+    // fit reached. A single word longer than the room still cuts at the
+    // character: there is no whole word to keep.
+    if whole_words && best_end < text.len() {
+        let at_word_end = text[best_end..].starts_with(char::is_whitespace)
+            || text[..best_end].ends_with(char::is_whitespace);
+        if !at_word_end {
+            if let Some(space) = prefix.rfind(char::is_whitespace) {
+                let word_end = prefix[..space].trim_end();
+                if !word_end.is_empty() {
+                    return Some(format!("{word_end}..."));
+                }
+            }
+        }
+    }
     Some(format!("{prefix}..."))
 }
 
@@ -1145,6 +1187,17 @@ fn wrap_and_truncate_two_lines(
     text: &str,
     size: f64,
 ) -> Option<(String, String)> {
+    wrap_and_truncate_two_lines_mode(sheet, letter, room, text, size, false)
+}
+
+fn wrap_and_truncate_two_lines_mode(
+    sheet: &SheetType,
+    letter: Spacing,
+    room: f64,
+    text: &str,
+    size: f64,
+    whole_words: bool,
+) -> Option<(String, String)> {
     let mut last_fit_char = 0;
     let mut last_fit_space = None;
     for (idx, ch) in text.char_indices() {
@@ -1170,7 +1223,7 @@ fn wrap_and_truncate_two_lines(
     if l1.is_empty() || rest.is_empty() {
         return None;
     }
-    let l2 = truncate_with_ellipsis(sheet, letter, room, rest, size)?;
+    let l2 = truncate_with_ellipsis_mode(sheet, letter, room, rest, size, whole_words)?;
     Some((l1, l2))
 }
 
@@ -3306,17 +3359,29 @@ fn amount_rect(
     }
 }
 
-fn apply_replacements(html: &str, mut replacements: Vec<(usize, usize, String)>) -> String {
+fn apply_replacements_checked(
+    html: &str,
+    mut replacements: Vec<(usize, usize, String)>,
+) -> Result<String, String> {
     replacements.sort_by_key(|(start, _, _)| *start);
     let mut out = String::with_capacity(html.len() + replacements.len() * 8);
     let mut last = 0;
     for (start, end, tag) in replacements {
+        if start < last || end < start {
+            return Err(format!(
+                "overlapping print writes: byte range {start}..{end} begins before the previous write ends at {last}"
+            ));
+        }
         out.push_str(&html[last..start]);
         out.push_str(&tag);
         last = end;
     }
     out.push_str(&html[last..]);
-    out
+    Ok(out)
+}
+
+fn apply_replacements(html: &str, replacements: Vec<(usize, usize, String)>) -> String {
+    apply_replacements_checked(html, replacements).expect("print replacements overlap")
 }
 
 pub(crate) fn writer_cells_json(slug: &str) -> Option<&'static str> {
@@ -4934,6 +4999,193 @@ fn with_class(tag: &str, class: &str) -> String {
     format!("{}{}{}", &tag[..start], joined, &tag[start + len..])
 }
 
+/// A raw sheet cell id used as a field key (`p4c213`), as opposed to a
+/// writer key from the form's print map. Writer-cell xbox pseudo ids
+/// (`cell-i2`) are raw cell addressing too.
+fn raw_cell_id_key(key: &str) -> bool {
+    let bytes = key.as_bytes();
+    if bytes.len() < 4 || bytes[0] != b'p' {
+        return false;
+    }
+    let mut at = 1;
+    let digits = |at: &mut usize| {
+        let start = *at;
+        while *at < bytes.len() && bytes[*at].is_ascii_digit() {
+            *at += 1;
+        }
+        *at > start
+    };
+    if !digits(&mut at) || at >= bytes.len() || bytes[at] != b'c' {
+        return false;
+    }
+    at += 1;
+    if !digits(&mut at) {
+        return false;
+    }
+    if at == bytes.len() {
+        return true;
+    }
+    if at + 2 > bytes.len() || bytes[at] != b'-' || bytes[at + 1] != b'i' {
+        return false;
+    }
+    at += 2;
+    digits(&mut at) && at == bytes.len()
+}
+
+fn claim_input_group<'a>(
+    grouped: &BTreeMap<&str, Vec<usize>>,
+    claims: &mut BTreeMap<usize, Vec<(&'a str, bool)>>,
+    key: &'a str,
+    writer: bool,
+    group: &str,
+) {
+    if let Some(indices) = grouped.get(group) {
+        for &index in indices {
+            claims.entry(index).or_default().push((key, writer));
+        }
+    }
+}
+
+fn claim_writer_key_inputs<'a>(
+    tags: &[InputTag],
+    grouped: &BTreeMap<&str, Vec<usize>>,
+    cells: &WriterCells,
+    key: &'a str,
+    xbox_active: bool,
+    claims: &mut BTreeMap<usize, Vec<(&'a str, bool)>>,
+) {
+    for (writer, ids) in &cells.joins {
+        if writer == key {
+            for id in ids {
+                claim_input_group(grouped, claims, key, true, id);
+            }
+        }
+    }
+    for join in &cells.money_joins {
+        if join.writer_key == key {
+            for pair in &join.cells {
+                claim_input_group(grouped, claims, key, true, &pair.peso_html_id);
+                if let Some(cent) = &pair.cent_html_id {
+                    claim_input_group(grouped, claims, key, true, cent);
+                }
+            }
+        }
+    }
+    for join in &cells.peso_joins {
+        if join.writer_key == key {
+            for id in &join.html_ids {
+                claim_input_group(grouped, claims, key, true, id);
+            }
+        }
+    }
+    for join in &cells.date_joins {
+        if join.writer_key == key {
+            claim_input_group(grouped, claims, key, true, &join.mm_html_id);
+            if let Some(dd) = &join.dd_html_id {
+                claim_input_group(grouped, claims, key, true, dd);
+            }
+            claim_input_group(grouped, claims, key, true, &join.yyyy_html_id);
+        }
+    }
+    if xbox_active {
+        for join in &cells.xbox_joins {
+            if join.writer_key != key {
+                continue;
+            }
+            for id in &join.html_ids {
+                if let Some(index) = xbox_input(tags, grouped, id) {
+                    claims.entry(index).or_default().push((key, true));
+                }
+            }
+        }
+    }
+}
+
+/// Inputs claimed by more than one writer key in a print map. Xbox claims
+/// are topological here: a map that puts two writer keys on one box is
+/// conflicting even when a particular draft checks only one of them.
+#[cfg(test)]
+fn writer_input_claim_conflicts<'a>(
+    html: &str,
+    cells: &'a WriterCells,
+) -> Vec<(usize, BTreeSet<&'a str>)> {
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut claims: BTreeMap<usize, Vec<(&str, bool)>> = BTreeMap::new();
+    for key in cells.joined_keys() {
+        claim_writer_key_inputs(&tags, &grouped, cells, key, true, &mut claims);
+    }
+    claims
+        .into_iter()
+        .filter_map(|(index, claims)| {
+            let keys: BTreeSet<&str> = claims.into_iter().map(|(key, _)| key).collect();
+            (keys.len() > 1).then_some((index, keys))
+        })
+        .collect()
+}
+
+/// Resolve field keys whose writes target the same input before any byte
+/// replacement is made. A writer key wins over raw cell-id addressing of
+/// the same input; two writer keys for one input are refused. This is the
+/// print input's conflict boundary: raw ids are diagnostic/ad hoc input,
+/// while writer keys are the form's own print map.
+fn resolve_overlapping_input_writes(
+    slug: &str,
+    html: &str,
+    fields: &BTreeMap<String, String>,
+    cells: &WriterCells,
+) -> Result<BTreeMap<String, String>, String> {
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut claims: BTreeMap<usize, Vec<(&str, bool)>> = BTreeMap::new();
+
+    for key in fields.keys() {
+        let key = key.as_str();
+        if raw_cell_id_key(key) {
+            claim_input_group(&grouped, &mut claims, key, false, key);
+            continue;
+        }
+
+        // A writer key that is itself a stamped input name takes the direct
+        // write path, not a writer-cell join path.
+        claim_input_group(&grouped, &mut claims, key, true, key);
+        // At print time only a checked xbox key makes its mark; the static
+        // writer-map invariant treats the same targets as conflicting claims.
+        let xbox_active = fields
+            .get(key)
+            .is_some_and(|value| writer_is_checked(value));
+        claim_writer_key_inputs(&tags, &grouped, cells, key, xbox_active, &mut claims);
+    }
+    let mut resolved = fields.clone();
+    for (index, claims) in claims {
+        let writers: BTreeSet<&str> = claims
+            .iter()
+            .filter(|(_, writer)| *writer)
+            .map(|(key, _)| *key)
+            .collect();
+        let raws: BTreeSet<&str> = claims
+            .iter()
+            .filter(|(_, writer)| !*writer)
+            .map(|(key, _)| *key)
+            .collect();
+        if writers.len() > 1 {
+            let mut keys = writers.iter();
+            let first = keys.next().unwrap();
+            let second = keys.next().unwrap();
+            return Err(format!(
+                "{slug}: writer keys {first} and {second} both write input {}",
+                tags[index].name
+            ));
+        }
+        if writers.len() == 1 {
+            for raw in raws {
+                resolved.remove(raw);
+            }
+        }
+    }
+    Ok(resolved)
+}
+
 fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<(), String> {
     if !cells.has_fill_join() && cells.not_joined.is_empty() && cells.not_joined_cells.is_empty() {
         return Ok(());
@@ -5076,20 +5328,22 @@ pub(crate) fn fill_continuation_fragment(
             negative_style,
         });
     }
-    let fields = &with_donor_estate_values(slug, fields);
+    let donor_fields = with_donor_estate_values(slug, fields);
+    let resolved_fields = resolve_overlapping_input_writes(slug, html, &donor_fields, &cells)?;
+    let fields = &resolved_fields;
     let filled = fill_donor_estate_dates(html, fields, slug);
     let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
         SheetType::of_sheet(slug, loaded.css)
     });
     let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = fill_by_name_set(
+    let filled = try_fill_by_name_set(
         &filled,
         fields,
         &cells.joins,
         &cells.captions,
         &plan,
         &sheet,
-    );
+    )?;
     let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
     let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -5150,20 +5404,22 @@ fn fill_bundle(
     let promoted = promote_empty_joined_cells(html, &cells);
     let html = promoted.as_str();
     validate_writer_cells(html, slug, &cells)?;
-    let fields = &with_donor_estate_values(slug, fields);
+    let donor_fields = with_donor_estate_values(slug, fields);
+    let resolved_fields = resolve_overlapping_input_writes(slug, html, &donor_fields, &cells)?;
+    let fields = &resolved_fields;
     let filled = fill_donor_estate_dates(html, fields, slug);
     let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
         SheetType::of_sheet(slug, loaded.css)
     });
     let plan = line_group_plan(&filled, fields, &cells, &sheet);
-    let filled = fill_by_name_set(
+    let filled = try_fill_by_name_set(
         &filled,
         fields,
         &cells.joins,
         &cells.captions,
         &plan,
         &sheet,
-    );
+    )?;
     let filled = fill_money_joins_with_sheet(&filled, fields, &cells.money_joins, &sheet);
     let filled = fill_peso_joins_with_sheet(&filled, fields, &cells.peso_joins, &sheet);
     let filled = fill_date_joins(&filled, fields, &cells.date_joins);
@@ -5294,50 +5550,9 @@ fn apply_rule6_specify_bands(
                 })
                 .unwrap_or(r6.insert_after_y);
 
-            // The owner's placement rule: the band runs from its cell's left
-            // to just before the first other value cell its strip crosses
-            // (a 2 pt gap), so an amount on the row is never covered; if it
-            // would still cross a value cell it moves down below that cell.
-            // Only cells starting above the cut matter: anything below it
-            // shifts down with the rest of the page, out of the inserted strip.
-            let mut x1 = r6.x1;
-            let mut cut_y = base_cut_y;
-            for _ in 0..8 {
-                let mut narrow: Option<f64> = None;
-                let mut move_below: Option<f64> = None;
-                for (id, left, top, _width, height) in &value_cells {
-                    if *id == r6.cell_id {
-                        continue;
-                    }
-                    let bottom = top + height;
-                    // Cells starting at or below the cut shift down with the
-                    // page. The band's top edge lies 0.5 pt under the cut, so
-                    // a cell ending above that never meets it; an overlap of
-                    // 0.05 pt or less is below the assertion's measure.
-                    if *top >= cut_y - 0.05 || bottom - (cut_y + 0.5) <= 0.05 {
-                        continue;
-                    }
-                    if *left > r6.x0 + 1.0 {
-                        let limit = *left - 2.0;
-                        narrow = Some(narrow.map_or(limit, |n: f64| n.min(limit)));
-                    } else {
-                        move_below = Some(move_below.map_or(bottom, |m: f64| m.max(bottom)));
-                    }
-                }
-                if let Some(bottom) = move_below {
-                    cut_y = bottom + 0.5;
-                    continue;
-                }
-                if let Some(limit) = narrow {
-                    if limit < x1 - 0.05 {
-                        x1 = limit;
-                        continue;
-                    }
-                }
-                break;
-            }
+            let (x1, cut_y) = rule6_place_band(r6.x0, r6.x1, base_cut_y, &r6.cell_id, &value_cells);
 
-            let rect_w = (x1 - r6.x0 - 4.0).max(20.0);
+            let rect_w = rule6_band_width(r6.x0, x1);
             let room = shrunk_room((rect_w - 6.0).max(20.0));
             let single_size = sheet.fit(letter, room, full_val, 8.5);
             let (dh, display, font_size_pt, two_lines, truncated) =
@@ -5347,15 +5562,27 @@ fn apply_rule6_specify_bands(
                     fit_two_lines(sheet, letter, room, full_val, 8.5, PLAIN_TEXT_MIN_PT)
                 {
                     (20.0, format!("{l1}\n{l2}"), sz, true, false)
-                } else if let Some((l1, l2)) =
-                    wrap_and_truncate_two_lines(sheet, letter, room, full_val, PLAIN_TEXT_MIN_PT)
-                {
+                } else if let Some((l1, l2)) = wrap_and_truncate_two_lines_mode(
+                    sheet,
+                    letter,
+                    room,
+                    full_val,
+                    PLAIN_TEXT_MIN_PT,
+                    true,
+                ) {
                     (20.0, format!("{l1}\n{l2}"), PLAIN_TEXT_MIN_PT, true, true)
                 } else {
                     (
                         14.0,
-                        truncate_with_ellipsis(sheet, letter, room, full_val, PLAIN_TEXT_MIN_PT)
-                            .unwrap_or_else(|| full_val.to_string()),
+                        truncate_with_ellipsis_mode(
+                            sheet,
+                            letter,
+                            room,
+                            full_val,
+                            PLAIN_TEXT_MIN_PT,
+                            true,
+                        )
+                        .unwrap_or_else(|| full_val.to_string()),
                         PLAIN_TEXT_MIN_PT,
                         false,
                         true,
@@ -5416,6 +5643,72 @@ fn apply_rule6_specify_bands(
         out.replace_range(pg_start..pg_end, &transformed);
     }
     out
+}
+
+/// How narrow a Rule 6 band may become by narrowing, in pt: below this floor
+/// the band moves down below the obstructing cell instead, so the text always
+/// has room a person can read.
+const RULE6_BAND_FLOOR_PT: f64 = 120.0;
+
+/// The width a Rule 6 band's text is fitted to and drawn at: one value, so
+/// nothing is ever fitted wider than it is drawn (a value fitted to a wider
+/// measure would print clipped, and the fitter would not carry it to the
+/// additional sheet).
+fn rule6_band_width(x0: f64, x1: f64) -> f64 {
+    (x1 - x0 - 3.0).max(10.0)
+}
+
+/// The owner's placement rule: the band runs from its cell's left to just
+/// before the first other value cell its strip crosses (a 2 pt gap), so an
+/// amount on the row is never covered; if narrowing would squeeze it below
+/// [`RULE6_BAND_FLOOR_PT`], or it would still cross a value cell, it moves
+/// down below that cell instead. Only cells starting above the cut matter:
+/// anything below it shifts down with the rest of the page, out of the
+/// inserted strip. Returns the band's right edge and its cut height.
+fn rule6_place_band(
+    x0: f64,
+    x1_full: f64,
+    base_cut_y: f64,
+    cell_id: &str,
+    value_cells: &[(String, f64, f64, f64, f64)],
+) -> (f64, f64) {
+    let mut x1 = x1_full;
+    let mut cut_y = base_cut_y;
+    for _ in 0..8 {
+        let mut narrow: Option<f64> = None;
+        let mut move_below: Option<f64> = None;
+        for (id, left, top, _width, height) in value_cells {
+            if *id == cell_id {
+                continue;
+            }
+            let bottom = top + height;
+            // Cells starting at or below the cut shift down with the page.
+            // The band's top edge lies 0.5 pt under the cut, so a cell ending
+            // above that never meets it; an overlap of 0.05 pt or less is
+            // below the assertion's measure.
+            if *top >= cut_y - 0.05 || bottom - (cut_y + 0.5) <= 0.05 {
+                continue;
+            }
+            let limit = *left - 2.0;
+            if *left > x0 + 1.0 && rule6_band_width(x0, limit) >= RULE6_BAND_FLOOR_PT {
+                narrow = Some(narrow.map_or(limit, |n: f64| n.min(limit)));
+            } else {
+                move_below = Some(move_below.map_or(bottom, |m: f64| m.max(bottom)));
+            }
+        }
+        if let Some(bottom) = move_below {
+            cut_y = bottom + 0.5;
+            continue;
+        }
+        if let Some(limit) = narrow {
+            if limit < x1 - 0.05 {
+                x1 = limit;
+                continue;
+            }
+        }
+        break;
+    }
+    (x1, cut_y)
 }
 
 /// `(id, left, top, width, height)` of every `data-cell-kind` `field`/`mixed`
@@ -5683,7 +5976,7 @@ fn shift_page_and_insert_rule6(
     let mut prior_dh = 0.0;
     for ins in insertions {
         let y = ins.cut_y + prior_dh;
-        let w = (ins.x1 - ins.x0 - 3.0).max(10.0);
+        let w = rule6_band_width(ins.x0, ins.x1);
         let h = (ins.dh - 1.0).max(8.0);
         let lh_css = if ins.two_lines {
             format!("line-height:{PLAIN_TWO_LINE_CSS_HEIGHT};")
@@ -10990,6 +11283,15 @@ mod tests {
                         .into_iter()
                         .map(|w| format!("{slug} ({len}): {w}")),
                 );
+                for band in drawn_divs(&doc).iter().filter(|d| d.band_of.is_some()) {
+                    if band.width + 0.01 < super::RULE6_BAND_FLOOR_PT {
+                        misplaced.push(format!(
+                            "{slug} ({len}): {} band narrower than the floor: {:.2} pt",
+                            band.band_of.as_deref().unwrap(),
+                            band.width
+                        ));
+                    }
+                }
             }
         }
         // Every Rule 6 band the long fills print (14 sheets), counted so a
@@ -11388,6 +11690,76 @@ mod tests {
                 .any(|w| w.starts_with("p2c153: band covers value cell ") && w.contains(&next_id)),
             "{wrong:?}"
         );
+    }
+
+    /// A value cell placed just right of a band's cell, so close that
+    /// narrowing would squeeze the band below its floor, makes the band move
+    /// down below the cell instead of shrinking.
+    #[test]
+    fn a_value_cell_just_right_of_the_band_cell_moves_the_band_down_not_shrinks() {
+        let cells = vec![
+            ("c1".to_string(), 14.0, 100.0, 312.0, 12.0),
+            ("c2".to_string(), 40.0, 99.0, 100.0, 30.0),
+        ];
+        let (x1, cut_y) = super::rule6_place_band(14.0, 590.0, 112.0, "c1", &cells);
+        assert_eq!(x1, 590.0, "the band must not shrink below the floor");
+        assert!(
+            cut_y >= 129.5,
+            "the band must move below the obstructing cell, cut_y {cut_y}"
+        );
+        // Far enough right that narrowing keeps the floor: the band narrows
+        // and stays on its line.
+        let cells = vec![
+            ("c1".to_string(), 14.0, 100.0, 312.0, 12.0),
+            ("c2".to_string(), 200.0, 99.0, 100.0, 30.0),
+        ];
+        let (x1, cut_y) = super::rule6_place_band(14.0, 590.0, 112.0, "c1", &cells);
+        assert_eq!(x1, 198.0, "the band ends 2 pt before the cell");
+        assert_eq!(cut_y, 112.0, "the band keeps its line");
+    }
+
+    /// A truncated Rule 6 band ends on a whole word, then the ellipsis: a
+    /// fragment cut mid-word would print as if it were a word of its own.
+    #[test]
+    fn a_truncated_rule6_band_ends_on_a_whole_word() {
+        let text = "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG";
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "frm1701:txtPg4IPart7_9Specify".to_string(),
+            text.to_string(),
+        );
+        let html = filled_document("1701-2018", &fields).unwrap();
+        let tags = super::input_tags(&html);
+        let band = tags
+            .iter()
+            .find(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
+            .expect("1701 item 9 Rule 6 band")
+            .tag;
+        let value = super::attr(band, "value").unwrap().replace("&#10;", "\n");
+        assert!(
+            value.contains("..."),
+            "the narrowed band must truncate this fill: {value:?}"
+        );
+        assert!(
+            !value.contains("GLOB..."),
+            "a mid-word fragment must never print: {value:?}"
+        );
+        for piece in value.split('\n') {
+            let Some(head) = piece.strip_suffix("...") else {
+                continue;
+            };
+            let head = head.trim_end();
+            let word = head.split_whitespace().last().unwrap_or("");
+            assert!(
+                !word.is_empty(),
+                "the ellipsis must follow a word: {value:?}"
+            );
+            let whole = text.match_indices(word).any(|(at, _)| {
+                let after = at + word.len();
+                after >= text.len() || text[after..].starts_with(char::is_whitespace)
+            });
+            assert!(whole, "{word:?} is cut mid-word in {value:?}");
+        }
     }
 
     /// Goldens: every sheet's long-text print pinned exactly
@@ -13131,6 +13503,102 @@ mod donor_estate_print_tests {
                 && html.contains("text-align:right;justify-content:flex-end"),
             "13-digit 1702Q Part II amount must print as right-aligned comma-formatted whole-peso plain rectangle"
         );
+    }
+
+    #[test]
+    fn no_frozen_sheet_input_is_claimed_by_two_writer_keys() {
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../html-frozen");
+        let mut slugs: Vec<String> = std::fs::read_dir(root)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                entry
+                    .path()
+                    .join("writer-cells.json")
+                    .exists()
+                    .then(|| entry.file_name().to_string_lossy().into_owned())
+            })
+            .collect();
+        slugs.sort();
+        assert_eq!(slugs.len(), 43);
+        for slug in slugs {
+            let html = bundle(&slug).unwrap().html;
+            let cells = writer_cells(&slug).unwrap();
+            let conflicts = writer_input_claim_conflicts(html, &cells);
+            if let Some((index, keys)) = conflicts.first() {
+                let mut keys = keys.iter();
+                let first = keys.next().unwrap();
+                let second = keys.next().unwrap();
+                panic!(
+                    "{slug}: input {} is claimed by writer keys {first} and {second}",
+                    input_tags(html)[*index].name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn two_writer_keys_claiming_one_input_are_found_in_the_map_scan() {
+        let html = r#"<input type="text" id="p1c1-i" name="p1c1">"#;
+        let mut cells = WriterCells::empty();
+        cells
+            .joins
+            .insert("writer.one".to_string(), vec!["p1c1".to_string()]);
+        cells
+            .joins
+            .insert("writer.two".to_string(), vec!["p1c1".to_string()]);
+        let conflicts = writer_input_claim_conflicts(html, &cells);
+        let (index, keys) = conflicts.first().expect("one conflicting input");
+        assert_eq!(input_tags(html)[*index].name, "p1c1");
+        assert!(keys.contains("writer.one"));
+        assert!(keys.contains("writer.two"));
+    }
+
+    #[test]
+    fn overlapping_raw_cell_write_loses_to_the_writer_key() {
+        let mut fields = every_join_filled("1701-2018");
+        fields.insert(
+            "frm1701:txtPg4IPart7_9Specify".to_string(),
+            "writer value".to_string(),
+        );
+        fields.insert("p4c213".to_string(), "raw value".to_string());
+        let html = filled_document("1701-2018", &fields).expect("overlapping raw write");
+        assert_eq!(printed_text(&html, "p4c213"), "WRITER VALUE");
+    }
+
+    #[test]
+    fn overlapping_byte_ranges_are_an_error_not_a_panic() {
+        let err = apply_replacements_checked(
+            "abcdef",
+            vec![(1, 4, "one".to_string()), (2, 3, "two".to_string())],
+        )
+        .expect_err("overlapping byte ranges");
+        assert!(err.contains("overlapping print writes"), "{err}");
+        assert!(err.contains("2..3"), "{err}");
+    }
+
+    #[test]
+    fn two_writer_keys_for_one_input_are_refused_naming_keys_and_cell() {
+        let html = r#"<input type="text" id="p1c1-i" name="p1c1">"#;
+        let mut extra_joins = BTreeMap::new();
+        extra_joins.insert("writer.one".to_string(), vec!["p1c1".to_string()]);
+        extra_joins.insert("writer.two".to_string(), vec!["p1c1".to_string()]);
+        let mut fields = BTreeMap::new();
+        fields.insert("writer.one".to_string(), "one".to_string());
+        fields.insert("writer.two".to_string(), "two".to_string());
+        let err = fill_continuation_fragment(
+            html,
+            &fields,
+            "1701-2018",
+            &extra_joins,
+            &[],
+            &[],
+            &BTreeMap::new(),
+        )
+        .expect_err("two writer keys on one input");
+        assert!(err.contains("writer.one"), "{err}");
+        assert!(err.contains("writer.two"), "{err}");
+        assert!(err.contains("p1c1"), "{err}");
     }
 
     #[test]

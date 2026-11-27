@@ -36,9 +36,15 @@ The quick checks are:
   (`bir-rules-codegen -- status --boundaries-only`).
 - `NSH app type check (Linux)`: `just nsh-check -v`, which checks the app's crate and then its TSX types, plus the
   check that the app does not enable `direct-bir`.
+- `NSH app agent compile check (Linux)`: on a pull request that moves `nsh/Cargo.toml`, `nsh/Cargo.lock` or an
+  agent-only app file, compiles the app and Linux plug with `--features agent --no-run`; skipped otherwise.
+  It compiles the Linux arm only; the other platforms stay covered by the complete suite.
 - `legacy-guard`.
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.
+
+Every Linux `apt-get update` goes through `scripts/ci/apt_update.sh`: it sets aside the third-party source lists
+the runner image ships and we do not use, then retries Ubuntu's own sources, so their outage cannot fail the job.
 
 `ci-ok` is the one required status. It fails if any job it asked for did not pass. A cancelled run (a newer push
 replaced it, or the pull request closed) reports no `ci-ok`. A `test/**` push, a manual run
@@ -155,8 +161,20 @@ Pull requests that touch the same files merge one at a time, and each is proven 
 in: about half a day per merge. A batch (a rollup, as in bors or a GitLab merge train) proves several of them in one
 complete run, on exactly the tree `main` will have once they are all merged, and then they merge in that order.
 
-Use it for a queue of pull requests that are each reviewed and ready: not drafts, based on `main`, quick checks green.
-Leave out a pull request you still expect to push to: any push to it voids the batch.
+### What a pull request needs before a batch
+
+- Its `ci-ok` check is green at its exact head. `--allow-unchecked <pr>` skips this gate only when the conductor
+  means it.
+- If the planner would run the app suite for its changed files, the `NSH app` suite must have run at that exact head.
+  "The suite ran" is judged per system the batch asks for: that system's app jobs are present in a run, none is
+  skipped, and every shard is green. Different systems may be proved by different runs, but a manual run narrowed by a
+  suite, screen or shard filter is partial proof and does not count. `just ci-test-pr <n> [system]` reads the pull
+  request's head from GitHub, fetches exactly that object, pushes it to `test/<system>/pr-<n>` and prints the Actions
+  page. `--allow-unsuited <pr>` skips this gate only when the conductor means it, and its use is written in the
+  batch's record.
+
+Use it for a queue of pull requests that are each reviewed and ready: not drafts, based on `main`, with both gates
+green. Leave out a pull request you still expect to push to: any push to it voids the batch.
 
 ```sh
 just ci-batch 412 415 418           # Linux and Windows; or: just ci-batch all 412 415 418

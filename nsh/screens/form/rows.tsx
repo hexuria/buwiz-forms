@@ -151,7 +151,7 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
       const radio = col.t === "radio";
       const f: SchemaField = { k, l: col.l, t: col.t === "hidden" ? "text" : radio ? "chk" : col.t, c: col.c, w: col.w, o: col.o };
       const base = fieldProps(s, f, narrow, `${col.l}, row ${rowName(r)}`, controlWidth(f, 320));
-      if (!radio) return base;
+      if (!radio) return { ...base, amountStored: () => filled(r) };
       return {
         ...base,
         onEdit: (text) => {
