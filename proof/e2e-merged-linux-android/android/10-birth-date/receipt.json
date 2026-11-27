@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-birth-date-phone",
+  "fingerprint": "fnv1a64:4e782350b8988d3a",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 868
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 742
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 908
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 346
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 974
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 409
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 59
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1007
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 57
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 891
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 884,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-final/10-birth-date/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 3
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3886
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1436
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 383
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 779
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 225,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-final/10-birth-date/017-s17.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j58/android-final/10-birth-date/011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j58/android-final/10-birth-date/017-s17.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 13865
+}

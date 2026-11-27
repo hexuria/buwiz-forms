@@ -1,0 +1,111 @@
+{
+ "suite": "smoke",
+ "target": "linux",
+ "started": "20261127-192328",
+ "out": "/home/ubuntu/j58/linux-final",
+ "cli_version": "0.4.1",
+ "app_commit": "7d155e6d",
+ "platform": "desktop",
+ "os": "linux",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 584,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 9868,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-linux.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6343,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 1990,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1797,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 13734,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-phone.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "pass",
+   "ms": 6097,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.json"
+  },
+  {
+   "name": "queue",
+   "status": "refused",
+   "ms": 0,
+   "note": "presses a send control: run with --allow-send",
+   "file": null
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 6138,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 11828,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
+   "screenshot": "/home/ubuntu/j58/linux-final/11-sign-out/failure.png",
+   "tree": "/home/ubuntu/j58/linux-final/11-sign-out/failure-tree.json"
+  }
+ ]
+}

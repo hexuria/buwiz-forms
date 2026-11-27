@@ -1,0 +1,133 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261127-192045",
+ "out": "/home/ubuntu/j58/android-final",
+ "cli_version": "0.4.1",
+ "app_commit": "7d155e6d",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3312,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/home/ubuntu/j58/android-final/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 13623,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json",
+   "video": "/home/ubuntu/j58/android-final/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 11119,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json",
+   "video": "/home/ubuntu/j58/android-final/03-tax-year/recording.mp4"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 5203,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": "/home/ubuntu/j58/android-final/04-navigate/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 4866,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "/home/ubuntu/j58/android-final/05-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes",
+   "status": "known gap",
+   "ms": 24726,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced-phone.json",
+   "video": "/home/ubuntu/j58/android-final/06-money-boxes/recording.mp4",
+   "step": "s14",
+   "error": "occluded_by: 5584",
+   "error_code": "host_error",
+   "line": null,
+   "known_gap": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have",
+   "screenshot": "/home/ubuntu/j58/android-final/06-money-boxes/failure.png",
+   "tree": "/home/ubuntu/j58/android-final/06-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "pass",
+   "ms": 11872,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.json",
+   "video": "/home/ubuntu/j58/android-final/08-delete-row/recording.mp4"
+  },
+  {
+   "name": "queue",
+   "status": "refused",
+   "ms": 0,
+   "note": "presses a send control: run with --allow-send",
+   "file": null
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 15963,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "video": "/home/ubuntu/j58/android-final/10-birth-date/recording.mp4"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 14384,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "video": "/home/ubuntu/j58/android-final/11-sign-out/recording.mp4",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
+   "screenshot": "/home/ubuntu/j58/android-final/11-sign-out/failure.png",
+   "tree": "/home/ubuntu/j58/android-final/11-sign-out/failure-tree.json"
+  }
+ ]
+}

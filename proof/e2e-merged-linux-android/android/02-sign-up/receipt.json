@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-sign-up-android",
+  "fingerprint": "fnv1a64:1c798c8accb8799d",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 44
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 810
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 639
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1337
+    },
+    {
+      "id": "s6h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 395
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1588
+    },
+    {
+      "id": "s7h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 454
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1002
+    },
+    {
+      "id": "s8h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 614
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 105
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2967,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-final/02-sign-up/013-s10.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 727
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 276
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 189,
+      "screenshot": {
+        "path": "/home/ubuntu/j58/android-final/02-sign-up/017-s14.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j58/android-final/02-sign-up/013-s10.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j58/android-final/02-sign-up/017-s14.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 11258
+}
