@@ -1,5 +1,5 @@
-# rdo-row-press.wants without pacing (an older gpui-agent-cli): each "makati" sent as one type request. A fault seen
-# only here, not in the paced run, is not a finding.
+# rdo-row-press.wants without pacing (an older gpui-agent-cli): each text sent as one type request. A fault seen only here,
+# not in the paced run, is not a finding.
 click new-tp-rdo_code-search
 type new-tp-rdo_code-search makati
 wait_until new-tp-rdo_code-opt-047 --timeout-ms 5000
@@ -34,4 +34,40 @@ wait_until new-tp-rdo_code-opt-047 --timeout-ms 5000
 click new-tp-rdo_code-opt-047 --screenshot
 wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
 assert new-tp-rdo_code-search value="047 — East Makati"
-wait_until new-tp-rdo_code-note --absent --timeout-ms 2000 --screenshot
+wait_until new-tp-rdo_code-note --absent --timeout-ms 2000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-list --timeout-ms 3000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-list --timeout-ms 3000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-list --timeout-ms 3000
+click new-tp-rdo_code-trigger --screenshot
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati
+wait_until new-tp-rdo_code-list --timeout-ms 3000
+click new-tp-name
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+wait_until new-tp-rdo_code-note --timeout-ms 2000
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati
+wait_until new-tp-rdo_code-list --timeout-ms 3000
+click new-tp-name
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+wait_until new-tp-rdo_code-note --timeout-ms 2000
+click new-tp-rdo_code-search
+type new-tp-rdo_code-search makati
+wait_until new-tp-rdo_code-list --timeout-ms 3000
+click new-tp-name
+wait_until new-tp-rdo_code-list --absent --timeout-ms 3000
+assert new-tp-rdo_code-search value="047 — East Makati"
+wait_until new-tp-rdo_code-note --timeout-ms 2000 --screenshot
