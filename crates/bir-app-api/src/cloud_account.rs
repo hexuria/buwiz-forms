@@ -187,6 +187,8 @@ fn refresh_account(
                 clear_stored();
                 crate::account_gate::set_unlocked(false);
                 bir_core::transport::set_practice_account(false);
+                // F2: the server ended the sign-in — the room closes as in the user's own sign-out.
+                crate::room_session::close_session();
             }
         }
         status_now()
@@ -215,9 +217,7 @@ fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
     // §A.5 step 6: close the room. The slot's Arc and the generation go (the reader follows it:
     // with_reader never serves a generation that is not the open room's). Sends already in flight
     // finish against their own Arc. The room's file and its PIN stay.
-    crate::open_room::close_room();
-    crate::legacy_import_module::forget_scan();
-    bir_core::db::set_open_room_database(None);
+    crate::room_session::close_session();
     // TODO(B2): clear ROOM_UNLOCKED once B2 lands it in this tree.
     if let Ok(submitter) = bir_core::relay::submitter() {
         submitter.invalidate_account_tins();
@@ -276,13 +276,14 @@ fn session_opened() -> HostResult {
     if let Ok(Some(stored)) = load_stored() {
         bir_core::transport::set_practice_account(stored.practice);
     }
-    crate::account_gate::set_unlocked(true);
     // A3a (§A.4), in this order: the saved sign-in is read; the legacy claim runs or resumes; the
     // account's room opens; the worker starts or wakes (the launch path below); the agent session
-    // rebuilds (its generation check does, on the next batch).
+    // rebuilds (its generation check does, on the next batch). F2: the gate opens only after the
+    // room — never ahead of it, so no tick and no screen runs on the old room under the new sign-in.
     if let Ok(Some(stored)) = load_stored() {
         crate::room_session::open_session_room(&stored);
     }
+    crate::account_gate::set_unlocked(true);
     crate::bir_module::open_database_at_launch();
     crate::hooks::hooks().start_updater();
     crate::hooks::hooks().refresh_menu();
@@ -298,9 +299,11 @@ fn session_closed() -> HostResult {
 
 /// The sign-in ended outside a user action (a rejected refresh, a removed
 /// device): `bir_core::account_session` has cleared the saved account.
-fn session_ended_by_server() {
+pub(crate) fn session_ended_by_server() {
     crate::account_gate::set_unlocked(false);
     bir_core::transport::set_practice_account(false);
+    // F2: the room closes here too — the account is gone, however it went.
+    crate::room_session::close_session();
     crate::hooks::hooks().refresh_menu();
 }
 

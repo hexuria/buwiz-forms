@@ -83,6 +83,16 @@ fn open_own_room(layout: &Layout, room_id: RoomId, user_id: &str) -> Result<Sess
     Ok(SessionRoom::Room { room_id })
 }
 
+/// Close the session's room state (F2): the one close every sign-out runs — the user's own, the
+/// server-ended refresh, the removed device. The slot's Arc and the generation go; the scan is
+/// forgotten; the process-wide room path clears. Sends already in flight finish against their own
+/// Arc, and the room's file and its PIN stay.
+pub(crate) fn close_session() {
+    crate::open_room::close_room();
+    crate::legacy_import_module::forget_scan();
+    bir_core::db::set_open_room_database(None);
+}
+
 /// The room of the account signed in now, claimed or looked up: `session_opened` and the launch
 /// resume both run this, in the §A.4 order. Never opens anything before the claim's `start()` ran
 /// (R1): it is the first thing here.
@@ -99,6 +109,9 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
             return SessionRoom::LegacyInPlace;
         }
     }
+    // F2: whatever a previous session left is closed before this account's claim and open run —
+    // no worker tick and no screen of the new sign-in ever meets the old room.
+    close_session();
     let who = claimant(stored);
     let claim = match LegacyClaim::at(layout.clone()) {
         Ok(claim) => claim,
@@ -824,6 +837,27 @@ mod a3a_tests {
             "a second engine's resume reopened the room (a new generation)"
         );
         crate::open_room::close_room();
+    }
+
+    /// F2: the server-ended sign-outs close the room too. A's device revoked, B signing in: nothing
+    /// of A stays in the slot, however the sign-in ended.
+    #[test]
+    fn the_server_ended_sign_outs_close_the_room() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let a = stored("user-a");
+        assert!(matches!(open_session_room(&a), SessionRoom::Room { .. }));
+        assert!(crate::open_room::current().is_some());
+        crate::cloud_account::session_ended_by_server();
+        assert!(
+            crate::open_room::current().is_none(),
+            "the server-ended sign-out left the room in the slot"
+        );
+        assert!(
+            bir_core::db::open_room_id().is_none(),
+            "the room path survived the server-ended sign-out"
+        );
     }
 
     /// X1: the room path is process-wide, never per-thread. A second engine thread (the print
