@@ -189,6 +189,25 @@ impl Drop for WakeInstalled {
 /// Each tick's answer: the open room's handle and the key the room's jobs are filed under
 /// (F6) — the room's id in rooms mode, a stable label where the source never changes rooms.
 /// Keys differ between rooms, so one account's job can never block or masquerade as another's.
+/// Which rooms this worker already requeued (F5): keyed by the room key, never the Arc's
+/// address — a later sign-in's Arc can reuse a dropped one's address, and then the new room's
+/// cut-off jobs would never requeue.
+#[derive(Default)]
+pub(crate) struct RequeueLedger {
+    rooms: Vec<String>,
+}
+
+impl RequeueLedger {
+    /// True the first time a room key is seen; the requeue runs then and only then.
+    pub(crate) fn should_requeue(&mut self, room_key: &str) -> bool {
+        if self.rooms.iter().any(|room| room == room_key) {
+            return false;
+        }
+        self.rooms.push(room_key.to_owned());
+        true
+    }
+}
+
 pub type RoomSource = Arc<dyn Fn() -> Option<(Arc<Mutex<Database>>, String)> + Send + Sync>;
 
 /// A source that always answers the one handle: tests, `bir-headless serve` (its process never
@@ -241,7 +260,7 @@ async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
     let _wake = WakeInstalled::new(tx);
     // Crash recovery (jobs left Running) runs once per distinct room, the first time the worker
     // opens it: never again while a send of an earlier sign-in could still be in flight against it.
-    let mut requeued: Vec<String> = Vec::new();
+    let mut requeued = RequeueLedger::default();
 
     loop {
         if stopping() {
@@ -253,9 +272,8 @@ async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
         if let Some((db, room_key)) = room {
             // F5: keyed by the room, never the Arc's address — a later sign-in's Arc can reuse
             // the address of a dropped one, and then the new room's cut-off jobs never requeue.
-            if !requeued.contains(&room_key) {
+            if requeued.should_requeue(&room_key) {
                 requeue_jobs_left_running(&db);
-                requeued.push(room_key.clone());
             }
             run_queue_tick_until(db.clone(), &stop, &room_key).await;
         }
@@ -3129,6 +3147,112 @@ impl Drop for JobCleanup {
 
 #[cfg(test)]
 mod tests {
+    /// F7, the send across a switch: the account captured at spawn is re-checked before the send
+    /// runs — after a switch the return stays Queued in its own room, never sent under the new
+    /// sign-in. The spawn-to-first-poll gap is deterministic here: the spawned task cannot poll
+    /// until this test yields, and the switch happens before that.
+    #[tokio::test]
+    async fn a_send_spawned_before_a_switch_is_never_sent_under_the_new_sign_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        fn secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
+            crate::cloud_account::AccountSecrets {
+                server_url: "http://localhost:3008".into(),
+                access_token: "access-secret".into(),
+                refresh_token: "refresh-secret".into(),
+                access_expires_at_unix: 500,
+                user_id: user.into(),
+                email: Some("filer@example.test".into()),
+                offline: false,
+                practice: false,
+            }
+        }
+        temp_env::async_with_vars(
+            [(crate::cloud_account::ENV_ACCOUNT_FILE, Some(account_path.to_str().unwrap().to_owned()))],
+            async {
+                crate::cloud_account::save_stored_account(&crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-a"))).unwrap();
+                let db = test_db();
+                let (queued, _summary) = stored_queued_2551q(&db);
+                let profile = reviewed_profile();
+                process_submission_queue(&profile, db.clone(), FIXED_ROOM_KEY).await;
+                // The switch happens before the spawned task's first poll.
+                crate::cloud_account::save_stored_account(&crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-b"))).unwrap();
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                while !get_active_jobs().lock().unwrap().is_empty() {
+                    assert!(std::time::Instant::now() < deadline, "the job key never cleared");
+                    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                }
+                let stored = db
+                    .lock()
+                    .unwrap()
+                    .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    stored.status,
+                    FilingStatus::Queued,
+                    "the return was sent under the new sign-in"
+                );
+            },
+        )
+        .await;
+    }
+
+    /// F6, the behavioral half: a key held for one room never blocks the same inner key's job in
+    /// another — the spawn reads a distinct key per room.
+    #[tokio::test]
+    async fn a_job_key_held_for_one_room_never_blocks_another_rooms_send() {
+        let db = test_db();
+        let (_queued, _summary) = stored_queued_2551q(&db);
+        let profile = reviewed_profile();
+        let inner = submission_job_key("2551Q", &profile.tin.full(), _queued.taxable_year, None, Some(_queued.quarter));
+        get_active_jobs()
+            .lock()
+            .unwrap()
+            .insert(room_job_key("room:someone-else", &inner));
+        process_submission_queue(&profile, db.clone(), "room:this-room").await;
+        // This room's job was not blocked: its key is in the set alongside the other room's.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let keys = get_active_jobs().lock().unwrap().clone();
+            if keys.iter().any(|key| room_of_job_key(key) == "room:this-room") {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the room's send was blocked by another room's key: {keys:?}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        // Let the task finish so its key does not leak into other tests.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while get_active_jobs().lock().unwrap().iter().any(|key| room_of_job_key(key) == "room:this-room") {
+            assert!(std::time::Instant::now() < deadline);
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+        get_active_jobs()
+            .lock()
+            .unwrap()
+            .remove(&room_job_key("room:someone-else", &inner));
+    }
+
+    /// F5: the requeue ledger keys on the room, so a second room requeues even when its Arc lands
+    /// on the address a dropped room's Arc just freed.
+    #[test]
+    fn the_requeue_ledger_never_keys_on_the_arcs_address() {
+        let a = test_db();
+        let address = Arc::as_ptr(&a) as usize;
+        drop(a);
+        // A fresh allocation often reuses the freed address; whether or not it does, the ledger
+        // answers by the room key, never the pointer.
+        let b = test_db();
+        let _same_or_not = Arc::as_ptr(&b) as usize == address;
+        let mut ledger = RequeueLedger::default();
+        assert!(ledger.should_requeue("room:a"), "first open of A");
+        assert!(!ledger.should_requeue("room:a"), "A again in the same worker");
+        assert!(ledger.should_requeue("room:b"), "B requeues even on A's freed address");
+    }
+
     /// F6: a job key carries its room, so the same return or job id in two rooms never collides,
     /// and a reader can tell which room a key belongs to.
     #[test]
@@ -3296,7 +3420,9 @@ mod tests {
             // A source the test flips between the rooms, as a sign-out and sign-in flip the app's.
             let current = Arc::new(Mutex::new(db_a.clone()));
             let source_db = current.clone();
-            let source: RoomSource = Arc::new(move || Some(source_db.lock().unwrap().clone()));
+            let source: RoomSource = Arc::new(move || {
+                Some((source_db.lock().unwrap().clone(), fixed_room_key()))
+            });
             let stop = CronStop::new();
             let worker = tokio::spawn(run_cron_jobs(source, stop.clone()));
             let expr_of = |db: &Arc<Mutex<Database>>| {

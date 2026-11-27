@@ -169,11 +169,25 @@ pub fn open_session_room(stored: &StoredAccount) -> SessionRoom {
     let claim = match LegacyClaim::here() {
         Ok(claim) => claim,
         Err(error) => {
-            // F11: the fallback is the account's empty room, never a permanent refusal. The claim
-            // cannot run in this process at all, so the started-rule is discharged for the
-            // session; the evidence half of the open rule still reads what it can.
-            tracing::warn!("legacy claim not opened ({error}); the account's room lookup stands");
+            // F11, narrowed: with a legacy file present, an empty room beside it is forbidden
+            // (§A.3.4 — the person would see their tax profiles vanish), so the file opens in
+            // place as the one slot, writing nothing beside it, as §A.3.7's legacy mode does.
+            // A practice account is never given the legacy file: its own empty room, as ever.
+            // With no legacy file the account's room opens as an ordinary sign-in. Never a
+            // permanent refusal either way. The claim cannot run in this process at all, so the
+            // started-rule is discharged for the session; the evidence half reads what it can.
+            tracing::warn!("legacy claim not opened ({error})");
             bir_core::legacy_claim::note_claim_impossible(layout.device_dir());
+            if layout.legacy_database().is_file() && !stored.practice {
+                tracing::warn!("legacy file present and the claim store unusable: legacy mode in place");
+                return match open_room::open_legacy_in_place(&layout, stored.user_id.clone(), origin_of(stored)) {
+                    Ok(_) => SessionRoom::LegacyInPlace,
+                    Err(open_error) => SessionRoom::BlockedTransient {
+                        copy_saved: false,
+                        detail: open_error,
+                    },
+                };
+            }
             return open_lookup_room(&layout, stored);
         }
     };
@@ -704,6 +718,66 @@ mod a3a_tests {
         assert!(
             crate::open_room::current().is_some(),
             "no room is open after the fallback"
+        );
+    }
+
+    /// F11, the first arm: the claim store unusable WITH a legacy file present — the file opens
+    /// in place as the one slot, never an empty room beside the data (§A.3.4).
+    #[test]
+    fn a_claim_store_that_cannot_open_with_a_legacy_file_opens_it_in_place() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        // The data is there: a legacy file with a taxpayer.
+        let db = Database::open(&scratch.layout.legacy_database()).unwrap();
+        db.create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+            tin_root: "123456780".into(),
+            name: "Juan Dela Cruz".into(),
+            taxpayer_type: bir_core::profile::TaxpayerType::Individual,
+            birth_date: None,
+            head_office: bir_core::tax_profile::BranchFacts {
+                rdo_code: "040".into(),
+                registered_address: "1 Example Street".into(),
+                zip_code: "1600".into(),
+                phone: "0280000000".into(),
+                email: "juan@example.com".into(),
+            },
+        })
+        .unwrap();
+        db.close().unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not a sqlite database at all").unwrap();
+        let a = stored("f11-legacy-user");
+        let session = open_session_room(&a);
+        assert!(
+            matches!(session, SessionRoom::LegacyInPlace),
+            "with the data present the fallback must not open an empty room beside it: {session:?}"
+        );
+        // Nothing is written beside the file: no rooms/, no claim artefacts.
+        assert!(
+            !scratch.layout.device_dir().join("rooms").exists(),
+            "a room was created beside the data"
+        );
+    }
+
+    /// The practice account is never given the legacy file, even in the first arm: its own empty
+    /// room, as ever.
+    #[test]
+    fn a_practice_account_never_gets_the_legacy_file_in_the_fallback() {
+        let _turn = turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        Database::open(&scratch.layout.legacy_database()).unwrap().close().unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not a sqlite database at all").unwrap();
+        let mut practice = stored("practice-user");
+        practice.practice = true;
+        let session = open_session_room(&practice);
+        assert!(
+            !matches!(session, SessionRoom::LegacyInPlace),
+            "the practice account was given the legacy file: {session:?}"
+        );
+        assert!(
+            matches!(session, SessionRoom::Room { .. } | SessionRoom::PermanentEmptyRoom { .. }),
+            "the practice account's own room did not open: {session:?}"
         );
     }
 
