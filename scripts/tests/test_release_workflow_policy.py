@@ -383,14 +383,14 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("check_pe_stack_reserve.py", check)
 
     def test_setup_scripts_keep_the_gpui_agent_version_pinned(self) -> None:
-        self.assertIn('local manifest="$SCRIPT_DIR/../Cargo.toml"', self.linux_setup)
+        self.assertIn('prebuilt_pin GPUI_AGENT_CLI_VERSION', self.linux_setup)
         self.assertIn(
-            "gpui-agent version pin not found in repository-root Cargo.toml",
+            "GPUI_AGENT_CLI_VERSION not found",
             self.linux_setup,
         )
-        self.assertIn('cargo install --list 2>/dev/null', self.linux_setup)
+        self.assertIn('prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent', self.linux_setup)
         self.assertIn(
-            'cargo install gpui-agent-cli --version "$version"', self.linux_setup
+            'install_pinned_tool gpui-agent-cli "$version"', self.linux_setup
         )
         self.assertNotIn("gpui-agent?rev=", self.linux_setup)
         self.assertIn(
@@ -399,9 +399,10 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )
         self.assertNotIn("--locked gpui-agent-cli", self.linux_setup)
         self.assertNotIn("installing from main", self.linux_setup)
-        self.assertIn("'Cargo.toml'", self.windows_setup)
-        self.assertIn(
-            "install gpui-agent-cli --version $gpuiVersion", self.windows_setup
+        self.assertIn("Read-PrebuiltPin 'GPUI_AGENT_CLI_VERSION'", self.windows_setup)
+        self.assertRegex(
+            self.windows_setup,
+            r"Install-PinnedTool\s+'gpui-agent-cli'\s+\$gpuiVersion",
         )
         self.assertIn("3010", self.windows_setup)
 
