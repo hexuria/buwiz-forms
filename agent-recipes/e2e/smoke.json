@@ -61,9 +61,13 @@
     "phone": "software_keyboard"
    },
    "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
-   "fallback": "money-boxes.wants",
+   "fallback": {
+    "phone": "money-boxes-phone.json",
+    "file": "money-boxes.wants"
+   },
    "known_gap": {
-    "macos": "gap 2: under the old in-process macOS listener the money box refused agent text; this branch moves macOS to the strict adapter, not yet proven on a Mac"
+    "macos": "gap 2: under the old in-process macOS listener the money box refused agent text; this branch moves macOS to the strict adapter, not yet proven on a Mac",
+    "phone": "gap 3: injected text cannot type into an auto-formatting money box (digits land scrambled at any pacing); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have"
    }
   },
   {
