@@ -718,10 +718,20 @@ pub fn forget_ephemeral_device_store() {
     EPHEMERAL.with(|slot| slot.borrow_mut().take());
 }
 
-/// The device stores this process has open, by `device.db` path: one connection each, held for the life of the
-/// process, so a setting read on the UI thread is a query, not a fresh open with its pragmas and schema checks. A
-/// held connection still sees what another process commits.
-static HELD_STORES: Mutex<std::collections::BTreeMap<PathBuf, DeviceStore>> =
+/// A held read connection and the identity of the file it opened (H1): a `device.db` deleted and made again, or
+/// replaced by an older copy, is a different file, and the connection to the old one is dropped before it is used.
+struct HeldStore {
+    store: DeviceStore,
+    id: crate::safe_fs::FileId,
+}
+
+/// The device stores this process reads, by `device.db` path: one connection each, so a setting read on the UI thread
+/// is a query, not a fresh open with its pragmas and schema checks. A held connection still sees what another process
+/// commits. Writes never use it: they open their own connection, outside this lock (H1), so a write that waits out
+/// the busy timeout against another process never holds up the readers. Whoever renames `device.db` aside in this
+/// process drops the held connection first ([`set_aside_unusable`]): on Windows an open connection refuses the rename.
+/// Every connection, held or not, is made through `configure` (WAL, `synchronous = FULL`, `secure_delete`).
+static HELD_STORES: Mutex<std::collections::BTreeMap<PathBuf, HeldStore>> =
     Mutex::new(std::collections::BTreeMap::new());
 
 /// Close every device-store connection this process holds, as a fresh process would start with none. Test builds
@@ -752,7 +762,7 @@ pub fn device_store_is_held(layout: &Layout) -> bool {
 pub enum DeviceStoreRef {
     /// The in-memory store of [`use_ephemeral_device_store`].
     Ephemeral(Arc<Mutex<DeviceStore>>),
-    /// `device.db` of this layout, through the process's held connection.
+    /// `device.db` of this layout: reads through the process's held connection, writes through their own.
     File(Layout),
 }
 
@@ -766,9 +776,14 @@ pub fn device_store_here() -> DeviceStoreRef {
 }
 
 impl DeviceStoreRef {
-    /// Run `work` on this store. `create`: make `device.db` where [`DeviceStore::open`] would (a write);
-    /// otherwise a missing file answers `Ok(None)` and nothing is made (a read). A held connection whose file is
-    /// gone is dropped first, so a lost store is found lost, never written unseen.
+    /// Run `work` on this store.
+    /// - `create` (a write): a connection of its own, made where [`DeviceStore::open`] would make the file, and closed
+    ///   after; the global lock is not held while it works (H1).
+    /// - otherwise (a read): the held connection, opened on first use and opened again whenever the file at the path
+    ///   is not the one it opened (deleted, made again, replaced). A missing file answers `Ok(None)` and nothing is
+    ///   made, so a lost store is found lost, never written unseen.
+    ///
+    /// A connection whose file turned out damaged is dropped, and the error says unreadable.
     pub fn with<T>(
         &self,
         create: bool,
@@ -784,27 +799,59 @@ impl DeviceStoreRef {
             Self::File(layout) => layout,
         };
         let path = layout.device_db();
+        if create {
+            let store = DeviceStore::open(layout)?;
+            return work(&store)
+                .map(Some)
+                .map_err(|error| damaged(&path, error));
+        }
         let mut held = HELD_STORES
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if !path.exists() {
+        let current = match crate::safe_fs::file_id(&path) {
+            Ok(id) => id,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                held.remove(&path);
+                return Ok(None);
+            }
+            Err(error) => {
+                held.remove(&path);
+                return Err(error.into());
+            }
+        };
+        if held.get(&path).is_some_and(|entry| entry.id != current) {
             held.remove(&path);
         }
         if !held.contains_key(&path) {
-            let store = if create {
-                DeviceStore::open(layout)?
-            } else {
-                match DeviceStore::open_existing(layout)? {
-                    Some(store) => store,
-                    None => return Ok(None),
-                }
+            let Some(store) = DeviceStore::open_existing(layout)? else {
+                return Ok(None);
             };
-            held.insert(path.clone(), store);
+            // The identity of the file this connection opened (read after the open, so a swap in between is seen at
+            // the next read and opens again).
+            let id = crate::safe_fs::file_id(&path)?;
+            held.insert(path.clone(), HeldStore { store, id });
         }
-        match held.get(&path) {
-            Some(store) => work(store).map(Some),
-            None => Ok(None),
+        let Some(entry) = held.get(&path) else {
+            return Ok(None);
+        };
+        match work(&entry.store) {
+            Ok(value) => Ok(Some(value)),
+            Err(error) => {
+                let error = damaged(&path, error);
+                if error.is_unusable() {
+                    held.remove(&path);
+                }
+                Err(error)
+            }
         }
+    }
+}
+
+/// A SQLite error that says the file itself is not a store (not a database, corrupt) as [`DeviceStoreError::Unreadable`].
+fn damaged(path: &Path, error: DeviceStoreError) -> DeviceStoreError {
+    match error {
+        DeviceStoreError::Sqlite(sqlite) => unreadable(path, sqlite),
+        other => other,
     }
 }
 
@@ -1458,7 +1505,7 @@ mod tests {
 
     /// Reads go through one held connection per `device.db` (no open per read), still see another connection's
     /// commits, and a file removed under it is never written unseen: the next write finds it missing and makes it again
-    /// (no rooms here) rather than writing into the removed file.
+    /// (no rooms here) rather than writing into the removed file. Writes open their own connection (H1).
     #[test]
     fn device_setting_reads_use_one_held_connection() {
         let folder = tempfile::tempdir().unwrap();
@@ -1473,7 +1520,9 @@ mod tests {
                 .unwrap()
                 .contains_key(&layout.device_db())
         };
-        assert!(held(), "the write's connection is kept");
+        assert!(!held(), "a write opens its own connection (H1)");
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("Dark"));
+        assert!(held(), "the read's connection is kept");
         // Another connection (another process, as headless is) commits: the held one sees it.
         DeviceStore::open(&layout)
             .unwrap()
@@ -1623,6 +1672,110 @@ mod tests {
 
         // With no open database there is nowhere else to write: the store's own error.
         assert!(set_device_setting_or("log_retention_days", "7", None).is_err());
+
+        HELD_STORES.lock().unwrap().clear();
+        crate::db::set_database_path_override(None);
+    }
+
+    /// H1 (#423's delta read): `device.db` deleted and made again (another process, or a person restoring an old copy)
+    /// is a different file. The held read connection is never used on the old one: the next read sees the new file, and
+    /// the next write reaches it (on Unix the old connection would write into the unlinked file, and the write would be
+    /// lost). Windows cannot delete a file a connection holds; its own test is the rename aside below.
+    #[cfg(unix)]
+    #[test]
+    fn a_recreated_device_db_gets_the_next_write() {
+        let folder = tempfile::tempdir().unwrap();
+        crate::db::set_database_path_override(Some(folder.path().join("bir_data.db")));
+        forget_ephemeral_device_store();
+        let layout = Layout::here();
+        set_device_setting("theme_preference", "Dark").unwrap();
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("Dark"));
+        assert!(
+            HELD_STORES
+                .lock()
+                .unwrap()
+                .contains_key(&layout.device_db()),
+            "a read holds its connection"
+        );
+
+        // Another process deletes device.db and makes a new one.
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(folder.path().join(format!("device.db{suffix}")));
+        }
+        drop(DeviceStore::open(&layout).unwrap());
+        assert_eq!(
+            device_setting("theme_preference"),
+            None,
+            "the read is of the new file"
+        );
+        let secure_delete = DeviceStoreRef::File(layout.clone())
+            .with(false, |store| {
+                Ok(store
+                    .conn
+                    .query_row("PRAGMA secure_delete", [], |row| row.get::<_, i64>(0))?)
+            })
+            .unwrap();
+        assert_eq!(
+            secure_delete,
+            Some(1),
+            "the reopened connection keeps secure_delete (B1)"
+        );
+        set_device_setting("theme_preference", "Light").unwrap();
+        assert_eq!(
+            DeviceStore::open(&layout)
+                .unwrap()
+                .setting("theme_preference")
+                .unwrap()
+                .as_deref(),
+            Some("Light"),
+            "the write reached the new file"
+        );
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("Light"));
+
+        // A copy put over it (a restore of an older device.db) is a new file too.
+        let older = folder.path().join("older.db");
+        {
+            let store = DeviceStore::open(&Layout::at(folder.path().join("elsewhere"))).unwrap();
+            store.set_setting("theme_preference", "Older").unwrap();
+        }
+        std::fs::copy(folder.path().join("elsewhere").join("device.db"), &older).unwrap();
+        for suffix in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(folder.path().join(format!("device.db{suffix}")));
+        }
+        std::fs::rename(&older, layout.device_db()).unwrap();
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("Older"));
+
+        HELD_STORES.lock().unwrap().clear();
+        crate::db::set_database_path_override(None);
+    }
+
+    /// H1 on Windows: an open connection there refuses a rename of its file (os error 32), so the in-process rename aside
+    /// of an unusable `device.db` (item 5) drops the held read connection first, and the write that needed it succeeds.
+    #[cfg(windows)]
+    #[test]
+    fn the_held_connection_never_blocks_a_rename_aside() {
+        let folder = tempfile::tempdir().unwrap();
+        crate::db::set_database_path_override(Some(folder.path().join("bir_data.db")));
+        forget_ephemeral_device_store();
+        let layout = Layout::here();
+        set_device_setting("theme_preference", "Dark").unwrap();
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("Dark"));
+        assert!(
+            HELD_STORES
+                .lock()
+                .unwrap()
+                .contains_key(&layout.device_db()),
+            "a read holds its connection"
+        );
+
+        // Another program writes over the store while the connection is held.
+        let garbage = b"this is not a SQLite file, and it is long enough to be read".to_vec();
+        std::fs::write(layout.device_db(), &garbage).unwrap();
+        set_device_setting("theme_preference", "Light").unwrap();
+        let aside = set_aside(folder.path());
+        assert_eq!(aside.len(), 1, "{aside:?}");
+        assert_eq!(aside[0].1, garbage);
+        assert_eq!(device_setting("theme_preference").as_deref(), Some("Light"));
 
         HELD_STORES.lock().unwrap().clear();
         crate::db::set_database_path_override(None);
