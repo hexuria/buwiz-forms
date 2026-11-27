@@ -5063,10 +5063,14 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     }
     if kind.form_code() == "1601FQ" {
         use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
-        for clearance in gate::row_clearances(kind, &before, &draft) {
-            if let Some(row) = gate::row_index(&before, &clearance.id) {
+        let clearances = gate::row_clearances(kind, &before, &draft);
+        let event_text = gate::clearance_event(&clearances).map(|(_, text)| text);
+        for clearance in clearances {
+            if let (Some(row), Some(text)) =
+                (gate::row_index(&before, &clearance.id), event_text.as_ref())
+            {
                 for key in gate::keys_for_row(row) {
-                    relock_notes.insert(key, json!(clearance.text.clone()));
+                    relock_notes.insert(key, json!(text.clone()));
                 }
             }
         }

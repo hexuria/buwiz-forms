@@ -4099,7 +4099,13 @@ mod tests {
             "{pending:?}"
         );
         assert!(
-            pending[0].1.contains("row-00000000000000000001"),
+            pending[0].1.contains("Schedule 1 row 1 was cleared"),
+            "{pending:?}"
+        );
+        assert!(
+            !pending[0]
+                .1
+                .contains("Schedule 1 row row-00000000000000000001"),
             "{pending:?}"
         );
     }

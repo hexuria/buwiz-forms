@@ -11,7 +11,7 @@ const AMOUNT = "id:fp-txtAmtIncomePay0";
 const YES = "id:fp-frm1601FQ:SpecialTax_1";
 const NO = "id:fp-frm1601FQ:SpecialTax_2";
 const SHUT = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
-const CLEARED = "Schedule 1 row row-00000000000000000001 was cleared: it applies only when item 13 is Yes.";
+const CLEARED = "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes.";
 
 async function reach(app: App, sel: string): Promise<void> {
   for (let i = 0; i < 60 && !app.shows(sel); i++) await app.scroll("id:form-scroll", 420).catch(() => {});
