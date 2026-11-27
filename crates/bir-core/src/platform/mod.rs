@@ -35,12 +35,12 @@ pub fn keychain_disabled() -> bool {
 /// renames or deletes lands in the person's real data folder. Every build
 /// that ships answers the system's folder, as before.
 pub fn data_dir() -> std::path::PathBuf {
-    let dir = os_data_dir();
+    // The system's folder is only looked at here, never created: a test build that does not use it leaves it alone.
     #[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
-    if !in_temp_folder(&dir) {
+    if !in_temp_folder(&os_data_dir_path()) {
         return test_data_dir();
     }
-    dir
+    os_data_dir()
 }
 
 /// The system's data folder for this app, without the test-build rule of [`data_dir`].
@@ -48,20 +48,95 @@ pub(crate) fn os_data_dir() -> std::path::PathBuf {
     os::data_dir()
 }
 
-/// Whether `path` is inside the system temp folder (both resolved where they exist).
+/// [`os_data_dir`] without creating it.
+#[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
+pub(crate) fn os_data_dir_path() -> std::path::PathBuf {
+    os::data_dir_path().unwrap_or_else(|| std::path::PathBuf::from(".taxman-ebir"))
+}
+
+/// `dir` created if missing; with no system folder (`None`) the old relative fallback `.taxman-ebir`, not created.
+#[cfg(not(target_os = "android"))]
+fn create_data_dir(dir: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    let Some(dir) = dir else {
+        return std::path::PathBuf::from(".taxman-ebir");
+    };
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+/// Whether `path` is inside the system temp folder. Both are resolved through their nearest existing folder, so a
+/// path not made yet (`/var/…` on macOS, really `/private/var/…`) is judged as it will be once made.
 #[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
 fn in_temp_folder(path: &std::path::Path) -> bool {
-    let resolve =
-        |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    fn resolve(path: &std::path::Path) -> std::path::PathBuf {
+        let mut rest = Vec::new();
+        let mut existing = path;
+        loop {
+            if let Ok(real) = existing.canonicalize() {
+                return rest.iter().rev().fold(real, |dir, name| dir.join(name));
+            }
+            match (existing.parent(), existing.file_name()) {
+                (Some(parent), Some(name)) => {
+                    rest.push(name);
+                    existing = parent;
+                }
+                _ => return path.to_path_buf(),
+            }
+        }
+    }
     resolve(path).starts_with(resolve(&std::env::temp_dir()))
 }
 
-/// The scratch data folder of a test process: `<temp>/bir-test-data-<pid>`.
+/// The scratch data folder of a test process: `<temp>/bir-test-data-<pid>`, emptied on its first use in the process.
 #[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
 fn test_data_dir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("bir-test-data-{}", std::process::id()));
+    static EMPTIED: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    let dir = fresh_scratch_dir(&EMPTIED, "bir-test-data");
     let _ = std::fs::create_dir_all(&dir);
     dir
+}
+
+/// `<temp>/<prefix>-<pid>` ([`temp_dir`]), emptied the first time `once` is asked in this process: an earlier
+/// process with the same id may have left files there. Only that folder of the temp folder is ever removed, and only
+/// when its name is exactly `<prefix>-<pid>`; a link there (a symlink, or on Windows any reparse point such as a
+/// junction) is removed as a link, never followed.
+pub(crate) fn fresh_scratch_dir(
+    once: &std::sync::OnceLock<std::path::PathBuf>,
+    prefix: &str,
+) -> std::path::PathBuf {
+    once.get_or_init(|| {
+        let temp = temp_dir();
+        let name = format!("{prefix}-{}", std::process::id());
+        let dir = temp.join(&name);
+        let own_folder = dir.parent() == Some(temp.as_path())
+            && dir.file_name() == Some(std::ffi::OsStr::new(&name));
+        if own_folder && let Ok(meta) = std::fs::symlink_metadata(&dir) {
+            let _ = if meta.file_type().is_symlink() || is_reparse_point(&meta) {
+                // A directory link (a Windows junction or directory symlink) goes with remove_dir, any other with
+                // remove_file; neither follows it.
+                std::fs::remove_dir(&dir).or_else(|_| std::fs::remove_file(&dir))
+            } else if meta.is_dir() {
+                std::fs::remove_dir_all(&dir)
+            } else {
+                std::fs::remove_file(&dir)
+            };
+        }
+        dir
+    })
+    .clone()
+}
+
+/// Whether `meta` (from `symlink_metadata`) is a Windows reparse point: a junction, a symlink or another link.
+#[cfg(windows)]
+fn is_reparse_point(meta: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(_meta: &std::fs::Metadata) -> bool {
+    false
 }
 
 pub(crate) fn keychain_switch_is_on(value: Option<&str>) -> bool {
@@ -373,7 +448,7 @@ mod tests {
     #[test]
     fn a_test_build_never_uses_the_real_data_folder() {
         let temp = std::env::temp_dir().canonicalize().unwrap();
-        let real = os_data_dir();
+        let real = os_data_dir_path();
         let dir = data_dir();
         assert!(
             dir.canonicalize().unwrap().starts_with(&temp),
@@ -395,6 +470,104 @@ mod tests {
                 ("LOCALAPPDATA", Some(home.path().as_os_str())),
             ],
             || assert_eq!(data_dir(), os_data_dir()),
+        );
+    }
+
+    /// The system's data folder is named without being made; only [`os_data_dir`] makes it.
+    #[cfg(not(target_os = "android"))]
+    #[test]
+    fn the_system_data_folder_is_named_without_being_made() {
+        let home = tempfile::tempdir().unwrap();
+        temp_env::with_vars(
+            [
+                ("HOME", Some(home.path().as_os_str())),
+                ("XDG_DATA_HOME", None),
+                ("LOCALAPPDATA", Some(home.path().as_os_str())),
+            ],
+            || {
+                let path = os_data_dir_path();
+                assert!(path.starts_with(home.path()), "{}", path.display());
+                assert_eq!(std::fs::read_dir(home.path()).unwrap().count(), 0);
+                assert_eq!(os_data_dir(), path);
+                assert!(path.is_dir());
+            },
+        );
+    }
+
+    /// A scratch folder an earlier process with this id left is emptied on its first use, and only then; a prefix
+    /// that would name a folder deeper in the temp folder removes nothing.
+    #[test]
+    fn a_scratch_folder_is_emptied_once_per_process() {
+        let prefix = "bir-test-scratch-check";
+        let dir = temp_dir().join(format!("{prefix}-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("old")).unwrap();
+        std::fs::write(dir.join("old").join("install_id"), "stale").unwrap();
+        let once = std::sync::OnceLock::new();
+        assert_eq!(fresh_scratch_dir(&once, prefix), dir);
+        assert!(!dir.exists(), "an earlier process's files are gone");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("now"), "this process").unwrap();
+        assert_eq!(fresh_scratch_dir(&once, prefix), dir);
+        assert!(dir.join("now").exists(), "emptied only on the first use");
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        let other = tempfile::tempdir().unwrap();
+        let kept = other.path().join(format!("x-{}", std::process::id()));
+        std::fs::create_dir_all(&kept).unwrap();
+        let prefix = format!("{}/x", other.path().file_name().unwrap().to_string_lossy());
+        fresh_scratch_dir(&std::sync::OnceLock::new(), &prefix);
+        assert!(
+            kept.is_dir(),
+            "a folder not named <prefix>-<pid> in the temp folder stays"
+        );
+    }
+
+    /// A link at the scratch folder is removed as a link: the folder it points at, and its files, stay.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_at_the_scratch_folder_is_removed_never_followed() {
+        let prefix = "bir-test-scratch-link";
+        let link = temp_dir().join(format!("{prefix}-{}", std::process::id()));
+        let _ = std::fs::remove_file(&link);
+        let target = tempfile::tempdir().unwrap();
+        std::fs::write(target.path().join("kept"), "not ours").unwrap();
+        std::os::unix::fs::symlink(target.path(), &link).unwrap();
+        assert_eq!(fresh_scratch_dir(&std::sync::OnceLock::new(), prefix), link);
+        assert!(
+            std::fs::symlink_metadata(&link).is_err(),
+            "the link is gone"
+        );
+        assert!(
+            target.path().join("kept").is_file(),
+            "its target is untouched"
+        );
+    }
+
+    /// A junction at the scratch folder is removed as a link: the folder it points at, and its files, stay.
+    #[cfg(windows)]
+    #[test]
+    fn a_junction_at_the_scratch_folder_is_removed_never_followed() {
+        let prefix = "bir-test-scratch-junction";
+        let link = temp_dir().join(format!("{prefix}-{}", std::process::id()));
+        let _ = std::fs::remove_dir(&link);
+        let target = tempfile::tempdir().unwrap();
+        std::fs::write(target.path().join("kept"), "not ours").unwrap();
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&link)
+            .arg(target.path())
+            .output()
+            .unwrap();
+        assert!(made.status.success(), "mklink /J: {made:?}");
+        assert!(is_reparse_point(&std::fs::symlink_metadata(&link).unwrap()));
+        assert_eq!(fresh_scratch_dir(&std::sync::OnceLock::new(), prefix), link);
+        assert!(
+            std::fs::symlink_metadata(&link).is_err(),
+            "the junction is gone"
+        );
+        assert!(
+            target.path().join("kept").is_file(),
+            "its target is untouched"
         );
     }
 

@@ -498,6 +498,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml_edit",
  "totp-rs",
  "tracing",
  "tracing-appender",

@@ -5,14 +5,19 @@ use std::path::PathBuf;
 /// Returns the app's data directory inside its sandbox:
 /// `$HOME/Library/Application Support/dev.goldcoders.bir`.
 pub fn data_dir() -> PathBuf {
-    let dir = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join("Library")
-        .join("Application Support")
-        .join(super::NSH_APP_ID);
-    let _ = std::fs::create_dir_all(&dir);
-    dir
+    super::create_data_dir(data_dir_path())
+}
+
+/// [`data_dir`] without creating it. Always a folder: the temp folder stands in for a missing `HOME`.
+pub(super) fn data_dir_path() -> Option<PathBuf> {
+    Some(
+        std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("Library")
+            .join("Application Support")
+            .join(super::NSH_APP_ID),
+    )
 }
 
 /// Returns the temporary directory.
