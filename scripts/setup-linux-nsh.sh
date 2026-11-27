@@ -159,8 +159,32 @@ RANLIB="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
 # Unset, the NSH app's own workspace builds full debuginfo: a 4 GB dev APK.
 # The Android app reads test settings baked in at build time, not from the
 # environment it runs in (nsh/src/dev_env.rs).
+# A value from the caller is taken only if it keeps the app a test build: it must say EBIR_TEST_ENV=1 and
+# BIR_SFTP_DRY_RUN=1 and may never name BIR_SFTP_LIVE. Anything else is refused and the safe default is baked in.
+dev_env_default="EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1"
+dev_env="${BUWIZ_ANDROID_DEV_ENV:-$dev_env_default}"
+case ";$dev_env;" in
+  *BIR_SFTP_LIVE*) dev_env="";;
+  *";EBIR_TEST_ENV=1;"*) case ";$dev_env;" in *";BIR_SFTP_DRY_RUN=1;"*) ;; *) dev_env="";; esac;;
+  *) dev_env="";;
+esac
+if [ -z "$dev_env" ]; then
+  echo "nsh2404: BUWIZ_ANDROID_DEV_ENV refused (it must keep EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1 and never name BIR_SFTP_LIVE); using the default" >&2
+  dev_env="$dev_env_default"
+fi
 android=(); case " $* " in *android*) android=(-e CARGO_PROFILE_DEV_DEBUG=0
-  -e "BUWIZ_ANDROID_DEV_ENV=${BUWIZ_ANDROID_DEV_ENV:-EBIR_TEST_ENV=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1}");; esac
+  -e "BUWIZ_ANDROID_DEV_ENV=$dev_env");; esac
+# The account and relay addresses reach the container only when they are this machine's own (a local mock). A debug
+# build pointed at a real server would sign in there, and on Android the address is compiled into the APK.
+urls=()
+for name in BUWIZ_SERVER_URL BUWIZ_ACCOUNT_URL; do
+  [ -n "${!name:-}" ] || continue
+  if [[ "${!name}" =~ ^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/|$) ]]; then
+    urls+=(-e "$name")
+  else
+    echo "nsh2404: $name is not a local address; not passed to the build" >&2
+  fi
+done
 uid="$(id -u)"
 # A host git config that rewrites GitHub URLs or names a credential helper (a Devin machine's git proxy) does not
 # authenticate inside the container, and Cargo's first git fetch fails there. Then the container fetches with the git
@@ -188,7 +212,7 @@ exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network ho
   -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_AUTH_BYPASS=1 -e BIR_SFTP_DRY_RUN=1 \
   -e GPUI_AGENT -e GPUI_AGENT_ADDR -e GPUI_AGENT_TOKEN -e BIR_DATABASE_PATH -e BUWIZ_ANDROID_DEV \
   -e CARGO -e NSH_REAL_CARGO \
-  -e BUWIZ_SERVER_URL -e BUWIZ_ACCOUNT_URL -e BUWIZ_TRUST_KEYS \
+  "${urls[@]}" -e BUWIZ_TRUST_KEYS \
   "${mounts[@]}" \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v "/run/user/$uid:/run/user/$uid" \
