@@ -3780,6 +3780,34 @@ fn v2018_1601fq_schedule_1_is_shut_and_refuses_writes_until_item_13_yes() {
 }
 
 #[test]
+fn v2018_1601fq_schedule_1_reopened_at_yes_keeps_its_computed_base_locks() {
+    setup();
+    let yes = fill(
+        "1601FQ",
+        &open("1601FQ", 1)["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    save("1601FQ", &yes["draft"]);
+    let reopened = open("1601FQ", 1);
+    for index in 0..5 {
+        let nature = format!("txtNatIncPayment{index}");
+        assert!(
+            reopened["locks"][&nature].as_str().is_some(),
+            "{nature}: {}",
+            reopened["locks"][&nature]
+        );
+        let withheld = format!("txtReqWithheld{index}");
+        assert_eq!(
+            reopened["locks"][&withheld], "computed by BIR's own formulas",
+            "{withheld}"
+        );
+    }
+    let percent = fill("1601FQ", &reopened["draft"], json!({"txtRate0": "10.555"}));
+    assert_eq!(percent["rejected"], json!({}));
+    assert_eq!(percent["values"]["txtRate0"], "10.56");
+}
+
+#[test]
 fn v2018_1601fq_schedule_1_clears_once_when_item_13_closes() {
     setup();
     use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
