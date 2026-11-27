@@ -1641,8 +1641,8 @@ fn writer_cells_json(slug: &str) -> Option<&'static str> {
         "2200s-2018" => Some(include_str!(
             "../../../html-frozen/2200s-2018/writer-cells.json"
         )),
-        "2200t-2020" => Some(include_str!(
-            "../../../html-frozen/2200t-2020/writer-cells.json"
+        "2200t-2022" => Some(include_str!(
+            "../../../html-frozen/2200t-2022/writer-cells.json"
         )),
         "2550m-2007" => Some(include_str!(
             "../../../html-frozen/2550m-2007/writer-cells.json"
@@ -6724,7 +6724,7 @@ mod tests {
         "2200m-2018",
         "2200p-2020",
         "2200s-2018",
-        "2200t-2020",
+        "2200t-2022",
         "2550m-2007",
         "2550q-2024",
         "2551q-2018",
@@ -6855,7 +6855,7 @@ mod tests {
     /// with the size); no `.fi` sets a letter-spacing, the size classes do.
     #[test]
     fn each_sheet_measures_in_its_own_face_and_spacing() {
-        const TINOS: [&str; 10] = [
+        const TINOS: [&str; 11] = [
             "0605-1999",
             "1601c-2018",
             "1602q-2019",
@@ -6864,6 +6864,7 @@ mod tests {
             "1604f-2018",
             "2200c-2018",
             "2200p-2020",
+            "2200t-2022",
             "2550m-2007",
             "2553-1999",
         ];
@@ -6880,7 +6881,7 @@ mod tests {
         }
         for (slug, pt) in [
             ("1604f-2018", 0.3238),
-            ("2200t-2020", 0.0),
+            ("2200t-2022", 0.4092),
             ("1600-pt-2018", 0.2778),
             ("1604e-2018", 0.1518),
             ("1600wp-2010", 0.0546),
@@ -7561,7 +7562,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1433, "band boxes");
+        assert_eq!(total, 1472, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
