@@ -1196,7 +1196,24 @@ fn build_single_band_continuation_page(
                 let syn_id = format!("cont_s{sched_idx}_p{cont_page_idx}_b{bi}_r{k}_{}", cell.id);
                 caption_aliases.insert(syn_id.clone(), cell.id.clone());
                 let cloned = clone_cell_div(&src_cell.raw_html, &cell.id, &syn_id, dy);
-                body_cells.push_str(&cloned);
+                // The upload control the cloned cell prints (the row's own
+                // key, not the template row's), for readers of the sheet.
+                let upload_key = match mb.cell_map.get(&cell.id) {
+                    Some(
+                        CellJoinKind::Text { col_idx, .. }
+                        | CellJoinKind::Peso { col_idx, .. }
+                        | CellJoinKind::Money {
+                            col_idx,
+                            is_peso: true,
+                            ..
+                        },
+                    ) => row.keys.get(*col_idx),
+                    _ => None,
+                };
+                body_cells.push_str(&match upload_key {
+                    Some(key) => with_upload_key(&cloned, key),
+                    None => cloned,
+                });
 
                 if let Some(join_kind) = mb.cell_map.get(&cell.id) {
                     match join_kind {
@@ -1330,11 +1347,9 @@ fn build_single_band_continuation_page(
         let syn_tot_id = format!("cont_tot_s{sched_idx}_{}", tj.html_id);
         caption_aliases.insert(syn_tot_id.clone(), tj.html_id.clone());
         if let Some(src_tot) = page.cells.get(&tj.html_id) {
-            body_cells.push_str(&clone_cell_div(
-                &src_tot.raw_html,
-                &tj.html_id,
-                &syn_tot_id,
-                dy_tot,
+            body_cells.push_str(&with_upload_key(
+                &clone_cell_div(&src_tot.raw_html, &tj.html_id, &syn_tot_id, dy_tot),
+                &tj.writer_key,
             ));
         }
         let syn_cents_id = tj.cents_html_id.as_ref().and_then(|cid| {
@@ -1521,6 +1536,20 @@ fn push_band_rect(target: &mut String, r: &BandRect, dy: f64) {
 fn fmt_pt(v: f64) -> String {
     let s = format!("{v:.2}");
     s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// `cell_div` with `data-upload-key="{key}"` on its opening tag: the upload
+/// control a cloned continuation cell prints.
+fn with_upload_key(cell_div: &str, key: &str) -> String {
+    match cell_div.find('>') {
+        Some(at) => format!(
+            "{} data-upload-key=\"{}\"{}",
+            &cell_div[..at],
+            escape_html(key),
+            &cell_div[at..]
+        ),
+        None => cell_div.to_string(),
+    }
 }
 
 fn clone_cell_div(raw_html: &str, orig_id: &str, new_id: &str, dy: f64) -> String {

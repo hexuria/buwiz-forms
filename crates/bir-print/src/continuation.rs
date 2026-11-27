@@ -31,6 +31,9 @@ pub struct OverflowColumn {
 pub struct OverflowRow {
     pub row_number: usize,
     pub values: Vec<String>,
+    /// The writer key of each value, in the same order: the upload control
+    /// the row's cell holds.
+    pub keys: Vec<String>,
 }
 
 /// All overflowing rows of a single schedule.
@@ -156,7 +159,25 @@ impl FilledDocument {
                     "{truncated_count} long entries are printed in full on an additional sheet"
                 ));
             }
-            let other_count = cell_warnings.len() - amount_count - small_count - truncated_count;
+            let identifier_count = cell_warnings
+                .iter()
+                .filter(|w| w.kind == "identifier-small")
+                .count();
+            if identifier_count == 1 {
+                lines.push(
+                    "1 TIN or ATC printed very small is also printed in full on an additional sheet"
+                        .to_string(),
+                );
+            } else if identifier_count > 1 {
+                lines.push(format!(
+                    "{identifier_count} TINs or ATCs printed very small are also printed in full on an additional sheet"
+                ));
+            }
+            let other_count = cell_warnings.len()
+                - amount_count
+                - small_count
+                - identifier_count
+                - truncated_count;
             if other_count == 1 {
                 lines.push("1 value overflowed its official box".to_string());
             } else if other_count > 1 {
@@ -261,6 +282,7 @@ pub fn detect_overflow(
 
         for idx in overflow_indices {
             let mut values = Vec::with_capacity(spec.columns.len());
+            let mut keys = Vec::with_capacity(spec.columns.len());
             let mut has_meaningful_value = false;
             for col in &spec.columns {
                 let key = format!("{}{}", col.stem, idx);
@@ -272,6 +294,7 @@ pub fn detect_overflow(
                     has_meaningful_value = true;
                 }
                 values.push(val);
+                keys.push(key);
             }
             if !has_meaningful_value {
                 continue;
@@ -285,7 +308,11 @@ pub fn detect_overflow(
                 }
             }
             let row_number = idx.saturating_sub(base_idx) + 1;
-            rows.push(OverflowRow { row_number, values });
+            rows.push(OverflowRow {
+                row_number,
+                values,
+                keys,
+            });
         }
 
         if rows.is_empty() {
@@ -372,9 +399,12 @@ pub fn collect_truncated_entries(
         page_number += 1;
 
         for warning in frozen_html::overflow_warnings(page_slice) {
-            // A long text shortened with "...", or an amount shrunk below
-            // `AMOUNT_ADDITIONAL_SHEET_BELOW_PT`: either prints whole here.
-            if warning.kind != "text-truncated" && warning.kind != "amount-small" {
+            // A long text shortened with "...", or an amount or a TIN/ATC
+            // shrunk below `SMALL_WHOLE_BELOW_PT`: each prints whole here.
+            if !matches!(
+                warning.kind.as_str(),
+                "text-truncated" | "amount-small" | "identifier-small"
+            ) {
                 continue;
             }
             let cell_id = warning.cell.strip_suffix("-i").unwrap_or(&warning.cell);
@@ -1883,6 +1913,7 @@ fn detect_popup_overflow(
         let mut col_has_numeric: Vec<bool> = vec![false; def.columns.len()];
         for n in indices {
             let mut values = Vec::with_capacity(def.columns.len());
+            let mut keys = Vec::with_capacity(def.columns.len());
             let mut has_meaningful = false;
             for col in def.columns {
                 let key = col.key_template.replace("{n}", &n.to_string());
@@ -1894,6 +1925,7 @@ fn detect_popup_overflow(
                     has_meaningful = true;
                 }
                 values.push(val);
+                keys.push(key);
             }
             if !has_meaningful {
                 continue;
@@ -1909,6 +1941,7 @@ fn detect_popup_overflow(
             rows.push(OverflowRow {
                 row_number: def.row_num_base + n,
                 values,
+                keys,
             });
         }
         if rows.is_empty() {
@@ -3503,6 +3536,7 @@ mod tests {
             rows: vec![OverflowRow {
                 row_number: 6,
                 values: vec!["Overflow row 6".into()],
+                keys: vec!["frm:txtDesc6".into()],
             }],
             has_total: false,
         };

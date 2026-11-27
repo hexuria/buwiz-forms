@@ -1021,10 +1021,11 @@ const PLAIN_WRAP_MIN_HEIGHT_PT: f64 = 15.55;
 /// printed in full on the additional sheet.
 const PLAIN_TEXT_MIN_PT: f64 = 7.5;
 
-/// An amount shrunk below this size (pt) to fit its box still prints there,
-/// whole, and is also carried, whole, to the additional sheet
-/// (`data-overflow-warning="amount-small"`): legible in full somewhere.
-pub(crate) const AMOUNT_ADDITIONAL_SHEET_BELOW_PT: f64 = 5.0;
+/// An amount or an identifier (a TIN, an ATC) shrunk below this size (pt)
+/// to fit its box still prints there, whole, and is also carried, whole, to
+/// the additional sheet (`data-overflow-warning="amount-small"` or
+/// `"identifier-small"`): legible in full somewhere.
+pub(crate) const SMALL_WHOLE_BELOW_PT: f64 = 5.0;
 
 /// Vertical room factor for two wrapped lines (`2 * 1.04 = 2.08`).
 const PLAIN_TWO_LINE_HEIGHT_FACTOR: f64 = 2.08;
@@ -2160,13 +2161,49 @@ fn is_identifier_cell(writer_key: &str, caption: Option<&str>) -> bool {
     let key = writer_key.split("__cont_").next().unwrap_or(writer_key);
     let last = key.rsplit(':').next().unwrap_or(key);
     let lower = last.to_ascii_lowercase();
-    if lower.contains("description") || lower.contains("page_header") {
+    // A description (`txtATCDesc`, `tp_atc_description`), a TIN-and-name
+    // header, or a check box or radio button (`chkTIN`, `rdoPg1I5Atc`,
+    // `optATC_1`, `rbATC_1`), which holds a tick, not an identifier.
+    let control = ["chk", "rdo", "opt", "rb"].iter().any(|prefix| {
+        last.strip_prefix(prefix)
+            .and_then(|rest| rest.bytes().next())
+            .is_some_and(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    });
+    if lower.contains("desc") || lower.contains("page_header") || control {
         return false;
     }
-    if last.contains("TIN") || last.contains("ATC") || lower.contains("branch") {
+    if lower.contains("branch") {
         return true;
     }
     let bytes = last.as_bytes();
+    // `TIN` or `ATC` in capitals as a word of its own: after the start, a
+    // non-capital, or a one-letter capital prefix (`I18STIN1`, the
+    // spouse's TIN), never inside a longer capital run (`ACCOUNTING`); and
+    // before the end, a digit, `_`, `of` (`TINofSignatory`), `Code`/`Cd`
+    // (`drpATCCode1`, `txtAtcCd1`), or one capital letter that starts no
+    // word (`txtTINE1`, `txtTINC1`, `drpPg1I5ATCR1`), never a word of its
+    // own (`TINStatus`).
+    let capitals = |needle: &str| {
+        last.match_indices(needle).any(|(at, _)| {
+            let upper = |i: usize| bytes.get(i).is_some_and(u8::is_ascii_uppercase);
+            let before = at == 0 || !upper(at - 1) || at == 1 || !upper(at - 2);
+            let rest = &last[at + needle.len()..];
+            let r = rest.as_bytes();
+            let after = rest.is_empty()
+                || r[0].is_ascii_digit()
+                || r[0] == b'_'
+                || (rest.starts_with("of")
+                    && r.get(2)
+                        .is_none_or(|b| b.is_ascii_uppercase() || b.is_ascii_digit()))
+                || rest.starts_with("Code")
+                || rest.starts_with("Cd")
+                || (r[0].is_ascii_uppercase() && r.get(1).is_none_or(|b| !b.is_ascii_lowercase()));
+            before && after
+        })
+    };
+    if capitals("TIN") || capitals("ATC") {
+        return true;
+    }
     let word_at = |at: usize, len: usize, lowercase: bool| {
         let before_ok = !lowercase || at == 0 || bytes[at - 1] == b'_';
         let after = bytes.get(at + len).copied();
@@ -2198,7 +2235,7 @@ fn is_identifier_cell(writer_key: &str, caption: Option<&str>) -> bool {
         Some(head) => head.trim(),
         None => caption.trim(),
     };
-    !caption.to_ascii_lowercase().contains("description")
+    !caption.to_ascii_lowercase().contains("desc")
         && caption
             .rsplit(|c: char| !c.is_ascii_alphanumeric())
             .find(|word| !word.is_empty())
@@ -2890,9 +2927,9 @@ fn fill_text_input(
         // other text keeps the long-text rule (two lines, 7.5 pt, "...",
         // the whole on the additional sheet).
         if chars.len() > ordered.len() {
-            let never_cut = is_identifier_cell(name, caption) || is_amount_comb_value(print);
-            let line = if never_cut {
-                comb_overflow_line_whole(html, input_name, print, sheet)
+            let identifier = is_identifier_cell(name, caption);
+            let line = if identifier || is_amount_comb_value(print) {
+                comb_overflow_line_whole(html, input_name, print, sheet, identifier)
             } else {
                 comb_overflow_line(html, input_name, print, sheet)
             };
@@ -2945,8 +2982,9 @@ fn fill_text_input(
             sheet.split.iter().any(|(cell, _)| *cell == input_name) && splits(tags, indices);
         let overflow = (split && !fits_one_per_box(print, indices.len()))
             .then(|| {
-                if is_identifier_cell(name, caption) || is_amount_comb_value(print) {
-                    comb_overflow_line_whole(html, input_name, print, sheet)
+                let identifier = is_identifier_cell(name, caption);
+                if identifier || is_amount_comb_value(print) {
+                    comb_overflow_line_whole(html, input_name, print, sheet, identifier)
                 } else {
                     comb_overflow_line(html, input_name, print, sheet)
                 }
@@ -3056,7 +3094,7 @@ fn fill_text_input(
                 && !split
                 && (is_formatted_money_amount(print) || is_formatted_whole_peso_amount(print)))
             || is_identifier_cell(name, caption);
-        let amount_figure = figure && !is_identifier_cell(name, caption);
+        let identifier = is_identifier_cell(name, caption);
         for &index in indices {
             let writer = via_cell.then_some(print);
             let fit = dims.filter(|_| !split).and_then(|(width, height)| {
@@ -3091,9 +3129,13 @@ fn fill_text_input(
                         let insert_at = tag.rfind('>').unwrap_or(tag.len());
                         tag.insert_str(insert_at, " data-overflow-warning=\"text-truncated\"");
                     }
-                    if amount_figure && fit.font_size_pt < AMOUNT_ADDITIONAL_SHEET_BELOW_PT {
+                    if figure && fit.font_size_pt < SMALL_WHOLE_BELOW_PT {
+                        tag = without_writer_value(&tag);
                         let insert_at = tag.rfind('>').unwrap_or(tag.len());
-                        tag.insert_str(insert_at, " data-overflow-warning=\"amount-small\"");
+                        tag.insert_str(
+                            insert_at,
+                            &small_whole_mark(fit.font_size_pt, identifier, &fit.text),
+                        );
                     }
                     tag
                 }
@@ -6465,7 +6507,7 @@ fn comb_overflow_amount_union(
     } else {
         String::new()
     };
-    let warning = if size < AMOUNT_ADDITIONAL_SHEET_BELOW_PT {
+    let warning = if size < SMALL_WHOLE_BELOW_PT {
         format!("amount-small\" data-writer-value=\"{}", html_escape(text))
     } else {
         "amount-comb".to_string()
@@ -6547,15 +6589,18 @@ fn comb_overflow_line(
     overflow_input_with_fit(html, cell, text, fit_line(sheet, width, text), sheet)
 }
 
-/// [`comb_overflow_line`] for an identifier ([`is_identifier_cell`]): the
-/// whole text on one line, its type measured to set within the line's real
-/// room (the cell less the input's 1 pt insets and 1 pt left padding, with
-/// 1 pt to spare) with no 7.5 pt floor, never cut with "...".
+/// [`comb_overflow_line`] for an identifier ([`is_identifier_cell`]) or a
+/// figure: the whole text on one line, its type measured to set within the
+/// line's real room (the cell less the input's 1 pt insets and 1 pt left
+/// padding, with 1 pt to spare) with no 7.5 pt floor, never cut with "...".
+/// Below [`SMALL_WHOLE_BELOW_PT`] it is also marked for the additional
+/// sheet ([`small_whole_mark`]).
 fn comb_overflow_line_whole(
     html: &str,
     cell: &str,
     text: &str,
     sheet: &SheetType,
+    identifier: bool,
 ) -> Option<(usize, String)> {
     let (_, _, width, _) = cell_box_pt(html, cell)?;
     let letter = sheet.letter_for("fi");
@@ -6567,10 +6612,32 @@ fn comb_overflow_line_whole(
     Some((
         close + 1,
         format!(
-            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"{cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
-            html_escape(text)
+            "<input type=\"text\" class=\"fi\" readonly value=\"{}\" style=\"font-size:{size:.2}pt;text-align:left;padding-left:1pt;z-index:1\"{} data-overflow-of=\"{cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
+            html_escape(text),
+            small_whole_mark(size, identifier, text),
         ),
     ))
+}
+
+/// The mark a value printed whole but shrunk below
+/// [`SMALL_WHOLE_BELOW_PT`] carries, so the additional sheet prints it whole
+/// as well and the preview warns ([`crate::continuation::collect_truncated_entries`]):
+/// `identifier-small` for a TIN or an ATC, `amount-small` for an amount or
+/// another figure. Two kinds, so the preview can say which. Empty at or
+/// above the size.
+fn small_whole_mark(size: f64, identifier: bool, text: &str) -> String {
+    if size >= SMALL_WHOLE_BELOW_PT {
+        return String::new();
+    }
+    let kind = if identifier {
+        "identifier-small"
+    } else {
+        "amount-small"
+    };
+    format!(
+        " data-overflow-warning=\"{kind}\" data-writer-value=\"{}\"",
+        html_escape(text)
+    )
 }
 
 /// Rule 1 + Rule 3: plain-rectangle text for an overflowing comb cell,
@@ -7375,7 +7442,7 @@ mod tests {
         );
         let (text, size) = super::printed_cell(&doc, "p1c90");
         assert_eq!(text, "-1,234,567,890,123.45");
-        assert!(size.unwrap() < super::AMOUNT_ADDITIONAL_SHEET_BELOW_PT);
+        assert!(size.unwrap() < super::SMALL_WHOLE_BELOW_PT);
         let warnings = super::overflow_warnings(&doc);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].kind, "amount-small");
@@ -7384,6 +7451,130 @@ mod tests {
         let entries = crate::continuation::collect_truncated_entries("1601c-2018", &doc, &report);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].full_text, "-1,234,567,890,123.45");
+    }
+
+    /// The print classes exactly the TIN and ATC joins the rendered parity
+    /// test pins (`crates/bir-core/tests/sample_payloads/fixtures/identifier-joins.tsv`:
+    /// 266 writer-cells.json joins on 41 sheets and the 4 SHEET_JOINS TIN
+    /// parts of 2550M): a change to the classing is a diff of that list.
+    #[test]
+    fn identifier_classing_matches_the_pinned_list() {
+        let pinned: std::collections::BTreeSet<(String, String)> =
+            include_str!("../../bir-core/tests/sample_payloads/fixtures/identifier-joins.tsv")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .map(|line| {
+                    let (sheet, key) = line.split_once('\t').expect("sheet<TAB>key");
+                    (sheet.to_string(), key.to_string())
+                })
+                .collect();
+        let mut classed = std::collections::BTreeSet::new();
+        for slug in sheet_slugs() {
+            let Some(cells) = super::merged_writer_cells_json(&slug) else {
+                continue;
+            };
+            for join in cells["joins"].as_array().unwrap() {
+                let key = join["writer_key"].as_str().unwrap();
+                if super::is_identifier_cell(key, join["printed"].as_str()) {
+                    classed.insert((slug.clone(), key.to_string()));
+                }
+            }
+        }
+        assert_eq!(classed, pinned);
+        assert_eq!(pinned.len(), 270);
+    }
+
+    /// The capitals rule wants `TIN` or `ATC` as a word of its own, and no
+    /// description, check box or radio button is an identifier.
+    #[test]
+    fn identifier_capitals_need_a_word_boundary() {
+        use super::is_identifier_cell as id;
+        for key in [
+            "frm1700:txtPg1I18STIN1",
+            "frm1702MX:txtPg2Pt3TINofSignatory",
+            "frm1801v2018:txtTINE1",
+            "frm1606:txtTINS1",
+            "frm1800v2018:txtDoneeTINA",
+            "frm0605:txtATCCode",
+            "frm1702MX:drpPg1I5ATCR1",
+        ] {
+            assert!(id(key, None), "{key}");
+        }
+        for key in [
+            "frm9999:txtTINStatus",
+            "frm9999:chkTIN",
+            "frm9999:txtATCDesc",
+            "frm9999:txtACCOUNTING",
+            "frm9999:txtACCOUNTINGPERIOD",
+            "frm9999:rdoATC1",
+            "frm9999:optTIN_1",
+        ] {
+            assert!(!id(key, None), "{key}");
+        }
+    }
+
+    /// I1: a TIN shrunk below 5 pt to fit its box prints there whole AND is
+    /// carried whole to the additional sheet, with a preview warning.
+    /// Before, a dashed 14-digit TIN in 1600-PT's Schedule 1 TIN box
+    /// printed whole at under 5 pt and nowhere else.
+    #[test]
+    fn a_tiny_tin_is_also_on_the_additional_sheet() {
+        let tin = "987-654-321-00000";
+        let fields = BTreeMap::from([("frm1600PT:Pg2Sc1TIN1".to_string(), tin.to_string())]);
+        let doc = super::filled_document_with_report("1600-pt-2018", &fields, None).unwrap();
+        assert_eq!(super::printed_text(&doc.html, "p2c16"), tin);
+        let tag = super::input_tags(&doc.html)
+            .into_iter()
+            .find(|t| t.name == "p2c16")
+            .expect("the TIN box")
+            .tag
+            .to_string();
+        let size: f64 = tag
+            .rsplit("font-size:")
+            .next()
+            .and_then(|v| v.split("pt").next())
+            .and_then(|v| v.parse().ok())
+            .expect("a fitted size");
+        assert!(size < super::SMALL_WHOLE_BELOW_PT, "{size}");
+        assert!(
+            tag.contains("data-overflow-warning=\"identifier-small\""),
+            "{tag}"
+        );
+        let additional = &doc.html[doc
+            .html
+            .find("page-continuation")
+            .expect("an additional sheet")..];
+        assert!(
+            additional.contains(tin),
+            "the additional sheet carries the TIN whole"
+        );
+        assert!(
+            doc.warning_lines().iter().any(|l| l.contains("TIN or ATC")),
+            "{:?}",
+            doc.warning_lines()
+        );
+    }
+
+    /// (a): a figure printed whole over a comb it does not fit, shrunk below
+    /// 5 pt, is marked for the additional sheet as well.
+    #[test]
+    fn a_tiny_whole_line_figure_is_also_on_the_additional_sheet() {
+        let html = format!(
+            "<div id=\"frm1601C:txtPhone\" style=\"left:10pt;top:10pt;width:20pt;height:14pt\">{}</div>",
+            comb("frm1601C:txtPhone", 4)
+        );
+        let fields = BTreeMap::from([(
+            "frm1601C:txtPhone".to_string(),
+            "09170000000123456".to_string(),
+        )]);
+        let doc = super::fill_by_name(&html, &fields);
+        let (text, size) = super::printed_cell(&doc, "frm1601C:txtPhone");
+        assert_eq!(text, "09170000000123456");
+        assert!(size.unwrap() < super::SMALL_WHOLE_BELOW_PT);
+        let warnings = super::overflow_warnings(&doc);
+        assert_eq!(warnings.len(), 1, "{doc}");
+        assert_eq!(warnings[0].kind, "amount-small");
+        assert_eq!(warnings[0].value, "09170000000123456");
     }
 
     /// F6: every sheet the negative-style table names a bracket form is a
@@ -10555,6 +10746,52 @@ mod tests {
         "2552-2018",
         "2553-1999",
     ];
+
+    /// The documents `long_text_prints_as_pinned_on_every_sheet` hashes for
+    /// `OVERFLOW_PROBE_SHEETS` (comma-separated slugs), written to
+    /// `OVERFLOW_PROBE_OUT/<slug>.html`, one tag per line and the inlined
+    /// fonts and images left out, for a readable diff between two commits
+    /// (docs/proof/field-rules-overflow/).
+    #[test]
+    #[ignore = "writes the overflow probe's documents for a diff"]
+    fn write_overflow_probe_documents() {
+        let (Some(out), Some(sheets)) = (
+            std::env::var_os("OVERFLOW_PROBE_OUT"),
+            std::env::var("OVERFLOW_PROBE_SHEETS").ok(),
+        ) else {
+            return;
+        };
+        let out = std::path::PathBuf::from(out);
+        std::fs::create_dir_all(&out).unwrap();
+        for slug in sheets.split(',') {
+            let cells = writer_cells(slug).unwrap();
+            let mut text = String::new();
+            for len in [200, 90, 12] {
+                let fields: BTreeMap<String, String> = cells
+                    .joins
+                    .keys()
+                    .map(|key| (key.clone(), words_of(len)))
+                    .collect();
+                let document = filled_document(slug, &fields).unwrap();
+                text.push_str(&format!(
+                    "<!-- probe: every text join filled with {len} characters -->\n"
+                ));
+                let mut rest = document.as_str();
+                while let Some(at) = rest.find("data:") {
+                    let end = rest[at..]
+                        .find(['"', ')', '\''])
+                        .map_or(rest.len(), |e| at + e);
+                    text.push_str(&rest[..at]);
+                    text.push_str("data:(inlined)");
+                    rest = &rest[end..];
+                }
+                text.push_str(rest);
+                text.push('\n');
+            }
+            let lines = text.replace("><", ">\n<");
+            std::fs::write(out.join(format!("{slug}.html")), lines).unwrap();
+        }
+    }
 
     /// Goldens: every sheet's long-text print pinned exactly
     /// (`fixtures/overflow-goldens.json`, `BIR_PRINT_BLESS_OVERFLOW=1`), and
