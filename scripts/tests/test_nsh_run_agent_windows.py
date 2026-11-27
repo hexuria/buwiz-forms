@@ -327,6 +327,7 @@ class NshRunAgentWindowsTests(unittest.TestCase):
             subprocess.run(['taskkill', '/T', '/F', '/PID', str(process.pid)], capture_output=True)
             self.fail('the recipe did not return\n' + evidence)
         output = self.output_after_wait(process)
+        self.assertFalse(process.output_reader.is_alive(), 'the recipe output pipe did not close; output may be incomplete')
         self.assertNotIn(TOKEN, output, 'the token is never printed')
         return process.returncode, output
 

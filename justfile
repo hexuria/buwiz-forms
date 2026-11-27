@@ -1398,8 +1398,8 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         # Stop-Job returns before the job's runspace has finished closing; receiving it in that state can either
         # throw or wait while the still-open runspace keeps this shell (and therefore the job's liveness check) alive.
         Stop-Job $job -ErrorAction SilentlyContinue
-        Wait-Job $job -Timeout 10 -ErrorAction SilentlyContinue | Out-Null
-        Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { [Console]::Error.WriteLine($_) }
+        $stopped = Wait-Job $job -Timeout 10 -ErrorAction SilentlyContinue
+        if ($stopped) { Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { [Console]::Error.WriteLine($_) } }
         Remove-Job $job -Force -ErrorAction SilentlyContinue
     }
     # The parameter arrives as an environment variable (PowerShell cannot read just's quoting of an apostrophe); a relative
