@@ -51,12 +51,14 @@ for (const { name, size } of TABLETS) {
     await app.waitFor("id:settings-nav-account");
   }, 60_000);
 
-  test(`${name}: a return is the phone form (no side list, the bottom pill), and the palette has no sidebar to toggle`, async () => {
+  test(`${name}: a return is the phone form (no side list, the bottom pill), and search lists only tax profiles`, async () => {
     const app = await open(ENTRY, { ...size, ...asking({ start: "form=2551Q/2026/3" }) });
     await app.waitFor("id:fp-pill");
     expect(app.shows("id:fp-pager-clearance")).toBe(true);
     await app.press("id:nb-search");
     await app.waitFor("id:palette-input");
-    expect(app.texts()).not.toContain("Toggle sidebar");
+    expect(app.texts()).toContain("TAXPAYERS");
+    for (const word of ["BRANCHES", "GO TO", "ACTIONS", "Toggle sidebar", "Change theme"]) expect(app.texts()).not.toContain(word);
+    expect(app.shows("id:palette-item-1")).toBe(false);
   }, 60_000);
 }
