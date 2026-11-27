@@ -1,0 +1,4 @@
+# Smoke 1, iOS seeded scratch database: the first-run account choice is already complete because the scratch database
+# was seeded through the data plane before launch. The phone picker probe stays outside smoke; see
+# docs/proof/e2e-recipes-refresh/ios-picker-gap/.
+wait_until frame --timeout-ms 10000 --screenshot

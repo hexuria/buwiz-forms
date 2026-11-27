@@ -49,22 +49,6 @@
    "needs": [
     "select"
    ]
-  },
-  {
-   "id": "background",
-   "op": "system",
-   "action": "background",
-   "needs": [
-    "listed"
-   ]
-  },
-  {
-   "id": "foreground",
-   "op": "system",
-   "action": "foreground",
-   "needs": [
-    "background"
-   ]
   }
  ]
 }

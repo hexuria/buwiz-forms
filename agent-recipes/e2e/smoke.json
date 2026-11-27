@@ -20,21 +20,8 @@
   {
    "name": "setup-start",
    "file": "setup-start.wants",
-   "required": true
-  },
-  {
-   "name": "sign-up-picker",
-   "ios": "sign-up-phone.json",
-   "precondition": "iOS probe of the new search picker. Currently exposes the gpui-agent phone-trigger gap; not required so the data-plane seed can still prove the rest of the suite.",
-   "resolve": {
-    "tin_field": {
-     "role": [
-      "textbox",
-      "textfield"
-     ],
-     "name_regex": "^TIN, 9 digits"
-    }
-   }
+   "required": true,
+   "ios": "setup-start-seeded.wants"
   },
   {
    "name": "sign-up-seed",
