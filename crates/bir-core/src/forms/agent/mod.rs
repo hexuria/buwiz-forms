@@ -483,6 +483,10 @@ pub fn save_draft(
     db: &crate::db::Database,
     draft: &mut Value,
 ) -> Result<i64, String> {
+    // The bytes as the save found them decide whether this recompute clears a
+    // dormant gated value; the pending notice is written below with the save,
+    // whichever caller opened or saved the return.
+    let before = draft.clone();
     compute(kind, draft)?;
     if identity(kind, draft)?.status != FilingStatus::Draft {
         return Err("this return is no longer a draft".to_string());
@@ -499,6 +503,7 @@ pub fn save_draft(
     if let Value::Object(object) = draft {
         object.insert("id".to_string(), Value::from(id));
     }
+    draft_locks::pending_notices::record_if_cleared(db, kind, &before, draft, id)?;
     Ok(id)
 }
 
@@ -1463,6 +1468,14 @@ fn fill_box(
     // draft-dependent layer locks on the draft as it stands. A page writer
     // (as_host = true) never consults it: the page's own UX governs those
     // boxes (its Edit penalties opens a group).
+    if !as_host
+        && kind == AgentFormKind::Form2551Q
+        && key == draft_locks::item16_2551q::KEY
+        && draft_locks::item16_2551q::lock_reason(draft).is_some()
+        && draft_locks::item16_2551q::zero_noop(value)
+    {
+        return Ok(());
+    }
     if !as_host && let Some(lock) = draft_refusal(kind, def, draft, key, verdict.as_ref()) {
         return Err(format!("`{key}` {lock}"));
     }

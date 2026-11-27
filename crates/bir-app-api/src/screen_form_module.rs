@@ -369,7 +369,13 @@ fn screen_form_notes_seen(arguments: &HostArguments) -> HostResult {
                 .insert_setting_if_absent(&key, "1")
                 .map_err(|error| host_error(error.to_string()))?
             {
-                recorded.push(key);
+                recorded.push(key.clone());
+            }
+            if let Some(pending) =
+                bir_core::forms::agent::draft_locks::pending_notices::pending_key_for_seen(&key)
+                && let Err(error) = db.delete_setting(&pending)
+            {
+                tracing::warn!("removing pending gate notice {pending} failed: {error}");
             }
         }
         Ok(recorded)
@@ -3404,12 +3410,20 @@ fn open_screen_form(
             // 2551Q Item 16; the opened draft may already have followed the
             // profile and been recomputed before the once-notes are read.
             let item16_precleared_on_open = if kind == AgentFormKind::Form2551Q && !sample {
-                draft["id"]
+                let stored = match draft["id"]
                     .as_i64()
                     .map(|id| db.draft_summary_and_json(id))
                     .transpose()
-                    .map_err(|error| host_error(error.to_string()))?
-                    .flatten()
+                {
+                    Ok(stored) => stored.flatten(),
+                    Err(error) => {
+                        tracing::warn!(
+                            "2551Q: reading the stored draft for Item 16 failed: {error}"
+                        );
+                        None
+                    }
+                };
+                stored
                     .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
                     .is_some_and(|stored| {
                         stored["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
@@ -3421,6 +3435,14 @@ fn open_screen_form(
             } else {
                 false
             };
+            // The migration itself is a normal draft save, before any profile
+            // follow can hide the transition: recompute clears the dormant
+            // amount and `save_draft` records its pending notice in the same
+            // save operation. A failed save never stops the return opening.
+            if item16_precleared_on_open && let Err(error) = agent::save_draft(kind, db, &mut draft)
+            {
+                tracing::warn!("2551Q: clearing a dormant Item 16 failed: {error}");
+            }
             let mut from_profile = if sample {
                 draft.clone()
             } else {

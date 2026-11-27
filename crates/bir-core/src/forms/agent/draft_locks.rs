@@ -1290,6 +1290,14 @@ pub mod item16_2551q {
         }
     }
 
+    /// Whether `value` is the zero amount a shut Item 16 accepts as a no-op.
+    pub fn zero_noop(value: &Value) -> bool {
+        value.as_f64() == Some(0.0)
+            || value
+                .as_str()
+                .is_some_and(|text| matches!(text.trim(), "0" | "0.0" | "0.00"))
+    }
+
     /// The clearing note for a transition into the closed state, by cause.
     pub fn cleared_note(draft: &Value) -> Option<&'static str> {
         if draft["item_13_election"] == "eight_percent" {
@@ -1951,5 +1959,146 @@ mod tests {
                 assert_eq!(page_lock(kind("2551Q"), &q1, key), None, "{key}");
             }
         }
+    }
+}
+
+pub mod pending_notices {
+    //! Pending gate-clearing notices, stored beside the once-note seen flags.
+    //!
+    //! A gate uses this by adding its dormant-before/cleared-after test to
+    //! [`clearance`]; [`super::super::save_draft`] then records the notice in
+    //! the same save operation that recomputes the draft, whoever initiated
+    //! that save. The key is `notice_pending:<gate>:<draft id>` and the value
+    //! carries the note text plus a unique clearing event. The page offers it
+    //! until `screen_form_notes_seen` records that event seen; recording also
+    //! removes the pending key, so a later import or edit that newly clears
+    //! the same gate creates a fresh event and is said again.
+
+    use serde_json::{Value, json};
+
+    use crate::db::Database;
+    use crate::forms::agent::AgentFormKind;
+
+    pub const PENDING_PREFIX: &str = "notice_pending:";
+    pub const SEEN_PREFIX: &str = "notice_seen:";
+
+    pub fn pending_key(gate: &str, draft_id: i64) -> String {
+        format!("{PENDING_PREFIX}{gate}:{draft_id}")
+    }
+
+    pub fn seen_key(gate: &str, draft_id: i64, event: &str) -> String {
+        format!("{SEEN_PREFIX}{gate}:{draft_id}:{event}")
+    }
+
+    /// Record one gate-clearing notice. This is the generic entry point a
+    /// gate uses: pass its stable gate name, the draft row and the exact
+    /// sentence the page should offer. Gate names and events must not carry
+    /// `:`; the event separates repeat clearings of the same draft.
+    pub fn record_pending(
+        db: &Database,
+        gate: &str,
+        draft_id: i64,
+        text: &str,
+    ) -> Result<(), String> {
+        let now = chrono::Utc::now();
+        let event = now
+            .timestamp_nanos_opt()
+            .unwrap_or_else(|| now.timestamp_millis())
+            .to_string();
+        let value = json!({"text": text, "event": event}).to_string();
+        db.set_setting(&pending_key(gate, draft_id), &value)
+            .map_err(|error| error.to_string())
+    }
+
+    /// The clearing `save_draft` just made, if a registered gate turned a
+    /// dormant value into its closed zero/blank state. Add later gates here;
+    /// save then records them through [`record_pending`] without each caller
+    /// knowing which path opened or imported the return.
+    pub fn clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Option<(&'static str, &'static str)> {
+        if kind == AgentFormKind::Form2551Q
+            && before["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
+            && after["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() < 0.005
+        {
+            return super::item16_2551q::cleared_note(after).map(|text| ("2551q_item16", text));
+        }
+        None
+    }
+
+    /// Record the clearing made by one `save_draft`, after the row id is
+    /// known. The draft row and this small setting are written by the same
+    /// save operation rather than inside the draft itself, so immutable
+    /// return bytes never change and a repeat import can produce a new event.
+    pub fn record_if_cleared(
+        db: &Database,
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+        draft_id: i64,
+    ) -> Result<(), String> {
+        if let Some((gate, text)) = clearance(kind, before, after) {
+            record_pending(db, gate, draft_id, text)?;
+        }
+        Ok(())
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct PendingNotice {
+        pub gate: String,
+        pub event: String,
+        pub text: String,
+        pub seen_key: String,
+    }
+
+    /// Pending clearings of one draft, unreadable entries skipped with a
+    /// warning so a bad app-state value never stops the return opening.
+    pub fn for_draft(db: &Database, draft_id: i64) -> Vec<PendingNotice> {
+        let rows = match db.settings_with_prefix(PENDING_PREFIX) {
+            Ok(rows) => rows,
+            Err(error) => {
+                tracing::warn!("reading pending gate notices failed: {error}");
+                return Vec::new();
+            }
+        };
+        rows.into_iter()
+            .filter_map(|(key, stored)| {
+                let rest = key.strip_prefix(PENDING_PREFIX)?;
+                let (gate, id) = rest.rsplit_once(':')?;
+                if id.parse::<i64>().ok()? != draft_id {
+                    return None;
+                }
+                let value: Value = match serde_json::from_str(&stored) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        tracing::warn!("{key}: pending gate notice is not JSON: {error}");
+                        return None;
+                    }
+                };
+                let event = value["event"].as_str()?.to_string();
+                let text = value["text"].as_str()?.to_string();
+                Some(PendingNotice {
+                    seen_key: seen_key(gate, draft_id, &event),
+                    gate: gate.to_string(),
+                    event,
+                    text,
+                })
+            })
+            .collect()
+    }
+
+    /// The pending key a seen key acknowledges, for `screen_form_notes_seen`.
+    pub fn pending_key_for_seen(seen: &str) -> Option<String> {
+        let rest = seen.strip_prefix(SEEN_PREFIX)?;
+        let mut parts = rest.rsplitn(3, ':');
+        let _event = parts.next()?;
+        let id = parts.next()?.parse::<i64>().ok()?;
+        let gate = parts.next()?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Some(pending_key(gate, id))
     }
 }

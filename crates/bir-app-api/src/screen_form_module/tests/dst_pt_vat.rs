@@ -1856,17 +1856,68 @@ fn v2018_2551q_a_legacy_dormant_item16_is_cleared_on_open_and_said_once() {
     assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
     assert_eq!(first["values"][item16::KEY], "0.00");
     assert_eq!(first["locks"][item16::KEY], item16::AMENDED_LOCK);
-    let key = format!("notice_seen:2551q_item16_cleared:{id}");
-    assert_eq!(
-        first["notes"],
-        json!([{"key": key, "text": item16::CLEARED_AMENDED_NOTE}])
+    let stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    assert_eq!(stored["tax_paid_previous"], 0.0);
+    let note = first["notes"][0].clone();
+    assert_eq!(note["text"], item16::CLEARED_AMENDED_NOTE);
+    let key = note["key"].as_str().unwrap().to_string();
+    assert!(
+        key.starts_with(&format!("notice_seen:2551q_item16:{id}:")),
+        "{key}"
     );
+    assert_eq!(first["notes"].as_array().unwrap().len(), 1);
     assert_eq!(open("2551Q", 1)["notes"].as_array().unwrap().len(), 1);
     assert_eq!(
-        call("screen_form_notes_seen", vec![json(json!([key]))]).unwrap(),
-        json!([format!("notice_seen:2551q_item16_cleared:{id}")])
+        call("screen_form_notes_seen", vec![json(json!([key.clone()]))]).unwrap(),
+        json!([key])
     );
     assert_eq!(open("2551Q", 1)["notes"], json!([]));
+}
+
+#[test]
+fn v2018_2551q_an_assistant_clearing_is_pending_for_the_page_open() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let yes = fill(
+        "2551Q",
+        &open("2551Q", 1)["draft"],
+        json!({"frm2551Qv2018:amendedRtn_1": "true"}),
+    );
+    let typed = fill("2551Q", &yes["draft"], json!({item16::KEY: "42"}));
+    let saved = save("2551Q", &typed["draft"]);
+    let id = stored_id(&saved);
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["is_amended"] = json!(false);
+    legacy["tax_paid_previous"] = json!(42.0);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+
+    // The assistant's form.open saves every Draft through agent::save_draft.
+    // That save clears the dormant value before any page has opened; the page
+    // still receives the pending notice on its first open.
+    with_database(|db| {
+        let mut draft = legacy.clone();
+        agent::save_draft(AgentFormKind::Form2551Q, db, &mut draft).map_err(host_error)
+    })
+    .unwrap();
+    let first = open("2551Q", 1);
+    assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
+    let stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    assert_eq!(stored["tax_paid_previous"], 0.0);
+    assert_eq!(first["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(first["notes"][0]["text"], item16::CLEARED_AMENDED_NOTE);
+    assert!(
+        first["notes"][0]["key"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("notice_seen:2551q_item16:{id}:"))
+    );
+
+    // Until the page records the offered note seen (an open that quits or
+    // fails before then records nothing), every later open offers it again.
+    assert_eq!(open("2551Q", 1)["notes"].as_array().unwrap().len(), 1);
 }
 
 #[test]
@@ -1924,9 +1975,13 @@ fn v2018_2551q_a_legacy_dormant_item16_survives_a_profile_follow_long_enough_to_
     let first = open("2551Q", 1);
     assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
     assert_eq!(first["draft"]["zip_code"], "1100");
-    assert_eq!(
-        first["notes"],
-        json!([{"key": format!("notice_seen:2551q_item16_cleared:{id}"), "text": item16::CLEARED_AMENDED_NOTE}])
+    assert_eq!(first["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(first["notes"][0]["text"], item16::CLEARED_AMENDED_NOTE);
+    assert!(
+        first["notes"][0]["key"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("notice_seen:2551q_item16:{id}:"))
     );
 }
 
@@ -1976,6 +2031,41 @@ fn v2018_2551q_an_imported_legacy_dormant_item16_is_cleared_on_open_and_said() {
         "{}",
         first["notes"]
     );
+    let first_key = first["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["text"] == item16::CLEARED_AMENDED_NOTE)
+        .unwrap()["key"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        call(
+            "screen_form_notes_seen",
+            vec![json(json!([first_key.clone()]))]
+        )
+        .unwrap(),
+        json!([first_key.clone()])
+    );
+    assert_eq!(open("2551Q", 1)["notes"], json!([]));
+
+    // Importing the dormant archive again over the row whose clearing note was
+    // already seen is a new clearing, not a repeat of the old event: it is
+    // pending again under a fresh seen key.
+    with_database(|db| {
+        bir_core::import::import_profile_data(db, &archive)
+            .map_err(|error| host_error(error.to_string()))
+    })
+    .unwrap();
+    let second = open("2551Q", 1);
+    let second_note = second["notes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|note| note["text"] == item16::CLEARED_AMENDED_NOTE)
+        .unwrap_or_else(|| panic!("{}", second["notes"]));
+    assert_ne!(second_note["key"], first_key);
 }
 
 #[test]
@@ -2002,9 +2092,16 @@ fn v2018_2551q_a_legacy_dormant_item16_under_eight_percent_is_cleared_and_never_
     );
     let first = open("2551Q", 1);
     assert_eq!(first["draft"]["tax_paid_previous"], 0.0);
+    assert_eq!(first["notes"].as_array().unwrap().len(), 1);
     assert_eq!(
-        first["notes"],
-        json!([{"key": format!("notice_seen:2551q_item16_cleared:{id}"), "text": item16::CLEARED_EIGHT_PERCENT_NOTE}])
+        first["notes"][0]["text"],
+        item16::CLEARED_EIGHT_PERCENT_NOTE
+    );
+    assert!(
+        first["notes"][0]["key"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("notice_seen:2551q_item16:{id}:"))
     );
 
     // 8% back to graduated leaves Item 16 at zero: the clear is not a hidden
@@ -2070,4 +2167,30 @@ fn v2018_2551q_an_amendment_of_a_filed_return_opens_item16() {
     let typed = fill("2551Q", &amended["draft"], json!({item16::KEY: "42"}));
     assert_eq!(typed["rejected"], json!({}));
     assert_eq!(typed["draft"]["tax_paid_previous"], 42.0);
+}
+
+#[test]
+fn v2018_2551q_an_amendment_of_an_eight_percent_original_keeps_item16_shut() {
+    setup();
+    use bir_core::forms::agent::draft_locks::item16_2551q as item16;
+    let saved = save("2551Q", &open("2551Q", 1)["draft"]);
+    let id = stored_id(&saved);
+    let mut filed: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    filed["status"] = json!("Submitted");
+    filed["item_13_election"] = json!("eight_percent");
+    raw_exec(
+        "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&filed).unwrap(), &id.to_string()],
+    );
+
+    let amended = call_async(
+        "screen_form_amend",
+        vec![TIN.into(), "2551Q".into(), YEAR.into(), 1.into()],
+    )
+    .unwrap_or_else(|error| panic!("2551Q amendment opens: {error}"));
+    assert_eq!(amended["draft"]["is_amended"], true);
+    assert_eq!(amended["locks"][item16::KEY], item16::EIGHT_PERCENT_LOCK);
+    let refused = fill("2551Q", &amended["draft"], json!({item16::KEY: "42"}));
+    assert_eq!(refused["rejected"][item16::KEY], item16::EIGHT_PERCENT_LOCK);
+    assert_eq!(refused["draft"]["tax_paid_previous"], 0.0);
 }
