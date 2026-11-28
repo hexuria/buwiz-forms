@@ -126,8 +126,9 @@ there, but nobody has run it on that platform.
   App Store package has no `com.apple.security.network.server` (kept only
   for Connect's one-shot 127.0.0.1 OAuth listener or an `--agent` build).
   The app then offers no Connect and says to use an app password. The
-  direct downloads (`release-macos.yml`, `package_macos_release.sh`) are
-  not affected.
+  direct downloads follow the same rule: no release build on any platform
+  gets the client unless the repository variable `STORE_GMAIL` is `1`
+  (`release-macos.yml`, `release.yml`; scripts/tests/test_store_gmail.py).
 - Entitlement files are in `assets/macos/` and at the repository root.
 
 ## Agent control
