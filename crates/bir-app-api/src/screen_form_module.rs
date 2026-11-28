@@ -3304,6 +3304,28 @@ fn draft_argument(arguments: &HostArguments, index: usize) -> Result<Value, Host
     Ok(draft)
 }
 
+/// The print copy of a page's draft with the worker's stored dry-run fact restored. The page's copy is untrusted
+/// (`draft_argument` strips it), but print still has to know what the stored send was.
+fn print_draft_with_stored_dry_run(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<Value, HostError> {
+    let mut print_draft = draft.clone();
+    let Some(stored) = stored_return(db, kind, draft).map_err(host_error)? else {
+        return Ok(print_draft);
+    };
+    if !lifecycle_flag(&stored, "submitted_dry_run") {
+        return Ok(print_draft);
+    }
+    if print_draft["lifecycle"].is_object() {
+        print_draft["lifecycle"]["submitted_dry_run"] = json!(true);
+    } else {
+        print_draft["submitted_dry_run"] = json!(true);
+    }
+    Ok(print_draft)
+}
+
 /// The optional list of profile boxes the page has open (see `apply_screen_edits`).
 fn unlocked_argument(arguments: &HostArguments, index: usize) -> BTreeSet<String> {
     match arguments.get(index).map(to_json) {
@@ -7042,7 +7064,8 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let identity = agent::identity(kind, &draft).map_err(host_error)?;
     let year = identity.taxable_year;
     with_database(|db| {
-        let (fields, receipt, test_send) = print_map(db, kind, &draft)?;
+        let print_draft = print_draft_with_stored_dry_run(db, kind, &draft)?;
+        let (fields, receipt, test_send) = print_map(db, kind, &print_draft)?;
         let profile = db
             .get_profile_by_tin(&identity.tin)
             .ok()
@@ -7095,7 +7118,13 @@ fn page_print_map(
     draft: &Value,
     sample: Option<&SampleMark>,
 ) -> PrintMapResult {
-    let (mut fields, receipt, test_send) = print_map(db, kind, draft)?;
+    // A Form library sample is unsaved and cannot be a worker's test send; looking up its incomplete period would fail.
+    let print_draft = if sample.is_some() {
+        draft.clone()
+    } else {
+        print_draft_with_stored_dry_run(db, kind, draft)?
+    };
+    let (mut fields, receipt, test_send) = print_map(db, kind, &print_draft)?;
     if let Some(mark) = sample {
         for key in &mark.blank {
             if let Some(value) = fields.get_mut(key) {
@@ -15383,6 +15412,36 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Print preview reads the worker's stored dry-run fact, never the copy a page sends (which the host
+    /// strips as untrusted). The printed HTML itself carries the warning.
+    #[test]
+    fn a_test_send_print_preview_is_marked_from_the_stored_fact() {
+        setup_taxpayer_filing(&["1601C"]);
+        let opened = open_for(TIN, "1601C", 2026, 6);
+        let id = store_filed("1601C", &opened["draft"], "Submitted");
+        let (_, raw) = raw_row(id);
+        let mut sent: Value = serde_json::from_str(&raw).unwrap();
+        sent["submitted_dry_run"] = json!(true);
+        raw_exec(
+            &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+            &[&serde_json::to_string(&sent).unwrap()],
+        );
+
+        let open = open_for(TIN, "1601C", 2026, 6);
+        let printed = call(
+            "screen_form_print",
+            vec!["1601C".into(), json(open["draft"].clone())],
+        )
+        .unwrap();
+        let path = std::path::PathBuf::from(printed["path"].as_str().unwrap());
+        let html = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(path);
+        assert!(
+            html.contains("Test send: not filed. Nothing reached the BIR."),
+            "the preview itself says the test send is not filed"
+        );
     }
 
     /// `send` in the open's answer is the stored return's send state
