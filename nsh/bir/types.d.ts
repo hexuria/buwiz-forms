@@ -475,8 +475,12 @@ export interface InboxState {
     google_available: boolean;
     oauth_inbox_email: string | null;
     oauth_updated_at: string | null;
-    /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */
+    /** A return on this inbox, sent within the last `window_days` days, still waits for its BIR email: the inbox is checked. */
     still_pending: boolean;
+    /** A return on this inbox sent more than `window_days` days ago is still Submitted: no BIR email was found and it is no longer looked for. */
+    past_window: boolean;
+    /** How far back the inbox is searched for the BIR's emails (bir_core::email::BIR_EMAIL_WINDOW_DAYS). */
+    window_days: number;
     matching_tins: string[];
     /** Last run of this inbox's `bir_poll_email` job, when one exists. */
     last_check_at: string | null;
@@ -494,6 +498,8 @@ export interface InboxVerifyResult { ok: boolean; message: string; state: InboxS
 export interface InboxCheckResult {
     ok: boolean;
     still_pending: boolean;
+    /** The inbox was searched: something was waiting for a BIR email. False: nothing was, so nothing was looked at. */
+    looked: boolean;
     error: string | null;
     state: InboxState;
 }

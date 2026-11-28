@@ -3364,20 +3364,53 @@ impl Database {
         Ok(summaries)
     }
 
-    /// Whether `tin` holds a return of `year` that waits for the BIR's
-    /// confirmation email: Submitted (or the legacy "Filed") and not a dry
-    /// run, which reached nobody and is sent no email
-    /// ([`crate::forms::dry_run`]).
-    pub fn has_return_awaiting_bir_email(&self, tin: &str, year: u16) -> Result<bool, DbError> {
+    /// Whether `tin` holds a return that waits for the BIR's confirmation email at `now`: Submitted (or the legacy
+    /// "Filed"), not a dry run (which reached nobody and is sent no email, [`crate::forms::dry_run`]), and sent within
+    /// the last [`crate::email::BIR_EMAIL_WINDOW_DAYS`] days, the inbox search's window. It goes by the return's own
+    /// state, whatever its taxable year: a December return sent in January, an annual return sent in April, a return
+    /// sent on 29 December whose email comes on 2 January all wait.
+    pub fn has_return_awaiting_bir_email(
+        &self,
+        tin: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, DbError> {
+        self.has_unconfirmed_send(tin, now, ">=")
+    }
+
+    /// Whether `tin` holds a return sent for real more than [`crate::email::BIR_EMAIL_WINDOW_DAYS`] days before `now`
+    /// that is still Submitted: no BIR email was found while the inbox was searched, and it is no longer looked for.
+    pub fn has_return_past_bir_email_window(
+        &self,
+        tin: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, DbError> {
+        self.has_unconfirmed_send(tin, now, "<")
+    }
+
+    /// A Submitted (or "Filed"), not-dry-run return of `tin` whose send time compares `side` (">=" within the window,
+    /// "<" before it) with `now` less the window. The send time is the return's `submitted_at` (top level or under
+    /// `lifecycle`), else the row's `updated_at`; SQLite's julianday reads both, offsets included.
+    fn has_unconfirmed_send(
+        &self,
+        tin: &str,
+        now: chrono::DateTime<chrono::Utc>,
+        side: &str,
+    ) -> Result<bool, DbError> {
+        let since = now - chrono::Duration::days(crate::email::BIR_EMAIL_WINDOW_DAYS);
         Ok(self.conn.query_row(
             &format!(
                 "SELECT EXISTS(SELECT 1 FROM form_drafts
-                  WHERE tin = ?1 AND taxable_year = ?2
+                  WHERE tin = ?1
                     AND status IN ('Submitted', 'Filed')
-                    AND NOT {})",
+                    AND NOT {}
+                    AND julianday(COALESCE(
+                        CASE WHEN json_valid(data_json) THEN COALESCE(
+                            json_extract(data_json, '$.submitted_at'),
+                            json_extract(data_json, '$.lifecycle.submitted_at')) END,
+                        updated_at)) {side} julianday(?2))",
                 crate::forms::dry_run::STORED_DRY_RUN_SQL
             ),
-            params![tin, i64::from(year)],
+            params![tin, since.to_rfc3339()],
             |row| row.get(0),
         )?)
     }

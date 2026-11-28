@@ -12,7 +12,10 @@ use crate::profile::{TaxpayerProfile, inbox_emails_match};
 #[derive(Debug, Clone)]
 pub struct EmailPollPlan {
     pub auth_profile: Option<TaxpayerProfile>,
+    /// A return on this inbox waits for the BIR's email (sent within the search window): the inbox is worth checking.
     pub still_pending: bool,
+    /// A return on this inbox was sent before the window and is still Submitted: no longer looked for.
+    pub past_window: bool,
     pub matching_tins: Vec<String>,
 }
 
@@ -94,11 +97,12 @@ fn overlay_inbox_oauth(profile: &mut TaxpayerProfile, tokens: &InboxOAuthTokens)
 pub fn plan_email_poll_for_address(
     db: &Database,
     email_address: &str,
-    current_year: u16,
+    now: chrono::DateTime<chrono::Utc>,
 ) -> EmailPollPlan {
     let profiles = db.list_profiles().unwrap_or_default();
     let mut matching_tins = Vec::new();
     let mut still_pending = false;
+    let mut past_window = false;
     let mut matching_profiles = Vec::new();
 
     for profile in profiles {
@@ -108,10 +112,16 @@ pub fn plan_email_poll_for_address(
         matching_tins.push(profile.tin.full());
         // A dry run waits for no email: only a real send keeps the poll on.
         if db
-            .has_return_awaiting_bir_email(&profile.tin.full(), current_year)
+            .has_return_awaiting_bir_email(&profile.tin.full(), now)
             .unwrap_or(false)
         {
             still_pending = true;
+        }
+        if db
+            .has_return_past_bir_email_window(&profile.tin.full(), now)
+            .unwrap_or(false)
+        {
+            past_window = true;
         }
         matching_profiles.push(profile);
     }
@@ -123,6 +133,7 @@ pub fn plan_email_poll_for_address(
     EmailPollPlan {
         auth_profile,
         still_pending,
+        past_window,
         matching_tins,
     }
 }
@@ -250,7 +261,7 @@ mod tests {
             );
         }
 
-        let plan = plan_email_poll_for_address(&db, SHARED_INBOX, 2026);
+        let plan = plan_email_poll_for_address(&db, SHARED_INBOX, chrono::Utc::now());
         let auth = plan.auth_profile.expect("poller has credentials");
         assert_eq!(
             auth.oauth_refresh_token.as_deref(),
@@ -360,6 +371,111 @@ mod tests {
         assert!(inbox_emails_match(auth.inbox_email(), SHARED_INBOX));
     }
 
+    /// A lab 1601C of `year`/`month` already sent (for real unless `dry_run`) at `sent`, an RFC 3339 time.
+    fn sent_1601c(db: &Database, year: u16, month: u8, sent: &str, dry_run: bool) {
+        let mut draft = crate::filing_queue::mandatory_lab_1601c_draft_for(year, month);
+        draft.status = FilingStatus::Submitted;
+        draft.submitted_at = Some(sent.to_string());
+        draft.submitted_dry_run = dry_run;
+        db.save_1601c_draft(&draft)
+            .expect("the sent return is saved");
+    }
+
+    fn at(time: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(time)
+            .expect("an RFC 3339 time")
+            .with_timezone(&chrono::Utc)
+    }
+
+    /// Waiting for the BIR's email goes by the return's own state and send time, never the calendar year: the
+    /// taxable year of a December monthly, a fourth quarter or an annual return is last year when it is sent.
+    #[test]
+    fn a_return_waits_for_its_email_across_the_new_year() {
+        let tin = crate::filing_queue::mandatory_lab_1601c_profile()
+            .tin
+            .full();
+        let cases = [
+            // (what, taxable year, month, sent, polled)
+            (
+                "sent 29 December, polled 2 January",
+                2026,
+                12,
+                "2026-12-29T15:00:00+08:00",
+                "2027-01-02T01:00:00Z",
+            ),
+            (
+                "a December return sent in January",
+                2026,
+                12,
+                "2027-01-08T10:00:00+08:00",
+                "2027-01-10T01:00:00Z",
+            ),
+            (
+                "last year's return sent in April",
+                2026,
+                12,
+                "2027-04-14T09:00:00+08:00",
+                "2027-04-20T01:00:00Z",
+            ),
+        ];
+        for (what, year, month, sent, polled) in cases {
+            let db = Database::open_ephemeral().unwrap();
+            sent_1601c(&db, year, month, sent, false);
+            assert!(
+                db.has_return_awaiting_bir_email(&tin, at(polled)).unwrap(),
+                "{what}: still waiting"
+            );
+            assert!(
+                !db.has_return_past_bir_email_window(&tin, at(polled))
+                    .unwrap(),
+                "{what}: not past the window"
+            );
+        }
+    }
+
+    /// Past the inbox search's window a return is no longer waited for (the search could not find its email), and it
+    /// says so: still Submitted, past the window. A dry run is never waited for.
+    #[test]
+    fn a_return_past_the_window_is_no_longer_waited_for_and_a_dry_run_never_is() {
+        let tin = crate::filing_queue::mandatory_lab_1601c_profile()
+            .tin
+            .full();
+        let db = Database::open_ephemeral().unwrap();
+        sent_1601c(&db, 2026, 12, "2026-12-29T15:00:00+08:00", false);
+        let window = crate::email::BIR_EMAIL_WINDOW_DAYS;
+        let last_day = at("2026-12-29T07:00:00Z") + chrono::Duration::days(window);
+        assert!(db.has_return_awaiting_bir_email(&tin, last_day).unwrap());
+        let after = last_day + chrono::Duration::days(1);
+        assert!(!db.has_return_awaiting_bir_email(&tin, after).unwrap());
+        assert!(db.has_return_past_bir_email_window(&tin, after).unwrap());
+
+        let dry = Database::open_ephemeral().unwrap();
+        sent_1601c(&dry, 2026, 12, "2026-12-29T15:00:00+08:00", true);
+        for polled in ["2027-01-02T01:00:00Z", "2027-03-01T01:00:00Z"] {
+            assert!(!dry.has_return_awaiting_bir_email(&tin, at(polled)).unwrap());
+            assert!(
+                !dry.has_return_past_bir_email_window(&tin, at(polled))
+                    .unwrap()
+            );
+        }
+    }
+
+    /// The poll's plan reads the same rule: the inbox is worth checking on 2 January for a return sent on 29 December.
+    #[test]
+    fn the_poll_plan_checks_the_inbox_across_the_new_year() {
+        let db = Database::open_ephemeral().unwrap();
+        let mut juan = crate::filing_queue::mandatory_lab_1601c_profile();
+        juan.imap_email = Some(SHARED_INBOX.to_string());
+        save(&db, juan);
+        sent_1601c(&db, 2026, 12, "2026-12-29T15:00:00+08:00", false);
+        let plan = plan_email_poll_for_address(&db, SHARED_INBOX, at("2027-01-02T01:00:00Z"));
+        assert!(plan.still_pending);
+        assert!(!plan.past_window);
+        let later = plan_email_poll_for_address(&db, SHARED_INBOX, at("2027-02-15T01:00:00Z"));
+        assert!(!later.still_pending);
+        assert!(later.past_window);
+    }
+
     fn submit_lab_1601c(db: &Database, queued: Form1601CDraft) -> Form1601CDraft {
         submit_lab_1601c_as(db, queued, false)
     }
@@ -418,7 +534,7 @@ mod tests {
         let submitted = submit_lab_1601c(&db, queued);
         assert_eq!(submitted.status, FilingStatus::Submitted);
 
-        let plan = plan_email_poll_for_address(&db, SHARED_INBOX, 2026);
+        let plan = plan_email_poll_for_address(&db, SHARED_INBOX, chrono::Utc::now());
         let auth = plan.auth_profile.expect("Juan's grant");
         assert_eq!(auth.full_name, "Juan");
         assert_eq!(auth.oauth_refresh_token.as_deref(), Some("refresh-juan"));
@@ -476,7 +592,7 @@ mod tests {
         assert_eq!(dry.status, FilingStatus::Submitted);
         assert!(dry.submitted_dry_run);
         assert!(
-            !plan_email_poll_for_address(&db, SHARED_INBOX, 2026).still_pending,
+            !plan_email_poll_for_address(&db, SHARED_INBOX, chrono::Utc::now()).still_pending,
             "a dry run waits for no BIR email"
         );
         let email = |tin: &str| BirReceiptConfirmation {
@@ -510,7 +626,7 @@ mod tests {
         // Juan's head office sent the same month for real: that one is confirmed.
         let real = submit_lab_1601c(&db, mandatory_lab_1601c_draft());
         assert!(!real.submitted_dry_run);
-        assert!(plan_email_poll_for_address(&db, SHARED_INBOX, 2026).still_pending);
+        assert!(plan_email_poll_for_address(&db, SHARED_INBOX, chrono::Utc::now()).still_pending);
         let (saved, _) = db.save_submission_receipt(&email(&real.tin)).unwrap();
         assert_eq!(
             db.confirm_submission_from_receipt(&saved).unwrap(),

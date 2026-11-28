@@ -7,7 +7,6 @@ use crate::db::{Database, SubmissionReceipt};
 use crate::lock_timing;
 use crate::profile::{EmailAuthMethod, TaxpayerProfile, inbox_emails_match};
 use crate::receipt::parse_bir_receipt_email;
-use chrono::Datelike;
 
 use super::auth_oauth::GoogleOAuthAuth;
 use super::auth_password::AppPasswordAuth;
@@ -209,7 +208,7 @@ fn fetch_with_auth(
     // email twice is harmless (ON CONFLICT DO UPDATE is a no-op for identical data).
     let since_date = {
         let now = chrono::Utc::now().naive_utc().date();
-        let since = now - chrono::Duration::days(30);
+        let since = now - chrono::Duration::days(super::BIR_EMAIL_WINDOW_DAYS);
         since.format("%d-%b-%Y").to_string()
     };
     let search_query = format!("FROM \"ebirforms-noreply@bir.gov.ph\" SINCE {}", since_date);
@@ -383,8 +382,8 @@ pub fn fetch_and_process_emails_for_address_until(
             Ok(g) => g,
             Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
         };
-        let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
-        let plan = plan_email_poll_for_address(&db_guard, email_address, current_year);
+        // Waiting goes by each return's own state and send time, never the calendar year.
+        let plan = plan_email_poll_for_address(&db_guard, email_address, chrono::Utc::now());
         (plan.auth_profile, plan.still_pending)
     };
 
@@ -403,13 +402,13 @@ pub fn fetch_and_process_emails_for_address_until(
                     Err(_) => return (false, true, Some("DB lock failed after fetch".to_string())),
                 };
                 let mut remaining_pending = false;
-                let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
+                let now = chrono::Utc::now();
                 let profiles = db_guard.list_profiles().unwrap_or_default();
                 for p in profiles {
                     // A dry run waits for no email: only a real send keeps the poll on.
                     if inbox_emails_match(p.inbox_email(), email_address)
                         && db_guard
-                            .has_return_awaiting_bir_email(&p.tin.full(), current_year)
+                            .has_return_awaiting_bir_email(&p.tin.full(), now)
                             .unwrap_or(false)
                     {
                         remaining_pending = true;

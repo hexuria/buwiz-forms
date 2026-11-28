@@ -245,7 +245,7 @@ function fakeGoogle(available: boolean): void {
   let state: InboxState = {
     tin: "00012345300000", inbox_email: "juana@example.com", auth_method: "AppPassword", tracking_enabled: false, imap_login: "", imap_host: "imap.gmail.com",
     has_app_password: false, oauth_connected: false, google_available: available, oauth_inbox_email: null, oauth_updated_at: null, still_pending: false, matching_tins: ["00012345300000"],
-    last_check_at: null, last_check_status: null, last_check_log: null,
+    last_check_at: null, last_check_status: null, last_check_log: null, past_window: false, window_days: 30,
   };
   swap("inbox_state", () => () => state);
   swap("connect_inbox_oauth", () => async () => {

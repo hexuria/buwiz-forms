@@ -2,7 +2,7 @@
 // year bounds, schedules and the section summaries.
 import { expect, test } from "nsh/test";
 import {
-  addressMeta, afterApply, agentMeta, allowedYears, defaultAddYear, emptyNewTaxpayer, factError, factsMeta, formSub, formsSavedText,
+  addressMeta, afterApply, agentMeta, allowedYears, checkText, defaultAddYear, emptyNewTaxpayer, factError, factsMeta, formSub, formsSavedText,
   futureDateNote, hiddenFactsText, inboxMeta, newTaxpayerErrors, newTaxpayerProblems, parseAtcCodes, pastDateError, profileDateProblem,
   profileDateShown, profileDateStored, realDate, replaceSentence, schedule,
   searchText, shownErrors, startHint, startYear, templateCounts, templateErrorText, trackingLine, yearAddedText,
@@ -135,5 +135,25 @@ test("section summaries", () => {
   expect(factsMeta(false, 0, 0)).toBe("Add a tax year first");
   expect(factsMeta(true, 3, 1)).toBe("1 not set");
   expect(hiddenFactsText(1)).toBe("1 fact is not shown: no form on your list uses it.");
-  expect(trackingLine({ tracking_enabled: false, still_pending: false })).toBe("○ Verify your connection to activate email tracking.");
+  expect(trackingLine({ tracking_enabled: false, still_pending: false, past_window: false, window_days: 30 })).toBe("○ Verify your connection to activate email tracking.");
+});
+
+test("the inbox check never says confirmed without having looked, and a return past the window stays Submitted in words", () => {
+  const state = { window_days: 30 };
+  expect(checkText({ ok: true, still_pending: false, looked: false, error: null, state })).toBe(
+    "Nothing sent in the last 30 days is waiting for a BIR email, so the inbox was not searched.",
+  );
+  expect(checkText({ ok: true, still_pending: false, looked: true, error: null, state })).toBe("Checked. Everything submitted is confirmed.");
+  expect(checkText({ ok: true, still_pending: true, looked: true, error: null, state })).toBe("Checked. A submitted return is still waiting for its confirmation.");
+  expect(checkText({ ok: false, still_pending: true, looked: true, error: "IMAP authentication failed", state })).toBe("IMAP authentication failed");
+
+  const on = { tracking_enabled: true, window_days: 30 };
+  expect(trackingLine({ ...on, still_pending: true, past_window: true })).toBe(
+    "● Automated BIR receipt tracking is active — a submitted return is still waiting for its confirmation.",
+  );
+  const past = trackingLine({ ...on, still_pending: false, past_window: true });
+  expect(past).toContain("more than 30 days ago has no BIR email yet and is no longer looked for: it stays Submitted.");
+  expect(past).toContain("ebirforms-noreply@bir.gov.ph");
+  expect(past).not.toContain("confirmed");
+  expect(trackingLine({ ...on, still_pending: false, past_window: false })).toBe("● Automated BIR receipt tracking is active.");
 });
