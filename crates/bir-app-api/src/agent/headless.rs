@@ -1184,6 +1184,203 @@ mod tests {
         );
     }
 
+    /// #5, THE PROOF: through serve()'s own start-up and one batch, on the token-fetching
+    /// transport of #613's F6 tests — never the dry run, whose route never reaches
+    /// AccountTokens or SEND_CONTEXT. A queued → sent: the transport's open really asked the
+    /// process-wide AccountTokens for a token under the worker's SEND_CONTEXT (the counters
+    /// count it), and the store counted the send. Then B on disk → the batch's client still
+    /// gets its clear error, the daemon does the one shared close and exits: the room's lock
+    /// is free (the test opens the room itself) and the pid file is gone. The nobody-on-disk
+    /// case: the same. Positive control: with A still on disk the same batch is answered,
+    /// never refused. STORED_OWNER is restored, the transport restored, and the global cron
+    /// worker stopped at the end.
+    #[test]
+    fn serve_exits_on_the_account_change_through_the_relay_route() {
+        use bir_core::forms::{Form2551QDraft, form_2551q::Item13Election};
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+
+        // the room before serve opens it: one reviewed profile, one queued 2551Q
+        {
+            let (opened, _) = bir_core::db::open_serve_database_at(&db_path).unwrap();
+            let profile = reviewed_profile();
+            let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2024, 1);
+            draft.item_13_election = Item13Election::Graduated;
+            draft.transition_to_queued().unwrap();
+            opened.save_profile(profile).unwrap();
+            opened.save_queued_2551q_draft_and_election(&draft).unwrap();
+        }
+
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let account_b = stored_for("http://localhost:3008", "user-b");
+        // the port is held until the env is set, then freed for serve to bind
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            bir_core::background_cron::use_token_fetching_transport(true);
+            bir_core::background_cron::reset_token_transport_counts();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let pid_path = dir.path().join("serve.pid");
+            let log = || std::fs::read_to_string(dir.path().join("serve.log")).unwrap_or_default();
+
+            // POSITIVE CONTROL: with A on disk the batch is answered, never refused.
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered; log: {}",
+                    log()
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+
+            // A queued → SENT: the token fetch happened (the open counted it) and the send
+            // was stored — never the dry-run route, which reaches neither.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+            loop {
+                let (opens, stores) = bir_core::background_cron::token_transport_counts();
+                if opens > 0 && stores > 0 {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "no token-fetching send happened (opens {opens}, stores {stores}); log: {}",
+                    log()
+                );
+                std::thread::sleep(std::time::Duration::from_millis(300));
+            }
+
+            // B on disk: the next batch is refused with the clear error, then the daemon
+            // does the one shared close and exits.
+            bir_core::account_session::save_stored(&account_b).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let error = client
+                .expect_ok(Op::Hello)
+                .expect_err("the batch under B must be refused");
+            assert!(
+                error.to_string().contains("the signed-in account changed"),
+                "the clear error, got: {error}"
+            );
+            wait_for_serve_exit(&outcome);
+            assert!(
+                !pid_path.exists(),
+                "the pid file is gone once the daemon has stopped"
+            );
+            // the room's lock is FREE: the test opens the room itself
+            drop(
+                bir_core::db::open_serve_database_at(&db_path).unwrap_or_else(|error| {
+                    panic!("the room must open again after the close: {error}")
+                }),
+            );
+
+            // nobody on disk: the same. A fresh serve under B, then the file goes away.
+            bir_core::account_session::save_stored(&account_b).unwrap();
+            let outcome2 = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome2_in_thread = outcome2.clone();
+            let (tx2, rx2) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx2.send(()).unwrap();
+                *outcome2_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx2.recv().unwrap();
+            let mut client2 = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client2.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the second daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // sign out entirely: nobody on disk
+            let _ = std::fs::remove_file(&account_path);
+            bir_core::account_session::cache_owner(None);
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let error2 = client2
+                .expect_ok(Op::Hello)
+                .expect_err("the batch with nobody on disk must be refused");
+            assert!(
+                error2.to_string().contains("the signed-in account changed"),
+                "the clear error, got: {error2}"
+            );
+            wait_for_serve_exit(&outcome2);
+            drop(
+                bir_core::db::open_serve_database_at(&db_path)
+                    .unwrap_or_else(|error| panic!("the room must open again: {error}")),
+            );
+
+            // restore: STORED_OWNER, the transport, and the global cron worker
+            bir_core::account_session::cache_owner(None);
+            bir_core::background_cron::use_token_fetching_transport(false);
+            bir_core::background_cron::request_shutdown();
+        });
+
+        fn wait_for_serve_exit(
+            outcome: &std::sync::Arc<std::sync::Mutex<Option<Result<(), std::process::ExitCode>>>>,
+        ) {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+            loop {
+                if outcome.lock().unwrap().is_some() {
+                    return;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon did not exit after the account change"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+    }
+
     /// #4: the account check compares the OwnerKey — the normalized origin — not the raw
     /// server_url string: a trailing slash appearing or going in a same-account token refresh
     /// is not an account change, and the daemon does not exit for nothing.
