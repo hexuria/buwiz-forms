@@ -1,7 +1,9 @@
+use bir_core::TaxpayerProfile;
 use bir_core::forms::form_1604c::Form1604cDraft;
 use bir_core::forms::form_1604e::Form1604eDraft;
 use bir_core::forms::form_1701::{
-    Form1701CivilStatus, Form1701Draft, Form1701EmployerRow, Form1701Party,
+    Form1701CivilStatus, Form1701Draft, Form1701EmployerRow, Form1701JointFilingStatus,
+    Form1701Party,
 };
 use bir_core::forms::form_1702mx::{Form1702MXDraft, WholePeso};
 use bir_core::forms::form_1707a::Form1707ADraft;
@@ -16,7 +18,6 @@ use bir_core::forms::form_2200s::{
     Form2200SBeverageRow, Form2200SDraft, Form2200SManner, Form2200SOtherRow,
 };
 use bir_core::forms::queueable::QueueableForm;
-use bir_core::TaxpayerProfile;
 use bir_print::frozen_html::{filled_document, printed_cell};
 use serde_json::json;
 
@@ -51,6 +52,19 @@ fn demo_profile() -> TaxpayerProfile {
         "default_form_type": "2551Q"
     }))
     .unwrap()
+}
+
+fn input_value(document: &str, id: &str) -> String {
+    let needle = format!("id=\"{id}\"");
+    let at = document.find(&needle).expect("input id");
+    let start = document[..at].rfind("<input").unwrap_or(0);
+    let end = at + document[at..].find('>').unwrap_or(0);
+    let tag = &document[start..=end];
+    tag.split("value=\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .unwrap_or("")
+        .to_string()
 }
 
 #[test]
@@ -162,6 +176,7 @@ fn form_1701_prints_schedule1_employer_names_and_tins() {
     let mut d = Form1701Draft::new_from_profile(&profile, 2025, 12);
     d.civil_status = Some(Form1701CivilStatus::Married);
     d.spouse_has_income = Some(true);
+    d.joint_filing_status = Some(Form1701JointFilingStatus::Joint);
     d.spouse.name = "SANTOS, JUANITO".into();
     d.spouse.tin = "00045678900000".into();
     d.spouse_rdo_code = "044".into();
@@ -184,7 +199,7 @@ fn form_1701_prints_schedule1_employer_names_and_tins() {
     let map = d.print_field_map();
     let doc = filled_document("1701-2018", &map).expect("1701-2018 render");
 
-    assert_eq!(printed_cell(&doc, "p2c54").0, "X");
+    assert_eq!(input_value(&doc, "p2c54-i0"), "X");
     assert_eq!(
         printed_cell(&doc, "p2c55").0,
         "ACME PACIFIC HOLDINGS CORPORATION"
@@ -192,7 +207,7 @@ fn form_1701_prints_schedule1_employer_names_and_tins() {
     assert_eq!(printed_cell(&doc, "p2c56").0, "PHILIPPINES");
     assert_eq!(printed_cell(&doc, "p2c58").0, "00077788800001");
 
-    assert_eq!(printed_cell(&doc, "p2c59").0, "X");
+    assert_eq!(input_value(&doc, "p2c59-i1"), "X");
     assert_eq!(printed_cell(&doc, "p2c60").0, "MANILA GLOBAL ENTERPRISES");
     assert_eq!(printed_cell(&doc, "p2c61").0, "INCORPORATED");
     assert_eq!(printed_cell(&doc, "p2c63").0, "00099911100002");
