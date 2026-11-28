@@ -1,0 +1,12 @@
+--- base/2551q-2018.html
++++ eeb28629/2551q-2018.html
+@@ -62,2 +62,2 @@
+-<rect x="22.32" y="446.09" width="568.54" height="34.00" fill="#e3e3e3"/>
+-<rect x="22.32" y="446.09" width="1.44" height="34.00" fill="#000000"/>
++<rect x="23.04" y="446.09" width="567.82" height="34.00" fill="#e3e3e3"/>
++<rect x="23.04" y="446.09" width="1.44" height="34.00" fill="#000000"/>
+@@ -6397,2 +6397,2 @@
+-<rect x="22.32" y="446.09" width="568.54" height="14.00" fill="#e3e3e3"/>
+-<rect x="22.32" y="446.09" width="1.44" height="14.00" fill="#000000"/>
++<rect x="23.04" y="446.09" width="567.82" height="14.00" fill="#e3e3e3"/>
++<rect x="23.04" y="446.09" width="1.44" height="14.00" fill="#000000"/>

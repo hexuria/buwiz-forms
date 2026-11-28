@@ -1,0 +1,59 @@
+--- base/1700-2018.html
++++ eeb28629/1700-2018.html
+@@ -4311 +4311 @@
+-<rect x="12.72" y="220.70" width="585.12" height="34.00" fill="#e3e3e3"/>
++<rect x="12.72" y="220.70" width="584.04" height="34.00" fill="#e3e3e3"/>
+@@ -4313 +4313 @@
+-<rect x="596.40" y="220.70" width="1.44" height="34.00" fill="#000000"/>
++<rect x="595.32" y="220.70" width="1.44" height="34.00" fill="#000000"/>
+@@ -4316 +4316 @@
+-<rect x="12.72" y="338.01" width="585.12" height="34.00" fill="#e3e3e3"/>
++<rect x="12.72" y="338.01" width="584.04" height="34.00" fill="#e3e3e3"/>
+@@ -4318 +4318 @@
+-<rect x="596.40" y="338.01" width="1.44" height="34.00" fill="#000000"/>
++<rect x="595.32" y="338.01" width="1.44" height="34.00" fill="#000000"/>
+@@ -4321 +4321 @@
+-<rect x="12.72" y="408.49" width="585.12" height="23.00" fill="#e3e3e3"/>
++<rect x="12.72" y="408.49" width="584.04" height="23.00" fill="#e3e3e3"/>
+@@ -4323 +4323 @@
+-<rect x="596.40" y="408.49" width="1.44" height="23.00" fill="#000000"/>
++<rect x="595.32" y="408.49" width="1.44" height="23.00" fill="#000000"/>
+@@ -5260 +5260 @@
+-<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR C..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING" data-overflow-of="p2c16" data-rect-box="355.63,169.70,476.26,184.46">
++<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING" data-overflow-of="p2c16" data-rect-box="355.63,169.70,476.26,184.46">
+@@ -5287 +5287 @@
+-<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR C..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING" data-overflow-of="p2c17" data-rect-box="476.26,169.70,597.12,184.46">
++<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING" data-overflow-of="p2c17" data-rect-box="476.26,169.70,597.12,184.46">
+@@ -6055 +6055 @@
+-<input type="text" class="fi fh2" id="p2c157-i" name="p2c157" style="inset:3.0952pt 7.61pt 0.21pt 160.83pt;font-size:8.55pt" autocomplete="off" spellcheck="false" value="UNIT 1203 TWELFTH FLOOR CURVE BUI..." data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING" data-overflow-warning="text-truncated">
++<input type="text" class="fi fh2" id="p2c157-i" name="p2c157" style="inset:3.0952pt 7.61pt 0.21pt 160.83pt;font-size:8.55pt" autocomplete="off" spellcheck="false" value="UNIT 1203 TWELFTH FLOOR CURVE..." data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING" data-overflow-warning="text-truncated">
+@@ -14498 +14498 @@
+-<rect x="12.72" y="220.70" width="585.12" height="23.00" fill="#e3e3e3"/>
++<rect x="12.72" y="220.70" width="584.04" height="23.00" fill="#e3e3e3"/>
+@@ -14500 +14500 @@
+-<rect x="596.40" y="220.70" width="1.44" height="23.00" fill="#000000"/>
++<rect x="595.32" y="220.70" width="1.44" height="23.00" fill="#000000"/>
+@@ -14503 +14503 @@
+-<rect x="12.72" y="327.01" width="585.12" height="14.00" fill="#e3e3e3"/>
++<rect x="12.72" y="327.01" width="584.04" height="14.00" fill="#e3e3e3"/>
+@@ -14505 +14505 @@
+-<rect x="596.40" y="327.01" width="1.44" height="14.00" fill="#000000"/>
++<rect x="595.32" y="327.01" width="1.44" height="14.00" fill="#000000"/>
+@@ -14508 +14508 @@
+-<rect x="12.72" y="377.49" width="585.12" height="14.00" fill="#e3e3e3"/>
++<rect x="12.72" y="377.49" width="584.04" height="14.00" fill="#e3e3e3"/>
+@@ -14510 +14510 @@
+-<rect x="596.40" y="377.49" width="1.44" height="14.00" fill="#000000"/>
++<rect x="595.32" y="377.49" width="1.44" height="14.00" fill="#000000"/>
+@@ -14513 +14513 @@
+-<rect x="12.72" y="512.59" width="585.12" height="14.00" fill="#e3e3e3"/>
++<rect x="12.72" y="512.59" width="584.04" height="14.00" fill="#e3e3e3"/>
+@@ -14515 +14515 @@
+-<rect x="596.40" y="512.59" width="1.44" height="14.00" fill="#000000"/>
++<rect x="595.32" y="512.59" width="1.44" height="14.00" fill="#000000"/>
+@@ -15452 +15452 @@
+-<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR C..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203" data-overflow-of="p2c16" data-rect-box="355.63,169.70,476.26,184.46">
++<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203" data-overflow-of="p2c16" data-rect-box="355.63,169.70,476.26,184.46">
+@@ -15479 +15479 @@
+-<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR C..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203" data-overflow-of="p2c17" data-rect-box="476.26,169.70,597.12,184.46">
++<input type="text" class="fi" readonly value="UNIT 1203 TWELFTH FLOOR..." style="font-size:7.50pt;text-align:left;padding-left:1pt;z-index:1" data-overflow-warning="text-truncated" data-writer-value="UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203" data-overflow-of="p2c17" data-rect-box="476.26,169.70,597.12,184.46">
