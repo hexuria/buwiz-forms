@@ -75,9 +75,9 @@
       "phone": "money-boxes-paced-phone.json",
       "needs_cli": "0.4.1",
       "needs_feature": {
-        "phone": "software_keyboard"
+        "phone": "paste"
       },
-      "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+      "needs_host": "an app built with gpui paste, scroll and compact snapshot support",
       "fallback": {
         "phone": "money-boxes-phone.json",
         "file": "money-boxes.wants"
@@ -116,7 +116,6 @@
       "linux": "birth-date-phone.json",
       "phone": "birth-date-phone.json",
       "known_gap": {
-        "phone": "gap 1: the date is set in a date sheet",
         "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
       }
     },
@@ -126,10 +125,10 @@
       "linux": "sign-out-phone.wants",
       "phone": "sign-out-phone.wants",
       "known_gap": {
-        "phone": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
+        "phone": "issue #450: BIR_AUTH_BYPASS=1 leaves no lock screen after Log out",
         "linux": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
         "windows": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
-        "macos": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed (nb-menu-logout) but no locked-screen ever appears, so the wait can never pass in this environment"
+        "macos": "issue #450: BIR_AUTH_BYPASS=1 leaves no lock screen after Log out"
       }
     }
   ]
