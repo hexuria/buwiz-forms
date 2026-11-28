@@ -1,10 +1,10 @@
 {
  "suite": "amountnotes-after",
  "target": "linux",
- "started": "20261128-104200",
- "out": "/home/ubuntu/forms-validation/e2e-evidence/after-final",
+ "started": "20261128-121001",
+ "out": "/home/ubuntu/forms-validation/e2e-evidence/after-14b653f6",
  "cli_version": "0.5.0",
- "app_commit": "19832128",
+ "app_commit": "14b653f6",
  "platform": "desktop",
  "os": "linux",
  "features": [
@@ -28,35 +28,35 @@
   {
    "name": "setup-start",
    "status": "pass",
-   "ms": 544,
+   "ms": 909,
    "note": null,
    "file": "agent-recipes/e2e/setup-start.wants"
   },
   {
    "name": "sign-up",
    "status": "pass",
-   "ms": 9732,
+   "ms": 9840,
    "note": null,
    "file": "agent-recipes/e2e/sign-up-linux.wants"
   },
   {
    "name": "tax-year",
    "status": "pass",
-   "ms": 6311,
+   "ms": 6212,
    "note": null,
    "file": "agent-recipes/e2e/tax-year-narrow.wants"
   },
   {
    "name": "open-2551q",
    "status": "pass",
-   "ms": 1761,
+   "ms": 1887,
    "note": null,
    "file": "agent-recipes/e2e/open-2551q-phone.wants"
   },
   {
    "name": "amount-notes",
    "status": "pass",
-   "ms": 14102,
+   "ms": 13959,
    "note": null,
    "file": "agent-recipes/e2e/amount-notes-linux.json"
   }

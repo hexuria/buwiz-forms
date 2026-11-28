@@ -9,19 +9,19 @@
       "id": "s1",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 809
+      "elapsed_ms": 808
     },
     {
       "id": "s2",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 389
+      "elapsed_ms": 387
     },
     {
       "id": "s3",
       "ok": true,
       "delivery_status": "delivered_verified",
-      "elapsed_ms": 16,
+      "elapsed_ms": 15,
       "result": {
         "found": true,
         "node": "fp-row-drpATC1-0",
@@ -33,51 +33,51 @@
       "id": "s4",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 667
+      "elapsed_ms": 658
     },
     {
       "id": "s5",
       "ok": true,
-      "elapsed_ms": 19
+      "elapsed_ms": 16
     },
     {
       "id": "s6",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 377
+      "elapsed_ms": 375
     },
     {
       "id": "s7",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 2967
+      "elapsed_ms": 2964
     },
     {
       "id": "s8",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 701
+      "elapsed_ms": 691
     },
     {
       "id": "s9",
       "ok": true,
-      "elapsed_ms": 328
+      "elapsed_ms": 332
     },
     {
       "id": "s10",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 660
+      "elapsed_ms": 727
     },
     {
       "id": "s11",
       "ok": true,
-      "elapsed_ms": 19
+      "elapsed_ms": 17
     },
     {
       "id": "s12",
       "ok": true,
-      "elapsed_ms": 18
+      "elapsed_ms": 17
     },
     {
       "id": "s13",
@@ -89,40 +89,40 @@
       "id": "s14",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 349
+      "elapsed_ms": 351
     },
     {
       "id": "s15",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 5881
+      "elapsed_ms": 5785
     },
     {
       "id": "s16",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 450
+      "elapsed_ms": 334
     },
     {
       "id": "s17",
       "ok": true,
-      "elapsed_ms": 18
+      "elapsed_ms": 17
     },
     {
       "id": "s18",
       "ok": true,
-      "elapsed_ms": 37,
+      "elapsed_ms": 67,
       "screenshot": {
-        "path": "/home/ubuntu/forms-validation/e2e-evidence/after-final/05-amount-notes/018-s18.png",
+        "path": "/home/ubuntu/forms-validation/e2e-evidence/after-14b653f6/05-amount-notes/018-s18.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/forms-validation/e2e-evidence/after-final/05-amount-notes/018-s18.png",
+      "path": "/home/ubuntu/forms-validation/e2e-evidence/after-14b653f6/05-amount-notes/018-s18.png",
       "ok": true
     }
   ],
-  "elapsed_ms": 14089
+  "elapsed_ms": 13944
 }
