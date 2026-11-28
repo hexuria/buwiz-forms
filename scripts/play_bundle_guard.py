@@ -56,6 +56,8 @@ GMAIL = ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")
 def store_gmail() -> bool:
     return os.environ.get("STORE_GMAIL") == "1"
 RUSTFLAGS = re.compile(r"^(RUSTFLAGS|CARGO_ENCODED_RUSTFLAGS|CARGO_BUILD_RUSTFLAGS|CARGO_TARGET_[A-Z0-9_]+_RUSTFLAGS)$")
+# A compiler wrapper can add any flag to every rustc call.
+WRAPPERS = ("RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER")
 MAX_BUILD = 2_100_000_000
 
 
@@ -168,6 +170,9 @@ def container_env_refusals(dump: str, expected: dict[str, str]) -> list[str]:
                             "(debug assertions would make it a debug build)")
         if RUSTFLAGS.match(key) and seen[key].strip():
             problems.append(f"{key} is set where the build runs: rustflags can change what a release build becomes")
+        if key in WRAPPERS and seen[key].strip():
+            problems.append(f"{key} is set where the build runs: a compiler wrapper can change what a release build "
+                            "becomes (unset it for the store build)")
     for key in NEVER_IN_RELEASE:
         if seen.get(key):
             problems.append(f"{key} is set where the build runs: a store build would bake it in")
@@ -213,11 +218,16 @@ def cargo_config_refusals(path: Path, text: str) -> list[str]:
         if not key:
             continue
         full = ".".join(part for part in (table, _dotted(key.group(1))) if part)
-        if full.startswith("profile.release") or full in ("profile",):
+        if full == "include":
+            problems.append(f"{path}:{number}: include brings in configuration this check does not read")
+        elif full.startswith("profile.release") or full in ("profile",):
             problems.append(f"{path}:{number}: {full} changes the release profile")
-        elif re.fullmatch(r"(build|target\.[^.]+)\.rustflags", full) or full in ("build", "target"):
-            if "rustflags" in line or full.endswith("rustflags"):
-                problems.append(f"{path}:{number}: {full} sets rustflags")
+        elif full in ("build.rustc-wrapper", "build.rustc-workspace-wrapper") or (
+                full == "build" and "wrapper" in line):
+            problems.append(f"{path}:{number}: {full} sets a compiler wrapper, which can add any flag")
+        elif (full == "build.rustflags" or (full.startswith("target.") and full.endswith(".rustflags"))
+              or (full in ("build", "target") and "rustflags" in line)):
+            problems.append(f"{path}:{number}: {full} sets rustflags")
         elif full.startswith("env."):
             name = full[len("env."):].split(".", 1)[0]
             if name in COMPILE_TIME:

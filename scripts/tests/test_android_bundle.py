@@ -110,6 +110,21 @@ class BundleTests(unittest.TestCase):
                 self.assertEqual(len(problems), 1, problems)
                 self.assertIn("not a release build's addresses", problems[0])
 
+    def test_the_sentinel_is_dev_envs_and_named_nowhere_else(self):
+        root = Path(__file__).resolve().parents[2]
+        dev_env = (root / "nsh/src/dev_env.rs").read_text(encoding="utf-8")
+        self.assertIn(f'const SENTINEL_TEXT: &str = "{android_bundle.DEV_LIST_SENTINEL.decode()}";', dev_env)
+        named = [path for folder in ("crates", "nsh/src") for path in (root / folder).rglob("*.rs")
+                 if android_bundle.DEV_LIST_SENTINEL in path.read_bytes()]
+        self.assertEqual(named, [root / "nsh/src/dev_env.rs"])
+
+    def test_text_a_release_library_keeps_is_no_marker(self):
+        # A release library keeps this error message (nsh/src/door.rs use_database, bir-app-api agent/headless.rs):
+        # the test list's own text cannot be the marker for a baked test list.
+        release = RELEASE_LIBRARY + b"useDatabase is for test environments (EBIR_TEST_ENV=1).\0"
+        self.assertEqual(android_bundle.library_problems("arm64-v8a", 10, release), [])
+        self.assertNotIn(b"attempt to add with overflow", android_bundle.DEBUG_MARKERS)
+
     def test_a_google_client_is_compiled_in_exactly_when_gmail_is_on(self):
         with_client = RELEASE_LIBRARY + b"1234-abc.apps.googleusercontent.com\0"
         # Off (the store default): a client id in the library is a problem; none is right.

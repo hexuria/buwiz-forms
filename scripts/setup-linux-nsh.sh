@@ -17,8 +17,8 @@
 #     the API 35 x86_64 image for the emulator, an AVD
 #     named "buwiz", the Rust Android targets and NSH's Android dev and release runtimes
 #     (copies, each with the NSH commit it was built from in nsh-ref)
-#   - ~/BuwizNsh/nsh2404.sh <cmd> (beside the tools folder: <NSH_TOOLS>/../nsh2404.sh for a folder of
-#     its own): runs <cmd> in the image from nsh/ (with the release profile
+#   - ~/BuwizNsh/nsh2404.sh <cmd> (for NSH_TOOLS=<dir>/<name>: <dir>/nsh2404-<name>.sh, beside it):
+#     runs <cmd> in the image from nsh/ (with the release profile
 #     `just play-bundle` sets, so a store bundle built through it is optimised as on a Mac) with
 #     $DISPLAY (default :0), host networking (`just mock-account` on 127.0.0.1:3008) and
 #     the local-test safety variables (baked into Android dev builds)
@@ -154,9 +154,15 @@ DOCKER_EOF
     docker build -q -t "$IMAGE" - < "$WORK/Dockerfile" >/dev/null
 }
 
+# One wrapper per tools folder, beside it: ~/BuwizNsh/nsh2404.sh for the shared tools, <dir>/nsh2404-<name>.sh for
+# NSH_TOOLS=<dir>/<name> (`just play-bundle` looks for it there), so one setup never rewrites another's.
+wrapper_path() {
+    if [ "$TOOLS" = "$WORK/tools" ]; then printf '%s\n' "$WORK/nsh2404.sh"
+    else printf '%s\n' "$(dirname "$TOOLS")/nsh2404-$(basename "$TOOLS").sh"; fi
+}
+
 write_wrapper() {
-    # Beside the tools folder it serves: ~/BuwizNsh/nsh2404.sh for the shared tools, its own for NSH_TOOLS=<folder>.
-    local out; out="$(dirname "$TOOLS")/nsh2404.sh"
+    local out; out="$(wrapper_path)"
     mkdir -p "$(dirname "$out")"
     cat > "$out" <<'NSH_EOF'
 #!/usr/bin/env bash
@@ -372,7 +378,7 @@ install_android_runtime() {
 
 check() {
     local ok=1
-    local wrapper; wrapper="$(dirname "$TOOLS")/nsh2404.sh"
+    local wrapper; wrapper="$(wrapper_path)"
     report() { printf '  %-22s %s\n' "$1" "$2"; [ "$3" -eq 1 ] || ok=0; }
     if docker info >/dev/null 2>&1; then report docker "$(docker --version)" 1
     else report docker "MISSING or not usable without sudo" 0; fi

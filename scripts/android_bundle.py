@@ -31,14 +31,16 @@ PHONE_ABIS = {"arm64-v8a", "armeabi-v7a"}
 STORE_PERMISSIONS = {"android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS"}
 # What the app's library must say about itself, read from its bytes: the only check a build setting cannot fool. A
 # release build resolves the production addresses (bir_core::cloud_account, PRODUCTION_SERVER_URL and
-# PRODUCTION_ACCOUNT_URL); a debug build, or one built with debug assertions, carries the checks those switch on
-# (overflow and the standard library's precondition checks) and the development server, and a development build
-# carries its baked test list (nsh/src/dev_env.rs).
+# PRODUCTION_ACCOUNT_URL). A debug build, or one built with debug assertions, resolves the development server and
+# carries the standard library's precondition checks; a library that honours the development list carries
+# nsh/src/dev_env.rs's SENTINEL_TEXT, which nothing else names (a release built with BUWIZ_ANDROID_DEV=1 has the
+# production addresses and no development server, so only that tells it apart). Every marker must be absent from a
+# real release library: the Linux verification build's is the control (docs/platforms/android.md).
+DEV_LIST_SENTINEL = b"nsh-dev-env:development-list-compiled-in"
 RELEASE_MARKERS = (b"https://api.buwiz.com", b"https://account.buwiz.com")
 DEBUG_MARKERS = (
-    b"http://localhost:3008",            # bir_core::cloud_account::DEV_SERVER_URL
-    b"EBIR_TEST_ENV=1",                  # a baked development list (BUWIZ_ANDROID_DEV_ENV)
-    b"attempt to add with overflow",     # overflow checks, on with debug assertions
+    b"http://localhost:3008",            # bir_core::cloud_account::DEV_SERVER_URL, chosen at compile time
+    DEV_LIST_SENTINEL,                   # the development list compiled in (nsh/src/dev_env.rs)
     b"unsafe precondition(s) violated",  # the standard library's checks under debug assertions
 )
 # The release profile makes libnsh.so about 88 MB on arm64-v8a and 76 MB on armeabi-v7a (2026-11-28); Cargo's defaults,
