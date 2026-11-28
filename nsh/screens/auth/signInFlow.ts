@@ -318,7 +318,8 @@ function openEmail(): void {
  * kept (Change email); the email page to the first page (its address, and the request Change email keeps, stay; a sentence
  * goes). True when it stepped back; false on the first page, where back leaves as it does elsewhere. While Continue sends,
  * it stays (the request is on its way) and says it handled the press. Signed in (`approved`) with the email page still open,
- * it closes the email page as well. Android's button reaches this only while the email or code page shows (Gate.tsx).
+ * it closes the email page as well. Gate.tsx passes Android's button here while the gate shows; the false it gets on the
+ * first page lets the press leave the app.
  */
 function back(): boolean {
   const now = state();

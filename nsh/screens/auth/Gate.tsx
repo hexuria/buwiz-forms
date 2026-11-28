@@ -15,12 +15,11 @@ export function AccountGate() {
     if (signInFlow.state().kind === "idle") untracked(() => signInFlow.restore());
   });
   const page = () => pageOf(signInFlow.state(), signInFlow.emailOpen());
-  // The newest listener hears the press first (the frame's, Shell.tsx, is older). It is made in an effect and only while the
-  // email or code page shows (nsh navigation.md: a listener made in an effect lasts until the effect runs again or its
-  // component goes), so the first page, and every page after sign-in, keep the press as everywhere else.
+  // The newest listener hears the press first (the frame's, Shell.tsx, is older). signInFlow.back answers false on the first
+  // page, so the press still leaves the app there; after sign-in this component and its listener are gone.
   if (mobileAvailable && platform.os === "android") {
     effect(() => {
-      if (page() !== "start") BackHandler.on("press", () => signInFlow.back());
+      BackHandler.on("press", () => signInFlow.back());
     });
   }
   return (

@@ -168,6 +168,7 @@ function toggleForgot(): void {
 
 const setupPin = signal("");
 const setupKey = signal<string | null>(null);
+let chosenHelpdeskPin: string | null = null;
 
 /** "Just me or my business": the owner's taxpayer becomes the admin account; with none yet it is typed first. */
 function chooseSolo(): void {
@@ -217,15 +218,49 @@ function submitHelpdeskPin(): void {
   const pin = setupPin();
   if (pin.length !== 4) return fail("Type all 4 digits of the admin PIN.");
   try {
+    // Back from the recovery key returns here to correct the PIN. The help desk is already written then, so this updates it
+    // and goes forward to the same key rather than starting the setup again.
+    if (setupKey() !== null) {
+      if (chosenHelpdeskPin !== pin) {
+        store.write("set_admin_pin", pin);
+        chosenHelpdeskPin = pin;
+      }
+      batch(() => {
+        error.set(null);
+        app.setSetup("helpdesk", "helpdesk-key");
+      });
+      return;
+    }
     const key = store.write("setup_helpdesk", pin).recovery_key;
+    chosenHelpdeskPin = pin;
     batch(() => {
       setupKey.set(key);
       error.set(null);
-      app.setSetup(null, "helpdesk-key");
+      app.setSetup("helpdesk", "helpdesk-key");
     });
   } catch (e) {
     error.set(errorText(e));
   }
+}
+
+/**
+ * Android's Back in first-run setup: the PIN page returns to the choice until its setup is written; the recovery-key page
+ * returns to the PIN. Once the key exists there is no way back to the choice (the help desk is already written), so Back on
+ * the PIN page then only keeps the key page's way forward from leaving the app. `"helpdesk"` is pending until the key is
+ * written down, which keeps the frame hidden behind these pages.
+ */
+function back(): boolean {
+  const step = app.setup().step;
+  if (step === "helpdesk-pin") {
+    if (app.setup().pending === "helpdesk") return true;
+    cancelSetup();
+    return true;
+  }
+  if (step === "helpdesk-key") {
+    app.setSetup("helpdesk", "helpdesk-pin");
+    return true;
+  }
+  return false;
 }
 
 /** The recovery key was written down: the admin starts on an empty Home. */
@@ -235,6 +270,7 @@ function finishHelpdeskSetup(): void {
   batch(() => {
     setupKey.set(null);
     setupPin.set("");
+    chosenHelpdeskPin = null;
     app.setSetup(null, "choose");
   });
   begin({ kind: "admin" });
@@ -316,6 +352,7 @@ export const auth = {
   toggleForgot,
   chooseSolo,
   cancelSetup,
+  back,
   finishSoloSetup,
   chooseHelpdesk,
   submitHelpdeskPin,

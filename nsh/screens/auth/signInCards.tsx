@@ -144,7 +144,7 @@ export function CodePage(props: { prefix: string }) {
     <OpenPage
       testID={`${props.prefix}-code-page`}
       gap="gap-3"
-      back={<BackControl testID={`${props.prefix}-change-email`} label="Change email" onPress={signInFlow.changeEmail} />}
+      back={<BackControl testID={`${props.prefix}-change-email`} label="Change email" onPress={() => void signInFlow.back()} />}
     >
       <PageHeading testID={`${props.prefix}-code-title`}>{CODE_TITLE}</PageHeading>
       <View class="w-full items-center" testID={`${props.prefix}-code-sentence`}>

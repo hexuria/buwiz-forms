@@ -2,7 +2,8 @@
 // the admin is. "Just me or my business" makes the owner's own taxpayer the admin (typed here first on an empty computer,
 // on the New taxpayer page with no chrome); "I help other taxpayers" makes the reserved TIN 000-000-000 the admin, with a
 // 4-digit PIN and a recovery key shown once.
-import { effect, untracked, View } from "nsh";
+import { effect, platform, untracked, View } from "nsh";
+import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
 import { app, store } from "../../shell";
 import { AppButton, Code, PinCells, Text, TOUCH } from "../../ui";
 import { NewTaxpayerPage } from "../taxpayer";
@@ -11,6 +12,13 @@ import { auth } from "./state";
 
 /** The choice, the help desk's PIN, or its recovery key: the step app.setup() names. */
 export function Setup() {
+  // The newest listener hears the press first (the frame's, Shell.tsx, is older). auth.back answers false on the choice, so
+  // the press still leaves the app there.
+  if (mobileAvailable && platform.os === "android") {
+    effect(() => {
+      BackHandler.on("press", () => auth.back());
+    });
+  }
   return (
     <View testID="setup-root" class="min-h-0 flex-1">
       <If when={app.setup().step === "helpdesk-pin"}>
@@ -60,7 +68,7 @@ function HelpdeskPin() {
       </Labelled>
       <ErrorLine message={auth.error()} />
       <Actions
-        left={<AppButton testID="setup-back" label="Back" variant="ghost" onPress={auth.cancelSetup} />}
+        left={<AppButton testID="setup-back" label="Back" variant="ghost" onPress={() => void auth.back()} />}
         right={<AppButton testID="setup-pin-submit" label="Continue" variant="primary" onPress={auth.submitHelpdeskPin} />}
       />
     </AuthCard>
