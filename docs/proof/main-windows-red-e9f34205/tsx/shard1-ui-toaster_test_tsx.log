@@ -1,0 +1,8 @@
+? built the Rust crate nsh-app-ebirforms (920ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.1s, 1 warning: -v shows it)
+? bundled ui\ToasterProbe.tsx (29228 B in 34.1 ms)
+? ui\toaster.test.tsx � phone: with no toast showing, a press at the bottom reaches the bar under the Toaster (266ms)
+? ui\toaster.test.tsx � phone: with a toast showing, a press outside its card reaches the bar and its own buttons work (604ms)
+? ui\toaster.test.tsx � desktop: with no toast showing, a press at the bottom reaches the bar under the Toaster (223ms)
+? ui\toaster.test.tsx � desktop: with a toast showing, a press outside its card reaches the bar and its own buttons work (583ms)
+? 4 tests: 4 passed, 0 failed (2.8s)

@@ -1,0 +1,50 @@
+? built the Rust crate nsh-app-ebirforms (937ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.1s, 1 warning: -v shows it)
+2026-11-28T06:44:40.391815Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T06:44:40.406876Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T06:44:40.463626Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T06:44:40.472536Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T06:44:40.472893Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T06:44:40.473220Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T06:44:40.473468Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T06:44:40.474119Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T06:44:40.474897Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T06:44:40.475127Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T06:44:40.475489Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T06:44:40.475642Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T06:44:40.475765Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T06:44:40.476324Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T06:44:40.476468Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T06:44:40.476593Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T06:44:40.476716Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T06:44:40.477023Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T06:44:40.479528Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T06:44:40.479719Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T06:44:40.480666Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T06:44:40.480811Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T06:44:40.485749Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T06:44:40.485932Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T06:44:40.486210Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T06:44:40.486707Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T06:44:40.487658Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T06:44:40.488022Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T06:44:40.489494Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T06:44:40.489967Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T06:44:40.492722Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T06:44:40.495311Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T06:44:40.497405Z  INFO bir_core::background_cron: Background cron engine started
+? shell\agent\agent.test.ts � a command is read from the JSON text the host hands over, as the old app read it (0ms)
+? shell\agent\agent.test.ts � what is not a command is ignored (0ms)
+? shell\agent\agent.test.ts � go, refresh and open act on the frame at once (1ms)
+? shell\agent\agent.test.ts � a fill and a review wait for the page of the return the agent opened (0ms)
+? shell\agent\agent.test.ts � a page that never comes takes nothing: the fill is dropped, not put on another return (0ms)
+? shell\agent\agent.test.ts � quit goes by the app's quit path (0ms)
+? shell\agent\agent.test.ts � a build without the agent, or an app not opted in, polls nothing (130ms)
+? shell\agent\agent.test.ts � a listening agent is drained on the host's thread as well as polled (94ms)
+? shell\agent\agent.test.ts � a listening agent is polled and its commands are applied one at a time, in order (173ms)
+2026-11-28T06:44:41.000312Z  WARN bir_shell::script: agent: the door is shut
+? shell\agent\agent.test.ts � a command that throws is reported and the poll goes on (95ms)
+? shell\agent\agent.test.ts � the host refusing to start is a quiet no-op (42ms)
+? shell\agent\agent.test.ts � a fill's dropped answers reach the page with its edits (0ms)
+2026-11-28T06:44:41.045658Z  INFO bir_core::background_cron: Background cron engine stopped
+? 12 tests: 12 passed, 0 failed (2.0s)

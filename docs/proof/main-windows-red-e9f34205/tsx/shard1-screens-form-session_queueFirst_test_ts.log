@@ -1,0 +1,74 @@
+? built the Rust crate nsh-app-ebirforms (903ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.0s, 1 warning: -v shows it)
+2026-11-28T07:06:08.758908Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T07:06:08.773143Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T07:06:08.895111Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:06:08.900970Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:06:08.901385Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:06:08.901771Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:06:08.902003Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:06:08.902647Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:06:08.903529Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:06:08.903721Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:06:08.904048Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:06:08.904212Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:06:08.904325Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:06:08.904904Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:06:08.905040Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:06:08.905179Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:06:08.905304Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:06:08.905613Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:06:08.908608Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:06:08.908816Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:06:08.909940Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:06:08.910096Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:06:08.914912Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:06:08.915091Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:06:08.915379Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:06:08.915695Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:06:08.916832Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:06:08.917424Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:06:08.918919Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:06:08.919249Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:06:08.921964Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:06:08.924683Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:06:08.926875Z  INFO bir_core::background_cron: Background cron engine started
+? screens\form\session.queueFirst.test.ts � a page notice is no reason for a refused Queue, and a validation message on the same fields of another form is (1ms)
+2026-11-28T07:06:09.207257Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � items to fix and the tier warning: Queue says what Check says, shows every message, and asks nothing (290ms)
+2026-11-28T07:06:09.356415Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � a second Queue takes the refusal toast down before its question opens: the toast's Show item must not float over the dialog (345ms)
+2026-11-28T07:06:09.700058Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � a second Queue with the same list goes to the host, which decides: the page's reading never keeps a return from being queued (299ms)
+2026-11-28T07:06:10.003256Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � a host refusal not listed on the page stays visible even when the page has other items (216ms)
+2026-11-28T07:06:10.224305Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:06:10.477466Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:06:10.479359Z  INFO bir_core::background_cron: Cron: Attempting to submit queued 0619E 042024 for 00012345300000
+2026-11-28T07:06:10.480061Z  INFO bir_core::transport: SFTP dry-run: no network source="dry-run" folder="0619E"
+2026-11-28T07:06:10.481780Z  INFO bir_core::transport: SFTP dry-run PUT (no network) source="dry-run" remote_path="/0619E/00012345300000-0619E-042024#juana@example.com#.xml" payload_len=662 payload_sha256="3870793c7064bcc1cb68b944f8b98da0d03720cdb8fc728061c83fe157c0c825"
+2026-11-28T07:06:10.482092Z  INFO bir_core::background_cron: Cron: dry run: simulated submission of queued 0619E 00012345300000-0619E-042024#juana@example.com#.xml (nothing sent to BIR)
+2026-11-28T07:06:10.487867Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � nothing to fix and the tier warning: Queue asks once; Cancel queues nothing, Continue queues it (323ms)
+2026-11-28T07:06:10.686798Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:06:10.881187Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:06:10.885057Z  INFO bir_core::background_cron: Cron: Attempting to submit queued 1702RT 122022 for 00012345300000
+2026-11-28T07:06:10.887375Z  INFO bir_core::transport: SFTP dry-run: no network source="dry-run" folder="1702RTv2018C"
+2026-11-28T07:06:10.893133Z  INFO bir_core::transport: SFTP dry-run PUT (no network) source="dry-run" remote_path="/1702RTv2018C/00012345300000-1702RTv2018C-122022#juana@example.com#.xml" payload_len=2497 payload_sha256="734d415f070053bc12bf3ca00bc2b2d7a7a0a55e29b000a44a6a136492c64f88"
+2026-11-28T07:06:10.893348Z  INFO bir_core::background_cron: Cron: dry run: simulated submission of queued 1702RT 00012345300000-1702RTv2018C-122022#juana@example.com#.xml (nothing sent to BIR)
+2026-11-28T07:06:10.896508Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � nothing to fix and no warning: Queue queues straight away, once, even when pressed twice (489ms)
+2026-11-28T07:06:11.038745Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � Check clean and the host still refuses: Continue reveals the host message instead of only a count (151ms)
+2026-11-28T07:06:11.314795Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:06:11.600171Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:06:11.604121Z  INFO bir_core::background_cron: Cron: Attempting to submit queued 1702RT 122021 for 00012345300000
+2026-11-28T07:06:11.606924Z  INFO bir_core::transport: SFTP dry-run: no network source="dry-run" folder="1702RTv2018C"
+2026-11-28T07:06:11.612941Z  INFO bir_core::transport: SFTP dry-run PUT (no network) source="dry-run" remote_path="/1702RTv2018C/00012345300000-1702RTv2018C-122021#juana@example.com#.xml" payload_len=2497 payload_sha256="94e7d10ee3792fdfc406446a9494b4212165cf8114bde77ad5bdd22df1c63c3d"
+2026-11-28T07:06:11.613153Z  INFO bir_core::background_cron: Cron: dry run: simulated submission of queued 1702RT 00012345300000-1702RTv2018C-122021#juana@example.com#.xml (nothing sent to BIR)
+2026-11-28T07:06:11.616175Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � a message that is only a page notice does not stop Queue (568ms)
+2026-11-28T07:06:11.773564Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.queueFirst.test.ts � 2551Q: its Queue reconciles the stored return with the year's tax profile, so Queue still asks and the host decides (123ms)
+2026-11-28T07:06:11.846573Z  INFO bir_core::background_cron: Background cron engine stopped
+? 10 tests: 10 passed, 0 failed (4.3s)

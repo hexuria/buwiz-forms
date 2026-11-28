@@ -1,0 +1,52 @@
+? built the Rust crate nsh-app-ebirforms (902ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.1s, 1 warning: -v shows it)
+2026-11-28T06:41:24.607633Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T06:41:24.622124Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T06:41:24.660768Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T06:41:24.665891Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T06:41:24.666237Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T06:41:24.666514Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T06:41:24.666719Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T06:41:24.667303Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T06:41:24.667855Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T06:41:24.668076Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T06:41:24.668405Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T06:41:24.668550Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T06:41:24.668664Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T06:41:24.669164Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T06:41:24.669301Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T06:41:24.669417Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T06:41:24.669542Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T06:41:24.669844Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T06:41:24.672451Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T06:41:24.672642Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T06:41:24.673753Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T06:41:24.673951Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T06:41:24.678644Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T06:41:24.678829Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T06:41:24.679120Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T06:41:24.679498Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T06:41:24.680395Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T06:41:24.680738Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T06:41:24.682252Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T06:41:24.682773Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T06:41:24.685508Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T06:41:24.687903Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T06:41:24.690000Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T06:41:25.011615Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.refusal.test.ts � 2551Q Queue refusal marks Item 13 like validation and offers a jump into its closed part (280ms)
+2026-11-28T06:41:25.151273Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:25.241379Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:25.345516Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:25.435785Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.refusal.test.ts � profile Queue refusals link to the relevant profile editor and form year (405ms)
+2026-11-28T06:41:25.533789Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:26.653088Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:26.684873Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.refusal.test.ts � a blank Item 8 name edited on the return offers Show item, not the unchanged taxpayer profile (1.3s)
+2026-11-28T06:41:26.785571Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:26.876329Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:26.979898Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.refusal.test.ts � unknown keys and unstructured Queue failures keep their full reason, without an invented jump (288ms)
+2026-11-28T06:41:27.033895Z  INFO bir_core::background_cron: Background cron engine stopped
+? 4 tests: 4 passed, 0 failed (3.7s)

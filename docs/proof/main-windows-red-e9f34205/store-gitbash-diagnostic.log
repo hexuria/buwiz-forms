@@ -1,0 +1,53 @@
+...........FF...F.....FF.
+======================================================================
+FAIL: test_off_refuses_a_build_with_the_id_or_the_secret (scripts.tests.test_store_gmail.CheckTests.test_off_refuses_a_build_with_the_id_or_the_secret) (payload=b'1234567890')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<home>\repos\main-windows-red-e9f34205\buwiz-forms\scripts\tests\test_store_gmail.py", line 82, in test_off_refuses_a_build_with_the_id_or_the_secret
+    self.assertIn("Contents/MacOS/eBIRForms", message)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Contents/MacOS/eBIRForms' not found in 'STORE_GMAIL is off but a Google OAuth client id or secret is in Contents\\MacOS\\eBIRForms: rebuild without them.\nScanned 2 files.'
+
+======================================================================
+FAIL: test_off_refuses_a_build_with_the_id_or_the_secret (scripts.tests.test_store_gmail.CheckTests.test_off_refuses_a_build_with_the_id_or_the_secret) (payload=b'GOCSPX-AbC')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<home>\repos\main-windows-red-e9f34205\buwiz-forms\scripts\tests\test_store_gmail.py", line 82, in test_off_refuses_a_build_with_the_id_or_the_secret
+    self.assertIn("Contents/MacOS/eBIRForms", message)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Contents/MacOS/eBIRForms' not found in 'STORE_GMAIL is off but a Google OAuth client id or secret is in Contents\\MacOS\\eBIRForms: rebuild without them.\nScanned 2 files.'
+
+======================================================================
+FAIL: test_a_failing_switch_stops_the_build (scripts.tests.test_store_gmail.RecipeTests.test_a_failing_switch_stops_the_build)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<home>\repos\main-windows-red-e9f34205\buwiz-forms\scripts\tests\test_store_gmail.py", line 165, in test_a_failing_switch_stops_the_build
+    self.assertNotEqual(out.returncode, 0)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 == 0
+
+======================================================================
+FAIL: test_off_drops_both_variables_in_the_shell (scripts.tests.test_store_gmail.SwitchTests.test_off_drops_both_variables_in_the_shell)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<home>\repos\main-windows-red-e9f34205\buwiz-forms\scripts\tests\test_store_gmail.py", line 57, in test_off_drops_both_variables_in_the_shell
+    self.assertIn("without Gmail Connect", out.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'without Gmail Connect' not found in '/bin/bash: line 1: C:Python315python.exe: command not found\n'
+
+======================================================================
+FAIL: test_on_keeps_both_variables (scripts.tests.test_store_gmail.SwitchTests.test_on_keeps_both_variables)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<home>\repos\main-windows-red-e9f34205\buwiz-forms\scripts\tests\test_store_gmail.py", line 63, in test_on_keeps_both_variables
+    self.assertEqual(out.stdout.strip(), "id=x secret=y")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'id=unset secret=unset' != 'id=x secret=y'
+- id=unset secret=unset
++ id=x secret=y
+
+
+----------------------------------------------------------------------
+Ran 24 tests in 25.354s
+
+FAILED (failures=5)

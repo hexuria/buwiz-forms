@@ -1,0 +1,71 @@
+? built the Rust crate nsh-app-ebirforms (916ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.1s, 1 warning: -v shows it)
+2026-11-28T07:05:24.476899Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T07:05:24.491374Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T07:05:24.618285Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:05:24.625295Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:05:24.625615Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:05:24.625915Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:05:24.626126Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:05:24.626729Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:05:24.627896Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:05:24.628130Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:05:24.628761Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:05:24.628927Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:05:24.629042Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:05:24.629467Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:05:24.629604Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:05:24.629721Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:05:24.629836Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:05:24.630143Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:05:24.632668Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:05:24.632868Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:05:24.633801Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:05:24.633950Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:05:24.638984Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:05:24.639168Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:05:24.639405Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:05:24.639702Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:05:24.640738Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:05:24.641102Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:05:24.642471Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:05:24.642801Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:05:24.645414Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:05:24.647970Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:05:24.650167Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:05:25.699357Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:26.507195Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 0605 registered date uses the same unrestricted calendar as its parts (1.8s)
+2026-11-28T07:05:27.396902Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:28.241952Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 1707A one-date rejects a typed non-December calendar year end (1.7s)
+2026-11-28T07:05:29.128625Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 1706 item 1 (month, day and year boxes): a picked day fills all three (903ms)
+2026-11-28T07:05:30.005269Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:30.821322Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 2551Q item 2 (a month list and a locked year): the pick sets the month by its listed value and leaves the year (1.7s)
+2026-11-28T07:05:31.682780Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:32.492074Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 2551Q item 2 (Fiscal): the calendar is limited to the locked year (min and max), and every day in that year fills the whole date (1.7s)
+2026-11-28T07:05:33.343581Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 0619E Due Date: a locked month and year limit the calendar to that month, the open day takes the pick (850ms)
+2026-11-28T07:05:34.320848Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � a month with a leap day: February of 2024 ends on the 29th; a year printed as 20YY (1702Q) holds two digits and still limits to 2025 (966ms)
+? screens\form\pickDate.test.ts � 1707A item 2: the box captioned Year end day is the day, and Year ended the year (2ms)
+? screens\form\pickDate.test.ts � on no form is a box captioned for a day read as a split date's year, or its month box as anything else (449ms)
+? screens\form\pickDate.test.ts � nothing locked: the calendar offers every day (1706 Date of Transaction) (56ms)
+2026-11-28T07:05:35.723815Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:36.545333Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:37.374173Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 1702Q item 2: with Calendar year ticked the calendar offers December of the locked year only; Fiscal frees the year; Calendar again limits it (2.5s)
+2026-11-28T07:05:38.224781Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:39.025144Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:39.838483Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � 2551Q item 2: with Calendar year ticked the calendar offers December of the locked year only; Fiscal frees the year; Calendar again limits it (2.5s)
+? screens\form\pickDate.test.ts � 2550Q item 2: with Calendar year ticked the calendar offers December of the locked year only; Fiscal frees the year; Calendar again limits it (2.7s)
+? screens\form\pickDate.test.ts � 1702RT sample (the year is open, so the calendar cannot leave the days out): a pick outside December is refused with the reason, December is taken (592ms)
+2026-11-28T07:05:43.998417Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:05:44.825751Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\pickDate.test.ts � the calendar opens on the month the boxes hold: MM/YYYY and MM/20YY (a two-digit year is read as 20YY), and on nothing when they hold none (1.9s)
+2026-11-28T07:05:45.059194Z  INFO bir_core::background_cron: Background cron engine stopped
+? 15 tests: 15 passed, 0 failed (21.9s)

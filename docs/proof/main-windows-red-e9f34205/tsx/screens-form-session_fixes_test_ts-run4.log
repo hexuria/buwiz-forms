@@ -1,0 +1,192 @@
+✓ built the Rust crate nsh-app-ebirforms (963ms, 1 warning: -v shows it)
+✓ built the headless runner of nsh-app-ebirforms (1.1s, 1 warning: -v shows it)
+2026-11-28T06:19:06.463397Z  INFO bir_core::logging: 🔍 Tracing initialized (developer_mode: false)
+2026-11-28T06:19:06.477958Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T06:19:06.499672Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T06:19:06.504585Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T06:19:06.504973Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T06:19:06.505302Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T06:19:06.505546Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T06:19:06.506225Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T06:19:06.507159Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T06:19:06.507426Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T06:19:06.507776Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T06:19:06.507940Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T06:19:06.508058Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T06:19:06.508847Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T06:19:06.509009Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T06:19:06.509169Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T06:19:06.509315Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T06:19:06.509654Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T06:19:06.512157Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T06:19:06.512357Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T06:19:06.513367Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T06:19:06.513534Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T06:19:06.518900Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T06:19:06.519085Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T06:19:06.519440Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T06:19:06.519791Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T06:19:06.520920Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T06:19:06.521533Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T06:19:06.523123Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T06:19:06.523517Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T06:19:06.526417Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T06:19:06.528861Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T06:19:06.531044Z  INFO bir_core::background_cron: Background cron engine started
+✓ screens\form\session.fixes.test.ts › F3-1: deleting the first row of a compacting schedule (2550Q Schedule 3) shows the row that moved up, as the draft holds it (2.3s)
+2026-11-28T06:19:10.084009Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:11.101809Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › Delete row on 1601EQ asks nothing, removes the row, and Undo brings it back with its base (2.3s)
+✓ screens\form\session.fixes.test.ts › Delete row drops a refused entry and moves later row state up: 2550Q Schedule 3 (1.4s)
+2026-11-28T06:19:14.030622Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:14.232469Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › Delete row drops a refused entry and moves later row state up: 1601EQ (1.7s)
+✓ screens\form\session.fixes.test.ts › Delete row rekeys overlapping row state in two passes (3.1s)
+2026-11-28T06:19:23.546045Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:24.808086Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › F3-2: a removal's Undo is never outlived by a save: autosave waits out the Undo, then saves and retires it; later saves go through (7.5s)
+2026-11-28T06:19:25.794803Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:26.657329Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:27.579620Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › F3-3: 1701MS item 11 draws the taxpayer's and the spouse's radios together: each choice reads its own tick (2.8s)
+2026-11-28T06:19:28.791885Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:28.929366Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › F3-4: every write through the door is told to the page (the frame drops its cached reads) (1.3s)
+2026-11-28T06:19:29.782728Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › F3-5: a queue refusal shows every message; a radio pick marks its row touched; the last part offers Check (864ms)
+2026-11-28T06:19:30.273107Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:31.065074Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › F3-7: a Form library sample keeps what is typed while it reopens as its return (1.3s)
+2026-11-28T06:19:32.227916Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:32.276484Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:33.406731Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › B19/F3-8: a rejected edit keeps what was typed, its sentence sits on the box, and it clears on the next edit (2.3s)
+2026-11-28T06:19:34.537560Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:34.571293Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:35.762462Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › F3-9: the save line says Unsaved changes at once; flushNow saves now; a refused save on leaving says why (2.4s)
+2026-11-28T06:19:36.193540Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › F3-10: leaving the page retires a removal's Undo and closes its toast (561ms)
+✓ screens\form\session.fixes.test.ts › F3-10: one definition of an empty schedule cell, the host's (blank text, a zero amount, an unticked box) (23ms)
+2026-11-28T06:19:37.516687Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › B16: a box another answer keeps shut shows its reason, and a write that reaches the host is refused with it (1.1s)
+✓ screens\form\session.fixes.test.ts › B17: a code off a select's list is refused on the box without a host call (276ms)
+2026-11-28T06:19:39.356632Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › B14: a boxed birth date shows the long month and asks once to save to the profile (1.7s)
+2026-11-28T06:19:40.314750Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:41.122571Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › money note: a gate zeroing a batched amount raises no note (1.6s)
+2026-11-28T06:19:42.264678Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:43.387226Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:44.565525Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › money note: clearing a filled or already-zero amount raises no note (0.00 against blank says nothing) (3.4s)
+2026-11-28T06:19:45.405293Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:45.437763Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:46.263582Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:19:47.376238Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › money note: an amount the host stored as another number shows as stored, with a note naming both; nothing is held and the save is reported (2.8s)
+✓ screens\form\session.fixes.test.ts › F10: an amount typed in a row that a Delete row in the same batch removes or moves raises no note; a real one in that batch still does (2.7s)
+✓ screens\form\session.fixes.test.ts › money note: a note on a schedule amount goes when deleting the row above moves its row up; the box then shows its row's amount (1.4s)
+✓ screens\form\session.fixes.test.ts › pending edits before row moves: an amount typed in a row is filled on its own row before a Delete row in the same turn moves the rows (4.2s)
+2026-11-28T06:19:56.817061Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › one leave toast: a save refused on the way out is said once, by flushNow, not again when the page goes (1.2s)
+2026-11-28T06:19:57.779015Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › queue settles the box: with an amount box focused, Queue leaves it first (its blur on a later turn), then stops on the note it raised (945ms)
+2026-11-28T06:19:58.964945Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › Q2: a box that never reports its blur stops Queue: nothing is checked or queued, the box is left as it is, and the filer is told once (1.2s)
+2026-11-28T06:20:00.150176Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:00.192445Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:00.532312Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › unreadable note: the box's report of text that is not an amount shows under it, stops Queue once (a folded part's too, opened), and stops nothing else (1.5s)
+2026-11-28T06:20:02.334307Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › unreadable note: a Delete row of its row takes it away; a sample with one saves as a return (2.5s)
+✓ screens\form\session.fixes.test.ts › [Z1] unreadable note on a blank schedule cell: it says the box was left blank, never that it kept 0.00 (1.3s)
+2026-11-28T06:20:05.476801Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [Z1] unreadable note on a stored zero schedule cell: it still says the box kept 0.00 (1.2s)
+2026-11-28T06:20:06.323520Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:06.393791Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [comma] a comma read as the decimal point is said under its box and stops nothing: not Queue, not a count; an edit ends it (896ms)
+2026-11-28T06:20:07.529328Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:08.360849Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:08.418676Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [B3] an outside value that won over typing back to the shown amount: a note says what the return holds now, and stops Queue once (2.0s)
+2026-11-28T06:20:08.496845Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › money note: leaving with a note and other valid edits saves them all; a second session reads them from the database (134ms)
+2026-11-28T06:20:08.708748Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › Q1: Queue pressed twice while it settles a focused amount box runs the host's queue check at most once, after the box was left (173ms)
+2026-11-28T06:20:09.911945Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:10.962176Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › V8: an amount still pending when a removal's Undo is pressed is stored on its own row, and Undo then says it is no longer available (2.3s)
+2026-11-28T06:20:11.947820Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:12.863155Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:13.086701Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:14.259499Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:14.554790Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › V8: an amount pending in a row when a choice removes that row or a row above: Continue puts it on no other row and raises no note (3.6s)
+2026-11-28T06:20:14.673622Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › note rules: a box that goes away unregisters its blur; Queue then treats it as left, neither waiting nor asking to finish the amount (117ms)
+2026-11-28T06:20:15.534753Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:16.366047Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › note rules: a note raised by a box leaving as its part folds is kept, and Queue stops on it and opens that part (1.7s)
+✓ screens\form\session.fixes.test.ts › note in a row drawer: Queue asks the schedule to open the cell's row drawer, and the note counts as shown only once it opened (1.4s)
+2026-11-28T06:20:18.695452Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:19.564941Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:19.638588Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › 1601FQ Schedule 1 percent and amount boxes are shut before the tax-relief answer (1.9s)
+2026-11-28T06:20:20.482494Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › number note [L2]: a count the host stores as typed raises no note (2551Q Number of Sheets) (852ms)
+✓ screens\form\session.fixes.test.ts › [B1] Delete row with an amount box in that row still focused: the typed amount goes with its row and never lands on the row that moves up (2.9s)
+✓ screens\form\session.fixes.test.ts › [B1] Delete row with an amount box focused in a row below: the typed amount moves up with its own row and leaves nothing behind (1.5s)
+✓ screens\form\session.fixes.test.ts › [B1] Delete row of the last row with its amount box still focused: the row does not come back (1.4s)
+✓ screens\form\session.fixes.test.ts › [B1] Delete row while a focused amount box never lets go: nothing is cleared and the filer is told to finish the amount, once (2.6s)
+✓ screens\form\session.fixes.test.ts › [B1] a second Delete row while the first settles a focused amount box does nothing (1.5s)
+✓ screens\form\session.fixes.test.ts › [B1] Delete row with a focused amount box that is gone (its blur unregistered): treated as left, cleared at once (1.4s)
+✓ screens\form\session.fixes.test.ts › [B1] no box focused: Delete row removes the row and moves the rows below up in the same turn (1.4s)
+2026-11-28T06:20:34.012397Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:34.819915Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:35.649966Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:35.760809Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:36.599384Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:37.426822Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:38.232611Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:38.344038Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:39.184684Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:40.199961Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:41.027795Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:41.148018Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [B1] 2551Q Schedule 1: after a Delete row with a focused cell holding typed text, no leftover slot carries an amount (8.0s)
+2026-11-28T06:20:41.307185Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [B2] Save with an amount box still focused leaves it first: the save takes the box's amount (173ms)
+2026-11-28T06:20:41.478526Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:41.548796Z  WARN nsh_app_ebirforms::print: the print preview has no window host (screens/print/host is not loaded) path=<home>\AppData\Local\Temp\bir-2551Q-2019-1795846841-preview.html
+✓ screens\form\session.fixes.test.ts › [B2] Print with an amount box still focused leaves it first: the paper takes the box's amount (242ms)
+2026-11-28T06:20:41.644075Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [F1] flushNow with an amount box still focused leaves it first, in the same turn: the save holds what the box reads (134ms)
+2026-11-28T06:20:41.777447Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [F1] dispose with an amount box still focused leaves it first, in the same turn: the save holds what the box reads (127ms)
+2026-11-28T06:20:41.892453Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:41.913824Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:41.982769Z  WARN nsh_app_ebirforms::print: the print preview has no window host (screens/print/host is not loaded) path=<home>\AppData\Local\Temp\bir-2551Q-2022-1795846841-preview.html
+✓ screens\form\session.fixes.test.ts › [B2] no box focused: Save and Print run in the same turn, as before (158ms)
+2026-11-28T06:20:42.050844Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:42.194954Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [B8] Continue on Queue's question with an amount box focused again leaves it first: what is queued holds what the box reads (244ms)
+2026-11-28T06:20:43.384220Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:44.487649Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [U1] a removal's Undo with an amount box still focused leaves it first: the amount stays on its own row, and Undo says it is no longer available (2.3s)
+✓ screens\form\session.fixes.test.ts › [S1] Queue pressed while a Delete row settles a focused amount box is kept: the row is deleted first, then Queue runs, once (1.5s)
+✓ screens\form\session.fixes.test.ts › [S1] Queue pressed twice while it settles a focused amount box runs once (1.4s)
+2026-11-28T06:20:47.560019Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:20:47.701055Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [B8-2] Continue with a focused amount box: saved first, queued once with no second question, and the stored row 2551Q's Queue reads holds what the box reads (244ms)
+2026-11-28T06:20:48.881846Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [B8-1] Continue with a focused amount box left unreadable: Queue stops on the box's note and queues nothing (1.3s)
+2026-11-28T06:20:50.800617Z  WARN nsh_app_ebirforms::print: the print preview has no window host (screens/print/host is not loaded) path=<home>\AppData\Local\Temp\bir-2550Q-2024-1795846850-preview.html
+2026-11-28T06:20:50.800937Z  WARN bir_core::lock_timing: held the database lock site=<home>\repos\main-windows-red-e9f34205\buwiz-forms\crates\bir-app-api\src\screen_form_module.rs:7669:5 millis=366
+✓ screens\form\session.fixes.test.ts › [S1-1] the settling Queue pressed again keeps the Print pressed before it: Queue runs once, then Print (1.8s)
+✓ screens\form\session.fixes.test.ts › [S1-2] a Delete row pressed while Queue settles a focused amount box is not kept: the filer is asked to wait, and no row is cleared (1.4s)
+✓ screens\form\session.fixes.test.ts › [S1-2] a Save pressed while a Delete row settles a focused amount box is kept: the row is deleted, then Save runs (1.5s)
+2026-11-28T06:20:53.934433Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+✓ screens\form\session.fixes.test.ts › [B8-2] Continue with a focused amount box whose leave changes the host's question: the new question is asked (241ms)
+2026-11-28T06:20:54.036441Z  INFO bir_core::background_cron: Background cron engine stopped
+✓ 64 tests: 64 passed, 0 failed (1m 48s)

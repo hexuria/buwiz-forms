@@ -1,0 +1,575 @@
+? built the Rust crate nsh-app-ebirforms (937ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.1s, 1 warning: -v shows it)
+? bundled screens\form\FormPageAny.tsx (562900 B in 139.8 ms)
+2026-11-28T07:03:25.164461Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T07:03:25.181747Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T07:03:25.296543Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:25.300522Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:25.300817Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:25.301119Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:25.301340Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:25.301954Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:25.302764Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:25.303107Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:25.303490Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:25.303677Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:25.303829Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:25.304408Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:25.304591Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:25.304760Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:25.304927Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:25.305300Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:25.307798Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:25.308011Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:25.309068Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:25.309246Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:25.314307Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:25.314506Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:25.314925Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:25.315290Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:25.316409Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:25.316827Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:25.318404Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:25.318812Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:25.321364Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:25.323806Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:25.326470Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:27.255448Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:27.288728Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � F3-4 desktop: an autosave drops the frame's cached reads (the saved returns re-read) (2.3s)
+2026-11-28T07:03:27.332975Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:27.338514Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:27.338783Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:27.339082Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:27.339248Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:27.339804Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:27.340041Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:27.340290Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:27.340655Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:27.340814Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:27.340930Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:27.341470Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:27.341633Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:27.341801Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:27.341944Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:27.342191Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:27.345076Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:27.345295Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:27.346376Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:27.346558Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:27.351691Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:27.351901Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:27.352161Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:27.352509Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:27.353520Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:27.353946Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:27.355418Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:27.355780Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:27.358466Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:27.360632Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:27.362463Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:29.184191Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:30.762722Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � F3-11 desktop: Cmd+Right inside a text box stays in the box; outside one it steps (3.5s)
+2026-11-28T07:03:30.805739Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:30.811768Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:30.812235Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:30.812635Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:30.812805Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:30.813382Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:30.813538Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:30.813691Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:30.814008Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:30.814148Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:30.814272Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:30.814750Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:30.814960Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:30.815116Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:30.815263Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:30.815549Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:30.818229Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:30.818387Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:30.819342Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:30.819470Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:30.824244Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:30.824399Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:30.824695Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:30.825051Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:30.826176Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:30.826547Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:30.827922Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:30.828231Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:30.830881Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:30.833043Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:30.834849Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:35.531149Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:35.575500Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:35.582539Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:35.582874Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:35.583133Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:35.583267Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:35.583774Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:35.583986Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:35.584181Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:35.584555Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:35.584698Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:35.584808Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:35.585310Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:35.585519Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:35.585656Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:35.585792Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:35.586034Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:35.588452Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:35.588654Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:35.589581Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:35.589734Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:35.594396Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:35.594590Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:35.594877Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:35.595261Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:35.596210Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:35.596585Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:35.597996Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:35.598313Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:35.601080Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:35.603594Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:35.604352Z  INFO bir_app_api::bir_module: submission worker not started: one runs already (this engine's, or one whose engine has not ended) engine=3
+2026-11-28T07:03:40.223172Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:40.254219Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � money round trip desktop: a zero amount is its placeholder and the first key of 15000.50 or 99999.99 is the number (9.5s)
+2026-11-28T07:03:40.323775Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:40.332197Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:40.332539Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:40.332793Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:40.332934Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:40.333414Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:40.333638Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:40.333789Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:40.334123Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:40.334274Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:40.334397Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:40.334980Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:40.335139Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:40.335274Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:40.335428Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:40.335709Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:40.338228Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:40.338410Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:40.339321Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:40.339469Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:40.344145Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:40.344331Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:40.344563Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:40.344862Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:40.346234Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:40.346750Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:40.348118Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:40.348423Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:40.351901Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:40.354457Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:40.356823Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:41.649083Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � zero placeholder desktop: a 2551Q zero amount types 5, saves 5.00, and clearing returns to the held zero (1.4s)
+2026-11-28T07:03:41.693277Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:41.697522Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:41.697787Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:41.698030Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:41.698185Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:41.698668Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:41.698883Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:41.699070Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:41.699511Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:41.699662Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:41.699772Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:41.700169Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:41.700300Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:41.700413Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:41.700523Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:41.700726Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:41.703390Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:41.703586Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:41.704524Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:41.704672Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:41.709898Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:41.710087Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:41.710362Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:41.710662Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:41.711800Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:41.712177Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:41.713528Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:41.713830Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:41.716567Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:41.718746Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:41.720762Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:43.791909Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:43.823006Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � money round trip desktop: focus on a filled amount keeps its grouped text and a digit with separators saves the right amount (2.2s)
+2026-11-28T07:03:43.871663Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:43.877139Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:43.877412Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:43.877650Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:43.877779Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:43.878281Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:43.878493Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:43.878671Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:43.879006Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:43.879149Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:43.879259Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:43.879692Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:43.879824Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:43.879933Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:43.880043Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:43.880246Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:43.882825Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:43.883010Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:43.883963Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:43.884110Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:43.888920Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:43.889111Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:43.889378Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:43.889723Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:43.890633Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:43.890992Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:43.892452Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:43.892990Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:43.895679Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:43.897928Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:43.899805Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:45.541695Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:45.585229Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:45.590754Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:45.591120Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:45.591478Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:45.591648Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:45.592305Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:45.592464Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:45.592604Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:45.592895Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:45.593030Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:45.593146Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:45.593582Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:45.593717Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:45.593839Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:45.593959Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:45.594162Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:45.596711Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:45.596860Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:45.597771Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:45.597895Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:45.602667Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:45.602824Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:45.603089Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:45.603576Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:45.604466Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:45.604831Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:45.606221Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:45.606535Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:45.609052Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:45.611472Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:45.612128Z  INFO bir_app_api::bir_module: submission worker not started: one runs already (this engine's, or one whose engine has not ended) engine=7
+2026-11-28T07:03:47.377174Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:47.404580Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � money round trip desktop: twelve digits count without separators in a filled or replacement amount (3.6s)
+2026-11-28T07:03:47.475731Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:47.481123Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:47.481499Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:47.481806Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:47.481954Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:47.482456Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:47.482673Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:47.482842Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:47.483136Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:47.483273Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:47.483391Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:47.483999Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:47.484147Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:47.484271Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:47.484390Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:47.484594Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:47.487360Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:47.487542Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:47.488511Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:47.488659Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:47.493432Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:47.493616Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:47.493842Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:47.494135Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:47.495142Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:47.495554Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:47.496971Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:47.497275Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:47.499879Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:47.502025Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:47.503929Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:49.101745Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:49.133830Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � money unreadable desktop: leaving 1500x keeps the old amount, says so, and the save goes through (1.7s)
+2026-11-28T07:03:49.181731Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:49.186397Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:49.186704Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:49.186958Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:49.187106Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:49.187627Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:49.187785Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:49.187974Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:49.188282Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:49.188421Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:49.188540Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:49.189034Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:49.189200Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:49.189327Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:49.189446Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:49.189646Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:49.192111Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:49.192286Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:49.193242Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:49.193368Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:49.200544Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:49.200706Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:49.200991Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:49.201296Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:49.202237Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:49.202592Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:49.204021Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:49.204340Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:49.207169Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:49.209272Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:49.211026Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:50.392412Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:51.612945Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:51.644365Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � F7-1 desktop: emptying an amount box returns to the host zero's placeholder, not the old amount, and the save line says Saved (2.5s)
+2026-11-28T07:03:51.690439Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:51.695720Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:51.696018Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:51.696264Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:51.696395Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:51.696901Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:51.697054Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:51.697238Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:51.697616Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:51.697762Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:51.697873Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:51.698273Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:51.698402Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:51.698514Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:51.698623Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:51.698823Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:51.701345Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:51.701499Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:51.702400Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:51.702521Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:51.707139Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:51.707294Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:51.707565Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:51.707906Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:51.708769Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:51.709134Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:51.710622Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:51.710943Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:51.713445Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:51.715585Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:51.717804Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:53.025286Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:54.283519Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:55.510702Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:56.110028Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � V1 desktop: a nullable schedule-row amount left empty shows blank, not zero (4.5s)
+2026-11-28T07:03:56.155908Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:56.160165Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:56.160435Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:56.160675Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:56.160816Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:56.161306Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:56.161475Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:56.161676Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:56.162080Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:56.162249Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:56.162367Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:56.162789Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:56.162916Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:56.163027Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:56.163145Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:56.163366Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:56.166297Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:56.166456Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:56.167380Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:56.167502Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:56.172322Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:56.172494Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:56.172791Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:56.173096Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:56.174013Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:56.174384Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:56.175858Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:56.176245Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:56.178861Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:56.180964Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:56.183068Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:57.790758Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:57.823447Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � group 5 desktop: a decimal comma typed into a zero amount saves as a point amount (1.7s)
+2026-11-28T07:03:57.864984Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:57.873085Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:57.873348Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:57.873636Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:57.873789Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:57.874356Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:57.874599Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:57.874833Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:57.875309Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:57.875568Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:57.875698Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:57.876151Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:57.876291Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:57.876409Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:57.876527Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:57.876731Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:57.879388Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:57.879572Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:57.880638Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:57.880810Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:57.886044Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:57.886237Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:57.886544Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:57.886897Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:57.887899Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:57.888278Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:57.889892Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:57.930593Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:57.933597Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:57.935881Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:03:57.938003Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:03:58.931479Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:58.937570Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:58.937941Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:58.938309Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:58.938489Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:58.939132Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:58.939369Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:58.939517Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:58.939859Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:58.940002Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:58.940113Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:58.940550Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:58.940678Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:58.940790Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:58.940908Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:58.941108Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:58.943589Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:58.943738Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:58.944644Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:58.944766Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:58.949768Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:58.949927Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:58.950170Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:58.950465Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:58.951393Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:58.951761Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:58.953177Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:58.953491Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:58.956359Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:58.958747Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:58.959506Z  INFO bir_app_api::bir_module: submission worker not started: one runs already (this engine's, or one whose engine has not ended) engine=13
+2026-11-28T07:03:59.502351Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:59.948224Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:03:59.953282Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:03:59.953949Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:03:59.954259Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:03:59.954410Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:03:59.954914Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:03:59.955118Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:03:59.955306Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:03:59.955704Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:03:59.955880Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:03:59.956039Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:03:59.956505Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:03:59.956635Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:03:59.956747Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:03:59.956854Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:03:59.957055Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:03:59.959577Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:03:59.959762Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:03:59.960694Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:03:59.960841Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:03:59.965499Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:03:59.965706Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:03:59.966029Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:03:59.966344Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:03:59.967275Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:03:59.967633Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:03:59.969035Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:03:59.969349Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:03:59.972113Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:03:59.974741Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:03:59.975521Z  INFO bir_app_api::bir_module: submission worker not started: one runs already (this engine's, or one whose engine has not ended) engine=13
+2026-11-28T07:04:00.525911Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:04:00.889354Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � group 5 desktop: decimal-comma shapes read on leaving, while a three-digit comma group stays thousands (3.2s)
+2026-11-28T07:04:01.047242Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:04:01.053689Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:04:01.054052Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:04:01.054360Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:04:01.054540Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:04:01.055086Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:04:01.055275Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:04:01.055511Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:04:01.055906Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:04:01.056104Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:04:01.056321Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:04:01.056904Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:04:01.057090Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:04:01.057253Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:04:01.057401Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:04:01.057667Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:04:01.060243Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:04:01.060418Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:04:01.061430Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:04:01.061581Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:04:01.066799Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:04:01.066968Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:04:01.067262Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:04:01.067611Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:04:01.068597Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:04:01.069023Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:04:01.070462Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:04:01.070823Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:04:01.073487Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:04:01.075662Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:04:01.077357Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:04:02.492066Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � group 5 desktop: End and Backspaces inside our grouping still read as digits (1.5s)
+2026-11-28T07:04:02.534287Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T07:04:02.539049Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T07:04:02.539478Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T07:04:02.539932Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T07:04:02.540156Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T07:04:02.540708Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T07:04:02.540857Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T07:04:02.541085Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T07:04:02.541633Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T07:04:02.541814Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T07:04:02.541954Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T07:04:02.542536Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T07:04:02.542678Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T07:04:02.542794Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T07:04:02.542914Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T07:04:02.543138Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T07:04:02.545959Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T07:04:02.546150Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T07:04:02.547084Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T07:04:02.547204Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T07:04:02.552241Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T07:04:02.552387Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T07:04:02.552656Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T07:04:02.553167Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T07:04:02.554101Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T07:04:02.554454Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T07:04:02.555998Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T07:04:02.556582Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T07:04:02.559237Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T07:04:02.561314Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:04:02.562988Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:04:03.524124Z  INFO bir_core::background_cron: Background cron engine stopped
+? screens\form\FormPageFixes.test.tsx � group 5 desktop: an unreadable comma amount is kept with the comma hint (1.1s)
+? 13 tests: 13 passed, 0 failed (39.8s)

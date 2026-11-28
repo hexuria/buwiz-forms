@@ -1,0 +1,79 @@
+? built the Rust crate nsh-app-ebirforms (934ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.0s, 1 warning: -v shows it)
+2026-11-28T06:41:29.320272Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T06:41:29.338233Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T06:41:29.373853Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T06:41:29.380363Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T06:41:29.380730Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T06:41:29.381005Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T06:41:29.381216Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T06:41:29.381809Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T06:41:29.382672Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T06:41:29.382899Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T06:41:29.383223Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T06:41:29.383408Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T06:41:29.383539Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T06:41:29.384261Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T06:41:29.384403Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T06:41:29.384519Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T06:41:29.384642Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T06:41:29.384950Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T06:41:29.387466Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T06:41:29.387661Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T06:41:29.388608Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T06:41:29.388756Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T06:41:29.395607Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T06:41:29.395799Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T06:41:29.396037Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T06:41:29.396329Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T06:41:29.397384Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T06:41:29.397838Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T06:41:29.399220Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T06:41:29.399546Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T06:41:29.402246Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T06:41:29.404596Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T06:41:29.406707Z  INFO bir_core::background_cron: Background cron engine started
+? screens\form\session.test.ts � a 2551Q opens: its schema, the profile's locked boxes, a fresh Draft not saved yet (192ms)
+2026-11-28T06:41:30.825546Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � typing stages; 300 ms later the fill computes the tax and the amount reformats on blur (1.2s)
+2026-11-28T06:41:31.968160Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � autosave: a successful fill saves after the quiet; reopening reads the amount back (1.2s)
+2026-11-28T06:41:32.083033Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � leaving the page within the quiet still saves what was typed (105ms)
+2026-11-28T06:41:32.948367Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:34.054081Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:34.129423Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � 2551Q: a refused calendar Year Ended month stays visible while ATC edits autosave (2.0s)
+? screens\form\session.test.ts � validation messages bind to their items: by key, then item number, then TIN, then label words (42ms)
+? screens\form\session.test.ts � touched-only errors: a message shows after its row was left, all of them after Check (86ms)
+? screens\form\session.test.ts � the to-do list (lib/todo): required-empty boxes and messages count at once, shown or not (127ms)
+2026-11-28T06:41:35.212914Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � a radio group: a pick ticks one, and the row re-renders alone (839ms)
+2026-11-28T06:41:36.606151Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:37.768724Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:37.918193Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � an answer that removes typed rows asks first; Continue removes them and Undo brings them back (2.7s)
+? screens\form\session.test.ts � a Form library sample is not autosaved until its period is set; Save as return asks for the period (398ms)
+2026-11-28T06:41:38.394916Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � Sample: typing 06/2025 in 1601C's filing-period box looks up that period and offers the existing return (407ms)
+2026-11-28T06:41:39.884964Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:40.988154Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � 1600WP: changing the From date from May 10 to May 15 updates both ends without a box message (2.2s)
+2026-11-28T06:41:41.534547Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:42.086304Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � Sample: an unfinished 1702EX year holds its period edits; a complete year commits, and blur commits too (1.1s)
+? screens\form\session.test.ts � Sample: retyping over a held 1702EX period year drops the hold; blur commits nothing stale (777ms)
+? screens\form\session.test.ts � Sample: restoring a refused period with no other edit creates no return (429ms)
+2026-11-28T06:41:44.844428Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � Sample: correcting 09/202 to 09/2025 autosaves the statutory minimum wage (1.6s)
+2026-11-28T06:41:45.371780Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � Sample: an incomplete 1601C year cannot save under the previous resolved period (480ms)
+2026-11-28T06:41:45.456531Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:46.676882Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:46.767932Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T06:41:47.909084Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+? screens\form\session.test.ts � Sample: 1600PT and 1600VT take a four-digit year for their period, typed or picked on the month grid (2.5s)
+? screens\form\session.test.ts � Sample: a four-digit year below 1900 (12/0025) on 1702EX is not read as 2025 (437ms)
+? screens\form\session.test.ts � the three heaviest forms build a session without error (999ms)
+2026-11-28T06:41:49.390841Z  INFO bir_core::background_cron: Background cron engine stopped
+? 21 tests: 21 passed, 0 failed (21.3s)

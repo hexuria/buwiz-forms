@@ -1,0 +1,276 @@
+warning: patch `nsh-cli v0.6.1 (<home>\repos\main-windows-red-e9f34205\nsh\crates\nsh-cli)` was not used in the crate graph
+warning: patch `nsh-ios-host v0.6.1 (<home>\repos\main-windows-red-e9f34205\nsh\crates\nsh-ios-host)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+warning: function `page_gate_refusal` is never used
+    --> <home>\repos\main-windows-red-e9f34205\buwiz-forms\crates\bir-app-api\src\screen_form_module.rs:5571:15
+     |
+5571 | pub(crate) fn page_gate_refusal(
+     |               ^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+System.Management.Automation.RemoteException
+warning: `bir-app-api` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.91s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src\lib.rs (<home>\main-red-rust-target\debug\deps\nsh_app_ebirforms-b89699eeaa28e7be.exe)
+
+running 171 tests
+test auth::tests::outside_a_test_environment_the_os_answer_is_the_answer ... ok
+test auth::tests::a_test_environment_answers_false_without_asking_the_os ... ok
+test agent::tests::the_app_counts_as_locked_until_the_frame_says_otherwise ... ok
+test desktop::tests::a_folder_that_cannot_be_made_leaves_the_app_unguarded_not_stopped ... ok
+test desktop::tests::a_combo_nothing_can_register_is_refused ... ok
+test agent::tests::the_lock_refuses_first_then_a_taxpayer_session_and_an_open_frame_is_admitted ... ok
+test desktop::tests::a_host_that_never_polls_keeps_only_the_newest_commands ... ok
+test desktop::tests::a_phase_the_page_does_not_know_is_refused_and_changes_nothing ... ok
+test desktop::tests::a_stored_combo_becomes_the_keystroke_nsh_registers ... ok
+test desktop::tests::a_launch_on_the_owners_folders_writes_nothing_there ... ok
+test desktop::tests::child_process ... ok
+test desktop::tests::later_hides_the_prompt_at_once_and_tells_the_driver ... ok
+test desktop::tests::a_lock_file_nobody_holds_is_taken_over ... ok
+test desktop::tests::the_automatic_download_setting_is_on_unless_it_says_off ... ok
+test desktop::tests::the_dock_icon_follows_the_window_but_never_brings_a_background_run_forward ... ok
+test desktop::tests::every_nsh_only_key_is_a_keystroke_nsh_reads_and_the_old_rule_still_refuses_it ... ok
+test desktop::tests::the_hooks_queue_their_commands_once_and_in_order ... ok
+test desktop::tests::every_combo_the_page_can_store_is_a_keystroke_nsh_reads ... ok
+test desktop::tests::the_menu_revision_moves_on_a_refresh_and_on_a_real_chrome_change_only ... ok
+test desktop::tests::the_nsh_only_keys_have_the_names_the_page_writes ... ok
+test desktop::tests::the_settings_presets_round_trip ... ok
+test desktop::tests::when_the_guard_applies ... ok
+test desktop::tests::with_a_source_the_status_is_what_the_driver_published ... ok
+test desktop::tests::without_an_update_source_the_status_is_one_honest_idle_sentence ... ok
+test dev_command::tests::consume_removes_commands_before_returning_and_never_replays_them ... ok
+test dev_command::tests::disabled_mailbox_is_untouched_and_unknown_or_invalid_commands_are_consumed ... ok
+test dev_command::tests::gate_requires_android_dev_opt_in_and_exact_test_environment ... ok
+test dev_command::tests::parse_accepts_only_lock_and_logout ... ok
+test dev_env::tests::a_relative_database_path_is_taken_under_the_data_folder ... ok
+test dev_env::tests::android_load_reaches_core_and_account_gate_without_changing_the_environment ... ok
+test dev_env::tests::baked_entries_accept_semicolons_and_newlines_with_the_same_validation ... ok
+test dev_env::tests::missing_file_is_empty_and_oversized_file_is_rejected ... ok
+test dev_env::tests::only_a_debug_or_buwiz_android_dev_build_honours_the_baked_list ... ok
+test desktop::tests::a_second_process_finds_the_first_asks_it_to_show_and_takes_over_when_it_ends ... ok
+test dev_env::tests::parses_only_allowlisted_values_without_shell_expansion ... ok
+test dev_env::tests::the_account_server_and_trust_key_are_allowed_but_sending_is_not ... ok
+test dev_env::tests::private_file_overrides_baked_values_per_key ... ok
+test dev_env::tests::the_agent_token_is_refused_baked_and_in_the_file ... ok
+test desktop::tests::a_launch_with_nobody_running_goes_on_and_a_test_environment_is_never_stopped ... ok
+test desktop::tests::a_second_launch_ends_without_starting_and_the_first_comes_forward ... ok
+test door::tests::a_call_with_the_wrong_kind_or_an_unknown_name_is_a_clear_error ... ok
+test desktop::tests::older_version_refused_while_the_new_one_runs ... ok
+test desktop::tests::the_first_claim_is_the_app_and_a_second_asks_it_to_show ... ok
+
+running 1 test
+test door::tests::a_refused_send_guard_latches_the_worker_off ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 170 filtered out; finished in 0.00s
+
+
+running 1 test
+test door::tests::a_refused_send_guard_latches_the_worker_off ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 170 filtered out; finished in 0.00s
+
+test door::tests::a_database_another_copy_holds_says_what_to_do_until_it_is_closed ... ok
+test door::tests::a_refused_send_guard_latches_the_worker_off ... ok
+test door::tests::a_scratch_folder_left_under_a_reused_process_id_starts_empty ... ok
+test door::tests::a_scratch_folder_is_removed_while_its_owner_lock_is_held ... ok
+test door::tests::a_scratch_folder_whose_database_was_written_lately_is_kept ... ok
+test door::tests::a_scratch_folder_whose_owner_lock_is_held_is_kept ... ok
+test door::tests::a_hotkey_this_listener_cannot_register_is_refused_when_it_is_set ... ok
+test door::tests::a_database_in_the_owners_folders_is_refused_before_it_is_created ... ok
+test door::tests::a_debug_build_always_switches_the_keychain_off_and_a_release_build_leaves_it ... ok
+test door::tests::a_second_copy_on_the_same_database_is_told_in_plain_words ... ok
+test door::tests::an_old_quiet_scratch_folder_is_forgotten_and_a_recent_one_is_not ... ok
+test door::tests::a_second_engine_booting_does_not_repoint_the_first ... ok
+test door::tests::a_sync_call_reaches_the_host_and_a_host_error_keeps_its_message ... ok
+
+running 1 test
+test door::tests::a_test_environment_with_no_database_named_gets_a_scratch_one ... ok
+test door::tests::only_the_second_copy_sentence_is_said_in_other_words ... ok
+
+running 1 test
+test door::tests::registration_prepares_the_process_before_anything_is_called ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 170 filtered out; finished in 0.01s
+
+test door::tests::registration_prepares_the_process_before_anything_is_called ... ok
+test door::tests::the_committed_types_file_is_current ... ok
+2026-11-28T07:32:06.599700Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T07:32:06.614505Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T07:32:06.622231Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:32:06.623223Z  INFO bir_core::background_cron: Background cron engine stopped
+2026-11-28T07:32:06.693781Z  INFO bir_core::db::taxpayers: Grouped existing profiles under one taxpayer tin_root=000123453 branches=1 source_profile_id=1
+2026-11-28T07:32:06.702966Z  WARN bir_core::db::google_calendar: Post-commit refresh needs attention warning="Taxpayer profile save committed, and the calendar/deadline refresh request was recorded for retry, but the immediate wake was deferred: the background worker is not running yet"
+2026-11-28T07:32:06.705738Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+test door::tests::an_async_call_runs_and_its_host_error_keeps_its_message ... ok
+test door::tests::the_host_functions_are_listed_with_their_kinds ... ok
+test door::tests::data_change_token_holds_for_reads_and_moves_for_local_and_external_writes ... ok
+test door::tests::each_engine_end_frees_the_database_for_the_next ... ok
+test desktop::tests::the_guard_locks_the_database_the_door_opens ... ok
+test export_archive::tests::download_path_uses_the_provider_name_including_collision_suffixes ... ok
+test export_archive::tests::failed_writer_removes_even_a_partial_archive ... ok
+test export_archive::tests::staging_is_private_unique_and_removed_on_drop ... ok
+test door::tests::try_again_opens_the_database_once_the_engine_before_has_ended ... ok
+test guards::tests::a_database_inside_each_protected_folder_is_refused ... ok
+test guards::tests::a_different_case_does_not_get_past_the_guard ... ok
+test guards::tests::a_bad_mock_port_is_not_the_mock ... ok
+test door::tests::the_shell_poll_switch_is_read_only_in_a_test_environment ... ok
+test guards::tests::a_dry_run_is_forced_and_the_live_acknowledgement_removed ... ok
+test door::tests::use_database_names_the_file_before_the_first_call_only ... ok
+test guards::tests::a_listening_loopback_host_is_the_mock_and_the_environment_is_left_alone ... ok
+test desktop::tests::the_host_functions_reach_the_mailbox_through_the_door ... ok
+test guards::tests::a_listening_loopback_relay_is_the_relay_and_anything_else_refuses ... ok
+test guards::tests::a_live_ack_does_not_survive_a_lab_host_that_is_not_the_mock ... ok
+test guards::tests::a_relay_url_decides_alone_and_only_a_listening_loopback_one_sends ... ok
+test guards::tests::a_test_environment_also_protects_the_apps_own_data_folder ... ok
+test guards::tests::an_android_test_run_opens_a_named_database_only_inside_test_data ... ok
+test guards::tests::dot_dot_cannot_reach_a_protected_folder ... ok
+test guards::tests::a_loopback_host_with_nothing_listening_is_a_dry_run ... ok
+test guards::tests::a_test_environment_stays_a_dry_run_even_with_the_mock_listening ... ok
+test guards::tests::a_legacy_relay_refusal_is_not_hidden_by_another_loopback_listener ... ok
+test guards::tests::here_a_scratch_database_opens_and_the_owners_data_does_not ... ok
+test guards::tests::localhost_accepts_an_ipv4_only_relay ... ok
+test guards::tests::localhost_accepts_an_ipv6_only_relay ... ok
+test guards::tests::off_starts_the_worker_and_says_sending_is_not_available ... ok
+test guards::tests::only_a_plain_release_launch_may_file_on_any_system ... ok
+test door::tests::the_door_reads_test_environment_the_way_bir_core_does ... ok
+test door::tests::a_release_build_in_a_test_environment_switches_the_keychain_off ... ok
+test guards::tests::localhost_checks_both_loopback_families_when_the_first_is_not_a_mock ... ok
+test guards::tests::health_probe_requires_successful_mock_json ... ok
+test guards::tests::the_local_buwiz_relay_is_that_server_or_a_refusal ... ok
+test guards::tests::relay_requires_both_a_listener_and_mock_health ... ok
+test guards::tests::a_release_launch_leaves_the_filing_transport_in_control ... ok
+test guards::tests::the_local_buwiz_relay_needs_a_listening_server_on_this_computer_and_a_test_key ... ok
+test guards::tests::the_protected_folders_ignore_userprofile ... ok
+test guards::tests::non_loopback_or_invalid_relay_refuses_even_when_dry_run_is_set ... ok
+test guards::tests::the_verdict_refuses_what_is_not_a_dry_run_or_the_mock ... ok
+test guards::tests::the_mock_works_on_the_ipv6_loopback_too ... ok
+test guards::tests::relay_guard_accepts_ipv6_and_localhost_origins ... ok
+test guards::tests::this_app_is_built_without_direct_filing ... ok
+test guards::tests::with_no_home_nothing_is_opened ... ok
+test guards::tests::test_and_agent_launches_cannot_go_live_in_release ... ok
+test os_login::apple::tests::la_errors_map_to_the_callers_words ... ok
+test os_login::tests::a_test_environment_never_asks_the_os ... ok
+test os_login::tests::outside_a_test_environment_the_os_answer_is_the_answer ... ok
+test os_login::tests::the_page_reads_snake_case_words ... ok
+test os_login::tests::the_main_window_title_comes_from_nsh_json ... ok
+test os_login::windows::tests::a_preview_in_front_never_owns_the_sheet ... ok
+test os_login::windows::tests::available_with_a_window_asks_with_that_window ... ok
+test os_login::windows::tests::each_verification_result_maps_to_one_answer ... ok
+test os_login::tests::os_login_has_no_password_input ... ok
+test os_login::windows::tests::not_available_or_no_window_never_asks ... ok
+test os_login::windows::tests::real_windows_answers ... ignored, real OS calls; run by hand on a Windows machine
+test guards::tests::where_nothing_can_be_verified_only_a_named_database_opens ... ok
+test os_login::windows::tests::the_numbers_match_the_windows_crate ... ok
+test os_login::windows::tests::windows_handle_is_ours_or_none ... ok
+test print::tests::a_document_without_the_paper_style_is_a4_at_scale_one ... ok
+test print::tests::a_capture_that_is_not_one_a4_sheet_is_refused ... ok
+test os_login::windows::tests::an_sta_thread_answers_none_without_winrt ... ok
+test print::tests::a_blank_pdf_is_seen_as_blank ... ok
+test print::tests::a_fill_is_not_made_for_a_form_with_no_window ... ok
+test print::tests::a_folio_sheet_prints_on_a4_scaled_down_to_fit ... ok
+test print::tests::a_failed_or_unchanged_fill_changes_nothing ... ok
+test print::tests::a_newer_host_is_not_stopped_by_an_older_stop ... ok
+test print::tests::a_save_path_is_only_honoured_in_a_test_environment ... ok
+test print::tests::a_sheet_that_fits_is_never_scaled_up ... ok
+test print::tests::a_type3_fonts_unicode_map_is_read ... ok
+test print::tests::a_request_writes_the_sheet_and_opens_the_window_once ... ok
+test print::tests::an_escaped_text_stays_escaped ... ok
+test guards::tests::other_paths_are_allowed ... ok
+test print::tests::an_edit_patches_the_open_preview_and_writes_the_new_document ... ok
+test print::tests::closing_deletes_the_files ... ok
+test print::tests::a_pdf_in_flight_never_survives_a_session_change_or_same_form_replacement ... ok
+test print::tests::asking_again_refreshes_in_place_with_a_patch_or_a_new_body ... ok
+test print::tests::size_names ... ok
+test print::tests::the_capture_style_goes_last_in_the_head ... ok
+test print::tests::missing_previews_and_failed_pdf_generation_do_not_produce_a_document ... ok
+test print::tests::the_field_texts_come_out_of_the_shape ... ok
+test print::tests::the_hook_deletes_the_source_sheet_once_it_is_read ... ok
+test print::tests::quitting_deletes_every_preview_folder ... ok
+test print::tests::the_folders_of_gone_processes_are_swept_and_nothing_else ... ok
+test print::tests::the_patch_script_sets_every_box_and_marks_the_revision ... ok
+2026-11-28T07:32:08.380039Z  WARN nsh_app_ebirforms::print: Print failed: The printer Office is not available.
+test print::tests::the_hooks_of_the_app_reach_this_module ... ok
+2026-11-28T07:32:08.404529Z  WARN nsh_app_ebirforms::print: Save as PDF failed: The save panel could not open: no owner window
+test print::tests::the_preview_folder_is_a_loadable_file_url_here ... ok
+2026-11-28T07:32:08.404739Z  WARN nsh_app_ebirforms::print: Save as PDF: the person stopped waiting for it to finish
+test print::tests::one_capture_per_sheet_becomes_one_a4_page_each ... ok
+test print::tests::the_sheet_is_written_whole_and_replaced_whole ... ok
+test print::tests::a_failed_print_or_save_is_written_to_the_log_and_a_cancel_is_not ... ok
+test print::tests::urls_names_and_stems ... ok
+test print::tests::windows_paths_become_file_urls_webview2_loads ... ok
+test print::tests::windows_tells_a_running_process_from_a_gone_one ... ok
+test print::tests::without_a_host_nothing_counts_as_open ... ok
+test print_android_policy::tests::missing_or_unknown_jobs_are_left_alone ... ok
+test print_android_policy::tests::replacement_leaves_every_job_alone ... ok
+test print_android_policy::tests::revocation_dismisses_only_the_unsubmitted_preview ... ok
+test print::tests::windows_refuses_a_pdf_that_is_not_one_a4_page_per_sheet ... ok
+test print_android_policy::tests::the_printing_webview_has_no_text_floor_and_no_text_zoom ... ok
+test sheets::tests::an_edit_marks_only_its_sheet ... ok
+test sheets::tests::data_urls_decode ... ok
+test tests::ping_answers_pong ... ok
+test guards::tests::windows_spellings_of_a_protected_folder_are_refused ... ok
+test os_login::windows::tests::lock_window_finds_our_one_nsh_window_and_refuses_two ... ok
+test tests::bir_core_is_built_as_plain_sqlite_with_the_nsh_data_folder ... ok
+test print::tests::the_hooks_open_one_preview_and_follow_edits ... ok
+test print::tests::windows_makes_the_pdf_one_a4_page_per_sheet ... ok
+test print::tests::the_sheets_are_drawn_as_pictures_and_an_edit_redraws_only_its_sheet ... ok
+2026-11-28T07:32:09.736840Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:32:09.737734Z  INFO bir_core::background_cron: Background cron engine stopped
+2026-11-28T07:32:09.755254Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T07:32:09.774063Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:32:09.777696Z  INFO bir_core::background_cron: Cron: Attempting to submit queued 1601C 022024 for 00012345300000
+2026-11-28T07:32:09.778601Z  INFO bir_core::transport: SFTP dry-run: no network source="dry-run" folder="1601Cv2018"
+2026-11-28T07:32:09.778303Z  INFO bir_core::background_cron: Cron: Attempting to submit queued 1601C 012024 for 00012345300000
+2026-11-28T07:32:09.779538Z  INFO bir_core::transport: SFTP dry-run: no network source="dry-run" folder="1601Cv2018"
+2026-11-28T07:32:09.783262Z  INFO bir_core::transport: SFTP dry-run PUT (no network) source="dry-run" remote_path="/1601Cv2018/00012345300000-1601Cv2018-022024#juana@example.com#.xml" payload_len=995 payload_sha256="87a26769d76200cff2f58a306923ed3034df74504a1c5de90d20551cb3d4690e"
+2026-11-28T07:32:09.783555Z  INFO bir_core::background_cron: Cron: dry run: simulated submission of queued 1601C 00012345300000-1601Cv2018-022024#juana@example.com#.xml (nothing sent to BIR)
+2026-11-28T07:32:09.785325Z  INFO bir_core::transport: SFTP dry-run PUT (no network) source="dry-run" remote_path="/1601Cv2018/00012345300000-1601Cv2018-012024#juana@example.com#.xml" payload_len=994 payload_sha256="cf5c08910979295704eab2e84f9661132f7968607e6eadda34d3abf1bc490174"
+2026-11-28T07:32:09.785752Z  INFO bir_core::background_cron: Cron: dry run: simulated submission of queued 1601C 00012345300000-1601Cv2018-012024#juana@example.com#.xml (nothing sent to BIR)
+2026-11-28T07:32:09.786394Z  INFO bir_core::background_cron: Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)
+2026-11-28T07:32:09.786688Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:32:09.787741Z  INFO bir_core::background_cron: Cron: 1601C dry-run PUT succeeded; skipping IMAP poll (source=dry-run)
+2026-11-28T07:32:09.788540Z  INFO bir_core::background_cron: Queue explicitly woken up by a wake signal.
+2026-11-28T07:32:09.876497Z  INFO bir_core::background_cron: Background cron engine stopped
+2026-11-28T07:32:09.908119Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:32:09.910082Z  INFO bir_core::background_cron: Background cron engine stopped
+2026-11-28T07:32:09.920788Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:32:09.922185Z  INFO bir_core::background_cron: Background cron engine stopped
+2026-11-28T07:32:09.932713Z  INFO bir_core::background_cron: Background cron engine started
+2026-11-28T07:32:09.934629Z  INFO bir_core::background_cron: Background cron engine stopped
+test door::tests::in_a_fresh_process_every_engine_end_frees_the_database ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 170 filtered out; finished in 3.60s
+
+test door::tests::in_a_fresh_process_every_engine_end_frees_the_database ... ok
+
+test result: ok. 170 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 4.66s
+
+     Running tests\agent.rs (<home>\main-red-rust-target\debug\deps\agent-62263d65d9b1df3f.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\agent_send.rs (<home>\main-red-rust-target\debug\deps\agent_send-669967022d3fb467.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\window_plane.rs (<home>\main-red-rust-target\debug\deps\window_plane-60ab4e7e6cc222d6.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nsh_app_ebirforms
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

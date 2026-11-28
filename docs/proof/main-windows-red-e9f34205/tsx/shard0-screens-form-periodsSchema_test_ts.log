@@ -1,0 +1,82 @@
+? built the Rust crate nsh-app-ebirforms (911ms, 1 warning: -v shows it)
+? built the headless runner of nsh-app-ebirforms (1.1s, 1 warning: -v shows it)
+? screens\form\periodsSchema.test.ts � PR3: the eighteen month+year pairs are all listed (1ms)
+2026-11-28T06:37:04.801463Z  INFO bir_core::logging: ?? Tracing initialized (developer_mode: false)
+2026-11-28T06:37:04.816600Z  INFO nsh_app_ebirforms::door: eBIRForms started
+2026-11-28T06:37:04.845910Z  INFO bir_core::db::migrations: Applying database migration v1
+2026-11-28T06:37:04.856551Z  INFO bir_core::db::migrations: Applying database migration v2
+2026-11-28T06:37:04.857059Z  INFO bir_core::db::migrations: Applying database migration v3
+2026-11-28T06:37:04.857351Z  INFO bir_core::db::migrations: Applying database migration v4
+2026-11-28T06:37:04.857558Z  INFO bir_core::db::migrations: Applying database migration v5
+2026-11-28T06:37:04.858236Z  INFO bir_core::db::migrations: v5 migration: added period_key column to form_drafts
+2026-11-28T06:37:04.859202Z  INFO bir_core::db::migrations: Applying database migration v6
+2026-11-28T06:37:04.859472Z  INFO bir_core::db::migrations: Applying database migration v7
+2026-11-28T06:37:04.859932Z  INFO bir_core::db::migrations: Applying database migration v8
+2026-11-28T06:37:04.860115Z  INFO bir_core::db::migrations: Applying database migration v9
+2026-11-28T06:37:04.860228Z  INFO bir_core::db::migrations: Applying database migration v10
+2026-11-28T06:37:04.860832Z  INFO bir_core::db::migrations: Applying database migration v11
+2026-11-28T06:37:04.860980Z  INFO bir_core::db::migrations: Applying database migration v12
+2026-11-28T06:37:04.861095Z  INFO bir_core::db::migrations: Applying database migration v13
+2026-11-28T06:37:04.861207Z  INFO bir_core::db::migrations: Applying database migration v14
+2026-11-28T06:37:04.861511Z  INFO bir_core::db::migrations: Applying database migration v15
+2026-11-28T06:37:04.864261Z  INFO bir_core::db::migrations: v15 migration: added 6 missing form-rule state columns
+2026-11-28T06:37:04.864467Z  INFO bir_core::db::migrations: Applying database migration v16
+2026-11-28T06:37:04.865409Z  INFO bir_core::db::migrations: v16 migration: added 2 checked Final Copy proof columns
+2026-11-28T06:37:04.865554Z  INFO bir_core::db::migrations: Applying database migration v17
+2026-11-28T06:37:04.870308Z  INFO bir_core::db::migrations: v17 migration: added 12 exact form-rule identity columns
+2026-11-28T06:37:04.870489Z  INFO bir_core::db::migrations: Applying database migration v18
+2026-11-28T06:37:04.870722Z  INFO bir_core::db::migrations: Applying database migration v19
+2026-11-28T06:37:04.871021Z  INFO bir_core::db::migrations: Applying database migration v20
+2026-11-28T06:37:04.872046Z  INFO bir_core::db::migrations: Applying database migration v21
+2026-11-28T06:37:04.872582Z  INFO bir_core::db::migrations: Applying database migration v22
+2026-11-28T06:37:04.874117Z  INFO bir_core::db::migrations: Applying database migration v23
+2026-11-28T06:37:04.874443Z  INFO bir_core::db::migrations: Applying database migration v24
+2026-11-28T06:37:04.877055Z  INFO bir_core::db::migrations: v11 migration: added 5 missing Forms Set provenance columns
+2026-11-28T06:37:04.879411Z  WARN bir_core::db::google_calendar: Calendar/deadline refresh request was recorded for retry, but its immediate wake was deferred reason="the background worker is not running yet"
+2026-11-28T06:37:04.881425Z  INFO bir_core::background_cron: Background cron engine started
+? screens\form\periodsSchema.test.ts � PR3: 0605's month+year pair is marked one_periods on one item, with the host's two_digit truth (307ms)
+? screens\form\periodsSchema.test.ts � PR3: 0619E's month+year pair is marked one_periods on one item, with the host's two_digit truth (4ms)
+? screens\form\periodsSchema.test.ts � PR3: 0619F's month+year pair is marked one_periods on one item, with the host's two_digit truth (4ms)
+? screens\form\periodsSchema.test.ts � PR3: 1600PT's month+year pair is marked one_periods on one item, with the host's two_digit truth (10ms)
+? screens\form\periodsSchema.test.ts � PR3: 1600VT's month+year pair is marked one_periods on one item, with the host's two_digit truth (7ms)
+? screens\form\periodsSchema.test.ts � PR3: 1601C's month+year pair is marked one_periods on one item, with the host's two_digit truth (6ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701's month+year pair is marked one_periods on one item, with the host's two_digit truth (63ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701A's month+year pair is marked one_periods on one item, with the host's two_digit truth (12ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701MS's month+year pair is marked one_periods on one item, with the host's two_digit truth (12ms)
+? screens\form\periodsSchema.test.ts � PR3: 2000's month+year pair is marked one_periods on one item, with the host's two_digit truth (7ms)
+? screens\form\periodsSchema.test.ts � PR3: 2550M's month+year pair is marked one_periods on one item, with the host's two_digit truth (18ms)
+? screens\form\periodsSchema.test.ts � PR3: 2550Q's month+year pair is marked one_periods on one item, with the host's two_digit truth (15ms)
+? screens\form\periodsSchema.test.ts � PR3: 2551Q's month+year pair is marked one_periods on one item, with the host's two_digit truth (5ms)
+? screens\form\periodsSchema.test.ts � PR3: 2553's month+year pair is marked one_periods on one item, with the host's two_digit truth (4ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702EX's month+year pair is marked one_periods on one item, with the host's two_digit truth (18ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702MX's month+year pair is marked one_periods on one item, with the host's two_digit truth (29ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702Q's month+year pair is marked one_periods on one item, with the host's two_digit truth (6ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702RT's month+year pair is marked one_periods on one item, with the host's two_digit truth (18ms)
+? screens\form\periodsSchema.test.ts � PR3: the six from-to pairs are all listed (0ms)
+? screens\form\periodsSchema.test.ts � PR3: 1600WP's from-to pair frm1600WP:DateWithholdingMonth is marked date_ranges on one item (5ms)
+? screens\form\periodsSchema.test.ts � PR3: 2550Q's from-to pair frm2550qv2024:RtnPeriodFromNo4 is marked date_ranges on one item (3ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702EX's from-to pair frm1702EX:txtPg1Pt1I17EffectivityFrom is marked date_ranges on one item (3ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701MS's from-to pair frm1701MS:txtTaxpayerNo16a is marked date_ranges on one item (3ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701MS's from-to pair frm1701MS:txtTaxpayerNo16b is marked date_ranges on one item (3ms)
+? screens\form\periodsSchema.test.ts � PR3: 2551Q's from-to pair txtDateIssue is marked date_ranges on one item (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 2551Q's bare keys are whole-date boxes (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 1600PT's year is a select that lists about a hundred years (2ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702EX's 20YY year box caps at two digits (3ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702MX's 20YY year box caps at two digits (6ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702RT's 20YY year box caps at two digits (4ms)
+? screens\form\periodsSchema.test.ts � PR3: 1702Q's year box is a number box (2ms)
+? screens\form\periodsSchema.test.ts � PR3: 0605's four-digit year box is a number box (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 0619E's four-digit year box is a number box (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 0619F's four-digit year box is a number box (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 1601C's four-digit year box is a number box (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701's four-digit year box is a number box (7ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701A's four-digit year box is a number box (2ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701MS's four-digit year box is a number box (2ms)
+? screens\form\periodsSchema.test.ts � PR3: 2000's four-digit year box is a number box (2ms)
+? screens\form\periodsSchema.test.ts � PR3: 2550M's four-digit year box is a number box (3ms)
+? screens\form\periodsSchema.test.ts � PR3: 2550Q's four-digit year box is a number box (2ms)
+? screens\form\periodsSchema.test.ts � PR3: 2551Q's four-digit year box is a number box (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 2553's four-digit year box is a number box (1ms)
+? screens\form\periodsSchema.test.ts � PR3: 1701's month moved onto the year's item and 2000's year joined its month � one item per pair (8ms)
+2026-11-28T06:37:05.438571Z  INFO bir_core::background_cron: Background cron engine stopped
+? 45 tests: 45 passed, 0 failed (1.9s)
