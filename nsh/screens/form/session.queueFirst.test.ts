@@ -99,6 +99,7 @@ test("items to fix and the tier warning: Queue says what Check says, shows every
   try {
     expect(bir.screen_form_queue_check("1604C", s.draft() as object).warns.length).toBeGreaterThan(0);
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length > 0, "the toast");
     expect(said.toasts).toEqual(["1 item needs attention."]);
     expect(s.overlay()).toBe(null);
@@ -123,15 +124,19 @@ test("a second Queue takes the refusal toast down before its question opens: the
   const spy = spyQueue();
   try {
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length === 1, "the refusal");
     expect(dismissed).toEqual([]);
     s.queue();
+    await s.idle();
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     expect(dismissed).toEqual(["t1"]);
     s.confirmQueue();
+    await s.idle();
     await until(() => said.toasts.length === 2, "the host's refusal");
     // The host's refusal is the toast now; the next refusal replaces it.
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length === 3, "the third toast");
     expect(dismissed).toEqual(["t1", "t2"]);
   } finally {
@@ -146,20 +151,24 @@ test("a second Queue with the same list goes to the host, which decides: the pag
   const spy = spyQueue();
   try {
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length === 1, "the first toast");
     expect(s.overlay()).toBe(null);
     expect(spy.calls.n).toBe(0);
     // Nothing was fixed: pressed again, the question is asked (the tier warning) and the host is the one that answers.
     s.queue();
+    await s.idle();
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     expect(spy.calls.n).toBe(0);
     s.confirmQueue();
+    await s.idle();
     await until(() => spy.calls.n === 1, "the host's Queue");
     await until(() => said.toasts.length === 2, "the host's refusal");
     expect(said.toasts[1]).toBe("1 item needs attention.");
     expect(s.status()).toBe("Draft");
     // And the next press is told again, not asked.
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length === 3, "the third toast");
     expect(s.overlay()).toBe(null);
     expect(spy.calls.n).toBe(1);
@@ -176,11 +185,14 @@ test("a host refusal not listed on the page stays visible even when the page has
   const spy = spyQueue(message);
   try {
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length === 1, "the page's list");
     expect(s.todo().length).toBeGreaterThan(0);
     s.queue();
+    await s.idle();
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     s.confirmQueue();
+    await s.idle();
     await until(() => said.toasts.length === 2, "the host's refusal");
     expect(said.toasts[1]).toBe(message);
     expect(s.status()).toBe("Draft");
@@ -199,6 +211,7 @@ test("nothing to fix and the tier warning: Queue asks once; Cancel queues nothin
     expect(s.errors().length).toBe(0);
     expect(bir.screen_form_queue_check("0619E", s.draft() as object).warns.length).toBeGreaterThan(0);
     s.queue();
+    await s.idle();
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     expect(said.toasts).toEqual([]);
     expect(spy.calls.n).toBe(0);
@@ -207,8 +220,10 @@ test("nothing to fix and the tier warning: Queue asks once; Cancel queues nothin
     expect(spy.calls.n).toBe(0);
     expect(s.status()).toBe("Draft");
     s.queue();
+    await s.idle();
     await until(() => s.overlay()?.kind === "queue-confirm", "the question again");
     s.confirmQueue();
+    await s.idle();
     expect(said.toasts).toEqual([QUEUED]);
     expect(spy.calls.n).toBe(1);
     await s.idle();
@@ -227,7 +242,9 @@ test("nothing to fix and no warning: Queue queues straight away, once, even when
     expect(s.errors().length).toBe(0);
     expect(bir.screen_form_queue_check("1702RT", s.draft() as object).warns.length).toBe(0);
     s.queue();
+    await s.idle();
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length > 0, "the toast");
     await s.idle();
     expect(said.toasts).toEqual([QUEUED]);
@@ -247,9 +264,11 @@ test("Check clean and the host still refuses: Continue reveals the host message 
   try {
     expect(s.errors().length).toBe(0);
     s.queue();
+    await s.idle();
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     expect(said.toasts).toEqual([]);
     s.confirmQueue();
+    await s.idle();
     expect(said.toasts).toEqual(["agent_category: Please select an option for Item 8."]);
     expect(spy.calls.n).toBe(1);
     expect(s.status()).toBe("Draft");
@@ -275,6 +294,7 @@ test("a message that is only a page notice does not stop Queue", async () => {
     expect(said.toasts).toEqual(["1 item needs attention."]);
     said.toasts.length = 0;
     s.queue();
+    await s.idle();
     await until(() => said.toasts.length > 0, "the toast");
     await s.idle();
     expect(said.toasts).toEqual([QUEUED]);
@@ -295,6 +315,7 @@ test("2551Q: its Queue reconciles the stored return with the year's tax profile,
     expect(s.errors().length).toBeGreaterThan(0);
     expect(bir.screen_form_queue_check("2551Q", s.draft() as object).warns.length).toBeGreaterThan(0);
     s.queue();
+    await s.idle();
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     expect(said.toasts).toEqual([]);
     s.cancelQueueConfirm();

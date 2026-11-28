@@ -883,7 +883,7 @@ export class FormSession {
   async idle(): Promise<void> {
     for (let i = 0; i < 600; i++) {
       const s = this.st;
-      if (!s.loading && !s.checking && !this.flushTimer && !this.saveTimer && s.saveState.state !== "saving" && !s.periodInFlight && !this.periodWaiting && !this.settling) return;
+      if (!s.loading && !s.checking && !this.flushTimer && !this.saveTimer && s.saveState.state !== "saving" && !s.periodInFlight && !this.periodWaiting && !this.settling && !this.queueGateBusySig()) return;
       await new Promise((r) => setTimeout(r, 25));
     }
   }
