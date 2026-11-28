@@ -1,0 +1,11 @@
+build: app 669996d9, nsh 8c78cfd6 beside it, tool nsh 0.6.1 (8c78cfd), cargo 1.99.0 (5f94df478 2026-08-27), folder C:\Users\Administrator\builds\p486\target
+✓ built the Rust crate nsh-app-ebirforms (2.1s)
+✓ built App.tsx (1.5 MB js, 5.5 MB bytecode, 335ms)
+✓ built the development host for Windows (2.0s)
+• Windows (DEVINBOX) connected, build 1
+Entering debug mode. Use h or ? for help. 
+
+At C:\Users\Administrator\AppData\Local\Temp\just-HM9Zwz\nsh-run-agent.ps1:1521 char:5
++     $code = $LASTEXITCODE
++     ~~~~~~~~~~~~~~~~~~~~~
+[DBG]: PS C:\Users\Administrator\builds\p486\app\nsh>> 

@@ -1,0 +1,19 @@
+2026-11-28T01:00:04.197Z	launch	nsh-run-agent windows C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261128-010003.db	started	0ms
+2026-11-28T01:00:11.774Z	wait	window plane	ready	7572ms
+2026-11-28T01:00:11.821Z	wait	data plane	ready	44ms
+2026-11-28T01:00:11.860Z	app.info	database	test	36ms
+2026-11-28T01:00:12.518Z	recipe	setup-start	pass	656ms
+2026-11-28T01:00:12.569Z	resolve	$tin_field	n11	48ms
+2026-11-28T01:00:19.182Z	recipe	sign-up	pass	6662ms
+2026-11-28T01:00:23.222Z	recipe	tax-year	pass	4038ms
+2026-11-28T01:00:32.452Z	recipe	navigate	pass	9226ms
+2026-11-28T01:00:41.795Z	recipe	open-2551q	pass	9341ms
+2026-11-28T01:00:59.216Z	recipe	money-boxes	pass	17419ms
+2026-11-28T01:01:10.471Z	recipe	sheet-press	pass	11254ms
+2026-11-28T01:01:10.579Z	resolve	$table	fp-table-drpATC1	104ms
+2026-11-28T01:01:12.987Z	recipe	delete-row	pass	2513ms
+2026-11-28T01:01:23.831Z	recipe	queue	pass	10843ms
+2026-11-28T01:01:27.655Z	recipe	birth-date	pass	3822ms
+2026-11-28T01:01:39.087Z	recipe	sign-out	known gap at s4: wait_until timed out: node `locked-screen` not found	11185ms
+2026-11-28T01:01:39.099Z	stop	app	stopped	9ms
+2026-11-28T01:01:39.603Z	clean	C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261128-010003.db	scratch database removed	0ms

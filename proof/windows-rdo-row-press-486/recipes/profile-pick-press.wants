@@ -189,12 +189,15 @@ wait_until tp-address-zip_code-list --timeout-ms 3000
 click tp-address-zip_code-trigger --screenshot
 wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
+# The ZIP click-aways press the Registered address box above it: in the macOS window the ZIP list opens downward over
+# the Phone box (gpui-agent refuses: occluded_by, macOS run of #486 at 2281b5ea, s163); the full-width box above is clear
+# in every layout.
 # Click away 1/3: "makati" fits several choices; a press on another box closes the list, the box keeps 1200 and says so.
 click tp-address-zip_code-search
 key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati --key-delay-ms 80
 wait_until tp-address-zip_code-list --timeout-ms 3000
-click tp-address-phone
+click tp-address-registered_address
 wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --timeout-ms 2000
@@ -203,7 +206,7 @@ click tp-address-zip_code-search
 key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati --key-delay-ms 80
 wait_until tp-address-zip_code-list --timeout-ms 3000
-click tp-address-phone
+click tp-address-registered_address
 wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --timeout-ms 2000
@@ -212,7 +215,7 @@ click tp-address-zip_code-search
 key tp-address-zip_code-search mod+a
 type tp-address-zip_code-search makati --key-delay-ms 80
 wait_until tp-address-zip_code-list --timeout-ms 3000
-click tp-address-phone
+click tp-address-registered_address
 wait_until tp-address-zip_code-list --absent --timeout-ms 3000
 assert tp-address-zip_code-search value="1200 — Makati CPO + Buendia Ave"
 wait_until tp-address-zip_code-note --timeout-ms 2000 --screenshot

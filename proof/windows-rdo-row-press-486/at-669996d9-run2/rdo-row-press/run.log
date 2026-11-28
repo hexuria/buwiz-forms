@@ -1,0 +1,11 @@
+2026-11-28T01:01:41.386Z	launch	nsh-run-agent windows C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261128-010140.db	started	0ms
+2026-11-28T01:01:49.340Z	wait	window plane	ready	7950ms
+2026-11-28T01:01:49.373Z	wait	data plane	ready	31ms
+2026-11-28T01:01:49.406Z	app.info	database	test	30ms
+2026-11-28T01:01:50.065Z	recipe	setup-start	pass	657ms
+2026-11-28T01:02:26.224Z	recipe	rdo-row-press	pass	36157ms
+2026-11-28T01:02:26.271Z	resolve	$tin_field	n11	43ms
+2026-11-28T01:02:34.885Z	recipe	sign-up	pass	8659ms
+2026-11-28T01:04:18.186Z	recipe	profile-pick-press	pass	103298ms
+2026-11-28T01:04:18.204Z	stop	app	stopped	17ms
+2026-11-28T01:04:18.707Z	clean	C:\Users\Administrator\BuwizNsh\agents\e2e-windows-20261128-010140.db	scratch database removed	0ms

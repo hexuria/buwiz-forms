@@ -22,6 +22,15 @@ inside smoke's queue recipe in this dry-run test build via the machine script.
   recipe version (profile-pick-press 196 steps).
 - `recipes/` — copies of the two 2281b5ea recipe files the suite ran.
 
+## 669996d9 runs (final head)
+
+Final head `669996d91f3fc478b652cf78309a116f0b2bf730` (recipe-only diff from 2281b5ea:
+the three ZIP click-aways press tp-address-registered_address; same app binary).
+`at-669996d9-run1/` and `at-669996d9-run2/` are two full `windows.ps1` runs at that head:
+smoke 10 pass + 1 known gap each; rdo-row-press 4/4 pass each (rdo-row-press 81 steps,
+profile-pick-press 196 steps in both runs). `recipes/` holds the 669996d9 recipe copies.
+Same single known gap as before: sign-out s4 `locked-screen` node not found.
+
 ## Results (from each report.json, not exit codes)
 
 Run 1 (at-6417adbc): smoke 10 pass + 1 known gap; rdo-row-press 4/4 pass.

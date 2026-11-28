@@ -1,0 +1,72 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "delete-row",
+  "fingerprint": "fnv1a64:dc58a7b9f8a1c3a4",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 440
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 249,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-004556\\08-delete-row\\002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 107
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 421
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 401
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 567
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 91
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 236,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-004556\\08-delete-row\\008-s8.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-004556\\08-delete-row\\002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-004556\\08-delete-row\\008-s8.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2516
+}
