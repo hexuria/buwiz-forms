@@ -45,6 +45,8 @@ Set all four, every time:
 BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
 ```
 
+One exception: the e2e runner's `--accounts mock` mode may set `BIR_AUTH_BYPASS` to `0` instead of `1` only because it pins sign-in to a loopback mock account server; the other three safety variables are unchanged.
+
 Never set `BIR_SFTP_LIVE`. Use a scratch database, never a real one. Never send anything to the production relay, the production account server or the real BIR: a release build of `main` files for real, so never press Queue, Send or Submit in one. Use only the demo taxpayer and invented values. Never print, commit or copy a key, token, certificate or `.env` value.
 
 ## Pull requests

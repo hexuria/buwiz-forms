@@ -22,6 +22,7 @@ The maintainer is the person named in the repository's ownership (`crew/README.m
 - Never press Submit in a store. Never type a password, PIN or sign-in code into a real page. A mock server's code, typed by a recipe, is fine.
 - Never print, commit or copy a key, certificate, token or `.env` value. Never commit `assets/ios/embedded.mobileprovision`.
 - Never send anything to the production relay or the real BIR. Every run of the app uses `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1`, never `BIR_SFTP_LIVE`, and a scratch database.
+- One exception: the e2e runner's `--accounts mock` mode may set `BIR_AUTH_BYPASS` to `0` instead of `1` only because it pins sign-in to a loopback mock account server; the other three safety variables are unchanged.
 - Never press Queue, Send or Submit in a release build: a release build of `main` files for real.
 - Use only the demo taxpayer and invented values. Real taxpayer data never enters a test, a proof or a file.
 - No builds or app runs on the conductor's computer unless its person said so when they started the conductor. Python, git and reading code are fine anywhere. Builds load the computer and mix build folders; the machines exist for them.

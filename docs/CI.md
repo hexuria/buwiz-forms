@@ -286,14 +286,15 @@ start on a pull request just because the range is unknown. A `test/**` push comp
 the pull request's whole change. A `ci:suite*` label event compares the same range and uses the same choosing code.
 
 Most of `docs/` is read by people only. The exceptions are inputs to Python scripts or their tests:
-`docs/platforms/devin-blueprint.yml`, `docs/CI.md`, `docs/platforms/devin-environment.md`, and the local findings files under
-`docs/form-findings/` (`scripts/check_fix_order_goal.py` reads them). `scripts/ci_plan.py` holds the one list;
+`docs/platforms/devin-blueprint.yml`, `docs/CI.md`, `docs/platforms/devin-environment.md`, `docs/proof/E2E.md`, and
+the local findings files under `docs/form-findings/` (`scripts/check_fix_order_goal.py` reads them).
+`scripts/ci_plan.py` holds the one list;
 `scripts/tests/test_ci_plan.py` scans the scripts and tests so another docs input cannot be added without joining it.
 
 | Changed files | Pull request | `test/**` push |
 | --- | --- | --- |
 | Docs, except the script inputs above: `docs/`, top-level `*.md`, `crates/<crate>/docs/`, `.github/*.md`, Markdown under `nsh/`, `assets/brand/`, `assets/badges/`, `assets/readme/` (the README's pictures) | `changes` (including the two legacy scans), then `ci-ok` only | nothing |
-| Script-input docs: `docs/platforms/devin-blueprint.yml`, `docs/CI.md`, `docs/platforms/devin-environment.md`, `docs/form-findings/` | Python script tests | nothing |
+| Script-input docs: `docs/platforms/devin-blueprint.yml`, `docs/CI.md`, `docs/platforms/devin-environment.md`, `docs/proof/E2E.md`, `docs/form-findings/` | Python script tests | nothing |
 | Screen tests only: `nsh/**/*.test.ts`, `nsh/**/*.test.tsx` | NSH type check | screen tests |
 | Other `nsh/` files, except `nsh/src/` and `nsh/Cargo.*` | NSH type check | app build, app Rust tests, screen tests |
 | `nsh/src/`, `nsh/Cargo.toml`, `nsh/Cargo.lock` | quick checks, NSH type check | workspace tests, app build, app Rust tests, screen tests |

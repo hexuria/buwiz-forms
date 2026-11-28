@@ -291,5 +291,31 @@ install_android_sdk
                 self.assertEqual((root / "apt-called").exists(), case in ("old", "missing"))
 
 
+class WrapperAccountsMockTextTests(unittest.TestCase):
+    """The container wrapper's mock-account mode, checked as text so it runs on every host."""
+
+    def test_mock_mode_passes_no_bypass_and_requires_the_loopback_mock(self):
+        text = SCRIPT.read_text(encoding="utf-8")
+        marker = 'if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then'
+        self.assertIn(marker, text)
+        at = text.index(marker)
+        else_at = text.index("else", at)
+        fi_at = text.index("fi", else_at)
+        mock_branch, bypass_branch = text[at:else_at], text[else_at:fi_at]
+        self.assertIn('[ "${E2E_MOCK_ACCOUNT_URL:-}" = "http://127.0.0.1:3008" ]', mock_branch)
+        self.assertIn("-e E2E_ACCOUNTS -e E2E_MOCK_ACCOUNT_URL", mock_branch)
+        self.assertIn("-e BIR_AUTH_BYPASS=0", mock_branch)
+        self.assertIn("-e BIR_DEVICE_DIR", mock_branch)
+        self.assertNotIn("-e BIR_AUTH_BYPASS= ", mock_branch)
+        self.assertNotIn("-e BIR_AUTH_BYPASS=1", mock_branch)
+        self.assertNotIn("-e BIR_AUTH_BYPASS=)", mock_branch)
+        self.assertIn("-e BIR_AUTH_BYPASS=1", bypass_branch)
+        docker = text[text.index("exec docker run", at):]
+        self.assertIn('"${accounts_env[@]}"', docker)
+        self.assertIn("-e BIR_DATABASE_PATH", docker)
+        safety_line = next(line for line in docker.splitlines() if "-e BUWIZ_NO_KEYCHAIN=1" in line)
+        self.assertNotIn("BIR_AUTH_BYPASS", safety_line)
+
+
 if __name__ == "__main__":
     unittest.main()

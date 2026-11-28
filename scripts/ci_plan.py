@@ -59,6 +59,7 @@ SCRIPT_INPUT_DOCS = (
     "docs/platforms/devin-blueprint.yml",
     "docs/CI.md",
     "docs/platforms/devin-environment.md",
+    "docs/proof/E2E.md",
     "docs/form-findings/",
 )
 
