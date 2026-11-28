@@ -316,17 +316,20 @@ fn recovery_key_and_mac_login_each_unlock_through_the_real_verbs() {
             );
             assert!(with_database(|_| Ok(())).is_ok());
 
-            assert!(lock_now());
-            locked(with_database(|_| Ok(())), "locked before mac_login");
-            let answer =
-                futures::executor::block_on(mac_login(&args(vec![text("unlock")])).unwrap())
-                    .unwrap();
-            assert_eq!(
-                answer,
-                HostValue::Bool(true),
-                "positive control: mac_login unlocks"
-            );
-            assert!(with_database(|_| Ok(())).is_ok());
+            #[cfg(target_os = "macos")]
+            {
+                assert!(lock_now());
+                locked(with_database(|_| Ok(())), "locked before mac_login");
+                let answer =
+                    futures::executor::block_on(mac_login(&args(vec![text("unlock")])).unwrap())
+                        .unwrap();
+                assert_eq!(
+                    answer,
+                    HostValue::Bool(true),
+                    "positive control: mac_login unlocks"
+                );
+                assert!(with_database(|_| Ok(())).is_ok());
+            }
             drop(room);
         },
     );
