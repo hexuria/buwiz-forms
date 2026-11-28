@@ -7,7 +7,7 @@
 //! the desktop assistant read one implementation: the page draws them and
 //! [`super::fill`] refuses them.
 //!
-//! [`draft_locks`] applies ten layers, in this order, each named after the
+//! [`draft_locks`] applies eleven layers, in this order, each named after the
 //! page's row module it came from (the last after the rule it carries):
 //!
 //! 1. [`dst_pt_vat`] (PR 4): 2000's 15B and 15C, computed; 2553's
@@ -34,6 +34,8 @@
 //!    return, shut with its item's amended-return reason.
 //! 10. [`schedule1_1601fq`]: 1601FQ Schedule 1 rows, shut until item 13 is
 //!     Yes and cleared row by stable row id when it closes.
+//! 11. [`gated_rows`]: the schedule and specification boxes whose own
+//!     recompute clears a typed value while the gate is shut.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -48,6 +50,8 @@
 //! as only a typed penalty overrides the computed one.
 
 use serde_json::{Map, Value};
+
+use super::gated_rows;
 
 use super::AgentFormKind;
 
@@ -82,7 +86,7 @@ pub fn draft_lock(
     locks.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-/// The ten layers; `only` limits the penalty layer to that key's group.
+/// The eleven layers; `only` limits the penalty layer to that key's group.
 fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, only: Option<&str>) {
     dst_pt_vat::relock(kind, draft, locks);
     annual_corporate::relock(kind, draft, locks);
@@ -103,6 +107,7 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     // Previous payment applies only to an amended return.
     previous_payment::relock(kind, draft, locks);
     schedule1_1601fq::relock(kind, draft, locks);
+    gated_rows::relock(kind, draft, locks, only);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -118,6 +123,7 @@ pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     relocks.extend(installment_1606::live_locks(kind, draft));
     relocks.extend(previous_payment::live_locks(kind, draft));
     relocks.extend(schedule1_1601fq::live_locks(kind, draft));
+    relocks.extend(gated_rows::live_locks(kind, draft));
     relocks
 }
 
@@ -2668,6 +2674,7 @@ pub mod pending_notices {
                 installment_1606_clearance,
                 previous_payment_clearance,
                 schedule1_1601fq_clearance,
+                gated_rows_clearance,
             ],
         )
     }
@@ -2707,6 +2714,17 @@ pub mod pending_notices {
             return vec![("2551q_item16".to_string(), text.to_string())];
         }
         Vec::new()
+    }
+
+    fn gated_rows_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        super::gated_rows::clearances(kind, before, after)
+            .into_iter()
+            .map(|clearance| (clearance.gate, clearance.text))
+            .collect()
     }
 
     fn installment_1606_clearance(

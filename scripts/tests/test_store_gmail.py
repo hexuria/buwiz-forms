@@ -225,8 +225,11 @@ class RecipeTests(unittest.TestCase):
                             f"${{{{ inputs.release && vars.STORE_GMAIL == '1' && secrets.{name} || '' }}}}",
                             "''",
                         )
+                        # Nothing may follow the allowed value but the flow mapping's closing braces or, after a comma,
+                        # the next key (checked on its own if it is one of these names).
+                        after = r"\s*(?:\}\s*)*(?:,\s*[A-Za-z_][\w-]*\s*:.*)?"
                         self.assertTrue(
-                            any(value.lower().startswith(candidate.lower()) for candidate in allowed),
+                            any(re.fullmatch(re.escape(candidate) + after, value, re.IGNORECASE) for candidate in allowed),
                             line,
                         )
                         assignments += 1
