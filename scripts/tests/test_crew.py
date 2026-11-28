@@ -141,6 +141,10 @@ sys.exit(int(os.environ.get("FAKE_ENGINE_EXIT", "0")))
 
 def init_git_repo(repo):
     subprocess.run(["git", "init", "-q"], cwd=str(repo), check=True)
+    # Windows runners set core.autocrlf=true globally: the fixture files are written with LF, and the work tree then
+    # reads as changed against the index, so `git diff --quiet` answers 1 on a tree nobody touched. The fixture
+    # repository keeps its bytes as written on every system.
+    subprocess.run(["git", "config", "core.autocrlf", "false"], cwd=str(repo), check=True)
 
 
 def commit_fixture_repo(repo):
