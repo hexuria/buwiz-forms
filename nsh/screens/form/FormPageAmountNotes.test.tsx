@@ -306,9 +306,12 @@ test("sample mode: a refused amount typed slowly stays rolled back after the per
   await app.waitFor(BOX);
   await typeSlowlyAndTab(app, BOX, "1234567890123");
   expect(app.value(BOX)).toBe("");
-  await app.type("id:fp-frm2551Qv2018:rtnMonth#period", "12/2025");
-  await app.waitUntil(() => app.enabled("id:fp-frm2551Qv2018:qtr_1") === true, { timeout: 10000 });
-  await app.press("id:fp-frm2551Qv2018:qtr_1");
+  await app.press("id:fp-save");
+  await app.waitFor("id:sample-period");
+  await app.type("id:sample-period-year_end_month", "12");
+  await app.type("id:sample-period-year", "2025");
+  await app.press("id:sample-period-q1");
+  await app.press("id:sample-period-save");
   await app.wait(2500);
   await app.press("id:fp-nav-2");
   await app.waitFor(BOX);
