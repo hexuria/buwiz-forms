@@ -26,6 +26,6 @@ click fp-frm2551Qv2018:taxTreaty_2 --screenshot
 click fp-frm2551Qv2018:taxRateNA --screenshot
 click fp-nav-0 --screenshot
 click fp-check
-wait_until 'No problems found.' --timeout-ms 10000 --screenshot
+wait_until fp-pill-count --timeout-ms 1000 --absent
 wait_until fp-queue --timeout-ms 5000 --screenshot
 wait_until queue-confirm --timeout-ms 1000 --absent

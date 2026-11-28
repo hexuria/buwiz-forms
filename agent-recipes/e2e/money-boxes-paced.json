@@ -9,6 +9,12 @@
  ],
  "steps": [
   {
+   "id": "s0",
+   "op": "wait_until",
+   "target": "fp-frm2551Qv2018:amendedRtn_1",
+   "timeout_ms": 8000
+  },
+  {
    "id": "s1",
    "op": "click",
    "target": "fp-frm2551Qv2018:amendedRtn_1",

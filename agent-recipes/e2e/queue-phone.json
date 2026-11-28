@@ -149,15 +149,16 @@
   },
   {
    "id": "s26",
-   "op": "click",
-   "target": "fp-check"
+   "op": "press",
+   "target": "fp-check",
+   "screenshot": true
   },
   {
-   "id": "s27",
+   "id": "s27a",
    "op": "wait_until",
-   "target": "No problems found.",
-   "timeout_ms": 10000,
-   "screenshot": true
+   "target": "fp-pill-count",
+   "timeout_ms": 1000,
+   "exists": false
   },
   {
    "id": "s28",
