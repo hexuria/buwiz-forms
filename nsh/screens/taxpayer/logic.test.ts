@@ -139,20 +139,20 @@ test("section summaries", () => {
 });
 
 test("the inbox check never says confirmed without having looked, and a return past the window stays Submitted in words", () => {
-  const state = { window_days: 30 };
-  expect(checkText({ ok: true, still_pending: false, looked: false, error: null, state })).toBe(
-    "Nothing sent in the last 30 days is waiting for a BIR email, so the inbox was not searched.",
+  expect(checkText({ ok: true, still_pending: false, looked: false, error: null })).toBe(
+    "Every return sent is confirmed or was a dry run, so the inbox was not searched.",
   );
-  expect(checkText({ ok: true, still_pending: false, looked: true, error: null, state })).toBe("Checked. Everything submitted is confirmed.");
-  expect(checkText({ ok: true, still_pending: true, looked: true, error: null, state })).toBe("Checked. A submitted return is still waiting for its confirmation.");
-  expect(checkText({ ok: false, still_pending: true, looked: true, error: "IMAP authentication failed", state })).toBe("IMAP authentication failed");
+  expect(checkText({ ok: true, still_pending: false, looked: true, error: null })).toBe("Checked. Everything submitted is confirmed.");
+  expect(checkText({ ok: true, still_pending: true, looked: true, error: null })).toBe("Checked. A submitted return is still waiting for its confirmation.");
+  expect(checkText({ ok: false, still_pending: true, looked: true, error: "IMAP authentication failed" })).toBe("IMAP authentication failed");
 
   const on = { tracking_enabled: true, window_days: 30 };
   expect(trackingLine({ ...on, still_pending: true, past_window: true })).toBe(
     "● Automated BIR receipt tracking is active — a submitted return is still waiting for its confirmation.",
   );
   const past = trackingLine({ ...on, still_pending: false, past_window: true });
-  expect(past).toContain("more than 30 days ago has no BIR email yet and is no longer looked for: it stays Submitted.");
+  expect(past).toContain("more than 30 days ago was not matched to a BIR email within 30 days and is no longer checked automatically: it stays Submitted.");
+  expect(past).toContain("Press Check now to search further back");
   expect(past).toContain("ebirforms-noreply@bir.gov.ph");
   expect(past).not.toContain("confirmed");
   expect(trackingLine({ ...on, still_pending: false, past_window: false })).toBe("● Automated BIR receipt tracking is active.");

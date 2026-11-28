@@ -1531,12 +1531,13 @@ fn check_inbox_now_run(tin: &str, db: &std::sync::Arc<std::sync::Mutex<Database>
         }
         email
     };
-    // Whether the poll will really search the inbox: it does exactly when a return waits for its BIR email (the same
-    // rule it reads), and the answer says so rather than "everything is confirmed" without having looked.
+    // Whether the check will really search the inbox: an explicit check does whenever a return is unconfirmed, waiting
+    // within the window or past it (bir_core fetch_and_process_emails_for_address), and the answer says so rather than
+    // "everything is confirmed" without having looked.
     let looked = {
         let guard = lock_db(db)?;
-        bir_core::email::plan_email_poll_for_address(&guard, &email, chrono::Utc::now())
-            .still_pending
+        let plan = bir_core::email::plan_email_poll_for_address(&guard, &email, chrono::Utc::now());
+        plan.still_pending || plan.past_window
     };
     let (poll_success, still_pending, err_msg) = run_inbox_poll(&email, db.clone())?;
 

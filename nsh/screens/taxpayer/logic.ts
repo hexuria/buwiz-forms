@@ -353,9 +353,9 @@ export function hiddenFactsText(hidden: number): string | null {
 }
 
 /** The result of a "check now", in words. It says "confirmed" only after the inbox was really searched (`looked`). */
-export function checkText(r: { ok: boolean; still_pending: boolean; looked: boolean; error: string | null; state?: Pick<InboxState, "window_days"> }): string {
+export function checkText(r: { ok: boolean; still_pending: boolean; looked: boolean; error: string | null }): string {
   if (!r.ok) return r.error || "The check failed.";
-  if (!r.looked) return `Nothing sent in the last ${r.state?.window_days ?? 30} days is waiting for a BIR email, so the inbox was not searched.`;
+  if (!r.looked) return "Every return sent is confirmed or was a dry run, so the inbox was not searched.";
   return r.still_pending ? "Checked. A submitted return is still waiting for its confirmation." : "Checked. Everything submitted is confirmed.";
 }
 
@@ -368,7 +368,7 @@ export function trackingLine(s: Pick<InboxState, "tracking_enabled" | "still_pen
   if (s.still_pending) return "● Automated BIR receipt tracking is active — a submitted return is still waiting for its confirmation.";
   // A return sent before the inbox search's window, still Submitted: never shown as confirmed, and how to check by hand.
   if (s.past_window) {
-    return `● Automated BIR receipt tracking is active. A return sent more than ${s.window_days} days ago has no BIR email yet and is no longer looked for: it stays Submitted. Search your inbox for mail from ebirforms-noreply@bir.gov.ph to check it.`;
+    return `● Automated BIR receipt tracking is active. A return sent more than ${s.window_days} days ago was not matched to a BIR email within ${s.window_days} days and is no longer checked automatically: it stays Submitted. Press Check now to search further back, or search your inbox for mail from ebirforms-noreply@bir.gov.ph.`;
   }
   return "● Automated BIR receipt tracking is active.";
 }

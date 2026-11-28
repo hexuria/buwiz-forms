@@ -76,7 +76,48 @@ pub fn fetch_and_process_emails(
     profile: &TaxpayerProfile,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
-    fetch_and_process_emails_until(profile, db, &|| false)
+    let since = window_since(chrono::Utc::now());
+    fetch_and_process_emails_until(profile, db, &|| false, since)
+}
+
+/// The IMAP `SINCE` day of the background poll: the window, plus one day. `SINCE` compares a whole date with each
+/// message's internal date in the server's own timezone, while the window is an exact instant; one more day keeps the
+/// first hours of the boundary day (extra matches are harmless: receipts de-duplicate by file name).
+fn window_since(now: chrono::DateTime<chrono::Utc>) -> chrono::NaiveDate {
+    now.date_naive() - chrono::Duration::days(super::BIR_EMAIL_WINDOW_DAYS + 1)
+}
+
+/// How far back an explicit check ("Check now") searches at most: a year.
+const EXPLICIT_REACH_DAYS: i64 = 365;
+
+/// Whether to search `email_address` now and from which day, or `None` when nothing is to be looked for.
+/// The background poll (`explicit` false) searches only while a return waits within the window, from
+/// [`window_since`]. An explicit check also searches for a return past the window (its BIR email may have come late),
+/// back to the day before its oldest unconfirmed send, at most [`EXPLICIT_REACH_DAYS`] ago.
+fn search_since(
+    db: &Database,
+    email_address: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    explicit: bool,
+) -> Option<chrono::NaiveDate> {
+    let plan = plan_email_poll_for_address(db, email_address, now);
+    let window = window_since(now);
+    if !explicit {
+        return plan.still_pending.then_some(window);
+    }
+    if !plan.still_pending && !plan.past_window {
+        return None;
+    }
+    let floor = now.date_naive() - chrono::Duration::days(EXPLICIT_REACH_DAYS);
+    let oldest = plan
+        .matching_tins
+        .iter()
+        .filter_map(|tin| db.oldest_unconfirmed_send_date(tin, floor).ok().flatten())
+        .min();
+    Some(match oldest {
+        Some(day) => (day - chrono::Duration::days(1)).max(floor).min(window),
+        None => window,
+    })
 }
 
 /// [`fetch_and_process_emails`] that stops between messages once `stop` says so.
@@ -84,13 +125,14 @@ fn fetch_and_process_emails_until(
     profile: &TaxpayerProfile,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
     stop: &dyn Fn() -> bool,
+    since: chrono::NaiveDate,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     if !profile.is_email_tracking_active() {
         return Ok(vec![]);
     }
 
     let fetch_profile = overlay_shared_inbox_credentials(profile, &db);
-    fetch_with_resolved_profile(&fetch_profile, db, stop)
+    fetch_with_resolved_profile(&fetch_profile, db, stop, since)
 }
 
 fn overlay_shared_inbox_credentials(
@@ -110,6 +152,7 @@ fn fetch_with_resolved_profile(
     profile: &TaxpayerProfile,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
     stop: &dyn Fn() -> bool,
+    since: chrono::NaiveDate,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     let email = profile.inbox_email();
 
@@ -136,7 +179,7 @@ fn fetch_with_resolved_profile(
         }
     };
 
-    fetch_with_auth(authenticator.as_ref(), &host, db, profile, stop)
+    fetch_with_auth(authenticator.as_ref(), &host, db, profile, stop, since)
 }
 
 /// Test that a connection can be established and authenticated.
@@ -182,6 +225,7 @@ fn fetch_with_auth(
     db: std::sync::Arc<std::sync::Mutex<Database>>,
     profile: &TaxpayerProfile,
     stop: &dyn Fn() -> bool,
+    since: chrono::NaiveDate,
 ) -> Result<Vec<SubmissionReceipt>, anyhow::Error> {
     let tls = native_tls::TlsConnector::builder().build()?;
     let client = imap_connect(host, &tls)?;
@@ -206,11 +250,8 @@ fn fetch_with_auth(
     // matching emails and rely on the `submission_receipts` table's
     // `UNIQUE(filename)` constraint for deduplication — processing the same
     // email twice is harmless (ON CONFLICT DO UPDATE is a no-op for identical data).
-    let since_date = {
-        let now = chrono::Utc::now().naive_utc().date();
-        let since = now - chrono::Duration::days(super::BIR_EMAIL_WINDOW_DAYS);
-        since.format("%d-%b-%Y").to_string()
-    };
+    // From `since`: the background poll's window plus a day, or how far an explicit check reaches (`search_since`).
+    let since_date = since.format("%d-%b-%Y").to_string();
     let search_query = format!("FROM \"ebirforms-noreply@bir.gov.ph\" SINCE {}", since_date);
     let seqs = session.search(&search_query)?;
 
@@ -363,11 +404,14 @@ fn fetch_with_auth(
 
 /// Fetch emails for a specific email address, across all profiles.
 /// Returns (poll_success, still_pending_forms, error_message).
+///
+/// This is the explicit check ("Check now"): beside returns waiting within the window it also searches for one past
+/// it, back to the day before its oldest unconfirmed send (at most a year), so a BIR email that came late is found.
 pub fn fetch_and_process_emails_for_address(
     email_address: &str,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> (bool, bool, Option<String>) {
-    fetch_and_process_emails_for_address_until(email_address, db, &|| false)
+    poll_inbox(email_address, db, &|| false, true)
 }
 
 /// [`fetch_and_process_emails_for_address`] for the queue worker: it stops between messages once `stop` says so (the
@@ -377,25 +421,37 @@ pub fn fetch_and_process_emails_for_address_until(
     db: std::sync::Arc<std::sync::Mutex<Database>>,
     stop: &dyn Fn() -> bool,
 ) -> (bool, bool, Option<String>) {
-    let (profile, still_pending) = {
+    poll_inbox(email_address, db, stop, false)
+}
+
+/// The background poll (`explicit` false) or an explicit check of `email_address`; see [`search_since`].
+fn poll_inbox(
+    email_address: &str,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
+    stop: &dyn Fn() -> bool,
+    explicit: bool,
+) -> (bool, bool, Option<String>) {
+    let (profile, still_pending, since) = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
             Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
         };
         // Waiting goes by each return's own state and send time, never the calendar year.
-        let plan = plan_email_poll_for_address(&db_guard, email_address, chrono::Utc::now());
-        (plan.auth_profile, plan.still_pending)
+        let now = chrono::Utc::now();
+        let plan = plan_email_poll_for_address(&db_guard, email_address, now);
+        let since = search_since(&db_guard, email_address, now, explicit);
+        (plan.auth_profile, plan.still_pending, since)
     };
 
-    if !still_pending {
+    let Some(since) = since else {
         return (true, false, None);
-    }
+    };
 
     if let Some(mut profile) = profile {
         // Sibling Submitted drafts (Jane) must still be polled even when the
         // grant lives on Juan and Juan's tracking toggle is off.
         profile.email_tracking_enabled = true;
-        match fetch_and_process_emails_until(&profile, db.clone(), stop) {
+        match fetch_and_process_emails_until(&profile, db.clone(), stop, since) {
             Ok(_) => {
                 let db_guard = match lock_timing::lock(&db) {
                     Ok(g) => g,
@@ -483,6 +539,94 @@ fn record_poll_failure(
 mod tests {
     use super::*;
     use crate::db::AlertRecordOutcome;
+
+    const INBOX: &str = "filer@example.com";
+
+    fn at(time: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(time)
+            .expect("an RFC 3339 time")
+            .with_timezone(&chrono::Utc)
+    }
+
+    fn day(text: &str) -> chrono::NaiveDate {
+        chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").expect("a day")
+    }
+
+    /// The lab taxpayer on `INBOX` with one 1601C of December 2026 in `status`, sent at `sent` (`None`: no send time).
+    fn inbox_with(status: crate::forms::FilingStatus, sent: Option<&str>) -> Database {
+        let db = Database::open_ephemeral().unwrap();
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.imap_email = Some(INBOX.to_string());
+        profile.email_tracking_enabled = true;
+        db.save_profile(profile).unwrap();
+        let mut draft = crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 12);
+        draft.status = status;
+        draft.submitted_at = sent.map(str::to_string);
+        db.save_1601c_draft(&draft).unwrap();
+        db
+    }
+
+    /// #508 D1: a return sent 40 days ago whose BIR email came late. The background poll no longer searches for it; an
+    /// explicit check does, from the day before it was sent, so its email is found and the return confirmed.
+    #[test]
+    fn an_explicit_check_searches_back_to_a_return_past_the_window() {
+        use crate::forms::FilingStatus::Submitted;
+        let db = inbox_with(Submitted, Some("2026-12-20T10:00:00+08:00"));
+        let now = at("2027-01-29T03:00:00Z");
+        assert_eq!(search_since(&db, INBOX, now, false), None);
+        assert_eq!(search_since(&db, INBOX, now, true), Some(day("2026-12-19")));
+    }
+
+    /// Within the window both search from the window's start, one day early (#508 D2: IMAP `SINCE` is a whole day in
+    /// the server's timezone); an explicit check reaches the day before the send when that is earlier.
+    #[test]
+    fn a_waiting_return_is_searched_from_the_window_with_a_day_to_spare() {
+        use crate::forms::FilingStatus::Submitted;
+        let db = inbox_with(Submitted, Some("2027-01-20T10:00:00+08:00"));
+        let now = at("2027-01-29T03:00:00Z");
+        let window = day("2026-12-29");
+        assert_eq!(window_since(now), window);
+        assert_eq!(search_since(&db, INBOX, now, false), Some(window));
+        assert_eq!(search_since(&db, INBOX, now, true), Some(window));
+    }
+
+    /// Nothing unconfirmed: neither searches (a confirmed return, or none at all).
+    #[test]
+    fn nothing_unconfirmed_is_not_searched_for() {
+        use crate::forms::FilingStatus::Confirmed;
+        let db = inbox_with(Confirmed, Some("2027-01-20T10:00:00+08:00"));
+        let now = at("2027-01-29T03:00:00Z");
+        assert_eq!(search_since(&db, INBOX, now, false), None);
+        assert_eq!(search_since(&db, INBOX, now, true), None);
+    }
+
+    /// #508 D3/D4: a Submitted return with no readable send time is past the window, never untracked: the background
+    /// poll leaves it, an explicit check searches the whole year back.
+    #[test]
+    fn a_return_without_a_send_time_is_past_the_window_and_searched_a_year_back() {
+        use crate::forms::FilingStatus::Submitted;
+        for sent in [None, Some(""), Some("not a time")] {
+            let db = inbox_with(Submitted, sent);
+            let now = at("2027-01-29T03:00:00Z");
+            let tin = crate::filing_queue::mandatory_lab_1601c_profile()
+                .tin
+                .full();
+            assert!(
+                !db.has_return_awaiting_bir_email(&tin, now).unwrap(),
+                "{sent:?}"
+            );
+            assert!(
+                db.has_return_past_bir_email_window(&tin, now).unwrap(),
+                "{sent:?}"
+            );
+            assert_eq!(search_since(&db, INBOX, now, false), None, "{sent:?}");
+            assert_eq!(
+                search_since(&db, INBOX, now, true),
+                Some(day("2026-01-29")),
+                "{sent:?}"
+            );
+        }
+    }
 
     fn juana() -> TaxpayerProfile {
         serde_json::from_value(serde_json::json!({
