@@ -299,6 +299,7 @@ function TypedBox(props: { p: FieldInput }) {
         width={widthOf(p)}
         error={p.box.message?.() || p.box.invalid()}
         whole={!!p.field.w}
+        integerCaret
         prefix={kind() === "num" ? "" : undefined}
         negative
         placeholder={p.placeholder}

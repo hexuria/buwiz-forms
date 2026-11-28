@@ -354,6 +354,7 @@ function MaskedField(props: MaskedProps) {
   });
   const change = (raw: string) => {
     armWindowsReselect = false;
+    const firstEditThisFocus = !typedThisFocus;
     typedThisFocus = true;
     const prev = untracked(text);
     if (outsideAfterEmpty) outsideAfterEmpty = false;
@@ -365,7 +366,7 @@ function MaskedField(props: MaskedProps) {
       // Focused text is authoritative: strict reading decides the report; no mask rewrite or refusal answer is computed for it.
       let reading = raw;
       let integerCaret: number | undefined;
-      if (props.integerCaret && typed && editKey && editKey >= "0" && editKey <= "9") {
+      if (props.integerCaret && firstEditThisFocus && typed && editKey && editKey >= "0" && editKey <= "9") {
         // A focus whose caret the platform drops at the very end of a decimal amount puts the first digit in its centavos.
         // The integer is the entry: when the edit came back as that digit appended at the end, put it before the point.
         // A platform that already honored the focus caret returns the digit there instead, so this does not run twice.
@@ -652,6 +653,8 @@ export interface MoneyInputProps extends MaskedFieldProps {
   onChange: (plain: string) => void;
   /** Whole pesos: leaving the box shows "1,234" rather than "1,234.00". */
   whole?: boolean;
+  /** The integer part is the entry: a first digit after focus that the platform appended past the decimal point is put before it. */
+  integerCaret?: boolean;
   /** What precedes the digits; "" for a bare number (an excise volume in metric tons, a count of shares). Default ₱. */
   prefix?: string;
   /** A minus may be typed or pasted; unset, a pasted negative is refused and a typed minus does nothing (a negative value that is there stays negative). */
@@ -680,7 +683,7 @@ export function MoneyInput(props: MoneyInputProps) {
       same={sameAmount}
       keyboardType="decimal-pad"
       noLiveFormat
-      integerCaret
+      integerCaret={props.integerCaret}
       commaStates
       commaNegative={props.negative}
     />
