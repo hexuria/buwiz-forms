@@ -336,7 +336,8 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("if: ${{ inputs.store }}", check)
         # The same condition that gave the build the client decides which way the package is checked.
         self.assertIn("GMAIL_BUILT_IN: ${{ inputs.release && vars.STORE_GMAIL == '1' }}", check)
-        self.assertIn("{ '--present' } else { '--absent' }", check)
+        self.assertIn("$expect = '--absent'", check)
+        self.assertIn("$expect = '--present'", check)
         self.assertLess(check.index("audit_google_client.py --self-test"), check.index("audit_google_client.py $expect"))
         self.assertLess(
             windows.index("- name: Package and audit the NSH Windows installers"),
@@ -352,6 +353,13 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("if: ${{ inputs.release && !inputs.store }}", control)
         self.assertIn("audit_google_client.py --present", control)
         self.assertIn("*-windows-x86_64.zip", control)
+        has_client = "HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}"
+        for step in (control, check):
+            # Each audit's exit code stops the step where it runs; empty secrets are named, not a bare "not found".
+            audits = step.count("python scripts/audit_google_client.py")
+            self.assertEqual(step.count("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"), audits)
+            self.assertIn(has_client, step)
+            self.assertIn("::error title=Google OAuth client secrets are empty::", step)
 
     def test_msix_packaging_and_smoke_scripts_enforce_runtime_and_registration_policies(
         self,

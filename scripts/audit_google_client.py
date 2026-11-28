@@ -30,6 +30,7 @@ import re
 import sys
 import tempfile
 import zipfile
+import zlib
 from pathlib import Path
 from typing import Iterator
 
@@ -96,8 +97,14 @@ def report(package: Path, want_present: bool) -> int:
         return 2
     try:
         ids, secrets = scan(package)
-    except (Unreadable, zipfile.BadZipFile, OSError, EOFError) as error:
+    except (Unreadable, zipfile.BadZipFile, OSError, EOFError, zlib.error) as error:
         print(f"{package.name}: refused, not read whole: {error}", file=sys.stderr)
+        return 2
+    except NotImplementedError as error:
+        print(f"{package.name}: refused, a member uses a compression this audit cannot read: {error}", file=sys.stderr)
+        return 2
+    except RuntimeError as error:
+        print(f"{package.name}: refused, a member could not be read (encrypted?): {error}", file=sys.stderr)
         return 2
     for kind, where in (("a client id", ids), ("a client secret", secrets)):
         print(f"{package.name}: {kind} in {', '.join(where)}" if where else f"{package.name}: no {kind[2:]} in any file")

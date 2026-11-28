@@ -160,10 +160,18 @@ jobs:
         # client, so the audit must find both the id and the secret in the updater ZIP's files. It proves the bytes
         # the audit reads are where the client lands.
         if: ${{ inputs.release && !inputs.store }}
+        env:
+          HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}
+        # pwsh fails a step only on its last native exit code, so each audit's is checked where it runs.
         run: |
+          if ($env:HAS_CLIENT -ne 'true') {
+            Write-Output '::error title=Google OAuth client secrets are empty::GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty, so the direct downloads were built without Gmail Connect and the audit has nothing to find. Set both repository secrets.'
+            exit 1
+          }
           $zip = @(Get-ChildItem target/release-artifacts -Filter *-windows-x86_64.zip -File)
           if ($zip.Count -ne 1) { throw "Expected one updater ZIP, found $($zip.Count)" }
           python scripts/audit_google_client.py --present $zip[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check the Store package against STORE_GMAIL
         # The detector's positive control first (it finds a planted id and secret). Then the package: with the switch
@@ -171,12 +179,23 @@ jobs:
         if: ${{ inputs.store }}
         env:
           GMAIL_BUILT_IN: ${{ inputs.release && vars.STORE_GMAIL == '1' }}
+          HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}
+        # pwsh fails a step only on its last native exit code, so each audit's is checked where it runs.
         run: |
           python scripts/audit_google_client.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $msix = @(Get-ChildItem target/release-artifacts -Filter *.msix -File)
           if ($msix.Count -ne 1) { throw "Expected one .msix, found $($msix.Count)" }
-          $expect = if ($env:GMAIL_BUILT_IN -eq 'true') { '--present' } else { '--absent' }
+          $expect = '--absent'
+          if ($env:GMAIL_BUILT_IN -eq 'true') {
+            if ($env:HAS_CLIENT -ne 'true') {
+              Write-Output '::error title=Google OAuth client secrets are empty::STORE_GMAIL is 1 but GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty, so the Store package was built without Gmail Connect. Set both repository secrets, or unset STORE_GMAIL.'
+              exit 1
+            }
+            $expect = '--present'
+          }
           python scripts/audit_google_client.py $expect $msix[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload Windows Artifact
         if: ${{ !inputs.store }}

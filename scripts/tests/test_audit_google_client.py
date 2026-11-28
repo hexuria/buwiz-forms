@@ -90,6 +90,31 @@ class AuditGoogleClientTests(unittest.TestCase):
             for leaked in (NEIGHBOUR, b'123456789012', b'planted', b'GOCSPX-p'):
                 self.assertNotIn(leaked.decode(), result.stdout + result.stderr)
 
+    def test_members_zipfile_cannot_read_are_refused_not_tracebacks(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            stored = io.BytesIO()
+            with zipfile.ZipFile(stored, 'w', zipfile.ZIP_STORED) as archive:
+                archive.writestr('eBIRForms.exe', CLEAN_EXE)
+            data = stored.getvalue()
+            central = data.index(b'PK\x01\x02')
+            # Deflate64 (method 9), which zipfile cannot decompress; and the "encrypted" flag (bit 0).
+            deflate64 = bytearray(data)
+            deflate64[8:10] = deflate64[central + 10:central + 12] = (9).to_bytes(2, 'little')
+            encrypted = bytearray(data)
+            encrypted[6] |= 1
+            encrypted[central + 8] |= 1
+            for name, patched, said in (
+                ('deflate64', deflate64, 'a compression this audit cannot read'),
+                ('encrypted', encrypted, 'could not be read'),
+            ):
+                with self.subTest(case=name):
+                    path = Path(scratch) / f'{name}.msix'
+                    path.write_bytes(bytes(patched))
+                    result = run('--absent', str(path))
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertIn(said, result.stderr)
+                    self.assertNotIn('Traceback', result.stderr)
+
     def test_a_missing_package_is_refused(self):
         result = run('--absent', '/nonexistent/eBIRForms.msix')
         self.assertEqual(result.returncode, 2)
