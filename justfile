@@ -574,7 +574,11 @@ app *args="":
 
 testflight *args="": (app args) testflight-upload
 
-testflight-agent *args="": (testflight "--agent" args)
+# An agent build carries the driver's socket and com.apple.security.network.server: internal TestFlight only, never review.
+# It is the one upload that may carry the agent (testflight-upload refuses one otherwise) and it is listed in
+# target/release-artifacts/agent-builds.txt, so its build number is never the one chosen for review (CUT-1.0.0.md).
+testflight-agent *args="":
+    ALLOW_AGENT_UPLOAD=1 just testflight --agent {{args}}
 
 testflight-upload:
     #!/usr/bin/env bash
@@ -603,6 +607,17 @@ testflight-upload:
         echo "❌ $PKG_PATH is unsigned. Set INSTALLER_IDENTITY in .env and rebuild with: just app" >&2; exit 1
     fi
     BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "{{RELEASE_DIR}}/mas/{{APP_NAME}}.app/Contents/Info.plist" 2>/dev/null || echo '?')"
+    # An agent build (just testflight-agent) never goes up by accident: its marker or its provenance refuses the upload
+    # unless ALLOW_AGENT_UPLOAD=1, and an allowed one is written to agent-builds.txt so nobody chooses it for review.
+    AGENT_MARK="$(/usr/libexec/PlistBuddy -c 'Print :NSHAgentBuild' "{{RELEASE_DIR}}/mas/{{APP_NAME}}.app/Contents/Info.plist" 2>/dev/null || echo false)"
+    if [ "$AGENT_MARK" = "true" ] || grep -q 'agent=1' "${PKG_PATH%.pkg}.provenance.txt" 2>/dev/null; then
+        if [ "${ALLOW_AGENT_UPLOAD:-}" != "1" ]; then
+            echo "❌ $PKG_PATH is an agent build (--agent: the driver's socket and network.server). It must never be sent to review, so it is not uploaded. Rebuild with: just app (or upload it for internal testing with: just testflight-agent)." >&2
+            exit 1
+        fi
+        echo "{{VERSION}} build $BUILD: agent build, internal TestFlight only, never for review ($(date -u +%Y-%m-%dT%H:%MZ))" >> "{{RELEASE_DIR}}/agent-builds.txt"
+        echo "⚠️  AGENT BUILD $BUILD: internal TestFlight only. Never choose it for review (listed in {{RELEASE_DIR}}/agent-builds.txt)." >&2
+    fi
     # iTMSTransporter only reads the key from a fixed set of private_keys
     # directories; stage it in a throwaway one instead of touching $HOME.
     KEY_DIR="$(mktemp -d)"
@@ -697,6 +712,11 @@ _package-mac-appstore args="": build-frozen-html-identity
     if [ "$NSH_MAS_AGENT" != "1" ]; then
         /usr/libexec/PlistBuddy -c "Delete :NSScreenCaptureUsageDescription" "$PLIST" 2>/dev/null || true
     fi
+    # An agent build says so in its Info.plist and its provenance: testflight-upload refuses it unless ALLOW_AGENT_UPLOAD=1
+    # (just testflight-agent), so a build with the driver's socket is never uploaded, and so never sent to review, by accident.
+    if [ "$NSH_MAS_AGENT" = "1" ]; then
+        /usr/libexec/PlistBuddy -c "Add :NSHAgentBuild bool true" "$PLIST"
+    fi
     if [ "${DEV_MODE:-}" = "true" ] || [ "${DEVELOPER_MODE:-}" = "true" ]; then
         echo "Injecting DEVELOPER_MODE into Info.plist..."
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$PLIST" || true
@@ -734,7 +754,7 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "✅ Unsigned PKG created: $PKG_PATH"
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
-    echo "$PROVENANCE, build {{BUILD_NUMBER}}" > "${PKG_PATH%.pkg}.provenance.txt"
+    echo "$PROVENANCE, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT" > "${PKG_PATH%.pkg}.provenance.txt"
     echo "   $PROVENANCE"
 
 # Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
