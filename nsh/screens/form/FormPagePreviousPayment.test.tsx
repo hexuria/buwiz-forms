@@ -19,10 +19,11 @@ interface Case {
   yesKey: string;
   noKey: string;
   sentence: string;
-  cleared: string;
+  cleared?: string;
+  removal?: string;
 }
 
-async function openForm(c: Case, setup?: ({ pick: string } | { edits: Record<string, string> })[]): Promise<App> {
+async function openForm(c: Case, setup?: ({ pick: string } | { edits: Record<string, string> } | { confirmRemoval: true })[]): Promise<App> {
   const app = await open(ENTRY, {
     width: 1440,
     height: 900,
@@ -62,9 +63,17 @@ async function exercise(c: Case): Promise<void> {
     { pick: c.yesKey },
     { edits: { [c.boxKey]: "42" } },
     { pick: c.noKey },
+    ...(c.removal ? [{ confirmRemoval: true } as const] : []),
   ]);
   await reach(closed, box);
-  await closed.waitUntil(() => closed.texts().includes(c.cleared), { timeout: 10_000 });
+  if (c.cleared) {
+    await closed.waitUntil(() => closed.texts().includes(c.cleared!), { timeout: 10_000 });
+  }
+  if (c.removal) {
+    // The removal toast is short-lived; the host test owns its exact wording.
+    // Here the page must not also carry the inline clearing sentence.
+    expect(closed.texts()).not.toContain(c.sentence.replace("applies only", "was cleared: it applies only"));
+  }
   await closed.waitUntil(() => closed.texts().includes("0.00"), { timeout: 10_000 });
   expect(closed.texts()).not.toContain("42.00");
 }
@@ -89,3 +98,34 @@ test("1600WP item 13 and 1600PT item 19 are shut until Amended Yes and clear whe
     cleared: "Item 19 was cleared: it applies only to an amended return.",
   });
 }, 120_000);
+
+
+test("0619E item 15, 0619F item 16 and 2550M item 23D are gated on the page", async () => {
+  await exercise({
+    code: "0619E",
+    title: "BIR Form 0619E",
+    boxKey: "frm0619E:txtTax15",
+    yesKey: "frm0619E:optAmend:Y",
+    noKey: "frm0619E:optAmend:N",
+    sentence: "Item 15 applies only to an amended return.",
+    cleared: "Item 15 was cleared: it applies only to an amended return.",
+  });
+  await exercise({
+    code: "0619F",
+    title: "BIR Form 0619F",
+    boxKey: "frm0619F:txtTax16",
+    yesKey: "frm0619F:optAmend:Y",
+    noKey: "frm0619F:optAmend:N",
+    sentence: "Item 16 applies only to an amended return.",
+    cleared: "Item 16 was cleared: it applies only to an amended return.",
+  });
+  await exercise({
+    code: "2550M",
+    title: "BIR Form 2550M",
+    boxKey: "frm2550m:txtTax23D",
+    yesKey: "frm2550m:OptAmendedYN1",
+    noKey: "frm2550m:OptAmendedYN2",
+    sentence: "Item 23D applies only to an amended return.",
+    removal: "Cleared item 23D",
+  });
+}, 180_000);
