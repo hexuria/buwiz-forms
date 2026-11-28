@@ -9,47 +9,41 @@ pub const DEFAULT_SCHEMA_DIR: &str = "rules/schema/v2";
 pub const DEFAULT_OUTPUT_DIR: &str = "crates/bir-rules/src/generated";
 
 pub(crate) fn is_symlink_or_reparse_point(metadata: &fs::Metadata) -> bool {
-    if metadata.file_type().is_symlink() {
-        return true;
-    }
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt as _;
 
         const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
-        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        metadata.file_type().is_symlink()
+            || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
     }
     #[cfg(not(windows))]
     {
-        false
+        metadata.file_type().is_symlink()
     }
 }
 
 pub(crate) fn is_same_path(left: &Path, right: &Path) -> bool {
-    if left == right {
-        return true;
-    }
     #[cfg(windows)]
     {
-        windows_comparison_path(left) == windows_comparison_path(right)
+        left == right || windows_comparison_path(left) == windows_comparison_path(right)
     }
     #[cfg(not(windows))]
     {
-        false
+        left == right
     }
 }
 
 pub(crate) fn is_same_or_below(root: &Path, candidate: &Path) -> bool {
-    if is_same_path(root, candidate) || candidate.starts_with(root) {
-        return true;
-    }
     #[cfg(windows)]
     {
-        windows_comparison_path(candidate).starts_with(windows_comparison_path(root))
+        is_same_path(root, candidate)
+            || candidate.starts_with(root)
+            || windows_comparison_path(candidate).starts_with(windows_comparison_path(root))
     }
     #[cfg(not(windows))]
     {
-        false
+        is_same_path(root, candidate) || candidate.starts_with(root)
     }
 }
 
