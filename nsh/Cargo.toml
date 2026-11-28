@@ -24,9 +24,12 @@ bir-core = { path = "../crates/bir-core", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tracing = "0.1"
+log = "0.4"
+tracing-log = "0.2"
 # Print preview (src/print.rs): the PDF is made from the same sheet as the printer gets; bir-print merges the pages.
 bir-print = { path = "../crates/bir-print", default-features = false }
 lopdf = "0.34"
+uuid = { version = "1.29.2", features = ["v4"] }
 # Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one version bir-app-api and bir-mcp use.
 gpui-agent = { version = "=0.5.0", optional = true }
 

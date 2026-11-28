@@ -462,7 +462,7 @@ impl ResolvedTaxProfileForPeriod {
 }
 
 /// Taxpayer profile stored in encrypted SQLite.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TaxpayerProfile {
     pub id: Option<i64>,
     pub full_name: String,
@@ -607,6 +607,35 @@ pub struct TaxpayerProfile {
     /// Per-year Forms Set. SKIP serialization since it is stored in a separate DB table.
     #[serde(skip, default)]
     pub per_year_forms: std::collections::BTreeMap<u16, crate::forms::PerYearFormsSet>,
+}
+
+impl std::fmt::Debug for TaxpayerProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Debug output is a logging choke point: it must never become a way to
+        // print the taxpayer's identity or credentials. Operational flags stay
+        // visible; free-text identity fields and secrets do not.
+        f.debug_struct("TaxpayerProfile")
+            .field("id", &self.id)
+            .field("full_name", &"•••")
+            .field("tin", &self.tin)
+            .field("rdo_code", &self.rdo_code)
+            .field("line_of_business", &"•••")
+            .field("registered_address", &"•••")
+            .field("zip_code", &"•••")
+            .field("phone", &"•••")
+            .field("email", &"•••")
+            .field("default_form_type", &self.default_form_type)
+            .field("taxpayer_type", &self.taxpayer_type)
+            .field("is_vat_registered", &self.is_vat_registered)
+            .field("tax_classification", &self.tax_classification)
+            .field("eopt_tier", &self.eopt_tier)
+            .field(
+                "registration_activity_status",
+                &self.registration_activity_status,
+            )
+            .field("compliance_source_mode", &self.compliance_source_mode)
+            .finish_non_exhaustive()
+    }
 }
 
 impl TaxpayerProfile {
@@ -1450,6 +1479,118 @@ mod tests {
             "default_form_type": "2551Qv2018"
         }))
         .expect("minimal profile fixture must deserialize")
+    }
+
+    fn production_source(source: &str) -> &str {
+        source.split("#[cfg(test)]").next().unwrap_or(source)
+    }
+
+    fn profile_logging_leaks(source: &str) -> Vec<String> {
+        let mut leaks = Vec::new();
+        let source = production_source(source);
+        for marker in [
+            "trace!",
+            "debug!",
+            "info!",
+            "warn!",
+            "error!",
+            "tracing::trace!",
+            "tracing::debug!",
+            "tracing::info!",
+            "tracing::warn!",
+            "tracing::error!",
+        ] {
+            let mut from = 0;
+            while let Some(at) = source[from..].find(marker).map(|found| from + found) {
+                let end = (at + 900).min(source.len());
+                let window = &source[at..end];
+                for bad in [
+                    "?profile",
+                    "?taxpayer_profile",
+                    "profile.full_name",
+                    "taxpayer_profile.full_name",
+                ] {
+                    if window.contains(bad) {
+                        leaks.push(format!("{bad} near byte {at}"));
+                    }
+                }
+                from = at + marker.len();
+            }
+        }
+        leaks.sort();
+        leaks.dedup();
+        leaks
+    }
+
+    #[test]
+    fn taxpayer_profile_debug_never_exposes_identity_fields() {
+        let profile = test_profile();
+        let debug = format!("{profile:?}");
+        for secret in [
+            "Flat compatibility name",
+            "Flat compatibility address",
+            "123456789000",
+            "123-456-789",
+        ] {
+            assert!(!debug.contains(secret), "{secret} in {debug}");
+        }
+        assert!(debug.contains("full_name: \"•••\""), "{debug}");
+        assert!(debug.contains("***-***-789"), "{debug}");
+    }
+
+    #[test]
+    fn profile_logging_policy_finds_name_fields_and_debugged_profiles() {
+        let bad_profile = concat!(
+            "tracing::info!(",
+            "profile = ?",
+            "profile, ",
+            "\"loaded\"",
+            ");"
+        );
+        let bad_name = concat!(
+            "tracing::warn!(",
+            "name = %profile.",
+            "full_name, ",
+            "\"loaded\"",
+            ");"
+        );
+        assert!(!profile_logging_leaks(bad_profile).is_empty());
+        assert!(!profile_logging_leaks(bad_name).is_empty());
+    }
+
+    #[test]
+    fn no_tracing_macro_logs_a_profile_or_a_name_field() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|path| path.parent())
+            .expect("workspace root")
+            .to_path_buf();
+        let mut leaks = Vec::new();
+        for dir in [
+            root.join("crates/bir-core/src"),
+            root.join("crates/bir-app-api/src"),
+            root.join("crates/bir-cli/src"),
+            root.join("nsh/src"),
+        ] {
+            let mut stack = vec![dir];
+            while let Some(dir) = stack.pop() {
+                for entry in std::fs::read_dir(&dir)
+                    .unwrap_or_else(|error| panic!("{}: {error}", dir.display()))
+                {
+                    let path = entry.expect("source entry").path();
+                    if path.is_dir() {
+                        stack.push(path);
+                    } else if path.extension().is_some_and(|ext| ext == "rs") {
+                        let source = std::fs::read_to_string(&path)
+                            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+                        for leak in profile_logging_leaks(&source) {
+                            leaks.push(format!("{}: {leak}", path.display()));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(leaks.is_empty(), "{}", leaks.join("\n"));
     }
 
     #[test]

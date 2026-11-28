@@ -266,7 +266,19 @@ pub fn prepare_app_storage() {
     {
         let (warn, line) = ios::prepare_ios_storage();
         LAUNCH_STORAGE.record(warn, line);
+        // The profile export's temporary copy is removed when the sheet answers; a crash leaves it — sweep those here.
+        let exports = temp_dir().join("profile-exports");
+        if exports.is_dir() {
+            let _ = std::fs::remove_dir_all(&exports);
+        }
     }
+}
+
+/// Whether the launch sweep may empty `previews`: only a path inside the app's own data directory. A dev
+/// single-room run can put its scratch database in Documents, and emptying a "previews" folder there deletes
+/// what is not ours.
+fn previews_sweep_allowed(previews: &std::path::Path, data: &std::path::Path) -> bool {
+    previews.starts_with(data)
 }
 
 /// Sweep every print-preview hand-off location once at launch. The current
@@ -280,8 +292,13 @@ pub fn prepare_print_previews() {
         #[cfg(test)]
         PRINT_SWEEP_RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut errors = Vec::new();
-        if let Err(error) = sweep_preview_html_in(print_previews_dir()) {
-            errors.push(format!("print previews not swept at launch: {error}"));
+        // Never sweep outside the app's own data directory: in a dev single-room run the scratch database can sit in
+        // Documents, and emptying a "previews" folder there deletes what is not ours. The previews still write there;
+        // they are just never swept.
+        if previews_sweep_allowed(&print_previews_dir(), &data_dir()) {
+            if let Err(error) = sweep_preview_html_in(print_previews_dir()) {
+                errors.push(format!("print previews not swept at launch: {error}"));
+            }
         }
         if let Err(error) = sweep_retired_preview_files_in(std::env::temp_dir(), data_dir()) {
             errors.push(format!(
@@ -501,6 +518,22 @@ mod tests {
         assert!(!keychain_switch_is_on(Some("0")));
         assert!(!keychain_switch_is_on(Some("false")));
         assert!(!keychain_switch_is_on(Some("Off")));
+    }
+
+    /// F8: a previews folder outside the app's data directory is never swept — a dev scratch database in
+    /// Documents must not have its sibling "previews" emptied; one inside the data directory is.
+    #[test]
+    fn the_preview_sweep_is_refused_outside_the_data_directory() {
+        let scratch = tempfile::tempdir().unwrap();
+        let data = scratch.path().join("data");
+        let inside = data.join("previews");
+        let outside = scratch.path().join("documents").join("previews");
+        assert!(previews_sweep_allowed(&inside, &data));
+        assert!(!previews_sweep_allowed(&outside, &data));
+        assert!(!previews_sweep_allowed(
+            std::path::Path::new("/Users/shared/Documents/previews"),
+            &data
+        ));
     }
 
     /// The one preview folder is the room layout's folder. In a single-room

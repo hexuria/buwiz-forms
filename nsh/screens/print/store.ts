@@ -6,7 +6,7 @@ import type { PrintEvent } from "./native";
 /** What a preview window shows: the sheet's file and the newest script for its page. */
 export interface Preview {
   key: string;
-  /** The window's title: "BIR Form 2551Q · Q1 2026 — Juana Santos". */
+  /** The window's title: "BIR Form 2551Q · Q1 2026" (never the taxpayer). */
   title: string;
   /** The file URL the web view loads. */
   url: string;

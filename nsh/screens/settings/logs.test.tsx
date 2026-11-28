@@ -17,7 +17,10 @@ for (const { name, size } of SIZES) {
   test(`${name}: the Logs section tails the log, colours its levels, filters by level and reads the file again on Refresh`, async () => {
     const app = await openSettings(size, { log: "mixed" }, "logs");
     await app.waitFor("id:logs-section");
-    expectTexts(app, ["ebirforms.2026-11-15.log · 8 lines"]);
+    expectTexts(app, [
+      "ebirforms.2026-11-15.log · 8 lines",
+      "A whole number of exactly 9, 12 or 14 digits is masked in logs even when it's a reference number.",
+    ]);
     const lines = () => app.texts().filter((t) => /^2026-11-15T|^a continuation/.test(t));
     expect(lines()).toHaveLength(8);
     expect(lines()[lines().length - 1]).toMatch(/fixture log read 1$/);

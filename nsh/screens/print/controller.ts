@@ -149,8 +149,10 @@ export function createPreviewHost(deps: HostDeps) {
         deps.print.closed(event.key, event.requestId);
         return;
       }
-      const identity = formIdentity(deps.route());
-      const title = `${previewTitle(event.title, deps.period())} ${identity?.split("|").slice(0, 4).join(" ") ?? event.key}`;
+      // Android passes this string to the system's print UI. Like the desktop
+      // window title it is the form and period only: never the return identity,
+      // which contains the TIN.
+      const title = previewTitle(event.title, deps.period());
       const pending = { generation, requestId: event.requestId };
       androidPreviews.set(event.key, pending);
       deps.androidPreview(event.key, title, pending.requestId).catch((error) => {

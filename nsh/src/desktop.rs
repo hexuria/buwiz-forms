@@ -28,10 +28,10 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 #[cfg(any(not(target_os = "android"), test))]
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(any(not(target_os = "android"), test))]
 use std::sync::Arc;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(any(not(target_os = "android"), test))]
 use std::thread::JoinHandle;
 #[cfg(any(not(target_os = "android"), test))]
@@ -220,7 +220,10 @@ impl Mailbox {
     }
 
     fn take_commands(&mut self) -> Vec<String> {
-        self.commands.drain(..).map(|c| c.word().to_owned()).collect()
+        self.commands
+            .drain(..)
+            .map(|c| c.word().to_owned())
+            .collect()
     }
 }
 
@@ -271,12 +274,16 @@ pub(crate) fn auto_download_enabled(value: Option<&str>) -> bool {
 /// `device_settings` value first, then the same key in the database, on the thread that owns the database slot). The page
 /// cannot read this setting itself (`get_setting` answers only the theme), so the host reports it through `update_status`.
 fn stored_auto_download() -> Option<bool> {
-    if let Some(value) = bir_core::rooms::device_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING) {
+    if let Some(value) = bir_core::rooms::device_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING)
+    {
         return Some(auto_download_enabled(Some(&value)));
     }
     let handle = bir_app_api::bir_module::database_handle().ok()?;
     let db = bir_core::lock_timing::lock(&handle).ok()?;
-    let value = db.get_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING).ok().flatten();
+    let value = db
+        .get_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING)
+        .ok()
+        .flatten();
     Some(auto_download_enabled(value.as_deref()))
 }
 
@@ -478,7 +485,9 @@ pub(crate) fn claim(database: &Path) -> Claim {
         .open(&lock)
     {
         Ok(file) => file,
-        Err(error) => return Claim::Unavailable(format!("cannot open {}: {error}", lock.display())),
+        Err(error) => {
+            return Claim::Unavailable(format!("cannot open {}: {error}", lock.display()));
+        }
     };
     match file.try_lock() {
         Ok(()) => match start_listening(file, port_path(database)) {
@@ -528,7 +537,9 @@ fn listen(listener: TcpListener, stop: &AtomicBool) {
         if stop.load(Ordering::SeqCst) {
             break;
         }
-        let Ok(stream) = stream else { continue };
+        let Ok(stream) = stream else {
+            continue;
+        };
         let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
         let mut line = String::new();
         // A line of at most 16 bytes: nothing else is ever sent.
@@ -574,7 +585,10 @@ fn read_port(port_file: &Path) -> Option<u16> {
 /// test environment (`EBIR_TEST_ENV`), where every test names a scratch database of its own.
 #[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn guard_wanted(setting: Option<&str>, test_environment: bool) -> bool {
-    match setting.map(|value| value.trim().to_ascii_lowercase()).as_deref() {
+    match setting
+        .map(|value| value.trim().to_ascii_lowercase())
+        .as_deref()
+    {
         Some("1" | "on" | "true" | "yes") => true,
         Some("0" | "off" | "false" | "no") => false,
         _ => !test_environment,
@@ -641,11 +655,15 @@ pub(crate) fn prepare_process_at(database: &Path) -> bool {
 #[cfg(any(not(target_os = "android"), test))]
 fn guarded_database() -> Option<PathBuf> {
     let setting = std::env::var("BIR_SINGLE_INSTANCE").ok();
-    if !guard_wanted(setting.as_deref(), bir_core::db::test_environment()) || crate::door::scratch_database_wanted() {
+    if !guard_wanted(setting.as_deref(), bir_core::db::test_environment())
+        || crate::door::scratch_database_wanted()
+    {
         return None;
     }
     let database = bir_core::db::app_database_path();
-    guards::database_refusal_here(&database).is_none().then_some(database)
+    guards::database_refusal_here(&database)
+        .is_none()
+        .then_some(database)
 }
 
 /// The launch's guard, from the registration of the native module (before any window opens): a second copy on
@@ -703,7 +721,11 @@ const POLICY_PROHIBITED: isize = 2;
 /// The policy `shown` asks for, from the one the app has: none when it runs in the background or already has it.
 #[cfg(any(target_os = "macos", test))]
 fn next_policy(current: isize, shown: bool) -> Option<isize> {
-    let want = if shown { POLICY_REGULAR } else { POLICY_ACCESSORY };
+    let want = if shown {
+        POLICY_REGULAR
+    } else {
+        POLICY_ACCESSORY
+    };
     (current != POLICY_PROHIBITED && current != want).then_some(want)
 }
 
@@ -729,7 +751,9 @@ fn set_dock_icon(shown: bool) {
             }
             let app = &*app;
             let current: isize = msg_send![app, activationPolicy];
-            let Some(next) = next_policy(current, shown) else { return };
+            let Some(next) = next_policy(current, shown) else {
+                return;
+            };
             let _: Bool = msg_send![app, setActivationPolicy: next];
             if shown {
                 let _: () = msg_send![app, activateIgnoringOtherApps: Bool::YES];
@@ -856,7 +880,9 @@ mod tests {
     static SERIAL: Mutex<()> = Mutex::new(());
 
     fn serial() -> MutexGuard<'static, ()> {
-        SERIAL.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn scratch() -> (tempfile::TempDir, PathBuf) {
@@ -947,7 +973,10 @@ mod tests {
             mailbox.take_commands(),
             ["start", "check", "auto-off", "auto-on", "install"]
         );
-        assert!(mailbox.take_commands().is_empty(), "each command comes once");
+        assert!(
+            mailbox.take_commands().is_empty(),
+            "each command comes once"
+        );
     }
 
     #[test]
@@ -978,7 +1007,15 @@ mod tests {
 
     #[test]
     fn the_automatic_download_setting_is_on_unless_it_says_off() {
-        for on in [None, Some(""), Some("  "), Some("1"), Some("true"), Some("on"), Some("yes")] {
+        for on in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("1"),
+            Some("true"),
+            Some("on"),
+            Some("yes"),
+        ] {
             assert!(auto_download_enabled(on), "{on:?}");
         }
         for off in ["0", "false", "off", " OFF ", "False"] {
@@ -1025,7 +1062,10 @@ mod tests {
                     // A restart forgets the mailbox; the database remembers.
                     mailbox(|mailbox| *mailbox = Mailbox::new());
                     let status = crate::door::call("update_status", vec![]).expect("update_status");
-                    assert_eq!(status["auto_download"], false, "read back from the database");
+                    assert_eq!(
+                        status["auto_download"], false,
+                        "read back from the database"
+                    );
                     assert!(!Desktop::auto_download());
 
                     crate::door::call("check_for_updates", vec![]).expect("check");
@@ -1036,7 +1076,10 @@ mod tests {
                     let seen = Desktop::poll();
                     assert_eq!(seen.update_commands, ["check", "install", "dismiss"]);
                     assert!(seen.chrome_open);
-                    assert!(seen.menu_revision >= 1, "the chrome switch and the refresh were counted");
+                    assert!(
+                        seen.menu_revision >= 1,
+                        "the chrome switch and the refresh were counted"
+                    );
                     let again = Desktop::poll();
                     assert!(again.update_commands.is_empty(), "each command comes once");
                     assert_eq!(again.menu_revision, seen.menu_revision);
@@ -1139,24 +1182,40 @@ mod tests {
     /// every one of them: it is the old listener's, and that listener cannot register them.
     #[test]
     fn every_nsh_only_key_is_a_keystroke_nsh_reads_and_the_old_rule_still_refuses_it() {
-        let sets = ["control+alt", "alt", "cmd", "super+shift", "control+alt+shift+super", "shift+control"];
+        let sets = [
+            "control+alt",
+            "alt",
+            "cmd",
+            "super+shift",
+            "control+alt+shift+super",
+            "shift+control",
+        ];
         let mut seen = std::collections::BTreeSet::new();
         for key in hotkey_combo::NSH_KEYS {
             for mods in sets {
                 let combo = format!("{mods}+{key}");
-                assert!(!hotkey_combo::is_registrable(&combo), "{combo}: the old listener's rule");
+                assert!(
+                    !hotkey_combo::is_registrable(&combo),
+                    "{combo}: the old listener's rule"
+                );
                 let shortcut = hotkey_shortcut(&combo).unwrap_or_else(|| panic!("{combo} maps"));
                 for mod_is_meta in [true, false] {
                     let read = nsh_core::desktop::Shortcut::parse(&shortcut, mod_is_meta)
                         .unwrap_or_else(|error| panic!("{combo} -> {shortcut}: {error:?}"));
-                    assert!(read.ctrl || read.alt || read.meta || read.shift, "{combo} -> {shortcut}");
+                    assert!(
+                        read.ctrl || read.alt || read.meta || read.shift,
+                        "{combo} -> {shortcut}"
+                    );
                 }
                 // The keymap reads the same text as the keystroke the recorder binds.
                 nsh_core::keymap::Keystroke::parse(&shortcut, nsh_core::platform::Os::MacOs)
                     .unwrap_or_else(|error| panic!("{combo} -> {shortcut}: {error:?}"));
             }
             let alone = key_name(key).expect("a name");
-            assert!(seen.insert(alone.clone()), "{key} -> {alone}: two words, one key");
+            assert!(
+                seen.insert(alone.clone()),
+                "{key} -> {alone}: two words, one key"
+            );
         }
         assert_eq!(seen.len(), hotkey_combo::NSH_KEYS.len());
     }
@@ -1198,24 +1257,48 @@ mod tests {
             );
         }
         // Lower case in a stored combo, as for every key.
-        assert_eq!(hotkey_shortcut("Control+Alt+space").as_deref(), Some("ctrl+alt+space"));
-        assert_eq!(hotkey_shortcut("alt+pagedown").as_deref(), Some("alt+pagedown"));
+        assert_eq!(
+            hotkey_shortcut("Control+Alt+space").as_deref(),
+            Some("ctrl+alt+space")
+        );
+        assert_eq!(
+            hotkey_shortcut("alt+pagedown").as_deref(),
+            Some("alt+pagedown")
+        );
         // Shift and a key is still no hotkey: it would be taken from every app (a bare key is the platform's default modifiers).
-        for combo in ["space", "SPACE", "shift+SPACE", "shift+LEFT", "F13", "shift+F20"] {
+        for combo in [
+            "space",
+            "SPACE",
+            "shift+SPACE",
+            "shift+LEFT",
+            "F13",
+            "shift+F20",
+        ] {
             // A bare key means the platform's default modifiers (control+alt, or super+shift: both have a Control, Alt or
             // Command), so it is a hotkey; Shift and a key, with nothing else, is not.
-            assert_eq!(hotkey_shortcut(combo).is_some(), !combo.starts_with("shift+"), "{combo}");
+            assert_eq!(
+                hotkey_shortcut(combo).is_some(),
+                !combo.starts_with("shift+"),
+                "{combo}"
+            );
         }
     }
 
     /// The four chords the Settings page offers (`hotkey_presets` in bir-app-api) round-trip: stored, mapped, read.
     #[test]
     fn the_settings_presets_round_trip() {
-        let prefix = if cfg!(target_os = "macos") { "control+alt" } else { "super+shift" };
+        let prefix = if cfg!(target_os = "macos") {
+            "control+alt"
+        } else {
+            "super+shift"
+        };
         for key in ["E", "B", "H", "F12"] {
             let stored = format!("{prefix}+{key}");
             let shortcut = hotkey_shortcut(&stored).expect("a preset maps");
-            assert!(shortcut.ends_with(&key.to_ascii_lowercase()), "{stored} -> {shortcut}");
+            assert!(
+                shortcut.ends_with(&key.to_ascii_lowercase()),
+                "{stored} -> {shortcut}"
+            );
             let read = nsh_core::desktop::Shortcut::parse(&shortcut, cfg!(target_os = "macos"))
                 .expect("NSH reads it");
             // The modifiers survived the trip: the keystroke has as many as the combo has words.
@@ -1258,7 +1341,11 @@ mod tests {
         let (folder, database) = scratch();
         let named = database.display().to_string();
         let decide = |single: Option<&str>, test_env: Option<&str>, path: Option<&str>| {
-            let vars = [("BIR_SINGLE_INSTANCE", single), ("EBIR_TEST_ENV", test_env), ("BIR_DATABASE_PATH", path)];
+            let vars = [
+                ("BIR_SINGLE_INSTANCE", single),
+                ("EBIR_TEST_ENV", test_env),
+                ("BIR_DATABASE_PATH", path),
+            ];
             temp_env::with_vars(vars, || {
                 bir_core::db::set_database_path_override(None);
                 guards::with_home_for_test(folder.path(), guarded_database)
@@ -1266,14 +1353,36 @@ mod tests {
         };
         for test_env in ["1", "true"] {
             let on = Some(test_env);
-            assert_eq!(decide(Some("1"), on, None), None, "{test_env}: the door makes a scratch database");
-            assert_eq!(decide(Some("1"), on, Some("")), None, "{test_env}: an empty path names nothing");
-            assert_eq!(decide(Some("1"), on, Some(&named)), Some(database.clone()), "{test_env}: the named database");
-            assert_eq!(decide(None, on, Some(&named)), None, "{test_env}: not guarded by default");
+            assert_eq!(
+                decide(Some("1"), on, None),
+                None,
+                "{test_env}: the door makes a scratch database"
+            );
+            assert_eq!(
+                decide(Some("1"), on, Some("")),
+                None,
+                "{test_env}: an empty path names nothing"
+            );
+            assert_eq!(
+                decide(Some("1"), on, Some(&named)),
+                Some(database.clone()),
+                "{test_env}: the named database"
+            );
+            assert_eq!(
+                decide(None, on, Some(&named)),
+                None,
+                "{test_env}: not guarded by default"
+            );
         }
         // Not a test environment: the database it opens.
-        assert_eq!(decide(None, Some("0"), Some(&named)), Some(database.clone()));
-        assert!(!database.parent().unwrap().exists(), "deciding wrote nothing");
+        assert_eq!(
+            decide(None, Some("0"), Some(&named)),
+            Some(database.clone())
+        );
+        assert!(
+            !database.parent().unwrap().exists(),
+            "deciding wrote nothing"
+        );
     }
 
     #[test]
@@ -1293,7 +1402,10 @@ mod tests {
         }
         let started = Instant::now();
         while !ACTIVATE.swap(false, Ordering::SeqCst) {
-            assert!(started.elapsed() < Duration::from_secs(5), "the first copy heard it");
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "the first copy heard it"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
 
@@ -1308,7 +1420,10 @@ mod tests {
         // first copy's open lock file, so on Unix the lock outlives the drop for an instant. Claim again past it.
         let started = Instant::now();
         while !matches!(claim(&database), Claim::Primary(_)) {
-            assert!(started.elapsed() < Duration::from_secs(2), "the next claim is the app again");
+            assert!(
+                started.elapsed() < Duration::from_secs(2),
+                "the next claim is the app again"
+            );
             std::thread::sleep(Duration::from_millis(20));
         }
     }
@@ -1355,7 +1470,10 @@ mod tests {
                 ],
                 || guards::with_home_for_test(home.path(), prepare_process),
             );
-            assert!(!database.parent().unwrap().exists(), "{relative}: no folder, no lock file");
+            assert!(
+                !database.parent().unwrap().exists(),
+                "{relative}: no folder, no lock file"
+            );
         }
     }
 
@@ -1429,7 +1547,12 @@ mod tests {
         fn start(mode: &str, database: &Path, env: &[(&str, &str)]) -> Child2 {
             let mut command = Command::new(std::env::current_exe().expect("the test binary"));
             command
-                .args(["--exact", "desktop::tests::child_process", "--nocapture", "--test-threads=1"])
+                .args([
+                    "--exact",
+                    "desktop::tests::child_process",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
                 .env("NSH_DESKTOP_TEST_DB", database)
                 .env("NSH_DESKTOP_TEST_MODE", mode)
                 .env("BUWIZ_NO_KEYCHAIN", "1")
@@ -1487,7 +1610,11 @@ mod tests {
             Claim::Running { notified } => assert!(notified),
             _ => panic!("the other process is the app"),
         }
-        assert_eq!(first.said(), "activated", "the first process heard the second");
+        assert_eq!(
+            first.said(),
+            "activated",
+            "the first process heard the second"
+        );
 
         let (ended_well, rest) = first.finish();
         assert!(ended_well);
@@ -1506,7 +1633,10 @@ mod tests {
         let _turn = serial();
         let (_folder, database) = scratch();
         let path = database.display().to_string();
-        let env = [("BIR_SINGLE_INSTANCE", "1"), ("BIR_DATABASE_PATH", path.as_str())];
+        let env = [
+            ("BIR_SINGLE_INSTANCE", "1"),
+            ("BIR_DATABASE_PATH", path.as_str()),
+        ];
 
         // An older build runs (it holds the guard as earlier versions did): this build's launch shows it and ends.
         let older = Child2::start("hold", &database, &[]);
@@ -1515,7 +1645,11 @@ mod tests {
         let (ended_well, said) = newer.finish();
         assert!(ended_well, "the newer launch ends quietly");
         assert_eq!(said, ["began"], "it never went on to open the database");
-        assert_eq!(older.said(), "activated", "the older build's window was asked forward");
+        assert_eq!(
+            older.said(),
+            "activated",
+            "the older build's window was asked forward"
+        );
         let (older_ended, _) = older.finish();
         assert!(older_ended);
 
@@ -1526,7 +1660,11 @@ mod tests {
             matches!(claim(&database), Claim::Running { notified: true }),
             "the older build is turned back at the guard, not at the database"
         );
-        assert_eq!(running.said(), "activated", "this build's window was asked forward");
+        assert_eq!(
+            running.said(),
+            "activated",
+            "this build's window was asked forward"
+        );
         let (running_ended, _) = running.finish();
         assert!(running_ended);
     }
@@ -1547,10 +1685,17 @@ mod tests {
         );
         let (ended_well, said) = second.finish();
         assert!(ended_well, "a second launch ends quietly, with success");
-        assert_eq!(said, ["began"], "it started, and never went on to start the app");
+        assert_eq!(
+            said,
+            ["began"],
+            "it started, and never went on to start the app"
+        );
         let started = Instant::now();
         while !ACTIVATE.swap(false, Ordering::SeqCst) {
-            assert!(started.elapsed() < Duration::from_secs(5), "the first heard the second launch");
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "the first heard the second launch"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
     }

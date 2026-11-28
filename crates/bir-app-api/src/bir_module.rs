@@ -2801,17 +2801,81 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
         .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
     with_database(|db| {
         let (fields, receipt) = print_fields(db, &tin, &form_code, year, quarter)?;
-        let profile = db
-            .get_profile_by_tin(&tin)
-            .ok()
-            .flatten()
-            .map(|p| p.full_name.clone());
-        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref(), profile)
+        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref())
     })
 }
 
 /// Fill `slug`'s frozen sheet with `fields`, write it to the app's own
 /// `data_dir()/previews/` folder and hand it to the preview host. Answers
+/// The preview window's whole title: the form number only. A taxpayer's name stays inside the sheet, never in a
+/// window or print string that can reach a log — pinned by `print_preview_title_is_the_form_number_only`.
+fn print_preview_title(form_code: &str) -> String {
+    format!("BIR Form {form_code}")
+}
+
+/// A name no other print of this process, and no other process, uses (pid, nanos, a sequence).
+/// The profile export's default file name. No TIN: it shows in save panels, Recent Items, iOS Files and Android's
+/// Downloads — a random id and the date only.
+fn profile_export_name() -> String {
+    let date = chrono::Utc::now().format("%Y%m%d").to_string();
+    format!("BIR_Profile_{}_{}.zip", preview_unique_name(), date)
+}
+
+fn preview_unique_name() -> String {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static SEQUENCE: AtomicU32 = AtomicU32::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    format!(
+        "{}-{nanos}-{}",
+        std::process::id(),
+        SEQUENCE.fetch_add(1, Ordering::SeqCst)
+    )
+}
+
+/// Makes `dir` (and any folder above it that is missing) readable by this user only (0700 where modes exist). A folder that
+/// is there already must be a real folder of this user (not a link someone left at the predictable name); it is made 0700 too.
+fn preview_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+        builder.mode(0o700);
+        builder.create(dir)?;
+        let meta = std::fs::symlink_metadata(dir)?;
+        // SAFETY: geteuid only reads the process's own id.
+        if !meta.file_type().is_dir() || meta.uid() != unsafe { libc::geteuid() } {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("{} is not a folder of this user", dir.display()),
+            ));
+        }
+        if meta.mode() & 0o777 != 0o700 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    builder.create(dir)
+}
+
+/// Writes `bytes` to a NEW file at `path` that only this user can read (0600 where modes exist): `create_new`, so a
+/// name someone else made first — or a link left at it — is an error, never a file written through.
+fn write_preview_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(bytes)
+}
+
 /// `{ path }`. The file is transient: the host reads it synchronously and this
 /// function removes anything still left when the host returns.
 pub(crate) fn open_print_preview(
@@ -2820,7 +2884,6 @@ pub(crate) fn open_print_preview(
     year: u16,
     fields: &std::collections::BTreeMap<String, String>,
     receipt: Option<&bir_print::frozen_html::ReceiptPage>,
-    profile_name: Option<String>,
 ) -> HostResult {
     let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
         .map_err(HostError::new)?;
@@ -2828,20 +2891,19 @@ pub(crate) fn open_print_preview(
     // page per form page from any engine; `print-overrides/<slug>.css` on top.
     let html =
         crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or(0);
     let root = bir_core::platform::print_previews_dir();
-    std::fs::create_dir_all(&root).map_err(|error| HostError::new(error.to_string()))?;
-    let path = root.join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
-    std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
+    preview_private_dir(&root).map_err(|error| HostError::new(error.to_string()))?;
+    // A random name, created exclusively at 0600: nothing predictable to pre-plant a link at, no two prints in one
+    // second colliding, and no filled return readable by another local user while it exists.
+    let unique = preview_unique_name();
+    let path = root.join(format!("bir-{form_code}-{year}-{unique}-preview.html"));
+    write_preview_private(&path, html.as_bytes())
+        .map_err(|error| HostError::new(error.to_string()))?;
     // In-app preview window (Blitz view + hidden WebKit PDF for Print/Share);
-    // one window per form, re-opening refreshes it in place.
-    let title = match profile_name.filter(|n| !n.trim().is_empty()) {
-        Some(name) => format!("BIR Form {form_code} \u{2014} {name}"),
-        None => format!("BIR Form {form_code}"),
-    };
+    // one window per form, re-opening refreshes it in place. The title is the
+    // form number only: a taxpayer's name stays inside the sheet, never in a
+    // window or print string that can reach a log.
+    let title = print_preview_title(form_code);
     crate::hooks::hooks().print_preview_request(path.clone(), title, form_code.to_string());
     if let Err(error) = std::fs::remove_file(&path)
         && error.kind() != std::io::ErrorKind::NotFound
@@ -3170,11 +3232,7 @@ fn export_profile(
         return Err(HostError::new("Wrong PIN."));
     }
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or(0);
-    let file_name = format!("BIR_Profile_{}_{}.zip", tin, timestamp);
+    let file_name = profile_export_name();
     if let Some(download) = crate::hooks::hooks().export_profile_download(&file_name, &mut |path| {
         export_profile_to(&tin, pin.as_deref(), path)
             .map(|_| ())
@@ -3757,6 +3815,86 @@ mod tests {
         .unwrap();
     }
 
+    /// F10: the export's default name carries no TIN — no digit run longer than the date's eight (and the date is
+    /// not a TIN's 9/12/14).
+    #[test]
+    fn the_profile_export_name_has_no_tin() {
+        let name = profile_export_name();
+        assert!(name.starts_with("BIR_Profile_"), "{name}");
+        assert!(name.ends_with(".zip"), "{name}");
+        for run in name.split(|c: char| !c.is_ascii_digit()) {
+            assert!(
+                run.len() != 9 && run.len() != 12 && run.len() != 14,
+                "TIN-shaped digits in {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn print_preview_title_is_the_form_number_only() {
+        // So that whichever of #629 and #502 merges second fails loudly if a profile name comes back.
+        assert_eq!(print_preview_title("2551Q"), "BIR Form 2551Q");
+        assert_eq!(print_preview_title("1701Q"), "BIR Form 1701Q");
+        assert!(!print_preview_title("2551Q").contains("Example"));
+    }
+
+    #[test]
+    fn print_preview_files_have_random_exclusive_private_names() {
+        let slug = print_slug_for("2551Q").expect("2551Q print sheet");
+        let one = open_print_preview(
+            slug,
+            "2551Q",
+            2026,
+            &std::collections::BTreeMap::new(),
+            None,
+        )
+        .expect("preview one");
+        let two = open_print_preview(
+            slug,
+            "2551Q",
+            2026,
+            &std::collections::BTreeMap::new(),
+            None,
+        )
+        .expect("preview two");
+        let path_of = |opened: &HostValue| {
+            std::path::PathBuf::from(
+                opened
+                    .get("path")
+                    .and_then(HostValue::as_str)
+                    .expect("path"),
+            )
+        };
+        let (one, two) = (path_of(&one), path_of(&two));
+        assert_ne!(one, two, "two prints in the same second never collide");
+        let name = one.file_name().unwrap().to_string_lossy().to_string();
+        assert!(name.starts_with("bir-2551Q-2026-"), "{name}");
+        assert!(name.ends_with("-preview.html"), "{name}");
+    }
+
+    #[test]
+    fn write_preview_private_refuses_an_existing_name() {
+        let dir = std::env::temp_dir().join(format!("bir-preview-test-{}", preview_unique_name()));
+        preview_private_dir(&dir).unwrap();
+        let path = dir.join("one.html");
+        write_preview_private(&path, b"a").unwrap();
+        write_preview_private(&path, b"b")
+            .expect_err("an exclusive create never follows or replaces");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+            assert_eq!(
+                std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn print_preview_file_is_in_data_dir_previews_and_removed_after_read() {
         let slug = print_slug_for("2551Q").expect("2551Q print sheet");
@@ -3765,7 +3903,6 @@ mod tests {
             "2551Q",
             2026,
             &std::collections::BTreeMap::new(),
-            None,
             None,
         )
         .expect("preview");
@@ -6938,6 +7075,7 @@ mod tests {
         };
         assert!(bir_core::logging::install(
             bir_core::logging::InstallOptions {
+                stdout: true,
                 developer_mode: false,
                 default_filter: "info",
             }

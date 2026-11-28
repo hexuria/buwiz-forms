@@ -49,13 +49,65 @@ pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
             .clone()?;
     }
     install_logging();
-    // An unnamed scratch test database is chosen only when its engine boots;
-    // the sweep then runs inside that scratch room, never the installed app's folder.
+    // As on desktop, an unnamed scratch test database is chosen only when its
+    // engine boots; the sweep then runs inside that scratch room, never the
+    // installed app's folder.
     if !scratch_database_wanted() {
         bir_core::platform::prepare_print_previews();
     }
     bir_core::platform::log_app_storage();
     Ok(())
+}
+
+/// Take the `log` facade for the app before NSH's desktop runner can. The
+/// bridge turns kit records into tracing events; the daily file's writer then
+/// applies `redact_secrets` like it does to the app's own events. At the NSH
+/// pin this is possible on desktop because native modules run before the
+/// runner's `install_logger`; Android's `JNI_OnLoad` has already taken the
+/// facade, and the `log` API offers no replacement.
+/// Whether this process is the kit's describe program. The tool builds it as
+/// `nsh-app-<package>-describe` only to print the crate's UI sets as one JSON
+/// document on stdout: registration must not install logging there at all.
+pub(crate) fn is_describe_program() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| {
+            path.file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+        })
+        .is_some_and(|name| is_describe_program_name(&name))
+}
+
+fn is_describe_program_name(name: &str) -> bool {
+    name == "describe" || name.ends_with("-describe")
+}
+
+pub(crate) fn install_log_facade_bridge() {
+    static BRIDGE: Once = Once::new();
+    BRIDGE.call_once(|| {
+        let _ = tracing_log::LogTracer::init();
+    });
+}
+
+fn logging_options() -> bir_core::logging::InstallOptions {
+    let developer_mode = bir_core::logging::developer_mode_enabled();
+    // A global warn first, so other crates' warnings and errors reach the daily file too, and js=warn keeps the
+    // page script's own errors (uncaught exceptions included). The app's own target is scoped exactly:
+    // `nsh_app_ebirforms` prefix-matches nothing but this crate and its modules, where `nsh` matched every
+    // nsh_* kit crate into the file at info.
+    let default_filter = if developer_mode {
+        "warn,nsh_app_ebirforms=debug,bir_app_api=debug,bir_core=info,bir_submit::ios_storage=info,bir_print=debug,panic=error,js=warn"
+    } else {
+        "warn,nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,bir_submit::ios_storage=info,bir_print=error,panic=error,js=warn"
+    };
+    bir_core::logging::InstallOptions {
+        // Registration installs logging before the host owns the process, in
+        // kit-built binaries whose stdout is a protocol channel: the app logs
+        // to the daily file only, never to stdout.
+        stdout: false,
+        developer_mode,
+        default_filter,
+    }
 }
 
 pub(crate) fn install_logging() {
@@ -64,16 +116,7 @@ pub(crate) fn install_logging() {
         if test_environment() {
             bir_core::log_files::set_default_log_dir(bir_core::log_files::fresh_test_log_dir());
         }
-        let developer_mode = bir_core::logging::developer_mode_enabled();
-        let default_filter = if developer_mode {
-            "nsh_app_ebirforms=debug,bir_app_api=debug,bir_core=info,bir_submit::ios_storage=info,bir_print=debug,panic=error"
-        } else {
-            "nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,bir_submit::ios_storage=info,bir_print=error,panic=error"
-        };
-        if bir_core::logging::install(bir_core::logging::InstallOptions {
-            developer_mode,
-            default_filter,
-        }) {
+        if bir_core::logging::install(logging_options()) {
             tracing::info!("eBIRForms started");
         }
         // The launch storage step ran at registration, before there was a log: its outcome goes out now.
@@ -170,6 +213,8 @@ fn choose_database() -> Result<(), String> {
     }
     if let Some(named) = NAMED.with(|slot| slot.borrow().clone()) {
         bir_core::db::set_database_path_override(Some(named));
+        // Registration cannot know this thread's database name, so its launch
+        // sweep is deferred to here: still before the database opens.
         bir_core::platform::prepare_print_previews();
         return Ok(());
     }
@@ -181,9 +226,15 @@ fn choose_database() -> Result<(), String> {
     #[cfg(target_os = "android")]
     let root = bir_core::platform::temp_dir().join("ebirforms-door");
     SWEPT.call_once(|| forget_old_scratch(&root, SCRATCH_LIFETIME));
-    let folder = fresh_scratch_folder(&root, std::process::id(), SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst))
-        .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
+    let folder = fresh_scratch_folder(
+        &root,
+        std::process::id(),
+        SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst),
+    )
+    .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
     bir_core::db::set_database_path_override(Some(folder.join("bir_data.db")));
+    // The scratch folder did not exist at registration. Sweep inside it now,
+    // never the installed app's previews folder.
     bir_core::platform::prepare_print_previews();
     Ok(())
 }
@@ -376,7 +427,11 @@ pub fn enter(engine: &nsh_core::element::Locals) -> Result<(), String> {
     if this.quit.get() {
         return Err(QUITTING.to_owned());
     }
-    let owner = BOOTED.with(|slot| slot.borrow().as_ref().map(|booted| Rc::clone(&booted.owner)));
+    let owner = BOOTED.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|booted| Rc::clone(&booted.owner))
+    });
     if let Some(owner) = owner
         && !Rc::ptr_eq(&owner, &this)
     {
@@ -396,9 +451,13 @@ pub fn enter(engine: &nsh_core::element::Locals) -> Result<(), String> {
 /// answers no call, one that skipped [`enter`] included.
 fn booted() -> Result<Rc<HostModule>, String> {
     let current = BOOTED.with(|slot| {
-        slot.borrow()
-            .as_ref()
-            .map(|booted| (Rc::clone(&booted.module), booted.checked.clone(), booted.owner.quit.get()))
+        slot.borrow().as_ref().map(|booted| {
+            (
+                Rc::clone(&booted.module),
+                booted.checked.clone(),
+                booted.owner.quit.get(),
+            )
+        })
     });
     let Some((module, checked, quit)) = current else {
         return boot_thread();
@@ -453,7 +512,9 @@ fn boot_thread() -> Result<Rc<HostModule>, String> {
         .map_err(|error| format!("The bir module is inconsistent: {error}"))?;
     let module = Rc::new(module);
     // The engine whose call boots it owns it; a call that skipped `enter` (a test's) boots one of its own.
-    let owner = CALLER.with(|caller| caller.borrow_mut().take()).unwrap_or_default();
+    let owner = CALLER
+        .with(|caller| caller.borrow_mut().take())
+        .unwrap_or_default();
     BOOTED.with(|slot| {
         *slot.borrow_mut() = Some(Booted {
             module: Rc::clone(&module),
@@ -505,8 +566,7 @@ fn kind_of(module: &HostModule, name: &str, wanted: FunctionKind) -> Result<(), 
 /// sign-in lock's card shows it above its Try again, so its last sentence says what to do there. The holder can also be
 /// an earlier engine of this same process that is still ending (a send or a calendar request it waits for), which is
 /// why the sentence offers waiting: its end closes the database, and Try again then opens it.
-pub const SECOND_COPY: &str =
-    "eBIRForms still has this database open, in another window or one that is closing. Close it or wait a moment, then press Try again.";
+pub const SECOND_COPY: &str = "eBIRForms still has this database open, in another window or one that is closing. Close it or wait a moment, then press Try again.";
 
 /// Whether `message` is bir-core's own sentence for a database another process owns (`DbError::LiveDatabaseInUse`): the text
 /// is read back from core, with a marker where the path goes, so it follows core if core's words change.
@@ -665,6 +725,34 @@ mod tests {
     }
 
     #[test]
+    fn the_log_bridge_keeps_js_errors_and_other_crates_warnings_but_not_kit_info() {
+        let dir = tempfile::tempdir().unwrap();
+        temp_env::with_vars(
+            [
+                ("BIR_LOG_DIR", Some(dir.path().as_os_str())),
+                ("RUST_LOG", None),
+            ],
+            || {
+                bir_core::logging::with_thread_subscriber(logging_options(), || {
+                    tracing::error!(target: "js", "uncaught page exception tin=12345678800000");
+                    tracing::warn!(target: "quickjs", "kit-warning-marker-7c1d");
+                    tracing::info!(target: "nsh_base", "kit-info-marker-7c1d");
+                    tracing::info!(target: "nsh_app_ebirforms::door", "app-info-marker-7c1d");
+                });
+                let path = bir_core::log_files::today_log_path(dir.path());
+                let text = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+                assert!(text.contains("uncaught page exception"), "{text}");
+                assert!(!text.contains("12345678800000"), "{text}");
+                assert!(text.contains("***-***-788-00000"), "{text}");
+                assert!(text.contains("kit-warning-marker-7c1d"), "{text}");
+                assert!(!text.contains("kit-info-marker-7c1d"), "{text}");
+                assert!(text.contains("app-info-marker-7c1d"), "{text}");
+            },
+        );
+    }
+
+    #[test]
     fn data_change_token_holds_for_reads_and_moves_for_local_and_external_writes() {
         let (folder, database) = empty();
         dev_env(Some(&database), Some(folder.path()), || {
@@ -676,8 +764,15 @@ mod tests {
             );
             // A local write to the database (the theme is a device setting since accounts-and-lock A1: it goes to
             // device.db, which this token does not follow).
-            call("set_setting", vec![json!("theme_preference"), json!("dark")]).expect("device write");
-            assert_eq!(data_change_token().unwrap().as_deref(), Some(first.as_str()));
+            call(
+                "set_setting",
+                vec![json!("theme_preference"), json!("dark")],
+            )
+            .expect("device write");
+            assert_eq!(
+                data_change_token().unwrap().as_deref(),
+                Some(first.as_str())
+            );
             {
                 let handle = bir_app_api::bir_module::database_handle().expect("handle");
                 bir_core::lock_timing::lock(&handle)
@@ -689,7 +784,9 @@ mod tests {
             assert_ne!(second, first);
             let other = bir_core::db::Database::open(&database).expect("another connection");
             let before_external = data_change_token().unwrap().unwrap();
-            other.set_setting("theme_preference", "light").expect("external write");
+            other
+                .set_setting("theme_preference", "light")
+                .expect("external write");
             assert_ne!(data_change_token().unwrap().unwrap(), before_external);
         });
     }
@@ -718,31 +815,65 @@ mod tests {
     fn a_hotkey_this_listener_cannot_register_is_refused_when_it_is_set() {
         let (folder, database) = empty();
         dev_env(Some(&database), Some(folder.path()), || {
-            let stored = || call("system_info", vec![]).expect("system_info")["global_hotkey"].clone();
+            let stored =
+                || call("system_info", vec![]).expect("system_info")["global_hotkey"].clone();
             assert_eq!(stored(), JsonValue::Null);
             for combo in ["shift+E", "Shift+F12", " shift + 9 ", "banana+E"] {
-                assert!(bir_app_api::hotkey_combo::is_registrable(combo.trim()), "{combo}");
+                assert!(
+                    bir_app_api::hotkey_combo::is_registrable(combo.trim()),
+                    "{combo}"
+                );
                 let refused = call("set_global_hotkey", vec![json!(combo)]).unwrap_err();
-                assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE, "{combo}");
+                assert_eq!(
+                    refused,
+                    bir_app_api::hotkey_combo::NOT_REGISTRABLE,
+                    "{combo}"
+                );
                 assert_eq!(stored(), JsonValue::Null, "{combo}: nothing stored");
             }
             call("set_global_hotkey", vec![json!("control+alt+E")]).expect("registrable");
             assert_eq!(stored(), json!("control+alt+E"));
             let refused = call("set_global_hotkey", vec![json!("shift+E")]).unwrap_err();
             assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE);
-            assert_eq!(stored(), json!("control+alt+E"), "the stored combo stays as it was");
+            assert_eq!(
+                stored(),
+                json!("control+alt+E"),
+                "the stored combo stays as it was"
+            );
             // F13 to F20 and the keys only NSH registers are stored; the old shell's rule would have refused them.
-            for combo in ["control+F13", "alt+SPACE", "control+alt+LEFT", "cmd+COMMA", "control+alt+BACKTICK", "control+alt+F20"] {
+            for combo in [
+                "control+F13",
+                "alt+SPACE",
+                "control+alt+LEFT",
+                "cmd+COMMA",
+                "control+alt+BACKTICK",
+                "control+alt+F20",
+            ] {
                 assert!(!bir_app_api::hotkey_combo::is_registrable(combo), "{combo}");
-                call("set_global_hotkey", vec![json!(combo)]).unwrap_or_else(|error| panic!("{combo}: {error}"));
+                call("set_global_hotkey", vec![json!(combo)])
+                    .unwrap_or_else(|error| panic!("{combo}: {error}"));
                 assert_eq!(stored(), json!(combo), "{combo}");
             }
             // Not these: a key no listener of ours registers, a character, F21 (macOS keyboards end at F20), Shift with a NSH-only key.
-            for combo in ["control+F21", "control+-", "control+TAB", "shift+SPACE", "control+space bar"] {
+            for combo in [
+                "control+F21",
+                "control+-",
+                "control+TAB",
+                "shift+SPACE",
+                "control+space bar",
+            ] {
                 let refused = call("set_global_hotkey", vec![json!(combo)]).unwrap_err();
-                assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE, "{combo}");
+                assert_eq!(
+                    refused,
+                    bir_app_api::hotkey_combo::NOT_REGISTRABLE,
+                    "{combo}"
+                );
             }
-            assert_eq!(stored(), json!("control+alt+F20"), "a refusal leaves the stored combo");
+            assert_eq!(
+                stored(),
+                json!("control+alt+F20"),
+                "a refusal leaves the stored combo"
+            );
             call("set_global_hotkey", vec![json!("")]).expect("cleared");
             assert_eq!(stored(), JsonValue::Null);
         });
@@ -754,14 +885,26 @@ mod tests {
     fn a_second_copy_on_the_same_database_is_told_in_plain_words() {
         let (folder, database) = empty();
         dev_env(Some(&database), Some(folder.path()), || {
-            call("list_taxpayers", vec![]).expect("the first copy opens the database and holds its lock");
+            call("list_taxpayers", vec![])
+                .expect("the first copy opens the database and holds its lock");
             // Another copy: another engine thread of this process (the door boots, and the database slot lives, per thread).
-            let second = std::thread::scope(|scope| scope.spawn(|| call("list_taxpayers", vec![])).join().expect("the thread ran"));
+            let second = std::thread::scope(|scope| {
+                scope
+                    .spawn(|| call("list_taxpayers", vec![]))
+                    .join()
+                    .expect("the thread ran")
+            });
             assert_eq!(second.unwrap_err(), SECOND_COPY);
             let asked = std::thread::scope(|scope| {
                 scope
                     .spawn(|| {
-                        let args = vec![json!("000123453"), json!("1601C"), json!(2025), json!(3), JsonValue::Null];
+                        let args = vec![
+                            json!("000123453"),
+                            json!("1601C"),
+                            json!(2025),
+                            json!(3),
+                            JsonValue::Null,
+                        ];
                         futures::executor::block_on(call_async("screen_form_open".into(), args))
                     })
                     .join()
@@ -783,12 +926,18 @@ mod tests {
             for engine in 1..=3 {
                 std::thread::scope(|scope| {
                     scope
-                        .spawn(|| call("list_taxpayers", vec![]).unwrap_or_else(|error| panic!("engine {engine}: {error}")))
+                        .spawn(|| {
+                            call("list_taxpayers", vec![])
+                                .unwrap_or_else(|error| panic!("engine {engine}: {error}"))
+                        })
                         .join()
                         .expect("the engine thread")
                 });
                 let lock = bir_core::db::try_acquire_live_owner_lock(&database);
-                assert!(lock.is_ok(), "engine {engine}: the lock is free after its end");
+                assert!(
+                    lock.is_ok(),
+                    "engine {engine}: the lock is free after its end"
+                );
             }
         });
     }
@@ -803,7 +952,11 @@ mod tests {
         const CHILD: &str = "NSH_DOOR_FRESH_PROCESS_ENGINES";
         if std::env::var_os(CHILD).is_none() {
             let status = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", "door::tests::in_a_fresh_process_every_engine_end_frees_the_database", "--nocapture"])
+                .args([
+                    "--exact",
+                    "door::tests::in_a_fresh_process_every_engine_end_frees_the_database",
+                    "--nocapture",
+                ])
                 .env(CHILD, "1")
                 .env("EBIR_TEST_ENV", "1")
                 .env("BIR_AUTH_BYPASS", "1")
@@ -823,12 +976,18 @@ mod tests {
             for engine in 1..=3 {
                 std::thread::scope(|scope| {
                     scope
-                        .spawn(|| call("auth_state", vec![]).unwrap_or_else(|error| panic!("engine {engine}: {error}")))
+                        .spawn(|| {
+                            call("auth_state", vec![])
+                                .unwrap_or_else(|error| panic!("engine {engine}: {error}"))
+                        })
                         .join()
                         .expect("the engine thread")
                 });
                 let lock = bir_core::db::try_acquire_live_owner_lock(&database);
-                assert!(lock.is_ok(), "engine {engine}: the lock is free after its end");
+                assert!(
+                    lock.is_ok(),
+                    "engine {engine}: the lock is free after its end"
+                );
             }
             let (opened, wait_for_open) = std::sync::mpsc::channel::<()>();
             let (end, wait_for_end) = std::sync::mpsc::channel::<()>();
@@ -840,7 +999,11 @@ mod tests {
                 });
                 let later = scope.spawn(move || {
                     wait_for_open.recv().unwrap();
-                    assert_eq!(call("auth_state", vec![]).unwrap_err(), SECOND_COPY, "engine 5 while 4 is open");
+                    assert_eq!(
+                        call("auth_state", vec![]).unwrap_err(),
+                        SECOND_COPY,
+                        "engine 5 while 4 is open"
+                    );
                     end.send(()).unwrap();
                     earlier.join().expect("engine 4 ended");
                     call("auth_state", vec![]).expect("engine 5: Try again opens the database");
@@ -848,11 +1011,15 @@ mod tests {
                 // `join`, not the scope's end: it waits for the thread's locals, the door's guard among them.
                 later.join().expect("engine 5 ended");
             });
-            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 5");
+            assert!(
+                bir_core::db::try_acquire_live_owner_lock(&database).is_ok(),
+                "free after engine 5"
+            );
 
             // From here on through the door's own functions (`crate::Door`, as NSH calls them), each engine with a
             // `System` of its own, as each VM has its own `Locals`.
-            let auth_state = |engine: &System| crate::Door::call("auth_state".into(), vec![], engine.clone());
+            let auth_state =
+                |engine: &System| crate::Door::call("auth_state".into(), vec![], engine.clone());
 
             // A quit (`Door.shutdown`) ends engine 6 for good. A door call it makes after that (a timer that fires before
             // the process ends: the shell's poll asks for the data token, the updater for its status) is refused and
@@ -866,19 +1033,33 @@ mod tests {
                         assert!(worker_runs_here(), "engine 6: its own worker");
                         crate::Door::shutdown(six.clone());
                         assert!(!worker_runs_here(), "engine 6: quit stopped its worker");
-                        assert!(bir_app_api::bir_module::owner_lock_released(), "engine 6: quit closed it");
+                        assert!(
+                            bir_app_api::bir_module::owner_lock_released(),
+                            "engine 6: quit closed it"
+                        );
                         queue_a_1601c(2024, 1);
                         assert_eq!(auth_state(&six).unwrap_err(), QUITTING, "a call after quit");
-                        assert_eq!(crate::Door::data_change_token(six.clone()).unwrap_err(), QUITTING, "the poll after quit");
+                        assert_eq!(
+                            crate::Door::data_change_token(six.clone()).unwrap_err(),
+                            QUITTING,
+                            "the poll after quit"
+                        );
                         assert!(!worker_runs_here(), "no worker after quit");
                         // A worker's first tick takes a queued return at once; give one the time it would need.
                         std::thread::sleep(std::time::Duration::from_secs(3));
-                        assert_eq!(queued_1601c_status(2024, 1), "Queued", "the return queued after quit was not sent");
+                        assert_eq!(
+                            queued_1601c_status(2024, 1),
+                            "Queued",
+                            "the return queued after quit was not sent"
+                        );
                     })
                     .join()
                     .expect("engine 6's thread")
             });
-            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 6");
+            assert!(
+                bir_core::db::try_acquire_live_owner_lock(&database).is_ok(),
+                "free after engine 6"
+            );
 
             // Two engines on ONE thread (a host that runs the next engine on the thread of the last). Engine 7 quits, and a
             // call it makes after that is refused. Engine 8's first call on the same thread boots again, with a worker of
@@ -893,22 +1074,39 @@ mod tests {
                         assert!(worker_runs_here(), "engine 7: its own worker");
                         crate::Door::shutdown(seven.clone());
                         assert!(!worker_runs_here(), "engine 7: quit stopped its worker");
-                        assert_eq!(auth_state(&seven).unwrap_err(), QUITTING, "engine 7 after its quit");
+                        assert_eq!(
+                            auth_state(&seven).unwrap_err(),
+                            QUITTING,
+                            "engine 7 after its quit"
+                        );
                         queue_a_1601c(2024, 2);
 
                         let eight = System::default();
                         auth_state(&eight).expect("engine 8 boots on the thread engine 7 quit on");
                         assert!(worker_runs_here(), "engine 8: a worker of its own");
-                        wait_for_status_here(2024, 2, "Submitted", "engine 8's worker sends the 1601C queued before it");
-                        assert_eq!(auth_state(&seven).unwrap_err(), QUITTING, "engine 7 stays refused");
+                        wait_for_status_here(
+                            2024,
+                            2,
+                            "Submitted",
+                            "engine 8's worker sends the 1601C queued before it",
+                        );
+                        assert_eq!(
+                            auth_state(&seven).unwrap_err(),
+                            QUITTING,
+                            "engine 7 stays refused"
+                        );
                         // Only a weak reference: a strong one would hold the database open past engine 8's end.
                         let handle_of_eight = std::sync::Arc::downgrade(
-                            &bir_app_api::bir_module::database_handle().expect("engine 8's database"),
+                            &bir_app_api::bir_module::database_handle()
+                                .expect("engine 8's database"),
                         );
 
                         let nine = System::default();
                         auth_state(&nine).expect("engine 9 boots in place of engine 8");
-                        assert!(handle_of_eight.upgrade().is_none(), "engine 8's end closed its database");
+                        assert!(
+                            handle_of_eight.upgrade().is_none(),
+                            "engine 8's end closed its database"
+                        );
                         assert!(worker_runs_here(), "engine 9: a worker of its own");
                         assert!(
                             crate::Door::data_change_token(nine.clone()).is_ok(),
@@ -918,7 +1116,10 @@ mod tests {
                     .join()
                     .expect("the thread of engines 7, 8 and 9")
             });
-            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 9");
+            assert!(
+                bir_core::db::try_acquire_live_owner_lock(&database).is_ok(),
+                "free after engine 9"
+            );
 
             // Two engines ALIVE together on one thread (NSH never runs that; the door does not rely on it). Engine 10
             // boots; engine 11's first call ends it and boots its own; engine 10's next call is refused, never handed
@@ -931,18 +1132,33 @@ mod tests {
                         auth_state(&ten).expect("engine 10 boots");
                         let eleven = System::default();
                         auth_state(&eleven).expect("engine 11 boots in its place");
-                        assert_eq!(auth_state(&ten).unwrap_err(), REPLACED, "engine 10 gets nothing of engine 11's");
+                        assert_eq!(
+                            auth_state(&ten).unwrap_err(),
+                            REPLACED,
+                            "engine 10 gets nothing of engine 11's"
+                        );
                         auth_state(&eleven).expect("engine 11 still answers");
                         crate::Door::shutdown(eleven.clone());
-                        assert_eq!(call("system_info", vec![]).unwrap_err(), QUITTING, "a call past the gate, after the quit");
+                        assert_eq!(
+                            call("system_info", vec![]).unwrap_err(),
+                            QUITTING,
+                            "a call past the gate, after the quit"
+                        );
                         let agent = crate::agent::Agent::start(eleven.clone());
-                        assert_eq!(agent.note.as_deref(), Some(QUITTING), "the agent starts nothing after the quit");
+                        assert_eq!(
+                            agent.note.as_deref(),
+                            Some(QUITTING),
+                            "the agent starts nothing after the quit"
+                        );
                         assert!(!agent.active);
                     })
                     .join()
                     .expect("the thread of engines 10 and 11")
             });
-            assert!(bir_core::db::try_acquire_live_owner_lock(&database).is_ok(), "free after engine 11");
+            assert!(
+                bir_core::db::try_acquire_live_owner_lock(&database).is_ok(),
+                "free after engine 11"
+            );
         });
     }
 
@@ -955,7 +1171,8 @@ mod tests {
     fn wait_for_status_here(year: u16, month: u8, status: &str, what: &str) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
         loop {
-            let handle = bir_app_api::bir_module::database_handle().expect("this engine's database");
+            let handle =
+                bir_app_api::bir_module::database_handle().expect("this engine's database");
             let now = {
                 let db = bir_core::lock_timing::lock(&handle).expect("the database lock");
                 db.get_1601c_draft(&demo_profile().tin.full(), year, month)
@@ -965,7 +1182,10 @@ mod tests {
             if now.as_deref() == Some(status) {
                 return;
             }
-            assert!(std::time::Instant::now() < deadline, "{what}: still {now:?} after 20 s");
+            assert!(
+                std::time::Instant::now() < deadline,
+                "{what}: still {now:?} after 20 s"
+            );
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
@@ -992,14 +1212,17 @@ mod tests {
     /// The demo taxpayer's 1601C for `year`/`month`, queued, written straight into the database (no engine has it open).
     fn queue_a_1601c(year: u16, month: u8) {
         let profile = demo_profile();
-        let mut draft = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, year, month);
+        let mut draft =
+            bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, year, month);
         draft.any_taxes_withheld = false;
         draft.transition_to_queued().expect("the demo 1601C queues");
-        let (db, _, _) = bir_core::db::open_live_database().expect("the database, closed by the quit");
+        let (db, _, _) =
+            bir_core::db::open_live_database().expect("the database, closed by the quit");
         if db.list_profiles().expect("the profiles").is_empty() {
             db.save_profile(profile).expect("the profile");
         }
-        db.save_queued_1601c_draft(&draft).expect("the queued 1601C");
+        db.save_queued_1601c_draft(&draft)
+            .expect("the queued 1601C");
         db.close().expect("closed again");
     }
 
@@ -1045,11 +1268,19 @@ mod tests {
     fn a_database_another_copy_holds_says_what_to_do_until_it_is_closed() {
         let (folder, database) = empty();
         dev_env(Some(&database), Some(folder.path()), || {
-            let other = bir_core::db::try_acquire_live_owner_lock(&database).expect("the other copy");
+            let other =
+                bir_core::db::try_acquire_live_owner_lock(&database).expect("the other copy");
             let said = call("auth_state", vec![]).unwrap_err();
             assert_eq!(said, SECOND_COPY);
-            assert!(said.ends_with("Close it or wait a moment, then press Try again."), "{said}");
-            assert_eq!(call("auth_state", vec![]).unwrap_err(), SECOND_COPY, "Try again while it is open");
+            assert!(
+                said.ends_with("Close it or wait a moment, then press Try again."),
+                "{said}"
+            );
+            assert_eq!(
+                call("auth_state", vec![]).unwrap_err(),
+                SECOND_COPY,
+                "Try again while it is open"
+            );
             drop(other);
             call("auth_state", vec![]).expect("Try again once it is closed");
         });
@@ -1059,9 +1290,17 @@ mod tests {
     /// error, even one that says "already open", reaches the page as the host wrote it.
     #[test]
     fn only_the_second_copy_sentence_is_said_in_other_words() {
-        for path in ["/tmp/a/bir_data.db", "C:\\Users\\x y\\bir_data.db", "/data/with space/bir_data.db", ""] {
+        for path in [
+            "/tmp/a/bir_data.db",
+            "C:\\Users\\x y\\bir_data.db",
+            "/data/with space/bir_data.db",
+            "",
+        ] {
             let core = bir_core::db::DbError::LiveDatabaseInUse(PathBuf::from(path)).to_string();
-            assert!(core.contains("Op::Yield"), "the developer's sentence: {core}");
+            assert!(
+                core.contains("Op::Yield"),
+                "the developer's sentence: {core}"
+            );
             assert_eq!(said(&core), SECOND_COPY, "{path:?}");
         }
         for other in [
@@ -1174,14 +1413,114 @@ mod tests {
         }
     }
 
+    struct UnroutedControlLogger;
+
+    impl log::Log for UnroutedControlLogger {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.level() <= log::Level::Info
+        }
+
+        fn log(&self, record: &log::Record<'_>) {
+            use std::io::Write as _;
+
+            if !self.enabled(record.metadata()) {
+                return;
+            }
+            let path = std::env::var_os("NSH_KIT_LOG_CONTROL_PATH").expect("control log path");
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .expect("open control log");
+            writeln!(file, "{}: {}", record.target(), record.args()).expect("write control log");
+        }
+
+        fn flush(&self) {}
+    }
+
+    static UNROUTED_CONTROL_LOGGER: UnroutedControlLogger = UnroutedControlLogger;
+
+    #[test]
+    fn a_kit_log_line_through_the_facade_bridge_is_masked_in_the_daily_log() {
+        const CHILD: &str = "NSH_KIT_LOG_BRIDGE_CHILD";
+        const CONTROL: &str = "NSH_KIT_LOG_CONTROL";
+        // A kit record below warn is deliberately scoped out of the daily
+        // file (the default filter admits the app's own targets only, or kit
+        // noise would flood it), so the mask proof uses a warn line.
+        const LINE: &str = "kit line tin=12345678800000 email payroll.team@example.com";
+
+        if std::env::var_os(CONTROL).is_some() {
+            log::set_logger(&UNROUTED_CONTROL_LOGGER).expect("control logger");
+            log::set_max_level(log::LevelFilter::Info);
+            log::warn!(target: "nsh_engine", "{LINE}");
+            return;
+        }
+
+        if std::env::var_os(CHILD).is_none() {
+            // Both modes need the process-wide `log` facade in a different end
+            // state, so each runs as an exact child process. The control has no
+            // bridge and writes the same facade record plainly; the test child
+            // takes the bridge and writes through the app's tracing file.
+            let folder = tempfile::tempdir().expect("log folder");
+            let control_path = folder.path().join("unrouted-control.log");
+            let child = |mode: &str| {
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", "door::tests::a_kit_log_line_through_the_facade_bridge_is_masked_in_the_daily_log", "--nocapture"])
+                    .env(mode, "1")
+                    .env("BIR_LOG_DIR", folder.path())
+                    .env("NSH_KIT_LOG_CONTROL_PATH", &control_path)
+                    .env("EBIR_TEST_ENV", "1")
+                    .env("BIR_AUTH_BYPASS", "1")
+                    .env("BUWIZ_NO_KEYCHAIN", "1")
+                    .env("BIR_SFTP_DRY_RUN", "1")
+                    .env_remove("BIR_SFTP_LIVE")
+                    .env_remove("RUST_LOG")
+                    .status()
+                    .expect("child test process")
+            };
+            assert!(
+                child(CONTROL).success(),
+                "the unrouted control child failed"
+            );
+            assert!(child(CHILD).success(), "the routed child failed");
+
+            let control = std::fs::read_to_string(&control_path).expect("control log");
+            assert!(control.contains("12345678800000"), "{control}");
+            assert!(control.contains("payroll.team@example.com"), "{control}");
+
+            let text = std::fs::read_to_string(bir_core::log_files::today_log_path(folder.path()))
+                .expect("daily log");
+            let line = text
+                .lines()
+                .find(|line| line.contains("kit line"))
+                .unwrap_or_else(|| panic!("kit line not in {text}"));
+            assert!(line.contains("***-***-788-00000"), "{line}");
+            assert!(line.contains("pa•••@example.com"), "{line}");
+            assert!(!line.contains("12345678800000"), "{line}");
+            assert!(!line.contains("payroll.team@example.com"), "{line}");
+            return;
+        }
+
+        install_log_facade_bridge();
+        bir_core::logging::with_thread_subscriber(logging_options(), || {
+            log::warn!(target: "nsh_engine", "{LINE}");
+        });
+    }
+
     #[test]
     fn the_registration_print_sweep_is_deferred_only_until_a_scratch_database_is_named() {
         dev_env(None, None, || {
-            assert!(scratch_database_wanted(), "no database named: registration must not sweep the real folder");
+            assert!(
+                scratch_database_wanted(),
+                "no database named: registration must not sweep the real folder"
+            );
         });
         let (folder, database) = empty();
         dev_env(Some(&database), Some(folder.path()), || {
-            assert!(!scratch_database_wanted(), "a database named in the environment is known at registration");
+            assert!(
+                !scratch_database_wanted(),
+                "a database named in the environment is known at registration"
+            );
         });
         temp_env::with_var("EBIR_TEST_ENV", None::<&str>, || {
             assert!(!scratch_database_wanted());
@@ -1210,13 +1549,51 @@ mod tests {
 
     #[test]
     fn use_database_names_the_file_before_the_first_call_only() {
-        let (folder, database) = empty();
+        // The launch sweep is process-once, so the sweep assertion is meaningful
+        // only when this test is the process's first door use. Run the test body
+        // in an exact child process; the in-process parent only launches it.
+        const CHILD: &str = "NSH_DOOR_USE_DATABASE_FIRST_SWEEP";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "door::tests::use_database_names_the_file_before_the_first_call_only",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_AUTH_BYPASS", "1")
+                .env("BUWIZ_NO_KEYCHAIN", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .status()
+                .expect("child test process");
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        let (folder, _) = empty();
         dev_env(None, Some(folder.path()), || {
             assert!(use_database("").is_err());
             let protected = folder.path().join("BuwizNsh/data/bir_data.db");
             let error = use_database(&protected.display().to_string()).unwrap_err();
             assert!(error.starts_with("Refusing to open"), "{error}");
             assert!(!protected.exists());
+            // The named room sits inside the app's own data folder: the launch
+            // sweep clears previews only there, never in a folder the database
+            // merely happens to sit in (a foreign folder is not ours to empty).
+            let database = bir_core::platform::data_dir()
+                .join("room")
+                .join("bir_data.db");
+            std::fs::create_dir_all(database.parent().expect("room folder")).expect("make room");
+            let stale = database
+                .parent()
+                .expect("database folder")
+                .join("previews")
+                .join("print")
+                .join("2551Q-stale-sheet.html");
+            std::fs::create_dir_all(stale.parent().expect("preview folder"))
+                .expect("make stale preview");
+            std::fs::write(&stale, "filled return").expect("write stale preview");
             assert_eq!(
                 use_database(&database.display().to_string()).expect("named"),
                 database.display().to_string()
@@ -1228,6 +1605,10 @@ mod tests {
             );
             let info = call("system_info", vec![]).expect("system_info");
             assert_eq!(info["database_path"], database.display().to_string());
+            assert!(
+                !stale.exists(),
+                "the first boot's launch sweep clears the named test room's print previews"
+            );
             let late = use_database(&database.display().to_string()).unwrap_err();
             assert!(late.contains("already open"), "{late}");
         });
@@ -1397,20 +1778,30 @@ mod tests {
             Ok("refused") => {
                 let process = set_up(|| SendMode::Refused("a reason".into()));
                 assert!(!process.send.worker_may_start());
-                assert!(bir_app_api::bir_module::submission_worker_refused(), "refused: latched");
+                assert!(
+                    bir_app_api::bir_module::submission_worker_refused(),
+                    "refused: latched"
+                );
                 return;
             }
             Ok("allowed") => {
                 let process = set_up(|| SendMode::DryRun);
                 assert!(process.send.worker_may_start());
-                assert!(!bir_app_api::bir_module::submission_worker_refused(), "a dry run: no latch");
+                assert!(
+                    !bir_app_api::bir_module::submission_worker_refused(),
+                    "a dry run: no latch"
+                );
                 return;
             }
             _ => {}
         }
         for case in ["refused", "allowed"] {
             let status = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", "door::tests::a_refused_send_guard_latches_the_worker_off", "--nocapture"])
+                .args([
+                    "--exact",
+                    "door::tests::a_refused_send_guard_latches_the_worker_off",
+                    "--nocapture",
+                ])
                 .env(CHILD, case)
                 .status()
                 .unwrap();
@@ -1426,7 +1817,9 @@ mod tests {
             #[cfg(windows)]
             let folder = {
                 use std::os::windows::fs::OpenOptionsExt;
-                use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_WRITE_ATTRIBUTES};
+                use windows_sys::Win32::Storage::FileSystem::{
+                    FILE_FLAG_BACKUP_SEMANTICS, FILE_WRITE_ATTRIBUTES,
+                };
                 std::fs::OpenOptions::new()
                     .access_mode(FILE_WRITE_ATTRIBUTES)
                     .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
@@ -1463,14 +1856,30 @@ mod tests {
         let root = tempfile::tempdir().expect("scratch root");
         let left = root.path().join("4242-0");
         std::fs::create_dir_all(&left).unwrap();
-        std::fs::write(left.join("bir_data.db"), b"a dead run's database, with its PIN").unwrap();
+        std::fs::write(
+            left.join("bir_data.db"),
+            b"a dead run's database, with its PIN",
+        )
+        .unwrap();
         let folder = fresh_scratch_folder(root.path(), 4242, 0).expect("fresh folder");
         assert_eq!(folder, left);
         assert!(folder.is_dir());
-        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 0, "nothing of the dead run is left");
+        assert_eq!(
+            std::fs::read_dir(&folder).unwrap().count(),
+            0,
+            "nothing of the dead run is left"
+        );
         // Another engine of the same process, and a first run, get folders of their own.
-        assert!(fresh_scratch_folder(root.path(), 4242, 1).expect("second").ends_with("4242-1"));
-        assert!(fresh_scratch_folder(root.path(), 7, 0).expect("new").is_dir());
+        assert!(
+            fresh_scratch_folder(root.path(), 4242, 1)
+                .expect("second")
+                .ends_with("4242-1")
+        );
+        assert!(
+            fresh_scratch_folder(root.path(), 7, 0)
+                .expect("new")
+                .is_dir()
+        );
     }
 
     fn scratch_folder(root: &Path, name: &str, by: std::time::Duration) -> PathBuf {

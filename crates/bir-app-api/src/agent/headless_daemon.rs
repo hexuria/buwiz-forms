@@ -462,7 +462,6 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
 
-    #[cfg(unix)]
     fn isolate_paths(dir: &Path) -> (PathBuf, PathBuf) {
         let log = dir.join("logs/bir-headless.log");
         let pid = dir.join("bir-headless.pid");
@@ -679,6 +678,70 @@ mod tests {
                     "detached child {} still alive after SIGTERM",
                     info.pid
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn detached_stderr_masks_eprintln_and_panic() {
+        if std::env::var_os(DETACHED_ENV).is_some() {
+            let installed = bir_core::logging::install(bir_core::logging::InstallOptions {
+                stdout: true,
+                developer_mode: false,
+                default_filter: bir_core::logging::shell_filter(false),
+            });
+            assert!(
+                installed,
+                "the detached probe needs the production panic hook"
+            );
+            bir_core::logging::redacted_stderr("inbox sync failed for payroll.team@example.com");
+            let panicked = std::panic::catch_unwind(|| {
+                panic!("probe panic tin 123-456-789-00000");
+            });
+            assert!(panicked.is_err());
+            // The detach launcher treats an immediately exiting daemon as a
+            // startup failure. The probe stays up briefly, then exits on its own.
+            std::thread::sleep(Duration::from_secs(1));
+            return;
+        }
+
+        let directory = tempfile::tempdir().expect("temp dir");
+        let (log, pid) = isolate_paths(directory.path());
+        let app_log_dir = directory.path().join("app-logs");
+        temp_env::with_vars(
+            [
+                (LOG_ENV, Some(log.to_str().expect("utf8"))),
+                (PID_ENV, Some(pid.to_str().expect("utf8"))),
+                ("BIR_LOG_DIR", Some(app_log_dir.to_str().expect("utf8"))),
+            ],
+            || {
+                let exe = std::env::current_exe().expect("test executable");
+                spawn_detached_command(
+                    &exe,
+                    &[
+                        "detached_stderr_masks_eprintln_and_panic".into(),
+                        "--nocapture".into(),
+                    ],
+                )
+                .expect("spawn detached stderr probe");
+
+                let deadline = Instant::now() + Duration::from_secs(10);
+                let mut body = String::new();
+                while Instant::now() < deadline {
+                    body = fs::read_to_string(&log).unwrap_or_default();
+                    if body.contains("payroll.team@example.com")
+                        || body.contains("pa•••@example.com")
+                        || body.contains("123-456-789-00000")
+                        || body.contains("***-***-789-00000")
+                    {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(30));
+                }
+                assert!(!body.contains("payroll.team@example.com"), "{body}");
+                assert!(!body.contains("123-456-789-00000"), "{body}");
+                assert!(body.contains("pa•••@example.com"), "{body}");
+                assert!(body.contains("***-***-789-00000"), "{body}");
             },
         );
     }

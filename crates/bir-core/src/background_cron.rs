@@ -2743,20 +2743,22 @@ fn release_unaccepted(
     settle: impl FnOnce(&Database, String, NoReceipt) -> Result<bool, crate::db::DbError>,
 ) {
     let how = error.no_receipt();
+    let error_text = error.to_string();
+    let error_for_log = crate::logging::redact_external_text_for_log(&error_text);
     let note = match how {
         NoReceipt::Unknown => {
             warn!(
                 category = error.category(),
                 "Cron: {form_code} {period} PUT ended after the network claim; outcome is unknown and the return is not sent again"
             );
-            format!("{OUTCOME_UNKNOWN} ({error})")
+            format!("{OUTCOME_UNKNOWN} ({error_text})")
         }
         _ => {
             warn!(
                 category = error.category(),
-                "Cron: {form_code} {period} was not sent: {error}"
+                "Cron: {form_code} {period} was not sent: {error_for_log}"
             );
-            error.to_string()
+            error_text
         }
     };
     if let Ok(db_guard) = lock_timing::lock(db) {
@@ -4272,6 +4274,7 @@ mod tests {
         let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
         let dir = tempfile::tempdir().unwrap();
         let options = crate::logging::InstallOptions {
+            stdout: true,
             developer_mode: false,
             default_filter: crate::logging::shell_filter(false),
         };
@@ -4303,6 +4306,47 @@ mod tests {
         );
         assert!(!text.contains("1234567890000"), "{text}");
         assert!(text.contains("***-***-789-0000"), "{text}");
+    }
+
+    #[test]
+    fn relay_server_text_is_masked_in_the_cron_log_file() {
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let options = crate::logging::InstallOptions {
+            stdout: true,
+            developer_mode: false,
+            default_filter: crate::logging::shell_filter(false),
+        };
+        temp_env::with_vars(
+            [
+                ("BIR_LOG_DIR", Some(dir.path().as_os_str())),
+                ("RUST_LOG", None),
+            ],
+            || {
+                crate::logging::with_thread_subscriber(options, || {
+                    release_unaccepted(
+                        "1601C",
+                        "052024",
+                        &crate::transport::TransportError::Refused(
+                            "TIN 1234567890000 refused; write payroll.team@example.com".into(),
+                        ),
+                        &db,
+                        |_, _, _| Ok(true),
+                    );
+                });
+            },
+        );
+        let path = crate::log_files::today_log_path(dir.path());
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        assert!(text.contains("was not sent"), "{text}");
+        assert!(!text.contains("1234567890000"), "{text}");
+        assert!(text.contains("***-***-789-0000"), "{text}");
+        assert!(!text.contains("payroll.team@example.com"), "{text}");
+        assert!(text.contains("pa•••@example.com"), "{text}");
     }
 
     #[tokio::test]

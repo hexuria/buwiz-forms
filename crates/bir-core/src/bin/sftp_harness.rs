@@ -112,7 +112,10 @@ async fn main() -> ExitCode {
         match live_put().await {
             Ok(filename) => {
                 println!("upload=ok");
-                println!("filename={filename}");
+                println!(
+                    "filename={}",
+                    bir_core::logging::submission_filename_for_log(&filename)
+                );
                 return ExitCode::SUCCESS;
             }
             Err(error) => {
@@ -123,11 +126,12 @@ async fn main() -> ExitCode {
     }
 
     let filename = placeholder_filename();
-    println!("filename={filename}");
     println!(
-        "filename_prefix_len={}",
-        filename.split('-').next().unwrap_or("").len()
+        "filename={}",
+        bir_core::logging::submission_filename_for_log(&filename)
     );
+    let filename_prefix_len = filename.split('-').next().unwrap_or("").len();
+    println!("filename_prefix_len={filename_prefix_len}");
 
     match wrap_dispatcher_field("lab.example") {
         Ok(wrapped) => match unwrap_dispatcher_field(&wrapped) {

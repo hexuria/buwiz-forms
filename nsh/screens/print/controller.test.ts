@@ -65,7 +65,7 @@ function world(nativePreview?: (key: string, title: string, requestId: string) =
       remove: (key) => void previews.delete(key),
     },
     route: () => state.route,
-    period: () => null,
+    period: () => "Q3 2026",
     chromeVisible: () => state.chrome,
     toast: (message) => void toasts.push(message),
     errorText: (error) => String((error as Error).message ?? error),
@@ -82,7 +82,9 @@ test("Android system preview needs no second window and does not follow updates"
   w.host.hear(w.event("update", "2551Q", 2));
   await Promise.resolve();
   expect(calls.length).toBe(1);
-  expect(calls[0].includes(TIN)).toBe(true);
+  expect(calls[0]).toBe("2551Q: BIR Form 2551Q · Q3 2026");
+  expect(calls[0].includes(TIN)).toBe(false);
+  expect(calls[0].includes("Juana Santos")).toBe(false);
   expect(w.opened.length).toBe(0);
   expect(w.closedKeys.length).toBe(0);
   expect(w.toasts.length).toBe(0);
@@ -159,6 +161,9 @@ test("the window belongs to the return it was asked on, and asking again for tha
   w.host.hear(w.event("open", "2551Q", 1));
   expect(w.opened.length).toBe(1);
   expect(w.opened[0].id).toBe(windowId("2551Q", identityOf(3)));
+  expect(w.opened[0].title).toBe("BIR Form 2551Q · Q3 2026");
+  expect(w.opened[0].title.includes("Juana Santos")).toBe(false);
+  expect(w.opened[0].title.includes(TIN)).toBe(false);
   expect(w.host.windowOf("2551Q")).toBe(w.opened[0].id);
   expect(w.state.mainHooked).toBe(1);
   // Asked again: the same window, its title refreshed, in front.

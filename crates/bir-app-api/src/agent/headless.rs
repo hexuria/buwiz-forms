@@ -28,6 +28,12 @@ use gpui_agent::server::spawn_mailbox_named;
 
 use super::APP;
 
+macro_rules! redacted_eprintln {
+    ($($arg:tt)*) => {
+        bir_core::logging::redacted_stderr(&format!($($arg)*))
+    };
+}
+
 /// The executable the discovery record names. The binary is `bir`, as is the NSH app's record, so the daemon keeps
 /// the old name here: `bir-mcp` reads it as headless mode and `connect_running` finds the daemon by it.
 const RECORD_EXECUTABLE: &str = "bir-headless";
@@ -73,6 +79,22 @@ enum Command {
 }
 
 pub fn run() -> ExitCode {
+    // First, before any record: without it a real `serve --detach` panic went raw into bir-headless.log, TINs and all.
+    bir_core::logging::install(bir_core::logging::InstallOptions {
+        stdout: true,
+        developer_mode: bir_core::logging::developer_mode_enabled(),
+        default_filter: "warn,bir_app_api=info,bir_core=info,js=warn",
+    });
+    // Test-only hook, armed only under EBIR_TEST_ENV: the detached-daemon logging proof needs a real panic
+    // carrying a TIN inside the real child after it is serving, and nothing in production sets this variable.
+    if std::env::var_os("EBIR_TEST_ENV").is_some()
+        && let Ok(message) = std::env::var("BIR_TEST_PANIC_ON_START")
+    {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            panic!("{message}");
+        });
+    }
     bir_core::notification::enable_desktop_delivery();
     dotenvy::dotenv().ok();
     match run_cli() {
@@ -102,7 +124,7 @@ fn run_cli() -> Result<(), ExitCode> {
     let cli = parse_cli();
     let command = cli.command.unwrap_or(Command::Serve);
     if cli.detach && !matches!(command, Command::Serve) {
-        eprintln!("--detach is only valid with `serve` (example: bir serve --detach)");
+        redacted_eprintln!("--detach is only valid with `serve` (example: bir serve --detach)");
         return Err(ExitCode::from(2));
     }
     match command {
@@ -304,10 +326,10 @@ pub fn wait_until_unblocked(addr: SocketAddr, wait: bool) -> Result<(), String> 
                 if last != Some(blocker) || last_print.elapsed() >= Duration::from_secs(2) {
                     match blocker {
                         ServeBlocker::BindInUse => {
-                            eprintln!("waiting for bind {addr} …")
+                            redacted_eprintln!("waiting for bind {addr} …")
                         }
                         ServeBlocker::DatabaseInUse => {
-                            eprintln!("waiting for live DB owner lock …")
+                            redacted_eprintln!("waiting for live DB owner lock …")
                         }
                     }
                     last = Some(blocker);
@@ -338,13 +360,13 @@ pub fn live_database_token_required(token_set: bool, using_path_override: bool) 
 fn load_serve_config() -> Result<gpui_agent::security::AgentConfig, ExitCode> {
     // First: a named database this build would not obey opens nothing (accounts-and-lock I3).
     if let Some(why) = ignored_override_refusal(db::ignored_database_path().as_deref()) {
-        eprintln!("{why}");
+        redacted_eprintln!("{why}");
         return Err(ExitCode::from(2));
     }
     let config = match from_env() {
         Ok(Some(config)) => config,
         Ok(None) => {
-            eprintln!(
+            redacted_eprintln!(
                 "bir serve is an automation host. Start it with GPUI_AGENT=1.\n\
                  Example:\n\
                  export GPUI_AGENT=1\n\
@@ -356,7 +378,7 @@ fn load_serve_config() -> Result<gpui_agent::security::AgentConfig, ExitCode> {
             return Err(ExitCode::from(2));
         }
         Err(error) => {
-            eprintln!("refusing to start automation: {error}");
+            redacted_eprintln!("refusing to start automation: {error}");
             return Err(ExitCode::from(2));
         }
     };
@@ -366,7 +388,7 @@ fn load_serve_config() -> Result<gpui_agent::security::AgentConfig, ExitCode> {
     // ignored, so the signed-in account's room is the live database and the token is required.
     let using_path_override = db::single_room_database().is_some();
     if live_database_token_required(token_set, using_path_override) {
-        eprintln!(
+        redacted_eprintln!(
             "refusing to open the live app database (the signed-in account's room) without GPUI_AGENT_TOKEN.\n\
              export GPUI_AGENT_TOKEN=... (never log the value). \
              CI may set BIR_DATABASE_PATH to a temp file."
@@ -380,11 +402,11 @@ fn detach_serve(wait: bool) -> Result<(), ExitCode> {
     let config = load_serve_config()?;
     if !wait {
         if let Some(pid) = headless_daemon::live_pid(&headless_daemon::pid_path()) {
-            eprintln!("{}", headless_daemon::already_running_message(pid));
+            redacted_eprintln!("{}", headless_daemon::already_running_message(pid));
             return Err(ExitCode::from(2));
         }
         if let Err(error) = wait_until_unblocked(config.addr, false) {
-            eprintln!("{error}");
+            redacted_eprintln!("{error}");
             return Err(ExitCode::from(if error.contains("already open") {
                 1
             } else {
@@ -394,20 +416,20 @@ fn detach_serve(wait: bool) -> Result<(), ExitCode> {
     }
 
     let exe = std::env::current_exe().map_err(|error| {
-        eprintln!("failed to resolve the bir executable: {error}");
+        redacted_eprintln!("failed to resolve the bir executable: {error}");
         ExitCode::from(2)
     })?;
     match headless_daemon::spawn_detached_serve(&exe, wait) {
         Ok(info) => {
             print!("{}", headless_daemon::format_detach_report(&info));
-            eprintln!(
+            redacted_eprintln!(
                 "detached. follow with: bir logs --follow   (log {})",
                 info.log_path.display()
             );
             Ok(())
         }
         Err(error) => {
-            eprintln!("{error}");
+            redacted_eprintln!("{error}");
             Err(ExitCode::from(2))
         }
     }
@@ -416,13 +438,13 @@ fn detach_serve(wait: bool) -> Result<(), ExitCode> {
 fn logs(follow: bool, tail: Option<usize>) -> Result<(), ExitCode> {
     let path = headless_daemon::log_path();
     if !path.exists() {
-        eprintln!("{}", headless_daemon::missing_log_message(&path));
+        redacted_eprintln!("{}", headless_daemon::missing_log_message(&path));
         return Err(ExitCode::from(1));
     }
     let stop = std::sync::atomic::AtomicBool::new(false);
     headless_daemon::dump_or_follow(&path, follow, tail, &stop, &mut std::io::stdout()).map_err(
         |error| {
-            eprintln!("failed to read {}: {error}", path.display());
+            redacted_eprintln!("failed to read {}: {error}", path.display());
             ExitCode::from(1)
         },
     )
@@ -474,12 +496,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         let (opened, path) = match open_serve_database() {
             Ok(opened) => opened,
             Err(error) if wait && error.contains("already open") => {
-                eprintln!("waiting for live DB owner lock …");
+                redacted_eprintln!("waiting for live DB owner lock …");
                 thread::sleep(Duration::from_millis(200));
                 continue;
             }
             Err(error) => {
-                eprintln!("{error}");
+                redacted_eprintln!("{error}");
                 return Err(ExitCode::from(1));
             }
         };
@@ -500,12 +522,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             Err(error) if wait && error.kind() == ErrorKind::AddrInUse => {
                 drop(host);
                 drop(db);
-                eprintln!("waiting for bind {} …", config.addr);
+                redacted_eprintln!("waiting for bind {} …", config.addr);
                 thread::sleep(Duration::from_millis(200));
                 continue;
             }
             Err(error) => {
-                eprintln!("{}", bind_failure_message(config.addr, &error));
+                redacted_eprintln!("{}", bind_failure_message(config.addr, &error));
                 return Err(ExitCode::from(2));
             }
         };
@@ -515,11 +537,11 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             drop(db);
             abandon_deaf_listener(addr, &shutdown);
             if wait {
-                eprintln!("waiting for bind {addr} …");
+                redacted_eprintln!("waiting for bind {addr} …");
                 thread::sleep(Duration::from_millis(200));
                 continue;
             }
-            eprintln!(
+            redacted_eprintln!(
                 "gpui-agent bind {addr} accepted no connections. Quit shell GUI                  or the previous headless process and retry.                  `bir serve --wait` polls until a handshake succeeds."
             );
             return Err(ExitCode::from(2));
@@ -532,12 +554,14 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                     bir_core::background_cron::start_cron_jobs(cron_db).await;
                 });
             } else {
-                eprintln!("Failed to initialize Tokio runtime for headless background tasks");
+                redacted_eprintln!(
+                    "Failed to initialize Tokio runtime for headless background tasks"
+                );
             }
         });
 
         if let Err(error) = headless_daemon::write_current_pid() {
-            eprintln!("pid file: {error}");
+            redacted_eprintln!("pid file: {error}");
         }
         let _pid_guard = ServePidGuard;
         // The serve thread's one write must land first, or it overwrites
@@ -556,41 +580,43 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         let _discovery_guard = match crate::agent::publish_record_retrying(&root, &record) {
             Ok(published) => Some(published),
             Err(error) => {
-                eprintln!("gpui-agent discovery record not written: {error}");
+                redacted_eprintln!("gpui-agent discovery record not written: {error}");
                 None
             }
         };
 
-        eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir)");
-        eprintln!(
+        redacted_eprintln!("gpui-agent listening on {addr} (platform=headless, app=bir)");
+        redacted_eprintln!(
             "log file: {} (override with {})",
             headless_daemon::log_path().display(),
             headless_daemon::LOG_ENV
         );
-        eprintln!(
+        redacted_eprintln!(
             "opt-in: GPUI_AGENT=1 · bind via from_env · protocol v2 HMAC · GPUI_AGENT_TOKEN required unless GPUI_AGENT_INSECURE_NO_TOKEN=1"
         );
         if token_set {
-            eprintln!(
+            redacted_eprintln!(
                 "auth: required (GPUI_AGENT_TOKEN set; CLI/MCP send protocol v2 HMAC, never the raw token)"
             );
         } else {
-            eprintln!(
+            redacted_eprintln!(
                 "auth: none (GPUI_AGENT_INSECURE_NO_TOKEN=1 demo only; recipe/MCP still need a client token)"
             );
         }
         if request_log::log_requests_enabled() {
-            eprintln!(
+            redacted_eprintln!(
                 "request log: {} (id/op/invoke/ok; token never logged)",
                 request_log::LOG_REQUESTS_ENV
             );
         }
-        eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
-        eprintln!(
+        redacted_eprintln!(
+            "delivery: semantic only (virtual_unavailable — no GPUI event pipeline)"
+        );
+        redacted_eprintln!(
             "database: {} (the saved sign-in's room, the legacy file before rooms, or BIR_DATABASE_PATH in a debug or test run; exclusive owner lock; not ephemeral)",
             path.display()
         );
-        eprintln!(
+        redacted_eprintln!(
             "BIR: no GPU · screenshot_unavailable · form.print errors · in-process SFTP cron. \
              Single bind + single live-DB owner. `serve --wait` resumes after GUI quit. \
              No Op::Yield. launchd KeepAlive is optional."
@@ -621,7 +647,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         if let Ok(guard) = db.lock()
             && let Err(error) = guard.checkpoint()
         {
-            eprintln!("wal checkpoint on shutdown: {error}");
+            redacted_eprintln!("wal checkpoint on shutdown: {error}");
         }
         return Ok(());
     }
@@ -638,7 +664,7 @@ fn connect_running() -> Result<AgentClient, ExitCode> {
         })
         .parse()
         .map_err(|error| {
-            eprintln!("invalid GPUI_AGENT_ADDR: {error}");
+            redacted_eprintln!("invalid GPUI_AGENT_ADDR: {error}");
             ExitCode::from(2)
         })?;
     let token = std::env::var("GPUI_AGENT_TOKEN")
@@ -646,7 +672,7 @@ fn connect_running() -> Result<AgentClient, ExitCode> {
         .filter(|value| !value.is_empty());
     let allow_remote = gpui_agent::security::truthy_env("GPUI_AGENT_ALLOW_REMOTE");
     gpui_agent::authorize_client(addr, token.as_deref(), allow_remote).map_err(|error| {
-        eprintln!("refusing agent address: {error}");
+        redacted_eprintln!("refusing agent address: {error}");
         ExitCode::from(2)
     })?;
     let mut client = AgentClient::connect(addr).with_timeout(Duration::from_secs(3));
@@ -659,7 +685,7 @@ fn connect_running() -> Result<AgentClient, ExitCode> {
 fn status() -> Result<(), ExitCode> {
     let mut client = connect_running()?;
     let resp = client.expect_ok(Op::Hello).map_err(|error| {
-        eprintln!("status failed: {error}");
+        redacted_eprintln!("status failed: {error}");
         ExitCode::from(1)
     })?;
     println!("{}", serde_json::to_string(&resp).expect("hello json"));
@@ -669,7 +695,7 @@ fn status() -> Result<(), ExitCode> {
 fn shutdown() -> Result<(), ExitCode> {
     let mut client = connect_running()?;
     client.expect_ok(Op::Shutdown).map_err(|error| {
-        eprintln!("shutdown failed: {error}");
+        redacted_eprintln!("shutdown failed: {error}");
         ExitCode::from(1)
     })?;
     Ok(())
