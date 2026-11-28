@@ -93,9 +93,10 @@ mock-relay *args="":
     cargo run --locked -p bir-core --features mock-relay --bin mock_relay -- {{args}}
 
 # The BIR_DEVICE_DIR contract's generator (test env, debug only): an unlocked pre-rooms
-# database with one taxpayer profile and one Queued return, written only inside the run folder.
-legacy-fixture run_folder target:
-    EBIR_TEST_ENV=1 cargo run --locked -p bir-core --features test-support --bin legacy_fixture -- {{run_folder}} {{target}}
+# database with one taxpayer profile and one Queued return, written only inside the run folder
+# (the target's parent).
+legacy-fixture target:
+    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; cargo run --locked -p bir-core --features test-support --bin legacy_fixture -- '" + target + "'" } else { "EBIR_TEST_ENV=1 cargo run --locked -p bir-core --features test-support --bin legacy_fixture -- '" + target + "'" } }}
 
 # In-memory development accounts on localhost:3008 (docs/cloud-account.md).
 mock-account *args="":
