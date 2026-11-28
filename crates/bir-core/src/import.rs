@@ -514,28 +514,27 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                             ))
                         };
                         type Candidate = (i64, String, Option<String>, String, Option<String>);
-                        let candidates: Vec<Candidate> =
-                            if period_key.is_some() {
-                                statement
-                                    .query_map(
-                                        rusqlite::params![
-                                            tin,
-                                            form_code,
-                                            taxable_year,
-                                            quarter,
-                                            period_key
-                                        ],
-                                        read_row,
-                                    )?
-                                    .collect::<Result<Vec<_>, _>>()?
-                            } else {
-                                statement
-                                    .query_map(
-                                        rusqlite::params![tin, form_code, taxable_year, quarter],
-                                        read_row,
-                                    )?
-                                    .collect::<Result<Vec<_>, _>>()?
-                            };
+                        let candidates: Vec<Candidate> = if period_key.is_some() {
+                            statement
+                                .query_map(
+                                    rusqlite::params![
+                                        tin,
+                                        form_code,
+                                        taxable_year,
+                                        quarter,
+                                        period_key
+                                    ],
+                                    read_row,
+                                )?
+                                .collect::<Result<Vec<_>, _>>()?
+                        } else {
+                            statement
+                                .query_map(
+                                    rusqlite::params![tin, form_code, taxable_year, quarter],
+                                    read_row,
+                                )?
+                                .collect::<Result<Vec<_>, _>>()?
+                        };
                         // Rows this import itself inserted are never
                         // candidates: the file's rows are independent of one
                         // another, and the second keyless open-ended entry
@@ -674,11 +673,10 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                 // in front of a device row dated strictly
                                 // newer: an older filed row never eats a
                                 // newer Draft or a real Queued.
-                                let device_dated_strictly_newer =
-                                    import_timestamp_allows_draft(
-                                        incoming_updated_at,
-                                        existing_updated_at.as_deref(),
-                                    );
+                                let device_dated_strictly_newer = import_timestamp_allows_draft(
+                                    incoming_updated_at,
+                                    existing_updated_at.as_deref(),
+                                );
                                 let may = !mid_send
                                     && if cross_amendment {
                                         incoming_rank >= existing_rank && newer
@@ -798,11 +796,9 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                 Err(_) => continue,
                             }
                         }
-                        serde_json::Value::Object(_) => match entry
-                            .get("codes")
-                            .and_then(|codes| {
-                                serde_json::from_value::<Vec<String>>(codes.clone()).ok()
-                            }) {
+                        serde_json::Value::Object(_) => match entry.get("codes").and_then(|codes| {
+                            serde_json::from_value::<Vec<String>>(codes.clone()).ok()
+                        }) {
                             Some(codes) => codes,
                             None => continue,
                         },
@@ -3636,17 +3632,17 @@ mod tests {
     #[test]
     fn restore_year_facts_branch_merge_never_overwrites_newer_head() {
         let db = Database::open_ephemeral().unwrap();
-        db.save_profile(branch_profile("Head Office", TIN_X)).unwrap();
+        db.save_profile(branch_profile("Head Office", TIN_X))
+            .unwrap();
         let branch_tin = "44455566600001";
         db.save_profile(branch_profile("Branch One", branch_tin))
             .unwrap();
         // The head already made its 8% election, written recently.
-        let head_facts: crate::tax_profile::YearFacts =
-            serde_json::from_value(serde_json::json!({
-                "income_tax_election": "EightPercent",
-                "election_source": "2551Q Q1"
-            }))
-            .unwrap();
+        let head_facts: crate::tax_profile::YearFacts = serde_json::from_value(serde_json::json!({
+            "income_tax_election": "EightPercent",
+            "election_source": "2551Q Q1"
+        }))
+        .unwrap();
         crate::db::taxpayers::write_year_facts_stamped(
             &db.conn,
             TIN_X,
@@ -3656,12 +3652,11 @@ mod tests {
         )
         .unwrap();
         // An older branch archive carries the graduated election.
-        let file_facts: crate::tax_profile::YearFacts =
-            serde_json::from_value(serde_json::json!({
-                "income_tax_election": "GraduatedOsd",
-                "election_source": "old backup"
-            }))
-            .unwrap();
+        let file_facts: crate::tax_profile::YearFacts = serde_json::from_value(serde_json::json!({
+            "income_tax_election": "GraduatedOsd",
+            "election_source": "old backup"
+        }))
+        .unwrap();
         crate::db::taxpayers::restore_year_facts(
             &db.conn,
             branch_tin,
@@ -3862,7 +3857,10 @@ mod tests {
         let counts = import_profile_data(&db, &archive).unwrap();
         let rows = rows_of(&db, TIN_X, "0605", 2024);
         assert_eq!(rows.len(), 1, "nothing inserted over a candidate");
-        assert!(rows[0].4.contains("\"mine\":true"), "the candidate untouched");
+        assert!(
+            rows[0].4.contains("\"mine\":true"),
+            "the candidate untouched"
+        );
         assert_eq!(counts.unmatched, 1);
     }
 
