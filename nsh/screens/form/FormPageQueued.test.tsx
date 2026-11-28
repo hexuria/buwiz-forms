@@ -196,7 +196,7 @@ test("desktop: a sent return keeps its own dated words, whatever the host's send
     await app.waitFor(stage === "test_sent" ? "text:Test send: not filed" : "text:Submitted · read-only", { timeout: 15_000 });
     // The page's words for a sent return carry its date (F21); the host's line is for a return still in the queue.
     await app.waitUntil(() => app.texts().some((text) => text.endsWith("Nothing here can be changed.")));
-    expect(app.texts().some((text) => text.includes("through Buwiz") || text.includes("Test send"))).toBe(false);
+    expect(app.texts().some((text) => text.includes("through Buwiz"))).toBe(false);
   }
 });
 

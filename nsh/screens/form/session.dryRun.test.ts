@@ -105,7 +105,7 @@ test("a return the dry-run worker sent says Dry run, not sent to BIR", async () 
   // A sent return keeps its dated words; the host's send words (send_state.rs) are for a return still in the queue.
   const when = sentWords(String(sent.submitted_at), true);
   expect(when === "Test send: not filed. Nothing reached the BIR.").toBe(true);
-  expect(await line(at("1601C", 9))).toBe(`${when}. Nothing here can be changed.`);
+  expect(await line(at("1601C", 9))).toBe(`${when} Nothing here can be changed.`);
   // The status chip says the banner's word, not "Submitted": what is stored stays Submitted.
   expect((await header(at("1601C", 9))).chip).toBe("Test send: not filed");
   expect(stored("1601C", 9).status).toBe("Submitted");
@@ -121,20 +121,21 @@ test("a Confirmed return carrying the old test-send mark reads as filed", async 
   life.confirmed_at = "2025-07-21T01:02:03+00:00";
   life.submitted_dry_run = true;
   bir.save_form_draft(DEMO.tin, "2550Q", YEAR, 2, "Confirmed", draft);
-  expect(await line(at("2550Q", 2))).toBe("Sent to BIR Jul 20, 2025. Nothing here can be changed.");
+  expect(await line(at("2550Q", 2))).toBe("Sent to BIR Jul 20, 2025, confirmed Jul 21, 2025. Nothing here can be changed.");
   expect((await header(at("2550Q", 2))).chip).toBe("Confirmed");
 });
 
 test("a return sent for real (no dry-run fact) says Sent to BIR", async () => {
   createDemoTaxpayer();
   // A return as the host builds it, stored as one that reached BIR (as a real send, or an earlier app's, leaves it).
-  const draft: Record<string, unknown> = { ...((await bir.screen_form_open(DEMO.tin, "2550Q", YEAR, 2)).draft as Record<string, unknown>) };
+  // Another period than the Confirmed test's: a stored return is never written over another status.
+  const draft: Record<string, unknown> = { ...((await bir.screen_form_open(DEMO.tin, "2550Q", YEAR, 3)).draft as Record<string, unknown>) };
   delete draft.screen_form_sample;
   const life = draft.lifecycle && typeof draft.lifecycle === "object" ? (draft.lifecycle as Record<string, unknown>) : draft;
   life.status = "Submitted";
   life.submitted_at = "2025-07-20T01:02:03+00:00";
-  bir.save_form_draft(DEMO.tin, "2550Q", YEAR, 2, "Submitted", draft);
-  expect(stored("2550Q", 2).submitted_dry_run).toBe(undefined);
-  expect(await line(at("2550Q", 2))).toBe("Sent to BIR Jul 20, 2025. Nothing here can be changed.");
-  expect((await header(at("2550Q", 2))).chip).toBe("Submitted");
+  bir.save_form_draft(DEMO.tin, "2550Q", YEAR, 3, "Submitted", draft);
+  expect(stored("2550Q", 3).submitted_dry_run).toBe(undefined);
+  expect(await line(at("2550Q", 3))).toBe("Sent to BIR Jul 20, 2025. Nothing here can be changed.");
+  expect((await header(at("2550Q", 3))).chip).toBe("Submitted");
 });
