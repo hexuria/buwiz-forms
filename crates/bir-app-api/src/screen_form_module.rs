@@ -7843,17 +7843,8 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
         let slug = slug.to_string();
         // Template fill + prepare + staticize run off the UI thread.
         let produce = Box::new(move || {
-            let html = if test_send {
-                bir_print::frozen_html::filled_document_test_send(&slug, &fields)
-            } else {
-                bir_print::frozen_html::filled_document_with_receipt(
-                    &slug,
-                    &fields,
-                    receipt.as_ref(),
-                )
-            }
-            .unwrap_or_default();
-            crate::static_html::staticize(&crate::print_sheet::prepare_html_for(&slug, &html, true))
+            crate::bir_module::preview_document(&slug, &fields, receipt.as_ref(), test_send)
+                .unwrap_or_default()
         });
         crate::hooks::hooks().print_preview_live_update(kind.form_code(), produce, started);
         Ok(HostValue::Bool(true))
@@ -16447,34 +16438,12 @@ mod tests {
         }
     }
 
-    /// Print preview reads the worker's stored dry-run fact, never the copy a page sends (which the host
-    /// strips as untrusted). The printed HTML itself carries the warning.
-    /// The document the print preview holds for `draft`, without the file: the preview source is
-    /// deleted once the window has read it (open_print_preview in bir_module.rs), so a test re-derives
-    /// the same pipeline's output. The screen_form_print call itself is kept for the wiring.
-    fn preview_html_for(code: &str, draft: &Value) -> String {
-        let kind = kind_of(code).unwrap();
-        let draft = flattened_lifecycle_for_print(&draft.clone());
-        with_database(|db| {
-            let opened = lifecycle_flag(&draft, "submitted_dry_run");
-            let print_draft = print_draft_with_opened_dry_run(&draft, opened);
-            let (fields, receipt, test_send) = print_map(db, kind, &print_draft).unwrap();
-            let slug = crate::bir_module::print_slug_for(kind.form_code()).unwrap();
-            let inner = if test_send {
-                bir_print::frozen_html::filled_document_test_send(slug, &fields)
-            } else {
-                bir_print::frozen_html::filled_document_with_receipt(
-                    slug,
-                    &fields,
-                    receipt.as_ref(),
-                )
-            }
-            .unwrap();
-            Ok(crate::static_html::staticize(
-                &crate::print_sheet::prepare_html_for(slug, &inner, true),
-            ))
-        })
-        .unwrap()
+    /// The document the real `open_print_preview` path just wrote, captured under `cfg(test)` before the transient
+    /// source file is removed. The test never re-derives the print pipeline.
+    fn captured_preview_html() -> String {
+        crate::bir_module::take_print_preview_captures()
+            .pop()
+            .expect("screen_form_print wrote a print-preview document")
     }
 
     #[test]
@@ -16500,7 +16469,7 @@ mod tests {
             !std::path::PathBuf::from(printed["path"].as_str().unwrap()).exists(),
             "the preview source is deleted once read"
         );
-        let html = preview_html_for("1601C", &open["draft"]);
+        let html = captured_preview_html();
         assert!(
             html.contains("Test send: not filed. Nothing reached the BIR."),
             "the preview itself says the test send is not filed"
@@ -16517,12 +16486,12 @@ mod tests {
         assert_eq!(open["draft"]["status"], "Submitted");
         assert_ne!(open["draft"]["submitted_dry_run"], true);
 
-        let printed = call(
+        call(
             "screen_form_print",
             vec!["1601C".into(), json(open["draft"].clone())],
         )
         .unwrap();
-        let html = preview_html_for("1601C", &open["draft"]);
+        let html = captured_preview_html();
         assert!(!html.contains("Test send: not filed"));
         assert!(!html.contains("test-send-warning"));
         assert!(html.contains("body>:not(.sheet){display:none !important}"));
@@ -16570,12 +16539,12 @@ mod tests {
         );
         assert!(receipt.is_some(), "the proof of filing stays on the print");
 
-        let printed = call(
+        call(
             "screen_form_print",
             vec!["1601C".into(), json(confirmed.clone())],
         )
         .unwrap();
-        let html = preview_html_for("1601C", &confirmed);
+        let html = captured_preview_html();
         assert!(!html.contains("Test send: not filed"));
         assert!(
             html.contains("page-receipt"),
@@ -16601,12 +16570,12 @@ mod tests {
         assert_eq!(open["draft"]["submitted_dry_run"], true);
         raw_exec(&format!("DELETE FROM form_drafts WHERE id = {id}"), &[]);
 
-        let printed = call(
+        call(
             "screen_form_print",
             vec!["1601C".into(), json(open["draft"].clone())],
         )
         .unwrap();
-        let html = preview_html_for("1601C", &open["draft"]);
+        let html = captured_preview_html();
         assert!(html.contains("Test send: not filed. Nothing reached the BIR."));
     }
 
@@ -16643,13 +16612,12 @@ mod tests {
             "the synthetic draft has the generic lifecycle shape"
         );
         assert_eq!(sent["lifecycle"]["submitted_dry_run"], true);
-        let printed = call(
+        call(
             "screen_form_print",
             vec!["0619E".into(), json(sent.clone())],
         )
         .unwrap();
-        let _ = printed;
-        let html = preview_html_for("0619E", &sent);
+        let html = captured_preview_html();
         assert!(html.contains("Test send: not filed. Nothing reached the BIR."));
     }
 
@@ -16682,7 +16650,7 @@ mod tests {
             vec!["1601C".into(), json(original.clone())],
         )
         .unwrap();
-        let html = preview_html_for("1601C", &original);
+        let html = captured_preview_html();
         assert!(
             !html.contains("Test send: not filed"),
             "the original prints as the real filing it is"
@@ -16692,7 +16660,7 @@ mod tests {
             vec!["1601C".into(), json(current.clone())],
         )
         .unwrap();
-        let html = preview_html_for("1601C", &current);
+        let html = captured_preview_html();
         assert!(
             html.contains("Test send: not filed"),
             "the test-sent amendment warns on every page"
@@ -16976,7 +16944,7 @@ mod tests {
                     vec![code.into(), json(view["draft"].clone())],
                 )
                 .unwrap();
-                let html = preview_html_for(code, &view["draft"]);
+                let html = captured_preview_html();
                 assert!(
                     !html.contains("Test send: not filed"),
                     "a real filed original never takes the amendment's test-send mark"

@@ -44,7 +44,7 @@ export function visibleColumns(statuses: ReadonlySet<string> | null): Column[] {
  */
 export function shownColumns(rows: readonly ReturnRow[], statuses: ReadonlySet<string> | null): Column[] {
   const tests = rows.some((r) => isDryRun(r));
-  return visibleColumns(statuses).filter((c) => !c.testSends || tests);
+  return visibleColumns(effectiveStatuses(rows, statuses)).filter((c) => !c.testSends || tests);
 }
 
 /** The narrow list's effective tab: a test-sends tab with no test send left falls back to all, never an empty list for ever. */
@@ -142,12 +142,17 @@ export interface FilterValues {
   filedOnly?: boolean;
 }
 
+/** The statuses that actually filter the rows: a test-sends-only selection falls back to all once no test send is left. */
+export function effectiveStatuses(rows: readonly ReturnRow[], statuses: ReadonlySet<string> | null): ReadonlySet<string> | null {
+  const testsOnly = statuses !== null && statuses.size > 0 && [...statuses].every((s) => s === "Test sends");
+  return testsOnly && !rows.some((r) => isDryRun(r)) ? null : statuses;
+}
+
 /** The returns the search and every filter keep. */
 export function filterRows(rows: readonly ReturnRow[], index: FormIndex, f: FilterValues): ReturnRow[] {
   const words = f.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   // A statuses filter of test sends only, with no test send left, falls back to all: never an empty list for ever.
-  const testsOnly = f.statuses !== null && f.statuses.size > 0 && [...f.statuses].every((s) => s === "Test sends");
-  const statuses = testsOnly && !rows.some((r) => isDryRun(r)) ? null : f.statuses;
+  const statuses = effectiveStatuses(rows, f.statuses);
   return rows.filter((r) => {
     if (f.tps && !f.tps.has(r.tin_root)) return false;
     if (f.forms && !f.forms.has(r.form_code)) return false;

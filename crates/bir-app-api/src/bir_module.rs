@@ -2830,6 +2830,39 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
+/// The static print-preview document for `slug`'s filled sheet. A test send is never confirmed and never carries a
+/// receipt; the sheet itself says nothing reached the BIR.
+pub(crate) fn preview_document(
+    slug: &str,
+    fields: &std::collections::BTreeMap<String, String>,
+    receipt: Option<&bir_print::frozen_html::ReceiptPage>,
+    test_send: bool,
+) -> Result<String, String> {
+    let html = if test_send {
+        bir_print::frozen_html::filled_document_test_send(slug, fields)
+    } else {
+        bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
+    }?;
+    Ok(crate::static_html::staticize(
+        &crate::print_sheet::prepare_html_for(slug, &html, true),
+    ))
+}
+
+#[cfg(test)]
+thread_local! {
+    static PRINT_PREVIEW_CAPTURES: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
+}
+
+#[cfg(test)]
+fn capture_print_preview_document(html: &str) {
+    PRINT_PREVIEW_CAPTURES.with(|captures| captures.borrow_mut().push(html.to_owned()));
+}
+
+#[cfg(test)]
+pub(crate) fn take_print_preview_captures() -> Vec<String> {
+    PRINT_PREVIEW_CAPTURES.with(|captures| std::mem::take(&mut *captures.borrow_mut()))
+}
+
 /// Fill `slug`'s frozen sheet with `fields`, write it to the app's own
 /// `data_dir()/previews/` folder and hand it to the preview host. Answers
 /// `{ path }`. The file is transient: the host reads it synchronously and this
@@ -2843,16 +2876,11 @@ pub(crate) fn open_print_preview(
     test_send: bool,
     profile_name: Option<String>,
 ) -> HostResult {
-    let html = if test_send {
-        bir_print::frozen_html::filled_document_test_send(slug, fields)
-    } else {
-        bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
-    }
-    .map_err(HostError::new)?;
     // A4 layout + static markup (no scripts, values as text): prints one A4
     // page per form page from any engine; `print-overrides/<slug>.css` on top.
-    let html =
-        crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
+    let html = preview_document(slug, fields, receipt, test_send).map_err(HostError::new)?;
+    #[cfg(test)]
+    capture_print_preview_document(&html);
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())

@@ -1541,8 +1541,8 @@ mod tests {
     }
 
     /// A deadline row says whether its Submitted send was only simulated
-    /// (the screens show "Dry run"); a real send, a Draft and a deadline
-    /// with no return say no.
+    /// (the screens keep it out of what counts as filed); a real send, a Draft
+    /// and a deadline with no return say no.
     #[test]
     fn deadline_rows_say_which_submitted_send_was_a_dry_run() {
         setup();

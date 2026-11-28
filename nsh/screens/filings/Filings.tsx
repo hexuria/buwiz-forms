@@ -198,7 +198,7 @@ export function Filings(): JSX.Element {
           </If>
         </If>
         <If when={!wide()}>
-          {/* Five tabs with counts side by side are wider than a phone: each count goes under its label, so all five fit. */}
+          {/* Status tabs with counts side by side are wider than a phone: each count goes under its label, so they fit. */}
           <Tabs testID="filings-tabs" fill tabs={tabs()} value={tab()} onChange={filters.setTab} />
           <View class="mb-3 w-full flex-row items-center justify-between">
             <View testID="filings-count">
@@ -214,7 +214,7 @@ export function Filings(): JSX.Element {
         </If>
       </If>
       {/* What was filed in the old program is not one of this app's returns: no status, no card, nothing filters it. It shows while nothing is narrowed. */}
-      <If when={!filters.active() && (wide() || filters.tab() === "all")}>
+      <If when={!filters.active() && (wide() || tab() === "all")}>
         <LegacyGroup wide={wide()} />
       </If>
       <If when={!wide()}>

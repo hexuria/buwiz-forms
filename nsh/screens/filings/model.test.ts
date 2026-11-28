@@ -234,7 +234,7 @@ test("the test-sends column shows only while a test send exists; a real filer ne
   const test1 = row({ status: "Submitted", send: sendState("test_sent") });
   // None: the column is out even though the filter would let it through.
   expect(shownColumns([real], null).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "confirmed"]);
-  expect(shownColumns([real], new Set(["Test sends"])).map((c) => c.id)).toEqual([]);
+  expect(shownColumns([real], new Set(["Test sends"])).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "confirmed"]);
   // One: it is in, in board order.
   expect(shownColumns([real, test1], null).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "test-sends", "confirmed"]);
   expect(shownColumns([real, test1], new Set(["Test sends"])).map((c) => c.id)).toEqual(["test-sends"]);
