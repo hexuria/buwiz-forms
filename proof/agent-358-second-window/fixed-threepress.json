@@ -1,0 +1,20 @@
+[
+ {
+  "press": 1,
+  "changed": true,
+  "panel": true,
+  "foreground": "Save as PDF"
+ },
+ {
+  "press": 2,
+  "changed": true,
+  "panel": true,
+  "foreground": "Save as PDF"
+ },
+ {
+  "press": 3,
+  "changed": true,
+  "panel": true,
+  "foreground": "Save as PDF"
+ }
+]

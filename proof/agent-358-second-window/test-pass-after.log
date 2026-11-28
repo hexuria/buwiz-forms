@@ -1,0 +1,9 @@
+   Compiling nsh-platform-windows v0.6.1 (C:\Users\Administrator\builds\a358\nsh-test\crates\nsh-platform-windows)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 41.81s
+     Running unittests src\lib.rs (C:\Users\Administrator\builds\a358\target-test\debug\build\nsh-platform-windows/73bf9582607d175f\out\nsh_platform_windows-73bf9582607d175f.exe)
+
+running 1 test
+test agent::tests::a_presss_down_and_up_are_one_main_thread_turn ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 351 filtered out; finished in 0.00s
+

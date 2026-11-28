@@ -1,0 +1,7 @@
+      1 - "windows-core 0.62.2",
+      1 - "windows 0.62.2",
+      6 -source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=<sha>#<sha>"
+      1 + "windows-core 0.56.0",
+      1 + "windows 0.56.0",
+      6 +source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=<sha>#<sha>"
+--- name/version diff ---

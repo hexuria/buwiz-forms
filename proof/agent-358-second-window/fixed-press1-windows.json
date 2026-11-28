@@ -1,0 +1,44 @@
+[
+ {
+  "hwnd": 852788,
+  "class": "#32770",
+  "title": "Save as PDF",
+  "foreground": true
+ },
+ {
+  "hwnd": 590642,
+  "class": "NshWindow",
+  "title": "eBIRForms",
+  "foreground": false
+ },
+ {
+  "hwnd": 787106,
+  "class": "NshWindow",
+  "title": "BIR Form 2551Q \u00b7 Q4 2026 \u2014 Juana Santos",
+  "foreground": false
+ },
+ {
+  "hwnd": 66108,
+  "class": "Chrome_WidgetWin_1",
+  "title": "Containers - Docker Desktop",
+  "foreground": false
+ },
+ {
+  "hwnd": 66306,
+  "class": "Chrome_WidgetWin_1",
+  "title": "New Tab - Google Chrome for Testing",
+  "foreground": false
+ },
+ {
+  "hwnd": 65884,
+  "class": "Windows.UI.Core.CoreWindow",
+  "title": "Windows Input Experience",
+  "foreground": false
+ },
+ {
+  "hwnd": 65736,
+  "class": "Progman",
+  "title": "Program Manager",
+  "foreground": false
+ }
+]

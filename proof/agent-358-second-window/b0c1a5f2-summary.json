@@ -1,0 +1,20 @@
+{
+ "1": {
+  "changed": false,
+  "status": "delivered_unverified",
+  "panel_appeared": false,
+  "cancelled": true
+ },
+ "2": {
+  "changed": false,
+  "status": "delivered_unverified",
+  "panel_appeared": false,
+  "cancelled": true
+ },
+ "3": {
+  "changed": false,
+  "status": "delivered_unverified",
+  "panel_appeared": false,
+  "cancelled": true
+ }
+}

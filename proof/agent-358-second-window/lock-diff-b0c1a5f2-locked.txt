@@ -1,0 +1,2 @@
+      6 < source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=<sha>#<sha>"
+      6 > source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=<sha>#<sha>"
