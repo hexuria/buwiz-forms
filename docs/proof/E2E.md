@@ -29,18 +29,24 @@ recipes that must prove sign-in and per-account behavior in the real app. It sta
 end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and sets `BIR_AUTH_BYPASS`
 to the empty string: the gate reads only the exact value `1`, and the app's dotenv does not replace a variable that is
 already set. The saved and pending sign-in files are pinned beside the run's own database, removed before launch and
-afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. Only those pinned files are
-removed: scratch cleanup never touches a sign-in file in the app's shared device folder, and a plain bypass-mode run
-touches no shared sign-in file there. After launch the runner waits a bounded time for the app's real sign-in-gate
+afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. A default mock run puts its
+database in its own `~/BuwizNsh/agents/e2e-<target>-<time>-<id>/` folder and removes that folder afterwards, so its
+device database, install id and device key are that run's alone and go with it. A plain run keeps one scratch database
+file directly in `~/BuwizNsh/agents/`; it still shares the device store and identity there, and this change leaves it
+alone. Only the mock run's pinned sign-in files are removed: scratch cleanup never touches a sign-in file in the app's
+shared device folder, and a plain bypass-mode run touches no shared sign-in file there. After launch the runner waits a bounded time for the app's real sign-in-gate
 node (`gate-root`) before the first recipe; `setup-root`, `home` or `sign-in` appearing first proves the run is already
 past the gate and refuses at once.
 
 On Android it writes the same pinned set over the emulator's private `dev.env`, refuses `--keep-data`, and adds the
 same `adb reverse tcp:3008 tcp:3008` the Android script uses after first refusing an existing reverse on that port;
-a fresh run removes the test database and the saved sign-in beside it, never files outside `test-data`. The previous
-`dev.env` is captured before the overwrite and restored in the same cleanup that stops the mock (or the mock-written
-file is removed when none existed), on success, failure and interruption alike. A bypass-mode Android run first reads
-that private file and refuses one carrying mock settings, because dev.env wins over the next launch's baked settings.
+a fresh mock run removes the test database and both the saved and pending sign-in beside it, never files outside
+`test-data`; a plain fresh run removes only the test database. The previous `dev.env` is captured before the overwrite
+and restored in the same cleanup that stops the mock (or the mock-written file is removed when none existed), on
+success, failure and interruption alike — except that a captured file already carrying mock settings is stale from an
+interrupted mock run, so it is removed rather than restored and the log says so. A bypass-mode Android run first reads
+that private file and refuses one carrying mock settings, because dev.env wins over the next launch's baked settings;
+its refusal includes the exact adb `rm -f` command.
 
 The mode refuses `--no-launch`, refuses when either account URL in the environment is not loopback (`127.0.0.1`,
 `[::1]` or `localhost`), and refuses when port 3008 is already taken: the mock has no health or version route by
@@ -49,12 +55,18 @@ Recipes can use the runner-supplied `$account_a` and `$account_b` (both invented
 `example.com` addresses) and `$code_1` through `$code_8` (`246810`, then counting up as the mock does). In mock mode
 only, a `type` step may put exactly one of those runner-supplied `$code_N` fixtures into the sign-in gate's code box;
 the literal code, any other placeholder or value, any other secret box, and every other input operation or mode stay
-refused. Whether a typed digit then lands in the real page is the sign-in page fix of #608, not part of this runner
+refused. The exception is pinned to the gpui-agent `type` schema (`op`, `id`, `target`, `text`, `key_delay_ms`, plus
+the runner's own `needs`, `screenshot`, `line` and `words` metadata, and gpui-agent's `delivery` /
+`expect_fingerprint`): any extra digit-carrying field is read as the secret it could carry. Whether a typed digit then lands in the real page is the sign-in page fix of #608, not part of this runner
 change.
 
 The account gate locks the data plane as well as the window: even `hello` is refused there. A mock run therefore does
 not ask that plane for the scratch-database proof before sign-in. Recipes marked `"sign_in": true` are the boundary
-that may run first (they write account sign-in state, not the filing database); before the first later recipe — and
+that may run first (they write account sign-in state, not the filing database). Such a recipe is allow-listed: only
+`click`, `press`, `type`, `key`, `assert`, `wait_until` or `scroll`, and only on `gate-*`, `sign-in-*` or `setup-*`
+nodes; a parameter is checked again after `resolve` binds its real node id. The rule is allow-list based because the
+runner's op names and the app's stable id prefixes are not recipe-chosen: a recipe can choose `fp-queue`, but cannot
+make that filing node begin with the allowed prefixes. Before the first later recipe — and
 before any data-plane recipe — the runner waits for the data plane and requires `app.info` to answer `"database":
 "test"`. If it does not, that recipe is never run. In a plain run the proof still happens before the first recipe, as
 before.
@@ -81,11 +93,21 @@ proves the SIGTERM/SIGHUP conversion and handler restoration in Python and the c
 prove OS signal delivery or process-group behavior inside every platform terminal, only the runner's ownership and
 ordering once the signal or interrupt reaches Python.
 
+On Windows a CI cancel can kill the runner before Python gets that boundary. Three things can then be left behind: the
+mock-account process, the emulator's mock `dev.env`, and the adb reverse. Recover with these commands after confirming
+the run is dead:
+
+```powershell
+taskkill /F /IM mock_account.exe
+adb -s <serial> shell run-as com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/dev.env
+adb -s <serial> reverse --remove tcp:3008
+```
+
 1. Checks the suite (below), and refuses to start if anything already listens on the agent's ports.
 2. Starts the app with `just nsh-run-agent <target> <db>`. That is a debug build in dry-run mode
    (`EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1`, never `BIR_SFTP_LIVE`); a plain run adds
    `BIR_AUTH_BYPASS=1`, while `--accounts mock` leaves it out.
-   - The database is new, under `~/BuwizNsh/agents/`.
+   - The database is new, under `~/BuwizNsh/agents/`; in mock mode it and the device store are a per-run folder.
    - On Android, the emulator's guarded test database is removed first, so the run starts at first-run setup.
    - The token is `GPUI_AGENT_TOKEN` if set, else one made for the run. It is never printed, and the run log masks it.
 3. Waits for the window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`). A plain run also proves the

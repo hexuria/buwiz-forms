@@ -62,6 +62,7 @@ ANDROID_HOST = "com.longbridge.nsh.host"
 # The Android development build's guarded test database (EBIR_TEST_ENV): a fresh run removes it.
 ANDROID_TEST_DB = "files/nsh/dev.goldcoders.bir/test-data/bir_data.db"
 ANDROID_TEST_ACCOUNT = "files/nsh/dev.goldcoders.bir/test-data/buwiz-cloud-account.json"
+ANDROID_TEST_PENDING = "files/nsh/dev.goldcoders.bir/test-data/buwiz-pending-sign-in.json"
 ANDROID_DEV_ENV_DIR = "files/nsh/dev.goldcoders.bir"
 ANDROID_DEV_ENV = ANDROID_DEV_ENV_DIR + "/dev.env"
 
@@ -78,6 +79,14 @@ CODE_BOX_WORDS = {"box", "boxes", "cell", "cells"}
 CODE_KIND_WORDS = {"authenticator", "verification", "security", "confirmation", "login", "email", "sign", "time",
                    "digit", "access", "one"}
 SIGN_IN_WORDS = {"gate", "signin", "login", "auth"}
+# A recipe marked sign_in is only the account-gate boundary: observation and ordinary presses/typing there, never the
+# app's filing or data planes. Every targeted step must stay on these node-id prefixes.
+SIGN_IN_RECIPE_OPS = {"click", "press", "type", "key", "assert", "wait_until", "scroll"}
+SIGN_IN_RECIPE_PREFIXES = ("gate-", "sign-in-", "setup-")
+# gpui-agent's recipe `type` op carries target and text (plus delivery/expect_fingerprint); RecipeStep adds id,
+# needs and screenshot, and gpui-agent-cli 0.4.1 adds key_delay_ms. line/words are this runner's own `.wants` metadata.
+TYPE_STEP_FIELDS = {"op", "target", "text", "delivery", "expect_fingerprint", "id", "needs", "screenshot",
+                    "key_delay_ms", "line", "words"}
 # The Buwiz account gate's own root testID (nsh/screens/auth/Gate.tsx). A mock-mode run must start there.
 SIGN_IN_GATE_NODE = "gate-root"
 # Nodes that prove a mock run reached a screen beyond that gate before the gate itself appeared.
@@ -349,6 +358,24 @@ def is_runner_code_fixture(text, params):
     return (name.startswith("code_") and name in fixtures and str((params or {}).get(name)) == fixtures[name])
 
 
+def carries_code_digits(value):
+    """A six-or-more digit run inside a string field: enough to carry the mock-code fixture outside `text`."""
+    if isinstance(value, str):
+        return bool(re.search(r"\d{6}", value))
+    if isinstance(value, dict):
+        return any(carries_code_digits(item) for item in value.values())
+    if isinstance(value, list):
+        return any(carries_code_digits(item) for item in value)
+    return False
+
+
+def code_fixture_spilled(step):
+    """True when a mock-code `type` step carries six digits anywhere but its text and the schema's numeric fields
+    (`line`, `key_delay_ms`, `expect_fingerprint`). Step ids such as s1 stay fine; a copied fixture does not."""
+    return any(carries_code_digits(value) for key, value in step.items()
+               if key not in {"text", "line", "key_delay_ms", "expect_fingerprint"})
+
+
 def is_secret_entry(step, params=None, names=None, accounts="bypass"):
     """A step that would type or key into a password, PIN, passcode, secret, token or code box, or press a key of the
     software keyboard. `names` maps a resolved id to the name and role its node has. Mock mode has one exception: a
@@ -360,7 +387,8 @@ def is_secret_entry(step, params=None, names=None, accounts="bypass"):
     if op not in TYPING_OPS:
         return False
     names = names or {}
-    mock_code = accounts == "mock" and op == "type" and is_runner_code_fixture(step.get("text"), params)
+    mock_code = (accounts == "mock" and op == "type" and set(step) <= TYPE_STEP_FIELDS and
+                 not code_fixture_spilled(step) and is_runner_code_fixture(step.get("text"), params))
     for item in found:
         descriptions = [item] + [described for resolved, described in names.items() if resolved and resolved in item]
         if not any(is_secret_text(described) for described in descriptions):
@@ -388,12 +416,50 @@ def is_sign_in_step(step, params=None):
     return False
 
 
+def sign_in_recipe_problem(step, params=None):
+    """Why a step cannot be in a recipe marked sign_in, or None. The rule is allow-list based because the runner's own
+    gpui-agent op names and the app's stable id prefixes are not recipe-chosen strings: a recipe can name gate-root or
+    fpQueue, but cannot make `fp-*` begin with `gate-`, `sign-in-` or `setup-`. An unresolved placeholder is checked
+    again once resolve has supplied its real id."""
+    op = step.get("op", "")
+    if op not in SIGN_IN_RECIPE_OPS:
+        return f"op {op!r}"
+    target = step.get("target")
+    if target is None and op in TARGET_OPS:
+        return f"a targetless {op!r} step"
+    targets = []
+
+    def collect(value):
+        if isinstance(value, str):
+            targets.append(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    collect(target)
+    for item in targets:
+        item = bind(item, params or {})
+        if "$" in item:
+            continue
+        if not item.startswith(SIGN_IN_RECIPE_PREFIXES):
+            return f"node {item!r}"
+    return None
+
+
 def step_problems(steps, params, file, entry, names=None, accounts="bypass"):
     """What a recipe's steps must not do, as sentences, with `params` bound."""
     problems = []
     for step in steps:
         what = step.get("target") or step.get("name") or step.get("op")
-        if is_send_step(step, params) and not entry.get("send"):
+        if entry.get("sign_in"):
+            boundary = sign_in_recipe_problem(step, params)
+            if boundary:
+                problems.append(f"{file} uses {boundary}: sign_in recipes may use only "
+                                f"{', '.join(sorted(SIGN_IN_RECIPE_OPS))} on gate-*, sign-in-* or setup-* nodes")
+        elif is_send_step(step, params) and not entry.get("send"):
             problems.append(f"{file} presses {what!r}, a send step, but the suite does not mark the recipe "
                             "\"send\": true")
         if is_secret_entry(step, params, names, accounts=accounts):
@@ -1470,6 +1536,7 @@ def run(args):
     android_dev_env_state = {}
     results = []
     made_db = None
+    mock_db_folder = None
     account_state = ()
     try:
         if not args.no_launch and (port_answers(addr) or port_answers(data_plane(addr))):
@@ -1480,8 +1547,11 @@ def run(args):
             if args.target == "android":
                 mock_reverse = android_mock_reverse(env, log)
         if not args.no_launch:
-            db = Path(args.db) if args.db else Path.home() / "BuwizNsh" / "agents" / f"e2e-{args.target}-{stamp}.db"
-            made_db = None if args.db else db
+            if args.db:
+                db = Path(args.db)
+            else:
+                db, mock_db_folder = default_database(args.target, stamp, accounts=args.accounts)
+            made_db = None if args.db or args.accounts == "mock" else db
             db.parent.mkdir(parents=True, exist_ok=True)
             if args.accounts == "mock":
                 account_state = pin_account_state(env, db)
@@ -1551,9 +1621,11 @@ def run(args):
         redact_file(out / "app.log", log)
         redact_file(out / "mock-account.log", log)
         write_report(out, header, results)
-        if made_db:
+        if mock_db_folder:
+            remove_mock_scratch(mock_db_folder, log)
+        elif made_db:
             remove_scratch(made_db, log)
-        if account_state and remove_files(account_state, log):
+        if account_state and not mock_db_folder and remove_files(account_state, log):
             log.line("clean", account_state[0], "mock sign-in state removed", 0)
     print(f"e2e {header['suite']} on {args.target}: {summary(results)}. Report: {out / 'report.md'}")
     return 0 if all(r["status"] in ("pass", "skipped") for r in results) else 1
@@ -1645,6 +1717,35 @@ def remove_files(paths, log):
     return removed
 
 
+def default_database(target, stamp, accounts="bypass", home=None, unique=None):
+    """The default scratch database path and the per-run folder mock mode owns. In mock mode the database itself lives
+    in that folder, so the app's device store (whose folder follows the database path), install id and device key are
+    this run's alone. A plain run keeps the old shared agents folder and its single scratch database file."""
+    home = Path.home() if home is None else Path(home)
+    agents = home / "BuwizNsh" / "agents"
+    if accounts == "mock":
+        unique = unique or secrets.token_hex(4)
+        folder = agents / f"e2e-{target}-{stamp}-{unique}"
+        return folder / "bir_data.db", folder
+    return agents / f"e2e-{target}-{stamp}.db", None
+
+
+def remove_mock_scratch(folder, log):
+    """Remove mock mode's whole per-run database folder. Unlike plain scratch cleanup this owns the folder itself:
+    it holds only this run's database, SQLite side files, pinned sign-in files, device database, install id and
+    device key."""
+    folder = Path(folder)
+    if not folder.exists():
+        return True
+    try:
+        shutil.rmtree(folder)
+        log.line("clean", folder, "mock device store and scratch database removed", 0)
+        return True
+    except OSError as error:
+        log.line("clean", folder, f"not removed: {error}", 0)
+        return False
+
+
 def remove_scratch(db, log):
     """The run's scratch database and its SQLite side files only. Sign-in state is never part of scratch cleanup:
     mock mode removes its own pinned files separately, and no mode removes a file in the app's shared device folder."""
@@ -1708,7 +1809,11 @@ def restore_android_dev_env(state, log):
     adb, serial = state["adb"], state["serial"]
     t0 = time.monotonic()
     try:
-        if state.get("exists"):
+        if state.get("exists") and android_dev_env_mock_settings(state.get("text")):
+            command = f"run-as {ANDROID_HOST} rm -f {ANDROID_DEV_ENV}"
+            done = subprocess.run([adb, "-s", serial, "shell", command], capture_output=True, text=True, timeout=30)
+            action = "stale"
+        elif state.get("exists"):
             done = write_android_dev_env_raw(adb, serial, state.get("text") or "")
             action = "restored"
         else:
@@ -1721,6 +1826,9 @@ def restore_android_dev_env(state, log):
     if done.returncode:
         log.line("clean", f"{serial}:{ANDROID_DEV_ENV}", "not restored: "
                  f"{(done.stderr or done.stdout).strip() or 'no error text'}", 0)
+    elif action == "stale":
+        log.line("clean", f"{serial}:{ANDROID_DEV_ENV}", "stale mock dev.env removed, not restored",
+                 (time.monotonic() - t0) * 1000)
     else:
         log.line("clean", f"{serial}:{ANDROID_DEV_ENV}", f"mock dev.env {action}", (time.monotonic() - t0) * 1000)
 
@@ -1795,11 +1903,14 @@ def assert_android_dev_env_not_mock(env, log):
     if not adb:
         raise SuiteError("no adb: set ANDROID_HOME")
     serial = env.get("ANDROID_SERIAL") or android_serial(adb)
+    if not serial:
+        raise SuiteError("no Android emulator is online (adb devices)")
     text = read_android_dev_env(adb, serial)
     settings = android_dev_env_mock_settings(text)
     if settings:
+        remove = shlex.join([adb, "-s", serial, "shell", "run-as", ANDROID_HOST, "rm", "-f", ANDROID_DEV_ENV])
         raise SuiteError("android: the host app's private dev.env carries mock settings ("
-                         + ", ".join(settings) + "); remove it or run --accounts mock")
+                         + ", ".join(settings) + "); remove it: " + remove)
 
 
 def fresh_android(env, log, dev_env=None, dev_env_state=None):
@@ -1812,9 +1923,11 @@ def fresh_android(env, log, dev_env=None, dev_env_state=None):
     if not serial:
         raise SuiteError("no Android emulator is online (adb devices)")
     t0 = time.monotonic()
-    done = subprocess.run([adb, "-s", serial, "shell", "run-as", ANDROID_HOST, "rm", "-f", ANDROID_TEST_DB,
-                           ANDROID_TEST_DB + "-wal", ANDROID_TEST_DB + "-shm", ANDROID_TEST_ACCOUNT],
-                  capture_output=True, text=True)
+    paths = [ANDROID_TEST_DB, ANDROID_TEST_DB + "-wal", ANDROID_TEST_DB + "-shm"]
+    if dev_env is not None:
+        paths += [ANDROID_TEST_ACCOUNT, ANDROID_TEST_PENDING]
+    done = subprocess.run([adb, "-s", serial, "shell", "run-as", ANDROID_HOST, "rm", "-f"] + paths,
+                          capture_output=True, text=True)
     log.line("fresh", f"{serial}:{ANDROID_TEST_DB}", "removed" if done.returncode == 0 else
              f"not removed ({done.stderr.strip() or 'host not installed yet'})", (time.monotonic() - t0) * 1000)
     if dev_env is not None:
