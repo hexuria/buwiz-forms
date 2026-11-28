@@ -1440,6 +1440,20 @@ fn locked_legacy_target(layout: &Layout, owner: &Owner) -> (Target, Option<OpenS
     }
 }
 
+/// A migration-record read failure for the page: the OS error and any path stay in the log.
+fn migration_record_read_failure(
+    error: &bir_core::rooms::DeviceStoreError,
+) -> (Target, Option<OpenSpec>) {
+    tracing::warn!("migration record not read: {error}");
+    (
+        Target::Blocked(Blocked::Transient {
+            copy_saved: false,
+            detail: "the migration record cannot be read".into(),
+        }),
+        None,
+    )
+}
+
 /// The claim decision (§12.2 item 3, with §7's store-error classification). Everything here runs
 /// on the claim thread, outside SESSION.
 fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
@@ -1581,15 +1595,7 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
         Start::Finished(outcome) => {
             let record = match claim.record() {
                 Ok(record) => record,
-                Err(error) => {
-                    return (
-                        Target::Blocked(Blocked::Transient {
-                            copy_saved: false,
-                            detail: format!("the migration record cannot be read: {error}"),
-                        }),
-                        None,
-                    );
-                }
+                Err(error) => return migration_record_read_failure(&error),
             };
             finished_outcome_target(&layout, owner, outcome, record.as_ref())
         }
@@ -1612,15 +1618,7 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
         Start::Failed(Failure::Transient(transient)) => {
             let record = match claim.record() {
                 Ok(record) => record,
-                Err(error) => {
-                    return (
-                        Target::Blocked(Blocked::Transient {
-                            copy_saved: false,
-                            detail: format!("the migration record cannot be read: {error}"),
-                        }),
-                        None,
-                    );
-                }
+                Err(error) => return migration_record_read_failure(&error),
             };
             let foreign_unfinished = record.as_ref().is_some_and(|record| {
                 !matches!(
@@ -2264,6 +2262,9 @@ pub(crate) fn reset_for_tests() {
     // process-wide, so every later check_invariants in the process would step aside. Tests
     // never MEAN to set it: reset it here, with the rest of the machine's process state.
     BYPASSED.store(false, std::sync::atomic::Ordering::SeqCst);
+    CORRUPT_STORE_RETRY.store(false, std::sync::atomic::Ordering::SeqCst);
+    lock(&FORCE_NEXT_OPEN_ROOM).take();
+    bir_core::legacy_claim::clear_fail_next_legacy_lock_for_test();
     let dropped = {
         let mut session = locked();
         let outcome = close_locked(&mut session, &CloseKind::OwnerEnds, None);
@@ -3397,6 +3398,28 @@ mod tests {
         );
     }
 
+    /// The migration-record read refusal is page wording only; the raw store error keeps the
+    /// path in the log, never on screen.
+    #[test]
+    fn migration_record_read_details_never_carry_os_paths() {
+        let path = std::path::PathBuf::from("/Users/os-user/private/device.db");
+        let raw = path.to_string_lossy().to_string();
+        let error = bir_core::rooms::DeviceStoreError::Unreadable {
+            path,
+            reason: "not sqlite".into(),
+        };
+        assert!(
+            error.to_string().contains(&raw),
+            "positive control: the raw store error has a path"
+        );
+        let (target, spec) = migration_record_read_failure(&error);
+        assert!(spec.is_none());
+        let Target::Blocked(Blocked::Transient { detail, .. }) = target else {
+            panic!("not a transient block")
+        };
+        assert!(!detail.contains(&raw), "{detail}");
+    }
+
     /// LB3: on a pre-rooms install with no rooms, an unreadable device.db is set aside, the claim
     /// store is retried, and the locked legacy file still opens in place.
     #[test]
@@ -3594,7 +3617,7 @@ mod tests {
             assert!(status.success(), "the child process failed");
             return;
         }
-        let _queue_turn = bir_core::background_cron::queue_transport_test_turn();
+        let _queue_turn = bir_core::background_cron::queue_transport_test_turn_blocking();
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
@@ -3869,65 +3892,12 @@ mod tests {
         );
     }
 
-    // ---------- §11's named interleavings: scripted now, un-ignored by their commit ----------
-    //
-    // Where the path a test drives lands in a later commit, the test calls a clearly named stub
-    // (the `commit_N_wires_*` functions below). Each stub is the hole the commit fills; the
-    // test's assertions are the final ones, so un-ignoring is the commit removing its stub.
-
-    // The commitN_* stubs are the holes their commits fill (the reviewer's rule: an empty or
-    // vacuous stub would let its test pass before the behavior exists). Every one PANICS, so its
-    // test fails today and passes only when the commit replaces the stub with the real drive.
-    // The names keep the design page's numbering.
-
-    /// Scripted stand-in for the ignored claim-thread interleaving tests; the production thread
-    /// is real, so this panics if a test is re-enabled without being rewritten.
-    fn scripted_claim_thread_opens(scratch: &Scratch, owner: &Owner, epoch: u64, name: &str) {
-        let _ = (scratch, owner, epoch, name);
-        panic!("scripted claim-thread stand-in is not implemented")
-    }
-
     /// Hand-drive an open session for the tests whose subject is the stored sign-in, not the
     /// claim: begin_open already ran, so the phase is Opening at `epoch`; this drives the real
     /// commit() the claim thread uses.
     fn open_hand(scratch: &Scratch, owner: &Owner, epoch: u64, name: &str) {
         let (handle, path) = scratch_handle(scratch, name);
         commit(epoch, room_target(owner), Some((handle, path)));
-    }
-
-    /// Scripted stand-in for the ignored OAuth-loopback interleaving tests.
-    fn scripted_oauth_bind(epoch: u64) -> Result<(), String> {
-        let _ = epoch;
-        panic!("scripted commit-boundary stand-in is not implemented")
-    }
-
-    /// Scripted stand-in for the ignored import interleaving test.
-    fn scripted_run_import(owner: &Owner, epoch: u64) {
-        let _ = (owner, epoch);
-        panic!("scripted commit-boundary stand-in is not implemented")
-    }
-
-    /// Scripted stand-in for the ignored inbox-write interleaving test.
-    fn scripted_inbox_write(owner: &Owner, epoch: u64, generation: u64) {
-        let _ = (owner, epoch, generation);
-        panic!("scripted commit-boundary stand-in is not implemented")
-    }
-
-    /// Scripted stand-in for the ignored device-key-registration interleaving test.
-    fn scripted_register_device_key(owner: &Owner, epoch: u64) {
-        let _ = (owner, epoch);
-        panic!("scripted commit-boundary stand-in is not implemented")
-    }
-
-    /// Scripted stand-in for the ignored claim-classification interleaving test.
-    fn scripted_claim_classify(scratch: &Scratch) {
-        let _ = scratch;
-        panic!("scripted claim-classification stand-in is not implemented")
-    }
-
-    /// Scripted stand-in for the ignored quit-release interleaving test.
-    fn scripted_quit_releases() {
-        panic!("scripted quit-release stand-in is not implemented")
     }
 
     /// K1, deterministic: signed_in paused between SESSION's release and the spawn — a
@@ -4406,75 +4376,6 @@ mod tests {
         assert_invariants();
     }
 
-    /// n2: a store read error with a moved record opens nothing (G1's evidence rule on the real
-    /// path, with the claim-store classify of §7).
-    #[test]
-    #[ignore = "scripted interleaving superseded by production-wiring tests"]
-    fn n2_a_store_read_error_with_a_moved_record_opens_nothing() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::Launch);
-        let epoch = snapshot().epoch;
-        // The scripted classify: the record says Moved with no hash check.
-        scripted_claim_classify(&scratch);
-        commit(
-            epoch,
-            Target::Blocked(Blocked::MovedNotOpened {
-                detail: "the move finished but the copy was never checked".to_string(),
-            }),
-            None,
-        );
-        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
-        assert!(snapshot().room.is_none(), "no room opened on the evidence");
-        assert!(!gate_unlocked());
-        assert_invariants();
-    }
-
-    /// n3: a browser preconnect (a connection with no request line) is closed, and the real GET
-    /// after it completes the consent (the OAuth loopback's accept loop, with real sockets).
-    #[test]
-    #[ignore = "scripted interleaving superseded by production-wiring tests"]
-    fn n3_a_preconnect_then_the_get_completes_the_consent() {
-        let _turn = test_turn();
-        let _scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        assert_invariants();
-        // The scripted interleaving stands in for the real listener.
-        assert!(
-            scripted_oauth_bind(epoch).is_ok(),
-            "the bind registers under the live epoch"
-        );
-        assert_invariants();
-    }
-
-    /// n3 (second arm): a bind racing a close is refused — no listener survives a close.
-    #[test]
-    #[ignore = "scripted interleaving superseded by production-wiring tests"]
-    fn n3_a_bind_during_close_is_refused() {
-        let _turn = test_turn();
-        let _scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        let close_gate = hooks::pause("close.locked");
-        let scratch_dir = _scratch.layout.device_dir().to_path_buf();
-        let closer = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            close(Reason::SignOut);
-        });
-        close_gate.reached();
-        close_gate.release();
-        closer.join().unwrap();
-        assert!(
-            scripted_oauth_bind(epoch).is_err(),
-            "a bind after the close's epoch bump is refused"
-        );
-        assert_invariants();
-    }
-
     /// f7: a send spawned in A, run after the switch to B, takes no token — the return stays
     /// Queued in A's room, and B's sign-in is intact. The token read is the real
     /// AccountTokens::access_token inside the send's captured context.
@@ -4618,28 +4519,6 @@ mod tests {
         );
         assert!(gate_unlocked(), "B's gate holds");
         assert_invariants();
-    }
-
-    /// quit: the release order — worker, holders, checkpoint, registry, guards — and a relaunch
-    /// meets no live writer.
-    #[test]
-    #[ignore = "quit release order is not implemented"]
-    fn quit_releases_in_order_and_a_relaunch_meets_no_live_writer() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        scripted_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        quit();
-        scripted_quit_releases();
-        assert_eq!(snapshot().phase_kind, PhaseKind::Quitting);
-        // The device guard is released last of all: after quit, a new copy can take it.
-        assert!(
-            bir_core::db::take_device_instance_lock(scratch.layout.device_dir()).is_ok(),
-            "the relaunch meets no live writer"
-        );
     }
 
     // ---------- the stored sign-in ----------
@@ -6686,69 +6565,6 @@ mod tests {
         assert_invariants();
     }
 
-    /// d4a: a device-key registration of A's, resolving after the switch, writes nothing for B.
-    #[test]
-    #[ignore = "scripted interleaving superseded by production-wiring tests"]
-    fn d4a_a_late_registration_of_a_writes_no_device_key_for_b() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch_a = snapshot().epoch;
-        scripted_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        // The switch.
-        sign_out();
-        bir_core::account_session::clear_stored();
-        let owner_b = seed_stored("user-b", false);
-        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
-        let epoch_b = snapshot().epoch;
-        scripted_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
-        assert_invariants();
-        // A's registration resolves now: it writes nothing. The device-key file of the device
-        // directory — whatever relay writes there for a registration — is byte-for-byte what it
-        // was before the late resolve.
-        let key_files_before: Vec<(std::path::PathBuf, Vec<u8>)> =
-            std::fs::read_dir(scratch.layout.device_dir())
-                .map(|entries| {
-                    entries
-                        .flatten()
-                        .map(|entry| {
-                            let path = entry.path();
-                            let bytes = std::fs::read(&path).unwrap_or_default();
-                            (path, bytes)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-        scripted_register_device_key(&owner_a, epoch_a);
-        let key_files_after: Vec<(std::path::PathBuf, Vec<u8>)> =
-            std::fs::read_dir(scratch.layout.device_dir())
-                .map(|entries| {
-                    entries
-                        .flatten()
-                        .map(|entry| {
-                            let path = entry.path();
-                            let bytes = std::fs::read(&path).unwrap_or_default();
-                            (path, bytes)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-        assert_eq!(
-            key_files_before, key_files_after,
-            "the device-key file is unchanged: A's late registration wrote nothing for B"
-        );
-        assert_eq!(
-            snapshot()
-                .owner
-                .as_ref()
-                .map(|owner| owner.user_id.as_str()),
-            Some("user-b"),
-            "B's session stands"
-        );
-        assert_invariants();
-    }
-
     /// The child process of [`d4c_a_second_copy_refused_before_any_room_opens`]: with the env
     /// var set, takes the device guard and holds it until stdin closes. In the normal suite the
     /// var is never set and the test returns at once.
@@ -6842,41 +6658,6 @@ mod tests {
         assert_invariants();
     }
 
-    /// d5: a close landing while an import runs — the import's install CAS misses, and nothing
-    /// of it installs (the restored file on disk is the next sign-in's).
-    #[test]
-    #[ignore = "scripted interleaving superseded by production-wiring tests"]
-    fn d5_a_close_during_the_import_installs_nothing() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        scripted_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // The import pauses with the session check passed, before the install.
-        let import_gate = hooks::pause("import.after_session_lock");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let import = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            hooks::at("import.after_session_lock");
-            scripted_run_import(&owner, epoch);
-        });
-        import_gate.reached();
-        close(Reason::SignOut);
-        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
-        import_gate.release();
-        import.join().unwrap();
-        assert_eq!(
-            snapshot().phase_kind,
-            PhaseKind::SignedOut,
-            "the import installed nothing past the close"
-        );
-        assert!(snapshot().room.is_none());
-        assert_invariants();
-    }
-
     /// q4: a stale opener installs nothing — an opener thread opens its handle, the close lands
     /// while it is paused before the commit, and the commit with the old epoch abandons: nothing
     /// is installed, and the handle itself drops (the Weak is dead).
@@ -6918,35 +6699,6 @@ mod tests {
             "the abandoned commit dropped the handle"
         );
         assert!(!gate_unlocked());
-        assert_invariants();
-    }
-
-    /// i3: an inbox write captured for a room whose session ended is refused — the write checks
-    /// the captured epoch and generation under the room's lock.
-    #[test]
-    #[ignore = "scripted interleaving superseded by production-wiring tests"]
-    fn i3_inbox_write_after_a_switch_is_refused() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch_a = snapshot().epoch;
-        scripted_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        let generation_a = snapshot().room.unwrap().1;
-        // The inbox thread captures its epoch and generation, then the session switches.
-        let inbox_gate = hooks::pause("inbox.before_write");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let inbox = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            hooks::at("inbox.before_write");
-            scripted_inbox_write(&owner, epoch_a, generation_a);
-        });
-        inbox_gate.reached();
-        sign_out();
-        inbox_gate.release();
-        inbox.join().unwrap();
-        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
         assert_invariants();
     }
 

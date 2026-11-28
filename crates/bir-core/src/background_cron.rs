@@ -3327,20 +3327,25 @@ impl Drop for JobCleanup {
 }
 
 #[cfg(any(test, feature = "test-support"))]
-static QUEUE_TRANSPORT_TEST_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static QUEUE_TRANSPORT_TEST_TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Serializes tests that flip the process-wide queue transport or submission pause. Every such
-/// test takes this before the room-path or session-epoch turns, in that order.
+/// Serializes async tests that touch the process-wide queue transport or submission pause. Take
+/// this before the room-path or session-epoch turns, in that order.
 #[cfg(any(test, feature = "test-support"))]
-pub fn queue_transport_test_turn() -> std::sync::MutexGuard<'static, ()> {
-    QUEUE_TRANSPORT_TEST_TURN
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+pub async fn queue_transport_test_turn() -> tokio::sync::MutexGuard<'static, ()> {
+    QUEUE_TRANSPORT_TEST_TURN.lock().await
+}
+
+/// The same turn for a synchronous test. Never call this inside a runtime; async tests use
+/// [`queue_transport_test_turn`].
+#[cfg(any(test, feature = "test-support"))]
+pub fn queue_transport_test_turn_blocking() -> tokio::sync::MutexGuard<'static, ()> {
+    QUEUE_TRANSPORT_TEST_TURN.blocking_lock()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::queue_transport_test_turn;
+    use super::{queue_transport_test_turn, queue_transport_test_turn_blocking};
 
     struct SubmissionPauseReset;
 
@@ -3420,7 +3425,7 @@ mod tests {
     /// Queued, the transport is never opened, and neither account's token is fetched.
     #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_before_a_switch_is_never_sent_under_the_new_sign_in() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3492,7 +3497,7 @@ mod tests {
     /// real AccountTokens ask succeeds once and the queued return is Submitted.
     #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_without_a_switch_is_submitted_and_fetches_its_context_token() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3560,7 +3565,7 @@ mod tests {
     /// in A's room. TokenFetchingTransport is the positive control that the room send really fires.
     #[tokio::test(flavor = "current_thread")]
     async fn a_locked_reappeared_file_never_sends_a_second_copy_of_as_return() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _turn = crate::db::room_path_test_turn();
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
@@ -3690,7 +3695,7 @@ mod tests {
     /// the spawn opens no transport, fetches no token and leaves A's return Queued.
     #[tokio::test(flavor = "current_thread")]
     async fn a_sign_in_between_the_room_snapshot_and_the_spawn_sends_nothing() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3761,7 +3766,7 @@ mod tests {
     /// spawn. The owner is unchanged, so only the captured epoch can stop the stale send.
     #[tokio::test(flavor = "current_thread")]
     async fn a_same_owner_epoch_bump_before_the_spawn_sends_nothing() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3818,7 +3823,7 @@ mod tests {
     /// load-bearing if such a state ever appears.
     #[tokio::test(flavor = "current_thread")]
     async fn an_owner_change_without_an_epoch_bump_sends_nothing() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3875,7 +3880,7 @@ mod tests {
     /// go, registration proceeds (the positive control).
     #[tokio::test(flavor = "current_thread")]
     async fn submission_job_registration_waits_for_the_room_lock() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _turn = crate::db::room_path_test_turn();
         let db = test_db();
         let (queued, _summary) = stored_queued_2551q(&db);
@@ -3950,7 +3955,7 @@ mod tests {
     /// positive control that the same path registers when the pause stays clear.
     #[tokio::test(flavor = "current_thread")]
     async fn a_tick_blocked_through_an_import_registers_nothing_on_the_retired_room() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _turn = crate::db::room_path_test_turn();
         let _pause_reset = submission_pause_test_guard();
         let db = test_db();
@@ -4008,7 +4013,7 @@ mod tests {
     /// another — the spawn reads a distinct key per room.
     #[tokio::test]
     async fn a_job_key_held_for_one_room_never_blocks_another_rooms_send() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let db = test_db();
         let (_queued, _summary) = stored_queued_2551q(&db);
@@ -4225,7 +4230,7 @@ mod tests {
     /// room B's stays untouched until the source answers B — and B's heal never lands in A.
     #[test]
     fn email_poll_and_calendar_use_the_tick_room() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn_blocking();
         let _epoch_turn = crate::session_epoch::test_turn();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -4947,6 +4952,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_queue_tick_does_not_panic() {
+        let _queue_turn = queue_transport_test_turn().await;
         let db_file = NamedTempFile::new().unwrap();
         // Since we are just testing the runner, if keyring fails we can't test.
         let db = match Database::open(db_file.path()) {
@@ -5411,7 +5417,7 @@ mod tests {
     #[cfg(not(feature = "direct-bir"))]
     #[tokio::test]
     async fn a_build_with_nowhere_to_send_leaves_the_queue_alone() {
-        let _queue_turn = queue_transport_test_turn();
+        let _queue_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let db = test_db();
         let (queued, _) = stored_queued_2551q(&db);
@@ -8110,6 +8116,7 @@ mod tests {
     /// (what a desktop relaunch after a quit mid-send finds).
     #[test]
     fn a_send_dropped_mid_flight_keeps_its_claim_and_frees_its_job_key() {
+        let _queue_turn = queue_transport_test_turn_blocking();
         const KEY: &str = "fixed|form:1601C:lifecycle-test:dropped-mid-send";
         let profile = test_profile();
         let queued = queued_1601c_draft(&profile);
@@ -8208,6 +8215,7 @@ mod tests {
     /// not made inside it on the first poll.
     #[test]
     fn a_job_dropped_before_it_ever_ran_frees_its_key() {
+        let _queue_turn = queue_transport_test_turn_blocking();
         const KEY: &str = "fixed|form:1601C:lifecycle-test:never-polled";
         let ran = Arc::new(AtomicBool::new(false));
         let runtime = tokio::runtime::Builder::new_current_thread()

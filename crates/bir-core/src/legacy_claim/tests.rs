@@ -2224,4 +2224,15 @@ fn transient_details_never_carry_os_paths() {
         panic!("not passing")
     };
     assert!(!detail.contains(&raw), "{detail}");
+
+    let raw_error = crate::db::DbError::NotPlainSqlite(path.clone());
+    assert!(
+        raw_error.to_string().contains(&raw),
+        "positive control: the raw database error has no path"
+    );
+    let step = db_failure(MovedNotOpenedReason::Open, raw_error);
+    let StepFailure::Moved(_, detail) = step else {
+        panic!("not moved-not-opened")
+    };
+    assert!(!detail.contains(&raw), "{detail}");
 }

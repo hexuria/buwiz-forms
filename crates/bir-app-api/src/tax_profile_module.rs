@@ -1652,12 +1652,28 @@ thread_local! {
 }
 
 #[cfg(test)]
-static AFTER_ACCOUNT_WORK: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>> =
+static AFTER_ACCOUNT_WORK: std::sync::Mutex<Option<(u64, Box<dyn FnOnce() + Send>)>> =
     std::sync::Mutex::new(None);
 
-/// The account verb's one session snapshot and the room that snapshot opened. Tests without a
-/// session machine use their ephemeral slot, as before; production rooms mode always reads the
-/// snapshot's own Arc here, never a room re-opened after the snapshot.
+#[cfg(test)]
+static NEXT_AFTER_ACCOUNT_WORK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_ACCOUNT_WORK_ID: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+// Fixed-token account tests have no real sign-in; the process-wide session machine belongs to
+// other tests running beside them. Real AccountTokens wiring tests leave this unset.
+#[cfg(test)]
+thread_local! {
+    static IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+/// The account verb's one session snapshot and the room that snapshot opened. A test's
+/// thread-local ephemeral slot wins; otherwise this reads the snapshot's own Arc, never a room
+/// re-opened after the snapshot.
 fn account_room_snapshot() -> Result<
     (
         crate::session::Snap,
@@ -1672,9 +1688,10 @@ fn account_room_snapshot() -> Result<
         // A test's thread-local ephemeral database wins over the process-wide session room. The
         // session machine is shared global test state; without this priority a parallel session
         // test can make a profile verb read that room instead of this test's own database.
-        return crate::bir_module::open_database_slot_for_tests().map(|handle| (snap, handle));
+        if let Some(handle) = crate::bir_module::thread_database_slot_for_tests() {
+            return Ok((snap, handle));
+        }
     }
-    #[allow(unreachable_code)]
     let Some((handle, _generation, _room_id, _path)) = snap.room.clone() else {
         return Err(HostError::new(
             "no room is open: the filing UI is behind a migration page or the gate",
@@ -1694,6 +1711,10 @@ fn on_account_thread<T: Send + 'static>(
     answer: impl FnOnce(T) -> HostResult + Send + 'static,
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
     let epoch = snap.epoch;
+    #[cfg(test)]
+    let after_account_work_id = AFTER_ACCOUNT_WORK_ID.with(|id| id.get());
+    #[cfg(test)]
+    let ignore_session_epoch = IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST.with(|flag| flag.get());
     let context = snap.owner.map(|owner| {
         bir_core::account_session::SendContext::new(
             bir_core::account_session::OwnerKey {
@@ -1714,12 +1735,24 @@ fn on_account_thread<T: Send + 'static>(
             runtime.block_on(work)
         };
         #[cfg(test)]
-        AFTER_ACCOUNT_WORK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
-            .map(|hook| hook());
-        if crate::session::snapshot().epoch != epoch {
+        if let Some(id) = after_account_work_id {
+            let hook = {
+                let mut hooks = AFTER_ACCOUNT_WORK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if matches!(hooks.as_ref(), Some((hook_id, _)) if *hook_id == id) {
+                    hooks.take().map(|(_, hook)| hook)
+                } else {
+                    None
+                }
+            };
+            hook.map(|hook| hook());
+        }
+        #[cfg(test)]
+        let session_changed = !ignore_session_epoch && crate::session::snapshot().epoch != epoch;
+        #[cfg(not(test))]
+        let session_changed = crate::session::snapshot().epoch != epoch;
+        if session_changed {
             return Err(HostError::new("The signed-in account changed; try again."));
         }
         answer(outcome)
@@ -3476,9 +3509,11 @@ mod tests {
         impl Drop for Uninstall {
             fn drop(&mut self) {
                 TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
+                IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST.with(|flag| flag.set(false));
             }
         }
         let _uninstall = Uninstall;
+        IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST.with(|flag| flag.set(true));
         body(&mock);
     }
 
@@ -3567,9 +3602,30 @@ mod tests {
         // write itself was still made under the verb snapshot's owner and epoch; nothing of the
         // newer session supplies either the profile data or the token.
         add_branch("00002");
-        AFTER_ACCOUNT_WORK.lock().unwrap().replace(Box::new(|| {
+        struct AfterHookReset(u64);
+        impl AfterHookReset {
+            fn install(hook: impl FnOnce() + Send + 'static) -> Self {
+                let id = NEXT_AFTER_ACCOUNT_WORK.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                AFTER_ACCOUNT_WORK
+                    .lock()
+                    .unwrap()
+                    .replace((id, Box::new(hook)));
+                AFTER_ACCOUNT_WORK_ID.with(|slot| slot.set(Some(id)));
+                Self(id)
+            }
+        }
+        impl Drop for AfterHookReset {
+            fn drop(&mut self) {
+                AFTER_ACCOUNT_WORK_ID.with(|slot| slot.set(None));
+                let mut hooks = AFTER_ACCOUNT_WORK.lock().unwrap();
+                if matches!(hooks.as_ref(), Some((id, _)) if *id == self.0) {
+                    hooks.take();
+                }
+            }
+        }
+        let _after_hook = AfterHookReset::install(|| {
             crate::session::reset_for_tests();
-        }));
+        });
         let answer = call_verb("activate_tin", vec![json!("12345678800002")]);
         TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
         crate::session::reset_for_tests();
@@ -3672,6 +3728,59 @@ mod tests {
         let rows = tin_status_list(&complete, &local)["rows"].clone();
         assert_eq!(rows[1]["state"], "not_activated");
         assert_eq!(rows[1]["fetched_at"], 7);
+    }
+
+    /// The production room branch of the account verbs: with no thread-local test database, the
+    /// verb reads the session machine's open room rather than answering that no room is open.
+    #[test]
+    fn activate_tin_reads_the_session_room_without_a_thread_slot() {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                bir_core::platform::set_device_dir_override(None);
+                crate::session::reset_for_tests();
+            }
+        }
+        let _reset = Reset;
+        let _turn = crate::session::test_turn();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        let (room, _generation) = crate::session::open_legacy_in_place_for_test(
+            &layout,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        assert!(
+            crate::bir_module::thread_database_slot_for_tests().is_none(),
+            "this test must exercise the session room, not a thread-local test database"
+        );
+        ok(
+            create_taxpayer,
+            vec![
+                json!({"tin_root": "123-456-788", "name": "Example Trading Corp", "taxpayer_type": "Corporation", "head_office": {}}),
+            ],
+        );
+        ok(
+            create_branch,
+            vec![
+                json!(ROOT),
+                json!({"branch_code": "00001", "name": "Example Store", "fields": {"zip_code": "1700"}}),
+            ],
+        );
+        {
+            let db = bir_core::lock_timing::lock(&room).unwrap();
+            assert!(
+                db.get_profile("12345678800001").unwrap().is_some(),
+                "the setup did not land in the session room"
+            );
+        }
+        against_the_account(|mock| {
+            let row = call_verb("activate_tin", vec![json!("12345678800001")]).unwrap();
+            assert_eq!(row["state"], "fix");
+            assert_eq!(mock.tax_profile_posts(), 1);
+        });
     }
 
     /// "Activate this TIN to send" posts the profile's kind and registered

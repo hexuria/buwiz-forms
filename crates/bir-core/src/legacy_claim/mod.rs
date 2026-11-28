@@ -2129,18 +2129,24 @@ fn record_room_outcome(outcome: Outcome) -> Outcome {
     }
 }
 
-#[cfg(any(test, debug_assertions))]
+#[cfg(any(test, feature = "test-support"))]
 static FAIL_NEXT_LEGACY_LOCK: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
-#[cfg(any(test, debug_assertions))]
+#[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
 pub fn fail_next_legacy_lock_for_test() {
     FAIL_NEXT_LEGACY_LOCK.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
+#[cfg(any(test, feature = "test-support"))]
+#[doc(hidden)]
+pub fn clear_fail_next_legacy_lock_for_test() {
+    FAIL_NEXT_LEGACY_LOCK.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn hold_legacy_lock(legacy: &Path) -> Result<OwnerLock, Failure> {
-    #[cfg(any(test, debug_assertions))]
+    #[cfg(any(test, feature = "test-support"))]
     if FAIL_NEXT_LEGACY_LOCK.swap(false, std::sync::atomic::Ordering::SeqCst) {
         return Err(Failure::Transient(Transient {
             cause: TransientCause::OwnerLockHeld,
@@ -2255,7 +2261,18 @@ fn db_failure(reason: MovedNotOpenedReason, error: crate::db::DbError) -> StepFa
     };
     match cause {
         Some(cause) => StepFailure::Passing(cause, "the room database cannot be used".into()),
-        None => StepFailure::Moved(reason, error.to_string()),
+        None => {
+            tracing::warn!(?reason, "room open check failed: {error}");
+            let detail = match reason {
+                MovedNotOpenedReason::Open => "the room database cannot be opened",
+                MovedNotOpenedReason::Fixups => "the room database cannot be prepared",
+                MovedNotOpenedReason::QuickCheck => "the room database failed its integrity check",
+                MovedNotOpenedReason::HashMismatch => {
+                    "the room copy does not match the legacy file"
+                }
+            };
+            StepFailure::Moved(reason, detail.into())
+        }
     }
 }
 

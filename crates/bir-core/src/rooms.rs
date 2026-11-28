@@ -1113,6 +1113,29 @@ mod tests {
     }
 
     #[test]
+    fn non_practice_rooms_exist_reads_the_claim_record_from_migration() {
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        let store = DeviceStore::open(&layout).unwrap();
+        store
+            .conn()
+            .execute(
+                "INSERT INTO migration (key, value) VALUES (?1, ?2)",
+                params![
+                    crate::legacy_claim::RECORD_KEY,
+                    r#"{"room":"room-a","step":"Closed"}"#
+                ],
+            )
+            .unwrap();
+        drop(store);
+        assert!(
+            layout.non_practice_rooms_exist(),
+            "a Closed or pre-move claim record with room counts as a room"
+        );
+    }
+
+    #[test]
     fn room_id_normalises_the_origin() {
         let a = room_for(None, "https://api.buwiz.com/", "user-1").unwrap();
         let b = room_for(None, "https://API.buwiz.com", "user-1").unwrap();

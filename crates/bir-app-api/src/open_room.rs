@@ -72,7 +72,7 @@ pub(crate) fn open_path(
     });
     if let Some(room) = room {
         let device_dir = bir_core::db::room_device_dir(path)
-            .ok_or_else(|| format!("no device folder for {}", path.display()))?;
+            .ok_or_else(|| "the room path is not inside the device folder".to_string())?;
         bir_core::legacy_claim::room_open_allowed(
             &bir_core::rooms::Layout::at(&device_dir),
             &room,
@@ -104,7 +104,10 @@ pub(crate) fn open_path(
         None => {
             let owner_lock =
                 bir_core::db::hold_owner_lock(path).map_err(|error| error.to_string())?;
-            let database = Database::open(path).map_err(|error| error.to_string())?;
+            let database = Database::open(path).map_err(|error| {
+                tracing::warn!(path = %path.display(), "room database not opened: {error}");
+                "the room database cannot be opened".to_string()
+            })?;
             let handle = Arc::new(Mutex::new(database));
             lock(&REGISTRY).insert(path.to_path_buf(), (Arc::downgrade(&handle), owner_lock));
             Ok(handle)
@@ -194,4 +197,39 @@ pub(crate) fn room_test_turn() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 pub(crate) fn reset_for_tests() {
     lock(&REGISTRY).clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn room_open_errors_never_carry_os_paths() {
+        let _turn = room_test_turn();
+        let folder = tempfile::tempdir().unwrap();
+        let outside = folder.path().join("bir_data.db");
+        let raw = outside.to_string_lossy().to_string();
+        let room = bir_core::rooms::room_id_for("https://api.buwiz.test", "user-a");
+        let error = match open_path(&outside, Some(&room)) {
+            Ok(_) => panic!("the out-of-device room opened"),
+            Err(error) => error,
+        };
+        assert!(!error.contains(&raw), "{error}");
+
+        let legacy = folder.path().join("legacy.db");
+        std::fs::write(&legacy, b"not sqlite").unwrap();
+        let raw_error = bir_core::db::DbError::NotPlainSqlite(legacy.clone()).to_string();
+        assert!(
+            raw_error.contains(&legacy.to_string_lossy().as_ref()),
+            "positive control: the raw database error has no path"
+        );
+        let error = match open_path(&legacy, None) {
+            Ok(_) => panic!("the invalid room opened"),
+            Err(error) => error,
+        };
+        assert!(
+            !error.contains(&legacy.to_string_lossy().as_ref()),
+            "{error}"
+        );
+    }
 }

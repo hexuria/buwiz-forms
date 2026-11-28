@@ -870,9 +870,9 @@ pub(crate) fn with_reader<R>(
 }
 
 #[cfg(test)]
-pub(crate) fn open_database_slot_for_tests()
--> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
-    open_database_slot()
+pub(crate) fn thread_database_slot_for_tests() -> Option<std::sync::Arc<std::sync::Mutex<Database>>>
+{
+    DATABASE.with(|slot| slot.borrow().clone())
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
