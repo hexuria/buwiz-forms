@@ -70,6 +70,11 @@
     "phone": "software_keyboard"
    },
    "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+   "may_scroll": {
+    "phone": [
+     "s14"
+    ]
+   },
    "fallback": {
     "phone": "money-boxes-phone.json",
     "file": "money-boxes.wants"
