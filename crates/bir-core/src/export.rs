@@ -224,13 +224,14 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     // an empty list for a year with none) and its stored facts record.
     let years = crate::db::taxpayers::query_tax_years(&db.conn, tin)
         .map_err(|error| DbError::Other(error.to_string()))?;
-    // Each year's forms list carries the list's own updated_at (the newest of
-    // its rows), so an import can tell an older file from a newer one. The
-    // entry is an object of `codes` and `updated_at`; readers of the legacy
-    // bare-array shape still read the codes.
+    // The forms list stays the legacy bare array of codes, so an archive of
+    // this build still imports into a released app. Each year's updated_at
+    // (the newest of its rows) travels in the separate yearly_forms_meta.json,
+    // which older readers never look for.
     let mut yearly_forms = std::collections::BTreeMap::new();
+    let mut yearly_forms_meta = std::collections::BTreeMap::new();
     for year in years {
-        let codes = db.active_form_codes_for_year(tin, year)?;
+        yearly_forms.insert(year.to_string(), db.active_form_codes_for_year(tin, year)?);
         let updated_at: Option<String> = db
             .conn
             .query_row(
@@ -239,13 +240,14 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
                 |row| row.get(0),
             )
             .unwrap_or(None);
-        yearly_forms.insert(
-            year.to_string(),
-            serde_json::json!({ "codes": codes, "updated_at": updated_at }),
-        );
+        if let Some(updated_at) = updated_at {
+            yearly_forms_meta.insert(year.to_string(), updated_at);
+        }
     }
     zip.start_file(format!("{}yearly_forms.json", base_dir), options)?;
     zip.write_all(serde_json::to_string_pretty(&yearly_forms)?.as_bytes())?;
+    zip.start_file(format!("{}yearly_forms_meta.json", base_dir), options)?;
+    zip.write_all(serde_json::to_string_pretty(&yearly_forms_meta)?.as_bytes())?;
     // Each year's facts record carries the record's own updated_at as a key
     // beside the facts. It is not part of YearFacts: readers of either shape
     // parse the facts themselves.

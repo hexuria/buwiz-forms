@@ -7742,6 +7742,73 @@ mod tests {
         );
     }
 
+    /// An old-format archive without any `updated_at` still imports. Where
+    /// the database has nothing yet it comes in whole; over an existing row
+    /// the undated copy counts as older than any existing row, so nothing is
+    /// lowered and no newer work is overwritten.
+    #[test]
+    fn an_old_format_archive_without_updated_at_still_imports() {
+        setup();
+        let scratch = ScratchDir::new("old-format");
+        let legacy_drafts = serde_json::json!([{
+            "form_code": "2551Q",
+            "taxable_year": 2026,
+            "quarter": 1,
+            "status": "Queued",
+            "data_json": "{\"legacy\":true}"
+        }])
+        .to_string();
+        let archive = archive_with_drafts(&scratch, "old-format.zip", legacy_drafts.clone());
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("2551Q", 2026);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(
+            rows[0].1, "Draft",
+            "a legacy Queued still comes in as a Draft"
+        );
+        assert_eq!(rows[0].2, "{\"legacy\":true}");
+
+        // A same-status undated copy never replaces the row that is here.
+        setup();
+        let scratch = ScratchDir::new("old-format-older");
+        insert_draft(
+            "2551Q",
+            2026,
+            Some(1),
+            "Draft",
+            "{\"current\":true}",
+            "2026-06-01 00:00:00",
+        );
+        let archive = archive_with_drafts(&scratch, "old-format-older.zip", legacy_drafts.clone());
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("2551Q", 2026);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(
+            rows[0].2, "{\"current\":true}",
+            "an undated copy counts as older than any existing row: {rows:?}"
+        );
+
+        // And a row further along is never overwritten by an undated copy.
+        setup();
+        let scratch = ScratchDir::new("old-format-submitted");
+        insert_draft(
+            "2551Q",
+            2026,
+            Some(1),
+            "Submitted",
+            "{\"current\":true}",
+            "2026-06-01 00:00:00",
+        );
+        let archive = archive_with_drafts(&scratch, "old-format-submitted.zip", legacy_drafts);
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("2551Q", 2026);
+        assert_eq!(
+            (rows.len(), rows[0].1.as_str(), rows[0].2.as_str()),
+            (1, "Submitted", "{\"current\":true}"),
+            "{rows:?}"
+        );
+    }
+
     /// The import still imports: a strictly newer file at the same status
     /// replaces the row's data in place.
     #[test]

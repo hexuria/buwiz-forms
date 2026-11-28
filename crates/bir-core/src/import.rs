@@ -82,9 +82,9 @@ fn import_safe_status(status: &str) -> String {
 
 /// Whether an incoming row may replace an existing row. A lower status never
 /// does. A higher status is newer by itself. At the same status the
-/// timestamps decide — as timestamps, not strings — and a file that cannot be
-/// shown older than the stored row may replace it, so a second import of the
-/// same archive still applies.
+/// timestamps decide — as timestamps, not strings. A file that cannot be
+/// shown newer than the stored row — a legacy archive has no timestamps — is
+/// older by rule and never replaces at the same status.
 fn import_may_replace(
     existing_status: &str,
     existing_updated_at: Option<&str>,
@@ -105,9 +105,15 @@ fn import_may_replace(
             crate::db::taxpayers::parse_stored_timestamp(incoming),
         ) {
             (Some(existing), Some(incoming)) => incoming >= existing,
-            _ => true,
+            // An unreadable timestamp cannot show the file is newer.
+            _ => false,
         },
-        _ => true,
+        // An undated row (a legacy archive) counts as older than any existing
+        // row: it never replaces at the same status, so nothing is lowered
+        // and no newer work is overwritten. Where there is no row yet, or the
+        // row is undated too, the import still applies.
+        (Some(_), None) => false,
+        (None, _) => true,
     }
 }
 
@@ -419,6 +425,11 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
             // record. An archive without them imports as before, and the
             // forms list is never generated from the profile.
             if let Ok(yearly_json) = read_from_zip("yearly_forms.json") {
+                let yearly_meta: BTreeMap<String, serde_json::Value> =
+                    read_from_zip("yearly_forms_meta.json")
+                        .ok()
+                        .and_then(|meta| serde_json::from_str(&meta).ok())
+                        .unwrap_or_default();
                 let yearly: BTreeMap<String, serde_json::Value> =
                     serde_json::from_str(&yearly_json)?;
                 for (year, entry) in yearly {
@@ -426,27 +437,25 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                         continue;
                     };
                     // Both shapes: the legacy bare array of codes, and the
-                    // object of `codes` and `updated_at`.
-                    let (codes, updated_at) = match &entry {
-                        serde_json::Value::Array(_) => (
-                            serde_json::from_value::<Vec<String>>(entry.clone())
-                                .unwrap_or_default(),
-                            None,
-                        ),
-                        serde_json::Value::Object(_) => (
-                            entry
-                                .get("codes")
-                                .and_then(|codes| {
-                                    serde_json::from_value::<Vec<String>>(codes.clone()).ok()
-                                })
-                                .unwrap_or_default(),
-                            entry
-                                .get("updated_at")
-                                .and_then(|v| v.as_str())
-                                .map(str::to_string),
-                        ),
+                    // object of `codes` and `updated_at`. The list's timestamp
+                    // comes from yearly_forms_meta.json, which older readers
+                    // never write.
+                    let codes = match &entry {
+                        serde_json::Value::Array(_) => {
+                            serde_json::from_value::<Vec<String>>(entry.clone()).unwrap_or_default()
+                        }
+                        serde_json::Value::Object(_) => entry
+                            .get("codes")
+                            .and_then(|codes| {
+                                serde_json::from_value::<Vec<String>>(codes.clone()).ok()
+                            })
+                            .unwrap_or_default(),
                         _ => continue,
                     };
+                    let updated_at = yearly_meta
+                        .get(&year.to_string())
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string);
                     crate::db::taxpayers::restore_yearly_forms(
                         &db.conn,
                         &tin,
