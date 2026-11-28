@@ -16,7 +16,9 @@ const activating = signal<string[]>([]);
 /** The refusal sentence of the last Activate, keyed by the 14-digit TIN, until a retry, a Dismiss or a new owner clears it. */
 const refusals = signal<Record<string, string>>({});
 let inFlight: Promise<void> | null = null;
-/** Reads started so far: only the newest may land its answer, its owner and its error. */
+/** Reads started so far: only the newest may land its answer, its owner and its error. Verified boundary: the
+ * tins.test.tsx owner-switch test (an older read answering after a newer one started changes nothing the chips show)
+ * and the gate tests' overlapping reads. */
 let readGen = 0;
 
 /** The list as last read, or null when there is none yet (never read, signed out, unreadable). */

@@ -43,7 +43,9 @@ for (const look of TIN_LOOKS) {
     await app.waitFor("text:BIR Form 2551Q", { timeout: 15000 });
     await app.press("id:fp-queue");
     // Wide shows the blocker as a dialog, narrow as the phone sheet: either answers the press.
-    const blockedShown = () => app.shows("id:tin-queue-blocked") || app.shows("id:tin-queue-blocked-sheet");
+    // The sheet's wrapper is in the tree even closed (zero width): the check is the popup's content, which mounts
+    // only when the blocker is open — the dialog's own testID on wide, the shared Close button on the phone sheet.
+    const blockedShown = () => app.shows("id:tin-queue-blocked") || app.shows("id:tin-blocked-close");
     // Press past the page's own stops, waiting on the transitions rather than counting a fixed beat.
     for (let i = 0; i < 8 && !blockedShown(); i++) {
       if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
