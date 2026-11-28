@@ -3397,7 +3397,7 @@ mod tests {
         assert_eq!(title, "Test send: 1601C 09/26 \u{2014} Juan Dela Cruz");
         assert_eq!(
             body,
-            "Test send. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
+            "Test send: not filed. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
         );
         assert_never_filed_alert(&title, &body);
     }
