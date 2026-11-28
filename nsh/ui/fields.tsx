@@ -76,8 +76,6 @@ export interface TextFieldProps {
   onSelectionChange?: (e: { start: number; end: number }) => void;
   /** Before the text changes: the typed text, "Backspace" or "Enter". */
   onKeyPress?: (e: { key: string }) => void;
-  /** An input method's composition started, changed or ended. */
-  onCompositionChange?: (e: { composing: boolean; text: string }) => void;
   /** The input's ref, to focus it or set its selection. */
   inputRef?: (ref: InputRef) => void;
   testID?: string;
@@ -141,7 +139,6 @@ export function TextField(props: TextFieldProps) {
           onSubmit={() => props.onSubmit?.()}
           onSelectionChange={props.onSelectionChange}
           onKeyPress={props.onKeyPress}
-          onCompositionChange={props.onCompositionChange}
           class={cx(
             "h-full min-w-0 flex-1 bg-transparent caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
             props.bare || props.large ? "text-emph font-normal" : "text-body",
