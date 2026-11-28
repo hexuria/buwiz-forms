@@ -1152,7 +1152,7 @@ fn migrate_v14_stale_migration_backfills(conn: &Connection) -> Result<(), DbErro
                 }
                 Err(error) => {
                     tracing::warn!(
-                        tin = %stored_tin,
+                        tin = %crate::logging::tin_for_log(&stored_tin),
                         %error,
                         "v14 migration: profile JSON could not be resolved; generated rows fail closed"
                     );
