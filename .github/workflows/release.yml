@@ -136,6 +136,21 @@ jobs:
       release: ${{ github.event_name == 'push' }}
     secrets: inherit
 
+  # The Microsoft Store's .msix, built apart from the direct downloads above. It is given the Google OAuth client
+  # only when the repository variable STORE_GMAIL is 1: Gmail Connect asks for Gmail's restricted scope, which
+  # needs Google's verification for a public app. It is given no signing certificate: the Store signs it. Off,
+  # its job checks that the package holds no client id. Setup.exe, the .msi and the ZIP keep the client as 0.2.x did.
+  build-windows-store:
+    needs: preflight
+    uses: ./.github/workflows/release-windows.yml
+    with:
+      release: ${{ github.event_name == 'push' }}
+      store: true
+    secrets:
+      NSH_REPO_TOKEN: ${{ secrets.NSH_REPO_TOKEN }}
+      GOOGLE_CLIENT_ID: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
+      GOOGLE_CLIENT_SECRET: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
+
   build-linux:
     needs: preflight
     uses: ./.github/workflows/release-linux.yml
@@ -154,7 +169,7 @@ jobs:
     concurrency:
       group: release-feed-${{ github.ref }}
       cancel-in-progress: false
-    needs: [preflight, build-windows, build-linux]
+    needs: [preflight, build-windows, build-windows-store, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts

@@ -55,8 +55,12 @@ there, but nobody has run it on that platform.
 - `windows-release` contains `eBIRForms-Windows-x64-<version>-Setup.exe`
   (Inno Setup) and `eBIRForms-Windows-x64-<version>.msi` (WiX). The installer
   adds a Start menu entry and offers an optional desktop icon.
-- The `.msix` in `windows-release` is the package for the Microsoft Store. Built without a signing certificate it is
-  unsigned and keeps the Store identity from `assets\windows\AppxManifest.xml`, which is what Partner Center takes (the
+- The `.msix` is the package for the Microsoft Store. A test run puts it in `windows-release`. A release builds it
+  in its own job, `build-windows-store`, as the `windows-store` artifact with `SHA256SUMS-windows-store-x64.txt`
+  (`package_nsh_windows.ps1 -MsixOnly`). The direct job then leaves it out (`-NoMsix`). The Store job gets the Google
+  OAuth client only when the repository variable `STORE_GMAIL` is `1`. Otherwise it checks the package holds no client id or secret
+  (`scripts/audit_google_client.py --absent`, after its `--self-test` finds planted ones). Built without a
+  signing certificate it is unsigned and keeps the Store identity from `assets\windows\AppxManifest.xml`, which is what Partner Center takes (the
   Store signs it). A run with `WINDOWS_CERTIFICATE_PFX` puts the certificate's subject in as publisher, which makes a
   sideload package that the Store refuses. The package carries `ebirforms-store-package` beside the executable, so the
   app in it never asks GitHub for a newer version (`nsh/src/desktop.rs` `store_managed`).

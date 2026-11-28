@@ -70,6 +70,27 @@ class NshWindowsReleaseTests(unittest.TestCase):
                     self.assertIn(error, result.stderr)
                     self.assertFalse(out.exists())
 
+    @unittest.skipUnless(shutil.which('pwsh'), 'requires PowerShell')
+    def test_store_and_direct_switches_refuse_what_they_cannot_build(self):
+        cases = (
+            (['-MsixOnly', '-NoMsix'], {}, 'Pass -MsixOnly or -NoMsix, not both'),
+            (['-NoMsix', '-SmokeMsix'], {}, '-SmokeMsix needs the .msix'),
+            (['-MsixOnly'], {'WINDOWS_CERTIFICATE_PFX': 'AAAA'}, 'The Store package is never signed here'),
+        )
+        with tempfile.TemporaryDirectory() as scratch:
+            out = Path(scratch) / 'out'
+            for switches, env, error in cases:
+                with self.subTest(switches=switches, env=sorted(env)):
+                    result = subprocess.run(
+                        ['pwsh', '-NoProfile', '-File', str(ROOT / 'scripts/package_nsh_windows.ps1'),
+                         '-PackageRoot', scratch, '-OutDir', str(out), *switches],
+                        env={**os.environ, 'WINDOWS_CERTIFICATE_PFX': '', **env, 'NO_COLOR': '1'},
+                        capture_output=True, text=True, timeout=20,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
+                    self.assertFalse(out.exists())
+
     def test_msi_has_new_per_user_identity_and_distinct_install_directory(self):
         ns = {'w': 'http://schemas.microsoft.com/wix/2006/wi'}
         product = ET.parse(ROOT / 'packaging/windows/nsh.wxs').find('w:Product', ns)
