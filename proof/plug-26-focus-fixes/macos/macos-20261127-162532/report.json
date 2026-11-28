@@ -1,0 +1,45 @@
+{
+ "suite": "keyclear",
+ "target": "macos",
+ "started": "20261127-162532",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162532",
+ "cli_version": "0.4.1",
+ "app_commit": "f030fbfd",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 701,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": null
+  },
+  {
+   "name": "sign-up-keyclear",
+   "status": "pass",
+   "ms": 8991,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-keyclear.wants",
+   "video": null
+  }
+ ]
+}

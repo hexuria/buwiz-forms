@@ -1,0 +1,25 @@
+# Probe for nsh-gpui-agent#26 review: key with a target and a clear right after the segmented TIN control.
+# The TIN is typed first (the segmented control), then the name box: typed, chorded with a target (mod+a
+# selects the text), cleared through set_value (which presses, selects all and backspaces), typed again.
+# Every step after the TIN is a press-then-keys path where macOS used to hand the keys to the TIN editor.
+click new-tp-start-trigger
+wait_until $start_option --timeout-ms 5000
+click $start_option
+type $tin_field $tin
+type new-tp-name WRONGNAME
+key new-tp-name mod+a
+set_value new-tp-name $name
+type new-tp-registered_address $address
+click new-tp-zip_code-trigger
+wait_until new-tp-zip_code-search --timeout-ms 5000
+type new-tp-zip_code-search $zip
+wait_until new-tp-zip_code-opt-$zip --timeout-ms 5000
+click new-tp-zip_code-opt-$zip --screenshot
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-search --timeout-ms 5000
+type new-tp-rdo_code-search $rdo
+wait_until new-tp-rdo_code-opt-$rdo --timeout-ms 5000
+click new-tp-rdo_code-opt-$rdo --screenshot
+click new-tp-save --screenshot
+wait_until nav-home --timeout-ms 10000
+assert context-pill name="Tax profile: $name" --screenshot

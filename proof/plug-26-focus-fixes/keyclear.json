@@ -1,0 +1,33 @@
+{
+ "v": 1,
+ "description": "Probe for nsh-gpui-agent#26 review fixes: setup, then sign-up exercising key-with-target and a clear right after the TIN boxes.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up-keyclear",
+   "desktop": "sign-up-keyclear.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  }
+ ]
+}

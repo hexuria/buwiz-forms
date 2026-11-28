@@ -1,0 +1,43 @@
+{
+ "v": 1,
+ "description": "setup-start + sign-up only (plug#26 iPhone proof)",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "birth": "01/15/1990",
+  "prior": "500.25",
+  "amount": "1234.56",
+  "amount_shown": "1,234.56",
+  "tin_root": "123456788",
+  "year": "2026",
+  "bstart": "01/01/2020"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "linux": "sign-up-linux.wants",
+   "phone": "sign-up-phone.json",
+   "android": "sign-up-android.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  }
+ ]
+}

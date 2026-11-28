@@ -1,0 +1,43 @@
+{
+ "suite": "p26bare",
+ "target": "macos",
+ "started": "20261127-162109",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162109",
+ "cli_version": "0.4.1",
+ "app_commit": "f030fbfd",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 860,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 8775,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-bare.wants"
+  }
+ ]
+}

@@ -1,0 +1,52 @@
+{
+ "suite": "p26signup",
+ "target": "ios",
+ "started": "20261127-163241",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-163241",
+ "cli_version": "0.4.1",
+ "app_commit": "f030fbfd",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1692,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-163241/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "fail",
+   "ms": 3708,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-163241/02-sign-up/recording.mp4",
+   "step": "s6",
+   "error": "a press at (185, 399) did not give node 3 the focus",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-163241/02-sign-up/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-163241/02-sign-up/failure-tree.json"
+  }
+ ]
+}

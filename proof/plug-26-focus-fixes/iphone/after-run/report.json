@@ -1,0 +1,48 @@
+{
+ "suite": "p26signup",
+ "target": "ios",
+ "started": "20261127-170859",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-170859",
+ "cli_version": "0.4.1",
+ "app_commit": "f030fbfd",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1971,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-170859/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 28879,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json",
+   "video": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-170859/02-sign-up/recording.mp4"
+  }
+ ]
+}
