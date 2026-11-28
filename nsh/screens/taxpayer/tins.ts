@@ -16,6 +16,8 @@ const activating = signal<string[]>([]);
 /** The refusal sentence of the last Activate, keyed by the 14-digit TIN, until a retry, a Dismiss or a new owner clears it. */
 const refusals = signal<Record<string, string>>({});
 let inFlight: Promise<void> | null = null;
+/** Reads started so far: only the newest may land its answer, its owner and its error. */
+let readGen = 0;
 
 /** The list as last read, or null when there is none yet (never read, signed out, unreadable). */
 export function tinsList(): TinStatusList | null {
@@ -97,6 +99,7 @@ export async function refreshTins(maxAge: number): Promise<TinStatusList | null>
     await inFlight;
     return list();
   }
+  const gen = ++readGen;
   const run = (async (): Promise<TinStatusList | null> => {
     const me = currentOwner();
     ownerNow = me;
@@ -107,13 +110,18 @@ export async function refreshTins(maxAge: number): Promise<TinStatusList | null>
     owner = me;
     try {
       const answer = await bir.account_tins(maxAge);
-      list.set(answer);
-      error.set(null);
+      // A read started later has the newer truth: an older answer landing after it must not overwrite it.
+      if (gen === readGen) {
+        list.set(answer);
+        error.set(null);
+      }
       return answer;
     } catch (e) {
-      error.set(errorText(e));
-      const kept = list();
-      if (kept && !kept.stale) list.set({ ...kept, stale: true, rows: kept.rows.map((row) => ({ ...row, stale: true })) });
+      if (gen === readGen) {
+        error.set(errorText(e));
+        const kept = list();
+        if (kept && !kept.stale) list.set({ ...kept, stale: true, rows: kept.rows.map((row) => ({ ...row, stale: true })) });
+      }
       return null;
     }
   })();
