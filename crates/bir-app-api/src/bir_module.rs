@@ -3249,9 +3249,10 @@ fn restore_staged_database(
     // The room's own hand_to_clients is re-applied over the foreign archive's strip; capture it
     // before anything replaces the live file.
     let hand_to_clients = with_database(|db| {
-        db.get_setting(bir_core::legacy_claim::HAND_TO_CLIENTS_SETTING)
+        Ok(db
+            .get_setting(bir_core::legacy_claim::HAND_TO_CLIENTS_SETTING)
             .ok()
-            .flatten()
+            .flatten())
     })
     .ok()
     .flatten();
@@ -3269,6 +3270,20 @@ fn restore_staged_database(
         // and the connection let go is the one it was copied from.
         let mut db = bir_core::lock_timing::lock(&handle)
             .map_err(|_| HostError::new("database lock poisoned"))?;
+        // I5: the authoritative busy check is under the same lock the worker inserts its keys
+        // with — no send can slip its key in between this check and the swap.
+        let still_busy = bir_core::background_cron::get_active_jobs()
+            .lock()
+            .map(|jobs| {
+                jobs.iter()
+                    .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
+            })
+            .unwrap_or(false);
+        if still_busy {
+            return Err(HostError::new(
+                "eBIRForms is sending this return now. Wait until it finishes.",
+            ));
+        }
         // Flush the WAL first: a raw copy of bir_data.db alone can miss
         // commits still living in -wal, and this copy is the restore
         // point if the replace goes wrong. A checkpoint a reader keeps from

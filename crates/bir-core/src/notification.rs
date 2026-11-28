@@ -43,6 +43,93 @@ pub fn send_notification(title: &str, body: &str) {
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+// ---------------------------------------------------------------------------
+// I1: one notifier, scoped to the open room, withdrawn at sign-out and close.
+// ---------------------------------------------------------------------------
+
+tokio::task_local! {
+    /// The room a send in flight belongs to, scoped at the send's spawn beside
+    /// SEND_CONTEXT. The submission notices read it to post through the room gate.
+    pub static SEND_ROOM: String
+}
+
+/// A send's notice: through the room gate when the send carries its room
+/// (the always case in production), unscoped only where no room exists.
+pub fn notify_send(title: &str, body: &str) {
+    match SEND_ROOM.try_with(|room| room.clone()) {
+        Ok(room) => notify(&room, title, body),
+        Err(_) => send_notification(title, body),
+    }
+}
+
+use std::sync::RwLock;
+
+type OpenRoomCheck = Box<dyn Fn(&str) -> bool + Send + Sync>;
+
+/// Filled by the painted session machine (bir-app-api): answers whether
+/// `room_id` is THE open room right now. Outside a session (headless, tests,
+/// `bir` serving one database) nothing is registered and every notify posts,
+/// the single-room behavior these processes already had.
+static OPEN_ROOM_CHECK: RwLock<Option<OpenRoomCheck>> = RwLock::new(None);
+
+/// The session machine's wiring, once at startup (and reset by tests).
+pub fn set_open_room_check(check: Option<OpenRoomCheck>) {
+    if let Ok(mut slot) = OPEN_ROOM_CHECK.write() {
+        *slot = check;
+    }
+}
+
+/// Whether a banner for `room_id` may post: the room is the open one, or no
+/// session machine is in play. The unit of the seam's tests.
+fn may_post(room_id: &str) -> bool {
+    match OPEN_ROOM_CHECK
+        .read()
+        .ok()
+        .and_then(|slot| slot.as_ref().map(|check| check(room_id)))
+    {
+        Some(open) => open,
+        None => true,
+    }
+}
+
+/// Post the banner of an event that happened in `room_id` — only while that
+/// room is the open one. A closed room's event stays in its own alert rows
+/// (the callers' `record_alert` writes) and posts nothing.
+pub fn notify(room_id: &str, title: &str, body: &str) {
+    if !may_post(room_id) {
+        tracing::debug!("desktop notification suppressed: not the open room");
+        return;
+    }
+    send_notification(title, body);
+}
+
+/// Withdraw every banner this process has delivered — at sign-out and at room
+/// close, so nothing about one account's sends stays on the screen of the
+/// next. Per platform:
+///
+/// - macOS / iOS: `UNUserNotificationCenter.removeAllDeliveredNotifications`
+///   (the notification center owns the delivered list; a bare binary that
+///   posts through the osascript fallback cannot withdraw — its banners are
+///   attributed to Script Editor, not the app, and are a dev-run-only case);
+/// - other platforms: documented in the release notes of the rooms release.
+pub fn withdraw_delivered() {
+    #[cfg(target_os = "macos")]
+    {
+        if macos_native::has_bundle_identifier() {
+            macos_native::withdraw_all();
+        }
+    }
+    if let Ok(slot) = WITHDRAW_TEST_HOOK.read()
+        && let Some(hook) = slot.as_ref()
+    {
+        hook();
+    }
+}
+
+/// Tests observe the withdrawal through this hook; production never sets it.
+#[doc(hidden)]
+pub static WITHDRAW_TEST_HOOK: RwLock<Option<Box<dyn Fn() + Send + Sync>>> = RwLock::new(None);
+
 /// Off until `bir-headless` turns it on. Test suites and one-off tools link
 /// this crate too, and their cron / alert tests reach `send_notification`
 /// with fixture data — which used to post straight into the developer's
@@ -126,6 +213,14 @@ mod macos_native {
                 }
             });
             center.addNotificationRequest_withCompletionHandler(&request, Some(&completion));
+        });
+    }
+
+    /// Empty the delivered list of the notification center: every banner this
+    /// app posted disappears, clicked or not.
+    pub(super) fn withdraw_all() {
+        objc2::rc::autoreleasepool(|_| {
+            UNUserNotificationCenter::currentNotificationCenter().removeAllDeliveredNotifications();
         });
     }
 }
@@ -252,5 +347,37 @@ mod tests {
     #[test]
     fn a_repeat_report_posts_nothing() {
         notify_alert_if_newly_active(AlertRecordOutcome::StillActive, "must not appear", "detail");
+    }
+
+    /// I1 through the seam: a banner of the open room posts, a closed room's is suppressed,
+    /// and with no machine registered everything posts (the single-room processes).
+    #[test]
+    fn the_open_room_gate_decides_what_posts() {
+        // No machine registered: the single-room behavior.
+        set_open_room_check(None);
+        assert!(may_post("any-room"));
+        set_open_room_check(Some(Box::new(|room| room == "room-open")));
+        assert!(may_post("room-open"), "the open room's banner posts");
+        assert!(
+            !may_post("room-closed"),
+            "a closed room's banner is suppressed"
+        );
+        set_open_room_check(None);
+    }
+
+    /// The withdrawal runs the platform path and the seam's hook together.
+    #[test]
+    fn withdraw_delivered_runs_the_hook() {
+        static HIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        HIT.store(false, Ordering::SeqCst);
+        *WITHDRAW_TEST_HOOK.write().unwrap() = Some(Box::new(|| {
+            HIT.store(true, Ordering::SeqCst);
+        }));
+        withdraw_delivered();
+        assert!(
+            HIT.load(Ordering::SeqCst),
+            "the withdrawal reached its seam"
+        );
+        *WITHDRAW_TEST_HOOK.write().unwrap() = None;
     }
 }

@@ -189,6 +189,19 @@ pub struct Snap {
 }
 
 pub fn snapshot() -> Snap {
+    // I1: the one notifier's open-room gate, registered with the machine's first read. The
+    // check is a pure function of the machine's own state, so registration is idempotent and
+    // ordering-free; unset outside a painted session, where every notify posts as before.
+    static GATE: std::sync::Once = std::sync::Once::new();
+    GATE.call_once(|| {
+        bir_core::notification::set_open_room_check(Some(Box::new(|room_id| {
+            crate::session::snapshot()
+                .room
+                .as_ref()
+                .and_then(|(_, _, open_id, _)| open_id.as_ref())
+                .is_some_and(|open_id| open_id.as_str() == room_id)
+        })));
+    });
     let session = locked();
     let (room, note, importing) = match &session.phase {
         Phase::Open {
@@ -387,6 +400,9 @@ pub fn join_device_forget_threads() {
 }
 
 fn finish_close(outcome: &CloseOutcome, mode: ForgetMode) {
+    // I1: the closed room's delivered banners are withdrawn — a room close is the end of what
+    // they announced, and the next room's screen never carries them.
+    bir_core::notification::withdraw_delivered();
     // F2'c/F7: the forget runs under the DEVICE_KEY lock, never nested in SESSION (we are
     // outside it here). Its condition — the epoch this close produced is still current — is
     // re-checked INSIDE the lock by forget_device_key_at_epoch itself: a newer epoch means a
@@ -804,6 +820,8 @@ pub(crate) fn sign_out_inner(
     logout_http: Box<dyn bir_core::cloud_account::Http + Send>,
 ) -> Result<(), bir_core::cloud_account::CloudError> {
     crate::cloud_email::cancel();
+    // I1: nothing about this account's sends stays on the screen of the next.
+    bir_core::notification::withdraw_delivered();
     bir_core::background_cron::set_submission_paused(true);
     // Step 1: the persisted sign-in goes, outside SESSION.
     let (logout, removed, at_clear) = {

@@ -1535,7 +1535,7 @@ fn finish_sent_queueable<F: QueueableForm>(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    crate::notification::notify_send(&notice_title, &notice_body);
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
@@ -2045,7 +2045,7 @@ fn finish_sent_2551q(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    crate::notification::notify_send(&notice_title, &notice_body);
     // Keep the exact bytes that were encrypted for PUT.
     if let Some(xml_payload) = xml_payload {
         draft.submitted_payload = Some(xml_payload);
@@ -2307,6 +2307,13 @@ async fn process_submission_queue(
 
         let active_jobs = get_active_jobs();
         {
+            // I5: the key goes in WHILE HOLDING the room's database lock — the import checks the
+            // keys under the same lock, so a send's insert and an import's check can never pass
+            // each other in the gap.
+            let _db_guard = match lock_timing::lock(&db) {
+                Ok(guard) => guard,
+                Err(_) => continue,
+            };
             let mut jobs = active_jobs
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -2317,6 +2324,7 @@ async fn process_submission_queue(
 
         let profile_clone = profile.clone();
         let db_clone = db.clone();
+        let room_key_owned = room_key.to_owned();
         let cleanup = JobCleanup {
             key: job_key.clone(),
             active_jobs: active_jobs.clone(),
@@ -2359,6 +2367,7 @@ async fn process_submission_queue(
 
                 crate::ipc::post_db_changed();
             };
+            let job = crate::notification::SEND_ROOM.scope(room_key_owned.clone(), job);
             if let Some(context) = send_context {
                 crate::account_session::SEND_CONTEXT
                     .scope(context, job)
@@ -2595,7 +2604,7 @@ fn finish_sent_1601c(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    crate::notification::notify_send(&notice_title, &notice_body);
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
