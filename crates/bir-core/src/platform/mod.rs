@@ -35,6 +35,11 @@ pub fn keychain_disabled() -> bool {
 /// renames or deletes lands in the person's real data folder. Every build
 /// that ships answers the system's folder, as before.
 pub fn data_dir() -> std::path::PathBuf {
+    // The seam first: with BIR_DEVICE_DIR honoured, the device IS the given folder, so the
+    // system's folder is never even looked at — nothing is made or written outside it.
+    if let Some(overridden) = device_dir_override() {
+        return overridden;
+    }
     // The system's folder is only looked at here, never created: a test build that does not use it leaves it alone.
     #[cfg(all(any(test, feature = "test-support"), not(target_os = "android")))]
     if !in_temp_folder(&os_data_dir_path()) {
@@ -224,7 +229,110 @@ pub fn browser_url_allowed(url: &str) -> bool {
 ///   every test keeps its scratch isolation.
 /// - Else [`data_dir`]. On a normal install that is where those files always
 ///   were, so nothing moves.
+///
+/// The test seam's one variable (the contract): `BIR_DEVICE_DIR` roots the rooms layout in a
+/// given folder — device.db, `rooms/<room id>/bir_data.db` and the saved sign-in all inside it —
+/// so a test run can keep two accounts apart. Honoured ONLY in a debug build under the test
+/// environment (EBIR_TEST_ENV): anything else ignores it with one warning and writes no marker.
+pub const DEVICE_DIR_ENV: &str = "BIR_DEVICE_DIR";
+
+/// The seam's folder when it is set, valid and honoured. An INVALID value exits the process
+/// early with one stderr line — never a fall-back to the OS default: a test that mistyped the
+/// folder must not write the install's real one. Read once and cached: the answer of a process
+/// never changes.
+pub fn device_dir_override() -> Option<std::path::PathBuf> {
+    // One cached answer for the process, exactly as the runner's real app start sees it: the
+    // variable is an input of the process's first moments, never re-read — which is also why
+    // the seam's integration tests run the probe as a subprocess, one process per scenario.
+    static CACHED: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    CACHED.get_or_init(device_dir_override_inner).clone()
+}
+
+#[cfg(not(target_os = "android"))]
+fn device_dir_override_inner() -> Option<std::path::PathBuf> {
+    let value = crate::config::var(DEVICE_DIR_ENV).ok()?;
+    if !(cfg!(debug_assertions) && crate::db::test_environment()) {
+        static WARNED: std::sync::Once = std::sync::Once::new();
+        WARNED.call_once(|| {
+            // stderr, never stdout (the registration rule): this fires at registration,
+            // before any tracing subscriber exists, so a tracing call here warns NOBODY.
+            eprintln!("BIR_DEVICE_DIR is ignored outside a debug build in the test environment");
+        });
+        return None;
+    }
+    match validate_device_dir(&value) {
+        Ok(path) => Some(path),
+        Err(wrong) => {
+            eprintln!("BIR_DEVICE_DIR must be an existing absolute folder: {wrong}");
+            std::process::exit(2);
+        }
+    }
+}
+
+// Android is out (issue #655): the seam does not exist there at all.
+#[cfg(target_os = "android")]
+fn device_dir_override_inner() -> Option<std::path::PathBuf> {
+    None
+}
+
+/// The seam's validation, pure for the tests: an absolute path to an existing directory.
+pub(crate) fn validate_device_dir(value: &str) -> Result<std::path::PathBuf, String> {
+    if value.trim().is_empty() {
+        return Err("the value is empty".to_owned());
+    }
+    let path = std::path::PathBuf::from(value);
+    if !path.is_absolute() {
+        return Err(format!("`{value}` is not an absolute path"));
+    }
+    match std::fs::metadata(&path) {
+        Ok(metadata) if metadata.is_dir() => Ok(path),
+        Ok(_) => Err(format!("`{value}` is not a folder")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(format!("`{value}` does not exist"))
+        }
+        Err(error) => Err(format!("`{value}` cannot be read: {error}")),
+    }
+}
+
+/// The seam's marker (contract point 4): `<device dir>/.ebirforms-test-device.json`, written
+/// atomically — a temp file in the device folder, then a rename — as the FIRST action of the
+/// desktop's process preparation, before the keychain switch, the storage preparation, the
+/// hooks or any device_dir use. The runner waits for the window's hello and then retries the
+/// marker briefly, so it must exist before the agent plane answers. Only when the seam is
+/// honoured; a release build writes nothing.
+pub fn write_device_dir_marker() {
+    let Some(dir) = device_dir_override() else {
+        return;
+    };
+    let canonical = std::fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
+    #[cfg(target_os = "windows")]
+    let canonical = {
+        let text = canonical.to_string_lossy().to_string();
+        std::path::PathBuf::from(text.strip_prefix("\\\\?\\").unwrap_or(&text).to_string())
+    };
+    let content = serde_json::json!({
+        "device_dir": canonical.to_string_lossy(),
+        "rooms": true,
+        "single_room": false,
+        "pid": std::process::id(),
+        "seam": 1,
+    })
+    .to_string();
+    let marker = dir.join(".ebirforms-test-device.json");
+    let temp = dir.join(format!(
+        ".ebirforms-test-device.json.write-{}",
+        std::process::id()
+    ));
+    let written = std::fs::write(&temp, &content).and_then(|()| std::fs::rename(&temp, &marker));
+    if let Err(error) = written {
+        eprintln!("the test-device marker could not be written: {error}");
+    }
+}
+
 pub fn device_dir() -> std::path::PathBuf {
+    if let Some(overridden) = device_dir_override() {
+        return overridden;
+    }
     match crate::db::single_room_database() {
         Some(named) => named
             .parent()
@@ -490,6 +598,45 @@ pub use android::*;
 mod tests {
     use super::*;
 
+    /// The seam's validation: an absolute path to an existing directory, else refused — a
+    /// relative path above all, never a fall-back to the OS default.
+    #[test]
+    fn the_seam_validation_takes_only_an_absolute_existing_folder() {
+        assert_eq!(
+            validate_device_dir("").unwrap_err(),
+            "the value is empty",
+            "an empty value is refused like an invalid one, never a silent fall-back"
+        );
+        assert_eq!(
+            validate_device_dir("   ").unwrap_err(),
+            "the value is empty",
+            "a blank value likewise"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let absolute = dir.path().to_str().unwrap();
+        assert_eq!(
+            validate_device_dir(absolute).as_deref().ok(),
+            Some(dir.path()),
+            "an absolute existing folder passes"
+        );
+        assert!(
+            validate_device_dir("relative/folder").is_err(),
+            "a relative path is refused"
+        );
+        assert!(
+            validate_device_dir(&format!("{absolute}/missing")).is_err(),
+            "a missing folder is refused"
+        );
+        let file = dir.path().join("a-file");
+        std::fs::write(&file, "x").unwrap();
+        assert!(
+            validate_device_dir(file.to_str().unwrap()).is_err(),
+            "a file is not a folder"
+        );
+    }
+
+    /// The seam honoured: device_dir() is the named folder, and single-room is OFF with the
+    /// one log line — BIR_DATABASE_PATH is ignored for the room choice.
     #[test]
     fn the_keychain_switch_reads_the_environment_value() {
         assert!(keychain_switch_is_on(Some("1")));

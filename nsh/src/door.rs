@@ -86,6 +86,11 @@ pub(crate) fn install_logging() {
 /// starts (bir-app-api's latch), so no route can start it, whatever host function it comes through. The name check in
 /// [`permitted`] stays, for the clear message.
 fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
+    // The test seam's marker is the FIRST action (the contract): before the keychain switch,
+    // the storage preparation, the hooks, logging or any device_dir use, so it exists before
+    // the agent plane answers. A no-op outside the seam.
+    #[cfg(not(target_os = "android"))]
+    bir_core::platform::write_device_dir_marker();
     #[cfg(not(target_os = "android"))]
     switch_off_keychain(cfg!(debug_assertions));
     // iOS takes the data folder out of backups, protects it, and removes the

@@ -183,12 +183,29 @@ impl Session {
                 row
             })
             .collect();
-        Ok(DispatchResult::json(json!({
+        let mut info = json!({
             "app": APP,
             "mode": "desktop",
             "database": database_kind(),
             "profiles": profiles,
-        })))
+        });
+        // The seam's answers (contract point 6), in a test environment only: the device dir,
+        // the open database's path — absent while no room is open — and rooms_mode COMPUTED
+        // from the path actually opened, never echoed from the variable.
+        if bir_core::db::test_environment() {
+            info["device_dir"] = Value::String(
+                bir_core::platform::device_dir()
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+            if let Some(opened) = bir_core::db::open_database_path() {
+                info["rooms_mode"] = Value::Bool(bir_core::db::path_is_a_room_database(&opened));
+                info["database_path"] = Value::String(opened.to_string_lossy().into_owned());
+            } else {
+                info["rooms_mode"] = Value::Bool(false);
+            }
+        }
+        Ok(DispatchResult::json(info))
     }
 
     fn profile_list(&self) -> Result<DispatchResult, String> {

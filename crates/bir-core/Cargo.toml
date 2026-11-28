@@ -68,6 +68,18 @@ name = "sftp_harness"
 path = "src/bin/sftp_harness.rs"
 required-features = ["direct-bir"]
 
+# The BIR_DEVICE_DIR seam's probe and the legacy-fixture generator: test-support only, so no
+# normal build contains them — the probe stages a sign-in and must never exist in one.
+[[bin]]
+name = "seam_probe"
+path = "src/bin/seam_probe.rs"
+required-features = ["test-support"]
+
+[[bin]]
+name = "legacy_fixture"
+path = "src/bin/legacy_fixture.rs"
+required-features = ["test-support"]
+
 [dependencies]
 bir-rules = { path = "../bir-rules", version = "0.2.1" }
 bir-submit = { path = "../bir-submit" }

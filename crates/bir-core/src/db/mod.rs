@@ -696,6 +696,19 @@ pub fn ignored_database_path() -> Option<PathBuf> {
 /// outside a test environment the name is ignored, with one warning line, so
 /// every account gets its own room.
 pub fn single_room_database() -> Option<PathBuf> {
+    // The seam's precedence (contract point 3): with BIR_DEVICE_DIR honoured, single-room is
+    // OFF ALTOGETHER — the named database and the door's scratch or override are ignored for
+    // the room choice, with one log line.
+    if crate::platform::device_dir_override().is_some() {
+        static WARNED: std::sync::Once = std::sync::Once::new();
+        WARNED.call_once(|| {
+            tracing::info!(
+                "BIR_DEVICE_DIR is set: rooms mode in {}; BIR_DATABASE_PATH ignored",
+                crate::platform::device_dir().display()
+            );
+        });
+        return None;
+    }
     let named = named_database()?;
     if single_room_allowed() {
         return Some(named);
@@ -727,6 +740,27 @@ pub fn set_open_room_database(path: Option<PathBuf>) {
 
 fn open_room_database() -> Option<PathBuf> {
     OPEN_ROOM_DATABASE.with(|slot| slot.borrow().clone())
+}
+
+/// The open database's path on this thread, absent while no room is open (the seam's info
+/// answer, contract point 6).
+pub fn open_database_path() -> Option<PathBuf> {
+    open_room_database()
+}
+
+/// rooms_mode COMPUTED from the path actually opened, never echoed from a variable: the
+/// `rooms/<room id>/bir_data.db` shape of the room layout.
+pub fn path_is_a_room_database(path: &Path) -> bool {
+    let Some(folder) = path.parent() else {
+        return false;
+    };
+    let Some(rooms) = folder.parent() else {
+        return false;
+    };
+    rooms
+        .file_name()
+        .is_some_and(|name| name == crate::rooms::ROOMS_DIR)
+        && path.file_name().is_some_and(|name| name == "bir_data.db")
 }
 
 /// The id of the room open on this thread ([`set_open_room_database`]): its folder's name under `rooms/`.
@@ -3586,5 +3620,27 @@ mod tests {
             )]
         );
         assert_eq!(db.settings_with_prefix("profile_ask:1%").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_room_database_path_is_known_by_its_shape() {
+        let device = tempfile::tempdir().unwrap();
+        let room = device
+            .path()
+            .join(crate::rooms::ROOMS_DIR)
+            .join("room-1")
+            .join("bir_data.db");
+        assert!(path_is_a_room_database(&room), "rooms/<id>/bir_data.db");
+        let single = device.path().join("bir_data.db");
+        assert!(
+            !path_is_a_room_database(&single),
+            "a flat database is not a room's"
+        );
+        let wrong_name = device
+            .path()
+            .join(crate::rooms::ROOMS_DIR)
+            .join("room-1")
+            .join("other.db");
+        assert!(!path_is_a_room_database(&wrong_name), "the name is fixed");
     }
 }

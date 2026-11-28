@@ -1976,3 +1976,145 @@ pub(crate) fn cut(point: Cut) {
     #[cfg(not(test))]
     let _ = point;
 }
+
+/// The legacy-fixture generator (the BIR_DEVICE_DIR contract point 9), test-support only:
+/// an UNLOCKED pre-rooms database — the current schema, as v0.2.0 writes it — with one
+/// taxpayer profile and one Queued return, for a run folder's first-boot claim rehearsal.
+/// Writes ONLY to a path it creates inside the named run folder: an existing file or a path
+/// outside it is refused.
+#[cfg(feature = "test-support")]
+pub mod fixture {
+    use std::path::{Path, PathBuf};
+
+    /// Write the fixture database at `target`, which must not exist and must lie inside
+    /// `run_folder` (canonicalized; the run folder itself must exist).
+    pub fn write_legacy_fixture(run_folder: &Path, target: &Path) -> Result<(), String> {
+        let run_folder = std::fs::canonicalize(run_folder)
+            .map_err(|error| format!("the run folder cannot be read: {error}"))?;
+        if target.exists() {
+            return Err(format!("refusing an existing file: {}", target.display()));
+        }
+        let parent = target
+            .parent()
+            .ok_or_else(|| "the target has no folder".to_owned())?;
+        let parent = std::fs::canonicalize(parent)
+            .map_err(|error| format!("the target's folder cannot be read: {error}"))?;
+        if !parent.starts_with(&run_folder) {
+            return Err(format!(
+                "refusing a path outside the run folder: {}",
+                target.display()
+            ));
+        }
+        let mut db = crate::db::Database::open(target).map_err(|error| error.to_string())?;
+        db.create_taxpayer(crate::tax_profile::NewTaxpayer {
+            tin_root: "123456788".into(),
+            name: "Legacy Fixture Taxpayer".into(),
+            taxpayer_type: crate::profile::TaxpayerType::Individual,
+            birth_date: None,
+            head_office: crate::tax_profile::BranchFacts {
+                rdo_code: "039".into(),
+                registered_address: "Quezon City".into(),
+                zip_code: "1100".into(),
+                phone: "09170000000".into(),
+                email: "legacy@example.test".into(),
+            },
+        })
+        .map_err(|error| error.to_string())?;
+        crate::legacy_claim::fixture::write_one_queued_draft(&mut db)?;
+        Ok(())
+    }
+
+    fn write_one_queued_draft(db: &mut crate::db::Database) -> Result<(), String> {
+        #[derive(serde::Serialize)]
+        struct Draft {
+            fixture: bool,
+        }
+        db.save_form_draft(
+            "12345678800000",
+            "0619E",
+            2026,
+            Some(1),
+            &crate::forms::FilingStatus::Draft,
+            &Draft { fixture: true },
+        )
+        .map_err(|error| error.to_string())?;
+        // the queue is form_drafts.status; the row is set raw, as the reviewed queue paths
+        // leave it, so the fixture never depends on the send paths it rehearses
+        db.conn
+            .execute_batch(
+                "UPDATE form_drafts SET status = 'Queued'
+                 WHERE tin = '12345678800000' AND form_code = '0619E';",
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    /// The fixture's target inside a run folder, for the just recipe's callers.
+    pub fn fixture_target(run_folder: &Path) -> PathBuf {
+        run_folder.join("bir_data.db")
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn the_fixture_has_one_taxpayer_and_one_queued_return() {
+            let run = tempfile::tempdir().unwrap();
+            let target = fixture_target(run.path());
+            write_legacy_fixture(run.path(), &target).unwrap();
+            assert!(target.exists(), "the fixture file exists");
+            let db = crate::db::Database::open(&target).unwrap();
+            let taxpayers = db.list_taxpayers().unwrap();
+            assert_eq!(taxpayers.len(), 1, "one taxpayer profile");
+            let drafts = db
+                .conn
+                .prepare("SELECT status FROM form_drafts WHERE form_code = '0619E'")
+                .unwrap()
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert_eq!(drafts, vec!["Queued".to_owned()], "one Queued return");
+        }
+
+        #[test]
+        fn the_generator_refuses_an_existing_file() {
+            let run = tempfile::tempdir().unwrap();
+            let target = fixture_target(run.path());
+            std::fs::write(&target, "occupied").unwrap();
+            let error =
+                write_legacy_fixture(run.path(), &target).expect_err("an existing file is refused");
+            assert!(error.contains("existing file"), "{error}");
+            // and the file is UNTOUCHED
+            assert_eq!(std::fs::read_to_string(&target).unwrap(), "occupied");
+        }
+
+        #[test]
+        fn the_generator_refuses_a_path_outside_the_run_folder() {
+            let run = tempfile::tempdir().unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            let target = outside.path().join("bir_data.db");
+            let error = write_legacy_fixture(run.path(), &target)
+                .expect_err("a path outside the run folder is refused");
+            assert!(error.contains("outside the run folder"), "{error}");
+            assert!(!target.exists(), "nothing was written outside");
+        }
+
+        #[test]
+        fn the_first_sign_in_claims_the_fixture_as_a_legacy_install() {
+            let run = tempfile::tempdir().unwrap();
+            let target = fixture_target(run.path());
+            write_legacy_fixture(run.path(), &target).unwrap();
+            // the claim probe reads the fixture the way a first sign-in does: a legacy
+            // database in place, claimable as a pre-rooms install
+            let layout = crate::rooms::Layout::at(run.path());
+            let probe = crate::legacy_claim::LegacyClaim::at(layout);
+            assert!(
+                probe.is_ok(),
+                "the first sign-in claims its file as a legacy install: {:?}",
+                probe.err()
+            );
+        }
+    }
+}
