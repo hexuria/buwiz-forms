@@ -3039,9 +3039,9 @@ dependencies = [
 
 [[package]]
 name = "gpui-agent"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d048392444cd3ae4a0d4d941d4f7c21c2717ded12f753d90a62177e5c58bf00d"
+checksum = "89667d0a8b270fbfc5047dcdec7f142e6adc758155e9d308ce580b142ad19c7c"
 dependencies = [
  "base64 0.22.1",
  "hmac 0.12.1",
@@ -4829,7 +4829,7 @@ dependencies = [
 [[package]]
 name = "nsh-agent-actions"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=b559e40dc593bd8e8cd78060ddb5a3507a237767#b559e40dc593bd8e8cd78060ddb5a3507a237767"
+source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=db0e4ac6127078a05751149f0ec6bed68204f911#db0e4ac6127078a05751149f0ec6bed68204f911"
 dependencies = [
  "log",
  "nsh-core",
@@ -4998,7 +4998,7 @@ dependencies = [
 [[package]]
 name = "nsh-gpui-agent"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=b559e40dc593bd8e8cd78060ddb5a3507a237767#b559e40dc593bd8e8cd78060ddb5a3507a237767"
+source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=db0e4ac6127078a05751149f0ec6bed68204f911#db0e4ac6127078a05751149f0ec6bed68204f911"
 dependencies = [
  "gpui-agent",
  "log",
@@ -5015,7 +5015,7 @@ dependencies = [
 [[package]]
 name = "nsh-gpui-agent-android"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=b559e40dc593bd8e8cd78060ddb5a3507a237767#b559e40dc593bd8e8cd78060ddb5a3507a237767"
+source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=db0e4ac6127078a05751149f0ec6bed68204f911#db0e4ac6127078a05751149f0ec6bed68204f911"
 dependencies = [
  "ctor",
  "jni 0.21.1",
@@ -5030,7 +5030,7 @@ dependencies = [
 [[package]]
 name = "nsh-gpui-agent-linux"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=b559e40dc593bd8e8cd78060ddb5a3507a237767#b559e40dc593bd8e8cd78060ddb5a3507a237767"
+source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=db0e4ac6127078a05751149f0ec6bed68204f911#db0e4ac6127078a05751149f0ec6bed68204f911"
 dependencies = [
  "log",
  "nsh-agent-actions",
@@ -5045,7 +5045,7 @@ dependencies = [
 [[package]]
 name = "nsh-gpui-agent-macos"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=b559e40dc593bd8e8cd78060ddb5a3507a237767#b559e40dc593bd8e8cd78060ddb5a3507a237767"
+source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=db0e4ac6127078a05751149f0ec6bed68204f911#db0e4ac6127078a05751149f0ec6bed68204f911"
 dependencies = [
  "block2 0.6.2",
  "dispatch2",
@@ -5071,7 +5071,7 @@ dependencies = [
 [[package]]
 name = "nsh-gpui-agent-windows"
 version = "0.1.0"
-source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=b559e40dc593bd8e8cd78060ddb5a3507a237767#b559e40dc593bd8e8cd78060ddb5a3507a237767"
+source = "git+https://github.com/hexuria/nsh-gpui-agent?rev=db0e4ac6127078a05751149f0ec6bed68204f911#db0e4ac6127078a05751149f0ec6bed68204f911"
 dependencies = [
  "log",
  "nsh-agent-actions",

@@ -328,7 +328,7 @@ for (const { name, size } of SIZES) {
     const texts = app.texts();
     expect(texts).toContain("Welcome to eBIRForms");
     expect(texts).toContain(`Prepare, print and track BIR returns for every taxpayer you handle. Everything stays on this ${name === "phone" ? "device" : "computer"}.`);
-    for (const title of ["Add a taxpayer", "Add a tax year", "Choose its forms"]) expect(texts).toContain(title);
+    for (const title of ["New tax profile", "Add a tax year", "Choose its forms"]) expect(texts).toContain(title);
     for (const n of ["1", "2", "3"]) expect(app.shows(`id:welcome-step-${n}`)).toBe(true);
     expect(app.shows("id:home-dashboard")).toBe(false);
     await app.press("id:welcome-add-taxpayer");

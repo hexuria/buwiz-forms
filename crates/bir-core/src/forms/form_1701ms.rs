@@ -759,9 +759,17 @@ impl Form1701MsColumn {
             )
     }
 
-    /// Items 8 and 10A–10C follow Itemized Deductions.
+    /// Items 8 and 10A–10C follow Itemized Deductions under graduated
+    /// rates. The exempt/special-rate branch opens them while Item 17 is
+    /// disabled, so they do not depend on an Item 17 answer there.
     pub fn itemized_open(&self) -> bool {
-        self.schedule_b1_open() && self.deduction == Form1701MsDeduction::Itemized
+        self.schedule_b1_open()
+            && (self.tax_option.is_exempt_or_special()
+                || self.deduction == Form1701MsDeduction::Itemized)
+    }
+
+    fn itemized_method(&self) -> bool {
+        self.tax_option.is_exempt_or_special() || self.deduction == Form1701MsDeduction::Itemized
     }
 
     /// Schedule B2 is open for business income under the 8% option.
@@ -805,9 +813,13 @@ impl Form1701MsColumn {
             self.deduction = Form1701MsDeduction::Unanswered;
         }
         match self.tax_option {
+            // incomeIsSubjectToTP ticks Itemized and then disables Item 17
+            // (BIR-Form1701MS.hta L10287-10288; spouse L10539). The itemized
+            // boxes themselves open for exempt/special rates in `itemized_open`.
             Form1701MsTaxOption::Exempt | Form1701MsTaxOption::Special => {
-                // incomeIsSubjectTo* ticks Itemized and locks Item 17.
-                self.deduction = Form1701MsDeduction::Itemized;
+                if self.source.has_business() {
+                    self.deduction = Form1701MsDeduction::Itemized;
+                }
             }
             Form1701MsTaxOption::EightPercent | Form1701MsTaxOption::Unanswered => {
                 self.deduction = Form1701MsDeduction::Unanswered;
@@ -908,15 +920,18 @@ impl Form1701MsColumn {
         self.gross_income = self.net_sales - self.cost_of_sales;
         self.total_deductions =
             self.itemized_deductions + self.special_allowable_deductions + self.nolco;
-        self.osd = if self.deduction == Form1701MsDeduction::Osd {
+        self.osd = if self.tax_option == T::Graduated && self.deduction == Form1701MsDeduction::Osd
+        {
             js_round(self.net_sales * 0.40)
         } else {
             0.0
         };
-        self.net_income = match self.deduction {
-            Form1701MsDeduction::Itemized => self.gross_income - self.total_deductions,
-            Form1701MsDeduction::Osd => self.gross_income - self.osd,
-            Form1701MsDeduction::Unanswered => 0.0,
+        self.net_income = if self.itemized_method() {
+            self.gross_income - self.total_deductions
+        } else if self.tax_option == T::Graduated && self.deduction == Form1701MsDeduction::Osd {
+            self.gross_income - self.osd
+        } else {
+            0.0
         };
         self.taxable_business_income = self.net_income + self.non_operating_income;
         let positive = |v: f64| if v > 0.0 { v } else { 0.0 };
@@ -2271,7 +2286,11 @@ mod tests {
         };
         d.recompute();
         let tp = &d.taxpayer;
-        assert_eq!(tp.deduction, Form1701MsDeduction::Itemized);
+        assert_eq!(
+            tp.deduction,
+            Form1701MsDeduction::Itemized,
+            "incomeIsSubjectToTP ticks Itemized before disabling Item 17 (BIR-Form1701MS.hta L10287-10288)"
+        );
         assert_eq!(tp.gross_income, 1_500_000.0);
         assert_eq!(tp.special_tax_due, 75_000.0);
         assert_eq!(tp.income_tax_due, 75_000.0);

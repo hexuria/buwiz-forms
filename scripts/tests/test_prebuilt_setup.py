@@ -26,6 +26,10 @@ def read_pin(key, pin_file=PIN_FILE):
     raise AssertionError(f"{key} missing from {pin_file}")
 
 
+# The gpui-agent-cli version the pin file names: the helpers refuse any other.
+CLI = read_pin("GPUI_AGENT_CLI_VERSION")
+
+
 def version_tuple(text):
     return tuple(int(part) for part in text.split("."))
 
@@ -312,7 +316,7 @@ esac
         return env
 
     def install_binary(self, crate, binary, content=b"installed binary", *,
-                       version="0.4.1", route="prebuilt", stamp=True, exe=False):
+                       version=CLI, route="prebuilt", stamp=True, exe=False):
         name = binary + (".exe" if exe else "")
         path = self.cargo_bin / name
         path.write_bytes(content)
@@ -371,14 +375,14 @@ class PrebuiltShellTests(unittest.TestCase):
         with FakeToolchain() as fake:
             data = run_bash_helper(
                 fake,
-                "install_pinned_tool gpui-agent-cli 0.4.1\n",
+                f"install_pinned_tool gpui-agent-cli {CLI}\n",
                 {"FAKE_HASH_OUTPUT": pin},
             )
         self.assertEqual(data["result"].returncode, 0, data["output"])
         self.assertNotIn("cargo ", data["log"])
-        archive = "gpui-agent-cli-x86_64-unknown-linux-gnu-v0.4.1.tgz"
+        archive = f"gpui-agent-cli-x86_64-unknown-linux-gnu-v{CLI}.tgz"
         self.assertIn(
-            f"https://github.com/hexuria/gpui-agent/releases/download/v0.4.1/{archive}",
+            f"https://github.com/hexuria/gpui-agent/releases/download/v{CLI}/{archive}",
             data["log"],
         )
         self.assertNotIn(".sha256", data["log"])
@@ -388,7 +392,7 @@ class PrebuiltShellTests(unittest.TestCase):
         digest = sha256_bytes(b"prebuilt binary payload")
         self.assertEqual(
             data["stamps"][".gpui-agent-cli.buwiz-installed"].splitlines(),
-            ["0.4.1", "prebuilt", digest],
+            [CLI, "prebuilt", digest],
         )
         self.assertEqual(data["bin_contents"]["gpui-agent"], b"prebuilt binary payload")
 
@@ -396,7 +400,7 @@ class PrebuiltShellTests(unittest.TestCase):
         with FakeToolchain() as fake:
             data = run_bash_helper(
                 fake,
-                "install_pinned_tool gpui-agent-cli 0.4.1\n",
+                f"install_pinned_tool gpui-agent-cli {CLI}\n",
                 {"FAKE_HASH_OUTPUT": "0" * 64},
             )
         self.assertEqual(data["result"].returncode, 0, data["output"])
@@ -404,25 +408,25 @@ class PrebuiltShellTests(unittest.TestCase):
         cargo_calls = [line for line in data["log"].splitlines() if line.startswith("cargo ")]
         self.assertEqual(
             cargo_calls,
-            ["cargo [install] [gpui-agent-cli] [--version] [=0.4.1]"],
+            [f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]"],
         )
         self.assertEqual(data["output"].count("building from source"), 1, data["output"])
         self.assertIn("digest", data["output"])
         self.assertEqual(data["tmp_entries"], [])
-        digest = sha256_bytes(b"source-gpui-agent-cli-0.4.1\n")
+        digest = sha256_bytes(f"source-gpui-agent-cli-{CLI}\n".encode())
         self.assertEqual(
             data["stamps"][".gpui-agent-cli.buwiz-installed"].splitlines(),
-            ["0.4.1", "source", digest],
+            [CLI, "source", digest],
         )
 
     def test_missing_archive_builds_from_source(self):
         with FakeToolchain(archive_exit=22) as fake:
-            data = run_bash_helper(fake, "install_pinned_tool gpui-agent-cli 0.4.1\n")
+            data = run_bash_helper(fake, f"install_pinned_tool gpui-agent-cli {CLI}\n")
         self.assertEqual(data["result"].returncode, 0, data["output"])
         self.assertNotIn("tar ", data["log"])
         self.assertEqual(
             [line for line in data["log"].splitlines() if line.startswith("cargo ")],
-            ["cargo [install] [gpui-agent-cli] [--version] [=0.4.1]"],
+            [f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]"],
         )
         self.assertEqual(data["output"].count("building from source"), 1, data["output"])
         self.assertIn("download", data["output"])
@@ -434,7 +438,7 @@ class PrebuiltShellTests(unittest.TestCase):
             with FakeToolchain() as fake:
                 data = run_bash_helper(
                     fake,
-                    "install_pinned_tool gpui-agent-cli 0.4.1\n",
+                    f"install_pinned_tool gpui-agent-cli {CLI}\n",
                     helper=bash_helper,
                 )
         self.assertEqual(data["result"].returncode, 0, data["output"])
@@ -443,7 +447,7 @@ class PrebuiltShellTests(unittest.TestCase):
         self.assertEqual(data["output"].count("building from source"), 1, data["output"])
         self.assertEqual(
             [line for line in data["log"].splitlines() if line.startswith("cargo ")],
-            ["cargo [install] [gpui-agent-cli] [--version] [=0.4.1]"],
+            [f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]"],
         )
 
     def test_sha256_for_version_mismatch_refuses_prebuilt_in_both_directions(self):
@@ -457,7 +461,7 @@ class PrebuiltShellTests(unittest.TestCase):
             (
                 "digest generation moved without the version pin",
                 replace_pin_line(base_pin, "GPUI_AGENT_CLI_SHA256_FOR", "0.4.2"),
-                "0.4.1",
+                CLI,
             ),
             (
                 "install version is not the version pin",
@@ -498,21 +502,21 @@ class PrebuiltShellTests(unittest.TestCase):
 
     def test_no_prebuilt_goes_straight_to_the_source_build(self):
         with FakeToolchain(no_prebuilt=True) as fake:
-            data = run_bash_helper(fake, "install_pinned_tool gpui-agent-cli 0.4.1\n")
+            data = run_bash_helper(fake, f"install_pinned_tool gpui-agent-cli {CLI}\n")
         self.assertEqual(data["result"].returncode, 0, data["output"])
         self.assertNotIn("curl ", data["log"])
         self.assertEqual(
             [line for line in data["log"].splitlines() if line.startswith("cargo ")],
-            ["cargo [install] [gpui-agent-cli] [--version] [=0.4.1]"],
+            [f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]"],
         )
 
     def test_skip_when_the_binary_and_stamp_are_already_at_the_pin(self):
         content = b"already installed binary"
         with FakeToolchain() as fake:
             fake.install_binary("gpui-agent-cli", "gpui-agent", content)
-            data = run_bash_helper(fake, "install_pinned_tool gpui-agent-cli 0.4.1\n")
+            data = run_bash_helper(fake, f"install_pinned_tool gpui-agent-cli {CLI}\n")
         self.assertEqual(data["result"].returncode, 0, data["output"])
-        self.assertIn("already at 0.4.1", data["output"])
+        self.assertIn(f"already at {CLI}", data["output"])
         self.assertNotIn("curl ", data["log"])
         self.assertNotIn("cargo ", data["log"])
 
@@ -529,7 +533,7 @@ class PrebuiltShellTests(unittest.TestCase):
 
     def test_a_bracketed_install_list_line_is_not_the_pin_but_a_plain_line_is(self):
         with FakeToolchain(
-            install_list="gpui-agent-cli v0.4.1 (/tmp/local-checkout):\n"
+            install_list=f"gpui-agent-cli v{CLI} (/tmp/local-checkout):\n"
         ) as fake:
             fake.install_binary("gpui-agent-cli", "gpui-agent", stamp=False)
             bracketed = run_bash_helper(
@@ -537,27 +541,27 @@ class PrebuiltShellTests(unittest.TestCase):
                 'installed_pinned_version gpui-agent-cli gpui-agent\n',
             )
         self.assertEqual(bracketed["result"].stdout.strip(), "")
-        with FakeToolchain(install_list="gpui-agent-cli v0.4.1:\n") as fake:
+        with FakeToolchain(install_list=f"gpui-agent-cli v{CLI}:\n") as fake:
             fake.install_binary("gpui-agent-cli", "gpui-agent", stamp=False)
             plain = run_bash_helper(
                 fake,
                 'installed_pinned_version gpui-agent-cli gpui-agent\n',
             )
-        self.assertEqual(plain["result"].stdout.strip(), "0.4.1")
+        self.assertEqual(plain["result"].stdout.strip(), CLI)
 
     def test_an_unexpected_archive_layout_builds_from_source(self):
         pin = read_pin("GPUI_AGENT_CLI_SHA256_x86_64_unknown_linux_gnu")
         with FakeToolchain(archive_paths=("too/deep/gpui-agent",)) as fake:
             data = run_bash_helper(
                 fake,
-                "install_pinned_tool gpui-agent-cli 0.4.1\n",
+                f"install_pinned_tool gpui-agent-cli {CLI}\n",
                 {"FAKE_HASH_OUTPUT": pin},
             )
         self.assertEqual(data["result"].returncode, 0, data["output"])
         self.assertIn("layout", data["output"])
         self.assertEqual(
             [line for line in data["log"].splitlines() if line.startswith("cargo ")],
-            ["cargo [install] [gpui-agent-cli] [--version] [=0.4.1]"],
+            [f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]"],
         )
 
     def test_impeccable_accepts_the_binary_at_the_top_level_or_one_folder_down(self):
@@ -576,8 +580,8 @@ class PrebuiltShellTests(unittest.TestCase):
     def test_check_mode_report_matches_mismatches_and_reports_unknown(self):
         content = b"check binary"
         cases = (
-            ("0.4.1", 0, "gpui-agent  0.4.1  (pin 0.4.1)"),
-            ("0.4.0", 1, "gpui-agent  0.4.0  (pin 0.4.1)"),
+            (CLI, 0, f"gpui-agent  {CLI}  (pin {CLI})"),
+            ("0.4.0", 1, f"gpui-agent  0.4.0  (pin {CLI})"),
         )
         for stamp_version, expected_rc, expected_line in cases:
             with self.subTest(stamp_version=stamp_version), FakeToolchain() as fake:
@@ -586,17 +590,17 @@ class PrebuiltShellTests(unittest.TestCase):
                 )
                 data = run_bash_helper(
                     fake,
-                    "prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent 0.4.1\n",
+                    f"prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent {CLI}\n",
                 )
             self.assertEqual(data["result"].returncode, expected_rc, data["output"])
             self.assertIn(expected_line, data["output"])
         with FakeToolchain() as fake:
             unknown = run_bash_helper(
                 fake,
-                "prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent 0.4.1\n",
+                f"prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent {CLI}\n",
             )
         self.assertEqual(unknown["result"].returncode, 1, unknown["output"])
-        self.assertIn("gpui-agent  unknown  (pin 0.4.1)", unknown["output"])
+        self.assertIn(f"gpui-agent  unknown  (pin {CLI})", unknown["output"])
 
     def test_ensure_cargo_binstall_checks_the_pinned_linux_digest_before_unpacking(self):
         digest_pin = read_pin("CARGO_BINSTALL_SHA256_x86_64_unknown_linux_musl")
@@ -807,7 +811,7 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
                 fake,
                 pwsh_archive_hash_override()
                 + f"$env:FAKE_PS_ARCHIVE_HASH = '{pin}'\n"
-                + "$out = @(Install-PinnedTool 'gpui-agent-cli' '0.4.1')\n"
+                + f"$out = @(Install-PinnedTool 'gpui-agent-cli' '{CLI}')\n"
                 "'COUNT:' + $out.Count\n"
                 "'TYPE:' + $out[0].GetType().Name\n"
                 "'VALUE:' + $out[0]\n",
@@ -821,14 +825,14 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
         digest = sha256_bytes(b"prebuilt binary payload")
         self.assertEqual(
             data["stamps"][".gpui-agent-cli.buwiz-installed"].splitlines(),
-            ["0.4.1", "prebuilt", digest],
+            [CLI, "prebuilt", digest],
         )
 
     def test_digest_mismatch_falls_back_to_source_and_returns_boolean(self):
         with FakeToolchain(archive_paths=("gpui-agent-cli/gpui-agent.exe",)) as fake:
             data = run_pwsh_helper(
                 fake,
-                "$out = @(Install-PinnedTool 'gpui-agent-cli' '0.4.1')\n"
+                f"$out = @(Install-PinnedTool 'gpui-agent-cli' '{CLI}')\n"
                 "'COUNT:' + $out.Count\n"
                 "'VALUE:' + $out[0]\n",
             )
@@ -838,7 +842,7 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
         self.assertNotIn(".sha256", data["log"])
         self.assertEqual(data["output"].count("building from source"), 1, data["output"])
         self.assertIn(
-            "cargo [install] [gpui-agent-cli] [--version] [=0.4.1]",
+            f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]",
             data["log"],
         )
 
@@ -852,7 +856,7 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
             with FakeToolchain(archive_paths=("gpui-agent-cli/gpui-agent.exe",)) as fake:
                 data = run_pwsh_helper(
                     fake,
-                    "$out = @(Install-PinnedTool 'gpui-agent-cli' '0.4.1')\n"
+                    f"$out = @(Install-PinnedTool 'gpui-agent-cli' '{CLI}')\n"
                     "'VALUE:' + $out[0]\n",
                     helper=powershell_helper,
                 )
@@ -862,7 +866,7 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
         self.assertIn("pin version", data["output"])
         self.assertEqual(data["output"].count("building from source"), 1, data["output"])
         self.assertIn(
-            "cargo [install] [gpui-agent-cli] [--version] [=0.4.1]",
+            f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]",
             data["log"],
         )
 
@@ -890,7 +894,7 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
             )
             data = run_pwsh_helper(
                 fake,
-                "$out = @(Install-PinnedTool 'gpui-agent-cli' '0.4.1')\n"
+                f"$out = @(Install-PinnedTool 'gpui-agent-cli' '{CLI}')\n"
                 "'VALUE:' + $out[0]\n",
             )
         self.assertEqual(data["result"].returncode, 0, data["output"])

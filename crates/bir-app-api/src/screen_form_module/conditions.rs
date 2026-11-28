@@ -248,8 +248,15 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
     // part)) is off whatever it shows: a legacy draft's value there is
     // faded, not hidden.
     let mut gated = std::collections::BTreeSet::new();
+    // Draft-recompute gates are true locks now, not the corpus's faded
+    // "off" boxes: keeping their off tag would suppress the clearing note
+    // the lock carries (the page treats an off tag as the row's wait).
+    let recompute_gated: std::collections::BTreeSet<&str> =
+        bir_core::forms::agent::gated_rows::keys(kind)
+            .into_iter()
+            .collect();
     for (key, condition) in list {
-        if donor_estate_gated.contains(key) {
+        if recompute_gated.contains(key.as_str()) || donor_estate_gated.contains(key) {
             gated.insert(key);
         } else if let Some(closed) = super::rows_withholding::gated(kind, draft, key)
             .or_else(|| super::rows_monthly::gated(kind, draft, key))

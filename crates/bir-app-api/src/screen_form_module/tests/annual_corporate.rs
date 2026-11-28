@@ -2063,7 +2063,11 @@ fn pr8_form_1702mx_schedule_9_row_1_and_nolco_years() {
         "txtPg7Sc9I1CB",
         "txtPg7Sc9I1CF",
     ] {
-        assert!(opened["locks"].get(mx(stem)).is_none(), "{stem} is open");
+        assert_eq!(
+            opened["locks"][mx(stem)],
+            json!("MCIT applies to this return."),
+            "{stem} is shut until MCIT applies"
+        );
     }
     assert_eq!(
         opened["waits"][mx("txtPg3IShed7_7Year")],
