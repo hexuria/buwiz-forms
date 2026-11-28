@@ -5475,6 +5475,8 @@ struct Rule6Insertion {
     truncated: bool,
     input_classes: String,
     greys: Vec<(f64, f64)>,
+
+    slack: f64,
 }
 
 /// RULES.md rule 6: when a named inline "(specify)" field in
@@ -5744,18 +5746,20 @@ fn apply_rule6_specify_bands(
             let input_classes = "fi".to_string();
             let letter = sheet.letter;
 
-            let base_cut_y = page
+            let base_cut_y = r6.insert_after_y;
+            let slack = page
                 .bands
                 .iter()
                 .find(|b| b.id == r6.band_id)
                 .map(|b| {
-                    if b.y1 > r6.insert_after_y && (b.y1 - r6.insert_after_y) <= 6.0 {
-                        b.y1
+                    let gap = b.y1 - r6.insert_after_y;
+                    if gap > 0.5 && gap <= 14.0 {
+                        gap
                     } else {
-                        r6.insert_after_y
+                        0.0
                     }
                 })
-                .unwrap_or(r6.insert_after_y);
+                .unwrap_or(0.0);
 
             let (x1, cut_y) = rule6_place_band(r6.x0, r6.x1, base_cut_y, &r6.cell_id, &value_cells);
 
@@ -5822,6 +5826,7 @@ fn apply_rule6_specify_bands(
                         truncated: band_truncated,
                         input_classes,
                         greys: greys.clone(),
+                        slack,
                     });
                 }
                 continue;
@@ -5878,6 +5883,7 @@ fn apply_rule6_specify_bands(
                 truncated,
                 input_classes,
                 greys,
+                slack,
             });
         }
 
@@ -5912,6 +5918,17 @@ fn apply_rule6_specify_bands(
             (f64::INFINITY, 0.0)
         };
 
+        let total_slack: f64 = insertions.iter().map(|i| i.slack).sum();
+        let (elastic_cut_y, elastic_shrink) = if total_slack > 0.1 {
+            let cut = insertions
+                .iter()
+                .map(|i| i.cut_y + 0.5)
+                .fold(f64::INFINITY, f64::min)
+                .min(elastic_cut_y);
+            (cut, elastic_shrink + total_slack)
+        } else {
+            (elastic_cut_y, elastic_shrink)
+        };
         let transformed =
             shift_page_and_insert_rule6(&page_html, &insertions, elastic_cut_y, elastic_shrink);
         out.replace_range(pg_start..pg_end, &transformed);
@@ -6226,6 +6243,18 @@ fn shift_page_and_insert_rule6(
                     y + 0.25,
                     (gw - 1.0).max(1.0),
                     (h - 0.5).max(1.0)
+                ));
+            }
+            let mut edges: Vec<f64> = ins.greys.iter().map(|(l, _)| *l).collect();
+            if let Some((l, gw)) = ins.greys.last() {
+                edges.push(l + gw);
+            }
+            for ex in edges {
+                out.push_str(&format!(
+                    "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"0.9\" height=\"{:.2}\" fill=\"#000000\"/>",
+                    ex - 0.45,
+                    y,
+                    h
                 ));
             }
             out.push_str(&format!(
