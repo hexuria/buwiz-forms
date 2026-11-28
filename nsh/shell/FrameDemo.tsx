@@ -2,6 +2,7 @@
 // shell/integration.test.tsx need on top of ShellDemo.tsx. open(entry, { host: { params } }):
 //   start    the dev route ("form=1601EQ/2025/3")
 //   removal  true: a stored 1601EQ 2025 period 3 with one ATC row (WI010, tax base 250.50), made through the form session
+//   removal2 true: the removal row has a second ATC row behind it (WI011, tax base 200.00)
 //   filed    true: a submitted 2550Q 2025 period 2 (a stored filed return with one Schedule 3 row, so it can be amended)
 //   amend    true: once the frame is up, open an amendment of that filed 2550Q (the form page, not saved yet)
 //   show     "route" prints the view the frame shows and the mode of the form it names (live)
@@ -17,6 +18,7 @@ import { Shell } from "./Shell";
 interface Params {
   start?: string;
   removal?: boolean;
+  removal2?: boolean;
   filed?: boolean;
   amend?: boolean;
   show?: "route";
@@ -43,6 +45,11 @@ async function seedRemoval() {
   s.choose({ "frm1601EQ:txtAtcCd1": "WI010" });
   s.edit("frm1601EQ:txtTaxBase1", "250.5");
   await s.idle();
+  if ((host.params as Params).removal2) {
+    s.choose({ "frm1601EQ:txtAtcCd2": "WI011" });
+    s.edit("frm1601EQ:txtTaxBase2", "200");
+    await s.idle();
+  }
   s.dispose();
 }
 

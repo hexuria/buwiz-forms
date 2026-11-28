@@ -314,22 +314,24 @@ for (const size of SIZES) {
     await app.waitFor("text:Row 1", { state: "gone" });
   });
 
-  test(`${size.name}: Delete row clears the row and closes the drawer; Add row opens the next empty row`, async () => {
+  test(`${size.name}: Delete row removes the row and closes the drawer; Add row opens the first empty row`, async () => {
     const app = await gallery(size.options);
     await app.press("id:fp-row-sch1pay-0");
     await app.waitFor("text:Row 1");
     await app.press("id:fp-table-sch1pay-delete");
     await app.waitFor("text:Row 1", { state: "gone" });
-    expect(app.texts()).toContain("cleared rows: 0");
-    // Row 1 is empty now: it is the one Add row opens; row 2 still has its line.
-    expect(app.count("id:fp-row-sch1pay-0")).toBe(0);
-    expect(app.count("id:fp-row-sch1pay-1")).toBe(1);
-    await app.press("id:fp-table-sch1pay-add");
-    await app.waitFor("text:Row 1");
-    await app.type("id:fp-sch1pay", "New payee");
-    await app.press("id:fp-table-sch1pay-done");
-    await app.waitFor("text:Row 1", { state: "gone" });
+    // Row 1 is gone, not cleared: its line shows nowhere, and the later rows moved up —
+    // row 1's place now holds what was row 2.
+    expect(app.texts().some((t) => t.includes("Santos Rentals"))).toBe(false);
     expect(app.count("id:fp-row-sch1pay-0")).toBe(1);
+    expect(app.texts()).toContain("Cruz Law · WI010 · 30,000.00");
+    // The first empty row is row 2 now: Add row opens it.
+    await app.press("id:fp-table-sch1pay-add");
+    await app.waitFor("text:Row 2");
+    await app.type("id:fp-sch2pay", "New payee");
+    await app.press("id:fp-table-sch1pay-done");
+    await app.waitFor("text:Row 2", { state: "gone" });
+    expect(app.count("id:fp-row-sch1pay-1")).toBe(1);
     expect(app.texts()).toContain("New payee");
     // Row 3 is the next empty one.
     await app.press("id:fp-table-sch1pay-add");

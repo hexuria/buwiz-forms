@@ -59,6 +59,9 @@ for (const { name, size } of TABLETS) {
     await app.waitFor("id:palette-input");
     expect(app.texts()).toContain("TAXPAYERS");
     for (const word of ["BRANCHES", "GO TO", "ACTIONS", "Toggle sidebar", "Change theme"]) expect(app.texts()).not.toContain(word);
-    expect(app.shows("id:palette-item-1")).toBe(false);
+    // The picker's add row follows the one taxpayer; nothing after it.
+    expect(app.texts()).toContain("New tax profile");
+    expect(app.shows("id:palette-item-1")).toBe(true);
+    expect(app.shows("id:palette-item-2")).toBe(false);
   }, 60_000);
 }
