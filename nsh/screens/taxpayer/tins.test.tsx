@@ -163,8 +163,9 @@ test("desktop: a chip mounted during an in-flight read after an owner switch fil
   await app.waitFor("id:tp-tin-status-state");
   await app.waitUntil(() => tinsCalls(app).length >= 1, { timeout: 8000 });
   await app.press("id:context-pill");
-  // B's read is in flight now. When it lands, the chip must fill again.
+  // B's read is in flight now: nothing of A's may show, observed as the chip going EMPTY — then it refills when B's read lands.
   await app.waitUntil(() => tinsCalls(app).length >= 2, { timeout: 10000 });
+  await app.waitUntil(() => !app.shows("id:tp-tin-status-state"), { timeout: 10000 });
   await app.waitFor("id:tp-tin-status-state", { timeout: 10000 });
   expect(app.shows("id:tp-tin-status-state")).toBe(true);
 }, 40_000);

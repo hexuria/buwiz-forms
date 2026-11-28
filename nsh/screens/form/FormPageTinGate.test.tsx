@@ -20,6 +20,29 @@ interface App {
   waitUntil: (fn: () => boolean, opts?: object) => Promise<void>;
 }
 
+
+/** Waits until Queue's next transition shows (the sheet, the page's own Continue, or the host queue call), then
+ * answers which; a beat at a time, never a blind fixed sleep. */
+async function nextQueueStep(app: App): Promise<"sheet" | "continue" | "queued" | "none"> {
+  for (let i = 0; i < 40; i++) {
+    if (app.shows("id:tin-queue-blocked")) return "sheet";
+    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) return "queued";
+    if (app.shows("id:queue-continue")) return "continue";
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return "none";
+}
+
+/** Presses Queue past the page's own stops until the gate sheet or the host answers, each press after a seen transition. */
+async function queueToGate(app: App): Promise<void> {
+  for (let i = 0; i < 8; i++) {
+    const step = await nextQueueStep(app);
+    if (step === "sheet" || step === "queued") return;
+    if (step === "continue") await app.press("id:queue-continue");
+    else await app.press("id:fp-queue");
+  }
+}
+
 function tinsCalls(app: App): string[] {
   return app.texts().filter((t) => t.startsWith("tins ")).map((t) => t.slice("tins ".length));
 }
@@ -35,12 +58,7 @@ async function pageAndQueue(tins: string, extra: Record<string, unknown> = {}): 
 test("desktop: a fresh complete list saying not_activated stops Queue on the sheet and nothing is queued", async () => {
   const app = await pageAndQueue("not_activated");
   // The page's own notes may stop Queue first; press past them until the gate sheet or the host call.
-  for (let i = 0; i < 6; i++) {
-    if (app.shows("id:tin-queue-blocked") || tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
   // The list was asked at max_age 0 and no queue verb ever ran.
   expect(tinsCalls(app)).toContain("account_tins(0)");
@@ -54,12 +72,7 @@ test("desktop: a fresh complete list saying not_activated stops Queue on the she
 
 test("desktop: a fresh complete list saying pending stops Queue with the row's message", async () => {
   const app = await pageAndQueue("pending");
-  for (let i = 0; i < 6; i++) {
-    if (app.shows("id:tin-queue-blocked")) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
   expect(app.texts()).toContain("This TIN is waiting to be verified");
   expect(app.texts()).toContain("Buwiz is verifying this TIN. It usually takes a day.");
@@ -67,12 +80,7 @@ test("desktop: a fresh complete list saying pending stops Queue with the row's m
 
 test("desktop: a fix row shows its action on the sheet", async () => {
   const app = await pageAndQueue("fix");
-  for (let i = 0; i < 6; i++) {
-    if (app.shows("id:tin-queue-blocked")) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
   expect(app.texts()).toContain("This TIN needs a step on your account");
   expect(app.texts()).toContain("The registered name does not match. Check it on your account.");
@@ -81,48 +89,28 @@ test("desktop: a fix row shows its action on the sheet", async () => {
 
 test("desktop: an activated TIN queues as today", async () => {
   const app = await pageAndQueue("activated");
-  for (let i = 0; i < 8; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else if (!tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 15000 });
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
 
 test("desktop: a stale list lets Queue go ahead", async () => {
   const app = await pageAndQueue("stale");
-  for (let i = 0; i < 8; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else if (!tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 15000 });
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
 
 test("desktop: an incomplete list lets Queue go ahead", async () => {
   const app = await pageAndQueue("incomplete");
-  for (let i = 0; i < 8; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else if (!tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 15000 });
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
 
 test("desktop: an unreadable list lets Queue go ahead", async () => {
   const app = await pageAndQueue("error");
-  for (let i = 0; i < 8; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else if (!tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 15000 });
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
@@ -132,20 +120,11 @@ test("desktop: a good list then an error at Queue lets it through", async () => 
   // dismissed the server errors: the kept list must not be read as fresh — the gate uses this call's answer, or
   // null when it threw, and null lets Queue go ahead as today.
   const app = await pageAndQueue("not_activated", { tinsErrorAfter: 1 });
-  for (let i = 0; i < 6 && !app.shows("id:tin-queue-blocked"); i++) {
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
   await app.press("id:tin-blocked-close");
   await app.waitFor("id:tin-queue-blocked", { state: "gone" });
-  for (let i = 0; i < 8; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 10000 });
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
@@ -156,9 +135,9 @@ test("desktop: a double Queue press inside the account read queues once, not twi
   await app.press("id:fp-queue").catch(() => {});
   await app.press("id:fp-queue").catch(() => {});
   for (let i = 0; i < 8; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    await new Promise((r) => setTimeout(r, 700));
+    const step = await nextQueueStep(app);
+    if (step === "queued") break;
+    if (step === "continue") await app.press("id:queue-continue");
   }
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 10000 });
   await new Promise((r) => setTimeout(r, 1500));
@@ -178,21 +157,22 @@ test("desktop: after the account owner changes a failing read clears the old lis
   // Owner A's list stopped the first Queue on the sheet; then the owner changes and B's read fails: nothing of A's
   // may answer for B, so the second Queue goes ahead.
   const app = await pageAndQueue("not_activated", { tinsErrorAfter: 1, tinsOwnerFlipAfter: 1 });
-  for (let i = 0; i < 6 && !app.shows("id:tin-queue-blocked"); i++) {
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
   await app.press("id:tin-blocked-close");
   await app.waitFor("id:tin-queue-blocked", { state: "gone" });
-  for (let i = 0; i < 8; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 10000 });
+  expect(app.shows("id:tin-queue-blocked")).toBe(false);
+}, 40_000);
+
+test("desktop: a switch to the filed original during the account read queues nothing", async () => {
+  // "View the filed original" opens the SAME form, period and TIN in another mode. What the read answered was the
+  // draft's activation, not the filed original's: nothing queues, nothing blocks.
+  const app = await pageAndQueue("activated", { tinsDelayMs: 1200, swapFiledOriginalAfterMs: 500 });
+  await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
+  await new Promise((r) => setTimeout(r, 3000));
+  expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
 
@@ -200,10 +180,9 @@ test("desktop: a switch to another return during the account read queues nothing
   // The press checks the pressed target's TIN; while the slow read is on the wire the page opens another return.
   // What the read answered was for a target the page no longer shows: nothing is queued, nothing is blocked.
   const app = await pageAndQueue("not_activated", { tinsDelayMs: 1200, swapTargetAfterMs: 500 });
-  for (let i = 0; i < 10; i++) {
-    if (app.shows("id:tin-queue-blocked") || tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    await new Promise((r) => setTimeout(r, 500));
-  }
+  // The overlap is real only when both halves are observed: the account read started, and the page switched.
+  await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
+  await app.waitFor("text:BIR Form 1601C", { timeout: 10000 });
   await new Promise((r) => setTimeout(r, 2500));
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
   expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
@@ -211,11 +190,7 @@ test("desktop: a switch to another return during the account read queues nothing
 
 test("desktop: the Queue button is enabled again after a blocked sheet is closed", async () => {
   const app = await pageAndQueue("not_activated");
-  for (let i = 0; i < 6 && !app.shows("id:tin-queue-blocked"); i++) {
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 700));
-  }
+  await queueToGate(app);
   await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
   await app.press("id:tin-blocked-close");
   await app.waitFor("id:tin-queue-blocked", { state: "gone" });
@@ -226,11 +201,11 @@ test("desktop: the Queue button is enabled again after a blocked sheet is closed
 test("desktop: a reopen of the same return during the account read still queues", async () => {
   // A reopen builds a NEW target object for the same return: the press must not be dropped for that — what the read
   // answered is still this return's TIN.
-  const app = await pageAndQueue("activated", { tinsDelayMs: 1000, reopenAfterMs: 500 });
+  const app = await pageAndQueue("activated", { tinsDelayMs: 1000, reopenOnTinsRead: true });
   for (let i = 0; i < 10; i++) {
-    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    await new Promise((r) => setTimeout(r, 500));
+    const step = await nextQueueStep(app);
+    if (step === "queued") break;
+    if (step === "continue") await app.press("id:queue-continue");
   }
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 12000 });
 }, 40_000);

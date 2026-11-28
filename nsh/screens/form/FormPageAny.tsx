@@ -43,6 +43,10 @@ interface Params {
   swapTargetAfterMs?: number;
   /** This many ms after mount the fixture reopens the SAME return (a reopen during a slow Queue read must not drop the press). */
   reopenAfterMs?: number;
+  /** This many ms after mount the fixture opens the filed original of the same form/period/tin (a switch the queue key must catch). */
+  swapFiledOriginalAfterMs?: number;
+  /** Reopen the same return the moment the first account_tins(0) read starts (a guaranteed overlap, not a guessed one). */
+  reopenOnTinsRead?: boolean;
   /** The refusal activate_tin throws. */
   activate?: FakeActivateKind;
   /** Year facts set for the demo taxpayer before the page opens (e.g. the EOPT tier a queue needs answered). */
@@ -109,6 +113,22 @@ function Fixture() {
               setTimeout(() => {
                 void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1 } as never, true);
               }, p.reopenAfterMs);
+            }
+            if (p.swapFiledOriginalAfterMs) {
+              setTimeout(() => {
+                void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1, mode: "filed_original", snapshotId: 1 } as never);
+              }, p.swapFiledOriginalAfterMs);
+            }
+            if (p.reopenOnTinsRead) {
+              let done = false;
+              const timer = setInterval(() => {
+                if (done) { clearInterval(timer); return; }
+                if (tinsCalls().some((line) => line.startsWith("account_tins(0)"))) {
+                  done = true;
+                  clearInterval(timer);
+                  void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1 } as never, true);
+                }
+              }, 100);
             }
             void s.ready().then(async () => {
               sessionFields.set(String(s.fieldCount()));

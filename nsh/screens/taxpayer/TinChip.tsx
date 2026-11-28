@@ -37,13 +37,22 @@ function ActivateRow(props: { tinFull: string; testID: string }) {
         disabled={busy()}
         onPress={() => void activateTin(props.tinFull)}
       />
-      <If when={refusal()}>
-        <View class="flex-row items-center gap-2">
-          <Text testID={`${props.testID}-refusal`} variant="meta" tone="danger">{refusal()}</Text>
-          <AppButton testID={`${props.testID}-refusal-dismiss`} label="Dismiss" size="sm" onPress={() => clearTinRefusal(props.tinFull)} />
-        </View>
-      </If>
     </View>
+  );
+}
+
+/** The refusal sentence of the last Activate, in the host's own words, with its Dismiss. Rendered for as long as it
+ * stands, whatever the row's new state: a refresh flipping the row to pending or activated must not hide what the
+ * server answered to the filer's own button press — that answer, not the row, is what explains the moment. */
+function RefusalRow(props: { tinFull: string; testID: string }) {
+  const refusal = () => tinRefusal(props.tinFull);
+  return (
+    <If when={refusal()}>
+      <View class="flex-row items-center gap-2">
+        <Text testID={`${props.testID}-refusal`} variant="meta" tone="danger">{refusal()}</Text>
+        <AppButton testID={`${props.testID}-refusal-dismiss`} label="Dismiss" size="sm" onPress={() => clearTinRefusal(props.tinFull)} />
+      </View>
+    </If>
   );
 }
 
@@ -83,6 +92,7 @@ export function TinChip(props: { tinRoot: string; branch: string; tinFull: strin
           <If when={row()!.state === "not_activated"}>
             <ActivateRow tinFull={props.tinFull} testID={id()} />
           </If>
+          <RefusalRow tinFull={props.tinFull} testID={id()} />
         </If>
       </View>
     </If>

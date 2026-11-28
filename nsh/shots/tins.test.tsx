@@ -10,7 +10,7 @@ import { shoot } from "./shoot";
 // each real host from the params.
 
 const ENTRY = "../TaxpayerDemo.tsx";
-const FORM_ENTRY = "../screens/form/FormPageAny.tsx";
+const FORM_ENTRY = "../FormAnyShot.tsx";
 
 /** Phone, tablet and desktop, light and dark. */
 const TIN_LOOKS = [
@@ -42,15 +42,17 @@ for (const look of TIN_LOOKS) {
     const app = await open(FORM_ENTRY, { ...size, host: { params: { formCode: "2551Q", year: 2025, period: 1, tins: "fix", facts: { eopt_tier: "Micro", tax_classification: "SelfEmployed" } } } });
     await app.waitFor("text:BIR Form 2551Q", { timeout: 15000 });
     await app.press("id:fp-queue");
+    // Wide shows the blocker as a dialog, narrow as the phone sheet: either answers the press.
+    const blockedShown = () => app.shows("id:tin-queue-blocked") || app.shows("id:tin-queue-blocked-sheet");
     for (let i = 0; i < 6; i++) {
-      if (app.shows("id:tin-queue-blocked")) break;
+      if (blockedShown()) break;
       if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
       else await app.press("id:fp-queue");
       await app.wait(700);
     }
-    await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
+    await app.waitUntil(blockedShown, { timeout: 10000 });
     await app.wait(400);
     await shoot(app, `tins-${look.name}-queue-sheet`);
-    expect(app.shows("id:tin-queue-blocked")).toBe(true);
+    expect(blockedShown()).toBe(true);
   }, 120_000);
 }

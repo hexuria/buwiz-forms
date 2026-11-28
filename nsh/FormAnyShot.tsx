@@ -5,11 +5,16 @@
 // above the bottom bar (bottom 96).
 import { host, mount, View } from "nsh";
 import "./theme/fonts";
-import { createDemoTaxpayer, DEMO } from "./bir/testing";
+import { bir } from "./bir";
+import { createDemoTaxpayer, DEMO, installFakeTins, type FakeTinsKind } from "./bir/testing";
 import { FormPage, type FormTarget } from "./screens/form/FormPage";
 import { Toaster } from "./ui";
 
 interface Params {
+  /** The account's TIN list faked for the queue gate (D2 shots): the sheet Queue stops on. */
+  tins?: FakeTinsKind;
+  /** Year facts set before the page opens (the EOPT tier a queue needs answered). */
+  facts?: Record<string, string>;
   formCode?: string;
   year?: number;
   period?: number;
@@ -23,6 +28,12 @@ interface Params {
 function Preview() {
   createDemoTaxpayer();
   const p = (host.params || {}) as Params;
+  if (p.tins) installFakeTins(bir as unknown as Record<string, unknown>, p.tins, undefined, () => {});
+  if (p.facts) {
+    const year = p.year ?? 2025;
+    if (!bir.list_tax_years(DEMO.tin).includes(year)) bir.add_tax_year(DEMO.tin, year, false);
+    bir.set_year_facts(DEMO.tin, year, p.facts as never);
+  }
   return (
     <View class="flex-1 bg-card">
       <FormPage

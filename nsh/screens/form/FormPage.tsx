@@ -1018,7 +1018,7 @@ function Dialogs(props: { s: FormSession }) {
           )}
         </If>
       </Dialog>
-      <Dialog testID="tin-queue-blocked" width={420} open={kind("tin-blocked")} onOpenChange={(open) => !open && s.dismissTinBlocked()}>
+      <Dialog testID="tin-queue-blocked" width={420} open={kind("tin-blocked") && !phone()} onOpenChange={(open) => !open && s.dismissTinBlocked()}>
         <If when={blocked()}>
           {(row) => (
             <View class="gap-3 p-5">
@@ -1047,6 +1047,35 @@ function Dialogs(props: { s: FormSession }) {
           )}
         </If>
       </Dialog>
+      <Sheet testID="tin-queue-blocked-sheet" open={kind("tin-blocked") && phone()} onOpenChange={(open) => !open && s.dismissTinBlocked()}>
+        <If when={blocked()}>
+          {(row) => (
+            <View class="gap-3">
+              <Text variant="title">{row().state === "pending" ? "This TIN is waiting to be verified" : row().state === "fix" ? "This TIN needs a step on your account" : "This TIN is not activated"}</Text>
+              <If when={row().message}>
+                <Text testID="tin-blocked-message" variant="control">{row().message}</Text>
+              </If>
+              <If when={row().test_only}>
+                <Text variant="meta" tone="fg2">A test TIN sends nothing to the BIR.</Text>
+              </If>
+              <If when={row().state === "fix" && row().action_url}>
+                <AppButton
+                  testID="tin-blocked-action"
+                  variant="primary"
+                  block
+                  label="Fix on your account"
+                  onPress={() => {
+                    // The list is asked fresh when the app becomes active on the filer's return, not at open.
+                    markAccountSiteOpened();
+                    void openUrl(row().action_url!);
+                  }}
+                />
+              </If>
+              <AppButton testID="tin-blocked-close" block label="Close" onPress={() => s.dismissTinBlocked()} />
+            </View>
+          )}
+        </If>
+      </Sheet>
       <Dialog testID="queue-confirm" width={420} open={kind("queue-confirm")} onOpenChange={(open) => !open && s.cancelQueueConfirm()}>
         <View class="gap-3 p-5">
           <Text variant="title">Queue this return?</Text>

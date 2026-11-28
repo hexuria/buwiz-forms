@@ -83,22 +83,24 @@ export function installFakeTins(
   kind: FakeTinsKind,
   activateKind: FakeActivateKind | undefined,
   readout: (line: string) => void,
-  opts: { errorAfter?: number; ownerFlipAfter?: number; refusalText?: string; delayMs?: number } = {},
+  opts: { errorAfter?: number; ownerFlipAfter?: number; refusalText?: string; delayMs?: number; flipToAfterActivate?: FakeTinsKind } = {},
 ): void {
   const now = Math.floor(Date.now() / 1000);
   const root = DEMO.tinRoot.replaceAll("-", "");
   const base = { tin_root: root, branch: "00000", action_url: null as string | null, test_only: false, stale: false, fetched_at: now };
+  let flipped = false;
   const rows = () => {
-    if (kind === "activated") return [{ ...base, state: "activated", message: null }];
-    if (kind === "pending") return [{ ...base, state: "pending", message: "Buwiz is verifying this TIN. It usually takes a day." }];
-    if (kind === "fix") return [{ ...base, state: "fix", message: "The registered name does not match. Check it on your account.", action_url: "https://account.buwiz.example.test/tins/fix/1" }];
-    if (kind === "not_activated") return [{ ...base, state: "not_activated", message: null }];
-    if (kind === "test") return [{ ...base, state: "activated", message: null, test_only: true }];
-    if (kind === "multi") return [
+    const k = flipped && opts.flipToAfterActivate ? opts.flipToAfterActivate : kind;
+    if (k === "activated") return [{ ...base, state: "activated", message: null }];
+    if (k === "pending") return [{ ...base, state: "pending", message: "Buwiz is verifying this TIN. It usually takes a day." }];
+    if (k === "fix") return [{ ...base, state: "fix", message: "The registered name does not match. Check it on your account.", action_url: "https://account.buwiz.example.test/tins/fix/1" }];
+    if (k === "not_activated") return [{ ...base, state: "not_activated", message: null }];
+    if (k === "test") return [{ ...base, state: "activated", message: null, test_only: true }];
+    if (k === "multi") return [
       { ...base, state: "activated", message: null },
       { ...base, tin_root: "000111233", branch: "00000", state: "pending", message: "Buwiz is verifying this TIN." },
     ];
-    if (kind === "stale") return [{ ...base, state: "activated", message: null, stale: true, fetched_at: now - 86400 * 3 }];
+    if (k === "stale") return [{ ...base, state: "activated", message: null, stale: true, fetched_at: now - 86400 * 3 }];
     return [];
   };
   // The sign-in the list belongs to: owner A, or owner B once ownerFlipAfter reads are behind (the account-switch test).
@@ -120,13 +122,15 @@ export function installFakeTins(
     readout(`account_tins(${maxAge})`);
     if (opts.delayMs) await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
     reads += 1;
-    if (kind === "error" || (opts.errorAfter !== undefined && reads > opts.errorAfter)) throw new Error("Sign in to Buwiz to see your TINs.");
+    if ((!flipped && kind === "error") || (opts.errorAfter !== undefined && reads > opts.errorAfter)) throw new Error("Sign in to Buwiz to see your TINs.");
     // An incomplete list still carries the rows it has: completeness is its own fact, and the gate must read it.
-    if (kind === "incomplete") return { rows: [{ ...base, state: "not_activated", message: null }], complete: false, stale: false, fetched_at: now };
-    return { rows: rows(), complete: true, stale: kind === "stale", fetched_at: now };
+    if (k === "incomplete") return { rows: [{ ...base, state: "not_activated", message: null }], complete: false, stale: false, fetched_at: now };
+    const k = flipped && opts.flipToAfterActivate ? opts.flipToAfterActivate : kind;
+    return { rows: rows(), complete: true, stale: k === "stale", fetched_at: now };
   };
   bir.activate_tin = async (tinFull: string) => {
     readout(`activate_tin(${tinFull})`);
+    if (opts.flipToAfterActivate) flipped = true;
     if (opts.refusalText) throw new Error(opts.refusalText);
     if (activateKind && activateKind !== "ok") throw new Error(FAKE_REFUSALS[activateKind]);
     return { ...base, tin_root: tinFull.slice(0, 9), branch: tinFull.slice(9), state: "pending", message: "Buwiz is verifying this TIN." };

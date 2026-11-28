@@ -13,7 +13,7 @@
 import { host, mount, signal, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
-import { createDemoTaxpayer, DEMO, installFakeTins, warmForms, type FakeActivateKind } from "./bir/testing";
+import { createDemoTaxpayer, DEMO, installFakeTins, warmForms, type FakeActivateKind, type FakeTinsKind } from "./bir/testing";
 import { ProfileExportCard } from "./screens/taxpayer";
 import { Shell } from "./shell/Shell";
 import { store } from "./shell/store";
@@ -47,6 +47,8 @@ interface Params {
   tinsOwnerFlipAfter?: number;
   /** The fake account_tins answer is delayed this long. */
   tinsDelayMs?: number;
+  /** After the first activate_tin call the list comes from this kind (the refusal-persistence test). */
+  tinsFlipAfterActivate?: FakeTinsKind;
   /** An arbitrary refusal sentence activate_tin throws verbatim (the pass-through test). */
   refusalText?: string;
 }
@@ -92,7 +94,7 @@ function fixGoogle(available: boolean) {
 function fakeTins(kind: NonNullable<Params["tins"]>, p: Params, readout: (line: string) => void): void {
   installFakeTins(bir as unknown as Record<string, unknown>, kind, p.activate, readout, {
     errorAfter: p.tinsErrorAfter,
-    ownerFlipAfter: p.tinsOwnerFlipAfter, delayMs: p.tinsDelayMs,
+    ownerFlipAfter: p.tinsOwnerFlipAfter, delayMs: p.tinsDelayMs, flipToAfterActivate: p.tinsFlipAfterActivate,
     refusalText: p.refusalText,
   });
 }

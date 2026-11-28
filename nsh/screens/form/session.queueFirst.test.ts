@@ -242,7 +242,7 @@ test("nothing to fix and no warning: Queue queues straight away, once, even when
     expect(s.errors().length).toBe(0);
     expect(bir.screen_form_queue_check("1702RT", s.draft() as object).warns.length).toBe(0);
     s.queue();
-    await s.idle();
+    // No idle here: the second press must land inside the first press's account read, or it proves nothing.
     s.queue();
     await s.idle();
     await until(() => said.toasts.length > 0, "the toast");
