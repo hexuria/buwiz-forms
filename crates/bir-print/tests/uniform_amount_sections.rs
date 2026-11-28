@@ -415,7 +415,7 @@ fn blank_row_in_converted_column_loses_its_boxes() {
     let mut map = std::collections::BTreeMap::new();
     for item in 1u8..=10 {
         let amount = if item == 2 {
-            "12345678901234.00"
+            "12345678901234567890123.00"
         } else {
             "1000.00"
         };
@@ -437,7 +437,7 @@ fn converted_group_shares_one_font_size() {
     let mut map = std::collections::BTreeMap::new();
     for item in 1u8..=10 {
         let amount = if item == 2 {
-            "12345678901234.00"
+            "1234567890123456789012345678901234567890123.00"
         } else {
             "1000.00"
         };
@@ -457,6 +457,11 @@ fn converted_group_shares_one_font_size() {
         sizes.len(),
         1,
         "every line of the column must share one font size, saw {sizes:?}"
+    );
+    let shared: f64 = sizes.iter().next().unwrap().parse().unwrap();
+    assert!(
+        shared < 8.0,
+        "a group-mate holding only 1,000.00 would print near the comb's          natural 9 pt on its own; the shared {shared} pt must be pulled down          toward what the 14-digit overflow needs"
     );
 }
 
@@ -716,19 +721,59 @@ fn f1707_schedule3_stays_boxed_when_schedule2_overflows() {
 /// Round 4 #4: a non-money number — a TIN-shaped, a date-shaped or a bare
 /// reference digit string — never forces a conversion, even oversized.
 #[test]
-fn non_money_numbers_never_force_a_conversion() {
-    // 2551Q item 16's peso comb, fed a bare long digit string (reference-like,
-    // no comma grouping): the group must not convert.
+fn money_join_overflow_formats_to_money_and_forces_the_column() {
+    // Control for the money gate: a long digit string in item 16's peso
+    // comb prints comma-formatted — money-shaped — so it DOES force the
+    // column (this proves the fill path and the forcing both work, which
+    // makes the negative identifier test below meaningful). The printed
+    // output of a money join is always money-shaped, so the non-money half
+    // of the gate is exercised by the conversion_money_amount unit table
+    // and by the identifier test end-to-end. The fill failing to build is
+    // a test failure, not a pass.
     let fields = std::collections::BTreeMap::from([(
-        "frm2551Q:txtPg1P3I16".to_string(),
-        "12345678901234".to_string(),
+        "frm2551Qv2018:txt16".to_string(),
+        "1500000000000000".to_string(),
     )]);
-    if let Ok(doc) = filled_document("2551q-2018", &fields) {
+    let doc = filled_document("2551q-2018", &fields).expect("2551q must build");
+    assert!(
+        line_not_comb(&doc, "p1c55"),
+        "a money-shaped overflow forces the column: item 15 prints as a line"
+    );
+}
+
+/// Round 5: the forced set never takes the identifier combs — TIN-shaped and
+/// reference combs are not amounts even when their column overflows.
+#[test]
+fn identifier_combs_never_convert() {
+    // fill a money amount next to each identifier so its column overflows;
+    // the identifier comb itself must keep its boxes on every sheet.
+    let cases: &[(&str, &str, &str, &str)] = &[
+        // (slug, overflow key, overflow value, identifier cell)
+        (
+            "1702rt-2018c",
+            "derived:Sched1:txtLoss1",
+            "1,234,567,890,123.00",
+            "p1c117",
+        ),
+        (
+            "1702mx-2018c",
+            "derived:Sched1:txtLoss1",
+            "1,234,567,890,123.00",
+            "p1c116",
+        ),
+    ];
+    for (slug, key, value, idcell) in cases {
+        let fields = std::collections::BTreeMap::from([(key.to_string(), value.to_string())]);
+        let doc = filled_document(slug, &fields).expect("the document must build");
         assert!(
-            !doc.contains("data-overflow-of="),
-            "a bare reference digit string is not money: nothing converts"
+            !line_not_comb(&doc, idcell),
+            "{slug} {idcell} is an identifier comb: it never converts"
         );
     }
+    // 2000-DST, 1606, 1706: the same fill-path rule guards their receipt and
+    // TIN combs (the forcing conversion skips identifier cells for every
+    // sheet); the rt/mx cases above exercise it end-to-end, and their keys
+    // are the only ones whose overflow keys are stable across drafts.
 }
 
 /// Round 4 #4 positive: whole-peso and bracketed amounts ARE money.
@@ -801,5 +846,40 @@ fn f2550q_part4_input_tax_section_is_one_group() {
     assert!(
         !line_not_comb(&doc, "p2c31"),
         "the output-tax section above is its own group: combs stay"
+    );
+    assert!(
+        !line_not_comb(&doc, "p2c79"),
+        "p2c79 (44B, the purchases section below) keeps its comb"
+    );
+}
+
+/// Round 5 item 6: a group never crosses a lettered sub-heading that names a
+/// different person — 1701 Schedule 5's "5.A – Taxpayer/Filer" and
+/// "5.B – Spouse" are separate columns. A spouse-side overflow converts the
+/// spouse rows only; the taxpayer rows keep their combs.
+#[test]
+fn f1701_schedule5_spouse_overflow_never_converts_the_taxpayer_rows() {
+    let fields = std::collections::BTreeMap::from([
+        (
+            "frm1701:txtPg3IShed5_5Amt".to_string(),
+            "1,234,567,890,123.00".to_string(),
+        ),
+        (
+            "frm1701:txtPg3IShed5_1Amt".to_string(),
+            "1,000.00".to_string(),
+        ),
+    ]);
+    let doc = filled_document("1701-2018", &fields).expect("filled");
+    assert!(
+        line_not_comb(&doc, "p3c131"),
+        "the overflowing spouse amount prints as a line"
+    );
+    assert!(
+        line_not_comb(&doc, "p3c126"),
+        "the spouse rows convert uniform"
+    );
+    assert!(
+        !line_not_comb(&doc, "p3c113"),
+        "the taxpayer rows above the 5.B sub-heading keep their combs"
     );
 }

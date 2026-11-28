@@ -32,15 +32,17 @@ fn write_uniform_section_renders() {
     };
     // 1702Q Schedule 4, item 2 overflows.
     let q: Vec<(&str, &str)> = [
-        ("derived:Sched4:txtTax1", "1000"),
-        ("derived:Sched4:txtTax2", "12345678901234"),
-        ("derived:Sched4:txtTax3", "1000"),
-        ("derived:Sched4:txtTax4", "1000"),
-        ("derived:Sched4:txtTax5", "1000"),
-        ("derived:Sched4:txtTax6", "1000"),
-        ("derived:Sched4:txtOthrTxCrdtAmnt0", "1000"),
-        ("derived:Sched4:txtOthrTxCrdtAmnt1", "1000"),
-        ("derived:Sched4:txtTax7", "1000"),
+        // formatted exactly as the draft's print_field_map emits them: a raw
+        // "1000" is a string the app never prints.
+        ("derived:Sched4:txtTax1", "1,000.00"),
+        ("derived:Sched4:txtTax2", "12,345,678,901,234.00"),
+        ("derived:Sched4:txtTax3", "1,000.00"),
+        ("derived:Sched4:txtTax4", "1,000.00"),
+        ("derived:Sched4:txtTax5", "1,000.00"),
+        ("derived:Sched4:txtTax6", "1,000.00"),
+        ("derived:Sched4:txtOthrTxCrdtAmnt0", "1,000.00"),
+        ("derived:Sched4:txtOthrTxCrdtAmnt1", "1,000.00"),
+        ("derived:Sched4:txtTax7", "1,000.00"),
     ]
     .into();
     std::fs::write(

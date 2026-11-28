@@ -11,20 +11,32 @@ the column, with hidden `<template>` rows never deciding geometry.
 `uniform_amount_group_table_matches_the_committed_file` fails if any sheet's
 table moves without GROUPS.md being regenerated.
 
-## How the proof renders are made (ONE committed command)
+## How the proof renders are made (exact steps)
 
-Both halves of every pair come from the same committed command, run twice with
-different tags against the two revisions:
+The render test `crates/bir-app-api/tests/proof_renders.rs` exists only on
+this branch, so the two halves are made in two checkouts:
 
-    PROOF_TAG=after  cargo test -p bir-app-api --test proof_renders -- --ignored    # on this branch
-    PROOF_TAG=before cargo test -p bir-app-api --test proof_renders -- --ignored    # on main (9bf2b3e5)
+1. Branch checkout (this branch): `PROOF_TAG=after cargo test -p bir-app-api --test proof_renders -- --ignored`
+   writes the `after-*.html` files here.
+2. Main checkout (main, which has no such test): copy
+   `crates/bir-app-api/tests/proof_renders.rs` from the branch into the main
+   checkout's `crates/bir-app-api/tests/` (uncommitted there; it is a probe,
+   never part of main), then run
+   `PROOF_TAG=before cargo test -p bir-app-api --test proof_renders -- --ignored`
+   and copy the resulting `before-*.html` files into this folder.
+3. PNGs: rasterize each html with headless Chrome
+   (`chrome --headless --disable-gpu --force-device-scale-factor=2 --screenshot=<out.png> --window-size=900,<full-height> --hide-scrollbars file:///<html>`,
+   forward slashes in the screenshot path), then crop both halves of a pair
+   to the same band around the pixels that differ (the diff bbox of the two
+   rasters), so the pair shows exactly the region the change touches.
 
-`crates/bir-app-api/tests/proof_renders.rs` fills each form through
-`filled_document_with_receipt` (the path the app uses; the 1701 inputs are the
-draft's own `print_field_map` keys) and writes the sheet through the real
-print path, `staticize(prepare_html_for(slug, &filled, true))`. The inputs are
-identical in both runs; only the grouping code differs. The PNGs are
-headless-Chrome rasters of the HTML files, cropped to the band that differs.
+The test fills each form through `filled_document_with_receipt` (the path the
+app uses) and writes the sheet through the real print path,
+`staticize(prepare_html_for(slug, &filled, true))`. The 1701 inputs are the
+draft's own `print_field_map` keys and values; the 1702Q inputs are the
+`derived:Sched4:` print keys with values formatted exactly as the draft emits
+them (`1,000.00` — a raw `1000` spreads from box 1, which the app never
+prints). The inputs are identical in both runs; only the grouping code differs.
 
 ## HTML renders
 
@@ -78,6 +90,6 @@ alone prints as a line beside boxed rows.
 | after | `f86afd33f44680b6ec96e5d089c285d980f77e89296578b8c40e16cdf54ad0ab` |
 
 Every pair differs. The no-overflow byte-identity claim is not a picture pair;
-it is pinned inside the test suite (`no_overflow_render_is_byte_identical`
+it is pinned inside the test suite (`no_overflow_documents_are_byte_identical_on_more_sheets`
 in `crates/bir-print/tests/uniform_amount_sections.rs`, covering 2551Q and
 1702EX).

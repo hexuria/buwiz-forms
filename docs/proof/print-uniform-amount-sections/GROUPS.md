@@ -1,3 +1,15 @@
+<!--
+             Notes on the grouping rule: a group is one printed section's column,
+             from the section's Part/Schedule band heading to the next heading on
+             that page, at one column x (within 2 pt). A column also splits where
+             a sub-table's column headers START inside the comb's width between
+             two rows, and at a lettered sub-heading that names a different person
+             or schedule of its own (such as 1701 Schedule 5's "5.A –
+             Taxpayer/Filer" and "5.B – Spouse"): what sits above it is never
+             the same column of figures as what sits below. Hidden template rows
+             never decide geometry.
+-->
+
 ## 0605-1999: 2 groups, 1 with amount joins
 
 | rows | cells | section | amount writer keys |
@@ -286,7 +298,7 @@
 | 6 | p2c98..p2c118 | Schedule 1 – Gross Compensation Income and Tax Withheld | derived:amount_sched1_1d |
 | 6 | p2c99..p2c119 | Schedule 1 – Gross Compensation Income and Tax Withheld | derived:amount_sched1_1e |
 
-## 1701-2018: 51 groups, 49 with amount joins
+## 1701-2018: 53 groups, 51 with amount joins
 
 | rows | cells | section | amount writer keys |
 |---|---|---|---|
@@ -327,8 +339,10 @@
 | 21 | p3c38..p3c104 | Schedule 4 - Ordinary Allowable Itemized Deductions | frm1701:txtPg3IShed4_1B |
 | 2 | p3c110..p3c115 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_1Desc |
 | 2 | p3c123..p3c128 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_4Desc |
-| 4 | p3c112..p3c130 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_1Legal |
-| 6 | p3c113..p3c133 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_1Amt |
+| 2 | p3c112..p3c117 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_1Legal |
+| 2 | p3c125..p3c130 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_4Legal |
+| 3 | p3c113..p3c120 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_1Amt |
+| 3 | p3c126..p3c133 | Schedule 5 – Special Allowable Itemized Deductions | frm1701:txtPg3IShed5_4Amt |
 | 3 | p3c140..p3c146 | Schedule 6 - Computation of Net Operating Loss Carry Over (NOLCO) | frm1701:txtPg3IShed6_1A |
 | 3 | p3c141..p3c147 | Schedule 6 - Computation of Net Operating Loss Carry Over (NOLCO) | frm1701:txtPg3IShed6_1B |
 | 1 | p4c5..p4c5 | (header) | derived:tin_digits |

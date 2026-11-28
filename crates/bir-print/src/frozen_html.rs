@@ -1419,6 +1419,20 @@ fn with_font_size(tag: &str, size: f64) -> String {
 /// `formatCurrency()`. Bare integers, TINs, ZIPs, dates, and `%` rates return false.
 fn is_formatted_money_amount(value: &str) -> bool {
     let s = value.trim();
+    let s = s.strip_prefix('-').unwrap_or(s);
+    let Some((whole, cents)) = s.split_once('.') else {
+        return false;
+    };
+    if cents.len() != 2 || !cents.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    !whole.is_empty()
+        && whole.bytes().any(|b| b.is_ascii_digit())
+        && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+}
+
+fn conversion_money_amount(value: &str) -> bool {
+    let s = value.trim();
     // Bracketed negatives are money too: `(1,234.00)` and `(500)`.
     let s = if let Some(inner) = s.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
         inner.trim()
@@ -2892,7 +2906,14 @@ fn fill_text_input(
         // Uniform sections (#477): a comb of a group another amount of
         // overflowed prints as a line even when its own amount fits, so the
         // column stays uniform.
-        if forced.contains(input_name) && is_amount_comb_value(print) && !print.is_empty() {
+        // The forced set never takes an identifier comb (a TIN, an ATC, a
+        // receipt number): it is not an amount, so it keeps its boxes even
+        // when an amount of its column overflows.
+        if forced.contains(input_name)
+            && !is_identifier_cell(name, caption)
+            && is_amount_comb_value(print)
+            && !print.is_empty()
+        {
             let formatted = format_comb_amount_for_rect(print, sheet.negative);
             let writer = via_cell.then_some(print);
             amount_rect(
@@ -7417,7 +7438,7 @@ fn section_of(headings: &[(String, f64, String)], page: &str, y: f64) -> Option<
 
 /// A text line of the sheet with its geometry: page, top y, and the x
 /// interval it occupies (width estimated from its length and font size).
-fn text_lines(html: &str) -> Vec<(String, f64, f64, f64)> {
+fn text_lines(html: &str) -> Vec<(String, f64, f64, f64, bool)> {
     let mut out = Vec::new();
     let needle = "<div class=\"t\"";
     let mut from = 0;
@@ -7474,18 +7495,55 @@ fn text_lines(html: &str) -> Vec<(String, f64, f64, f64)> {
         }
         // Arimo sets about half its point size per character.
         let width = len * size * 0.5;
-        out.push((cell_page_key(id), y, x, x + width));
+        // A lettered sub-heading that names a person or a schedule of its
+        // own — "5.A – Taxpayer/Filer", "5.B – Spouse" — splits a column even
+        // though it starts far left of the amounts: what sits above it is
+        // never the same column of figures as what sits below.
+        let stripped: String = {
+            let mut t = String::new();
+            let mut r = inner;
+            while let Some(lt) = r.find('<') {
+                t.push_str(&r[..lt]);
+                match r[lt..].find('>') {
+                    Some(gt) => r = &r[lt + gt + 1..],
+                    None => break,
+                }
+            }
+            t.push_str(r);
+            t.trim().to_string()
+        };
+        let bytes = stripped.as_bytes();
+        let digits = bytes.iter().take_while(|b| b.is_ascii_digit()).count();
+        let sub = digits > 0
+            && bytes.len() > digits + 1
+            && bytes[digits] == b'.'
+            && bytes[digits + 1].is_ascii_uppercase()
+            && (stripped.contains("Taxpayer")
+                || stripped.contains("Spouse")
+                || stripped.contains("Filer"));
+        out.push((cell_page_key(id), y, x, x + width, sub));
     }
     out
+}
+
+/// The amount column groups of a frozen sheet by slug, for tests and audit.
+pub fn uniform_amount_groups_of(slug: &str) -> Vec<Vec<String>> {
+    let Some(loaded) = bundle(slug) else {
+        return Vec::new();
+    };
+    amount_column_groups(loaded.html)
 }
 
 /// Group amount-sized comb cells into a printed section's columns. A group is
 /// one section's column: from the section's Part/Schedule band to the next
 /// band on that page, at one column x (within 2 pt). Never a pitch ratio:
 /// the bands are the sheet's own text lines. A column also splits where a
-/// text line crosses it between two rows — a sub-table's column headers
-/// (1702RT Schedule III's stacked NOLCO tables share one x but are separate
-/// columns of figures).
+/// text line STARTS inside the comb's width between two rows — a sub-table's
+/// column headers (1702RT Schedule III's stacked NOLCO tables share one x but
+/// are separate columns of figures). The start is what counts, so the tail of
+/// a row label that reaches into the column still splits it when the label
+/// itself begins inside the comb's span; a label beginning far left of the
+/// column never does, however far its tail reaches.
 fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
     let geoms = comb_geometries(html);
     let headings = section_headings(html);
@@ -7521,12 +7579,11 @@ fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
                 // the comb's own horizontal span. A row label or a marginal
                 // note comes from the left margin and never splits anything.
                 let comb_right = col_x + geom.width;
-                let crossed = lines.iter().any(|(lp, ly, lx0, _lx1)| {
+                let crossed = lines.iter().any(|(lp, ly, lx0, _lx1, sub)| {
                     *lp == page
                         && *ly > py + 1.0
                         && *ly < geom.y - 1.0
-                        && *lx0 >= col_x - 2.0
-                        && *lx0 <= comb_right
+                        && (*sub || (*lx0 >= col_x - 2.0 && *lx0 <= comb_right))
                 });
                 if crossed && !current.is_empty() {
                     groups.push(std::mem::take(&mut current));
@@ -7572,14 +7629,22 @@ fn converted_amount_cells(html: &str) -> std::collections::BTreeSet<String> {
             // Only amount conversions widen to the section, not identifier
             // or date overflow lines.
             if tag.contains("amount-comb") {
-                out.insert(html[start..end].to_string());
+                // Only money forces the column: a TIN-shaped, a reference or
+                // a bare digit string that outgrows its own boxes prints as
+                // a line itself, but it never converts the column around it.
+                let money = attr(tag, "data-writer-value")
+                    .or_else(|| attr(tag, "value"))
+                    .is_some_and(conversion_money_amount);
+                if money {
+                    out.insert(html[start..end].to_string());
+                }
             } else if tag.contains("amount-small") {
                 // A shrunk line widens its column only when it is money:
                 // `amount-small` also marks long non-money figures, which
                 // must never force a column of amount boxes into lines.
                 let money = attr(tag, "data-writer-value")
                     .or_else(|| attr(tag, "value"))
-                    .is_some_and(is_formatted_money_amount);
+                    .is_some_and(conversion_money_amount);
                 if money {
                     out.insert(html[start..end].to_string());
                 }
@@ -7600,6 +7665,7 @@ fn uniform_amount_forced_cells(
     if converted.is_empty() {
         return forced;
     }
+    // `converted` is already money-gated by converted_amount_cells.
     for group in amount_column_groups(html) {
         if group.iter().any(|id| converted.contains(id)) {
             for id in group {
@@ -8266,6 +8332,21 @@ mod tests {
             "2553-1999",
         ];
         let mut out = String::new();
+        out.push_str(
+            "<!--
+             Notes on the grouping rule: a group is one printed section's column,
+             from the section's Part/Schedule band heading to the next heading on
+             that page, at one column x (within 2 pt). A column also splits where
+             a sub-table's column headers START inside the comb's width between
+             two rows, and at a lettered sub-heading that names a different person
+             or schedule of its own (such as 1701 Schedule 5's \"5.A –
+             Taxpayer/Filer\" and \"5.B – Spouse\"): what sits above it is never
+             the same column of figures as what sits below. Hidden template rows
+             never decide geometry.
+-->
+
+",
+        );
         for slug in slugs {
             let Some(loaded) = bundle(slug) else {
                 out.push_str(&format!(
@@ -8373,6 +8454,41 @@ no bundle
     /// P3: the band-heading rule — numerals yes, cross-references and
     /// particulars no.
     #[test]
+    fn conversion_money_amount_table() {
+        for money in [
+            "0",
+            "0.00",
+            "1,234",
+            "(1,234.00)",
+            "(500)",
+            "-500",
+            "12",
+            "999",
+            "1234.50",
+        ] {
+            assert!(conversion_money_amount(money), "{money} is money");
+        }
+        for not_money in [
+            "1500",
+            "250000",
+            "1234.5",
+            "123-456-789",
+            "2024",
+            "WC010",
+            "1200",
+            "09171234567",
+        ] {
+            assert!(
+                !conversion_money_amount(not_money),
+                "{not_money} is not money"
+            );
+        }
+        // the shared strict function is unchanged: centavos only, no brackets
+        assert!(is_formatted_money_amount("1234.50"));
+        assert!(!is_formatted_money_amount("(500)"));
+        assert!(!is_formatted_money_amount("0"));
+    }
+
     fn section_band_heading_rule() {
         for yes in [
             "Part IV",

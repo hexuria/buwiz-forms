@@ -123,13 +123,17 @@ impl FilledDocument {
         let mut lines = self.overflow.warning_lines();
         let cell_warnings = self.cell_overflow_warnings();
         if !cell_warnings.is_empty() {
+            // Blank cells carry no value: an empty amount-small mark is no
+            // overflow of the filer's, so it neither reaches the additional
+            // sheet nor counts here.
+            let non_blank = |w: &&frozen_html::OverflowWarning| !w.value.trim().is_empty();
             let amount_count = cell_warnings
                 .iter()
-                .filter(|w| w.kind == "amount-comb")
+                .filter(|w| w.kind == "amount-comb" && non_blank(w))
                 .count();
             let small_count = cell_warnings
                 .iter()
-                .filter(|w| w.kind == "amount-small")
+                .filter(|w| w.kind == "amount-small" && non_blank(w))
                 .count();
             if small_count == 1 {
                 lines.push(
