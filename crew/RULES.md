@@ -32,6 +32,7 @@ The maintainer is the person named in the repository's ownership (`crew/README.m
 - Open as a draft while you are still pushing (a draft runs no checks), and mark it ready when you want its checks.
 - A crew member commits with the identity its settings name (`[crew] commit_identity` in `crew.local.ini`). It must be a GitHub noreply address (`…@users.noreply.github.com`), never a real e-mail. This project's own maintainers use `hexuria <295542929+hexuria@users.noreply.github.com>`; a contributor running the crew on a fork uses their own GitHub noreply identity. Check `git log -1 --format='%an <%ae> | %cn <%ce>'` before every push. No `Co-authored-by` lines; squash merges carry an explicit `--body`.
 - A pull request goes to the reviewer the moment it exists (`crew/playbooks/review.md`).
+- no absolute local paths in commit messages, pull request text or issues.
 
 ## Ready, merge and tag
 

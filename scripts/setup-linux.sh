@@ -346,6 +346,9 @@ main() {
         install_impeccable_skill
     fi
 
+    log "Installing git commit-message hooks"
+    python3 "$SCRIPT_DIR/install_git_hooks.py"
+
     if [ "$WITH_COMPOSITOR" -eq 1 ]; then
         log "Installing xcompmgr"
         install_compositor

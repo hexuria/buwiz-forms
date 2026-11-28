@@ -449,6 +449,9 @@ main() {
         install_impeccable_skill
     fi
 
+    log "Installing git commit-message hooks"
+    python3 "$REPO_ROOT/scripts/install_git_hooks.py"
+
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
         cargo install cargo-audit --version =0.22.1
