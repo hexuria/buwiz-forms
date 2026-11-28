@@ -2550,7 +2550,7 @@ mod tests {
         assert_eq!(clearances.len(), 1, "{clearances:?}");
         assert_eq!(
             clearances[0].1,
-            "Schedule 1 row 1 was cleared: changing item 4 clears all computation fields."
+            "Schedule 1 row 1 was cleared: changing item 4 clears the entries in Part II and Schedule II."
         );
     }
 

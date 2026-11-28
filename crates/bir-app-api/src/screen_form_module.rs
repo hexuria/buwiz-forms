@@ -5865,11 +5865,11 @@ fn apply_screen_edits_here(
     {
         let def = kind.definition();
         planned.sort_by_key(|(key, step)| {
-            let opening_answer = match def.bindings.get(key).map(|bound| &bound.binding) {
-                Some(bir_core::forms::agent::Binding::Choice { .. }) => true,
-                Some(bir_core::forms::agent::Binding::Text { date: Some(_), .. }) => true,
-                _ => false,
-            } || matches!(step, ChoiceStep::Set(_) | ChoiceStep::Untick)
+            let opening_answer = matches!(
+                def.bindings.get(key).map(|bound| &bound.binding),
+                Some(bir_core::forms::agent::Binding::Choice { .. })
+                    | Some(bir_core::forms::agent::Binding::Text { date: Some(_), .. })
+            ) || matches!(step, ChoiceStep::Set(_) | ChoiceStep::Untick)
                 || key == "frm1702RT:txtPg1Pt1I10";
             usize::from(!opening_answer)
         });

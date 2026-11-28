@@ -3971,19 +3971,19 @@ mod tests {
         call(
             &mut session,
             "form.open",
-            json!({"code": "2000", "year": 2026, "period": 6, "tin": TIN}),
+            json!({"code": "1701A", "year": 2026, "period": 0, "tin": TIN}),
         )
         .unwrap();
         call(
             &mut session,
             "form.fill",
-            json!({"fields": {"frm2000:optParty_1": "true"}}),
+            json!({"fields": {"frm1701A:optForeignTaxCredits_1": "true"}}),
         )
         .unwrap();
         call(
             &mut session,
             "form.fill",
-            json!({"fields": {"frm2000:txtOtherName": "Lender Corp", "frm2000:txtOtherTIN": "123456789000"}}),
+            json!({"fields": {"frm1701A:txtForeignTaxNumber": "FTN-42"}}),
         )
         .unwrap();
         let id = session.open.as_ref().unwrap().draft["id"]
@@ -3994,13 +3994,13 @@ mod tests {
         let error = call(
             &mut session,
             "form.fill",
-            json!({"fields": {"frm2000:optParty_3": "true"}}),
+            json!({"fields": {"frm1701A:optForeignTaxCredits_2": "true"}}),
         )
         .unwrap_err();
         assert!(error.starts_with("approval required:"), "{error}");
         let reported = crate::screen_form_module::reported_inline_clearances(Some(id));
         assert!(
-            reported.contains("2000_other_party_name"),
+            reported.contains("1701a_foreign_tax_number"),
             "the window's approval is the one showing of this clearing; reported: {reported:?}"
         );
     }
