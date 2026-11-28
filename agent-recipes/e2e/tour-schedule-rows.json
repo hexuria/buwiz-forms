@@ -1,0 +1,111 @@
+{
+ "v": 1,
+ "name": "e2e-tour-schedule-rows",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -6000
+  },
+  {
+   "id": "s2",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -6000
+  },
+  {
+   "id": "s3",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 600
+  },
+  {
+   "id": "s4",
+   "op": "click",
+   "target": "fp-part-4-toggle"
+  },
+  {
+   "id": "s5",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 600
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-0",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s7",
+   "op": "click",
+   "target": "fp-table-drpATC1-add"
+  },
+  {
+   "id": "s8",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt2",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "fp-txtATCAmt2"
+  },
+  {
+   "id": "s10",
+   "op": "type",
+   "target": "fp-txtATCAmt2",
+   "text": "1000",
+   "key_delay_ms": 60
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "s12",
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-1",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s13",
+   "op": "click",
+   "target": "fp-table-drpATC1-add"
+  },
+  {
+   "id": "s14",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt3",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s15",
+   "op": "click",
+   "target": "fp-txtATCAmt3"
+  },
+  {
+   "id": "s16",
+   "op": "type",
+   "target": "fp-txtATCAmt3",
+   "text": "2000",
+   "key_delay_ms": 60
+  },
+  {
+   "id": "s17",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "s18",
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-2",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ]
+}

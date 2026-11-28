@@ -1,0 +1,31 @@
+{
+ "v": 1,
+ "name": "e2e-tour-sheet-calendar",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -6000
+  },
+  {
+   "id": "s2",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -6000
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "frm2551Qv2018:rtnMonth#period-calendar"
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "frm2551Qv2018:rtnMonth#period-calendar-sheet",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ]
+}

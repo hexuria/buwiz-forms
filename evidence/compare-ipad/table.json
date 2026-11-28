@@ -1,0 +1,275 @@
+[
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "01-setup-start/001-s1.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "02-setup-cards/001-s1.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "03-sign-up/011-s11.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "03-sign-up/018-s18.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": false,
+  "diff_count": 1834289,
+  "diff_box": [
+   0,
+   210,
+   1206,
+   2483
+  ],
+  "pair": "03-sign-up/020-s20.png",
+  "side_by_side": "03-sign-up_020-s20.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "03-sign-up/021-s21.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": false,
+  "diff_count": 84512,
+  "diff_box": [
+   27,
+   2103,
+   1179,
+   2331
+  ],
+  "pair": "04-tax-year/016-s16.png",
+  "side_by_side": "04-tax-year_016-s16.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "05-home/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "06-navigation/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "06-navigation/004-s4.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": false,
+  "diff_count": 228912,
+  "diff_box": [
+   0,
+   2145,
+   1206,
+   2373
+  ],
+  "pair": "06-navigation/006-s6.png",
+  "side_by_side": "06-navigation_006-s6.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": false,
+  "diff_count": 229349,
+  "diff_box": [
+   0,
+   2145,
+   1206,
+   2373
+  ],
+  "pair": "06-navigation/008-s8.png",
+  "side_by_side": "06-navigation_008-s8.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "07-new-return/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": false,
+  "diff_count": 922539,
+  "diff_box": [
+   0,
+   576,
+   1206,
+   2346
+  ],
+  "pair": "07-new-return/005-s5.png",
+  "side_by_side": "07-new-return_005-s5.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "08-form-top/001-s1.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "09-form-middle/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "10-form-end/004-s4.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "11-schedule-rows/018-s18.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": false,
+  "diff_count": 324,
+  "diff_box": [
+   144,
+   571,
+   150,
+   625
+  ],
+  "pair": "12-sheet-pick/006-s6.png",
+  "side_by_side": "12-sheet-pick_006-s6.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": false,
+  "diff_count": 324,
+  "diff_box": [
+   144,
+   571,
+   150,
+   625
+  ],
+  "pair": "12-sheet-pick/009-s9.png",
+  "side_by_side": "12-sheet-pick_009-s9.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "13-sheet-calendar/004-s4.png"
+ }
+]

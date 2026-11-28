@@ -1,0 +1,96 @@
+{
+ "v": 1,
+ "description": "The Taffy 0.15/0.16 before-after visual tour, phone layout: every screen the reviewer's eye must compare, one screenshot per step. Run with `just e2e ios tour` on a booted Simulator; see docs/proof/E2E.md.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "birth": "01/15/1990",
+  "prior": "500.25",
+  "amount": "1234.56",
+  "amount_shown": "1,234.56",
+  "tin_root": "123456788",
+  "year": "2026",
+  "bstart": "01/01/2020"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "setup-cards",
+   "phone": "tour-setup-cards.json"
+  },
+  {
+   "name": "sign-up",
+   "phone": "sign-up-phone.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "tax-year",
+   "phone": "tax-year-narrow.wants",
+   "required": true
+  },
+  {
+   "name": "home",
+   "phone": "tour-home.json"
+  },
+  {
+   "name": "navigation",
+   "phone": "navigate-phone.wants"
+  },
+  {
+   "name": "new-return",
+   "phone": "tour-new-return.json",
+   "required": true
+  },
+  {
+   "name": "form-top",
+   "phone": "tour-form-top.json"
+  },
+  {
+   "name": "form-middle",
+   "phone": "tour-form-middle.json"
+  },
+  {
+   "name": "form-end",
+   "phone": "tour-form-end.json"
+  },
+  {
+   "name": "schedule-rows",
+   "phone": "tour-schedule-rows.json",
+   "needs_cli": "0.4.1",
+   "fallback": {
+    "phone": "tour-schedule-rows.json",
+    "file": "tour-schedule-rows.json"
+   }
+  },
+  {
+   "name": "sheet-pick",
+   "phone": "tour-sheet-pick.json",
+   "needs_cli": "0.4.1",
+   "fallback": {
+    "phone": "tour-sheet-pick.json",
+    "file": "tour-sheet-pick.json"
+   }
+  },
+  {
+   "name": "sheet-calendar",
+   "phone": "tour-sheet-calendar.json"
+  }
+ ]
+}

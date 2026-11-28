@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tax-year",
+  "fingerprint": "fnv1a64:b5adf073e096fa36",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 441
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 6
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 728
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 6
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 623
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 5
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1546
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 751
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 36
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1157
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 512
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1164
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 219,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/smoke-after/03-tax-year/015-s15.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/smoke-after/03-tax-year/015-s15.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 7221
+}

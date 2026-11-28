@@ -1,0 +1,129 @@
+{
+ "suite": "tour",
+ "target": "ios",
+ "started": "20261128-042406",
+ "out": "/Users/devin/taffyjob/out/after-ipad",
+ "cli_version": "0.5.0",
+ "app_commit": "8f825621",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 674,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "setup-cards",
+   "status": "pass",
+   "ms": 151,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-setup-cards.json"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 21418,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 8445,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+  },
+  {
+   "name": "home",
+   "status": "pass",
+   "ms": 864,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-home.json"
+  },
+  {
+   "name": "navigation",
+   "status": "pass",
+   "ms": 2455,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "new-return",
+   "status": "pass",
+   "ms": 2982,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-new-return.json"
+  },
+  {
+   "name": "form-top",
+   "status": "pass",
+   "ms": 180,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-form-top.json"
+  },
+  {
+   "name": "form-middle",
+   "status": "pass",
+   "ms": 1933,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-form-middle.json"
+  },
+  {
+   "name": "form-end",
+   "status": "pass",
+   "ms": 14470,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-form-end.json"
+  },
+  {
+   "name": "schedule-rows",
+   "status": "pass",
+   "ms": 23665,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-schedule-rows.json"
+  },
+  {
+   "name": "sheet-pick",
+   "status": "fail",
+   "ms": 10371,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-sheet-pick.json",
+   "step": "s11",
+   "error": "target_gone: fp-drpATC1-opt-1",
+   "error_code": "target_gone",
+   "line": null,
+   "screenshot": "/Users/devin/taffyjob/out/after-ipad/12-sheet-pick/failure.png",
+   "tree": "/Users/devin/taffyjob/out/after-ipad/12-sheet-pick/failure-tree.json"
+  },
+  {
+   "name": "sheet-calendar",
+   "status": "pass",
+   "ms": 10417,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-sheet-calendar.json"
+  }
+ ]
+}

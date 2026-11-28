@@ -1,0 +1,43 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-form-end",
+  "fingerprint": "fnv1a64:cd7d6cd5deaa6788",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4673
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4662
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4725
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 160,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/after-iphone/10-form-end/004-s4.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/after-iphone/10-form-end/004-s4.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 14221
+}

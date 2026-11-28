@@ -1,0 +1,92 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-sheet-pick",
+  "fingerprint": "fnv1a64:4bd3ef261a083c83",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 712
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 844
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 34
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 462
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 193,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-iphone/12-sheet-pick/006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2332
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2318
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 163,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-iphone/12-sheet-pick/009-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3097
+    },
+    {
+      "id": "s11",
+      "ok": false,
+      "error": "target_gone: fp-drpATC1-opt-1",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 136
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/before-iphone/12-sheet-pick/006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/taffyjob/out/before-iphone/12-sheet-pick/009-s9.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 10321
+}

@@ -1,0 +1,31 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-form-middle",
+  "fingerprint": "fnv1a64:0c73f6a3f3961871",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1716
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 182,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/after-iphone/09-form-middle/002-s2.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/after-iphone/09-form-middle/002-s2.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 1899
+}

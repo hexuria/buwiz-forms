@@ -1,0 +1,43 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-tour-sheet-calendar",
+  "fingerprint": "fnv1a64:f730345e35ec3769",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4253
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4724
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1259
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 163,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-ipad/13-sheet-calendar/004-s4.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/before-ipad/13-sheet-calendar/004-s4.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 10402
+}

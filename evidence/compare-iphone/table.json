@@ -1,0 +1,233 @@
+[
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "01-setup-start/001-s1.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "02-setup-cards/001-s1.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "03-sign-up/011-s11.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "03-sign-up/018-s18.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "03-sign-up/020-s20.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "03-sign-up/021-s21.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "04-tax-year/016-s16.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "05-home/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "06-navigation/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "06-navigation/004-s4.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "06-navigation/006-s6.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "06-navigation/008-s8.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "07-new-return/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "07-new-return/005-s5.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "08-form-top/001-s1.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "09-form-middle/002-s2.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "10-form-end/004-s4.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "11-schedule-rows/018-s18.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "12-sheet-pick/006-s6.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "12-sheet-pick/009-s9.png"
+ },
+ {
+  "same_size": true,
+  "size": [
+   1206,
+   2622
+  ],
+  "identical": true,
+  "diff_count": 0,
+  "diff_box": null,
+  "pair": "13-sheet-calendar/004-s4.png"
+ }
+]

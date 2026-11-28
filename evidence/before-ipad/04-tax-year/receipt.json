@@ -1,0 +1,109 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tax-year-narrow",
+  "fingerprint": "fnv1a64:4955a89e633a1553",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1250
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 967
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1328
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 171
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 790
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 7
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2319
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 21
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3182
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 32
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1299
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 520
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1764
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 252,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-ipad/04-tax-year/016-s16.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/before-ipad/04-tax-year/016-s16.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 13934
+}

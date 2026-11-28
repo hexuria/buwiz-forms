@@ -1,0 +1,14 @@
+{
+ "v": 1,
+ "name": "e2e-setup-cards",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "new-tp-name",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ]
+}

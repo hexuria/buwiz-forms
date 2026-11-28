@@ -1,0 +1,166 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-sign-up-phone",
+  "fingerprint": "fnv1a64:a8839ae6d76880dd",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 790
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 17
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 630
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 9
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 5912
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3418
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1866
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 919
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 345
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1185,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 12
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 816
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 35
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1383
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1316
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 55
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1571,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/018-s18.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1632,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/020-s20.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 356,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/021-s21.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 52
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/018-s18.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/020-s20.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/taffyjob/out/before-ipad/03-sign-up/021-s21.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 22348
+}
