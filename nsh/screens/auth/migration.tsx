@@ -215,15 +215,15 @@ export function MovedNotOpenedPage(props: { detail: string }) {
 }
 
 /** The offer (§A.3.6): "Tax profiles from an older version of eBIRForms were found on this device."
- *  Add them to this account / Not now. */
+ *  No / Not now. Add is not available in this version. */
 export function OfferPage() {
   const busy = signal(false);
   const error = signal<string | null>(null);
-  const answer = async (add: boolean) => {
+  const answer = async (answer: "no" | "not_now") => {
     busy.set(true);
     error.set(null);
     try {
-      await bir.migration_offer_answer(add);
+      await bir.migration_offer_answer(answer);
       rereadMigration();
     } catch (e) {
       error.set(errorText(e));
@@ -240,9 +240,9 @@ export function OfferPage() {
         </If>
       </View>
       <View class="w-full gap-2.5">
-        <PageButton testID="migration-offer-add" label="Add them to this account" busy={busy()} onPress={() => void answer(true)} />
+        <PageButton testID="migration-offer-no" label="No" busy={busy()} onPress={() => void answer("no")} />
         <View class="items-center">
-          <TextLink testID="migration-offer-not-now" label="Not now" onPress={() => void answer(false)} />
+          <TextLink testID="migration-offer-not-now" label="Not now" onPress={() => void answer("not_now")} />
         </View>
       </View>
     </OpenPage>

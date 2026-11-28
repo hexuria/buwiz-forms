@@ -682,11 +682,9 @@ impl LegacyClaim {
         let Some(raw) = self.migration_value(OFFER_CONSUMED_KEY)? else {
             return Ok(None);
         };
-        serde_json::from_str(&raw).map(Some).map_err(|error| {
-            DeviceStoreError::Io(std::io::Error::other(format!(
-                "the offer-consumption mark cannot be read: {error}"
-            )))
-        })
+        // An old-format or otherwise unknown mark is never a start failure. It protects nothing
+        // (the new marks are room plus content hash), but it must not strand the sign-in either.
+        Ok(serde_json::from_str(&raw).ok())
     }
 
     /// How `sha256` at the legacy path relates to the consumption mark for `room_id`.
@@ -1023,6 +1021,16 @@ impl LegacyClaim {
         // room's offer so the cut-off rename can finish. This also closes the race in which an
         // import commits after Ready was returned but before ReadyClaim::claim moves the file.
         let content_sha256 = files::sha256_file(&legacy).map_err(io_failure)?;
+        // A file A already moved is marked by the claim record's room and raw content hash. A
+        // byte-for-byte reappearance is therefore nothing for every other account: never Ready,
+        // never offered, even when no Add-consumption mark exists.
+        if let Some(record) = &record
+            && record.moved()
+            && record.raw_sha256.as_deref() == Some(content_sha256.as_str())
+            && record.room.as_deref() != Some(room.room_id.as_str())
+        {
+            return Ok(Start::Nothing);
+        }
         match self
             .offer_consumption_match(&room.room_id, &content_sha256)
             .map_err(store_failure)?
@@ -2043,6 +2051,12 @@ pub struct Added {
 }
 
 impl Offer {
+    /// "No": this account never takes the file; it stays exactly where it is and is not offered
+    /// to this account again.
+    pub fn not_mine(self, claim: &LegacyClaim) -> Result<(), DeviceStoreError> {
+        self.gate.not_mine(claim)
+    }
+
     /// The words of the offer (ruled).
     pub const MESSAGE: &'static str =
         "Tax profiles from an older version of eBIRForms were found on this device.";

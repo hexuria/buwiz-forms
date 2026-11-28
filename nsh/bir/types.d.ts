@@ -993,9 +993,9 @@ export function migration_state(): {
 };
 /** The transient page's Try again: the claim and the room open run again for the saved sign-in. */
 export function migration_try_again(): void;
-/** The offer page's answer: `add` runs the whole-profile export of the found file and imports it into
- *  the room, then the file is renamed aside; `false` leaves it for the next launch. */
-export function migration_offer_answer(add: boolean): void;
+/** The offer page's answer: `no` marks the file not this account's; `not_now` leaves it for the
+ *  next launch. `add` is refused in this version. */
+export function migration_offer_answer(answer: string): void;
 /** How many returns of the open room are Queued or sending now — the sign-out confirm's count, no names. */
 export function returns_waiting_count(): number;
 /** The pre-rooms safety copy of the open room's claim, for Settings › Import / Export: kept-until

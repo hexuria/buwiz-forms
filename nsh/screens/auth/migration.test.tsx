@@ -62,6 +62,7 @@ test("the offer: both answers, desktop", async () => {
   const app = await open(DEMO, { width: 1440, height: 900, platform: "macos", host: { params: { page: "offered" } } });
   await app.waitFor("id:migration-offer");
   expect(app.texts()).toContain("Tax profiles from an older version of eBIRForms were found on this device.");
-  await app.waitFor("id:migration-offer-add");
+  expect(app.shows("id:migration-offer-add")).toBe(false);
+  await app.waitFor("id:migration-offer-no");
   await app.waitFor("id:migration-offer-not-now");
 });

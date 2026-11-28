@@ -17,9 +17,9 @@ export function migration_state(): {
 };
 /** The transient page's Try again: the claim and the room open run again for the saved sign-in. */
 export function migration_try_again(): void;
-/** The offer page's answer: `add` runs the whole-profile export of the found file and imports it into
- *  the room, then the file is renamed aside; `false` leaves it for the next launch. */
-export function migration_offer_answer(add: boolean): void;
+/** The offer page's answer: `no` marks the file not this account's; `not_now` leaves it for the
+ *  next launch. `add` is refused in this version. */
+export function migration_offer_answer(answer: string): void;
 /** How many returns of the open room are Queued or sending now — the sign-out confirm's count, no names. */
 export function returns_waiting_count(): number;
 /** The pre-rooms safety copy of the open room's claim, for Settings › Import / Export: kept-until
@@ -82,14 +82,18 @@ fn migration_try_again() -> HostResult {
     Ok(HostValue::Null)
 }
 
-/// §A.3.6: the offer's answer. Add runs the existing whole-profile export on the found file and
-/// imports the archive into the open room, then renames the file to `bir_data.offered-<stamp>.db`;
-/// Not now leaves it, and the offer shows again at the next launch.
+/// §A.3.6: the offer's answer. Add is out of reach in this version; Not now leaves the file
+/// where it is, and No marks it not this account's without opening or moving it.
 fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
-    let add = arguments.boolean(0)?;
-    if !add {
-        crate::session::clear_offer_note();
-        return Ok(HostValue::Null);
+    let answer = arguments.string(0)?;
+    match answer {
+        "not_now" => {
+            crate::session::clear_offer_note();
+            return Ok(HostValue::Null);
+        }
+        "add" => return Err(HostError::new("not available in this version")),
+        "no" => {}
+        _ => return Err(HostError::new("the offer answer is not_now, no, or add")),
     }
     // X2: the answer runs only for the account the offer was made to, in the room it was made in.
     // The note is in the phase, so the snapshot's one read binds them by construction: an offer
@@ -128,14 +132,16 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
         bir_core::legacy_claim::Failure::Transient(transient) => transient.detail,
         bir_core::legacy_claim::Failure::Permanent(permanent) => permanent.detail,
     };
-    let offer = match claim.start(&claimant) {
+    match claim.start(&claimant) {
         bir_core::legacy_claim::Start::Offer(bir_core::legacy_claim::OfferStart::Open(offer)) => {
             offer
+                .not_mine(&claim)
+                .map_err(|error| HostError::new(error.to_string()))?;
         }
-        bir_core::legacy_claim::Start::Offer(bir_core::legacy_claim::OfferStart::Locked(_)) => {
-            return Err(HostError::new(
-                "This file is locked with a TIN and PIN. Moving locked files comes in a later version; choose Not now.",
-            ));
+        bir_core::legacy_claim::Start::Offer(bir_core::legacy_claim::OfferStart::Locked(offer)) => {
+            offer
+                .not_mine(&claim)
+                .map_err(|error| HostError::new(error.to_string()))?;
         }
         bir_core::legacy_claim::Start::Failed(failure) => {
             return Err(HostError::new(failure_detail(failure)));
@@ -144,19 +150,9 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
             crate::session::clear_offer_note();
             return Err(HostError::new("the file that was offered is gone"));
         }
-    };
-    let (handle, ..) = snap
-        .room
-        .ok_or_else(|| HostError::new("no room is open to add them to"))?;
-    let room = bir_core::lock_timing::lock(&handle)
-        .map_err(|_| HostError::new("database lock poisoned"))?;
-    match offer.add(&claim, &room) {
-        Ok(_) => {
-            crate::session::clear_offer_note();
-            Ok(HostValue::Null)
-        }
-        Err(failure) => Err(HostError::new(failure_detail(failure))),
     }
+    crate::session::clear_offer_note();
+    Ok(HostValue::Null)
 }
 
 /// The sign-out confirm's count (§A.5): the open room's Queued returns, plus any send in flight —
@@ -257,49 +253,6 @@ mod tests {
                 phone: "0280000000".into(),
                 email: "office@example.com".into(),
             },
-        })
-        .unwrap();
-    }
-
-    fn save_return_at(
-        path: &std::path::Path,
-        root: &str,
-        status: bir_core::forms::FilingStatus,
-        marker: &str,
-    ) {
-        let conn = rusqlite::Connection::open(path).unwrap();
-        conn.execute(
-            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
-             VALUES (?1, '2551Q', 2026, 1, ?2, ?3)",
-            rusqlite::params![
-                format!("{root}00000"),
-                match status {
-                    bir_core::forms::FilingStatus::Draft => "Draft",
-                    bir_core::forms::FilingStatus::Queued => "Queued",
-                    bir_core::forms::FilingStatus::Submitted => "Submitted",
-                    bir_core::forms::FilingStatus::Confirmed => "Confirmed",
-                    bir_core::forms::FilingStatus::Paid => "Paid",
-                },
-                serde_json::to_string(&serde_json::json!({ "marker": marker })).unwrap()
-            ],
-        )
-        .unwrap();
-    }
-
-    fn save_submission_row(db: &Database, root: &str, status: &str, marker: &str) {
-        db.save_submission(bir_core::db::Submission {
-            id: None,
-            tin: format!("{root}00000"),
-            form_type: "2551Q".into(),
-            period: "2026Q1".into(),
-            status: status.into(),
-            form_data: [("marker".to_owned(), marker.to_owned())]
-                .into_iter()
-                .collect(),
-            submitted_at: Some("2026-04-25T10:00:00Z".into()),
-            filename: Some("shared-file".into()),
-            created_at: None,
-            updated_at: None,
         })
         .unwrap();
     }
@@ -419,140 +372,161 @@ mod tests {
         }
     }
 
-    fn offer_answer(add: bool) -> HostResult {
+    fn offer_answer(answer: &str) -> HostResult {
         let module = register(HostModule::new("bir"));
         module.call(
             "migration_offer_answer",
-            &HostArguments::new([HostValue::Bool(add)]),
+            &HostArguments::new([HostValue::Str(answer.into())]),
         )
     }
 
-    /// B2 through the real migration verb: the rename fails after the import committed; the file is
-    /// offered again, but the second Add consumes the same offer without importing it again.
-    #[test]
-    fn b2_a_failed_offer_rename_does_not_import_the_file_twice() {
-        let scratch = offer_scratch();
-        bir_core::legacy_claim::fail_next_offer_rename_for_test();
-        let first = offer_answer(true).expect_err("the injected rename failure");
-        assert!(
-            first
-                .message()
-                .contains("injected offered-file rename failure"),
-            "{}",
-            first.message()
-        );
-        assert!(scratch.layout.legacy_database().is_file());
-        {
-            let room = scratch.room.lock().unwrap();
-            assert!(
-                room.get_profile_by_tin("72345678800000").unwrap().is_some(),
-                "positive control: the first import committed"
-            );
-            room.delete_profile("72345678800000").unwrap();
-        }
-
-        offer_answer(true).expect("the repeated offer is consumed idempotently");
-        assert!(!scratch.layout.legacy_database().exists());
-        let room = scratch.room.lock().unwrap();
-        assert!(
-            room.get_profile_by_tin("72345678800000").unwrap().is_none(),
-            "the second Add imported the consumed offer again"
-        );
-        assert!(
-            room.get_profile_by_tin("12345678800000").unwrap().is_some(),
-            "the room's own profile stays"
-        );
-        let offered = std::fs::read_dir(scratch.layout.device_dir())
-            .unwrap()
-            .flatten()
-            .any(|entry| {
-                entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with("bir_data.offered-")
-            });
-        assert!(offered, "the rename eventually moved the legacy file aside");
-        assert_eq!(
-            crate::session::migration_state(),
-            None,
-            "the offer note cleared: {:?}",
-            crate::session::migration_state()
-        );
-        drop(room);
-        drop(scratch);
+    fn sha256_path(path: &std::path::Path) -> String {
+        use sha2::Digest;
+        let mut file = std::fs::File::open(path).unwrap();
+        let mut hash = sha2::Sha256::new();
+        std::io::copy(&mut file, &mut hash).unwrap();
+        hash.finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 
-    fn add_shared_legacy_return(
-        layout: &Layout,
-        root: &str,
-        status: bir_core::forms::FilingStatus,
-        marker: &str,
-    ) {
-        let legacy = Database::open(layout.legacy_database()).unwrap();
-        if legacy
-            .get_profile_by_tin(&format!("{root}00000"))
-            .unwrap()
-            .is_none()
-        {
-            add_taxpayer(&legacy, root, "Legacy Shared");
-        }
-        legacy.close().unwrap();
-        save_return_at(&layout.legacy_database(), root, status, marker);
-        let legacy = Database::open(layout.legacy_database()).unwrap();
-        save_submission_row(&legacy, root, "Queued", marker);
-        legacy.close().unwrap();
+    fn rewrite_claim_record(scratch: &OfferScratch, rewrite: impl FnOnce(&mut Record)) {
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        let raw: String = conn
+            .query_row(
+                "SELECT value FROM migration WHERE key = ?1",
+                [bir_core::legacy_claim::RECORD_KEY],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let mut record: Record = serde_json::from_str(&raw).unwrap();
+        rewrite(&mut record);
+        conn.execute(
+            "UPDATE migration SET value = ?1 WHERE key = ?2",
+            rusqlite::params![
+                serde_json::to_string(&record).unwrap(),
+                bir_core::legacy_claim::RECORD_KEY
+            ],
+        )
+        .unwrap();
     }
 
-    /// B2b #1 through the real sign-in entry: an offer whose import committed but whose rename
-    /// failed is never ready or offered to another account. B opens an empty room with no offer,
-    /// and the shared Queued return exists in A's room only.
-    #[test]
-    fn b2b_a_consumed_offer_is_never_claimed_or_offered_to_another_account() {
-        let scratch = offer_scratch();
-        save_return_at(
-            &scratch.room_path,
-            "123456788",
-            bir_core::forms::FilingStatus::Queued,
-            "a-room",
-        );
-        add_shared_legacy_return(
-            &scratch.layout,
-            "123456788",
-            bir_core::forms::FilingStatus::Queued,
-            "legacy-copy",
-        );
-        bir_core::legacy_claim::fail_next_offer_rename_for_test();
-        offer_answer(true).expect_err("the injected rename failure");
-        let record = bir_core::legacy_claim::LegacyClaim::at(scratch.layout.clone())
-            .unwrap()
-            .record()
-            .unwrap()
-            .expect("the consumed offer wrote its record");
-        assert_eq!(record.room.as_deref(), Some(scratch.room_id.as_str()));
-        assert_eq!(record.step, Step::Done);
-        let before_copy = bir_core::safe_fs::file_id(&scratch.layout.legacy_database()).unwrap();
+    fn copy_legacy_to_a_new_inode(scratch: &OfferScratch) {
+        let before = bir_core::safe_fs::file_id(&scratch.layout.legacy_database()).unwrap();
         let bytes = std::fs::read(scratch.layout.legacy_database()).unwrap();
         std::fs::remove_file(scratch.layout.legacy_database()).unwrap();
         std::fs::write(scratch.layout.legacy_database(), bytes).unwrap();
         assert_ne!(
             bir_core::safe_fs::file_id(&scratch.layout.legacy_database()).unwrap(),
-            before_copy,
+            before,
             "positive control: the reappeared copy has a new file identity"
         );
-        assert!(
-            matches!(
-                crate::session::migration_state(),
-                Some(crate::session::MigrationState::Offered)
-            ),
-            "positive control: the failed rename leaves A's offer visible"
-        );
+    }
 
+    fn sign_b_in(_scratch: &OfferScratch) {
         crate::session::sign_out();
         crate::session::permit_claim_threads();
         let stored_b = write_stored("user-b");
         let owner_b = crate::session::Owner::of_stored(&stored_b).unwrap();
         crate::session::begin_open(owner_b, 1, crate::session::OpenWhy::SignIn);
         crate::session::join_claim_threads();
+    }
+
+    /// Add is out of reach through the real migration verb. The file stays in place and nothing
+    /// enters the open room.
+    #[test]
+    fn b2removal_add_is_refused_through_the_real_offer_verb() {
+        let scratch = offer_scratch();
+        let error = offer_answer("add").expect_err("Add must be refused");
+        assert_eq!(error.message(), "not available in this version");
+        assert!(scratch.layout.legacy_database().is_file());
+        let room = scratch.room.lock().unwrap();
+        assert!(
+            room.get_profile_by_tin("72345678800000").unwrap().is_none(),
+            "the refused Add imported the offered profile"
+        );
+    }
+
+    /// No is the real not-mine answer: no import, no move, no change to the file, and the offer note ends.
+    #[test]
+    fn b2removal_no_marks_the_offer_not_mine_without_touching_the_file() {
+        let scratch = offer_scratch();
+        let before = std::fs::read(scratch.layout.legacy_database()).unwrap();
+        offer_answer("no").expect("No answers the offer");
+        assert_eq!(
+            std::fs::read(scratch.layout.legacy_database()).unwrap(),
+            before
+        );
+        assert!(crate::session::migration_state().is_none());
+        let room = scratch.room.lock().unwrap();
+        assert!(room.get_profile_by_tin("72345678800000").unwrap().is_none());
+    }
+
+    /// Positive control for the absence proofs: the same reappeared file is still detected and
+    /// offered when it carries neither the moved-file content mark nor a consumed mark.
+    #[test]
+    fn b2removal_an_unmarked_reappeared_file_is_offered_to_another_account() {
+        let scratch = offer_scratch();
+        copy_legacy_to_a_new_inode(&scratch);
+        sign_b_in(&scratch);
+        assert!(
+            matches!(
+                crate::session::migration_state(),
+                Some(crate::session::MigrationState::Offered)
+            ),
+            "positive control: the unmarked reappeared file was not offered"
+        );
+    }
+
+    /// A copy of a file the claim record says A already moved is nothing for B: never Ready, never offered.
+    #[test]
+    fn b2removal_a_moved_files_copy_is_never_offered_to_another_account() {
+        let scratch = offer_scratch();
+        let sha256 = sha256_path(&scratch.layout.legacy_database());
+        rewrite_claim_record(&scratch, |record| {
+            record.step = Step::Done;
+            record.raw_sha256 = Some(sha256);
+        });
+        copy_legacy_to_a_new_inode(&scratch);
+        sign_b_in(&scratch);
+        assert_eq!(
+            crate::session::snapshot().phase_kind,
+            crate::session::PhaseKind::Open
+        );
+        assert!(
+            crate::session::migration_state().is_none(),
+            "B was offered A's moved file: {:?}",
+            crate::session::migration_state()
+        );
+        let (b_handle, _, b_room, _) = crate::session::snapshot().room.expect("B's room");
+        assert_ne!(b_room.expect("B's room id"), scratch.room_id);
+        let b_db = b_handle.lock().unwrap();
+        assert!(b_db.get_profile_by_tin("72345678800000").unwrap().is_none());
+    }
+
+    /// The content-keyed consumed mark protects B even when the consumed file returns with a new inode.
+    #[test]
+    fn b2removal_a_consumed_same_bytes_copy_is_never_offered_to_another_account() {
+        let scratch = offer_scratch();
+        let sha256 = sha256_path(&scratch.layout.legacy_database());
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO migration (key, value) VALUES (?1, ?2)",
+            rusqlite::params![
+                bir_core::legacy_claim::OFFER_CONSUMED_KEY,
+                serde_json::json!({
+                    "room": scratch.room_id.as_str(),
+                    "sha256": sha256,
+                    "state": "imported"
+                })
+                .to_string()
+            ],
+        )
+        .unwrap();
+        drop(conn);
+        copy_legacy_to_a_new_inode(&scratch);
+        sign_b_in(&scratch);
         assert_eq!(
             crate::session::snapshot().phase_kind,
             crate::session::PhaseKind::Open
@@ -562,60 +536,35 @@ mod tests {
             "B was offered A's consumed file: {:?}",
             crate::session::migration_state()
         );
-        let (b_handle, _, b_room, b_path) = crate::session::snapshot().room.expect("B's room");
-        let b_room = b_room.expect("B's room id");
-        assert_ne!(b_room, scratch.room_id, "B opened A's room");
-        assert_eq!(b_path, scratch.layout.room_database(&b_room));
-        {
-            let b_db = b_handle.lock().unwrap();
-            assert!(
-                b_db.get_profile_by_tin("12345678800000").unwrap().is_none(),
-                "B's room received the shared profile"
-            );
-            assert_eq!(
-                b_db.count_queued_drafts().unwrap(),
-                0,
-                "B's room received the shared Queued return"
-            );
-        }
-        let a_db = scratch.room.lock().unwrap();
-        assert!(
-            a_db.get_profile_by_tin("12345678800000").unwrap().is_some(),
-            "positive control: A's shared profile is present"
-        );
-        assert_eq!(
-            a_db.count_queued_drafts().unwrap(),
-            1,
-            "exactly one copy of the shared Queued return exists in A's room"
-        );
     }
 
-    /// B2b #3: a cut after the importing mark is not a silently consumed half-import. The next
-    /// Add resumes the import instead of skipping it and renaming the only copy away.
+    /// The 1699c37e mark was a serialized FileId. It is unknown now, never a start failure.
     #[test]
-    fn b2b_a_cut_after_the_importing_mark_resumes_the_import() {
+    fn b2removal_an_old_format_consumed_mark_never_breaks_start() {
         let scratch = offer_scratch();
-        bir_core::legacy_claim::cut_next_offer_after_importing_mark_for_test();
-        let first = offer_answer(true).expect_err("the injected cut after the importing mark");
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO migration (key, value) VALUES (?1, ?2)",
+            rusqlite::params![
+                bir_core::legacy_claim::OFFER_CONSUMED_KEY,
+                serde_json::json!({ "volume": 1, "index": 2 }).to_string()
+            ],
+        )
+        .unwrap();
+        drop(conn);
+        let claim = bir_core::legacy_claim::LegacyClaim::at(scratch.layout.clone()).unwrap();
+        let claimant = bir_core::legacy_claim::Claimant {
+            server_url: "https://buwiz.example.test".into(),
+            user_id: "user-a".into(),
+            email: Some("user-a@example.test".into()),
+            practice: false,
+        };
         assert!(
-            first.message().contains("injected offer-import cut"),
-            "{}",
-            first.message()
+            matches!(
+                claim.start(&claimant),
+                bir_core::legacy_claim::Start::Offer(_)
+            ),
+            "the old-format mark broke start"
         );
-        {
-            let room = scratch.room.lock().unwrap();
-            assert!(
-                room.get_profile_by_tin("72345678800000").unwrap().is_none(),
-                "positive control: the first cut committed no import"
-            );
-        }
-
-        offer_answer(true).expect("the next Add resumes the importing state");
-        let room = scratch.room.lock().unwrap();
-        assert!(
-            room.get_profile_by_tin("72345678800000").unwrap().is_some(),
-            "the resumed Add never imported the offered profiles"
-        );
-        assert!(!scratch.layout.legacy_database().exists());
     }
 }
