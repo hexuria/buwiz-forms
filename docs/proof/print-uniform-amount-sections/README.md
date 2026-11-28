@@ -11,10 +11,20 @@ the column, with hidden `<template>` rows never deciding geometry.
 `uniform_amount_group_table_matches_the_committed_file` fails if any sheet's
 table moves without GROUPS.md being regenerated.
 
-The renders are print proofs through the real print path,
-`staticize(prepare_html_for(slug, &filled_document(..), true))` (written by
-`cargo test -p bir-app-api --test proof_renders -- --ignored`). "before" is
-the pre-#477 behaviour on main (per-cell conversion only), "after" the branch.
+## How the proof renders are made (ONE committed command)
+
+Both halves of every pair come from the same committed command, run twice with
+different tags against the two revisions:
+
+    PROOF_TAG=after  cargo test -p bir-app-api --test proof_renders -- --ignored    # on this branch
+    PROOF_TAG=before cargo test -p bir-app-api --test proof_renders -- --ignored    # on main (9bf2b3e5)
+
+`crates/bir-app-api/tests/proof_renders.rs` fills each form through
+`filled_document_with_receipt` (the path the app uses; the 1701 inputs are the
+draft's own `print_field_map` keys) and writes the sheet through the real
+print path, `staticize(prepare_html_for(slug, &filled, true))`. The inputs are
+identical in both runs; only the grouping code differs. The PNGs are
+headless-Chrome rasters of the HTML files, cropped to the band that differs.
 
 ## HTML renders
 
@@ -22,19 +32,22 @@ the pre-#477 behaviour on main (per-cell conversion only), "after" the branch.
 
 | | sha256 |
 |---|---|
-| before-1702q-sched4-overflow.html | `a240191257a6e7a57d764ee5c1253557ee2b1aa70cb616e684d3d573ffcda540` |
+| before-1702q-sched4-overflow.html | `49a2eefd7dc2a789723cb66b64c2cfbc1d144b8f4fb068243d128d616f6e588c` |
 | after-1702q-sched4-overflow.html | `19d43eedf83c9a0df6e843effe4cd4a9cf8a678e2a1bf877b71f4319a2d8d0f0` |
 
-before/after DIFFER — the whole section column prints as uniform right-aligned lines after.
+before/after DIFFER — before, item 2 alone prints as a line beside boxed rows;
+after, the whole Schedule 4 column prints as uniform right-aligned lines.
 
-### 1701 page 2 Schedule 3 / Part VII, ten digits in the 9-box combs
+### 1701 Part VII, item 2 = 1,234,567,890 in the 9-box combs
 
 | | sha256 |
 |---|---|
-| before-1701-part4-overflow.html | `6918ec8e796fb26e77408fa53a926718545aeb4beef44cb605630200d43f125a` |
-| after-1701-part4-overflow.html | `989febdec4b65df0cc6c6c567774735df0884bf89441c29e2ba04336b3571df7` |
+| before-1701-part4-overflow.html | `4ff6be1c8c94ad124c6eaa2cba0603cc1f79e9581d84e8cf59148bc91b6f41f5` |
+| after-1701-part4-overflow.html | `108bbdd4e1c88a78dfcbb4533e8651e845cc7e99cdf8306147506b2630c9501d` |
 
-before/after DIFFER — the whole section column prints as uniform right-aligned lines after.
+before/after DIFFER — before, item 2 alone is a line among comb-filled rows;
+after, all ten column-A amounts print as uniform right-aligned lines while
+the spouse column B keeps its combs.
 
 ### 1601C Part II, item 14 overflows: the centavo proof
 
@@ -47,19 +60,24 @@ before/after DIFFER — after, the empty rows of the converted column lose the
 peso AND the paired centavo comb boxes and the printed point; before, item 14
 alone prints as a line beside boxed rows.
 
-## Pictures (PNG, headless-Chrome rasters of the staticize renders above)
+## Pictures (PNG, headless-Chrome rasters of the renders above)
 
 | 1702q-sched4-overflow | sha256 |
 |---|---|
-| before | `4d22abd55598f4418750b715f0098067ceb1ac83158838755c104857cbb7579f` |
-| after | `7b5bcb3dc16643ce5cfd88a51591ef2eab8124894f5936c8e89aed2121d06e0c` |
+| before | `cab6ca2ea854d58418c6fdccde5a2454ac94e5d79a6dcfdf4d3571263b92cab0` |
+| after | `61f8ba11ba3b721093c4c5fbbec3e48f626ff2cb1c323a03ce4cceb5a8c1ddb1` |
 
 | 1701-part4-overflow | sha256 |
 |---|---|
-| before | `e4a0f02208ee87b116689d6629a93f720848d9e45894a70b27ca4156f897afe3` |
-| after | `513aeeb6e37109909ac2700f1b549be66d1ea434db1b3f17972a09e29323639a` |
+| before | `357399970a206acbe26d739864f6b62b467f280bf89dcb41ced433efc8b49bd8` |
+| after | `4bc671846ec243913d60a02bb8fbc06a1ba8e7b5dcd444e7fd0eb748c6796fb7` |
 
 | 1601c-centavo-blank | sha256 |
 |---|---|
-| before | `23ab882b18a0d283782317537d8e188682cea81db6efa7a8c15419e1a7c3d586` |
-| after | `7d917b63f0ca5e35ab5a91de44c283ff1d0eee16e76a0c07751b7bbdcd7f3dc4` |
+| before | `399fd95f72020722246d02474958c674f668257f8fd8d8ca6f4c632ce5537729` |
+| after | `f86afd33f44680b6ec96e5d089c285d980f77e89296578b8c40e16cdf54ad0ab` |
+
+Every pair differs. The no-overflow byte-identity claim is not a picture pair;
+it is pinned inside the test suite (`no_overflow_render_is_byte_identical`
+in `crates/bir-print/tests/uniform_amount_sections.rs`, covering 2551Q and
+1702EX).
