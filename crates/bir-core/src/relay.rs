@@ -140,7 +140,11 @@ pub fn install_device_key_gate() {
         if let Some(raw) = stored_device_key_raw() {
             note_key_created_here(raw);
         }
-        if let Some(owner) = crate::account_session::stored_owner() {
+        let owner = crate::account_session::SEND_CONTEXT
+            .try_with(|context| context.owner.clone())
+            .ok()
+            .or_else(crate::account_session::stored_owner);
+        if let Some(owner) = owner {
             write_device_owner(&owner);
         } else {
             tracing::warn!(
@@ -661,9 +665,11 @@ pub(crate) enum Settlement {
     Sent(StoreReport),
     /// No receipt: the outcome the send itself would have had.
     Failed(TransportError),
-    /// Nothing to go on yet (the server cannot be asked, the person is signed
-    /// out or signed in elsewhere, the submission is still under way).
+    /// Nothing to go on yet (the server cannot be asked or the submission is still under way).
     NotYet,
+    /// The owner signed out or changed: keep the record indefinitely. It is never evidence that
+    /// the send is gone.
+    Keep,
     /// The server does not know the submission, or the record is unreadable.
     Gone,
 }
@@ -694,6 +700,7 @@ pub(crate) fn settlement(settled: bir_submit::Settled) -> Settlement {
         },
         bir_submit::Settled::Failed(error) => Settlement::Failed(send_failure(error)),
         bir_submit::Settled::NotYet => Settlement::NotYet,
+        bir_submit::Settled::SignedOut => Settlement::Keep,
         bir_submit::Settled::Gone => Settlement::Gone,
     }
 }

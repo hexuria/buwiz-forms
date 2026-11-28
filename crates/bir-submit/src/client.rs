@@ -321,9 +321,12 @@ pub enum Settled {
     Sent(Box<Sent>),
     /// It ended without a receipt, as the send itself would have said.
     Failed(SendError),
-    /// The server could not be asked (offline, an error, signed out, another
-    /// server) or the submission is not final yet: ask again later.
+    /// The server could not be asked (offline, an error, another server) or
+    /// the submission is not final yet: ask again later.
     NotYet,
+    /// The token owner signed out or another owner is signed in: keep the
+    /// waiting record; it is never evidence that the send is gone.
+    SignedOut,
     /// The server does not know the submission (404).
     Gone,
 }
@@ -1128,6 +1131,7 @@ impl Submitter {
         {
             Ok(view) => view,
             Err(ClientError::Server { status: 404, .. }) => return Settled::Gone,
+            Err(ClientError::SignedOut) => return Settled::SignedOut,
             Err(_) => return Settled::NotYet,
         };
         let Some(status) = view["status"]
@@ -3214,6 +3218,7 @@ mod tests {
             Settled::Failed(SendError::Counted { .. }) => "counted",
             Settled::Failed(SendError::MaybeSent(_)) => "maybe sent",
             Settled::NotYet => "not yet",
+            Settled::SignedOut => "signed out",
             Settled::Gone => "gone",
         }
     }
@@ -3358,12 +3363,12 @@ mod tests {
             Settled::NotYet
         ));
 
-        // Signed out: no request at all.
+        // Signed out: no request at all, and never evidence that the send is gone.
         let (url, seen) = serve(|_| Answer::json(200, &json!({"status": "failed"})));
         let client = submitter(&url, false, Vec::new());
         assert!(matches!(
             client.settle(&pending(&client, false)).await,
-            Settled::NotYet
+            Settled::SignedOut
         ));
         assert!(seen.lock().unwrap().is_empty());
 

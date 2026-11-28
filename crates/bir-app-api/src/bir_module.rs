@@ -399,8 +399,9 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
             bir_core::background_cron::fixed_room_source(db)
         } else {
             std::sync::Arc::new(|| {
-                // §5.3: the tick's room comes from one snapshot of the machine — no Open or
-                // Legacy phase, no tick. (The owner and epoch join the tick in commit 4.)
+                // §5.3/AL1: the tick's room, owner and epoch come from one snapshot of the
+                // machine — no Open or Legacy phase, no tick. A sign-in after this read cannot
+                // join this room's sends to the newer account's token.
                 let snap = crate::session::snapshot();
                 if !matches!(
                     snap.phase_kind,
@@ -408,12 +409,22 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
                 ) {
                     return None;
                 }
+                let owner = snap.owner.map(|owner| bir_core::account_session::OwnerKey {
+                    origin: owner.origin,
+                    user_id: owner.user_id,
+                });
+                let epoch = snap.epoch;
                 snap.room.map(|(handle, _generation, room_id, _path)| {
                     let key = match room_id {
                         Some(room) => format!("room:{}", room.as_str()),
                         None => "legacy".to_owned(),
                     };
-                    (handle, key)
+                    bir_core::background_cron::RoomTick {
+                        db: handle,
+                        key,
+                        owner,
+                        epoch,
+                    }
                 })
             })
         };

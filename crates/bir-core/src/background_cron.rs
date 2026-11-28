@@ -208,12 +208,29 @@ impl RequeueLedger {
     }
 }
 
-pub type RoomSource = Arc<dyn Fn() -> Option<(Arc<Mutex<Database>>, String)> + Send + Sync>;
+/// The room a tick works on, with the owner and epoch read in the same snapshot as the room.
+/// Sends of this tick are for exactly these, however the sign-in changes while the tick reads.
+#[derive(Clone)]
+pub struct RoomTick {
+    pub db: Arc<Mutex<Database>>,
+    pub key: String,
+    pub owner: Option<crate::account_session::OwnerKey>,
+    pub epoch: u64,
+}
+
+pub type RoomSource = Arc<dyn Fn() -> Option<RoomTick> + Send + Sync>;
 
 /// A source that always answers the one handle: tests, `bir-headless serve` (its process never
 /// changes rooms), and single-room mode.
 pub fn fixed_room_source(db: Arc<Mutex<Database>>) -> RoomSource {
-    Arc::new(move || Some((db.clone(), FIXED_ROOM_KEY.to_owned())))
+    Arc::new(move || {
+        Some(RoomTick {
+            db: db.clone(),
+            key: FIXED_ROOM_KEY.to_owned(),
+            owner: crate::account_session::stored_owner(),
+            epoch: crate::session_epoch::current(),
+        })
+    })
 }
 
 /// The key a fixed source files under (tests, serve, single-room mode — a source whose room
@@ -269,13 +286,13 @@ async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
         // Each tick asks the source for the open room. None — no room open, or submissions paused —
         // skips the tick, as submission_paused skipped it before.
         let room = if submission_paused() { None } else { source() };
-        if let Some((db, room_key)) = room {
+        if let Some(tick) = room {
             // F5: keyed by the room, never the Arc's address — a later sign-in's Arc can reuse
             // the address of a dropped one, and then the new room's cut-off jobs never requeue.
-            if requeued.should_requeue(&room_key) {
-                requeue_jobs_left_running(&db);
+            if requeued.should_requeue(&tick.key) {
+                requeue_jobs_left_running(&tick.db);
             }
-            run_queue_tick_until(db.clone(), &stop, &room_key).await;
+            run_queue_tick_until(tick.db.clone(), &stop, &tick.key, tick.owner, tick.epoch).await;
         }
         if stopping() {
             break;
@@ -296,11 +313,24 @@ async fn run_cron_loop(source: RoomSource, stop: CronStop, born: u64) {
 /// Extracted from `start_cron_jobs` to allow deterministic unit testing
 /// without being blocked by an infinite loop or thread sleep.
 pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
-    run_queue_tick_until(db, &CronStop::new(), FIXED_ROOM_KEY).await;
+    run_queue_tick_until(
+        db,
+        &CronStop::new(),
+        FIXED_ROOM_KEY,
+        crate::account_session::stored_owner(),
+        crate::session_epoch::current(),
+    )
+    .await;
 }
 
 /// One tick whose blocking work (the calendar sync, an inbox poll) checks `stop` between its items and ends early.
-async fn run_queue_tick_until(db: Arc<Mutex<Database>>, stop: &CronStop, room_key: &str) {
+async fn run_queue_tick_until(
+    db: Arc<Mutex<Database>>,
+    stop: &CronStop,
+    room_key: &str,
+    tick_owner: Option<crate::account_session::OwnerKey>,
+    tick_epoch: u64,
+) {
     // Heartbeat log removed to prevent log spam. Job specific logs are emitted when jobs run.
 
     // Ensure we don't hold the DB lock across async network calls.
@@ -349,7 +379,14 @@ async fn run_queue_tick_until(db: Arc<Mutex<Database>>, stop: &CronStop, room_ke
     if global_cron_enabled {
         for profile in profiles {
             // Task A: Form Submission Retries
-            process_submission_queue(&profile, db.clone(), room_key).await;
+            process_submission_queue(
+                &profile,
+                db.clone(),
+                room_key,
+                tick_owner.clone(),
+                tick_epoch,
+            )
+            .await;
         }
     }
 
@@ -787,6 +824,7 @@ fn reconcile_step(
         Settlement::Sent(report) => Reconcile::Finish(report),
         Settlement::Failed(error) => Reconcile::Release(error),
         Settlement::Gone => Reconcile::Clear,
+        Settlement::Keep => Reconcile::Keep,
         Settlement::NotYet => {
             let waited_long = serde_json::from_str::<bir_submit::PendingSend>(pending)
                 .map_or(true, |pending| now - pending.noted_at >= PENDING_PATIENCE);
@@ -2262,10 +2300,18 @@ fn give_back_queueable<F: QueueableForm>(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static BEFORE_SEND_EPOCH_CHECK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 async fn process_submission_queue(
     profile: &TaxpayerProfile,
     db: Arc<Mutex<Database>>,
     room_key: &str,
+    tick_owner: Option<crate::account_session::OwnerKey>,
+    tick_epoch: u64,
 ) {
     // A build with nowhere to send leaves every queued return as it is: no
     // attempt is counted and none goes back to Draft.
@@ -2321,12 +2367,23 @@ async fn process_submission_queue(
             key: job_key.clone(),
             active_jobs: active_jobs.clone(),
         };
-        // F7: the account and epoch this tick sends under are the session snapshot captured now,
-        // never a disk re-read at transmit time — a new sign-in is written to disk before the
-        // session section that ends the old one, and the disk alone cannot say which epoch a send
-        // belongs to.
-        let owner_at_spawn = crate::account_session::stored_owner();
-        let epoch_at_spawn = crate::session_epoch::current();
+        // AL1: the account and epoch this send belongs to are the ones read with the room Arc at
+        // the tick's source snapshot. Capturing them here, after the tick's blocking reads, would
+        // let a sign-in in the gap join A's room to B's token.
+        let owner_at_spawn = tick_owner.clone();
+        let epoch_at_spawn = tick_epoch;
+        #[cfg(test)]
+        BEFORE_SEND_EPOCH_CHECK.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
+        if crate::session_epoch::current() != epoch_at_spawn {
+            warn!(
+                "Cron: the session changed before this send was queued; the return stays queued for its own account's next tick"
+            );
+            active_jobs
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .remove(&job_key);
+            continue;
+        }
 
         // F4: the send's context is scoped at the spawn — the owner and epoch of this moment — so
         // a token fetch or a 401 the send meets acts for exactly that session, never whoever
@@ -3198,7 +3255,14 @@ mod tests {
                 let db = test_db();
                 let (queued, _summary) = stored_queued_2551q(&db);
                 let profile = reviewed_profile();
-                process_submission_queue(&profile, db.clone(), FIXED_ROOM_KEY).await;
+                process_submission_queue(
+                    &profile,
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    crate::account_session::stored_owner(),
+                    crate::session_epoch::current(),
+                )
+                .await;
                 // The switch happens before the spawned task's first poll.
                 crate::account_session::save_stored(
                     &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-b")),
@@ -3228,6 +3292,97 @@ mod tests {
         .await;
     }
 
+    /// AL1: the owner and epoch are fixed with the room Arc at the tick's source snapshot. A
+    /// sign-in landing after that snapshot but before the spawn sends nothing and fetches no token
+    /// for the newer account; the same queued return is sent under the newer account only when a
+    /// later tick snapshots that account (the positive control).
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_sign_in_between_the_room_snapshot_and_the_spawn_sends_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        fn secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
+            crate::cloud_account::AccountSecrets {
+                server_url: "http://localhost:3008".into(),
+                access_token: format!("access-{user}"),
+                refresh_token: format!("refresh-{user}"),
+                access_expires_at_unix: crate::cloud_account::unix_now() + 3600,
+                user_id: user.into(),
+                email: Some(format!("{user}@example.test")),
+                offline: false,
+                practice: false,
+            }
+        }
+        fn stored_for(user: &str) -> crate::cloud_account::StoredAccount {
+            crate::cloud_account::StoredAccount::from_secrets(&secrets_for(user))
+        }
+        fn key_for(user: &str) -> crate::account_session::OwnerKey {
+            crate::account_session::OwnerKey::of(&stored_for(user)).unwrap()
+        }
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let db = test_db();
+                let (queued, _summary) = stored_queued_2551q(&db);
+                let profile = reviewed_profile();
+                crate::account_session::save_stored(&stored_for("user-a")).unwrap();
+                let epoch_a = crate::session_epoch::current() + 11;
+                crate::session_epoch::set(epoch_a);
+                let b_before = crate::account_session::token_fetches_for(&key_for("user-b"));
+                BEFORE_SEND_EPOCH_CHECK.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        crate::account_session::save_stored(&stored_for("user-b")).unwrap();
+                        crate::session_epoch::set(epoch_a + 1);
+                    }));
+                });
+                process_submission_queue(
+                    &profile,
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    Some(key_for("user-a")),
+                    epoch_a,
+                )
+                .await;
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                assert_eq!(
+                    crate::account_session::token_fetches_for(&key_for("user-b")),
+                    b_before,
+                    "B's token was fetched for the room Arc snapshotted as A"
+                );
+                let stored = db
+                    .lock()
+                    .unwrap()
+                    .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(stored.status, FilingStatus::Queued, "A's return was sent");
+
+                // Positive control: B's token counter does move when B's own session asks for it.
+                let context =
+                    crate::account_session::SendContext::new(key_for("user-b"), epoch_a + 1);
+                use bir_submit::TokenSource;
+                let token = crate::account_session::SEND_CONTEXT
+                    .scope(context, async {
+                        crate::account_session::AccountTokens
+                            .access_token(false)
+                            .await
+                    })
+                    .await
+                    .unwrap();
+                assert_eq!(token, "access-user-b");
+                assert_eq!(
+                    crate::account_session::token_fetches_for(&key_for("user-b")),
+                    b_before + 1,
+                    "the positive control did not fetch B's token"
+                );
+                get_active_jobs().lock().unwrap().clear();
+            },
+        )
+        .await;
+    }
+
     /// F6, the behavioral half: a key held for one room never blocks the same inner key's job in
     /// another — the spawn reads a distinct key per room.
     #[tokio::test]
@@ -3246,7 +3401,14 @@ mod tests {
             .lock()
             .unwrap()
             .insert(room_job_key("room:someone-else", &inner));
-        process_submission_queue(&profile, db.clone(), "room:this-room").await;
+        process_submission_queue(
+            &profile,
+            db.clone(),
+            "room:this-room",
+            crate::account_session::stored_owner(),
+            crate::session_epoch::current(),
+        )
+        .await;
         // This room's job was not blocked: its key is in the set alongside the other room's.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         loop {
@@ -3470,8 +3632,14 @@ mod tests {
             // A source the test flips between the rooms, as a sign-out and sign-in flip the app's.
             let current = Arc::new(Mutex::new(db_a.clone()));
             let source_db = current.clone();
-            let source: RoomSource =
-                Arc::new(move || Some((source_db.lock().unwrap().clone(), fixed_room_key())));
+            let source: RoomSource = Arc::new(move || {
+                Some(RoomTick {
+                    db: source_db.lock().unwrap().clone(),
+                    key: fixed_room_key(),
+                    owner: crate::account_session::stored_owner(),
+                    epoch: crate::session_epoch::current(),
+                })
+            });
             let stop = CronStop::new();
             let worker = tokio::spawn(run_cron_jobs(source, stop.clone()));
             let expr_of = |db: &Arc<Mutex<Database>>| {
@@ -4642,7 +4810,14 @@ mod tests {
                 assert!(crate::transport::sending_unavailable());
                 let waiting = db.lock().unwrap().list_all_queued_submissions().unwrap();
                 assert_eq!(waiting.len(), 1, "the return is in the queue");
-                process_submission_queue(&profile, db.clone(), FIXED_ROOM_KEY).await;
+                process_submission_queue(
+                    &profile,
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    crate::account_session::stored_owner(),
+                    crate::session_epoch::current(),
+                )
+                .await;
             },
         )
         .await;
@@ -7215,6 +7390,10 @@ mod tests {
         assert!(matches!(
             reconcile_step(Settlement::NotYet, "not a record", now),
             Reconcile::Clear
+        ));
+        assert!(matches!(
+            reconcile_step(Settlement::Keep, &noted(24), now),
+            Reconcile::Keep
         ));
         assert!(matches!(
             reconcile_step(Settlement::Gone, &noted(0), now),

@@ -1658,12 +1658,29 @@ fn on_account_thread<T: Send + 'static>(
     work: impl std::future::Future<Output = T> + Send + 'static,
     answer: impl FnOnce(T) -> HostResult + Send + 'static,
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
+    // AL2: a non-send account verb is still work for one owner and epoch. Capture both from the
+    // session snapshot at the verb's start and scope the whole client call with them, so the real
+    // AccountTokens never falls back to whoever is stored when the network answer comes back.
+    let snap = crate::session::snapshot();
+    let context = snap.owner.map(|owner| {
+        bir_core::account_session::SendContext::new(
+            bir_core::account_session::OwnerKey {
+                origin: owner.origin,
+                user_id: owner.user_id,
+            },
+            snap.epoch,
+        )
+    });
     crate::cloud_account::spawn_account(name, move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|error| HostError::new(error.to_string()))?;
-        answer(runtime.block_on(work))
+        if let Some(context) = context {
+            answer(runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(context, work)))
+        } else {
+            answer(runtime.block_on(work))
+        }
     })
 }
 
@@ -3430,6 +3447,63 @@ mod tests {
             vec![
                 json!({"tin_root": "000-123-453", "name": "Juana Santos", "taxpayer_type": "Individual", "head_office": {}}),
             ],
+        );
+    }
+
+    /// AL2's real-entry regression test: the verb's own context reaches the process-wide
+    /// AccountTokens. The client is the test client's only injection; its token source is the
+    /// real one, not FixedToken.
+    #[test]
+    fn account_tins_through_real_account_tokens_uses_the_verb_context() {
+        use bir_core::mock_account::{MockAccount, MockOptions, TinState};
+        let _turn = crate::session::test_turn();
+        setup();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mock = runtime
+            .block_on(MockAccount::start_with(
+                "127.0.0.1:0".parse().unwrap(),
+                MockOptions::default(),
+            ))
+            .unwrap();
+        let email = "filer@example.test";
+        mock.add_tin(email, "123-456-788-00000", TinState::Approved);
+        let access = mock.app_token(email);
+        let stored = bir_core::cloud_account::StoredAccount {
+            server_url: mock.url(),
+            access_token: access,
+            refresh_token: "refresh-not-needed-while-access-is-valid".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-filer".into(),
+            email: Some(email.into()),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        bir_core::account_session::save_stored(&stored).unwrap();
+        let owner = crate::session::Owner::of_stored(&stored).unwrap();
+        crate::session::CLAIM_SPAWN_SUPPRESSED.store(true, std::sync::atomic::Ordering::SeqCst);
+        crate::session::begin_open(owner, 1, crate::session::OpenWhy::SignIn);
+        let submitter = Submitter::new(
+            bir_core::bir_submit::SubmitConfig::new(&mock.url()).unwrap(),
+            Box::new(bir_core::bir_submit::secrets::MemoryStore::default()),
+            std::sync::Arc::new(bir_core::account_session::AccountTokens),
+        );
+        TEST_ACCOUNT_SUBMITTER
+            .with(|slot| *slot.borrow_mut() = Some(std::sync::Arc::new(submitter)));
+        let result = call_verb("account_tins", vec![json!(0)]);
+        TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
+        crate::session::reset_for_tests();
+        bir_core::account_session::clear_stored();
+        let list = result
+            .unwrap_or_else(|error| panic!("the real AccountTokens verb call failed: {error}"));
+        assert_eq!(list["complete"], true);
+        assert!(
+            list["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| { row["tin_root"] == "123456788" && row["state"] == "activated" }),
+            "the account row did not list: {list}"
         );
     }
 

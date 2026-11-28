@@ -24,9 +24,7 @@ static SESSION_ENDED: OnceLock<fn(OwnerKey, u64, String)> = OnceLock::new();
 
 /// The send's context (revision 5's BUG 3): who the send is for, the session epoch it was
 /// spawned in, and — recorded at the token fetch — the credential its access token came from.
-/// A late 401 ends exactly that: never the owner, epoch or credential of NOW. This is the slot
-/// SEND_OWNER's spawn wiring fills from commit 4; the sends of today are scoped by the tests
-/// and the hosts that already know their owner.
+/// A late 401 ends exactly that: never the owner, epoch or credential of NOW. The cron, the account verbs and the tests scope it; with none, token work is signed out.
 pub struct SendContext {
     /// The owner the task was spawned for.
     pub owner: OwnerKey,
@@ -627,6 +625,12 @@ impl AccountStore for SavedAccount {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// [`access_token`] against `store` — the D2 restructure (§4): the lock is held only for the
 /// file reads and writes, NEVER across the network refresh, and never while waiting on another
 /// refresh's flight ((b): a waiter holds no account_session, SESSION or DEVICE_KEY lock, and the
@@ -660,6 +664,14 @@ fn access_token_in(
         // never leave it.
         let mut stored = {
             let _one = lock();
+            #[cfg(test)]
+            BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK
+                .with(|hook| hook.borrow_mut().take().map(|hook| hook()));
+            // AL4: the epoch is re-read under the account lock, after the first cheap check.
+            // A same-owner re-sign-in in that gap must not hand the new epoch's token to the old send.
+            if crate::session_epoch::current() != epoch {
+                return Err(TokenError::SignedOut);
+            }
             match store.load() {
                 Ok(Some(stored)) => stored,
                 Ok(None) => return Err(TokenError::SignedOut),
@@ -1072,7 +1084,7 @@ mod tests {
             now,
             force,
             &test_owner(),
-            1,
+            crate::session_epoch::current(),
             &|_, _, _| {
                 hook_runs.fetch_add(1, Ordering::SeqCst);
             },
@@ -1119,7 +1131,7 @@ mod tests {
             1_000,
             true,
             &test_owner(),
-            1,
+            crate::session_epoch::current(),
             &|_, _, _| {
                 hook.fetch_add(1, Ordering::SeqCst);
             },
@@ -1366,7 +1378,7 @@ mod tests {
                     1_000,
                     false,
                     &owner,
-                    1,
+                    crate::session_epoch::current(),
                     &move |_, _, _| {
                         hook2.fetch_add(1, Ordering::SeqCst);
                     },
@@ -1492,7 +1504,7 @@ mod tests {
                         1_000,
                         false,
                         &test_owner(),
-                        1,
+                        crate::session_epoch::current(),
                         &move |_, _, _| {
                             hook_count.fetch_add(1, Ordering::SeqCst);
                             hook_store.clear();
@@ -1632,7 +1644,7 @@ mod tests {
             1_000,
             false,
             &other,
-            1,
+            crate::session_epoch::current(),
             &|_, _, _| {
                 hook.fetch_add(1, Ordering::SeqCst);
             },
@@ -1645,6 +1657,54 @@ mod tests {
             store.current().is_some(),
             "nothing of the stored sign-in is touched"
         );
+    }
+
+    /// AL4: the cheap epoch check and the account load are not atomic. A same-owner re-sign-in
+    /// in that gap is caught by the epoch re-read under the account lock, so the old send never
+    /// receives the new session's token. The positive control without the race answers the token.
+    #[test]
+    fn a_same_owner_re_sign_in_before_the_account_load_is_signed_out() {
+        let _turn = turn();
+        let store = Arc::new(MemoryStore::with(account(2_000, 500)));
+        let epoch = crate::session_epoch::current();
+        let resign = store.clone();
+        BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                let mut newer = account(2_000, 500);
+                newer.access_token = "access-new-epoch".into();
+                newer.refresh_token = "refresh-new-epoch".into();
+                resign.save(&newer).unwrap();
+                crate::session_epoch::set(epoch + 1);
+            }));
+        });
+        let server = FakeServer::new(&[]);
+        let answer = access_token_in(
+            store.as_ref(),
+            &mut FakeHttp(server.clone()),
+            1_000,
+            false,
+            &test_owner(),
+            epoch,
+            &|_, _, _| {},
+            None,
+        );
+        assert_eq!(answer.map(|pair| pair.0), Err(TokenError::SignedOut));
+        assert_eq!(server.requests(), 0, "the stale send refreshed or fetched");
+
+        // Positive control: with no same-owner re-sign-in in the gap, the detector can return a token.
+        crate::session_epoch::set(epoch);
+        let store = MemoryStore::with(account(2_000, 500));
+        let answer = access_token_in(
+            &store,
+            &mut FakeHttp(server),
+            1_000,
+            false,
+            &test_owner(),
+            epoch,
+            &|_, _, _| {},
+            None,
+        );
+        assert_eq!(answer.map(|pair| pair.0).as_deref(), Ok("access-0"));
     }
 
     #[test]
