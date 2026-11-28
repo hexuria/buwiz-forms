@@ -140,6 +140,23 @@ class LocalPathPatternTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertFalse(has_absolute_local_path(message))
 
+    def test_file_urls_with_a_home_or_volume_path_are_refused(self):
+        for message in (
+            "See file:///Users/alice/notes/plan.md",
+            "See file://localhost/home/alice/notes/plan.md",
+            "Open file:///Volumes/work/repo/README.md",
+            "Log at <file:///home/alice/run.log>",
+        ):
+            with self.subTest(message=message):
+                self.assertTrue(has_absolute_local_path(message))
+        for message in (
+            "See file:///Users/runner/work/repo/README.md",
+            "See https://example.com/Users/alice/profile",
+            "See https://example.com/home/alice",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(has_absolute_local_path(message))
+
     def test_home_path_segments_inside_relative_repository_paths_pass(self):
         messages = [
             "Update nsh/screens/home/Home.tsx to clarify filing status",

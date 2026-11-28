@@ -12,11 +12,14 @@ from typing import Callable, Iterable
 REASON = "commit message carries an absolute local path; use $HOME, ~, or /Users/<name> instead"
 ZERO_SHA = "0" * 40
 
-POSIX_HOME_PATTERN = re.compile(r"(?<![A-Za-z0-9._~/])(?P<root>/Users/|/home/)(?P<name>[A-Za-z0-9._-]+)(?![A-Za-z0-9._-])")
+# A path starts at a boundary: not in the middle of a relative path (src/home/…). A local file URL is a boundary
+# too: file:///Users/… and file://localhost/home/… name the same folders.
+PATH_START = r"(?:(?<![A-Za-z0-9._~/])|(?<=file://)|(?<=file://localhost))"
+POSIX_HOME_PATTERN = re.compile(PATH_START + r"(?P<root>/Users/|/home/)(?P<name>[A-Za-z0-9._-]+)(?![A-Za-z0-9._-])")
 WINDOWS_HOME_START_PATTERN = re.compile(r"(?<![A-Za-z0-9_\\/])C:\\Users\\", re.IGNORECASE)
 WINDOWS_SPACED_NAME_PATTERN = re.compile(r"(?P<name>[A-Za-z0-9._-]+(?: [A-Za-z0-9._-]+)+)(?=\\|[\"'])")
 WINDOWS_NAME_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
-VOLUME_PATTERN = re.compile(r"(?<![A-Za-z0-9._~/])/Volumes/")
+VOLUME_PATTERN = re.compile(PATH_START + r"/Volumes/")
 ALLOWED_POSIX_HOME_NAMES = {
     "/Users/": {"runner", "devin", "you"},
     "/home/": {"runner", "ubuntu"},
