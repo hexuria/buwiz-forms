@@ -1,0 +1,20 @@
+file	commit	platform	entry	step/result
+8f38ceda-macos-sidepanel-entry-visible.png	8f38cedacd21d05708e7c6e576421965e224517e	macos	side panel	Add entry visible for owner with one tax profile
+8f38ceda-macos-sidepanel-opened-new-profile.png	8f38cedacd21d05708e7c6e576421965e224517e	macos	side panel	Clicking entry opened New tax profile page
+8f38ceda-macos-picker-addrow-visible.png	8f38cedacd21d05708e7c6e576421965e224517e	macos	picker	Add row visible for owner with one tax profile in narrow picker
+8f38ceda-macos-picker-opened-new-profile.png	8f38cedacd21d05708e7c6e576421965e224517e	macos	picker	Clicking add row opened New tax profile page
+8f38ceda-macos-palette-row-visible.png	8f38cedacd21d05708e7c6e576421965e224517e	macos	command palette	New tax profile row visible for owner with one tax profile
+8f38ceda-macos-palette-opened-new-profile.png	8f38cedacd21d05708e7c6e576421965e224517e	macos	command palette	Clicking row opened New tax profile page
+8f38ceda-macos-desktop-entry-proof.mp4	8f38cedacd21d05708e7c6e576421965e224517e	macos	desktop recording	One 18.3s desktop AFTER recording of entry captures
+8f38ceda-ios-picker-addrow-visible.png	8f38cedacd21d05708e7c6e576421965e224517e	iphone	picker	Add row visible for owner with one tax profile
+8f38ceda-ios-picker-opened-new-profile.png	8f38cedacd21d05708e7c6e576421965e224517e	iphone	picker	Clicking add row opened New tax profile page
+8f38ceda-ios-homeempty-new-profile-button.png	8f38cedacd21d05708e7c6e576421965e224517e	iphone	Home empty state	New tax profile button visible with no tax profiles
+8f38ceda-ios-homeempty-opened-new-profile.png	8f38cedacd21d05708e7c6e576421965e224517e	iphone	Home empty state	Clicking button opened New tax profile page
+af4348cf-macos-sidepanel-entry-absent.png	af4348cfbaf95ac00aeec84b274359706a5d7ba8	macos	side panel	Add entry absent for owner with one tax profile
+af4348cf-macos-picker-addrow-absent.png	af4348cfbaf95ac00aeec84b274359706a5d7ba8	macos	picker	Add row absent for owner with one tax profile in narrow picker
+af4348cf-macos-palette-row-absent.png	af4348cfbaf95ac00aeec84b274359706a5d7ba8	macos	command palette	Query New tax profile shows no matching row
+af4348cf-ios-picker-addrow-absent.png	af4348cfbaf95ac00aeec84b274359706a5d7ba8	iphone	picker	Add row absent for owner with one tax profile
+af4348cf-ios-homeempty-add-first-taxpayer-button.png	af4348cfbaf95ac00aeec84b274359706a5d7ba8	iphone	Home empty state	Add your first taxpayer button visible with no tax profiles
+af4348cf-ios-homeempty-opened-new-taxpayer.png	af4348cfbaf95ac00aeec84b274359706a5d7ba8	iphone	Home empty state	Clicking button opened New taxpayer page
+after-macos-native-menu-gpui-attempts.txt	8f38cedacd21d05708e7c6e576421965e224517e	macos	native menu	known_gap: gpui-agent cannot expose native menu rows; exact errors recorded
+before-macos-native-menu-gpui-attempts.txt	af4348cfbaf95ac00aeec84b274359706a5d7ba8	macos	native menu	known_gap: gpui-agent cannot expose native menu rows; exact errors recorded

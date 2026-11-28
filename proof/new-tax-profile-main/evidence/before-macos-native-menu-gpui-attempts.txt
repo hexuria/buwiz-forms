@@ -1,0 +1,27 @@
+gpui-agent native-menu probes, BEFORE af4348cfbaf95ac00aeec84b274359706a5d7ba8, session proofmac on 127.0.0.1:17421.
+The exact click/keybinding invocations below were run. The positional keybinding syntax was also tried and rejected by the CLI as a usage error; only the correct --id results below are evidence.
+
+=== click run:File > New taxpayer…
+error: node `run:File > New taxpayer…` not found
+rc=1
+=== click run:Profiles > New taxpayer…
+error: node `run:Profiles > New taxpayer…` not found
+rc=1
+=== click run:File > New tax profile…
+error: node `run:File > New tax profile…` not found
+rc=1
+=== click run:Profiles > New tax profile…
+error: node `run:Profiles > New tax profile…` not found
+rc=1
+=== keybinding --id menu.File/New taxpayer… --scope focused
+error: unknown binding `menu.File/New taxpayer…`
+rc=1
+=== keybinding --id menu.Profiles/New taxpayer… --scope focused
+error: unknown binding `menu.Profiles/New taxpayer…`
+rc=1
+=== keybinding --id menu.File/New tax profile… --scope focused
+error: unknown binding `menu.File/New tax profile…`
+rc=1
+=== keybinding --id menu.Profiles/New tax profile… --scope focused
+error: unknown binding `menu.Profiles/New tax profile…`
+rc=1

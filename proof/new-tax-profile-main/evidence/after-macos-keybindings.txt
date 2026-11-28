@@ -1,0 +1,184 @@
+gpui-agent: session proofmac -> 127.0.0.1:17421
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "result": {
+    "keybindings": [
+      {
+        "chord": "cmd-b",
+        "dangerous": false,
+        "id": "keymap.1.cmd-b",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-t",
+        "dangerous": false,
+        "id": "keymap.2.cmd-t",
+        "scope": "focused"
+      },
+      {
+        "chord": "shift-cmd-b",
+        "dangerous": false,
+        "id": "keymap.3.shift-cmd-b",
+        "scope": "focused"
+      },
+      {
+        "chord": "shift-cmd-n",
+        "dangerous": false,
+        "id": "keymap.4.shift-cmd-n",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-k",
+        "dangerous": false,
+        "id": "keymap.5.cmd-k",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-n",
+        "dangerous": false,
+        "id": "keymap.6.cmd-n",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-,",
+        "dangerous": false,
+        "id": "keymap.7.cmd-,",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-l",
+        "dangerous": false,
+        "id": "keymap.8.cmd-l",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-[",
+        "dangerous": false,
+        "id": "keymap.9.cmd-[",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-]",
+        "dangerous": false,
+        "id": "keymap.10.cmd-]",
+        "scope": "focused"
+      },
+      {
+        "chord": "escape",
+        "dangerous": false,
+        "id": "keymap.12.escape",
+        "scope": "focused"
+      },
+      {
+        "chord": "cmd-,",
+        "dangerous": false,
+        "id": "menu.eBIRForms/Settings…#85",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-h",
+        "dangerous": false,
+        "id": "menu.eBIRForms/Hide eBIRForms#86",
+        "scope": "global"
+      },
+      {
+        "chord": "alt-cmd-h",
+        "dangerous": false,
+        "id": "menu.eBIRForms/#0",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-q",
+        "dangerous": true,
+        "id": "menu.eBIRForms/Quit eBIRForms#88",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-n",
+        "dangerous": false,
+        "id": "menu.File/New Return…#90",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-w",
+        "dangerous": false,
+        "id": "menu.File/Close Window#91",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-z",
+        "dangerous": false,
+        "id": "menu.Edit/#0",
+        "scope": "global"
+      },
+      {
+        "chord": "shift-cmd-z",
+        "dangerous": false,
+        "id": "menu.Edit/#0",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-x",
+        "dangerous": false,
+        "id": "menu.Edit/#0",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-c",
+        "dangerous": false,
+        "id": "menu.Edit/#0",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-v",
+        "dangerous": false,
+        "id": "menu.Edit/#0",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-a",
+        "dangerous": false,
+        "id": "menu.Edit/#0",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-b",
+        "dangerous": false,
+        "id": "menu.View/Toggle Sidebar#92",
+        "scope": "global"
+      },
+      {
+        "chord": "shift-cmd-b",
+        "dangerous": false,
+        "id": "menu.View/Toggle Tax Profile#93",
+        "scope": "global"
+      },
+      {
+        "chord": "shift-cmd-n",
+        "dangerous": false,
+        "id": "menu.View/Toggle Notifications#94",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-t",
+        "dangerous": false,
+        "id": "menu.View/Toggle Theme#95",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-k",
+        "dangerous": false,
+        "id": "menu.View/Command Palette…#96",
+        "scope": "global"
+      },
+      {
+        "chord": "cmd-m",
+        "dangerous": false,
+        "id": "menu.Window/#0",
+        "scope": "global"
+      }
+    ]
+  }
+}

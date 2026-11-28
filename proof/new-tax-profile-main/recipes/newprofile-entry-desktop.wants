@@ -1,0 +1,8 @@
+# New tax profile proof, desktop 2/3: the sidebar's profile panel always carries New tax profile; it opens the page.
+wait_until context-pill --timeout-ms 10000
+click context-pill
+wait_until panel-new-tp --timeout-ms 5000 --screenshot
+click panel-new-tp
+wait_until new-tp-name --timeout-ms 8000 --screenshot
+click new-tp-cancel
+wait_until frame --timeout-ms 8000

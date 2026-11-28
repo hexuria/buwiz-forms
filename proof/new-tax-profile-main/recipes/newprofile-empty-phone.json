@@ -1,0 +1,80 @@
+{
+ "v": 1,
+ "name": "e2e-newprofile-empty-phone",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "invoke",
+   "name": "nav.go",
+   "args": {
+    "page": "profile"
+   }
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "tp-page-profile",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s3",
+   "op": "scroll",
+   "target": "main-scroll",
+   "dy": 900
+  },
+  {
+   "id": "s4",
+   "op": "scroll",
+   "target": "main-scroll",
+   "dy": 900
+  },
+  {
+   "id": "s5",
+   "op": "scroll",
+   "target": "main-scroll",
+   "dy": 900
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "tp-delete-btn",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s7",
+   "op": "click",
+   "target": "tp-delete-btn"
+  },
+  {
+   "id": "s8",
+   "op": "wait_until",
+   "target": "tp-delete-cancel",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "tp-delete-btn"
+  },
+  {
+   "id": "s10",
+   "op": "wait_until",
+   "target": "home-welcome",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "welcome-add-taxpayer"
+  },
+  {
+   "id": "s12",
+   "op": "wait_until",
+   "target": "new-tp-name",
+   "timeout_ms": 8000,
+   "screenshot": true
+  }
+ ]
+}

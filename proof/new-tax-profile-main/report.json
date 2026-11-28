@@ -1,0 +1,21 @@
+{
+  "driver": "gpui-agent-cli 0.5.0",
+  "after": "8f38cedacd21d05708e7c6e576421965e224517e",
+  "before": "af4348cfbaf95ac00aeec84b274359706a5d7ba8",
+  "result": "pass_with_known_gaps",
+  "passed": [
+    "AFTER macOS side panel entry visible and opened New tax profile",
+    "AFTER macOS narrow picker add row visible and opened New tax profile",
+    "AFTER macOS command palette row visible and opened New tax profile",
+    "BEFORE macOS side panel/picker/palette add entries absent",
+    "AFTER iPhone picker add row visible and opened New tax profile",
+    "BEFORE iPhone picker add row absent",
+    "BEFORE/AFTER iPhone Home empty button visible and opened first-profile page"
+  ],
+  "known_gaps": [
+    "native macOS application menu unavailable through gpui-agent semantic tree/keybindings; see hexuria/gpui-agent#120 and exact transcripts",
+    "Home empty-state images used reachable helpdesk-admin/no-profiles scratch session rather than literal solo-owner/no-profiles"
+  ],
+  "recording": "evidence/8f38ceda-macos-desktop-entry-proof.mp4",
+  "captures": "CAPTURES.tsv"
+}

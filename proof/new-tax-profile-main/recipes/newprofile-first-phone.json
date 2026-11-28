@@ -1,0 +1,152 @@
+{
+ "v": 1,
+ "name": "e2e-newprofile-first-phone",
+ "app": "bir-shell",
+ "params": [
+  "tin",
+  "name",
+  "address",
+  "zip",
+  "rdo",
+  "start_option",
+  "tin_field"
+ ],
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "setup-solo",
+   "timeout_ms": 30000
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "setup-solo"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "new-tp-name",
+   "timeout_ms": 8000,
+   "screenshot": true
+  },
+  {
+   "id": "s4",
+   "op": "click",
+   "target": "new-tp-start-trigger"
+  },
+  {
+   "id": "s5",
+   "op": "wait_until",
+   "target": "$start_option",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s6",
+   "op": "click",
+   "target": "$start_option"
+  },
+  {
+   "id": "s7",
+   "op": "wait_until",
+   "target": "$start_option",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "s8",
+   "op": "set_value",
+   "target": "$tin_field",
+   "value": "$tin"
+  },
+  {
+   "id": "s9",
+   "op": "set_value",
+   "target": "new-tp-name",
+   "value": "$name"
+  },
+  {
+   "id": "s10",
+   "op": "set_value",
+   "target": "new-tp-registered_address",
+   "value": "$address"
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "new-tp-zip_code-trigger"
+  },
+  {
+   "id": "s12",
+   "op": "wait_until",
+   "target": "new-tp-zip_code-opt-$zip",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s13",
+   "op": "click",
+   "target": "new-tp-zip_code-opt-$zip"
+  },
+  {
+   "id": "s14",
+   "op": "wait_until",
+   "target": "new-tp-zip_code-search",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "s15",
+   "op": "click",
+   "target": "new-tp-rdo_code-trigger"
+  },
+  {
+   "id": "s16",
+   "op": "wait_until",
+   "target": "new-tp-rdo_code-list",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s17",
+   "op": "scroll",
+   "target": "new-tp-rdo_code-list",
+   "dy": 950
+  },
+  {
+   "id": "s18",
+   "op": "scroll",
+   "target": "new-tp-rdo_code-list",
+   "dy": 950
+  },
+  {
+   "id": "s19",
+   "op": "wait_until",
+   "target": "new-tp-rdo_code-opt-$rdo",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s20",
+   "op": "click",
+   "target": "new-tp-rdo_code-opt-$rdo",
+   "screenshot": true
+  },
+  {
+   "id": "s21",
+   "op": "wait_until",
+   "target": "new-tp-rdo_code-search",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "s22",
+   "op": "click",
+   "target": "new-tp-save",
+   "screenshot": true
+  },
+  {
+   "id": "s23",
+   "op": "wait_until",
+   "target": "frame",
+   "timeout_ms": 10000
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+gpui-agent: session proofmac -> 127.0.0.1:17421
+{
+  "v": 2,
+  "id": "2",
+  "ok": true,
+  "result": {
+    "height": 844.0,
+    "width": 390.0
+  },
+  "delivery_status": "delivered_unverified"
+}

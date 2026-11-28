@@ -1,0 +1,42 @@
+=== click run:File > New tax profile…
+gpui-agent: session proofmac -> 127.0.0.1:17421
+{
+  "delivery_status": "not_delivered",
+  "error": "node `run:File > New tax profile…` not found",
+  "error_code": "not_found",
+  "hint": "take a new snapshot and use an id from it",
+  "ok": false
+}
+error: node `run:File > New tax profile…` not found
+rc=1
+=== click run:Profiles > New tax profile…
+gpui-agent: session proofmac -> 127.0.0.1:17421
+{
+  "delivery_status": "not_delivered",
+  "error": "node `run:Profiles > New tax profile…` not found",
+  "error_code": "not_found",
+  "hint": "take a new snapshot and use an id from it",
+  "ok": false
+}
+error: node `run:Profiles > New tax profile…` not found
+rc=1
+=== keybinding menu.File/New tax profile…
+gpui-agent: session proofmac -> 127.0.0.1:17421
+{
+  "delivery_status": "delivery_uncertain",
+  "error": "unknown binding `menu.File/New tax profile…`",
+  "error_code": "host_error",
+  "ok": false
+}
+error: unknown binding `menu.File/New tax profile…`
+rc=1
+=== keybinding menu.Profiles/New tax profile…
+gpui-agent: session proofmac -> 127.0.0.1:17421
+{
+  "delivery_status": "delivery_uncertain",
+  "error": "unknown binding `menu.Profiles/New tax profile…`",
+  "error_code": "host_error",
+  "ok": false
+}
+error: unknown binding `menu.Profiles/New tax profile…`
+rc=1

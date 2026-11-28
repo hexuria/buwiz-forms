@@ -1,0 +1,2499 @@
+{
+  "v": 2,
+  "id": "1",
+  "ok": true,
+  "tree": {
+    "app": "Native Shell",
+    "platform": "desktop",
+    "ready": true,
+    "nodes": [
+      {
+        "id": "n1",
+        "role": "generic",
+        "name": "",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+          "x": 0.0,
+          "y": 0.0,
+          "w": 390.0,
+          "h": 844.0
+        },
+        "children": [
+          {
+            "id": "n2",
+            "role": "generic",
+            "name": "",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 0.0,
+              "y": 0.0,
+              "w": 390.0,
+              "h": 844.0
+            },
+            "children": [
+              {
+                "id": "shell",
+                "role": "generic",
+                "name": "shell",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                  "x": 0.0,
+                  "y": 0.0,
+                  "w": 390.0,
+                  "h": 844.0
+                },
+                "children": [
+                  {
+                    "id": "frame",
+                    "role": "generic",
+                    "name": "frame",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                      "x": 0.0,
+                      "y": 0.0,
+                      "w": 390.0,
+                      "h": 844.0
+                    },
+                    "children": [
+                      {
+                        "id": "narrow-bar",
+                        "role": "generic",
+                        "name": "narrow-bar",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                          "x": 0.0,
+                          "y": 0.0,
+                          "w": 390.0,
+                          "h": 40.0
+                        },
+                        "children": [
+                          {
+                            "id": "nb-title",
+                            "role": "note",
+                            "name": "eBIRForms",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 85.0,
+                              "y": 9.0,
+                              "w": 197.0,
+                              "h": 23.0
+                            }
+                          },
+                          {
+                            "id": "nb-new",
+                            "role": "button",
+                            "name": "New return",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 286.0,
+                              "y": 6.0,
+                              "w": 28.0,
+                              "h": 28.0
+                            },
+                            "children": [
+                              {
+                                "id": "n1684",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 292.0,
+                                  "y": 12.0,
+                                  "w": 16.0,
+                                  "h": 16.0
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "id": "nb-search",
+                            "role": "button",
+                            "name": "Search",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 318.0,
+                              "y": 6.0,
+                              "w": 28.0,
+                              "h": 28.0
+                            },
+                            "children": [
+                              {
+                                "id": "n1694",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 324.0,
+                                  "y": 12.0,
+                                  "w": 16.0,
+                                  "h": 16.0
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "id": "nb-account-menu",
+                            "role": "generic",
+                            "name": "nb-account-menu",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 350.0,
+                              "y": 4.0,
+                              "w": 32.0,
+                              "h": 32.0
+                            },
+                            "children": [
+                              {
+                                "id": "n1708",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 350.0,
+                                  "y": 4.0,
+                                  "w": 32.0,
+                                  "h": 32.0
+                                },
+                                "children": [
+                                  {
+                                    "id": "nb-avatar",
+                                    "role": "button",
+                                    "name": "Account",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 350.0,
+                                      "y": 4.0,
+                                      "w": 32.0,
+                                      "h": 32.0
+                                    },
+                                    "states": [
+                                      "collapsed"
+                                    ],
+                                    "children": [
+                                      {
+                                        "id": "n1698",
+                                        "role": "image",
+                                        "name": "E2E PROFILE PROOF [grouped]",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                          "x": 352.0,
+                                          "y": 6.0,
+                                          "w": 28.0,
+                                          "h": 28.0
+                                        },
+                                        "states": [
+                                          "grouped"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "frame-body",
+                        "role": "generic",
+                        "name": "frame-body",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                          "x": 0.0,
+                          "y": 40.0,
+                          "w": 390.0,
+                          "h": 747.0
+                        },
+                        "children": [
+                          {
+                            "id": "main-surface",
+                            "role": "generic",
+                            "name": "main-surface",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 0.0,
+                              "y": 40.0,
+                              "w": 390.0,
+                              "h": 747.0
+                            },
+                            "children": [
+                              {
+                                "id": "n110",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 0.0,
+                                  "y": 41.0,
+                                  "w": 390.0,
+                                  "h": 745.0
+                                },
+                                "children": [
+                                  {
+                                    "id": "main-scroll",
+                                    "role": "scroll",
+                                    "name": "main-scroll",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 0.0,
+                                      "y": 41.0,
+                                      "w": 390.0,
+                                      "h": 745.0
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "n114",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                          "x": 0.0,
+                                          "y": 41.0,
+                                          "w": 390.0,
+                                          "h": 1064.0
+                                        },
+                                        "children": [
+                                          {
+                                            "id": "content-column",
+                                            "role": "generic",
+                                            "name": "content-column",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                              "x": 16.0,
+                                              "y": 61.0,
+                                              "w": 358.0,
+                                              "h": 988.0
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "home",
+                                                "role": "generic",
+                                                "name": "home",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "bounds": {
+                                                  "x": 16.0,
+                                                  "y": 61.0,
+                                                  "w": 358.0,
+                                                  "h": 988.0
+                                                },
+                                                "children": [
+                                                  {
+                                                    "id": "home-dashboard",
+                                                    "role": "generic",
+                                                    "name": "home-dashboard",
+                                                    "enabled": true,
+                                                    "focused": false,
+                                                    "bounds": {
+                                                      "x": 16.0,
+                                                      "y": 61.0,
+                                                      "w": 358.0,
+                                                      "h": 988.0
+                                                    },
+                                                    "children": [
+                                                      {
+                                                        "id": "n216",
+                                                        "role": "generic",
+                                                        "name": "",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 61.0,
+                                                          "w": 358.0,
+                                                          "h": 61.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "n218",
+                                                            "role": "generic",
+                                                            "name": "",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 16.0,
+                                                              "y": 61.0,
+                                                              "w": 358.0,
+                                                              "h": 61.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n220",
+                                                                "role": "note",
+                                                                "name": "Good evening",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 16.0,
+                                                                  "y": 61.0,
+                                                                  "w": 358.0,
+                                                                  "h": 33.0
+                                                                }
+                                                              },
+                                                              {
+                                                                "id": "n224",
+                                                                "role": "note",
+                                                                "name": "Friday, November 27, 2026.",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 16.0,
+                                                                  "y": 100.0,
+                                                                  "w": 358.0,
+                                                                  "h": 22.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "id": "home-tiles",
+                                                        "role": "generic",
+                                                        "name": "home-tiles",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 146.0,
+                                                          "w": 358.0,
+                                                          "h": 222.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "home-tile-overdue",
+                                                            "role": "button",
+                                                            "name": "Overdue: 0",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 16.0,
+                                                              "y": 146.0,
+                                                              "w": 175.0,
+                                                              "h": 107.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n126",
+                                                                "role": "generic",
+                                                                "name": "",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 33.0,
+                                                                  "y": 161.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n128",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 33.0,
+                                                                      "y": 163.0,
+                                                                      "w": 16.0,
+                                                                      "h": 16.0
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "id": "n130",
+                                                                    "role": "note",
+                                                                    "name": "Overdue",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 55.0,
+                                                                      "y": 161.0,
+                                                                      "w": 119.0,
+                                                                      "h": 20.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "n134",
+                                                                "role": "note",
+                                                                "name": "0",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 33.0,
+                                                                  "y": 183.0,
+                                                                  "w": 13.0,
+                                                                  "h": 33.0
+                                                                }
+                                                              },
+                                                              {
+                                                                "id": "n138",
+                                                                "role": "note",
+                                                                "name": "past the due date",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 33.0,
+                                                                  "y": 218.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          },
+                                                          {
+                                                            "id": "home-tile-week",
+                                                            "role": "button",
+                                                            "name": "Due in 7 days: 0",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 199.0,
+                                                              "y": 146.0,
+                                                              "w": 175.0,
+                                                              "h": 107.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n144",
+                                                                "role": "generic",
+                                                                "name": "",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 216.0,
+                                                                  "y": 161.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n146",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 216.0,
+                                                                      "y": 163.0,
+                                                                      "w": 16.0,
+                                                                      "h": 16.0
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "id": "n148",
+                                                                    "role": "note",
+                                                                    "name": "Due in 7 days",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 238.0,
+                                                                      "y": 161.0,
+                                                                      "w": 119.0,
+                                                                      "h": 20.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "n152",
+                                                                "role": "note",
+                                                                "name": "0",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 216.0,
+                                                                  "y": 183.0,
+                                                                  "w": 13.0,
+                                                                  "h": 33.0
+                                                                }
+                                                              },
+                                                              {
+                                                                "id": "n156",
+                                                                "role": "note",
+                                                                "name": "by Dec 4",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 216.0,
+                                                                  "y": 218.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          },
+                                                          {
+                                                            "id": "home-tile-drafts",
+                                                            "role": "button",
+                                                            "name": "Drafts: 0",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 16.0,
+                                                              "y": 261.0,
+                                                              "w": 175.0,
+                                                              "h": 107.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n162",
+                                                                "role": "generic",
+                                                                "name": "",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 33.0,
+                                                                  "y": 276.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n164",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 33.0,
+                                                                      "y": 278.0,
+                                                                      "w": 16.0,
+                                                                      "h": 16.0
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "id": "n166",
+                                                                    "role": "note",
+                                                                    "name": "Drafts",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 55.0,
+                                                                      "y": 276.0,
+                                                                      "w": 119.0,
+                                                                      "h": 20.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "n170",
+                                                                "role": "note",
+                                                                "name": "0",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 33.0,
+                                                                  "y": 298.0,
+                                                                  "w": 13.0,
+                                                                  "h": 33.0
+                                                                }
+                                                              },
+                                                              {
+                                                                "id": "n174",
+                                                                "role": "note",
+                                                                "name": "started, not queued",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 33.0,
+                                                                  "y": 333.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          },
+                                                          {
+                                                            "id": "home-tile-waiting",
+                                                            "role": "button",
+                                                            "name": "Waiting to send: 0",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 199.0,
+                                                              "y": 261.0,
+                                                              "w": 175.0,
+                                                              "h": 107.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n180",
+                                                                "role": "generic",
+                                                                "name": "",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 216.0,
+                                                                  "y": 276.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n182",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 216.0,
+                                                                      "y": 278.0,
+                                                                      "w": 16.0,
+                                                                      "h": 16.0
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "id": "n184",
+                                                                    "role": "note",
+                                                                    "name": "Waiting to send",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 238.0,
+                                                                      "y": 276.0,
+                                                                      "w": 119.0,
+                                                                      "h": 20.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "n188",
+                                                                "role": "note",
+                                                                "name": "0",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 216.0,
+                                                                  "y": 298.0,
+                                                                  "w": 13.0,
+                                                                  "h": 33.0
+                                                                }
+                                                              },
+                                                              {
+                                                                "id": "n192",
+                                                                "role": "note",
+                                                                "name": "queued to send",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 216.0,
+                                                                  "y": 333.0,
+                                                                  "w": 141.0,
+                                                                  "h": 20.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "id": "n196",
+                                                        "role": "generic",
+                                                        "name": "",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 396.0,
+                                                          "w": 358.0,
+                                                          "h": 38.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "n198",
+                                                            "role": "note",
+                                                            "name": "Next 30 days",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 16.0,
+                                                              "y": 396.0,
+                                                              "w": 358.0,
+                                                              "h": 26.0
+                                                            }
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "id": "n228",
+                                                        "role": "generic",
+                                                        "name": "",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 434.0,
+                                                          "w": 358.0,
+                                                          "h": 114.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "home-strip",
+                                                            "role": "generic",
+                                                            "name": "home-strip",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 16.0,
+                                                              "y": 434.0,
+                                                              "w": 358.0,
+                                                              "h": 92.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "home-strip-2026-11-27",
+                                                                "role": "button",
+                                                                "name": "Today, Nov 27: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 29.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n250",
+                                                                    "role": "note",
+                                                                    "name": "27",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 26.0,
+                                                                      "y": 498.0,
+                                                                      "w": 15.0,
+                                                                      "h": 18.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-11-28",
+                                                                "role": "button",
+                                                                "name": "Nov 28: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 40.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1712",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 44.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-11-29",
+                                                                "role": "button",
+                                                                "name": "Nov 29: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 51.0,
+                                                                  "y": 445.0,
+                                                                  "w": 9.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1714",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 55.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-11-30",
+                                                                "role": "button",
+                                                                "name": "Nov 30: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 63.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1716",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 67.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-01",
+                                                                "role": "button",
+                                                                "name": "Dec 1: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 74.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1718",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 78.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-02",
+                                                                "role": "button",
+                                                                "name": "Dec 2: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 85.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1720",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 89.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-03",
+                                                                "role": "button",
+                                                                "name": "Dec 3: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 96.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1722",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 100.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-04",
+                                                                "role": "button",
+                                                                "name": "Dec 4: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 107.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n334",
+                                                                    "role": "note",
+                                                                    "name": "4",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 107.0,
+                                                                      "y": 498.0,
+                                                                      "w": 8.0,
+                                                                      "h": 18.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-05",
+                                                                "role": "button",
+                                                                "name": "Dec 5: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 118.0,
+                                                                  "y": 445.0,
+                                                                  "w": 9.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1724",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 122.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-06",
+                                                                "role": "button",
+                                                                "name": "Dec 6: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 130.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1726",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 134.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-07",
+                                                                "role": "button",
+                                                                "name": "Dec 7: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 141.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1728",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 145.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-08",
+                                                                "role": "button",
+                                                                "name": "Dec 8: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 152.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1730",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 156.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-09",
+                                                                "role": "button",
+                                                                "name": "Dec 9: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 163.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1732",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 167.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-10",
+                                                                "role": "button",
+                                                                "name": "Dec 10: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 174.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1734",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 178.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-11",
+                                                                "role": "button",
+                                                                "name": "Dec 11: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 185.0,
+                                                                  "y": 445.0,
+                                                                  "w": 9.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n418",
+                                                                    "role": "note",
+                                                                    "name": "11",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 182.0,
+                                                                      "y": 498.0,
+                                                                      "w": 15.0,
+                                                                      "h": 18.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-12",
+                                                                "role": "button",
+                                                                "name": "Dec 12: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 197.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1736",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 201.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-13",
+                                                                "role": "button",
+                                                                "name": "Dec 13: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 208.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1738",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 212.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-14",
+                                                                "role": "button",
+                                                                "name": "Dec 14: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 219.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1740",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 223.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-15",
+                                                                "role": "button",
+                                                                "name": "Dec 15: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 230.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1742",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 234.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-16",
+                                                                "role": "button",
+                                                                "name": "Dec 16: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 241.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1744",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 245.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-17",
+                                                                "role": "button",
+                                                                "name": "Dec 17: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 252.0,
+                                                                  "y": 445.0,
+                                                                  "w": 9.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1746",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 256.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-18",
+                                                                "role": "button",
+                                                                "name": "Dec 18: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 264.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n502",
+                                                                    "role": "note",
+                                                                    "name": "18",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 260.0,
+                                                                      "y": 498.0,
+                                                                      "w": 15.0,
+                                                                      "h": 18.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-19",
+                                                                "role": "button",
+                                                                "name": "Dec 19: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 275.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1748",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 279.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-20",
+                                                                "role": "button",
+                                                                "name": "Dec 20: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 286.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1750",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 290.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-21",
+                                                                "role": "button",
+                                                                "name": "Dec 21: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 297.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1752",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 301.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-22",
+                                                                "role": "button",
+                                                                "name": "Dec 22: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 308.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1754",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 312.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-23",
+                                                                "role": "button",
+                                                                "name": "Dec 23: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 319.0,
+                                                                  "y": 445.0,
+                                                                  "w": 9.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1756",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 323.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-24",
+                                                                "role": "button",
+                                                                "name": "Dec 24: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 331.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1758",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 335.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-25",
+                                                                "role": "button",
+                                                                "name": "Dec 25: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 342.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n586",
+                                                                    "role": "note",
+                                                                    "name": "25",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 338.0,
+                                                                      "y": 498.0,
+                                                                      "w": 15.0,
+                                                                      "h": 18.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "home-strip-2026-12-26",
+                                                                "role": "button",
+                                                                "name": "Dec 26: nothing due",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 353.0,
+                                                                  "y": 445.0,
+                                                                  "w": 8.0,
+                                                                  "h": 80.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n1710",
+                                                                    "role": "generic",
+                                                                    "name": "",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "bounds": {
+                                                                      "x": 357.0,
+                                                                      "y": 504.0,
+                                                                      "w": 0.0,
+                                                                      "h": 12.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          },
+                                                          {
+                                                            "id": "n230",
+                                                            "role": "generic",
+                                                            "name": "",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 16.0,
+                                                              "y": 526.0,
+                                                              "w": 358.0,
+                                                              "h": 22.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n232",
+                                                                "role": "note",
+                                                                "name": "Today, Nov 27",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 28.0,
+                                                                  "y": 530.0,
+                                                                  "w": 75.0,
+                                                                  "h": 18.0
+                                                                }
+                                                              },
+                                                              {
+                                                                "id": "n236",
+                                                                "role": "note",
+                                                                "name": "Dec 26",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 324.0,
+                                                                  "y": 530.0,
+                                                                  "w": 38.0,
+                                                                  "h": 18.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "id": "n202",
+                                                        "role": "generic",
+                                                        "name": "",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 564.0,
+                                                          "w": 358.0,
+                                                          "h": 28.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "n204",
+                                                            "role": "note",
+                                                            "name": "Open deadlines",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 16.0,
+                                                              "y": 567.0,
+                                                              "w": 212.0,
+                                                              "h": 23.0
+                                                            }
+                                                          },
+                                                          {
+                                                            "id": "home-open-calendar",
+                                                            "role": "button",
+                                                            "name": "Open Calendar",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 236.0,
+                                                              "y": 564.0,
+                                                              "w": 138.0,
+                                                              "h": 28.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n214",
+                                                                "role": "generic",
+                                                                "name": "",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 247.0,
+                                                                  "y": 570.0,
+                                                                  "w": 16.0,
+                                                                  "h": 16.0
+                                                                }
+                                                              },
+                                                              {
+                                                                "id": "n210",
+                                                                "role": "note",
+                                                                "name": "Open Calendar",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 269.0,
+                                                                  "y": 567.0,
+                                                                  "w": 94.0,
+                                                                  "h": 22.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "id": "home-due",
+                                                        "role": "generic",
+                                                        "name": "home-due",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 600.0,
+                                                          "w": 358.0,
+                                                          "h": 125.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "home-due-empty",
+                                                            "role": "generic",
+                                                            "name": "home-due-empty",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "bounds": {
+                                                              "x": 17.0,
+                                                              "y": 601.0,
+                                                              "w": 356.0,
+                                                              "h": 123.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n606",
+                                                                "role": "note",
+                                                                "name": "Deadlines show here once a taxpayer has forms for a tax year.",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "bounds": {
+                                                                  "x": 37.0,
+                                                                  "y": 641.0,
+                                                                  "w": 317.0,
+                                                                  "h": 43.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "id": "n610",
+                                                        "role": "note",
+                                                        "name": "Each taxpayer at a glance",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 757.0,
+                                                          "w": 358.0,
+                                                          "h": 26.0
+                                                        }
+                                                      },
+                                                      {
+                                                        "id": "home-taxpayers",
+                                                        "role": "generic",
+                                                        "name": "home-taxpayers",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "visible": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 795.0,
+                                                          "w": 358.0,
+                                                          "h": 80.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "home-tp-123456788",
+                                                            "role": "generic",
+                                                            "name": "home-tp-123456788",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "visible": false,
+                                                            "bounds": {
+                                                              "x": 17.0,
+                                                              "y": 796.0,
+                                                              "w": 356.0,
+                                                              "h": 78.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n618",
+                                                                "role": "image",
+                                                                "name": "E2E PROFILE PROOF [grouped]",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "visible": false,
+                                                                "bounds": {
+                                                                  "x": 33.0,
+                                                                  "y": 821.0,
+                                                                  "w": 28.0,
+                                                                  "h": 28.0
+                                                                },
+                                                                "states": [
+                                                                  "grouped"
+                                                                ]
+                                                              },
+                                                              {
+                                                                "id": "n960",
+                                                                "role": "generic",
+                                                                "name": "",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "visible": false,
+                                                                "bounds": {
+                                                                  "x": 73.0,
+                                                                  "y": 804.0,
+                                                                  "w": 284.0,
+                                                                  "h": 62.0
+                                                                },
+                                                                "children": [
+                                                                  {
+                                                                    "id": "n962",
+                                                                    "role": "note",
+                                                                    "name": "E2E PROFILE PROOF",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "visible": false,
+                                                                    "bounds": {
+                                                                      "x": 73.0,
+                                                                      "y": 804.0,
+                                                                      "w": 284.0,
+                                                                      "h": 22.0
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "id": "n966",
+                                                                    "role": "note",
+                                                                    "name": "Nothing was due yet this year",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "visible": false,
+                                                                    "bounds": {
+                                                                      "x": 73.0,
+                                                                      "y": 826.0,
+                                                                      "w": 284.0,
+                                                                      "h": 20.0
+                                                                    }
+                                                                  },
+                                                                  {
+                                                                    "id": "n970",
+                                                                    "role": "note",
+                                                                    "name": "Nothing due in 60 days",
+                                                                    "enabled": true,
+                                                                    "focused": false,
+                                                                    "visible": false,
+                                                                    "bounds": {
+                                                                      "x": 73.0,
+                                                                      "y": 846.0,
+                                                                      "w": 284.0,
+                                                                      "h": 20.0
+                                                                    }
+                                                                  }
+                                                                ]
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "id": "n652",
+                                                        "role": "note",
+                                                        "name": "Recently filed",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "visible": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 907.0,
+                                                          "w": 358.0,
+                                                          "h": 26.0
+                                                        }
+                                                      },
+                                                      {
+                                                        "id": "home-filed",
+                                                        "role": "generic",
+                                                        "name": "home-filed",
+                                                        "enabled": true,
+                                                        "focused": false,
+                                                        "visible": false,
+                                                        "bounds": {
+                                                          "x": 16.0,
+                                                          "y": 945.0,
+                                                          "w": 358.0,
+                                                          "h": 104.0
+                                                        },
+                                                        "children": [
+                                                          {
+                                                            "id": "home-filed-empty",
+                                                            "role": "generic",
+                                                            "name": "home-filed-empty",
+                                                            "enabled": true,
+                                                            "focused": false,
+                                                            "visible": false,
+                                                            "bounds": {
+                                                              "x": 17.0,
+                                                              "y": 946.0,
+                                                              "w": 356.0,
+                                                              "h": 102.0
+                                                            },
+                                                            "children": [
+                                                              {
+                                                                "id": "n660",
+                                                                "role": "note",
+                                                                "name": "Filed returns show here.",
+                                                                "enabled": true,
+                                                                "focused": false,
+                                                                "visible": false,
+                                                                "bounds": {
+                                                                  "x": 121.0,
+                                                                  "y": 986.0,
+                                                                  "w": 149.0,
+                                                                  "h": 22.0
+                                                                }
+                                                              }
+                                                            ]
+                                                          }
+                                                        ]
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "tab-bar",
+                        "role": "generic",
+                        "name": "tab-bar",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                          "x": 0.0,
+                          "y": 787.0,
+                          "w": 390.0,
+                          "h": 57.0
+                        },
+                        "children": [
+                          {
+                            "id": "tab-row",
+                            "role": "generic",
+                            "name": "tab-row",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 0.0,
+                              "y": 788.0,
+                              "w": 390.0,
+                              "h": 56.0
+                            },
+                            "children": [
+                              {
+                                "id": "tab-home",
+                                "role": "button",
+                                "name": "Home",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 0.0,
+                                  "y": 788.0,
+                                  "w": 98.0,
+                                  "h": 56.0
+                                },
+                                "states": [
+                                  "selected"
+                                ],
+                                "children": [
+                                  {
+                                    "id": "n1636",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 41.0,
+                                      "y": 798.0,
+                                      "w": 16.0,
+                                      "h": 16.0
+                                    }
+                                  },
+                                  {
+                                    "id": "n1638",
+                                    "role": "note",
+                                    "name": "Home",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 33.0,
+                                      "y": 816.0,
+                                      "w": 32.0,
+                                      "h": 18.0
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "tab-library",
+                                "role": "button",
+                                "name": "Forms",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 98.0,
+                                  "y": 788.0,
+                                  "w": 97.0,
+                                  "h": 56.0
+                                },
+                                "children": [
+                                  {
+                                    "id": "n1644",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 138.0,
+                                      "y": 798.0,
+                                      "w": 16.0,
+                                      "h": 16.0
+                                    }
+                                  },
+                                  {
+                                    "id": "n1646",
+                                    "role": "note",
+                                    "name": "Forms",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 130.0,
+                                      "y": 816.0,
+                                      "w": 33.0,
+                                      "h": 18.0
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "tab-filings",
+                                "role": "button",
+                                "name": "Filings",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 195.0,
+                                  "y": 788.0,
+                                  "w": 98.0,
+                                  "h": 56.0
+                                },
+                                "children": [
+                                  {
+                                    "id": "n1652",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 236.0,
+                                      "y": 798.0,
+                                      "w": 16.0,
+                                      "h": 16.0
+                                    }
+                                  },
+                                  {
+                                    "id": "n1654",
+                                    "role": "note",
+                                    "name": "Filings",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 226.0,
+                                      "y": 816.0,
+                                      "w": 35.0,
+                                      "h": 18.0
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "tab-calendar",
+                                "role": "button",
+                                "name": "Calendar",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 293.0,
+                                  "y": 788.0,
+                                  "w": 97.0,
+                                  "h": 56.0
+                                },
+                                "children": [
+                                  {
+                                    "id": "n1660",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 333.0,
+                                      "y": 798.0,
+                                      "w": 16.0,
+                                      "h": 16.0
+                                    }
+                                  },
+                                  {
+                                    "id": "n1662",
+                                    "role": "note",
+                                    "name": "Calendar",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 317.0,
+                                      "y": 816.0,
+                                      "w": 48.0,
+                                      "h": 18.0
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "sheet-profile",
+                        "role": "generic",
+                        "name": "sheet-profile",
+                        "enabled": true,
+                        "focused": false,
+                        "visible": false,
+                        "bounds": {
+                          "x": 0.0,
+                          "y": 844.0,
+                          "w": 390.0,
+                          "h": 0.0
+                        }
+                      },
+                      {
+                        "id": "sheet-notifications",
+                        "role": "generic",
+                        "name": "sheet-notifications",
+                        "enabled": true,
+                        "focused": false,
+                        "visible": false,
+                        "bounds": {
+                          "x": 0.0,
+                          "y": 844.0,
+                          "w": 390.0,
+                          "h": 0.0
+                        }
+                      },
+                      {
+                        "id": "palette",
+                        "role": "dialog",
+                        "name": "palette",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                          "x": 0.0,
+                          "y": 0.0,
+                          "w": 390.0,
+                          "h": 844.0
+                        },
+                        "children": [
+                          {
+                            "id": "n1762",
+                            "role": "button",
+                            "name": "",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 0.0,
+                              "y": 0.0,
+                              "w": 390.0,
+                              "h": 844.0
+                            }
+                          },
+                          {
+                            "id": "n1764",
+                            "role": "generic",
+                            "name": "",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                              "x": 16.0,
+                              "y": 64.0,
+                              "w": 358.0,
+                              "h": 144.0
+                            },
+                            "children": [
+                              {
+                                "id": "n1766",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 17.0,
+                                  "y": 65.0,
+                                  "w": 356.0,
+                                  "h": 48.0
+                                },
+                                "children": [
+                                  {
+                                    "id": "n1776",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 33.0,
+                                      "y": 81.0,
+                                      "w": 16.0,
+                                      "h": 16.0
+                                    }
+                                  },
+                                  {
+                                    "id": "n1768",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 59.0,
+                                      "y": 73.0,
+                                      "w": 259.0,
+                                      "h": 32.0
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "n1770",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                          "x": 59.0,
+                                          "y": 73.0,
+                                          "w": 259.0,
+                                          "h": 32.0
+                                        },
+                                        "children": [
+                                          {
+                                            "id": "n1772",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                              "x": 59.0,
+                                              "y": 73.0,
+                                              "w": 259.0,
+                                              "h": 32.0
+                                            },
+                                            "children": [
+                                              {
+                                                "id": "palette-input",
+                                                "role": "textbox",
+                                                "name": "Search",
+                                                "value": "",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "bounds": {
+                                                  "x": 59.0,
+                                                  "y": 73.0,
+                                                  "w": 259.0,
+                                                  "h": 32.0
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "id": "n1778",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 328.0,
+                                      "y": 80.0,
+                                      "w": 29.0,
+                                      "h": 18.0
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "n1780",
+                                        "role": "note",
+                                        "name": "Esc",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                          "x": 333.0,
+                                          "y": 80.0,
+                                          "w": 19.0,
+                                          "h": 18.0
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "palette-list",
+                                "role": "scroll",
+                                "name": "palette-list",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                  "x": 17.0,
+                                  "y": 113.0,
+                                  "w": 356.0,
+                                  "h": 94.0
+                                },
+                                "children": [
+                                  {
+                                    "id": "n1786",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                      "x": 17.0,
+                                      "y": 113.0,
+                                      "w": 356.0,
+                                      "h": 94.0
+                                    },
+                                    "children": [
+                                      {
+                                        "id": "n1788",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                          "x": 29.0,
+                                          "y": 125.0,
+                                          "w": 332.0,
+                                          "h": 32.0
+                                        },
+                                        "children": [
+                                          {
+                                            "id": "n1790",
+                                            "role": "note",
+                                            "name": "TAXPAYERS",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                              "x": 39.0,
+                                              "y": 135.0,
+                                              "w": 312.0,
+                                              "h": 18.0
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "id": "palette-item-0",
+                                        "role": "button",
+                                        "name": "E2E PROFILE PROOF",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                          "x": 29.0,
+                                          "y": 159.0,
+                                          "w": 332.0,
+                                          "h": 36.0
+                                        },
+                                        "states": [
+                                          "selected"
+                                        ],
+                                        "children": [
+                                          {
+                                            "id": "n1808",
+                                            "role": "image",
+                                            "name": "E2E PROFILE PROOF [grouped]",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                              "x": 39.0,
+                                              "y": 167.0,
+                                              "w": 20.0,
+                                              "h": 20.0
+                                            },
+                                            "states": [
+                                              "grouped"
+                                            ]
+                                          },
+                                          {
+                                            "id": "n1796",
+                                            "role": "note",
+                                            "name": "E2E PROFILE PROOF",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                              "x": 69.0,
+                                              "y": 166.0,
+                                              "w": 186.0,
+                                              "h": 22.0
+                                            }
+                                          },
+                                          {
+                                            "id": "n1816",
+                                            "role": "note",
+                                            "name": "123-456-788",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                              "x": 265.0,
+                                              "y": 167.0,
+                                              "w": 86.0,
+                                              "h": 20.0
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "toaster",
+            "role": "generic",
+            "name": "toaster",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+              "x": 0.0,
+              "y": 768.0,
+              "w": 390.0,
+              "h": 76.0
+            },
+            "children": [
+              {
+                "id": "n8",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                  "x": 16.0,
+                  "y": 768.0,
+                  "w": 358.0,
+                  "h": 0.0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
