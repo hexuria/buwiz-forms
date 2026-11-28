@@ -9,6 +9,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -23,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("e2e_runner", ROOT / "scripts" / "e2e" / "runner.py")
 E2E = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(E2E)
+REAL_MOCK_LAYOUT_IS_PROVEN = E2E.mock_layout_is_proven
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "e2e"
 
 
@@ -39,6 +41,52 @@ def write(folder, name, text):
 def suite_of(folder, recipes, params=None):
     path = write(folder, "s.json", json.dumps({"v": 1, "params": params or {}, "recipes": recipes}))
     return E2E.load_suite(str(path))
+
+
+def clean_env(**updates):
+    """The least environment a cleared run() test must keep: Windows finds a home from USERPROFILE or
+    HOMEDRIVE/HOMEPATH, both Windows and POSIX need PATH for launch commands, and POSIX Path.home reads HOME."""
+    env = {}
+    for name in ("USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SYSTEMROOT", "TEMP", "TMP", "PATH", "HOME"):
+        if os.environ.get(name) is not None:
+            env[name] = os.environ[name]
+    env.update(updates)
+    return env
+
+
+class WindowsPortabilityTests(unittest.TestCase):
+    """The run()-shaped tests must keep the home and shell variables Windows needs."""
+
+    def test_no_run_test_clears_the_environment_to_empty(self):
+        text = Path(__file__).read_text(encoding="utf-8")
+        self.assertFalse(any(line.strip() == "@mock.patch.dict(os.environ, {}, clear=True)"
+                             for line in text.splitlines()))
+
+    def test_clean_env_keeps_the_windows_and_posix_home_variables(self):
+        kept = {"USERPROFILE": "C:\\Users\\runner", "HOMEDRIVE": "C:", "HOMEPATH": "\\Users\\runner",
+                "SYSTEMROOT": "C:\\Windows", "TEMP": "C:\\Temp", "TMP": "C:\\Temp", "PATH": "/bin",
+                "HOME": "/home/runner"}
+        with mock.patch.dict(os.environ, kept, clear=True):
+            env = clean_env()
+        for name, value in kept.items():
+            with self.subTest(name=name):
+                self.assertEqual(env.get(name), value)
+
+
+    def test_a_homeless_environment_with_userprofile_still_runs_the_database_path_body(self):
+        windowsish = {"USERPROFILE": "C:\\Users\\runner", "HOMEDRIVE": "C:", "HOMEPATH": "\\Users\\runner",
+                      "SYSTEMROOT": "C:\\Windows", "TEMP": "C:\\Temp", "TMP": "C:\\Temp", "PATH": os.defpath}
+        with mock.patch.dict(os.environ, windowsish, clear=True):
+            db, folder = E2E.default_database("macos", "20261128-010203", accounts="mock", unique="u")
+        self.assertTrue(db.is_absolute())
+        self.assertTrue(folder.is_absolute())
+        self.assertNotIn("HOME", windowsish)
+
+    def test_the_posix_process_group_test_is_skipped_where_killpg_does_not_exist(self):
+        text = Path(__file__).read_text(encoding="utf-8")
+        at = text.rindex("\n    def test_posix_stop_kills_a_process_group_that_survives_the_launcher")
+        before = text[:at]
+        self.assertIn('@unittest.skipUnless(os.name == "posix"', before[-200:])
 
 
 class VersionTests(unittest.TestCase):
@@ -260,7 +308,7 @@ class SafetyTests(unittest.TestCase):
                 key gate-email Enter
                 wait_until --timeout-ms 100 gate-code-boxes
                 assert setup-root
-                scroll setup-card
+                scroll setup-helpdesk
             """)
             suite = suite_of(folder, [{"name": "sign-in", "file": "good.wants", "sign_in": True}])
             self.assertEqual(E2E.check_suite(suite), [])
@@ -315,10 +363,12 @@ class AccountsMockTests(unittest.TestCase):
             E2E.parse_args(["macos", "smoke", "--accounts", "mock", "--no-launch"])
         self.assertIn("--no-launch", str(raised.exception))
 
-    def test_accounts_mock_on_android_refuses_keep_data(self):
+    def test_accounts_mock_on_android_is_refused_before_launch_or_write(self):
         with self.assertRaises(E2E.SuiteError) as raised:
-            E2E.parse_args(["android", "smoke", "--accounts", "mock", "--keep-data"])
-        self.assertIn("--keep-data", str(raised.exception))
+            E2E.parse_args(["android", "smoke", "--accounts", "mock"])
+        self.assertIn("not supported", str(raised.exception))
+        self.assertIn("cannot reach the device's app", str(raised.exception))
+        self.assertIn("host path does not exist", str(raised.exception))
 
     def test_the_mock_launch_environment_has_no_bypass_and_points_at_the_mock(self):
         env = E2E.launch_env({"PATH": "/bin", "BIR_AUTH_BYPASS": "0", "BIR_SFTP_LIVE": "1",
@@ -363,6 +413,7 @@ class AccountsMockTests(unittest.TestCase):
     def test_the_mock_default_database_is_in_a_per_run_device_folder(self):
         home = Path("home")
         db, folder = E2E.default_database("macos", "20261128-010203", accounts="mock", home=home, unique="u")
+        home = home.resolve()
         self.assertEqual(folder, home / "BuwizNsh" / "agents" / "e2e-macos-20261128-010203-u")
         self.assertEqual(db, folder / "bir_data.db")
         plain, plain_folder = E2E.default_database("macos", "20261128-010203", home=home)
@@ -550,7 +601,7 @@ class AccountsMockTests(unittest.TestCase):
             killpg.assert_any_call(4321, E2E.signal.SIGINT)
         else:
             E2E.stop_mock_account(proc, log)
-            proc.send_signal.assert_called_once_with(E2E.signal.CTRL_BREAK_EVENT)
+            proc.send_signal.assert_called_once_with(getattr(E2E.signal, "CTRL_BREAK_EVENT", E2E.signal.SIGTERM))
 
     def test_nsh_run_agent_keeps_the_gate_on_for_accounts_mock(self):
         text = (E2E.ROOT / "justfile").read_text(encoding="utf-8")
@@ -568,6 +619,9 @@ class AccountsMockTests(unittest.TestCase):
 
         mock_branch, bypass_branch = bash_branch(unix)
         self.assertIn("export BIR_AUTH_BYPASS=0", mock_branch)
+        self.assertNotIn("export BIR_AUTH_BYPASS=", mock_branch.replace("export BIR_AUTH_BYPASS=0", ""))
+        self.assertIn('BIR_DEVICE_DIR:?nsh-run-agent: mock mode needs BIR_DEVICE_DIR', mock_branch)
+        self.assertIn('BIR_DATABASE_PATH:?nsh-run-agent: mock mode needs BIR_DATABASE_PATH', mock_branch)
         self.assertNotIn("unset BIR_AUTH_BYPASS", mock_branch)
         self.assertIn('export BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL"', mock_branch)
         self.assertIn('BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"', mock_branch)
@@ -603,6 +657,8 @@ class AccountsMockTests(unittest.TestCase):
         ps_end = windows.index("}", ps_else + len("} else {"))
         ps_mock, ps_bypass = windows[ps_at:ps_else], windows[ps_else:ps_end]
         self.assertIn("$env:BIR_AUTH_BYPASS = '0'", ps_mock)
+        self.assertIn("mock mode needs BIR_DEVICE_DIR", ps_mock)
+        self.assertIn("mock mode needs BIR_DATABASE_PATH", ps_mock)
         self.assertNotIn("Remove-Item Env:BIR_AUTH_BYPASS", ps_mock)
         self.assertIn("$env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL", ps_mock)
         self.assertIn("$env:BUWIZ_ACCOUNT_URL = $env:E2E_MOCK_ACCOUNT_URL", ps_mock)
@@ -615,6 +671,7 @@ class AccountsMockTests(unittest.TestCase):
                       windows)
         self.assertIn("$($accountSettings)", windows)
         self.assertIn("$($deviceSettings)", windows)
+        self.assertIn("BIR_DATABASE_PATH=$($env:BIR_DATABASE_PATH);", windows)
 
     def test_android_first_run_leaves_the_sign_in_files_alone_in_bypass_mode(self):
         calls = []
@@ -928,7 +985,7 @@ class AccountsMockTests(unittest.TestCase):
         self.assertGreaterEqual(clock.now, 1.0)
         self.assertIn("gate-root", str(raised.exception))
 
-    @mock.patch.dict(os.environ, {}, clear=True)
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
     def test_a_mock_run_refuses_a_past_gate_app_before_the_first_recipe(self):
         with tempfile.TemporaryDirectory() as folder:
             folder = Path(folder)
@@ -953,10 +1010,17 @@ class AccountsMockTests(unittest.TestCase):
                 def snapshot(self):
                     return {"tree": {"nodes": [{"id": "home", "role": "group"}]}}
 
+            real_database = E2E.default_database
+
+            def database(target, stamp, accounts="bypass"):
+                return real_database(target, stamp, accounts=accounts, home=folder / "home", unique="test")
+
             with mock.patch.object(E2E, "check_suite", return_value=[]), \
                     mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "default_database", side_effect=database), \
                     mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()), \
                     mock.patch.object(E2E, "launch", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "wait_for_device_marker", return_value={}), \
                     mock.patch.object(E2E, "Agent", FakeAgent), \
                     mock.patch.object(E2E, "installed_cli_version", return_value="test"), \
                     mock.patch.object(E2E, "git_head", return_value="test"), \
@@ -968,49 +1032,18 @@ class AccountsMockTests(unittest.TestCase):
             self.assertIn("the app started past the sign-in gate", str(raised.exception))
             self.assertEqual(entries, [])
 
-    @mock.patch.dict(os.environ, {}, clear=True)
-    def test_an_android_mock_failure_restores_the_dev_env_in_the_run_finally(self):
+    def test_an_android_mock_is_refused_before_any_dev_env_write_or_launch(self):
         with tempfile.TemporaryDirectory() as folder:
-            folder = Path(folder)
             write(folder, "x.wants", "click x\n")
             suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [{"name": "x", "file": "x.wants"}]}))
-            args = E2E.parse_args(["android", str(suite), "--accounts", "mock", "--out", str(folder / "out")])
-            entries = []
-
-            class AliveProcess:
-                def poll(self):
-                    return None
-
-            class FakeAgent:
-                def __init__(self, *args, **kwargs):
-                    pass
-
-                def hello(self):
-                    return {"ready": True, "platform": "mobile", "features": []}
-
-                def snapshot(self):
-                    return {"tree": {"nodes": [{"id": "home", "role": "group"}]}}
-
-            def fresh(env, log, dev_env=None, dev_env_state=None):
-                dev_env_state.update({"adb": "adb", "serial": "emulator-5554", "written": True, "exists": False})
-
-            with mock.patch.object(E2E, "check_suite", return_value=[]), \
-                    mock.patch.object(E2E, "port_answers", return_value=False), \
-                    mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()), \
-                    mock.patch.object(E2E, "android_mock_reverse", return_value=("adb", "emulator-5554")), \
-                    mock.patch.object(E2E, "remove_android_mock_reverse"), \
-                    mock.patch.object(E2E, "fresh_android", side_effect=fresh), \
-                    mock.patch.object(E2E, "launch", return_value=AliveProcess()), \
-                    mock.patch.object(E2E, "Agent", FakeAgent), \
-                    mock.patch.object(E2E, "restore_android_dev_env") as restore, \
-                    mock.patch.object(E2E, "run_entry", side_effect=lambda *rest: entries.append(rest) or
-                                     {"name": "x", "status": "pass", "ms": 0}), \
-                    mock.patch.object(E2E, "stop"), mock.patch.object(E2E, "close_device"), \
-                    mock.patch.object(E2E, "stop_mock_account"):
+            with mock.patch.object(E2E, "fresh_android") as fresh, \
+                    mock.patch.object(E2E, "launch") as launch, \
+                    mock.patch.object(E2E, "start_mock_account") as start_mock:
                 with self.assertRaises(E2E.SuiteError):
-                    E2E.run(args)
-            restore.assert_called_once()
-            self.assertEqual(entries, [])
+                    E2E.parse_args(["android", str(suite), "--accounts", "mock", "--out", str(Path(folder) / "out")])
+            fresh.assert_not_called()
+            launch.assert_not_called()
+            start_mock.assert_not_called()
 
     def run_fake_mock_suite(self, folder, recipes, events, database="test", info_override=None):
         folder = Path(folder)
@@ -1047,13 +1080,31 @@ class AccountsMockTests(unittest.TestCase):
             events.append("recipe:" + entry["name"])
             return {"name": entry["name"], "status": "pass", "ms": 0}
 
+        def default_database_for_test(target, stamp, accounts="bypass"):
+            if accounts == "mock":
+                device = (folder / "home" / "BuwizNsh" / "agents" / f"e2e-{target}-{stamp}-test").resolve()
+                return device / "bir_data.db", device
+            return (folder / "home" / "BuwizNsh" / "agents" / f"e2e-{target}-{stamp}.db").resolve(), None
+
+        def fast_layout(data, context, log, need_database=False):
+            return REAL_MOCK_LAYOUT_IS_PROVEN(data, context, log, need_database=need_database, timeout_s=0,
+                               sleep=lambda seconds: None, now=lambda: 0.0)
+
+        def launch(target, db, env, out, log, just):
+            device = Path(env["BIR_DEVICE_DIR"])
+            marker = {"device_dir": str(device.resolve()), "rooms": True, "pid": os.getpid(), "seam": 1}
+            (device / E2E.DEVICE_MARKER_NAME).write_text(json.dumps(marker), encoding="utf-8")
+            return AliveProcess()
+
         patches = [mock.patch.object(E2E, "check_suite", return_value=[]),
                    mock.patch.object(E2E, "port_answers", return_value=False),
+                   mock.patch.object(E2E, "default_database", side_effect=default_database_for_test),
                    mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()),
-                   mock.patch.object(E2E, "launch", return_value=AliveProcess()),
+                   mock.patch.object(E2E, "launch", side_effect=launch),
                    mock.patch.object(E2E, "Agent", FakeAgent),
                    mock.patch.object(E2E, "installed_cli_version", return_value="test"),
                    mock.patch.object(E2E, "git_head", return_value="test"),
+                   mock.patch.object(E2E, "mock_layout_is_proven", side_effect=fast_layout),
                    mock.patch.object(E2E, "run_entry", side_effect=run_entry),
                    mock.patch.object(E2E, "stop"), mock.patch.object(E2E, "stop_mock_account")]
         for patch in patches:
@@ -1061,7 +1112,7 @@ class AccountsMockTests(unittest.TestCase):
             self.addCleanup(patch.stop)
         return args
 
-    @mock.patch.dict(os.environ, {}, clear=True)
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
     def test_a_mock_run_uses_and_removes_a_per_run_database_folder(self):
         with tempfile.TemporaryDirectory() as folder:
             folder = Path(folder)
@@ -1091,8 +1142,12 @@ class AccountsMockTests(unittest.TestCase):
 
             def launch(target, db, env, out, log, just):
                 launched.append((db, dict(env)))
+                device = Path(env["BIR_DEVICE_DIR"])
+                marker = {"device_dir": str(device.resolve()), "rooms": True, "pid": os.getpid(), "seam": 1}
+                (device / E2E.DEVICE_MARKER_NAME).write_text(json.dumps(marker), encoding="utf-8")
                 return AliveProcess()
 
+            os.environ["BIR_DATABASE_PATH"] = str(folder / "repository-dotenv-leak.db")
             with mock.patch.object(E2E, "check_suite", return_value=[]), \
                     mock.patch.object(E2E, "port_answers", return_value=False), \
                     mock.patch.object(E2E, "default_database", side_effect=database), \
@@ -1109,14 +1164,15 @@ class AccountsMockTests(unittest.TestCase):
                 self.assertEqual(E2E.run(args), 0)
             self.assertEqual(len(launched), 1)
             db, env = launched[0]
-            self.assertIsNone(db)
             device = Path(env["BIR_DEVICE_DIR"])
             self.assertTrue(device.name.startswith("e2e-macos-"), device)
             self.assertTrue(device.name.endswith("-test"), device)
-            self.assertNotIn("BIR_DATABASE_PATH", env)
+            self.assertEqual(db, Path(env["BIR_DATABASE_PATH"]),
+                         "the positional database must be the runner's own, never a .env value")
+            self.assertEqual(db, device / "bir_data.db")
             self.assertFalse(device.exists(), "the per-run device folder goes with the run")
 
-    @mock.patch.dict(os.environ, {}, clear=True)
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
     def test_the_rooms_database_proof_waits_for_sign_in_and_precedes_the_first_write_recipe(self):
         with tempfile.TemporaryDirectory() as folder:
             events = []
@@ -1127,9 +1183,9 @@ class AccountsMockTests(unittest.TestCase):
             ]
             args = self.run_fake_mock_suite(folder, recipes, events)
             self.assertEqual(E2E.run(args), 0)
-        self.assertEqual(events, ["app.info", "recipe:sign-in-start", "recipe:sign-in-finish", "app.info", "recipe:write"])
+        self.assertEqual(events, ["recipe:sign-in-start", "recipe:sign-in-finish", "app.info", "recipe:write"])
 
-    @mock.patch.dict(os.environ, {}, clear=True)
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
     def test_a_mock_write_recipe_does_not_run_without_the_rooms_database_proof(self):
         with tempfile.TemporaryDirectory() as folder:
             events = []
@@ -1138,14 +1194,14 @@ class AccountsMockTests(unittest.TestCase):
             with self.assertRaises(E2E.SuiteError) as raised:
                 E2E.run(args)
         self.assertIn("database_path", str(raised.exception))
-        self.assertEqual(events, ["app.info", "app.info"])
+        self.assertEqual(events, ["app.info"])
 
-    @mock.patch.dict(os.environ, {}, clear=True)
-    def test_mock_launch_refuses_an_app_without_the_rooms_seam_or_outside_the_run_folder(self):
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
+    def test_the_post_sign_in_proof_refuses_a_bad_rooms_layout_or_outside_the_run_folder(self):
         cases = (
             ({}, "device_dir"),
             ({"device_dir": "/tmp"}, "rooms_mode"),
-            ({"device_dir": "/tmp", "rooms_mode": True}, "outside"),
+            ({"device_dir": "/tmp", "rooms_mode": True, "database_path": "/tmp/bir_data.db"}, "outside"),
         )
         for info, expected in cases:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as folder:
@@ -1157,7 +1213,7 @@ class AccountsMockTests(unittest.TestCase):
                 self.assertIn(expected, str(raised.exception))
                 self.assertEqual(events, ["app.info"])
 
-    @mock.patch.dict(os.environ, {}, clear=True)
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
     def test_a_recipe_failure_still_stops_the_mock(self):
         with tempfile.TemporaryDirectory() as folder:
             folder = Path(folder)
@@ -1179,10 +1235,17 @@ class AccountsMockTests(unittest.TestCase):
                 def snapshot(self):
                     return {"tree": {"nodes": [{"id": "gate-root", "role": "group"}]}}
 
+            real_database = E2E.default_database
+
+            def database(target, stamp, accounts="bypass"):
+                return real_database(target, stamp, accounts=accounts, home=folder / "home", unique="test")
+
             with mock.patch.object(E2E, "check_suite", return_value=[]), \
                     mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "default_database", side_effect=database), \
                     mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()), \
                     mock.patch.object(E2E, "launch", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "wait_for_device_marker", return_value={}), \
                     mock.patch.object(E2E, "Agent", FakeAgent), \
                     mock.patch.object(E2E, "installed_cli_version", return_value="test"), \
                     mock.patch.object(E2E, "git_head", return_value="test"), \
@@ -1355,10 +1418,15 @@ class AccountsMockTests(unittest.TestCase):
                     self.assertEqual(E2E.sign_in_recipe_problem(step), "node 'home'")
 
     def test_the_first_run_setup_allow_list_is_explicit_and_excludes_the_writing_controls(self):
-        for target in E2E.SIGN_IN_SETUP_IDS:
+        for target in E2E.SIGN_IN_SETUP_CONTAINERS:
+            with self.subTest(target=target):
+                self.assertIsNone(E2E.sign_in_recipe_problem({"op": "assert", "target": target}))
+                self.assertEqual(E2E.sign_in_recipe_problem({"op": "click", "target": target}), f"node {target!r}")
+        for target in E2E.SIGN_IN_SETUP_ACTING_IDS:
             with self.subTest(target=target):
                 self.assertIsNone(E2E.sign_in_recipe_problem({"op": "click", "target": target}))
-        for target in ("setup-solo", "setup-pin-submit", "setup-key-done", "setup-change-confirm-btn", "setup-change-pin"):
+        for target in ("setup-solo", "setup-pin-submit", "setup-key-done", "setup-change-confirm-btn", "setup-change-pin",
+                       "setup-solo-card", "setup-helpdesk-card"):
             with self.subTest(target=target):
                 self.assertEqual(E2E.sign_in_recipe_problem({"op": "click", "target": target}), f"node {target!r}")
 
@@ -1380,22 +1448,36 @@ class AccountsMockTests(unittest.TestCase):
         context["rooms_database_proven"] = True
         self.assertIsNone(E2E.plan_entry(entry, {}, context)[2])
 
-    def test_mock_launch_env_uses_rooms_mode_and_removes_an_inherited_database_path(self):
+    def test_mock_launch_env_sets_both_device_dir_and_a_database_inside_it(self):
         with tempfile.TemporaryDirectory() as folder:
+            device = Path(folder).resolve() / "device"
+            database = device / "bir_data.db"
             env = E2E.launch_env({"PATH": "/bin", "BIR_DATABASE_PATH": "/real/bir_data.db"}, "tok", "127.0.0.1:1",
-                                 accounts="mock", device_dir=folder)
-            self.assertEqual(env["BIR_DEVICE_DIR"], folder)
-            self.assertNotIn("BIR_DATABASE_PATH", env)
+                                 accounts="mock", device_dir=device, database_path=database)
+            self.assertEqual(env["BIR_DEVICE_DIR"], str(device))
+            self.assertEqual(env["BIR_DATABASE_PATH"], str(database))
             self.assertEqual(env["BIR_AUTH_BYPASS"], "0")
         env = E2E.launch_env({"PATH": "/bin", "BIR_DEVICE_DIR": "/elsewhere"}, "tok", "127.0.0.1:1")
         self.assertNotIn("BIR_DEVICE_DIR", env)
+
+    def test_mock_launch_env_refuses_a_relative_or_outside_device_layout(self):
+        with tempfile.TemporaryDirectory() as folder:
+            device = Path(folder).resolve() / "device"
+            for device_dir, database in ((Path("relative-device"), Path("relative-device/bir_data.db")),
+                                         (device, Path(folder).resolve() / "outside.db")):
+                with self.subTest(device_dir=device_dir, database=database):
+                    with self.assertRaises(E2E.SuiteError):
+                        E2E.launch_env({"PATH": "/bin"}, "tok", "127.0.0.1:1", accounts="mock",
+                                       device_dir=device_dir, database_path=database)
 
     def test_platform_default_data_dirs_follow_the_platform_sources(self):
         home = Path("/home/example")
         self.assertEqual(E2E.platform_default_data_dir("macos", {}, home), home / "Library" / "Application Support" / "dev.goldcoders.bir")
         self.assertEqual(E2E.platform_default_data_dir("ios", {}, home), home / "Library" / "Application Support" / "dev.goldcoders.bir")
         self.assertEqual(E2E.platform_default_data_dir("linux", {}, home), home / ".local" / "share" / "dev.goldcoders.bir")
-        self.assertEqual(E2E.platform_default_data_dir("linux", {"XDG_DATA_HOME": "/xdg"}, home), Path("/xdg/dev.goldcoders.bir"))
+        xdg = Path(tempfile.gettempdir()).resolve() / "xdg"
+        self.assertEqual(E2E.platform_default_data_dir("linux", {"XDG_DATA_HOME": str(xdg)}, home),
+                         xdg / "dev.goldcoders.bir")
         self.assertEqual(E2E.platform_default_data_dir("linux", {"XDG_DATA_HOME": "relative"}, home), home / ".local" / "share" / "dev.goldcoders.bir")
         self.assertEqual(E2E.platform_default_data_dir("windows", {"LOCALAPPDATA": "C:\\Local"}, home), Path("C:\\Local/dev.goldcoders.bir"))
         self.assertEqual(E2E.platform_default_data_dir("windows", {}, home), home / "AppData" / "Local" / "dev.goldcoders.bir")
@@ -1466,13 +1548,231 @@ class AccountsMockTests(unittest.TestCase):
                 E2E.plant_legacy_fixture("just", folder, log, run=failing)
             self.assertIn("no fixture", str(failed.exception))
 
+            def slow(command, **kwargs):
+                raise subprocess.TimeoutExpired(command, kwargs.get("timeout"))
+
+            with mock.patch.object(E2E, "just_has_recipe", return_value=True), \
+                    self.assertRaises(E2E.SuiteError) as timed_out:
+                E2E.plant_legacy_fixture("just", folder, log, run=slow)
+            self.assertIn("120", str(timed_out.exception))
+
     def test_windows_commands_are_printed_with_windows_quoting(self):
         command = ["C:\\Android SDK\\platform-tools\\adb.exe", "-s", "emulator-5554", "shell", "run-as",
                    E2E.ANDROID_HOST, "rm", "-f", E2E.ANDROID_DEV_ENV]
         with mock.patch.object(E2E, "os", types.SimpleNamespace(name="nt")):
-            self.assertEqual(E2E.command_for_user(command), subprocess.list2cmdline(command))
+            self.assertEqual(E2E.command_for_user(command),
+                             "& 'C:\\Android SDK\\platform-tools\\adb.exe' -s emulator-5554 shell run-as "
+                             "com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/dev.env")
         with mock.patch.object(E2E, "os", types.SimpleNamespace(name="posix")):
             self.assertEqual(E2E.command_for_user(command), E2E.shlex.join(command))
+
+
+class RoomsMarkerProofTests(unittest.TestCase):
+    def marker(self, folder, **changes):
+        data = {"device_dir": str(Path(folder).resolve()), "rooms": True, "pid": 4321, "seam": 1}
+        data.update(changes)
+        return data
+
+    def write_marker(self, folder, data):
+        path = Path(folder) / ".ebirforms-test-device.json"
+        if isinstance(data, str):
+            path.write_text(data, encoding="utf-8")
+        else:
+            path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    def test_prepare_mock_device_dir_refuses_an_existing_folder_or_stale_marker(self):
+        with tempfile.TemporaryDirectory() as folder:
+            existing = Path(folder) / "run"
+            existing.mkdir()
+            self.write_marker(existing, self.marker(existing))
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.prepare_mock_device_dir(existing)
+            self.assertIn("stale", str(raised.exception).lower())
+            self.assertTrue((existing / ".ebirforms-test-device.json").exists())
+            fresh = Path(folder) / "fresh"
+            E2E.prepare_mock_device_dir(fresh)
+            self.assertTrue(fresh.is_dir())
+
+    def test_the_launch_marker_is_proved_when_it_appears_late_inside_the_bound(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder).resolve()
+            proc = mock.Mock()
+            proc.poll.return_value = None
+            log = E2E.RunLog(None, echo=False)
+            clock = [0.0]
+            writes = []
+
+            def sleep(seconds):
+                clock[0] += seconds
+                if len(writes) == 1:
+                    self.write_marker(folder, self.marker(folder))
+                writes.append(seconds)
+
+            log_path = Path(folder) / "app.log"
+            log_path.write_text("", encoding="utf-8")
+            found = E2E.wait_for_device_marker(folder, proc, log_path, log, timeout_s=1, poll_s=0.25,
+                                               sleep=sleep, now=lambda: clock[0])
+            self.assertEqual(found["device_dir"], str(folder))
+            self.assertTrue(any("device marker" in line for line in log.lines), log.lines)
+
+    def test_a_missing_launch_marker_is_the_exact_pre_seam_refusal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            proc = mock.Mock()
+            proc.poll.return_value = None
+            clock = [0.0]
+
+            def sleep(seconds):
+                clock[0] += seconds
+
+            log_path = Path(folder) / "app.log"
+            log_path.write_text("", encoding="utf-8")
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.wait_for_device_marker(Path(folder), proc, log_path, E2E.RunLog(None, echo=False),
+                                           timeout_s=0.5, poll_s=0.25, sleep=sleep, now=lambda: clock[0])
+            self.assertEqual(str(raised.exception),
+                             "this app build has no BIR_DEVICE_DIR seam: mock sign-in runs need an app with it "
+                             "(see docs/proof/E2E.md)")
+
+    def test_bad_launch_markers_are_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            folder = root / "run"
+            folder.mkdir()
+            cases = (
+                ("wrong folder", self.marker(folder, device_dir=str(root)), "not the per-run folder"),
+                ("rooms false", self.marker(folder, rooms=False), "rooms"),
+                ("seam missing", {k: v for k, v in self.marker(folder).items() if k != "seam"}, "seam"),
+                ("unparsable", "not json", "JSON"),
+                ("bad pid", self.marker(folder, pid=0), "pid"),
+            )
+            for name, data, expected in cases:
+                with self.subTest(name=name):
+                    marker = self.write_marker(folder, data)
+                    proc = mock.Mock()
+                    proc.poll.return_value = None
+                    with self.assertRaises(E2E.SuiteError) as raised:
+                        E2E.wait_for_device_marker(folder, proc, folder / "app.log", E2E.RunLog(None, echo=False),
+                                                   timeout_s=1, poll_s=0.1, sleep=lambda seconds: None,
+                                                   now=lambda: 0.0)
+                    self.assertIn(expected, str(raised.exception))
+                    marker.unlink()
+
+    def test_an_early_launcher_exit_reports_the_apps_own_error_line(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log_path = Path(folder) / "app.log"
+            log_path.write_text("build noise\ninvalid BIR_DEVICE_DIR: relative path\n", encoding="utf-8")
+            proc = mock.Mock()
+            proc.poll.return_value = 2
+            proc.returncode = 2
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.wait_for_device_marker(Path(folder), proc, log_path, E2E.RunLog(None, echo=False),
+                                           timeout_s=30, poll_s=0.1, sleep=lambda seconds: None,
+                                           now=lambda: 0.0)
+            self.assertIn("invalid BIR_DEVICE_DIR: relative path", str(raised.exception))
+            self.assertNotIn("no BIR_DEVICE_DIR seam", str(raised.exception))
+
+    def test_the_post_sign_in_database_proof_retries_until_the_room_is_open(self):
+        folder = Path(tempfile.gettempdir()).resolve() / "e2e-proof-room"
+        answers = [
+            {"device_dir": str(folder), "rooms_mode": True},
+            {"device_dir": str(folder), "rooms_mode": True,
+             "database_path": str(folder / "rooms" / "room" / "bir_data.db")},
+        ]
+
+        class Data:
+            def __init__(self):
+                self.calls = 0
+
+            def json(self, *args, **kwargs):
+                answer = answers[min(self.calls, len(answers) - 1)]
+                self.calls += 1
+                return 0, {"result": answer}, ""
+
+        data = Data()
+        context = {"device_dir": folder, "target": "macos"}
+        clock = [0.0]
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        self.assertTrue(E2E.mock_layout_is_proven(data, context, E2E.RunLog(None, echo=False), need_database=True,
+                                                  timeout_s=1, poll_s=0.25, sleep=sleep,
+                                                  now=lambda: clock[0]))
+        self.assertEqual(data.calls, 2)
+        self.assertEqual(context["database_path"], str(folder / "rooms" / "room" / "bir_data.db"))
+
+
+class SignInBoundaryParserTests(unittest.TestCase):
+    def problems_for(self, folder, line):
+        name = "case.wants"
+        write(folder, name, line + "\n")
+        suite = suite_of(folder, [{"name": "sign-in", "file": name, "sign_in": True}])
+        return "\n".join(E2E.check_suite(suite, extra_params=E2E.mock_account_params(), accounts="mock"))
+
+    def test_parser_ambiguity_probes_are_refused(self):
+        probes = (
+            "assert --name --screenshot gate-root home",
+            r"assert gate-root\ --id home",
+            "assert gate-root --id home",
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            for line in probes:
+                with self.subTest(line=line):
+                    self.assertIn("sign_in recipes may use only", self.problems_for(folder, line))
+
+    def test_setup_containers_are_observation_only_and_pointer_modifiers_are_refused(self):
+        containers = ("setup-root", "setup-card", "setup-pin-card", "setup-key-card", "setup-taxpayer")
+        with tempfile.TemporaryDirectory() as folder:
+            for target in containers:
+                with self.subTest(target=target):
+                    self.assertIn("sign_in recipes may use only", self.problems_for(folder, f"click {target}"))
+                    self.assertIn("sign_in recipes may use only", self.problems_for(folder, f"scroll {target}"))
+                    self.assertEqual("", self.problems_for(folder, f"assert {target}"))
+                    self.assertEqual("", self.problems_for(folder,
+                                                           f"wait_until --timeout-ms 100 {target}"))
+            for line in ("press setup-helpdesk --within 1,2", "click --delivery virtual setup-helpdesk"):
+                with self.subTest(line=line):
+                    self.assertIn("sign_in recipes may use only", self.problems_for(folder, line))
+
+    def test_json_sign_in_steps_refuse_within_and_delivery_fields(self):
+        for step in ({"op": "press", "target": "setup-helpdesk", "within": "1,2"},
+                     {"op": "click", "target": "setup-helpdesk", "delivery": "virtual"}):
+            with self.subTest(step=step):
+                self.assertIn("sign_in recipes may use only",
+                              "\n".join(E2E.step_problems([step], {}, "x.json", {"sign_in": True})))
+
+    def test_sign_in_steps_refuse_step_level_flags_on_acting_ops(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for line in ("click --screenshot setup-helpdesk", "click --fp 9 setup-helpdesk",
+                         "type --key-delay-ms 20 setup-helpdesk secret"):
+                with self.subTest(line=line):
+                    self.assertIn("sign_in recipes may use only", self.problems_for(folder, line))
+        for field, step in (
+            ("screenshot", {"op": "click", "target": "setup-helpdesk", "screenshot": True}),
+            ("key_delay_ms", {"op": "type", "target": "setup-helpdesk", "text": "x", "key_delay_ms": 20}),
+            ("expect_fingerprint", {"op": "click", "target": "setup-helpdesk", "expect_fingerprint": 9}),
+        ):
+            with self.subTest(field=field):
+                self.assertIn("sign_in recipes may use only",
+                              "\n".join(E2E.step_problems([step], {}, "x.json", {"sign_in": True})))
+
+    def test_json_sign_in_assertions_refuse_unmodeled_assertion_fields(self):
+        for field in ("screenshot", "value", "role", "checked", "exists", "visible", "in_viewport", "absent", "state",
+                      "states", "fp", "key_delay_ms"):
+            step = {"op": "assert", "target": "gate-root", field: True}
+            with self.subTest(field=field):
+                self.assertIn("sign_in recipes may use only",
+                              "\n".join(E2E.step_problems([step], {}, "x.json", {"sign_in": True})))
+
+    def test_the_setup_ids_are_exactly_the_ids_in_the_tsx(self):
+        text = (E2E.ROOT / "nsh" / "screens" / "auth" / "Setup.tsx").read_text(encoding="utf-8")
+        found = set(re.findall(r'testID="([^"]+)"', text))
+        self.assertEqual(found, {"setup-root", "setup-card", "setup-solo", "setup-helpdesk", "setup-pin-card",
+                                 "setup-admin-pin", "setup-back", "setup-pin-submit", "setup-key-card",
+                                 "setup-key", "setup-key-done", "setup-taxpayer"})
+        self.assertNotIn("setup-solo-card", found)
+        self.assertNotIn("setup-helpdesk-card", found)
 
 
 class ProcessControlTests(unittest.TestCase):
@@ -1506,6 +1806,7 @@ class ProcessControlTests(unittest.TestCase):
         for name, handler in before.items():
             self.assertEqual(E2E.signal.getsignal(getattr(E2E.signal, name)), handler)
 
+    @unittest.skipUnless(os.name == "posix", "os.killpg does not exist on Windows")
     def test_posix_stop_kills_a_process_group_that_survives_the_launcher(self):
         proc = mock.Mock()
         proc.poll.return_value = None
@@ -1536,6 +1837,45 @@ class ProcessControlTests(unittest.TestCase):
         self.assertIn("4321", runs[0])
         self.assertIn("/T", runs[0])
         self.assertIn("/F", runs[0])
+
+    def test_windows_stop_uses_taskkill_after_a_graceful_ctrl_break(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.pid = 4321
+        proc.wait.return_value = 0
+        runs = []
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E.os, "name", "nt"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=lambda command, **kwargs: runs.append(command)):
+            E2E.stop(proc, log)
+        proc.send_signal.assert_called_once_with(getattr(E2E.signal, "CTRL_BREAK_EVENT", E2E.signal.SIGTERM))
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0][:2], ["taskkill", "/PID"])
+        self.assertIn("4321", runs[0])
+
+    def test_windows_stop_uses_taskkill_even_when_the_launcher_already_exited(self):
+        proc = mock.Mock()
+        proc.poll.return_value = 0
+        proc.pid = 4321
+        runs = []
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E.os, "name", "nt"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=lambda command, **kwargs: runs.append(command)):
+            E2E.stop(proc, log)
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0][:2], ["taskkill", "/PID"])
+        self.assertIn("4321", runs[0])
+
+    @unittest.skipUnless(os.name == "nt", "the Windows twin of the POSIX process-group test")
+    def test_windows_stop_by_pid_on_every_exit_path(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.pid = 4321
+        proc.wait.return_value = 0
+        with mock.patch.object(E2E.subprocess, "run") as run:
+            E2E.stop(proc, E2E.RunLog(None, echo=False))
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0][:2], ["taskkill", "/PID"])
 
 
 class FileTests(unittest.TestCase):

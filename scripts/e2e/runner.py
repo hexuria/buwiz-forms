@@ -83,14 +83,18 @@ SIGN_IN_WORDS = {"gate", "signin", "login", "auth"}
 # app's filing or data planes. Every targeted step must stay on these prefixes or the explicit non-writing setup ids.
 SIGN_IN_RECIPE_OPS = {"click", "press", "type", "key", "assert", "wait_until", "scroll"}
 SIGN_IN_RECIPE_PREFIXES = ("gate-", "sign-in-")
-# The first-run page's own ids (nsh/screens/auth/Setup.tsx) that do not finish admin set-up. The three that do
-# (setup-solo, setup-pin-submit, setup-key-done) write the filing database's admin setup and stay outside sign_in.
-SIGN_IN_SETUP_IDS = ("setup-root", "setup-card", "setup-helpdesk", "setup-pin-card", "setup-admin-pin", "setup-back",
-                     "setup-key-card", "setup-key", "setup-taxpayer")
+# The first-run page's own ids (nsh/screens/auth/Setup.tsx) that do not finish admin set-up. The containers hold
+# writing children: press/click/long_press/scroll may never act on one because gpui-agent's `--within` or virtual
+# delivery can hit a child; assert and wait_until may only observe them. The leaf ids here do not write. setup-solo
+# and setup-pin-submit write; setup-key-done only signs the admin in after that write, and all three stay outside.
+SIGN_IN_SETUP_CONTAINERS = ("setup-root", "setup-card", "setup-pin-card", "setup-key-card", "setup-taxpayer")
+SIGN_IN_SETUP_ACTING_IDS = ("setup-helpdesk", "setup-admin-pin", "setup-back", "setup-key")
+SIGN_IN_SETUP_IDS = SIGN_IN_SETUP_CONTAINERS + SIGN_IN_SETUP_ACTING_IDS
 # gpui-agent's recipe `type` op carries target and text (plus delivery/expect_fingerprint); RecipeStep adds id,
-# needs and screenshot, and gpui-agent-cli 0.4.1 adds key_delay_ms. line/words are this runner's own `.wants` metadata.
+# needs and screenshot, and gpui-agent-cli 0.4.1 adds key_delay_ms. line/words and the parser-ambiguity metadata are
+# this runner's own `.wants` reading.
 TYPE_STEP_FIELDS = {"op", "target", "text", "delivery", "expect_fingerprint", "id", "needs", "screenshot",
-                    "key_delay_ms", "line", "words"}
+                    "key_delay_ms", "line", "words", "tokens", "has_backslash", "has_non_ascii_whitespace"}
 # The Buwiz account gate's own root testID (nsh/screens/auth/Gate.tsx). A mock-mode run must start there.
 SIGN_IN_GATE_NODE = "gate-root"
 # Nodes that prove a mock run reached a screen beyond that gate before the gate itself appeared.
@@ -98,7 +102,8 @@ PAST_SIGN_IN_GATE_NODES = ("setup-root", "home", "sign-in")
 # Ops that put text or keys into a box.
 TYPING_OPS = {"type", "set_value", "paste", "key"}
 # Step fields that are what is typed or expected, not what is acted on.
-VALUE_FIELDS = {"text", "value", "id", "needs", "screenshot", "key_delay_ms", "timeout_ms", "op", "line", "words"}
+VALUE_FIELDS = {"text", "value", "id", "needs", "screenshot", "key_delay_ms", "timeout_ms", "op", "line", "words",
+              "tokens", "has_backslash", "has_non_ascii_whitespace"}
 # The variables that point the app at a real SFTP server or relay: never in a run's environment. The app stays in dry
 # run under the runner anyway (its own guard), but the live host and its password must not reach the process.
 LIVE_SEND_VARS = ("BIR_SFTP_LIVE", "BIR_SFTP_HOST", "BIR_SFTP_PORT", "BIR_SFTP_USERNAME", "BIR_SFTP_PASSWORD",
@@ -250,7 +255,9 @@ def recipe_steps(path):
         except ValueError as error:
             raise SuiteError(f"{path}:{number}: {error}") from None
         op = tokens[0].replace("-", "_")
-        step = {"op": op, "line": number}
+        step = {"op": op, "line": number, "tokens": tokens[1:],
+                "has_backslash": "\\" in line,
+                "has_non_ascii_whitespace": any(ord(ch) > 127 and ch.isspace() for ch in line)}
         rest = []
         # Every word after the op, flag values included, but the text a typing op types.
         typed_index = None
@@ -495,6 +502,45 @@ def sign_in_recipe_problem(step, params=None):
     op = step.get("op", "")
     if op not in SIGN_IN_RECIPE_OPS:
         return f"op {op!r}"
+    if step.get("has_backslash"):
+        return "a backslash"
+    if step.get("has_non_ascii_whitespace"):
+        return "non-ASCII whitespace"
+    tokens = [str(token) for token in step.get("tokens") or ()]
+    if "--within" in tokens or any(token.startswith("within=") for token in tokens) or step.get("within") is not None:
+        return "--within"
+    if ("--delivery" in tokens or any(token.startswith("delivery=") for token in tokens)
+            or step.get("delivery") is not None):
+        return "--delivery"
+    # gpui-agent-recipe 0.5.0 recipe.rs accepts step-level `--screenshot` at line 1844, `--key-delay-ms` at
+    # lines 1977-1994 and `--fp` at lines 1996-2013; press `--within` at lines 2122-2167, click/type/key
+    # `--delivery` at lines 2311-2321, assert's `--id`, `--target`, `--name`, `--value`, `--role`, `--checked`,
+    # `--exists`, `--absent`, `--visible`, `--in-viewport`/`--in_viewport` and key=value forms (including
+    # `state`/`states`) at lines 2323-2424, and wait_until's timeout at lines 2446-2475. In a sign_in recipe the
+    # runner models only target selection; assertion state, screenshots, fingerprints and pacing hide semantics
+    # this boundary does not check, so everything but --id/--target/--name (and wait_until's timeout) is refused.
+    for flag in ("--screenshot", "--fp", "--key-delay-ms"):
+        if flag in tokens:
+            return f"flag {flag!r}"
+    for field in ("screenshot", "key_delay_ms", "expect_fingerprint"):
+        if field in step:
+            return f"flag {field.replace('_', '-')!r}"
+    if op in ("assert", "wait_until"):
+        allowed = {"--id", "--target", "--name"}
+        if op == "wait_until":
+            allowed |= {"--timeout-ms", "--timeout_ms"}
+        for token in tokens:
+            if token.startswith("--") and token not in allowed:
+                return f"flag {token!r}"
+            if "=" in token and not token.startswith("-"):
+                key = token.split("=", 1)[0].replace("-", "_")
+                if key not in {"id", "target", "name"} and not (op == "wait_until" and key == "timeout_ms"):
+                    return f"flag {key!r}"
+        unmodeled = {"value", "role", "checked", "exists", "visible", "in_viewport", "in-viewport", "absent",
+                     "state", "states", "screenshot", "fp", "key_delay_ms"}
+        for field in unmodeled & set(step):
+            if field in step and step.get(field) is not None:
+                return f"flag {field.replace('_', '-')!r}"
     target = step.get("target")
     if target is None and op in TARGET_OPS:
         return f"a targetless {op!r} step"
@@ -515,7 +561,10 @@ def sign_in_recipe_problem(step, params=None):
         item = bind(item, params or {})
         if placeholders_in_text(item):
             continue
-        if not (item.startswith(SIGN_IN_RECIPE_PREFIXES) or item in SIGN_IN_SETUP_IDS):
+        allowed = item.startswith(SIGN_IN_RECIPE_PREFIXES) or item in SIGN_IN_SETUP_IDS
+        if item in SIGN_IN_SETUP_CONTAINERS and op not in ("assert", "wait_until"):
+            allowed = False
+        if not allowed:
             return f"node {item!r}"
     return None
 
@@ -576,10 +625,12 @@ def pin_account_state(env, db):
     return paths
 
 
-def launch_env(environ, token, addr, accounts="bypass", device_dir=None):
+def launch_env(environ, token, addr, accounts="bypass", device_dir=None, database_path=None):
     """The environment the app is launched with: the dry-run test settings, the agent's address and token, none of
     the live SFTP or relay variables, and no account server that is not on this machine. `mock` leaves the account
-    gate on, pins both account URLs to this run's loopback mock, names its device folder, and names no database."""
+    gate on, pins both account URLs to this run's loopback mock, names its device folder, and names the run's
+    database inside it. The seam app's BIR_DEVICE_DIR wins over that database path; a pre-seam app is contained in
+    the per-run folder and is refused by the launch-marker proof."""
     if accounts not in ("bypass", "mock"):
         raise SuiteError(f"unknown accounts mode {accounts!r}")
     if accounts == "mock":
@@ -602,7 +653,18 @@ def launch_env(environ, token, addr, accounts="bypass", device_dir=None):
         env["BIR_AUTH_BYPASS"] = "0"
         env.pop("BIR_DATABASE_PATH", None)
         if device_dir is not None:
-            env["BIR_DEVICE_DIR"] = str(device_dir)
+            device = Path(device_dir).expanduser()
+            database = Path(database_path).expanduser() if database_path is not None else None
+            if not device.is_absolute():
+                raise SuiteError(f"--accounts mock needs an absolute BIR_DEVICE_DIR, not {device_dir}")
+            if database is None or not database.is_absolute():
+                raise SuiteError("--accounts mock needs an absolute BIR_DATABASE_PATH inside BIR_DEVICE_DIR")
+            device = device.resolve(strict=False)
+            database = database.resolve(strict=False)
+            if database == device or not canonical_within(database, device):
+                raise SuiteError(f"--accounts mock database {database} is not inside device folder {device}")
+            env["BIR_DEVICE_DIR"] = str(device)
+            env["BIR_DATABASE_PATH"] = str(database)
         for name in ACCOUNT_STATE_VARS:
             env.pop(name, None)
         env[MOCK_ACCOUNT_URL_ENV] = MOCK_ACCOUNT_URL
@@ -1421,9 +1483,19 @@ def launch(target, db, env, out, log, just):
 
 
 def stop(proc, log, what="app"):
-    if proc is None or proc.poll() is not None:
+    if proc is None:
         return
     t0 = time.monotonic()
+    if proc.poll() is not None:
+        if os.name == "nt":
+            # The launcher can already be gone while cargo, nsh or the app remain in its tree; Windows still needs
+            # the tree kill on this exit path too.
+            try:
+                subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=10)
+            except (OSError, subprocess.SubprocessError):
+                pass
+        log.line("stop", what, "stopped", (time.monotonic() - t0) * 1000)
+        return
     graceful = False
     try:
         if os.name == "nt":
@@ -1446,7 +1518,14 @@ def stop(proc, log, what="app"):
                 os.killpg(proc.pid, signal.SIGKILL)
         except (OSError, subprocess.SubprocessError):
             pass
-    if graceful and os.name != "nt":
+    if graceful and os.name == "nt":
+        # Ctrl-Break can end the `just` launcher while cargo, nsh or the app remain in its tree. Kill the tree by
+        # the launcher's pid on every Windows exit path, exactly as the timeout path does.
+        try:
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    elif graceful:
         # The launcher can exit on SIGINT while a child in its session holds the database. The group id is the
         # launcher's pid (start_new_session); probe it and end the surviving group before scratch removal.
         try:
@@ -1571,9 +1650,9 @@ def parse_args(argv):
                          "against the loopback mock")
     if args.accounts == "mock" and args.db:
         raise SuiteError("--accounts mock runs in rooms mode in its own device folder and cannot take --db")
-    if args.target == "android" and args.accounts == "mock" and args.keep_data:
-        raise SuiteError("--accounts mock on android refuses --keep-data: a stale dev.env or sign-in could "
-                         "reach the app")
+    if args.target == "android" and args.accounts == "mock":
+        raise SuiteError("--accounts mock is not supported on android: BIR_DEVICE_DIR cannot reach the device's app "
+                         "and a host path does not exist there")
     return args
 
 
@@ -1627,8 +1706,9 @@ def run(args):
         mock_db, mock_device_dir = default_database(args.target, stamp, accounts="mock")
     # What the app (and every gpui-agent call) gets: a dry-run test build, no live SFTP or relay settings, no remote
     # account server. nsh-run-agent sets and unsets the same again after `just` reads .env. Mock mode is rooms mode:
-    # BIR_DEVICE_DIR names this run's device folder and no database is named at all.
-    env = launch_env(os.environ, token, addr, accounts=args.accounts, device_dir=mock_device_dir)
+    # BIR_DEVICE_DIR names this run's device folder and BIR_DATABASE_PATH the contained pre-seam fallback database.
+    env = launch_env(os.environ, token, addr, accounts=args.accounts, device_dir=mock_device_dir,
+                     database_path=mock_db)
     secret_values = [token] + [os.environ[name] for name in ("BIR_SFTP_PASSWORD", "BIR_SFTP_USERNAME")
                                if os.environ.get(name)]
     log = RunLog(out / "run.log", secrets_=secret_values)
@@ -1647,6 +1727,7 @@ def run(args):
             raise SuiteError(f"something already listens on {addr} or {data_plane(addr)}: stop it, or pass "
                              "--no-launch to drive it")
         if args.accounts == "mock":
+            prepare_mock_device_dir(mock_device_dir)
             mock_proc = start_mock_account(args.just, env, out, log, args.launch_timeout)
             if args.target == "android":
                 mock_reverse = android_mock_reverse(env, log)
@@ -1671,7 +1752,9 @@ def run(args):
                 if not args.keep_data:
                     dev_env = android_mock_dev_env(addr, mock_device_dir) if args.accounts == "mock" else None
                     fresh_android(env, log, dev_env=dev_env, dev_env_state=android_dev_env_state)
-            proc = launch(args.target, None if args.accounts == "mock" else db, env, out, log, args.just)
+            proc = launch(args.target, db, env, out, log, args.just)
+            if args.accounts == "mock":
+                wait_for_device_marker(mock_device_dir, proc, out / "app.log", log)
         window = Agent(args.cli, addr, env, log, args.reply_timeout_ms)
         hello = wait_for(window, proc, args.launch_timeout if proc else 30, log, "window plane")
         if not hello:
@@ -1698,11 +1781,8 @@ def run(args):
                    "device_dir": mock_device_dir, "cli_version": header["cli_version"],
                    "recorder": (lambda folder: Recorder(args.target, folder, env, log)) if args.record else None}
         if args.accounts == "mock":
-            if not mock_layout_is_proven(data, context, log):
-                raise SuiteError("the rooms-mode launch proof failed: "
-                                 f"{context.get('layout_error') or 'no answer'}; the app needs the BIR_DEVICE_DIR seam")
             header["rooms_mode"] = True
-            header["device_dir"] = context.get("device_dir_answer")
+            header["device_dir"] = str(mock_device_dir)
         stopped = None
         for index, entry in enumerate(suite["recipes"], 1):
             if args.only and entry["name"] not in args.only:
@@ -1802,6 +1882,101 @@ def mock_layout_problem(info, folder, default_dir=None, need_database=False):
     return None
 
 
+DEVICE_MARKER_NAME = ".ebirforms-test-device.json"
+NO_DEVICE_SEAM_REFUSAL = ("this app build has no BIR_DEVICE_DIR seam: mock sign-in runs need an app with it "
+                          "(see docs/proof/E2E.md)")
+
+
+def prepare_mock_device_dir(folder):
+    """Create mock mode's per-run device folder only when it is fresh. A pre-existing folder can carry a stale
+    launch marker, sign-in state or room, so it is refused before anything is launched."""
+    folder = Path(folder)
+    if folder.exists():
+        marker = folder / DEVICE_MARKER_NAME
+        detail = f" with stale marker {DEVICE_MARKER_NAME}" if marker.exists() else ""
+        raise SuiteError(f"the per-run mock device folder already exists{detail}: {folder}")
+    folder.mkdir(parents=True)
+    return folder
+
+
+def device_marker_problem(data, folder):
+    """Why a launch marker is not the exact per-run rooms-mode device this runner launched, or None."""
+    folder = Path(folder).expanduser().resolve(strict=False)
+    if not isinstance(data, dict):
+        return "the device marker is not a JSON object"
+    if data.get("seam") != 1:
+        return "the device marker does not say seam: 1"
+    if data.get("rooms") is not True:
+        return "the device marker does not say rooms: true"
+    device = data.get("device_dir")
+    if not isinstance(device, str) or not device:
+        return "the device marker has no device_dir"
+    try:
+        canonical = Path(device).expanduser().resolve(strict=False)
+    except (OSError, RuntimeError):
+        return f"the device marker's device_dir {device!r} cannot be canonicalised"
+    if canonical != folder:
+        return f"the device marker's device_dir {canonical} is not the per-run folder {folder}"
+    pid = data.get("pid")
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return "the device marker's pid is not a positive integer"
+    return None
+
+
+def launcher_output_error(log_path):
+    """The app's own last launcher-output line for an early launcher exit, or a pointer to the log."""
+    try:
+        lines = [line.strip() for line in Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
+                 if line.strip()]
+    except OSError:
+        lines = []
+    return lines[-1][-300:] if lines else f"see {log_path}"
+
+
+def note_marker_pid(data, log):
+    """POSIX only: a dead marker pid is evidence worth logging, never a proof failure. The launcher is a shell or
+    PowerShell wrapper around the app, so the contract deliberately does not require the pids to match."""
+    if os.name == "nt" or not isinstance(data, dict):
+        return
+    pid = data.get("pid")
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        pass
+    except OSError as error:
+        log.line("device-marker", pid, f"marker pid not alive at proof time: {error}", 0)
+
+
+def wait_for_device_marker(folder, proc, log_path, log, timeout_s=30, poll_s=0.25, sleep=time.sleep,
+                           now=time.monotonic):
+    """The launch-time proof of the BIR_DEVICE_DIR seam: the app atomically writes DEVICE_MARKER_NAME before the
+    account gate, so this works while every info plane is still locked. No marker in the bound means a pre-seam app;
+    launcher output, not a marker timeout, explains an early launcher exit."""
+    folder = Path(folder).expanduser().resolve(strict=False)
+    marker = folder / DEVICE_MARKER_NAME
+    deadline = now() + timeout_s
+    while True:
+        if marker.exists():
+            try:
+                data = json.loads(marker.read_text(encoding="utf-8"))
+            except ValueError as error:
+                raise SuiteError(f"the device marker is not JSON: {error}") from None
+            problem = device_marker_problem(data, folder)
+            if problem:
+                raise SuiteError(problem)
+            note_marker_pid(data, log)
+            log.line("device-marker", marker, "rooms-mode device marker proved", 0)
+            return data
+        if proc is not None and proc.poll() is not None:
+            raise SuiteError(f"the app ended before writing its device marker (exit {proc.returncode}): "
+                             f"{launcher_output_error(log_path)}")
+        if now() >= deadline:
+            raise SuiteError(NO_DEVICE_SEAM_REFUSAL)
+        sleep(poll_s)
+
+
 def app_info(data, log):
     """The app's app.info object, found inside gpui-agent's JSON answer, or None when it does not answer."""
     t0 = time.monotonic()
@@ -1821,18 +1996,25 @@ def app_info(data, log):
     return info
 
 
-def mock_layout_is_proven(data, context, log, need_database=False):
-    """Read app.info once for the rooms-mode proof; context['layout_error'] names the failure."""
-    info = app_info(data, log)
-    problem = mock_layout_problem(info, context["device_dir"], platform_default_data_dir(context["target"]),
-                                  need_database=need_database)
-    context["layout_error"] = problem
-    if not problem and isinstance(info, dict):
-        context["rooms_mode"] = True
-        context["device_dir_answer"] = info.get("device_dir")
-        if info.get("database_path"):
-            context["database_path"] = info.get("database_path")
-    return not problem
+def mock_layout_is_proven(data, context, log, need_database=False, timeout_s=30, poll_s=0.25, sleep=time.sleep,
+                          now=time.monotonic):
+    """The post-sign-in rooms proof, retried inside a 30 s bound: sign-in opens the room asynchronously on slower
+    hosts, and the first writing recipe must wait for app.info to report that room inside the per-run folder."""
+    deadline = now() + timeout_s
+    while True:
+        info = app_info(data, log)
+        problem = mock_layout_problem(info, context["device_dir"], platform_default_data_dir(context["target"]),
+                                      need_database=need_database)
+        context["layout_error"] = problem
+        if not problem and isinstance(info, dict):
+            context["rooms_mode"] = True
+            context["device_dir_answer"] = info.get("device_dir")
+            if info.get("database_path"):
+                context["database_path"] = info.get("database_path")
+            return True
+        if now() >= deadline:
+            return False
+        sleep(poll_s)
 
 
 def just_has_recipe(name, justfile=None):
@@ -1848,7 +2030,10 @@ def plant_legacy_fixture(just, folder, log, run=subprocess.run):
                          "does not have")
     path = Path(folder) / "bir_data.db"
     command = [str(just), "legacy-fixture", str(path)]
-    done = run(command, cwd=ROOT, capture_output=True, text=True, timeout=120)
+    try:
+        done = run(command, cwd=ROOT, capture_output=True, text=True, timeout=120, env=launch_env(os.environ, "", ""))
+    except subprocess.TimeoutExpired:
+        raise SuiteError("just legacy-fixture did not finish within 120 s") from None
     if done.returncode:
         raise SuiteError("just legacy-fixture failed: " + ((done.stderr or done.stdout).strip() or "no error text"))
     log.line("plant", path, "legacy fixture generated", 0)
@@ -1930,10 +2115,11 @@ def remove_files(paths, log):
 
 def default_database(target, stamp, accounts="bypass", home=None, unique=None):
     """The default scratch database path and the per-run device folder mock mode owns. In mock mode the returned
-    database path is only the legacy-fixture/sign-in-pinning location inside that folder; it is never passed to the
-    app, which runs in rooms mode under the folder itself. A plain run keeps the old shared agents folder and its
+    database path is the legacy-fixture/sign-in-pinning location inside that folder and is also passed to the app
+    as BIR_DATABASE_PATH: the seam ignores it, while a pre-seam app stays contained there and fails the marker proof.
+    A plain run keeps the old shared agents folder and its
     single scratch database file."""
-    home = Path.home() if home is None else Path(home)
+    home = (Path.home() if home is None else Path(home)).expanduser().resolve(strict=False)
     agents = home / "BuwizNsh" / "agents"
     if accounts == "mock":
         unique = unique or secrets.token_hex(4)
@@ -2108,10 +2294,21 @@ def read_android_dev_env(adb, serial):
     return done.stdout
 
 
+def powershell_quote(text):
+    """One PowerShell argument: bare only for a plain path/flag alphabet, single-quoted otherwise."""
+    text = str(text)
+    if text and re.fullmatch(r"[A-Za-z0-9_./:\\-]+", text):
+        return text
+    return "'" + text.replace("'", "''") + "'"
+
+
 def command_for_user(command):
-    """`command` as a command line the user can paste on this platform."""
-    return subprocess.list2cmdline([str(part) for part in command]) if os.name == "nt" else shlex.join(
-        [str(part) for part in command])
+    """`command` as a command line the user can paste into the shell docs/proof/E2E.md names: PowerShell on Windows,
+    a POSIX shell elsewhere. A quoted first word needs PowerShell's call operator `&`."""
+    parts = [str(part) for part in command]
+    if os.name == "nt":
+        return "& " + " ".join(powershell_quote(part) for part in parts)
+    return shlex.join(parts)
 
 
 def assert_android_dev_env_not_mock(env, log):

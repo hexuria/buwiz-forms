@@ -1355,6 +1355,7 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1
     if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
         export BIR_AUTH_BYPASS=0
+        : "${BIR_DEVICE_DIR:?nsh-run-agent: mock mode needs BIR_DEVICE_DIR}" "${BIR_DATABASE_PATH:?nsh-run-agent: mock mode needs BIR_DATABASE_PATH}"
         [ "${E2E_MOCK_ACCOUNT_URL:-}" = "http://127.0.0.1:3008" ] || { echo "nsh-run-agent: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock" >&2; exit 1; }
         export BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL" BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"
     else
@@ -1412,7 +1413,7 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
             auth_bypass="BIR_AUTH_BYPASS=0;"
             account_settings="BUWIZ_SERVER_URL=$E2E_MOCK_ACCOUNT_URL;BUWIZ_ACCOUNT_URL=$E2E_MOCK_ACCOUNT_URL;"
-            device_settings="BIR_DEVICE_DIR=${BIR_DEVICE_DIR:?nsh-run-agent: mock mode needs BIR_DEVICE_DIR};"
+            device_settings="BIR_DEVICE_DIR=${BIR_DEVICE_DIR:?nsh-run-agent: mock mode needs BIR_DEVICE_DIR};BIR_DATABASE_PATH=${BIR_DATABASE_PATH:?nsh-run-agent: mock mode needs BIR_DATABASE_PATH};"
         fi
         export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;${auth_bypass}BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;${account_settings}${device_settings}GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # One adb and one device for the whole launch: the SDK's adb and the device nsh starts the app on, checked before
@@ -1497,6 +1498,8 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_SFTP_DRY_RUN = '1'
     if ($env:E2E_ACCOUNTS -eq 'mock') {
         $env:BIR_AUTH_BYPASS = '0'
+        if (-not $env:BIR_DEVICE_DIR) { [Console]::Error.WriteLine('nsh-run-agent: mock mode needs BIR_DEVICE_DIR'); exit 1 }
+        if (-not $env:BIR_DATABASE_PATH) { [Console]::Error.WriteLine('nsh-run-agent: mock mode needs BIR_DATABASE_PATH'); exit 1 }
         if ($env:E2E_MOCK_ACCOUNT_URL -ne 'http://127.0.0.1:3008') { [Console]::Error.WriteLine('nsh-run-agent: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock'); exit 1 }
         $env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL; $env:BUWIZ_ACCOUNT_URL = $env:E2E_MOCK_ACCOUNT_URL
     } else {
@@ -1562,7 +1565,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         $env:BUWIZ_ANDROID_DEV = '1'
         $authBypass = if ($env:E2E_ACCOUNTS -eq 'mock') { 'BIR_AUTH_BYPASS=0;' } else { 'BIR_AUTH_BYPASS=1;' }
         $accountSettings = if ($env:E2E_ACCOUNTS -eq 'mock') { "BUWIZ_SERVER_URL=$($env:E2E_MOCK_ACCOUNT_URL);BUWIZ_ACCOUNT_URL=$($env:E2E_MOCK_ACCOUNT_URL);" } else { '' }
-        $deviceSettings = if ($env:E2E_ACCOUNTS -eq 'mock') { "BIR_DEVICE_DIR=$($env:BIR_DEVICE_DIR);" } else { '' }
+        $deviceSettings = if ($env:E2E_ACCOUNTS -eq 'mock') { "BIR_DEVICE_DIR=$($env:BIR_DEVICE_DIR);BIR_DATABASE_PATH=$($env:BIR_DATABASE_PATH);" } else { '' }
         $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;$($authBypass)BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;$($accountSettings)$($deviceSettings)GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # adb is the one nsh itself runs: in the SDK it finds (ANDROID_HOME, ANDROID_SDK_ROOT, then Android Studio's
         # default place), not whichever is on PATH. Checked here, before anything is built or launched.

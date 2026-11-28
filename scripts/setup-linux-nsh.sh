@@ -216,15 +216,15 @@ git_env=()
 if git config --global --get-regexp '^(url\..*\.insteadof|credential\..*helper)$' >/dev/null 2>&1; then
   git_env=(-e CARGO_NET_GIT_FETCH_WITH_CLI=true -e GIT_CONFIG_GLOBAL=/dev/null)
 fi
-# In a mock-account e2e the gate stays on: pass the mode and exact mock URL through, with the bypass present but
-# empty so the app's dotenv cannot restore it. Every other launch is exactly the old development bypass.
+# In a mock-account e2e the gate stays on: pass the mode, exact mock URL and rooms-mode device folder through, with
+# the bypass exactly 0 so the app's dotenv cannot restore it. Every other launch is exactly the old development bypass.
 accounts_env=()
 if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
   [ "${E2E_MOCK_ACCOUNT_URL:-}" = "http://127.0.0.1:3008" ] || {
     echo "nsh2404: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock" >&2
     exit 1
   }
-  accounts_env=(-e E2E_ACCOUNTS -e E2E_MOCK_ACCOUNT_URL -e BIR_AUTH_BYPASS=)
+  accounts_env=(-e E2E_ACCOUNTS -e E2E_MOCK_ACCOUNT_URL -e BIR_AUTH_BYPASS=0 -e BIR_DEVICE_DIR)
 else
   accounts_env=(-e BIR_AUTH_BYPASS=1)
 fi

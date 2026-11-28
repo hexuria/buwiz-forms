@@ -304,11 +304,15 @@ class WrapperAccountsMockTextTests(unittest.TestCase):
         mock_branch, bypass_branch = text[at:else_at], text[else_at:fi_at]
         self.assertIn('[ "${E2E_MOCK_ACCOUNT_URL:-}" = "http://127.0.0.1:3008" ]', mock_branch)
         self.assertIn("-e E2E_ACCOUNTS -e E2E_MOCK_ACCOUNT_URL", mock_branch)
-        self.assertIn("-e BIR_AUTH_BYPASS=", mock_branch)
+        self.assertIn("-e BIR_AUTH_BYPASS=0", mock_branch)
+        self.assertIn("-e BIR_DEVICE_DIR", mock_branch)
+        self.assertNotIn("-e BIR_AUTH_BYPASS= ", mock_branch)
         self.assertNotIn("-e BIR_AUTH_BYPASS=1", mock_branch)
+        self.assertNotIn("-e BIR_AUTH_BYPASS=)", mock_branch)
         self.assertIn("-e BIR_AUTH_BYPASS=1", bypass_branch)
         docker = text[text.index("exec docker run", at):]
         self.assertIn('"${accounts_env[@]}"', docker)
+        self.assertIn("-e BIR_DATABASE_PATH", docker)
         safety_line = next(line for line in docker.splitlines() if "-e BUWIZ_NO_KEYCHAIN=1" in line)
         self.assertNotIn("BIR_AUTH_BYPASS", safety_line)
 

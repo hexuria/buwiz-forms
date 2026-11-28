@@ -28,10 +28,13 @@ recipes that must prove sign-in and per-account behavior in the real app. It sta
 (the same loopback in-memory server the Android development scripts use, pinned to `127.0.0.1:3008`), stops it at the
 end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and sets `BIR_AUTH_BYPASS`
 to `0`: the gate opens only for the exact value `1`, the app's dotenv does not replace a variable that is already set,
-and PowerShell does not treat `0` as an unset variable the way it treats an empty one. The run names no database at
-all: it sets `BIR_DEVICE_DIR` to its own `~/BuwizNsh/agents/e2e-<target>-<time>-<id>/` folder and removes any inherited
-`BIR_DATABASE_PATH`, so the app runs in rooms mode (`device.db`, `rooms/<id>/bir_data.db`, and the sign-in files inside
-that folder). The saved and pending sign-in files are pinned inside the same per-run folder, removed before launch, and
+and PowerShell does not treat `0` as an unset variable the way it treats an empty one. The run sets both variables:
+`BIR_DEVICE_DIR` is its own absolute `~/BuwizNsh/agents/e2e-<target>-<time>-<id>/` folder, and `BIR_DATABASE_PATH`
+is `<that folder>/bir_data.db`. An app built with the seam lets `BIR_DEVICE_DIR` win and runs in rooms mode
+(`device.db`, `rooms/<id>/bir_data.db`, and the sign-in files inside that folder); an app built before it ignores the
+device variable but stays in single-room mode inside the same per-run folder, never in the machine user's real data
+folder, and is refused by the launch proof below. The saved and pending sign-in files are pinned inside the same
+per-run folder, removed before launch, and
 go with that folder afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. A plain run
 keeps one scratch database file directly in `~/BuwizNsh/agents/`; it still shares the device store and identity there,
 and this change leaves it alone. Only the mock run's pinned sign-in files are removed: scratch cleanup never touches a sign-in file in the app's
@@ -39,15 +42,14 @@ shared device folder, and a plain bypass-mode run touches no shared sign-in file
 node (`gate-root`) before the first recipe; `setup-root`, `home` or `sign-in` appearing first proves the run is already
 past the gate and refuses at once.
 
-On Android it writes the same pinned set over the emulator's private `dev.env`, refuses `--keep-data`, and adds the
-same `adb reverse tcp:3008 tcp:3008` the Android script uses after first refusing an existing reverse on that port;
-a fresh mock run removes the test database and both the saved and pending sign-in beside it, never files outside
-`test-data`; a plain fresh run removes only the test database. The previous `dev.env` is captured before the overwrite
-and restored in the same cleanup that stops the mock (or the mock-written file is removed when none existed), on
-success, failure and interruption alike — except that a captured file already carrying mock settings is stale from an
-interrupted mock run, so it is removed rather than restored and the log says so. A bypass-mode Android run first reads
-that private file and refuses one carrying mock settings, because dev.env wins over the next launch's baked settings;
-its refusal includes the exact adb `rm -f` command.
+`--accounts mock` on the `android` target is refused before the mock is started, anything is written, or the app is
+launched: `BIR_DEVICE_DIR` cannot reach the app process on the device, and a host path does not exist there.
+Rooms-mode Android mock sign-in needs a device-side seam and is not supported yet; the older single-room Android mock
+behavior is not part of this mode. A plain fresh Android run still removes only the emulator's guarded test database.
+A bypass-mode Android run first reads the host app's private `dev.env` and refuses one carrying stale mock settings,
+because dev.env wins over the next launch's baked settings; its refusal includes the exact adb `rm -f` command,
+quoted for PowerShell on Windows (the shell this page tells Windows users to paste into) and for a POSIX shell
+elsewhere.
 
 The mode refuses `--no-launch`, refuses when either account URL in the environment is not loopback (`127.0.0.1`,
 `[::1]` or `localhost`), and refuses when port 3008 is already taken: the mock has no health or version route by
@@ -61,23 +63,36 @@ the runner's own `needs`, `screenshot`, `line` and `words` metadata, and gpui-ag
 `expect_fingerprint`): any extra digit-carrying field is read as the secret it could carry. Whether a typed digit then lands in the real page is the sign-in page fix of #608, not part of this runner
 change.
 
-The rooms-mode proof replaces the old scratch-database proof in mock mode. Immediately after launch the runner reads
-`app.info` and refuses unless it carries the test-environment seam fields: `rooms_mode: true`, a `device_dir` whose
-canonical path is inside (or is) the per-run folder, and a `device_dir` that is not the platform's default
-`dev.goldcoders.bir` data folder. An answer without those fields is an app built before the `BIR_DEVICE_DIR` seam and
-is refused with the missing field named. After the sign-in recipes and before the first recipe that can write, the
-runner reads `app.info` again and refuses unless the open database's `database_path` is also inside the per-run folder.
-Mock mode therefore needs an app built with the `BIR_DEVICE_DIR` seam; plain bypass mode is unchanged (single-room,
-`BIR_DATABASE_PATH`, `"database": "test"`).
+The rooms-mode proof replaces the old scratch-database proof in mock mode. Before launch the per-run folder must be
+fresh: an existing folder, with or without a marker, is refused. A seam app atomically writes
+`<device_dir>/.ebirforms-test-device.json` as the first thing it does, before the account gate locks even the info
+planes: `{"device_dir": "<canonical absolute path>", "rooms": true, "pid": <pid>, "seam": 1}`. The runner polls it
+about every 250 ms for up to 30 seconds and refuses unless it parses as JSON, says `seam: 1` and `rooms: true`, its
+canonical `device_dir` is exactly the per-run folder, and `pid` is a positive integer. The pid is not required to be
+the launcher's pid (the launcher is a shell or PowerShell wrapper); on POSIX a dead pid is only logged. A launcher
+that exits early is reported from the app's own launcher output, not as a marker timeout. No marker in the bound is
+exactly: `this app build has no BIR_DEVICE_DIR seam: mock sign-in runs need an app with it (see docs/proof/E2E.md)`.
+After the sign-in recipes and before the first recipe that can write, the runner retries `app.info` for up to 30
+seconds and refuses unless it reports rooms mode in the per-run folder and the open database's `database_path`
+inside it. Mock mode therefore needs an app built with the `BIR_DEVICE_DIR` seam; plain bypass mode is unchanged
+(single-room, `BIR_DATABASE_PATH`, `"database": "test"`).
 
 The account gate locks the data plane as well as the window: even `hello` is refused there. Recipes marked
 `"sign_in": true` are the boundary that may run first (they write account sign-in state, not the filing database).
 Such a recipe is allow-listed: only `click`, `press`, `type`, `key`, `assert`, `wait_until` or `scroll`, and only on
-`gate-*`, `sign-in-*`, or these non-writing first-run setup ids from `nsh/screens/auth/Setup.tsx`: `setup-root`,
-`setup-card`, `setup-helpdesk`, `setup-pin-card`, `setup-admin-pin`, `setup-back`, `setup-key-card`, `setup-key` and
-`setup-taxpayer`. `setup-solo`, `setup-pin-submit` and `setup-key-done` finish admin set-up and write the filing
-database, so they may not run before the rooms-mode database proof; Settings' `setup-change-*` ids are outside the
-first-run page and are refused too. A parameter is checked again after `resolve` binds its real node id. The rule is
+`gate-*`, `sign-in-*`, or selected first-run setup ids. The ids that exist in `nsh/screens/auth/Setup.tsx` are
+`setup-root`, `setup-card`, `setup-solo`, `setup-helpdesk`, `setup-pin-card`, `setup-admin-pin`, `setup-back`,
+`setup-pin-submit`, `setup-key-card`, `setup-key`, `setup-key-done` and `setup-taxpayer`; there are no
+`setup-solo-card` or `setup-helpdesk-card` ids. The containers `setup-root`, `setup-card`, `setup-pin-card`,
+`setup-key-card` and `setup-taxpayer` may be targets only of `assert` and `wait_until`: they hold writing children,
+and gpui-agent's `press <container> --within X,Y` or virtual delivery can hit one. `--within` and `--delivery` are
+refused in every sign_in recipe. The non-writing leaf ids `setup-helpdesk`, `setup-admin-pin`, `setup-back` and
+`setup-key` may be acted on. `setup-solo` writes `setup_solo` at once when a taxpayer exists, and `setup-pin-submit`
+writes `setup_helpdesk`; `setup-key-done` itself does not write (`finishHelpdeskSetup` only signs the admin in), but
+it crosses the post-setup boundary, so all three stay outside sign_in. Settings' `setup-change-*` ids are outside
+the first-run page and are refused too. A backslash, non-ASCII whitespace, or an assertion flag the runner does not
+model for this boundary (`--screenshot`, `--value`, `--role` and the state flags) is refused rather than reparsed
+differently from gpui-agent-recipe 0.5.0. A parameter is checked again after `resolve` binds its real node id. The rule is
 allow-list based because the runner's op names and the app's stable ids are not recipe-chosen: a recipe can choose
 `fp-queue`, but cannot make that filing node one of the allowed ids. In a plain run the `"database": "test"` proof
 still happens before the first recipe, as before.
@@ -98,8 +113,8 @@ still happens before the first recipe, as before.
 **Cancellation model.** The runner owns only the processes it started: the mock-account server, the app launcher, and
 any emulator reverse it added. Ctrl+C, SIGTERM and SIGHUP (where the platform has them) are one boundary at the
 runner: `finally` stops the app process group and the mock in reverse ownership order, closes the device-side app
-and forwards, restores or removes a mock-written Android `dev.env`, redacts and writes the evidence, and only then
-removes the mock run's per-run folder (or the plain run's scratch database). A second Ctrl+C can interrupt that
+and forwards, redacts and writes the evidence, and only then removes the mock run's per-run folder (or the plain
+run's scratch database). A second Ctrl+C can interrupt that
 `finally`: what remains is the per-run folder (with any room database, device database and pinned sign-in files), and
 possibly the mock or app processes the first interrupt had not yet stopped. Verification boundary: `scripts/tests/test_e2e.py`
 proves the SIGTERM/SIGHUP conversion and handler restoration in Python and the cleanup seams with fakes; it does not
@@ -108,12 +123,19 @@ ordering once the signal or interrupt reaches Python.
 
 On Windows a CI cancel can kill the runner before Python gets that boundary, and because Windows does not keep a
 killable tree for grandchildren after their launcher exits, the app or mock can survive even when the launcher did not.
-Four things can then be left behind: the mock-account process, the app, the emulator's mock `dev.env`, and the adb
-reverse; the per-run folder can remain too. Recover with these commands after confirming the run is dead and using the
-process id from the run's own window or process list (never an image-name kill, which could hit another mock):
+The mock-account process, the app, or the per-run folder can then be left behind. Recover with this command after
+confirming the run is dead and using the process id from the run's own window or process list (never an image-name
+kill, which could hit another mock). The command is PowerShell, the shell the Windows setup uses; a full adb path the
+runner prints for a stale Android dev.env is quoted for this same shell and starts with PowerShell's call operator
+`&` when it needs quotes:
 
 ```powershell
 taskkill /PID <pid> /T /F
+```
+
+If an older or interrupted Android mock attempt left its own artifacts behind, remove exactly those too:
+
+```powershell
 adb -s <serial> shell run-as com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/dev.env
 adb -s <serial> reverse --remove tcp:3008
 ```
@@ -122,13 +144,14 @@ adb -s <serial> reverse --remove tcp:3008
 2. Starts the app with `just nsh-run-agent <target> <db>`. That is a debug build in dry-run mode
    (`EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1`, never `BIR_SFTP_LIVE`); a plain run adds
    `BIR_AUTH_BYPASS=1`, while `--accounts mock` sets it to `0`.
-   - A plain run's database is new, under `~/BuwizNsh/agents/`; mock mode names no database and instead gives the app
-     its per-run rooms-mode device folder there.
+   - A plain run's database is new, under `~/BuwizNsh/agents/`; mock mode gives the app both its per-run rooms-mode
+     device folder there and `BIR_DATABASE_PATH` inside it.
    - On Android, the emulator's guarded test database is removed first, so the run starts at first-run setup.
    - The token is `GPUI_AGENT_TOKEN` if set, else one made for the run. It is never printed, and the run log masks it.
-3. Waits for the window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`). A plain run also proves the
-   data plane on the next port now; a mock run proves the rooms-mode device folder from `app.info`, then proves the
-   open room database before the first recipe that can write, as above. The first build can take a long time:
+3. In mock mode, first waits for the launch marker that proves the rooms-mode seam, as above. Then waits for the
+   window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`). A plain run also proves the data plane on
+   the next port now; a mock run proves the open room database from `app.info` before the first recipe that can
+   write, as above. The first build can take a long time:
    `--launch-timeout` is an hour by default.
 4. Runs each recipe with `gpui-agent recipe run`, in the variant for what the host reports:
    - **Variant.** `phone` when `hello.platform` is mobile (iPhone, iPad and Android tablets use the phone layout),
@@ -184,9 +207,8 @@ The checks read every word of a step (flag values included) and every string of 
 - **The token** stays in the environment of the processes that need it, and is masked in `run.log`, the receipts,
   the failure trees and `app.log`.
 - **Afterwards** the app is stopped, on the Simulator or emulator too (and the emulator's forwarded ports removed);
-  then the plain run's scratch database is deleted or the mock run's whole per-run rooms folder is deleted, and a
-  mock-written Android `dev.env` is restored or removed. Shared default-location sign-in files are never deleted. The
-  evidence folder stays.
+  then the plain run's scratch database is deleted or the mock run's whole per-run rooms folder is deleted. Shared
+  default-location sign-in files are never deleted. The evidence folder stays.
 
 ## Per machine type
 
