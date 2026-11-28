@@ -31,6 +31,16 @@ use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, H
 
 use crate::bir_module::{after_path_prompt, with_database, with_reader};
 
+fn ensure_not_client_scoped() -> Result<(), HostError> {
+    if crate::bir_module::current_client_scope().is_some() {
+        Err(HostError::new(
+            "A taxpayer session cannot import or export another taxpayer.",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
 export interface LegacySkippedFile {
@@ -148,6 +158,7 @@ fn legacy_standard_folders(arguments: &HostArguments) -> HostResult {
         return Err(HostError::new("legacy_standard_folders takes no arguments"));
     }
     crate::account_gate::ensure_unlocked()?;
+    ensure_not_client_scoped()?;
     Ok(HostValue::Array(
         legacy_migration::discover_legacy_roots()
             .into_iter()
@@ -173,6 +184,7 @@ fn legacy_scan_folder(
         ));
     }
     crate::account_gate::ensure_unlocked()?;
+    ensure_not_client_scoped()?;
     after_path_prompt(
         |answer| crate::hooks::hooks().prompt_for_folder("Scan", answer),
         |path| scan_folder(&path),
@@ -190,6 +202,7 @@ fn legacy_scan_standard(arguments: &HostArguments) -> HostResult {
         }
     };
     crate::account_gate::ensure_unlocked()?;
+    ensure_not_client_scoped()?;
     let roots = legacy_migration::discover_legacy_roots();
     let Some(folder) = usize::try_from(index)
         .ok()
@@ -206,6 +219,7 @@ fn legacy_scan_standard(arguments: &HostArguments) -> HostResult {
 /// Replaces any scan held before.
 pub(crate) fn scan_folder(path: &Path) -> HostResult {
     crate::account_gate::ensure_unlocked()?;
+    ensure_not_client_scoped()?;
     forget_scan();
     let folder = path.to_string_lossy().into_owned();
     let not_ebirforms = || {
@@ -276,6 +290,7 @@ fn legacy_import(arguments: &HostArguments) -> HostResult {
         }
     };
     crate::account_gate::ensure_unlocked()?;
+    ensure_not_client_scoped()?;
     let Some(held) = held_lock().take() else {
         return Err(HostError::new(
             "There is no scanned folder to import. Choose the folder again.",

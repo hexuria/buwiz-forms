@@ -211,6 +211,14 @@ pub fn say(line: &str) {
 /// Answer the whole batch with the sign-in error when the account gate is
 /// locked, and do no host work. `Some` is the batch to run.
 pub fn admit(batch: Vec<MailboxRequest>) -> Option<Vec<MailboxRequest>> {
+    if crate::bir_module::current_client_scope().is_some() {
+        let message = "The agent is not available in a taxpayer session.".to_owned();
+        for posted in batch {
+            let id = posted.request.id.clone();
+            posted.reply(gpui_agent::Response::err(id, message.clone()));
+        }
+        return None;
+    }
     if let Err(error) = crate::account_gate::ensure_unlocked() {
         let message = error.to_string();
         for posted in batch {
@@ -617,6 +625,80 @@ mod tests {
                 Some(crate::account_gate::LOCKED_MESSAGE)
             );
         }
+    }
+
+    fn isolated_lock_test(name: &str, body: impl FnOnce()) {
+        const CHILD: &str = "BIR_AGENT_LOCK_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some_and(|running| running == name) {
+            body();
+            return;
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &format!("agent::tests::{name}"), "--nocapture"])
+            .env(CHILD, name)
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_AUTH_BYPASS", "1")
+            .env("BUWIZ_NO_KEYCHAIN", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .env_remove("BIR_SFTP_LIVE")
+            .status()
+            .unwrap();
+        assert!(status.success(), "{name}: the child failed");
+    }
+
+    #[test]
+    fn a_locked_room_refuses_the_agent_until_a_host_check_unlocks_it() {
+        isolated_lock_test(
+            "a_locked_room_refuses_the_agent_until_a_host_check_unlocks_it",
+            || {
+                use std::time::Duration;
+
+                use gpui_agent::protocol::{Op, Request};
+
+                let _turn = crate::open_room::room_test_turn();
+                crate::bir_module::use_ephemeral_database();
+                crate::bir_module::with_account_database(|db| {
+                    db.set_setting("access_mode", "helpdesk")
+                        .map_err(|error| gpui_shell::HostError::new(error.to_string()))?;
+                    db.set_setting("app_lock_pin_hash", &bir_core::crypto::hash_pin("0817"))
+                        .map_err(|error| gpui_shell::HostError::new(error.to_string()))?;
+                    Ok(())
+                })
+                .unwrap();
+                crate::account_gate::set_unlocked(true);
+                crate::account_gate::set_room_unlocked(false);
+
+                let mailbox = AgentMailbox::new();
+                let hello = mailbox.push(Request::new("hello", Op::Hello));
+                assert!(admit(mailbox.take()).is_none());
+                let response = hello.recv_timeout(Duration::from_millis(200)).unwrap();
+                assert!(!response.ok);
+                assert_eq!(
+                    response.error.as_deref(),
+                    Some(crate::account_gate::LOCKED_MESSAGE)
+                );
+
+                let module = crate::bir_module::module();
+                let answer = module
+                    .call(
+                        "verify_admin_pin",
+                        &gpui_shell::HostArguments::new(vec![gpui_shell::HostValue::Str(
+                            "0817".into(),
+                        )]),
+                    )
+                    .unwrap();
+                assert_eq!(
+                    answer,
+                    gpui_shell::HostValue::Bool(true),
+                    "positive control"
+                );
+
+                let mailbox = AgentMailbox::new();
+                let _hello = mailbox.push(Request::new("hello", Op::Hello));
+                assert!(admit(mailbox.take()).is_some());
+                crate::account_gate::clear_room_unlocked();
+            },
+        );
     }
 
     #[test]
