@@ -861,8 +861,7 @@ pub fn end_changed_server(server_url: &str, refresh_token: &str) {
         tracing::info!("end_changed_server after quit ignored: the session is terminal");
         return;
     }
-    let mut at_clear = (None, 0);
-    {
+    let at_clear = {
         let _account = bir_core::account_session::lock();
         // B2: re-check INSIDE the lock what the caller decided outside it — a signed_in that won
         // the mutex in the gap is never deleted behind its back.
@@ -883,8 +882,8 @@ pub fn end_changed_server(server_url: &str, refresh_token: &str) {
             );
         }
         // F1: the cache and its generation AT THE CLEAR.
-        at_clear = bir_core::account_session::cache_owner_with_generation();
-    }
+        bir_core::account_session::cache_owner_with_generation()
+    };
     hooks::at("end_changed_server.after_clear");
     let outcome = {
         let mut session = locked();
