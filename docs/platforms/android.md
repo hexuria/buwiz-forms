@@ -63,13 +63,15 @@ Three steps on the owner's Mac. The first needs no secret; the second is the onl
    result (`scripts/android_bundle.py check`): package `com.buwiz.ebirforms`, the expected `versionCode`,
    `targetSdkVersion` from `nsh.json`, backup off, not debuggable, phone ABIs only, no permission beyond those the store
    listing declares (`STORE_PERMISSIONS`: `INTERNET`, `POST_NOTIFICATIONS`), and, read from the bytes of each ABI's
-   `libnsh.so`, the proof of what the build became: the production addresses present; no development server, baked
-   test list, overflow checks or standard-library precondition checks (what debug assertions switch on); no Google
+   `libnsh.so`, the proof of what the build became: the production addresses present; no development server (chosen at compile time), no sentinel of a compiled-in
+   development list (`nsh/src/dev_env.rs` `SENTINEL_TEXT`), no standard-library precondition checks (what debug
+   assertions switch on); no Google
    client id unless `STORE_GMAIL=1` (then one is required); and the library under its size ceiling (100 MB arm64,
    88 MB armeabi-v7a: Cargo's default profile makes 123 MB and 99 MB). Before the half hour of build the recipe also
    refuses early what it can see: a build environment (read with `env` where the build runs) without its release
-   profile or with any other `CARGO_PROFILE_RELEASE_*` or `RUSTFLAGS` form, and a Cargo configuration file with a
-   `[profile.release]` setting, rustflags, or an `[env]` entry for a variable the app bakes in. Those are early
+   profile, or with any other `CARGO_PROFILE_RELEASE_*`, any `RUSTFLAGS` form or a compiler wrapper (`RUSTC_WRAPPER`),
+   and a Cargo configuration file with a `[profile.release]` setting, rustflags, a compiler wrapper, an `include`, or
+   an `[env]` entry for a variable the app bakes in. Those are early
    refusals; the bundle check is the proof. It builds in the checkout's own `target/play-bundle` unless
    `CARGO_TARGET_DIR` is set, so a bundle never links crates compiled from another worktree. It writes
    `target/release-artifacts/eBIRForms-Android-<version>-<build>.aab`, unsigned.
@@ -118,7 +120,9 @@ that `nsh package` makes on its own, and a Linux machine may build the unsigned 
 ### On Linux, a verification build
 
 The same recipe runs on Linux. The pinned `nsh` is built in the Ubuntu 24.04 image (GTK 4), so the recipe runs it
-through the `nsh2404.sh` that `scripts/setup-linux-nsh.sh` writes beside the tools folder it serves (or `$NSH_WRAPPER`).
+through the wrapper `scripts/setup-linux-nsh.sh` writes beside the tools folder it serves: `~/BuwizNsh/nsh2404.sh`,
+or `<dir>/nsh2404-<name>.sh` for `NSH_TOOLS=<dir>/<name>` (or `$NSH_WRAPPER`). `STORE_GMAIL=1` is refused there at
+the start: the container gets no Google client.
 Before building, it refuses a wrapper written for another checkout and NSH tools the container cannot see, as well as
 the early refusals above, read inside the container. The bundle check at the end is the same proof as on a Mac.
 

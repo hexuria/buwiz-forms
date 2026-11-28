@@ -136,7 +136,8 @@ install_android_runtime
             root = Path(tmp)
             (root / "repo/nsh").mkdir(parents=True)
             result = self.run_shell(
-                "\n".join(function(name) for name in ("outside_home", "sdk_mount", "write_wrapper")) + r'''
+                "\n".join(function(name) for name in ("outside_home", "sdk_mount", "wrapper_path", "write_wrapper"))
+                + r'''
 export HOME="$PWD/home"
 REPO="$PWD/repo"
 ANDROID_HOME="$PWD/sdk"
@@ -147,7 +148,8 @@ MOUNTS=(-v "$HOME:$HOME")
 write_wrapper
 ''', tmp)
             self.assertEqual(result.returncode, 0, result.stderr)
-            wrapper = root / "store/nsh2404.sh"
+            # Named after its tools folder, so a second folder beside it gets its own.
+            wrapper = root / "store/nsh2404-tools.sh"
             self.assertTrue(wrapper.is_file())
             self.assertIn(f"tools={root}/store/tools", wrapper.read_text())
             self.assertFalse((root / "work/nsh2404.sh").exists())
@@ -206,7 +208,7 @@ checkout_nsh
             docker.chmod(0o755)
             result = self.run_shell(
                 "\n".join(function(name) for name in
-                          ("outside_home", "sdk_mount", "write_wrapper")) + r'''
+                          ("outside_home", "sdk_mount", "wrapper_path", "write_wrapper")) + r'''
 export HOME="$PWD/home" PATH="$PWD/bin:$PATH"
 REPO="$1"
 ANDROID_HOME="$2"
@@ -266,7 +268,7 @@ bash "$WORK/nsh2404.sh" nsh run --target android
                 docker.chmod(0o755)
                 result = self.run_shell(
                     "\n".join(function(name) for name in
-                              ("outside_home", "sdk_mount", "write_wrapper")) + r'''
+                              ("outside_home", "sdk_mount", "wrapper_path", "write_wrapper")) + r'''
 export HOME="$PWD/home" PATH="$PWD/bin:$PATH"
 REPO="$PWD/repo"
 ANDROID_HOME="$PWD/sdk"
@@ -309,7 +311,7 @@ bash "$WORK/nsh2404.sh" nsh run --target android
                 docker.chmod(0o755)
                 result = self.run_shell(
                     "\n".join(function(name) for name in
-                              ("outside_home", "sdk_mount", "write_wrapper", "in_image")) + r'''
+                              ("outside_home", "sdk_mount", "wrapper_path", "write_wrapper", "in_image")) + r'''
 unset GIT_CONFIG_GLOBAL
 export HOME="$PWD/home" XDG_CONFIG_HOME="$PWD/xdg" PATH="$PWD/bin:$PATH"
 REPO="$PWD/repo" ANDROID_HOME="$PWD/sdk" NDK_VERSION=27 WORK="$PWD" TOOLS="$PWD/tools" IMAGE=buwiz-nsh-2404

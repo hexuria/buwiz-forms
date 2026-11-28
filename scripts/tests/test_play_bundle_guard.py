@@ -172,7 +172,9 @@ class MoreContainerEnvTests(unittest.TestCase):
                            ("RUSTFLAGS", "-C debug-assertions"),
                            ("CARGO_ENCODED_RUSTFLAGS", "-Cdebug-assertions"),
                            ("CARGO_BUILD_RUSTFLAGS", "-C opt-level=0"),
-                           ("CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS", "-C debug-assertions")):
+                           ("CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS", "-C debug-assertions"),
+                           ("RUSTC_WRAPPER", "sccache"),
+                           ("RUSTC_WORKSPACE_WRAPPER", "x")):
             with self.subTest(key=key):
                 problems = guard.container_env_refusals(dump({**PROFILE, key: value}), PROFILE)
                 self.assertEqual(len(problems), 1, problems)
@@ -205,7 +207,12 @@ class CargoConfigTests(unittest.TestCase):
                      '[target.aarch64-linux-android]\nrustflags = ["-Cdebug-assertions"]\n',
                      '[env]\nBUWIZ_SERVER_URL = "http://localhost:3008"\n',
                      '[env]\nGOOGLE_CLIENT_ID = { value = "x", force = true }\n',
-                     'env.BUWIZ_ANDROID_DEV = "1"\n'):
+                     'env.BUWIZ_ANDROID_DEV = "1"\n',
+                     'include = ["other.toml"]\n',
+                     '[build]\nrustc-wrapper = "sccache"\n',
+                     'build.rustc-workspace-wrapper = "x"\n',
+                     'build = { rustc-wrapper = "x" }\n',
+                     '[target."aarch64.custom-android"]\nrustflags = ["-Cdebug-assertions"]\n'):
             with self.subTest(text=text):
                 self.assertTrue(self.refusals(text), text)
 

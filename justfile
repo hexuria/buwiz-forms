@@ -773,8 +773,13 @@ play-bundle *args:
     # scripts/setup-linux-nsh.sh writes; inside the image already (/.dockerenv), or on a Mac, it runs as it is.
     NSH_RUN=()
     if [ "$(uname -s)" = Linux ] && [ ! -f /.dockerenv ]; then
-        # setup-linux-nsh.sh writes the wrapper beside the tools folder it serves (~/BuwizNsh/nsh2404.sh by default).
-        WRAPPER="${NSH_WRAPPER:-$(dirname "$TOOLS")/nsh2404.sh}"
+        # The wrapper passes the build no Google client, so a Gmail bundle cannot be made here: say so before the build.
+        [ "${STORE_GMAIL:-}" != 1 ] || { echo "❌ STORE_GMAIL=1 builds only on the owner's Mac: the Linux container gets no Google client." >&2; exit 1; }
+        # setup-linux-nsh.sh writes one wrapper per tools folder, beside it: ~/BuwizNsh/nsh2404.sh for the shared tools,
+        # <folder>/../nsh2404-<name>.sh for NSH_TOOLS=<folder>/<name>.
+        if [ "$TOOLS" = "$HOME/BuwizNsh/tools" ]; then DEFAULT_WRAPPER="$HOME/BuwizNsh/nsh2404.sh"
+        else DEFAULT_WRAPPER="$(dirname "$TOOLS")/nsh2404-$(basename "$TOOLS").sh"; fi
+        WRAPPER="${NSH_WRAPPER:-$DEFAULT_WRAPPER}"
         [ -x "$WRAPPER" ] || { echo "❌ No $WRAPPER: run scripts/setup-linux-nsh.sh (NSH_TOOLS=<folder> for a fresh one)." >&2; exit 1; }
         {{PYTHON}} scripts/play_bundle_guard.py wrapper "$WRAPPER" "$root/nsh" "$TOOLS" "$HOME"
         export NSH_TOOLS="$TOOLS"
@@ -823,7 +828,10 @@ play-bundle *args:
     # release becomes, and no Cargo configuration file sets what `env` cannot show.
     BUILD_ENV="$(${NSH_RUN[@]+"${NSH_RUN[@]}"} env)" || { echo "❌ Could not read the build's environment (the error above)." >&2; exit 1; }
     printf '%s\n' "$BUILD_ENV" | {{PYTHON}} scripts/play_bundle_guard.py container-env
-    {{PYTHON}} scripts/play_bundle_guard.py cargo-config "$root/nsh" "$CARGO_TARGET_DIR"
+    # Cargo reads the configuration of the place it builds in: in the container, $HOME/.cargo (the wrapper passes no
+    # CARGO_HOME); here, $CARGO_HOME.
+    if [ ${#NSH_RUN[@]} -gt 0 ]; then BUILD_CARGO_HOME="$HOME/.cargo"; else BUILD_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"; fi
+    {{PYTHON}} scripts/play_bundle_guard.py cargo-config "$root/nsh" "$CARGO_TARGET_DIR" --cargo-home "$BUILD_CARGO_HOME"
     OUT="$root/{{RELEASE_DIR}}/android"
     AAB="$root/{{RELEASE_DIR}}/{{APP_NAME}}-Android-{{VERSION}}-$BUILD.aab"
     rm -rf "$OUT" "$AAB"
