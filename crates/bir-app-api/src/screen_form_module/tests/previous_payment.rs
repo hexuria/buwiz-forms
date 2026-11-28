@@ -158,10 +158,17 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
             &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
         );
         let first = open(code, 1);
+        // BIR-Form0619E.hta and BIR-Form0619F.hta disable the box at load but
+        // do not run the No radio's zeroing onclick for a stored file
+        // (optAmend:N :330; load/enableAllControl :1309-1313/:2490-2494 and
+        // :1359-1362/:2565-2568). A legacy or hand-edited dormant amount
+        // therefore stays in the draft there; the other gated forms' load
+        // path clears it through their runtime handlers.
+        let official_load_keeps_it = matches!(code, "0619E" | "0619F");
         assert_eq!(
             first["draft"][spec.path].as_f64().unwrap_or(0.0),
-            0.0,
-            "{code}: legacy dormant amount is cleared on open"
+            if official_load_keeps_it { 42.0 } else { 0.0 },
+            "{code}: legacy dormant amount on open"
         );
         assert_eq!(first["values"][spec.key], "0.00");
         assert_eq!(first["locks"][spec.key], spec.lock);
@@ -173,6 +180,10 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
         );
         let gate = gate_key(spec);
         let notes = first["notes"].as_array().unwrap();
+        if official_load_keeps_it {
+            assert_eq!(notes.len(), 0, "{code}: no clearing happened on open");
+            continue;
+        }
         assert_eq!(notes.len(), 1, "{code}: one pending clearing notice");
         assert_eq!(notes[0]["text"], spec.cleared, "{code}: pending note text");
         let key = notes[0]["key"].as_str().unwrap().to_string();

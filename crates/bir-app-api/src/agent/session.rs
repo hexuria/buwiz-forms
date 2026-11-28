@@ -709,11 +709,25 @@ impl Session {
                 }
                 break;
             }
+            if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+                bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
+                    kind,
+                    &mut draft,
+                    filled.iter().any(|key| key.as_str() == spec.no_key),
+                );
+            }
             agent::compute(kind, &mut draft)?;
             pending = deferred
                 .into_iter()
                 .map(|(key, value, _)| (key, value))
                 .collect();
+        }
+        if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+            bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
+                kind,
+                &mut draft,
+                filled.iter().any(|key| key.as_str() == spec.no_key),
+            );
         }
         agent::compute(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;

@@ -1625,6 +1625,23 @@ pub mod previous_payment {
             && draft[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005
     }
 
+    /// The No radio's own onclick clearing. Compute alone must not do it:
+    /// 0619E/F's load handlers disable the box without running that onclick,
+    /// so a dormant legacy amount survives opening there.
+    pub fn clear_on_no_radio(kind: AgentFormKind, draft: &mut Value, no_chosen: bool) {
+        if !no_chosen {
+            return;
+        }
+        let Some(spec) = spec(kind) else {
+            return;
+        };
+        if lock_reason(spec, draft).is_some()
+            && let Value::Object(object) = draft
+        {
+            object.insert(spec.path.to_string(), json!(0.0));
+        }
+    }
+
     pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
         let Some(spec) = spec(kind) else {
             return;

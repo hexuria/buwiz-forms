@@ -3586,11 +3586,25 @@ fn open_screen_form(
             };
             let clearance_on_open = stored_on_open.as_ref().is_some_and(|stored| {
                 let mut computed = stored.clone();
-                agent::compute(kind, &mut computed).is_ok()
-                    && !bir_core::forms::agent::draft_locks::pending_notices::clearance(
+                if agent::compute(kind, &mut computed).is_err() {
+                    return false;
+                }
+                let mut clearances =
+                    bir_core::forms::agent::draft_locks::pending_notices::clearance(
                         kind, stored, &computed,
-                    )
-                    .is_empty()
+                    );
+                // 0619E/F's official load keeps that dormant amount; it is
+                // not an open-time clearing and must not create a migration
+                // save or a notice.
+                if matches!(kind.form_code(), "0619E" | "0619F")
+                    && let Some(spec) =
+                        bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+                {
+                    let gate =
+                        bir_core::forms::agent::draft_locks::previous_payment::gate_key(spec);
+                    clearances.retain(|(clearance, _)| clearance != &gate);
+                }
+                !clearances.is_empty()
             });
             // The migration is a normal guarded draft save before any profile
             // follow can hide the transition: recompute clears the dormant
@@ -5465,6 +5479,13 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             with_database(|db| {
                 reapply_penalty_context(db, kind, &mut draft).map_err(HostError::new)
             })?;
+        }
+        if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+            bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
+                kind,
+                &mut draft,
+                edits.contains_key(spec.no_key),
+            );
         }
         agent::compute(kind, &mut draft).map_err(host_error)?;
     }
