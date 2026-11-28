@@ -1,0 +1,12 @@
+{
+ "v": 1,
+ "description": "#465 sheet press-through proof, iPhone only",
+ "recipes": [
+  {
+   "name": "sheet-press-through",
+   "file": "sheet-press-through.json",
+   "required": true,
+   "timeout_s": 600
+  }
+ ]
+}

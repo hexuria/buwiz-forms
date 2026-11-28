@@ -1,0 +1,49 @@
+# #465: pick the RDO, then press ZIP at once while the RDO sheet is closing.
+wait_until setup-solo --timeout-ms 30000
+click setup-solo
+wait_until new-tp-name --timeout-ms 10000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-sheet --timeout-ms 5000
+type new-tp-rdo_code-search 039
+click new-tp-rdo_code-opt-039
+click new-tp-zip_code-trigger --screenshot
+wait_until new-tp-zip_code-sheet --timeout-ms 1500 --screenshot
+type new-tp-zip_code-search 1000
+click new-tp-zip_code-opt-1000
+wait_until new-tp-zip_code-sheet --absent --timeout-ms 5000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-sheet --timeout-ms 5000
+type new-tp-rdo_code-search 040
+click new-tp-rdo_code-opt-040
+click new-tp-zip_code-trigger --screenshot
+wait_until new-tp-zip_code-sheet --timeout-ms 1500 --screenshot
+type new-tp-zip_code-search 1000
+click new-tp-zip_code-opt-1000
+wait_until new-tp-zip_code-sheet --absent --timeout-ms 5000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-sheet --timeout-ms 5000
+type new-tp-rdo_code-search 039
+click new-tp-rdo_code-opt-039
+click new-tp-zip_code-trigger --screenshot
+wait_until new-tp-zip_code-sheet --timeout-ms 1500 --screenshot
+type new-tp-zip_code-search 1000
+click new-tp-zip_code-opt-1000
+wait_until new-tp-zip_code-sheet --absent --timeout-ms 5000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-sheet --timeout-ms 5000
+type new-tp-rdo_code-search 040
+click new-tp-rdo_code-opt-040
+click new-tp-zip_code-trigger --screenshot
+wait_until new-tp-zip_code-sheet --timeout-ms 1500 --screenshot
+type new-tp-zip_code-search 1000
+click new-tp-zip_code-opt-1000
+wait_until new-tp-zip_code-sheet --absent --timeout-ms 5000
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-sheet --timeout-ms 5000
+type new-tp-rdo_code-search 039
+click new-tp-rdo_code-opt-039
+click new-tp-zip_code-trigger --screenshot
+wait_until new-tp-zip_code-sheet --timeout-ms 1500 --screenshot
+type new-tp-zip_code-search 1000
+click new-tp-zip_code-opt-1000
+wait_until new-tp-zip_code-sheet --absent --timeout-ms 5000

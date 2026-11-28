@@ -1,0 +1,363 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-sheet-press-through",
+  "fingerprint": "fnv1a64:b2acaab7de810b07",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "setup-wait",
+      "ok": true,
+      "elapsed_ms": 3
+    },
+    {
+      "id": "setup-solo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 564
+    },
+    {
+      "id": "setup-page",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "r1-open-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1611
+    },
+    {
+      "id": "r1-rdo-sheet",
+      "ok": true,
+      "elapsed_ms": 17
+    },
+    {
+      "id": "r1-type-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1335
+    },
+    {
+      "id": "r1-pick-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 725
+    },
+    {
+      "id": "r1-press-zip-at-once",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 907,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/008-r1-press-zip-at-once.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r1-zip-opened",
+      "ok": true,
+      "elapsed_ms": 137,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/009-r1-zip-opened.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r1-type-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1062
+    },
+    {
+      "id": "r1-pick-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 714
+    },
+    {
+      "id": "r1-zip-settled",
+      "ok": true,
+      "elapsed_ms": 0
+    },
+    {
+      "id": "r2-open-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 746
+    },
+    {
+      "id": "r2-rdo-sheet",
+      "ok": true,
+      "elapsed_ms": 22
+    },
+    {
+      "id": "r2-type-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 960
+    },
+    {
+      "id": "r2-pick-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 725
+    },
+    {
+      "id": "r2-press-zip-at-once",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 915,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/017-r2-press-zip-at-once.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r2-zip-opened",
+      "ok": true,
+      "elapsed_ms": 139,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/018-r2-zip-opened.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r2-type-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1086
+    },
+    {
+      "id": "r2-pick-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 700
+    },
+    {
+      "id": "r2-zip-settled",
+      "ok": true,
+      "elapsed_ms": 0
+    },
+    {
+      "id": "r3-open-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 775
+    },
+    {
+      "id": "r3-rdo-sheet",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "r3-type-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 913
+    },
+    {
+      "id": "r3-pick-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 705
+    },
+    {
+      "id": "r3-press-zip-at-once",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2349,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/026-r3-press-zip-at-once.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r3-zip-opened",
+      "ok": true,
+      "elapsed_ms": 136,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/027-r3-zip-opened.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r3-type-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1050
+    },
+    {
+      "id": "r3-pick-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 712
+    },
+    {
+      "id": "r3-zip-settled",
+      "ok": true,
+      "elapsed_ms": 0
+    },
+    {
+      "id": "r4-open-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 717
+    },
+    {
+      "id": "r4-rdo-sheet",
+      "ok": true,
+      "elapsed_ms": 23
+    },
+    {
+      "id": "r4-type-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 906
+    },
+    {
+      "id": "r4-pick-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 713
+    },
+    {
+      "id": "r4-press-zip-at-once",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 902,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/035-r4-press-zip-at-once.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r4-zip-opened",
+      "ok": true,
+      "elapsed_ms": 140,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/036-r4-zip-opened.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r4-type-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1016
+    },
+    {
+      "id": "r4-pick-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 676
+    },
+    {
+      "id": "r4-zip-settled",
+      "ok": true,
+      "elapsed_ms": 0
+    },
+    {
+      "id": "r5-open-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 744
+    },
+    {
+      "id": "r5-rdo-sheet",
+      "ok": true,
+      "elapsed_ms": 18
+    },
+    {
+      "id": "r5-type-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 940
+    },
+    {
+      "id": "r5-pick-rdo",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 731
+    },
+    {
+      "id": "r5-press-zip-at-once",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 880,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/044-r5-press-zip-at-once.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r5-zip-opened",
+      "ok": true,
+      "elapsed_ms": 123,
+      "screenshot": {
+        "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/045-r5-zip-opened.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "r5-type-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 979
+    },
+    {
+      "id": "r5-pick-zip",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 757
+    },
+    {
+      "id": "r5-zip-settled",
+      "ok": true,
+      "elapsed_ms": 0
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/008-r1-press-zip-at-once.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/009-r1-zip-opened.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/017-r2-press-zip-at-once.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/018-r2-zip-opened.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/026-r3-press-zip-at-once.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/027-r3-zip-opened.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/035-r4-press-zip-at-once.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/036-r4-zip-opened.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/044-r5-press-zip-at-once.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/storea2/out-sheet1v/01-sheet-press-through/045-r5-zip-opened.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 29319
+}

@@ -1,0 +1,37 @@
+{
+ "suite": "sheet-press-through-suite",
+ "target": "ios",
+ "started": "20261127-173451",
+ "out": "/Users/devin/storea2/out-sheet2v",
+ "cli_version": "0.4.1",
+ "app_commit": "d910f47d",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "sheet-press-through",
+   "status": "pass",
+   "ms": 27332,
+   "note": null,
+   "file": "agent-recipes/e2e/sheet-press-through.json"
+  }
+ ]
+}
