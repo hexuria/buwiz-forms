@@ -776,6 +776,85 @@ impl SubmissionTransport for NetworkSubmissionTransport {
     }
 }
 
+#[cfg(test)]
+static USE_TOKEN_FETCHING_TRANSPORT: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+#[cfg(test)]
+static TOKEN_TRANSPORT_OPENS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+#[cfg(test)]
+static TOKEN_TRANSPORT_CALLS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// The cron tests' transport stub: no network, but its session open really asks the process-wide
+/// AccountTokens for a token. That is the production send's token path under the spawned job's
+/// SEND_CONTEXT; a stale or ownerless context fails here exactly as it would before a relay send.
+#[cfg(test)]
+struct TokenFetchingTransport;
+
+#[cfg(test)]
+impl SubmissionTransport for TokenFetchingTransport {
+    type Session = String;
+
+    fn session_source(&self, _session: &Self::Session) -> crate::transport::SftpEndpointSource {
+        crate::transport::SftpEndpointSource::Env
+    }
+
+    fn open_session<'a>(
+        &'a self,
+        form_type: &'a str,
+        _tin: &'a str,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Self::Session, crate::transport::TransportError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        TOKEN_TRANSPORT_OPENS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async move {
+            let tokens = crate::account_session::AccountTokens;
+            bir_submit::TokenSource::access_token(&tokens, false)
+                .await
+                .map_err(|error| crate::transport::TransportError::RelayHeld {
+                    reason: error.to_string(),
+                    wait_until: None,
+                })?;
+            Ok(form_type.to_owned())
+        })
+    }
+
+    fn store_session<'a>(
+        &'a self,
+        session: Self::Session,
+        _filename: &'a str,
+        _payload: &'a [u8],
+        _xml: &'a [u8],
+        _note: bir_submit::Note<'a>,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        crate::transport::StoreReport,
+                        crate::transport::TransportError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        let _ = session;
+        TOKEN_TRANSPORT_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async move { Ok(crate::transport::StoreReport::default()) })
+    }
+
+    fn settle_pending<'a>(
+        &'a self,
+        _pending: &'a str,
+    ) -> Pin<Box<dyn Future<Output = crate::relay::Settlement> + Send + 'a>> {
+        Box::pin(async move { crate::relay::Settlement::NotYet })
+    }
+}
+
 /// The worker's note of a Buwiz relay send ([`SubmissionTransport::store_session`]): the client's pending send, as
 /// JSON, written by `write` on the claimed return. It fails when the claim is no longer this worker's.
 fn pending_note<'a, W>(
@@ -1738,6 +1817,11 @@ async fn process_queued_2551q(
     profile: &TaxpayerProfile,
     db: Arc<Mutex<Database>>,
 ) {
+    #[cfg(test)]
+    if USE_TOKEN_FETCHING_TRANSPORT.load(std::sync::atomic::Ordering::SeqCst) {
+        process_queued_2551q_with_transport(summary, profile, db, &TokenFetchingTransport).await;
+        return;
+    }
     process_queued_2551q_with_transport(summary, profile, db, &NetworkSubmissionTransport).await;
 }
 
@@ -3222,39 +3306,85 @@ impl Drop for JobCleanup {
 
 #[cfg(test)]
 mod tests {
-    /// F7, the send across a switch: the account captured at spawn is re-checked before the send
-    /// runs — after a switch the return stays Queued in its own room, never sent under the new
-    /// sign-in. The spawn-to-first-poll gap is deterministic here: the spawned task cannot poll
-    /// until this test yields, and the switch happens before that.
+    fn cron_secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
+        crate::cloud_account::AccountSecrets {
+            server_url: "http://localhost:3008".into(),
+            access_token: format!("access-{user}"),
+            refresh_token: format!("refresh-{user}"),
+            access_expires_at_unix: crate::cloud_account::unix_now() + 3600,
+            user_id: user.into(),
+            email: Some(format!("{user}@example.test")),
+            offline: false,
+            practice: false,
+        }
+    }
+
+    fn cron_stored_for(user: &str) -> crate::cloud_account::StoredAccount {
+        crate::cloud_account::StoredAccount::from_secrets(&cron_secrets_for(user))
+    }
+
+    fn cron_key_for(user: &str) -> crate::account_session::OwnerKey {
+        crate::account_session::OwnerKey::of(&cron_stored_for(user)).unwrap()
+    }
+
+    struct TokenTransportReset;
+
+    impl Drop for TokenTransportReset {
+        fn drop(&mut self) {
+            USE_TOKEN_FETCHING_TRANSPORT.store(false, std::sync::atomic::Ordering::SeqCst);
+            crate::account_session::cache_owner(None);
+        }
+    }
+
+    fn use_token_transport() -> TokenTransportReset {
+        TOKEN_TRANSPORT_OPENS.store(0, std::sync::atomic::Ordering::SeqCst);
+        TOKEN_TRANSPORT_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+        USE_TOKEN_FETCHING_TRANSPORT.store(true, std::sync::atomic::Ordering::SeqCst);
+        TokenTransportReset
+    }
+
+    fn token_transport_counts() -> (usize, usize) {
+        (
+            TOKEN_TRANSPORT_OPENS.load(std::sync::atomic::Ordering::SeqCst),
+            TOKEN_TRANSPORT_CALLS.load(std::sync::atomic::Ordering::SeqCst),
+        )
+    }
+
+    async fn wait_for_no_active_jobs() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !get_active_jobs().lock().unwrap().is_empty() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the job key never cleared"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    }
+
+    /// F7, the send across a switch through the cron's production spawn wiring and a transport
+    /// that really asks AccountTokens: after the machine's sign-in transition the return stays
+    /// Queued, the transport is never opened, and neither account's token is fetched.
     #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_before_a_switch_is_never_sent_under_the_new_sign_in() {
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
-        fn secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
-            crate::cloud_account::AccountSecrets {
-                server_url: "http://localhost:3008".into(),
-                access_token: "access-secret".into(),
-                refresh_token: "refresh-secret".into(),
-                access_expires_at_unix: 500,
-                user_id: user.into(),
-                email: Some("filer@example.test".into()),
-                offline: false,
-                practice: false,
-            }
-        }
         temp_env::async_with_vars(
             [(
                 crate::cloud_account::ENV_ACCOUNT_FILE,
                 Some(account_path.to_str().unwrap().to_owned()),
             )],
             async {
-                let stored_a =
-                    crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-a"));
+                let _transport = use_token_transport();
+                let stored_a = cron_stored_for("user-a");
                 crate::account_session::save_stored(&stored_a).unwrap();
                 let owner_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(owner_a.clone()));
                 let epoch_a = crate::session_epoch::current() + 1;
                 crate::session_epoch::set(epoch_a);
+                let a_before = crate::account_session::token_fetches_for(&owner_a);
+                let key_b = cron_key_for("user-b");
+                let b_before = crate::account_session::token_fetches_for(&key_b);
                 let db = test_db();
                 let (queued, _summary) = stored_queued_2551q(&db);
                 let profile = reviewed_profile();
@@ -3262,24 +3392,16 @@ mod tests {
                     &profile,
                     db.clone(),
                     FIXED_ROOM_KEY,
-                    Some(owner_a),
+                    Some(owner_a.clone()),
                     epoch_a,
                 )
                 .await;
                 // The machine's sign-in transition happens before the spawned task's first poll.
-                crate::account_session::save_stored(
-                    &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-b")),
-                )
-                .unwrap();
+                let stored_b = cron_stored_for("user-b");
+                crate::account_session::save_stored(&stored_b).unwrap();
+                crate::account_session::cache_owner(Some(key_b.clone()));
                 crate::session_epoch::set(epoch_a + 1);
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-                while !get_active_jobs().lock().unwrap().is_empty() {
-                    assert!(
-                        std::time::Instant::now() < deadline,
-                        "the job key never cleared"
-                    );
-                    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
-                }
+                wait_for_no_active_jobs().await;
                 let stored = db
                     .lock()
                     .unwrap()
@@ -3291,54 +3413,124 @@ mod tests {
                     FilingStatus::Queued,
                     "the return was sent under the new sign-in"
                 );
+                assert_eq!(
+                    token_transport_counts(),
+                    (0, 0),
+                    "the transport was opened or used for the dead send"
+                );
+                assert_eq!(
+                    crate::account_session::token_fetches_for(&owner_a),
+                    a_before,
+                    "A's token was fetched after A's epoch ended"
+                );
+                assert_eq!(
+                    crate::account_session::token_fetches_for(&key_b),
+                    b_before,
+                    "B's token was fetched for A's send"
+                );
             },
         )
         .await;
     }
 
-    /// AL1: the owner and epoch are fixed with the room Arc at the tick's source snapshot. A
-    /// sign-in landing after that snapshot but before the spawn sends nothing and fetches no token
-    /// for the newer account; the same queued return is sent under the newer account only when a
-    /// later tick snapshots that account (the positive control).
+    /// Positive control through the same production spawn wiring: with no switch, the transport's
+    /// real AccountTokens ask succeeds once and the queued return is Submitted.
     #[tokio::test(flavor = "current_thread")]
-    async fn a_sign_in_between_the_room_snapshot_and_the_spawn_sends_nothing() {
+    async fn a_send_spawned_without_a_switch_is_submitted_and_fetches_its_context_token() {
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
-        fn secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
-            crate::cloud_account::AccountSecrets {
-                server_url: "http://localhost:3008".into(),
-                access_token: format!("access-{user}"),
-                refresh_token: format!("refresh-{user}"),
-                access_expires_at_unix: crate::cloud_account::unix_now() + 3600,
-                user_id: user.into(),
-                email: Some(format!("{user}@example.test")),
-                offline: false,
-                practice: false,
-            }
-        }
-        fn stored_for(user: &str) -> crate::cloud_account::StoredAccount {
-            crate::cloud_account::StoredAccount::from_secrets(&secrets_for(user))
-        }
-        fn key_for(user: &str) -> crate::account_session::OwnerKey {
-            crate::account_session::OwnerKey::of(&stored_for(user)).unwrap()
-        }
         temp_env::async_with_vars(
             [(
                 crate::cloud_account::ENV_ACCOUNT_FILE,
                 Some(account_path.to_str().unwrap().to_owned()),
             )],
             async {
+                let _transport = use_token_transport();
+                let stored_a = cron_stored_for("user-a");
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let owner_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(owner_a.clone()));
+                let epoch_a = crate::session_epoch::current() + 1;
+                crate::session_epoch::set(epoch_a);
+                let before = crate::account_session::token_fetches_for(&owner_a);
                 let db = test_db();
                 let (queued, _summary) = stored_queued_2551q(&db);
                 let profile = reviewed_profile();
-                crate::account_session::save_stored(&stored_for("user-a")).unwrap();
+                process_submission_queue(
+                    &profile,
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    Some(owner_a.clone()),
+                    epoch_a,
+                )
+                .await;
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                loop {
+                    let stored = db
+                        .lock()
+                        .unwrap()
+                        .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                        .unwrap()
+                        .unwrap();
+                    if stored.status == FilingStatus::Submitted {
+                        break;
+                    }
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "the control send was not submitted: {:?}",
+                        stored.status
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                }
+                wait_for_no_active_jobs().await;
+                assert_eq!(
+                    token_transport_counts(),
+                    (1, 1),
+                    "the control transport did not open and store exactly once"
+                );
+                assert_eq!(
+                    crate::account_session::token_fetches_for(&owner_a),
+                    before + 1,
+                    "the control did not fetch A's token exactly once"
+                );
+            },
+        )
+        .await;
+    }
+
+    /// AL1 through the cron's production spawn wiring: the owner and epoch are fixed with the
+    /// room Arc at the tick's source snapshot. A sign-in landing after that snapshot but before
+    /// the spawn opens no transport, fetches no token and leaves A's return Queued.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_sign_in_between_the_room_snapshot_and_the_spawn_sends_nothing() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let _transport = use_token_transport();
+                let db = test_db();
+                let (queued, _summary) = stored_queued_2551q(&db);
+                let profile = reviewed_profile();
+                let stored_a = cron_stored_for("user-a");
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let key_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(key_a.clone()));
+                let key_b = cron_key_for("user-b");
                 let epoch_a = crate::session_epoch::current() + 11;
                 crate::session_epoch::set(epoch_a);
-                let b_before = crate::account_session::token_fetches_for(&key_for("user-b"));
+                let a_before = crate::account_session::token_fetches_for(&key_a);
+                let b_before = crate::account_session::token_fetches_for(&key_b);
                 BEFORE_SEND_EPOCH_CHECK.with(|hook| {
                     *hook.borrow_mut() = Some(Box::new(move || {
-                        crate::account_session::save_stored(&stored_for("user-b")).unwrap();
+                        let stored_b = cron_stored_for("user-b");
+                        crate::account_session::save_stored(&stored_b).unwrap();
+                        crate::account_session::cache_owner(Some(key_b.clone()));
                         crate::session_epoch::set(epoch_a + 1);
                     }));
                 });
@@ -3346,13 +3538,23 @@ mod tests {
                     &profile,
                     db.clone(),
                     FIXED_ROOM_KEY,
-                    Some(key_for("user-a")),
+                    Some(key_a.clone()),
                     epoch_a,
                 )
                 .await;
                 tokio::time::sleep(std::time::Duration::from_millis(150)).await;
                 assert_eq!(
-                    crate::account_session::token_fetches_for(&key_for("user-b")),
+                    token_transport_counts(),
+                    (0, 0),
+                    "the transport was opened or used after the sign-in gap"
+                );
+                assert_eq!(
+                    crate::account_session::token_fetches_for(&key_a),
+                    a_before,
+                    "A's token was fetched after A's epoch ended"
+                );
+                assert_eq!(
+                    crate::account_session::token_fetches_for(&cron_key_for("user-b")),
                     b_before,
                     "B's token was fetched for the room Arc snapshotted as A"
                 );
@@ -3363,25 +3565,6 @@ mod tests {
                     .unwrap()
                     .unwrap();
                 assert_eq!(stored.status, FilingStatus::Queued, "A's return was sent");
-
-                // Positive control: B's token counter does move when B's own session asks for it.
-                let context =
-                    crate::account_session::SendContext::new(key_for("user-b"), epoch_a + 1);
-                use bir_submit::TokenSource;
-                let token = crate::account_session::SEND_CONTEXT
-                    .scope(context, async {
-                        crate::account_session::AccountTokens
-                            .access_token(false)
-                            .await
-                    })
-                    .await
-                    .unwrap();
-                assert_eq!(token, "access-user-b");
-                assert_eq!(
-                    crate::account_session::token_fetches_for(&key_for("user-b")),
-                    b_before + 1,
-                    "the positive control did not fetch B's token"
-                );
                 get_active_jobs().lock().unwrap().clear();
             },
         )
