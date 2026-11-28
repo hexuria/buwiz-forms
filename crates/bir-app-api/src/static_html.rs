@@ -172,6 +172,27 @@ pub fn field_map(html: &str) -> Vec<(String, String)> {
     out
 }
 
+/// The text of `cell` in a static print document: its one span, or its
+/// `<cell>-i` input span or `<cell>-s<slot>` comb spans in slot order.
+/// Test-only proof helper.
+#[cfg(test)]
+pub(crate) fn cell_text(html: &str, cell: &str) -> String {
+    let prefix = format!("{cell}-s");
+    let mut slots: Vec<(usize, String)> = field_map(html)
+        .into_iter()
+        .filter_map(|(id, text)| {
+            if id == cell || id == format!("{cell}-i") {
+                return Some((0, text));
+            }
+            id.strip_prefix(&prefix)
+                .and_then(|slot| slot.parse::<usize>().ok())
+                .map(|slot| (slot, text))
+        })
+        .collect();
+    slots.sort_by_key(|(slot, _)| *slot);
+    slots.into_iter().map(|(_, text)| text).collect()
+}
+
 #[cfg(test)]
 mod tests {
     const DOC: &str = r##"<html><head></head><body><a class="doc-link" href="guide.html">Guide</a><div class="page page-1"><input type="text" class="fi fh4 fc" id="p1c1-i" style="inset:1pt" value="X"></div><div class="page page-2 page-receipt"><input type="text" class="fi fh22" id="p2c3-s0" data-slot-index="0" value="A&amp;B"></div><script>alert(1)</script></body></html>"##;

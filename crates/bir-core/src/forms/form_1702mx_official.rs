@@ -298,15 +298,6 @@ impl Form1702MXDraft {
                 }
             }
         }
-        if !self.is_amended {
-            for column in 0..3 {
-                set(
-                    column_mut(&mut self.schedule_3.items_20_to_33[7], column),
-                    0,
-                );
-            }
-        }
-
         // Schedule 5 (itemized deductions) and Schedule 6 (special deductions).
         for row in self.schedule_5.amounts.iter_mut().take(25) {
             row_total(row);
@@ -1030,14 +1021,6 @@ impl Form1702MXDraft {
             err(
                 "atc",
                 "Less than 4 years has passed since Date of Incorporation and the Filing Year, the mark in ATC - IC 055 of Page 1 Item 5 will be removed.".to_string(),
-            );
-        }
-        if !self.is_amended
-            && (0..3).any(|c| v(column_ref(&self.schedule_3.items_20_to_33[7], c)) != 0)
-        {
-            err(
-                "schedule_3.item_27",
-                "Item 27 (tax paid in a previously filed return) applies only to an amended return.".to_string(),
             );
         }
         if self.negative_input() {
@@ -2395,5 +2378,44 @@ mod tests {
             upload["frm1702MX:txtPg1Pt1I10RegisteredAddress2"],
             "123 Ayala Avenue, Makati City"
         );
+    }
+    #[test]
+    fn disabled_schedule_3_item_27_is_kept_and_computed() {
+        let mut d = sample();
+        d.is_amended = true;
+        d.recompute();
+        let base_a = v(&d.schedule_3.items_20_to_33[12].exempt);
+        let base_b = v(&d.schedule_3.items_20_to_33[12].special);
+        let base_c = v(&d.schedule_3.items_20_to_33[12].regular);
+        let row = &mut d.schedule_3.items_20_to_33[7];
+        row.exempt = peso(111);
+        row.special = peso(222);
+        row.regular = peso(333);
+        d.recompute();
+        let reopened: Form1702MXDraft =
+            serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(v(&reopened.schedule_3.items_20_to_33[7].regular), 333);
+        d.is_amended = false;
+        d.recompute();
+        let row = &d.schedule_3.items_20_to_33[7];
+        assert_eq!(
+            (v(&row.exempt), v(&row.special), v(&row.regular)),
+            (111, 222, 333)
+        );
+        assert_eq!(v(&d.schedule_3.items_20_to_33[12].exempt), base_a + 111);
+        assert_eq!(v(&d.schedule_3.items_20_to_33[12].special), base_b + 222);
+        assert_eq!(v(&d.schedule_3.items_20_to_33[12].regular), base_c + 333);
+        let upload = d.to_official_field_map();
+        assert_eq!(upload["frm1702MX:txtPg2Sc3It27A"], "111");
+        assert_eq!(upload["frm1702MX:txtPg2Sc3It27B"], "222");
+        assert_eq!(upload["frm1702MX:txtPg2Sc3It27C"], "333");
+        let print = d.to_print_field_map();
+        assert_eq!(print["frm1702MX:txtPg2Sc3It27A"], "111");
+        assert_eq!(print["frm1702MX:txtPg2Sc3It27B"], "222");
+        assert_eq!(print["frm1702MX:txtPg2Sc3It27C"], "333");
+        let payload = d.official_payload().unwrap();
+        assert!(payload.contains("frm1702MX:txtPg2Sc3It27A=111frm1702MX:txtPg2Sc3It27A="));
+        assert!(payload.contains("frm1702MX:txtPg2Sc3It27B=222frm1702MX:txtPg2Sc3It27B="));
+        assert!(payload.contains("frm1702MX:txtPg2Sc3It27C=333frm1702MX:txtPg2Sc3It27C="));
     }
 }

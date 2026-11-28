@@ -7,6 +7,6 @@
 - Dummy editable save: `00000000000000-1601FQ-2026Q1V1.xml`, 10,683 bytes, SHA-256 `5eabcc27f87c26025aee6eab282fdbd31cda01f4ebc8d57a7ad0eef5c3130027`.
 - ATC catalog: `atcCodes.xml`, 153,753 bytes, SHA-256 `16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b`; 80 records (41 Private, 39 Government).
 
-The representative save has 168 serialized elements. The maximum category/ATC union expands the computation families through row 41 for 309 stable field keys; ordered-key SHA-256 is `f5faf84282077325bc84e3138ca57211c539833ba30a0f247521adb3b60b6cbf`.
+The representative save has 168 serialized elements. The representative save's email value is redacted as `#email-redacted#` in captured field metadata. The maximum category/ATC union expands the computation families through row 41 for 309 stable field keys; ordered-key SHA-256 is `f5faf84282077325bc84e3138ca57211c539833ba30a0f247521adb3b60b6cbf`.
 
 Official PDFs were pinned from the BIR CDN. The local September 2020 form and guide are comparator-only because that revision adds treaty countries and is not the installed January 2018 runtime.

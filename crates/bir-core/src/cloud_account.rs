@@ -230,13 +230,26 @@ pub struct TokenSet {
     pub expires_in: i64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct HttpRequest {
     pub method: &'static str,
     pub url: String,
     pub content_type: &'static str,
     pub bearer: Option<String>,
     pub body: String,
+}
+
+/// Never prints the bearer token or the body (a form body can carry a refresh token or a code).
+impl std::fmt::Debug for HttpRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpRequest")
+            .field("method", &self.method)
+            .field("url", &self.url)
+            .field("content_type", &self.content_type)
+            .field("bearer", &self.bearer.as_ref().map(|_| "<redacted>"))
+            .field("body_bytes", &self.body.len())
+            .finish()
+    }
 }
 
 pub struct HttpResponse {
@@ -1201,6 +1214,22 @@ fn standard_b64(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_request_never_debug_prints_its_bearer_or_body() {
+        let request = HttpRequest {
+            method: "POST",
+            url: "https://example.com/token".into(),
+            content_type: "application/x-www-form-urlencoded",
+            bearer: Some("access-secret-fixture".into()),
+            body: "refresh_token=refresh-secret-fixture".into(),
+        };
+        let printed = format!("{request:?}");
+        assert!(!printed.contains("access-secret-fixture"), "{printed}");
+        assert!(!printed.contains("refresh-secret-fixture"), "{printed}");
+        assert!(printed.contains("https://example.com/token"), "{printed}");
+        assert!(printed.contains("<redacted>"), "{printed}");
+    }
+
     use super::*;
     use std::cell::Cell;
 
