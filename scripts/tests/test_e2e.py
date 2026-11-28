@@ -430,14 +430,20 @@ class AccountsMockTests(unittest.TestCase):
                 return None
 
         answers_seen = []
+        proc = Alive()
+        stops = []
         with tempfile.TemporaryDirectory() as folder:
             log = E2E.RunLog(None, echo=False)
-            with self.assertRaises(E2E.SuiteError) as raised:
-                E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=0,
-                                       popen=lambda *args, **kwargs: Alive(),
-                                       answers=lambda addr: answers_seen.append(addr) or len(answers_seen) > 1,
-                                       sleep=lambda seconds: None)
+            # The refusal stops the child. The child here is a stand-in with a made-up pid: the real stop would
+            # signal whatever process group has that number on the machine running the tests, so it is replaced.
+            with mock.patch.object(E2E, "stop_mock_account", side_effect=lambda p, log: stops.append(p)):
+                with self.assertRaises(E2E.SuiteError) as raised:
+                    E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=0,
+                                           popen=lambda *args, **kwargs: proc,
+                                           answers=lambda addr: answers_seen.append(addr) or len(answers_seen) > 1,
+                                           sleep=lambda seconds: None)
         self.assertIn("listening line", str(raised.exception))
+        self.assertEqual(stops, [proc])
 
     def test_ctrl_c_during_mock_start_stops_the_child(self):
         class Alive:
