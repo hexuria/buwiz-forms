@@ -4,7 +4,7 @@
 // the selection the input reported before each edit goes to the mask so the edit is read exactly (NSH: onKeyPress comes
 // before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
 import type { InputRef, JSX, ViewRef } from "nsh";
-import { cleanup, effect, lifecycle, platform, signal, Text as NText, untracked, View } from "nsh";
+import { cleanup, effect, platform, signal, Text as NText, untracked, View } from "nsh";
 import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
@@ -309,9 +309,6 @@ function MaskedField(props: MaskedProps) {
   let programmaticFocusToken = 0;
   // Whose comma the money text holds for this focus: the box's grouping, the filer's, none yet, or not attributable.
   let commaState: CommaState = initialCommaState(untracked(text));
-  // Whether the input method has a composition, and whether Android's backgrounding blurred the box only to end it.
-  let composing = false;
-  let backgroundBlur = false;
   const commaValueOf = (reading: string, leaving: boolean) =>
     props.commaStates ? (readAmountWithCommas(reading, commaState, props.commaNegative, leaving) ?? "") : props.valueOf(reading);
   const commaValid = (reading: string, leaving: boolean) =>
@@ -471,21 +468,6 @@ function MaskedField(props: MaskedProps) {
         props.field.onBlur?.();
   };
 
-  // Android can replay a focused input method's composition through the connection made on return. Home (only
-  // Home: `inactive` is a permission dialog, voice input or picture-in-picture) ends it by blurring the native box,
-  // but that is not the person's leave: no settle, reformat or blur callback. Focus is restored on return, so a real
-  // leave later still settles; the keyboard comes back with that focus.
-  effect(() => {
-    if (platform.os !== "android") return;
-    const state = lifecycle();
-    if (state === "background" && untracked(focused) && composing && !backgroundBlur) {
-      backgroundBlur = true;
-      input?.blur();
-    } else if (state === "active" && backgroundBlur && untracked(focused)) {
-      input?.focus();
-    }
-  });
-
   cleanup(() => {
     if (untracked(focused)) finishLeave(false);
   });
@@ -562,12 +544,7 @@ function MaskedField(props: MaskedProps) {
         editTyped = [...e.key].length === 1;
         props.field.onKeyPress?.(e);
       }}
-      onCompositionChange={(e) => {
-        composing = e.composing;
-        props.field.onCompositionChange?.(e);
-      }}
       onFocus={() => {
-        backgroundBlur = false;
         // A duplicate focus without a blur is not a new edit session: no reset, rewrite, reselect or renotify.
         if (untracked(focused)) {
           programmaticFocus = false;
@@ -603,10 +580,6 @@ function MaskedField(props: MaskedProps) {
       }}
       onBlur={() => {
         if (!untracked(focused)) return;
-        if (platform.os === "android" && (backgroundBlur || (lifecycle() === "background" && composing))) {
-          backgroundBlur = true;
-          return;
-        }
         finishLeave(true);
       }}
     />
