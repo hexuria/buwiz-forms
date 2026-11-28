@@ -622,7 +622,7 @@ impl Database {
                         super::AlertAction::OpenProfileManager,
                     ) {
                         // Listing runs on every sidebar refresh, so gate it.
-                        crate::notification::notify_alert_if_newly_active(outcome, TITLE, &detail);
+                        crate::notification::notify_alert_if_newly_active(outcome);
                     }
                     continue;
                 }
