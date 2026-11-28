@@ -53,19 +53,23 @@ fn write_uniform_section_renders() {
     qdraft.previous_quarters_cwt = 100.0;
     qdraft.cwt_this_quarter = 100.0;
     qdraft.previously_filed = 100.0;
+    // no ATC closes Schedules 1, 2 and 4 in recompute; quarter 2 keeps the
+    // previous-quarters rows open.
+    qdraft.atc = "IC010_25%".to_string();
     qdraft.recompute();
     let qmap = qdraft.to_print_field_map();
     let qhtml = bir_print::frozen_html::filled_document_with_receipt("1702q-2018", &qmap, None)
         .expect("1702q render");
-    std::fs::write(
-        root.join(format!("{tag}-1702q-sched4-overflow.html")),
-        bir_app_api::static_html::staticize(&bir_app_api::print_sheet::prepare_html_for(
-            "1702q-2018",
-            &qhtml,
-            true,
-        )),
-    )
-    .unwrap();
+    let qout = bir_app_api::static_html::staticize(&bir_app_api::print_sheet::prepare_html_for(
+        "1702q-2018",
+        &qhtml,
+        true,
+    ));
+    assert!(
+        qout.contains("12,345,678,901,234"),
+        "the overflow value must reach the printed sheet, or the proof shows nothing"
+    );
+    std::fs::write(root.join(format!("{tag}-1702q-sched4-overflow.html")), qout).unwrap();
     // 1701 Part VII column A, item 2 overflows — filled through the draft's
     // own print field map, the same keys the upload writes.
     let profile: bir_core::TaxpayerProfile = serde_json::from_value(serde_json::json!({

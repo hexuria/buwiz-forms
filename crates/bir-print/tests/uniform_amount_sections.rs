@@ -741,6 +741,27 @@ fn money_join_overflow_formats_to_money_and_forces_the_column() {
     );
 }
 
+/// Round 6 item A: a zero draft never converts. 1702Q Schedule 1 column A's
+/// combs print zeros as amount rectangles on main; a zero is not an overflow
+/// and must not force the group.
+#[test]
+fn a_zero_1702q_draft_converts_nothing() {
+    let profile = demo_profile();
+    let draft = bir_core::forms::form_1702q::Form1702qDraft::new_from_profile(&profile, 2025, 2);
+    let map = draft.to_print_field_map();
+    let doc = filled_document("1702q-2018", &map).expect("1702q zero draft builds");
+    for cell in ["p2c12", "p2c47"] {
+        assert!(
+            !line_not_comb(&doc, cell),
+            "a zero draft prints no conversion: {cell} keeps its comb"
+        );
+    }
+    assert!(
+        !doc.contains("data-overflow-of="),
+        "an all-zero draft converts nothing at all"
+    );
+}
+
 /// Round 5: the forced set never takes the identifier combs — TIN-shaped and
 /// reference combs are not amounts even when their column overflows.
 #[test]

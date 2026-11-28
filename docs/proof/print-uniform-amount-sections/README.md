@@ -44,8 +44,8 @@ prints). The inputs are identical in both runs; only the grouping code differs.
 
 | | sha256 |
 |---|---|
-| before-1702q-sched4-overflow.html | `55ef12eb85d00c08dc29c56b0d4f02c42bbcdfc48442e3519fa689f2e12e09a8` |
-| after-1702q-sched4-overflow.html | `bcbe517ee597c1b7b2e935c39739acbf8d6415c84c86032f81362d5ddfb866ac` |
+| before-1702q-sched4-overflow.html | `7cfbc72ed82c937967357973bbaaa8245dc177e7eb99fb0df4aad71549a72f80` |
+| after-1702q-sched4-overflow.html | `fc39eb398da20b1fd3b28d19c852d89687d2ac9acda6b5985d4466d89617086f` |
 
 before/after DIFFER — before, item 2 alone prints as a line beside boxed rows;
 after, the whole Schedule 4 column prints as uniform right-aligned lines.
@@ -76,8 +76,8 @@ alone prints as a line beside boxed rows.
 
 | 1702q-sched4-overflow | sha256 |
 |---|---|
-| before | `0939eb9d8af2da441b9735ab41464e627d515b711620817f88954c568c75174f` |
-| after | `c249da496b3f0c41056eb0cb85172ce54099d0c5e652f9ad1d8bbedf8f328192` |
+| before | `f64cc95ae1061feb6a7e58396f70a38566465e3afad6e596327232038129c59d` |
+| after | `2e2275ba0106f4b48231aec1929489ddf2eb023c5c08db7b9ef0990cb7f24bd3` |
 
 | 1701-part4-overflow | sha256 |
 |---|---|

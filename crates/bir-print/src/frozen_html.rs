@@ -2903,6 +2903,31 @@ fn fill_text_input(
     let comb = indices.iter().any(|&index| tags[index].slot.is_some());
     if comb {
         let ordered = ordered_comb_indices(tags, indices);
+        // Some writers right-align their whole-peso amounts with padding
+        // spaces (1702Q Schedule 1 pads to the comb's slot count). Where the
+        // padding does not match the real input count — a 12-slot comb can
+        // have 9 inputs — every value, zeros included, would overflow its
+        // boxes into a rectangle. Re-pad the amount to the real input count:
+        // the digits land right-aligned in the boxes exactly as the padding
+        // means them to.
+        let repadded;
+        let print = {
+            let trimmed = print.trim();
+            let amount_like = !trimmed.is_empty()
+                && trimmed.chars().any(|ch| ch.is_ascii_digit())
+                && trimmed
+                    .chars()
+                    .all(|ch| ch.is_ascii_digit() || matches!(ch, ',' | '.' | '-' | '(' | ')'));
+            if amount_like
+                && trimmed.len() != print.len()
+                && trimmed.chars().count() <= ordered.len()
+            {
+                repadded = format!("{trimmed:>width$}", width = ordered.len());
+                repadded.as_str()
+            } else {
+                print
+            }
+        };
         // Uniform sections (#477): a comb of a group another amount of
         // overflowed prints as a line even when its own amount fits, so the
         // column stays uniform.
@@ -7635,7 +7660,17 @@ fn converted_amount_cells(html: &str) -> std::collections::BTreeSet<String> {
                 let money = attr(tag, "data-writer-value")
                     .or_else(|| attr(tag, "value"))
                     .is_some_and(conversion_money_amount);
-                if money {
+                // A zero is not a conversion: a whole-peso comb prints its
+                // zero as a rectangle (the writer pads it to the slot count,
+                // so it always reads as overflowing), and forcing a column
+                // of zeros into lines would convert every all-zero print.
+                let zero = attr(tag, "data-writer-value")
+                    .or_else(|| attr(tag, "value"))
+                    .is_some_and(|v| {
+                        let digits: String = v.chars().filter(|ch| ch.is_ascii_digit()).collect();
+                        !digits.is_empty() && digits.bytes().all(|b| b == b'0')
+                    });
+                if money && !zero {
                     out.insert(html[start..end].to_string());
                 }
             } else if tag.contains("amount-small") {
@@ -8378,7 +8413,7 @@ no bundle
                     joined.entry(id.as_str()).or_insert(key.as_str());
                 }
             }
-            let groups = amount_column_groups(loaded.html);
+            let groups = uniform_amount_groups_of(slug);
             let n_amount = groups
                 .iter()
                 .filter(|g| g.iter().any(|c| joined.contains_key(c.as_str())))
