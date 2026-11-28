@@ -43,7 +43,7 @@ fn fit_css(native: (f32, f32)) -> String {
     format!(
         "@page{{size:{w:.2}pt {h:.2}pt;margin:0}}\
 html,body{{width:{w:.2}pt;margin:0 auto;padding:0;background:#fff}}\
-body>:not(.sheet):not(.test-send-warning){{display:none !important}}\
+body>:not(.sheet){{display:none !important}}\
 .sheet{{position:relative;width:{w:.2}pt;height:{sheet_h:.2}pt;box-sizing:border-box;overflow:hidden;background:#fff;padding-top:{safety:.0}pt;break-after:page;page-break-after:always}}\
 .sheet:last-of-type{{break-after:auto;page-break-after:auto}}\
 .sheet-flow{{height:auto;min-height:{sheet_h:.2}pt;overflow:visible}}\
@@ -236,16 +236,35 @@ mod tests {
     }
 
     #[test]
-    fn paper_css_does_not_hide_a_test_send_warning() {
+    fn every_staticized_sheet_of_a_test_send_print_carries_the_warning() {
         let fields = std::collections::BTreeMap::new();
-        let html =
-            bir_print::frozen_html::filled_document_test_send("1601c-2018", &fields).unwrap();
-        let out = super::prepare_html(&html);
-        assert!(out.contains("class=\"test-send-warning\""));
+        let html = bir_print::frozen_html::filled_document_test_send("2552-2018", &fields).unwrap();
+        let out = crate::static_html::staticize(&super::prepare_html(&html));
+        let sheets = out.matches("<div class=\"sheet").count();
+        assert!(sheets > 1, "2552 is a multi-page form");
+        assert_eq!(out.matches("class=\"test-send-warning\"").count(), sheets);
+        let first_sheet = out.find("<div class=\"sheet").unwrap();
+        let warning = out[first_sheet..]
+            .find("class=\"test-send-warning\"")
+            .unwrap();
+        let page = out[first_sheet..].find("<div class=\"page").unwrap();
         assert!(
-            out.contains("body>:not(.sheet):not(.test-send-warning)"),
-            "the warning stays visible in preview and print"
+            warning < page,
+            "the warning sits in the sheet margin, before the form page"
         );
+    }
+
+    #[test]
+    fn paper_css_is_exactly_the_real_filings_css() {
+        let fields = std::collections::BTreeMap::new();
+        let html = bir_print::frozen_html::filled_document("1601c-2018", &fields).unwrap();
+        let out = super::prepare_html(&html);
+        assert!(!out.contains("test-send-warning"));
+        assert!(
+            out.contains("body>:not(.sheet){display:none !important}"),
+            "{out}"
+        );
+        assert!(!out.contains("body>:not(.sheet):not"), "{out}");
     }
 
     #[test]

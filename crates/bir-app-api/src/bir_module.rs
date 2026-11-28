@@ -10,6 +10,7 @@ use std::cell::RefCell;
 
 use bir_core::db::{self, Database};
 use bir_core::forms::FORM_REGISTRY;
+use bir_core::forms::dry_run::is_dry_run;
 use bir_core::forms::queueable::QueueableForm as _;
 use gpui_shell::{HostError, HostModule, HostObject, HostResult, HostValue};
 
@@ -2758,7 +2759,11 @@ pub(crate) fn print_fields(
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email);
-            Ok((draft.to_print_field_map(), page, draft.submitted_dry_run))
+            Ok((
+                draft.to_print_field_map(),
+                page,
+                is_dry_run(&draft.status, draft.submitted_dry_run),
+            ))
         }),
         "1601C" => crate::screen_form_module::out_of_line(|| {
             let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
@@ -2767,7 +2772,11 @@ pub(crate) fn print_fields(
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email_address);
-            Ok((draft.to_print_field_map(), page, draft.submitted_dry_run))
+            Ok((
+                draft.to_print_field_map(),
+                page,
+                is_dry_run(&draft.status, draft.submitted_dry_run),
+            ))
         }),
         _ => {
             use bir_core::forms::queueable::QueueableKind;
@@ -2785,7 +2794,7 @@ pub(crate) fn print_fields(
                     draft.lifecycle().receipt_id,
                     draft.submission_email(),
                 );
-                Ok((draft.print_field_map(), page, draft.lifecycle().submitted_dry_run))
+                Ok((draft.print_field_map(), page, is_dry_run(&draft.lifecycle().status, draft.lifecycle().submitted_dry_run)))
             }))
         }
     }

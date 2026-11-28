@@ -1,6 +1,6 @@
 // One return as a card: "2551Q Q3 2026", whose it is, the branch when it is not the head office, a send that needs a word (held,
 // retrying, needs attention, refused: a chip and the host's line), its date, and Cancel queue on a queued one. The whole card opens the return; the column (or tab) says the status, so the card repeats it only where
-// the two differ (Paid under Confirmed, a dry run's "Dry run" under Submitted, or every card on the narrow list's All tab).
+// the two differ (Paid under Confirmed, a dry run's "Test send: not filed" under Submitted, or every card on the narrow list's All tab).
 import { View } from "nsh";
 import type { ReturnRow } from "../../bir";
 import { statusChipName, statusWord } from "../../lib/statusWord";

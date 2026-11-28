@@ -1310,7 +1310,8 @@ const PAUSED_MESSAGE: &str = "Sending is paused for this TIN. Write to support@b
 const NEEDS_FIX_PREFIX: &str = "Sent back for a fix: ";
 const NEEDS_FIX_NO_REASON: &str =
     "Sent back for a fix. See what to change on My TINs at account.buwiz.com.";
-const TEST_TIN_MESSAGE: &str = "A test TIN: a send for it ends as a dry run, with a signed receipt. Buwiz never sends it to the BIR.";
+const TEST_TIN_MESSAGE: &str =
+    "A test TIN: every send is a test send. Test send: not filed. Nothing reached the BIR.";
 const TEST_TIN_REFUSED: &str = "This TIN is reserved for testing: only Buwiz staff add test TINs. If it is yours, write to support@buwiz.com.";
 
 fn unix_now() -> i64 {

@@ -6363,25 +6363,25 @@ pub fn filled_document_test_send(
     slug: &str,
     fields: &BTreeMap<String, String>,
 ) -> Result<String, String> {
-    Ok(prepend_after_body_start(
-        &filled_document_with_receipt(slug, fields, None)?,
-        "<div class=\"test-send-warning\" style=\"position:absolute;top:2mm;left:0;right:0;z-index:9999;text-align:center;color:#9f1239;font:bold 10pt sans-serif\">Test send: not filed. Nothing reached the BIR.</div>",
-    ))
+    Ok(warn_every_page(&filled_document_with_receipt(
+        slug, fields, None,
+    )?))
 }
 
-fn prepend_after_body_start(document: &str, fragment: &str) -> String {
-    let Some(body) = document.find("<body") else {
-        return format!("{fragment}{document}");
-    };
-    let Some(open_end) = document[body..].find('>').map(|at| body + at + 1) else {
-        return format!("{fragment}{document}");
-    };
-    format!(
-        "{}{}{}",
-        &document[..open_end],
-        fragment,
-        &document[open_end..]
-    )
+pub const TEST_SEND_WARNING_HTML: &str = "<div class=\"test-send-warning\" style=\"position:absolute;top:0;left:0;right:0;height:9pt;line-height:9pt;z-index:9999;text-align:center;background:#fff;color:#9f1239;font:bold 7pt sans-serif\">Test send: not filed. Nothing reached the BIR.</div>";
+
+/// Put the warning immediately before every form page. `static_html` moves it into the sheet wrapper's
+/// reserved ten-point top strip, so every printed sheet carries it above the form instead of over its content.
+fn warn_every_page(document: &str) -> String {
+    let mut out = String::with_capacity(document.len() + 4096);
+    let mut copied = 0;
+    for (page, _) in document.match_indices("<div class=\"page") {
+        out.push_str(&document[copied..page]);
+        out.push_str(TEST_SEND_WARNING_HTML);
+        copied = page;
+    }
+    out.push_str(&document[copied..]);
+    out
 }
 
 /// `@page { size:612pt 936pt; … }` from the bundle's form.css, so the receipt
@@ -8654,6 +8654,17 @@ mod tests {
             super::filled_document_test_send("1601c-2018", &fields).expect("test-send print");
         assert!(html.contains("Test send: not filed. Nothing reached the BIR."));
         assert!(!html.contains("page-receipt"));
+    }
+
+    #[test]
+    fn every_page_of_a_test_send_print_carries_the_warning_above_the_form() {
+        let fields = std::collections::BTreeMap::new();
+        let html = super::filled_document_test_send("2552-2018", &fields).expect("test-send print");
+        let pages = html.matches("<div class=\"page").count();
+        assert!(pages > 1, "2552 is a multi-page form");
+        assert_eq!(html.matches("class=\"test-send-warning\"").count(), pages);
+        assert!(html.contains("top:0;left:0;right:0;height:9pt"));
+        assert!(html.contains("background:#fff"));
     }
 
     #[test]

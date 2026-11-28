@@ -638,7 +638,7 @@ impl Database {
         let dry_run = is_dry_run(&previous_status, current.lifecycle().submitted_dry_run);
         if dry_run && replacement.is_some() {
             return Err(DbError::Other(format!(
-                "This {} return was a dry run: nothing reached the BIR, so there is no filed return to amend",
+                "Test send: not filed. Nothing reached the BIR. This {} return has no filed original to amend",
                 F::FORM_CODE
             )));
         }
@@ -1656,7 +1656,10 @@ mod tests {
             .map(|_| ())
             .unwrap_err()
             .to_string();
-        assert!(error.contains("dry run"), "{error}");
+        assert!(
+            error.contains("Test send: not filed. Nothing reached the BIR."),
+            "{error}"
+        );
         assert_eq!(rows(&db), vec![(id, 6, "Submitted".to_string())]);
         assert!(snapshots(&db).is_empty());
     }

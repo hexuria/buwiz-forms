@@ -1534,7 +1534,10 @@ mod tests {
             "test_sent",
             "a test send, receipt and all"
         );
-        assert_eq!(send(7)["line"], "Test send. Nothing reached the BIR.");
+        assert_eq!(
+            send(7)["line"],
+            "Test send: not filed. Nothing reached the BIR."
+        );
     }
 
     /// A deadline row says whether its Submitted send was only simulated

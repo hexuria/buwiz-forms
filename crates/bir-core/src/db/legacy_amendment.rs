@@ -327,7 +327,7 @@ impl Database {
         let dry_run = is_dry_run(&previous_status, current.submitted_dry_run());
         if dry_run && replacement.is_some() {
             return Err(DbError::Other(format!(
-                "This {} return was a dry run: nothing reached the BIR, so there is no filed return to amend",
+                "Test send: not filed. Nothing reached the BIR. This {} return has no filed original to amend",
                 F::FORM_CODE
             )));
         }
@@ -695,7 +695,10 @@ mod tests {
             .save_1601c_amendment(&amended, &base)
             .unwrap_err()
             .to_string();
-        assert!(error.contains("dry run"), "{error}");
+        assert!(
+            error.contains("Test send: not filed. Nothing reached the BIR."),
+            "{error}"
+        );
         assert_eq!(row(&db, "1601C"), before);
 
         let db = Database::open_in_memory_for_tests().unwrap();
@@ -714,7 +717,10 @@ mod tests {
             .save_2551q_amendment(&amended, &base)
             .unwrap_err()
             .to_string();
-        assert!(error.contains("dry run"), "{error}");
+        assert!(
+            error.contains("Test send: not filed. Nothing reached the BIR."),
+            "{error}"
+        );
         assert_eq!(row(&db, "2551Q"), before);
         assert_eq!(snapshot_count(&db), 0);
     }

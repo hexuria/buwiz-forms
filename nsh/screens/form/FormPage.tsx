@@ -361,7 +361,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
       </View>
     );
   }
-  const statusLabel = () => (h().editable ? h().statusWord : `${h().statusWord} · read-only`);
+  const statusLabel = () => (h().editable || h().statusWord === DRY_RUN_WORD ? h().statusWord : `${h().statusWord} · read-only`);
   return (
     <View testID="fp-header" class="mb-5 flex-row flex-wrap items-start gap-3.5">
       <View class="min-w-0 flex-1" style={{ minWidth: props.narrow() ? 0 : 420 }}>
@@ -372,7 +372,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
           <Chip label={`${f.pages} page${f.pages > 1 ? "s" : ""}`} />
           <Chip label={`${s.fieldCount()} fields`} />
           <If when={h().status !== "Draft"}>
-            <Chip testID="fp-status" label={statusLabel()} tone={h().status === "Queued" ? "accent" : "success"} />
+            <Chip testID="fp-status" label={statusLabel()} tone={h().statusWord === DRY_RUN_WORD ? "neutral" : h().status === "Queued" ? "accent" : "success"} />
           </If>
           <If when={h().amends}>
             <Chip label="Amended return" tone="warning" />

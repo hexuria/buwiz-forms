@@ -2054,7 +2054,7 @@ fn queued_answer(code: &str, id: i64, through_buwiz: bool, dry_run: bool) -> Val
     } else if dry_run {
         (
             json!(true),
-            "Queued. This build is a dry run: nothing is sent to BIR.",
+            "Queued. This build only makes test sends: nothing is sent to BIR.",
         )
     } else {
         (json!(false), "Queued for upload from this computer.")
@@ -4448,7 +4448,7 @@ mod tests {
         assert_eq!(dry["dry_run"], true);
         assert_eq!(
             dry["message"],
-            "Queued. This build is a dry run: nothing is sent to BIR."
+            "Queued. This build only makes test sends: nothing is sent to BIR."
         );
         let local = queued_answer("2551Q", 7, false, false);
         assert_eq!(local["dry_run"], false);

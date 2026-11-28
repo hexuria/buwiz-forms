@@ -2286,7 +2286,7 @@ pub fn quarterly_period_label(taxable_year: u16, quarter: u8) -> String {
 /// The app's one sentence for a send that reached nobody (a dry run, a
 /// practice account, a Buwiz test TIN): the OS notice and the screens'
 /// `test_sent` line (bir-app-api `send_state::TEST_SENT_LINE`) say it.
-pub const TEST_SENT_LINE: &str = "Test send. Nothing reached the BIR.";
+pub const TEST_SENT_LINE: &str = "Test send: not filed. Nothing reached the BIR.";
 
 /// The first words of a test send's notice title.
 const TEST_SEND_TITLE: &str = "Test send";
@@ -3263,7 +3263,7 @@ mod tests {
         assert_eq!(title, "Test send: 1601C 09/26 \u{2014} Juan Dela Cruz");
         assert_eq!(
             body,
-            "Test send. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
+            "Test send: not filed. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
         );
         assert_never_filed_notice(&title, &body);
     }
@@ -3288,13 +3288,13 @@ mod tests {
 
     /// A test send's notice leads with "Test send" in the title, carries the app's one sentence for it as a line of
     /// its own (the OS notice's first; the stored alert names the taxpayer above it), and never says the return was
-    /// submitted, sent or filed.
+    /// submitted or sent. The required sentence itself says `not filed`, so the positive filed phrases are what stay banned.
     fn assert_never_filed_notice(title: &str, body: &str) {
         assert!(title.starts_with("Test send: "), "{title}");
         assert!(body.lines().any(|line| line == TEST_SENT_LINE), "{body}");
         for text in [title, body] {
             let lower = text.to_lowercase();
-            for word in ["submitted", "sent ", "filed"] {
+            for word in ["submitted", "sent ", "filed under", "was filed"] {
                 assert!(!lower.contains(word), "{word:?} in {text:?}");
             }
         }

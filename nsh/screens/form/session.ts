@@ -37,7 +37,7 @@ import {
 } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
-import { statusWord } from "../../lib/statusWord";
+import { isDryRun, statusWord } from "../../lib/statusWord";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
 import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
@@ -217,7 +217,7 @@ export interface HeaderInfo {
   loading: boolean;
   error: string;
   status: ScreenFormStatus;
-  /** The status as the chip says it (`statusWord`): "Dry run" for a send the worker only simulated, else `status`. */
+  /** The status as the chip says it (`statusWord`): "Test send: not filed" for a send the worker only simulated, else `status`. */
   statusWord: string;
   editable: boolean;
   sample: boolean;
@@ -4604,14 +4604,14 @@ export class FormSession {
       this.sAllOpen.set(this.schema.parts.every((_p, i) => s.openParts.has(i)));
     }
     const sent: string[] = [];
-    if (s.submittedAt) sent.push(sentWords(s.submittedAt, s.submittedDryRun, s.submittedViaRelay));
+    if (s.submittedAt) sent.push(sentWords(s.submittedAt, isDryRun({ status: s.status, submitted_dry_run: s.submittedDryRun, send: s.send }), s.submittedViaRelay));
     if (s.confirmedAt) sent.push(`confirmed ${shortIsoDate(s.confirmedAt)}`);
     // The host's words for the send, where it has them (send_state.rs): a refused Draft's notice, a Queued or sent return's line.
     const send = s.sample || s.filedOriginalView ? null : s.send;
-    // A sent return keeps the words it always had, with their date ("Sent to BIR <date>", "Dry run <date>, not sent to BIR": F21); the
+    // A sent return keeps the words it always had, with their date ("Sent to BIR <date>", "Test send: not filed. Nothing reached the BIR.": F21); the
     // host's send words are for a return still in the queue.
     const sendLine = send && s.status === "Queued" && !s.editable ? sendWords(send, new Date()) : "";
-    const sentLine = sent.length ? `${sent.join(", ")}. Nothing here can be changed.` : "";
+    const sentLine = sent.length ? `${sent.join(", ").replace(/\.$/, "")}. Nothing here can be changed.` : "";
     this.sHeader.set({
       loading: s.loading,
       error: s.error,

@@ -4,7 +4,7 @@ import { DRY_RUN_WORD } from "../../lib/statusWord";
 
 /**
  * The chip kind of a return's status: Draft, Queued, filed (Submitted, Confirmed, Paid) or not started. A chip passes the shown word
- * (`statusWord`), so a simulated send's "Dry run" is its own chip; what a filed return offers reads the stored status.
+ * (`statusWord`), so a simulated send's "Test send: not filed" is its own chip; what a filed return offers reads the stored status.
  */
 export function statusKind(status: string): "draft" | "queued" | "dry_run" | "filed" | "not_started" {
   if (status === DRY_RUN_WORD) return "dry_run";

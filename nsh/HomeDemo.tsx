@@ -62,7 +62,7 @@ async function saveReturn(tin: string, year: number, period: number): Promise<vo
 function showAsSubmitted(ids: number[], dry: boolean): void {
   const host = bir as { list_returns: typeof bir.list_returns };
   const real = host.list_returns;
-  const send = dry ? { stage: "test_sent" as const, line: "Test send. Nothing reached the BIR.", code: null, next_try_at: null, can_resolve: false } : null;
+  const send = dry ? { stage: "test_sent" as const, line: "Test send: not filed. Nothing reached the BIR.", code: null, next_try_at: null, can_resolve: false } : null;
   host.list_returns = (which) => {
     const saved = real("saved").filter((r) => ids.includes(r.id));
     if (which === "filed") return [...saved.map((r) => ({ ...r, status: "Submitted", send })), ...real("filed")];

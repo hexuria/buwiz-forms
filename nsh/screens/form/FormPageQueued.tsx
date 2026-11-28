@@ -46,7 +46,7 @@ const LINES: Record<SendState["stage"], string> = {
   needs_attention: "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.",
   refused: "This TIN is not on your Buwiz account.",
   sent: "Sent to the BIR through Buwiz. Waiting for the BIR's confirmation email.",
-  test_sent: "Test send. Nothing reached the BIR.",
+  test_sent: "Test send: not filed. Nothing reached the BIR.",
 };
 /** The send the host's open answers while the return is as the parameters say (null once an answer moved it on). */
 let send: SendState | null = params.send

@@ -1,4 +1,4 @@
-// A return the submission worker sent in a dry run (nothing reached BIR) says so on its page: "Dry run <date>, not sent to BIR", where a
+// A return the submission worker sent in a dry run (nothing reached BIR) says so on its page: "Test send: not filed. Nothing reached the BIR.", where a
 // real send says "Sent to BIR <date>". The fact is the host's `submitted_dry_run`, which the worker stores at the send (F21). A return
 // still in the queue says the host's send words instead (send_state.rs).
 // Through the real door: the dry-run worker of this process sends a Queued return of this file's scratch database at once.
@@ -28,7 +28,7 @@ function stored(formCode: string, period: number): Record<string, unknown> {
   return (bir.get_form_draft(DEMO.tin, formCode, YEAR, period) ?? {}) as Record<string, unknown>;
 }
 
-/** The page's sent line and the status its chip says ("Dry run" for a simulated send). */
+/** The page's sent line and the status its chip says ("Test send: not filed" for a simulated send). */
 async function header(target: FormTarget): Promise<{ line: string; chip: string }> {
   const s = new FormSession(target);
   try {
@@ -46,14 +46,14 @@ async function line(target: FormTarget): Promise<string> {
 
 test("the words: a real send and a dry run", () => {
   expect(sentWords("2026-11-18T01:02:03+00:00", false)).toBe("Sent to BIR Nov 18, 2026");
-  expect(sentWords("2026-11-18T01:02:03+00:00", true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
+  expect(sentWords("2026-11-18T01:02:03+00:00", true)).toBe("Test send: not filed. Nothing reached the BIR.");
   expect(sentWords("2026-11-18T01:02:03+00:00", false, true)).toBe("Sent to the mock relay Nov 18, 2026, not to BIR");
-  expect(sentWords("2026-11-18T01:02:03+00:00", true, true)).toBe("Dry run Nov 18, 2026, not sent to BIR");
+  expect(sentWords("2026-11-18T01:02:03+00:00", true, true)).toBe("Test send: not filed. Nothing reached the BIR.");
 });
 
 test("a read-only return's profile-changed note: a filed return's, and a dry run's (never filed)", () => {
   expect(profileChangedNote(false)).toBe("The tax profile changed after this return was filed. This return keeps what was filed.");
-  expect(profileChangedNote(true)).toBe("The tax profile changed after this dry run. This return keeps what the dry run held.");
+  expect(profileChangedNote(true)).toBe("The tax profile changed after this test send. This return keeps what the test send held.");
 });
 
 test("a sample's offer of a stored return: a dry-run send says dry run, a real send says submitted", () => {
@@ -62,8 +62,8 @@ test("a sample's offer of a stored return: a dry-run send says dry run, a real s
     actions: ["view", "keep"], submitted_at: "2025-10-01T01:02:03+00:00", submitted_dry_run, confirmed_at: null,
   });
   const dry = existingOfferFor(existing(true));
-  expect(dry.title).toBe("September 2025 was a dry run, not sent to BIR");
-  expect(dry.choices[0].hint).toBe("See exactly what was in the dry run.");
+  expect(dry.title).toBe("Test send: not filed. Nothing reached the BIR.");
+  expect(dry.choices[0].hint).toBe("See exactly what was in the test send.");
   const real = existingOfferFor(existing(false));
   expect(real.title).toBe("September 2025 was submitted");
   expect(real.choices[0].hint).toBe("See exactly what was submitted.");
@@ -104,11 +104,25 @@ test("a return the dry-run worker sent says Dry run, not sent to BIR", async () 
   expect(sent.submitted_dry_run).toBe(true);
   // A sent return keeps its dated words; the host's send words (send_state.rs) are for a return still in the queue.
   const when = sentWords(String(sent.submitted_at), true);
-  expect(when.startsWith("Dry run ")).toBe(true);
+  expect(when === "Test send: not filed. Nothing reached the BIR.").toBe(true);
   expect(await line(at("1601C", 9))).toBe(`${when}. Nothing here can be changed.`);
   // The status chip says the banner's word, not "Submitted": what is stored stays Submitted.
-  expect((await header(at("1601C", 9))).chip).toBe("Dry run");
+  expect((await header(at("1601C", 9))).chip).toBe("Test send: not filed");
   expect(stored("1601C", 9).status).toBe("Submitted");
+});
+
+test("a Confirmed return carrying the old test-send mark reads as filed", async () => {
+  createDemoTaxpayer();
+  const draft: Record<string, unknown> = { ...((await bir.screen_form_open(DEMO.tin, "2550Q", YEAR, 2)).draft as Record<string, unknown>) };
+  delete draft.screen_form_sample;
+  const life = draft.lifecycle && typeof draft.lifecycle === "object" ? (draft.lifecycle as Record<string, unknown>) : draft;
+  life.status = "Confirmed";
+  life.submitted_at = "2025-07-20T01:02:03+00:00";
+  life.confirmed_at = "2025-07-21T01:02:03+00:00";
+  life.submitted_dry_run = true;
+  bir.save_form_draft(DEMO.tin, "2550Q", YEAR, 2, "Confirmed", draft);
+  expect(await line(at("2550Q", 2))).toBe("Sent to BIR Jul 20, 2025. Nothing here can be changed.");
+  expect((await header(at("2550Q", 2))).chip).toBe("Confirmed");
 });
 
 test("a return sent for real (no dry-run fact) says Sent to BIR", async () => {

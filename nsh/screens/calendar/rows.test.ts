@@ -100,7 +100,7 @@ test("a row's status, who and key", () => {
   expect(kindOf("Confirmed")).toBe("filed");
   expect(kindOf("Paid")).toBe("filed");
   expect(kindOf("Not started")).toBe("not_started");
-  // A chip passes the shown word: a simulated send is "Dry run", a real one keeps Submitted's "filed".
+  // A chip passes the shown word: a simulated send is "Test send: not filed", a real one keeps Submitted's "filed".
   expect(kindOf(statusWord(row({ form_code: "0619E", due_date: "2026-02-10", status: "Submitted", submitted_dry_run: true })))).toBe("dry_run");
   expect(kindOf(statusWord(row({ form_code: "0619E", due_date: "2026-02-10", status: "Submitted" })))).toBe("filed");
   expect(whoLine(rows[0])).toBe("Juana Santos");

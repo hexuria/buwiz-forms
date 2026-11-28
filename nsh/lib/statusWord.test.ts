@@ -1,4 +1,4 @@
-// The word a return's status shows: "Dry run" for a Submitted return whose send was only simulated, from either fact a host answer
+// The word a return's status shows: "Test send: not filed" for a Submitted return whose send was only simulated, from either fact a host answer
 // carries (`submitted_dry_run`, or `send.stage` "test_sent"); every other return keeps its stored status.
 import { expect, test } from "nsh/test";
 import { countsAsFiled, isDryRun, isOpenDeadline, statusChipName, statusWord } from "./statusWord";
@@ -6,8 +6,8 @@ import { countsAsFiled, isDryRun, isOpenDeadline, statusChipName, statusWord } f
 const send = (stage: string) => ({ stage });
 
 test("a simulated send says Dry run, from either fact", () => {
-  expect(statusWord({ status: "Submitted", submitted_dry_run: true })).toBe("Dry run");
-  expect(statusWord({ status: "Submitted", send: send("test_sent") })).toBe("Dry run");
+  expect(statusWord({ status: "Submitted", submitted_dry_run: true })).toBe("Test send: not filed");
+  expect(statusWord({ status: "Submitted", send: send("test_sent") })).toBe("Test send: not filed");
   expect(statusChipName({ status: "Submitted", send: send("test_sent") })).toBe("dry_run");
   expect(isDryRun({ status: "Submitted", submitted_dry_run: true, send: null })).toBe(true);
 });

@@ -8,7 +8,7 @@ test("a status becomes the chip kind the row shows", () => {
   expect(statusKind("Queued")).toBe("queued");
   for (const filed of ["Submitted", "Confirmed", "Paid"]) expect(statusKind(filed)).toBe("filed");
   expect(statusKind("Not started")).toBe("not_started");
-  // A chip passes the shown word (statusWord): a simulated send's "Dry run" is its own chip.
+  // A chip passes the shown word (statusWord): a simulated send's "Test send: not filed" is its own chip.
   expect(statusKind(statusWord({ status: "Submitted", submitted_dry_run: true }))).toBe("dry_run");
   expect(statusKind(statusWord({ status: "Submitted", submitted_dry_run: false }))).toBe("filed");
   expect(statusKind("anything else")).toBe("not_started");

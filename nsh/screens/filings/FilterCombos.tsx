@@ -8,6 +8,7 @@ import { formatTin } from "../../lib/format";
 import { store } from "../../shell";
 import { Avatar, MultiCombo, Text } from "../../ui";
 import { filters } from "./filters";
+import { isDryRun } from "../../lib/statusWord";
 import { type DotTone, type FormIndex, periodKey, periodRank, plural, STATUS_TONE, STATUSES } from "./model";
 
 const DOT: Record<DotTone, string> = {
@@ -57,14 +58,17 @@ export function FilterCombos(props: FilterCombosProps) {
       .sort((a, b) => periodRank(b) - periodRank(a))
       .map((k) => ({ value: k, label: k, sub: plural(keys.filter((x) => x === k).length, "return") }));
   });
-  const statuses = computed(() =>
-    STATUSES.map((s) => ({
+  const statuses = computed(() => {
+    const options = STATUSES.map((s) => ({
       value: s,
       label: s,
-      sub: plural(props.all.filter((r) => r.status === s).length, "return"),
+      sub: plural(props.all.filter((r) => r.status === s && !isDryRun(r)).length, "return"),
       lead: () => <View class={DOT[STATUS_TONE[s]]} />,
-    })),
-  );
+    }));
+    const tests = props.all.filter((r) => isDryRun(r)).length;
+    if (tests) options.push({ value: "Test sends", label: "Test sends", sub: plural(tests, "return"), lead: () => <View class={DOT.quiet} /> } as (typeof options)[number]);
+    return options;
+  });
   const label = (text: string) => (props.stacked ? text : undefined);
   return (
     <View class={props.stacked ? "w-full gap-4" : "flex-row flex-wrap items-center gap-2"}>

@@ -2,7 +2,7 @@
 import { computed, View } from "nsh";
 import type { ReturnRow } from "../../bir";
 import { Chip, Text } from "../../ui";
-import { type Column, COLUMNS, type FormIndex } from "./model";
+import { type Column, columnRows, COLUMNS, type FormIndex } from "./model";
 import { ReturnCard } from "./ReturnCard";
 
 /** Props of Board. */
@@ -15,7 +15,7 @@ export interface BoardProps {
 }
 
 function BoardColumn(props: BoardProps & { column: Column }) {
-  const list = computed(() => props.rows.filter((r) => props.column.statuses.includes(r.status)));
+  const list = computed(() => columnRows(props.rows, props.column));
   return (
     <View
       testID={`filings-col-${props.column.id}`}

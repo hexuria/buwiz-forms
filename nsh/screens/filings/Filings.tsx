@@ -17,7 +17,7 @@ import { Board } from "./Board";
 import { FilterCombos } from "./FilterCombos";
 import { filters } from "./filters";
 import { LegacyGroup } from "./LegacyGroup";
-import { COLUMNS, type FormIndex, filterRows, monthLabel, newestFirst, plural, presetOf, visibleColumns } from "./model";
+import { COLUMNS, columnRows, type FormIndex, filterRows, monthLabel, newestFirst, plural, presetOf, visibleColumns } from "./model";
 import { NarrowList } from "./NarrowList";
 
 /** Page width (the main surface less its padding) from which the board shows; under it, the list with tabs. */
@@ -175,11 +175,11 @@ export function Filings(): JSX.Element {
 
   const tabs = computed(() => [
     { value: "all", label: "All", count: rows().length },
-    ...visibleColumns(filters.statuses()).map((c) => ({ value: c.id, label: c.title, count: rows().filter((r) => c.statuses.includes(r.status)).length })),
+    ...visibleColumns(filters.statuses()).map((c) => ({ value: c.id, label: c.title, count: columnRows(rows(), c).length })),
   ]);
   const shownCount = () => {
     const c = COLUMNS.find((x) => x.id === filters.tab());
-    return c ? rows().filter((r) => c.statuses.includes(r.status)).length : rows().length;
+    return c ? columnRows(rows(), c).length : rows().length;
   };
 
   return (
