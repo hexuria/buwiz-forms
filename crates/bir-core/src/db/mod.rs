@@ -21,7 +21,7 @@ mod alerts;
 mod amendment_snapshots;
 pub use alerts::{AlertAction, AlertRecordOutcome, AlertSeverity, AppAlert, kinds as alert_kinds};
 pub use amendment_snapshots::{AmendmentSnapshot, SnapshotPayloadSource};
-mod drafts;
+pub(crate) mod drafts;
 pub use drafts::{
     ABANDONED_CLAIM_RELEASE_REASON, AbandonedClaimRelease, Claim1601CSubmissionResult,
     Claim2551QSubmissionResult, abandoned_claim_audit,

@@ -1010,18 +1010,111 @@ fn read_year_facts(
     Ok(json.as_deref().map(serde_json::from_str).transpose()?)
 }
 
+/// Parse a stored `updated_at` — sqlite's `datetime('now')` shape or an
+/// ISO-ish date — into a timestamp. The import compares these as timestamps,
+/// never as strings.
+pub(crate) fn parse_stored_timestamp(ts: &str) -> Option<chrono::NaiveDateTime> {
+    let trimmed = ts.trim();
+    for format in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f"] {
+        if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(trimmed, format) {
+            return Some(parsed);
+        }
+    }
+    // RFC 3339 with a zone — `Z` or an offset like `+08:00` — compares by its
+    // UTC instant.
+    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+        return Some(parsed.naive_utc());
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return date.and_hms_opt(0, 0, 0);
+    }
+    None
+}
+
+/// Whether a record timestamped `incoming` may replace one timestamped
+/// `existing` (both optional). No existing record: yes. An existing record
+/// the file cannot date (a legacy archive): no — an older file must never
+/// overwrite what is here. Otherwise the timestamps decide as timestamps.
+pub(crate) fn import_timestamp_allows(existing: Option<&str>, incoming: Option<&str>) -> bool {
+    match (existing, incoming) {
+        (None, _) => true,
+        (Some(_), None) => false,
+        (Some(existing), Some(incoming)) => {
+            match (
+                parse_stored_timestamp(existing),
+                parse_stored_timestamp(incoming),
+            ) {
+                (Some(existing), Some(incoming)) => incoming > existing,
+                _ => false,
+            }
+        }
+    }
+}
+
+/// `write_year_facts` only where the file's record is not older than the
+/// stored one. Returns whether it wrote.
+pub(crate) fn write_year_facts_if_newer(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+    incoming_updated_at: Option<&str>,
+) -> std::result::Result<bool, DbError> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT updated_at FROM year_facts WHERE tin = ?1 AND taxable_year = ?2",
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if !import_timestamp_allows(existing.as_deref(), incoming_updated_at) {
+        return Ok(false);
+    }
+    // The record keeps the file's time, so a later import from another
+    // device compares against when the facts were really written, not when
+    // they were imported.
+    conn.execute(
+        "INSERT INTO year_facts (tin, taxable_year, facts_json, updated_at)
+         VALUES (?1, ?2, ?3, COALESCE(?4, datetime('now')))
+         ON CONFLICT(tin, taxable_year)
+         DO UPDATE SET facts_json = excluded.facts_json,
+                       updated_at = COALESCE(?4, datetime('now'))",
+        params![
+            tin,
+            i64::from(year),
+            serde_json::to_string(facts)?,
+            incoming_updated_at
+        ],
+    )?;
+    Ok(true)
+}
+
 pub(crate) fn write_year_facts(
     conn: &Connection,
     tin: &str,
     year: u16,
     facts: &YearFacts,
 ) -> std::result::Result<(), DbError> {
+    write_year_facts_stamped(conn, tin, year, facts, None)
+}
+
+/// `write_year_facts` keeping the stamp it is given: an import writes the
+/// file's time, so a later import from another device compares against when
+/// the facts were really written, not when they were imported.
+pub(crate) fn write_year_facts_stamped(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+    stamp: Option<&str>,
+) -> std::result::Result<(), DbError> {
     conn.execute(
         "INSERT INTO year_facts (tin, taxable_year, facts_json, updated_at)
-         VALUES (?1, ?2, ?3, datetime('now'))
+         VALUES (?1, ?2, ?3, COALESCE(?4, datetime('now')))
          ON CONFLICT(tin, taxable_year)
-         DO UPDATE SET facts_json = excluded.facts_json, updated_at = datetime('now')",
-        params![tin, i64::from(year), serde_json::to_string(facts)?],
+         DO UPDATE SET facts_json = excluded.facts_json,
+                       updated_at = COALESCE(?4, datetime('now'))",
+        params![tin, i64::from(year), serde_json::to_string(facts)?, stamp],
     )?;
     Ok(())
 }
@@ -1034,10 +1127,33 @@ pub(crate) fn restore_yearly_forms(
     tin: &str,
     year: u16,
     codes: &[String],
+    incoming_updated_at: Option<&str>,
 ) -> Result<()> {
     let codes = canonical_codes(codes)?;
-    if !codes.is_empty() || !super::forms_set::query_per_year_forms(conn, tin, year)?.is_empty() {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT MAX(updated_at) FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    // An older file never overwrites the year's forms list; a legacy file
+    // with no timestamp writes only into a year that has none.
+    if import_timestamp_allows(existing.as_deref(), incoming_updated_at)
+        && (!codes.is_empty()
+            || !super::forms_set::query_per_year_forms(conn, tin, year)?.is_empty())
+    {
         replace_yearly_forms(conn, tin, year, &codes)?;
+        // The list keeps the file's time, so a later import from another
+        // device compares against when the list was really written.
+        if let Some(incoming) = incoming_updated_at {
+            conn.execute(
+                "UPDATE per_year_forms SET updated_at = ?3
+                 WHERE tin = ?1 AND taxable_year = ?2",
+                params![tin, i64::from(year), incoming],
+            )?;
+        }
     }
     record_tax_year(conn, tin, year)
 }
@@ -1070,10 +1186,12 @@ pub(crate) fn restore_year_facts(
     tin: &str,
     year: u16,
     facts: &YearFacts,
+    incoming_updated_at: Option<&str>,
 ) -> std::result::Result<(), DbError> {
     let head_tin = head_office_tin_of(conn, tin)?;
     if head_tin == tin {
-        return write_year_facts(conn, tin, year, facts);
+        write_year_facts_if_newer(conn, tin, year, facts, incoming_updated_at)?;
+        return Ok(());
     }
     let own = YearFacts {
         tax_classification: None,
@@ -1082,19 +1200,66 @@ pub(crate) fn restore_year_facts(
         eopt_tier: None,
         ..facts.clone()
     };
-    write_year_facts(conn, tin, year, &own)?;
-    let mut head = ensure_year_facts(conn, &head_tin, year)?;
+    write_year_facts_if_newer(conn, tin, year, &own, incoming_updated_at)?;
+    // Read the head row as it is, seeding IN MEMORY only: a seed the merge
+    // itself creates is not knowledge, it must never reach the table when
+    // nothing is filled — its fresh stamp would refuse a later head archive
+    // stamped earlier, and the real facts would drop.
+    let existing_head = read_year_facts(conn, &head_tin, year)?;
+    let head_existed = existing_head.is_some();
+    let mut head = match existing_head {
+        Some(facts) => facts,
+        None => seed_year_facts(conn, &head_tin, year, true)?,
+    };
+    let mut filled = false;
     if head.tax_classification.is_none() {
         head.tax_classification = facts.tax_classification.clone();
+        filled |= facts.tax_classification.is_some();
     }
     if head.income_tax_election.is_none() {
         head.income_tax_election = facts.income_tax_election.clone();
         head.election_source = facts.election_source.clone();
+        filled |= facts.income_tax_election.is_some();
     }
     if head.eopt_tier.is_none() {
         head.eopt_tier = facts.eopt_tier.clone();
+        filled |= facts.eopt_tier.is_some();
     }
-    write_year_facts(conn, &head_tin, year, &head)
+    if !filled {
+        // Nothing the head lacks: the merge writes nothing, so a file can
+        // never overwrite or re-stamp the head office's own facts.
+        return Ok(());
+    }
+    // The write carries the LATER of the row's own stamp and the file's:
+    // filled fields are newer knowledge, but the stamp never moves backward,
+    // so a later head archive can never overwrite a newer election by
+    // carrying an older time.
+    let existing_stamp: Option<String> = if head_existed {
+        conn.query_row(
+            "SELECT updated_at FROM year_facts WHERE tin = ?1 AND taxable_year = ?2",
+            params![head_tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?
+    } else {
+        None
+    };
+    let stamp = match (existing_stamp.as_deref(), incoming_updated_at) {
+        (Some(existing), Some(incoming)) => {
+            let existing_time = parse_stored_timestamp(existing);
+            let incoming_time = parse_stored_timestamp(incoming);
+            match (existing_time, incoming_time) {
+                (Some(existing_time), Some(incoming_time)) if incoming_time > existing_time => {
+                    Some(incoming)
+                }
+                (Some(_), _) => Some(existing),
+                _ => Some(incoming),
+            }
+        }
+        (Some(existing), None) => Some(existing),
+        (None, incoming) => incoming,
+    };
+    write_year_facts_stamped(conn, &head_tin, year, &head, stamp)
 }
 
 pub(crate) fn list_year_facts(
