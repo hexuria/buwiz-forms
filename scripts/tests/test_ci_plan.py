@@ -616,11 +616,34 @@ class OutputTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("::error::unknown suite", result.stdout)
 
+    @unittest.skipIf(shutil.which("git") is None, "needs git")
+    def test_a_code_file_moved_into_docs_is_not_a_docs_only_change(self):
+        # git's rename detection prints only the NEW path, so a script moved to docs/ would look like one docs file
+        # while a code input is deleted. The planner must see both paths.
+        with tempfile.TemporaryDirectory() as temp:
+            def git(*args):
+                subprocess.run(["git", "-C", temp, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                                "-c", "commit.gpgsign=false", *args], check=True, capture_output=True)
+            git("init", "-q", "-b", "main")
+            (Path(temp) / "scripts").mkdir()
+            (Path(temp) / "scripts/foo.py").write_text("print('a tool that a test relies on')\n" * 5)
+            git("add", "."); git("commit", "-q", "-m", "base")
+            (Path(temp) / "docs/old").mkdir(parents=True)
+            git("mv", "scripts/foo.py", "docs/old/foo.py"); git("commit", "-q", "-m", "move")
+            here = os.getcwd()
+            os.chdir(temp)
+            try:
+                changed = ci_plan.changed_files(dict(EVENT="pull_request", PR_BASE="HEAD~1", PR_HEAD="HEAD"))
+            finally:
+                os.chdir(here)
+            self.assertEqual(sorted(changed), ["docs/old/foo.py", "scripts/foo.py"])
+            self.assertFalse(ci_plan.what_changed(changed)["docs_only"])
+
     @unittest.skipIf(os.name == "nt", "the git stub is a shell script; the plan runs on Linux")
     def test_changed_files_reads_the_right_range(self):
         with tempfile.TemporaryDirectory() as temp:
             stub = Path(temp) / "git"
-            stub.write_text('#!/bin/sh\necho "$3" >> "$GIT_LOG"\necho a.rs\n')
+            stub.write_text('#!/bin/sh\nfor last; do :; done\necho "$last" >> "$GIT_LOG"\necho a.rs\n')
             stub.chmod(0o755)
             log = Path(temp) / "log"
             saved = dict(os.environ)

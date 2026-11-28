@@ -390,7 +390,10 @@ def changed_files(env: dict[str, str]) -> list[str] | None:
         span = f"{before}..{after}"
     else:
         return None
-    result = subprocess.run(["git", "diff", "--name-only", span], capture_output=True, text=True, check=False)
+    # --no-renames: with rename detection git prints only a moved file's NEW path, so a script moved into docs/
+    # would read as one docs file while a code input is deleted. Both paths must be classified.
+    result = subprocess.run(["git", "diff", "--name-only", "--no-renames", span], capture_output=True, text=True,
+                            check=False)
     if result.returncode != 0:
         return None
     return [line for line in result.stdout.splitlines() if line]
