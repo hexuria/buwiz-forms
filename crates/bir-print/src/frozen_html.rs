@@ -7150,7 +7150,6 @@ struct CombGeom {
     page: String,
     x: f64,
     y: f64,
-    cap: u32,
     width: f64,
 }
 
@@ -7206,7 +7205,6 @@ fn comb_geometries(html: &str) -> Vec<CombGeom> {
             page: cell_page_key(id),
             x,
             y,
-            cap,
             width: parse_style_pt(tag, "width").unwrap_or(f64::from(cap) * 5.5),
         });
     }
