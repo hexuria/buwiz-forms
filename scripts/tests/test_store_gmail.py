@@ -165,28 +165,44 @@ class RecipeTests(unittest.TestCase):
         self.assertNotEqual(out.returncode, 0)
         self.assertNotIn("went-on", out.stdout)
 
-    def test_the_direct_downloads_are_untouched(self):
-        # Only the store artifacts follow the switch; the direct downloads keep shipping Gmail Connect. The Mac and Linux
-        # release paths never mention it. The Windows release (#503) uses the same STORE_GMAIL repository variable for its
-        # Microsoft Store .msix job only, so there the switch may appear, but a build that is not the Store's still gets
-        # the client unconditionally.
+    def test_no_release_build_gets_the_google_client_without_the_switch(self):
+        # The one place the rule is stated (owner, 2026-11-28: 1.0.0 ships no Google client in any build). Every
+        # reference to the client's repository secrets in any workflow either passes it behind STORE_GMAIL == '1' or only
+        # checks that both are set (HAS_CLIENT); no build path, Store or direct, on any platform, gets it ungated. The
+        # direct downloads never run store_gmail.py: they are checked by audit_google_client.py
+        # (test_release_workflow_policy.py checks those steps).
         package = (ROOT / "scripts/package_macos_release.sh").read_text(encoding="utf-8")
         self.assertNotIn("store_gmail", package)
         self.assertNotIn("STORE_GMAIL", package)
-        workflows = ROOT / ".github/workflows"
+        gated = re.compile(r"vars\.STORE_GMAIL == '1' && secrets\.GOOGLE_CLIENT_(ID|SECRET) \|\| ''")
+        presence_check = "HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}"
+        reference = re.compile(r"secrets\s*(\.|\[\s*['\"])GOOGLE_CLIENT_")
+        gated_count = {}
+        for path in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
+            text = path.read_text(encoding="utf-8")
+            gated_count[path.name] = 0
+            for number, line in enumerate(text.splitlines(), 1):
+                if not reference.search(line):
+                    continue
+                with self.subTest(workflow=path.name, line=number):
+                    if presence_check in line:
+                        continue
+                    self.assertEqual(len(reference.findall(line)), 1, line)
+                    self.assertRegex(line, gated)
+                    gated_count[path.name] += 1
         for name in ("release.yml", "release-macos.yml", "release-windows.yml", "release-linux.yml"):
-            text = (workflows / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
-                self.assertNotIn("store_gmail.py", text)
-                self.assertIn("GOOGLE_CLIENT_ID: ${{", text)
-                if name in ("release-macos.yml", "release-linux.yml"):
-                    self.assertNotIn("STORE_GMAIL", text)
-        top = (workflows / "release.yml").read_text(encoding="utf-8").split("\njobs:", 1)[0]
-        self.assertIn("  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}", top)
-        self.assertIn("  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}", top)
-        windows = (workflows / "release-windows.yml").read_text(encoding="utf-8")
-        # A release build that is not the Store's gets the client whatever STORE_GMAIL says.
-        self.assertIn("(!inputs.store || vars.STORE_GMAIL == '1')", windows)
+                # The detector's positive control: each release workflow does pass the client, behind the switch.
+                self.assertEqual(gated_count.get(name, 0) % 2, 0)
+                self.assertGreaterEqual(gated_count.get(name, 0), 2)
+                self.assertNotIn("store_gmail.py", (ROOT / ".github/workflows" / name).read_text(encoding="utf-8"))
+        # The Store job keeps its shape: named secrets, never inherit, no signing certificate.
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        store = release.split("  build-windows-store:", 1)[1].split("\n  build-linux:", 1)[0]
+        self.assertIn("store: true", store)
+        self.assertNotIn("secrets: inherit", store)
+        self.assertNotIn("WINDOWS_CERTIFICATE", store)
+        self.assertIn("NSH_REPO_TOKEN: ${{ secrets.NSH_REPO_TOKEN }}", store)
 
 class ArchiveTests(unittest.TestCase):
     def test_a_zip_archive_is_read_member_by_member(self):

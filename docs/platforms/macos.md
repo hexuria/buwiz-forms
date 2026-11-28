@@ -24,7 +24,7 @@ there, but nobody has run it on that platform.
 | PIN or authenticator app lock | ✓ |  |
 | In-app notifications drawer and toasts | ✓ | The bell in the top bar (⌘⇧N); in-app toasts. |
 | Background refresh when the database changes | ✓ | The paced watch in `nsh/shell/app.ts` re-reads. |
-| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card; the host opens the browser. |
+| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card, in a build given a Google client (none in 1.0.0: an app password instead); the host opens the browser. |
 | Keyboard shortcuts | ✓ | Cmd based; also Cmd+H, Cmd+M, Cmd+Ctrl+F. |
 | Packaging | ✓ | Signed and notarized `.app` and `.dmg`; Mac App Store package. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
@@ -126,8 +126,9 @@ there, but nobody has run it on that platform.
   App Store package has no `com.apple.security.network.server` (kept only
   for Connect's one-shot 127.0.0.1 OAuth listener or an `--agent` build).
   The app then offers no Connect and says to use an app password. The
-  direct downloads (`release-macos.yml`, `package_macos_release.sh`) are
-  not affected.
+  direct downloads follow the same rule: no release build on any platform
+  gets the client unless the repository variable `STORE_GMAIL` is `1`
+  (`release-macos.yml`, `release.yml`; scripts/tests/test_store_gmail.py).
 - Entitlement files are in `assets/macos/` and at the repository root.
 
 ## Agent control

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Whether a Windows package holds Google's OAuth client, in any of its files.
+"""Whether a release package holds Google's OAuth client, in any of its files.
 
-The Microsoft Store package ships without Gmail Connect unless the repository variable STORE_GMAIL is exactly 1: Connect
-asks for Gmail's restricted scope, which needs Google's verification for a public app. bir-core compiles the client in at
+No release package, Store or direct download on any platform, ships Gmail Connect unless the repository variable
+STORE_GMAIL is exactly 1: Connect asks for Gmail's restricted scope, which needs Google's verification for a public app,
+and 1.0.0 ships none. bir-core compiles the client in at
 build time (option_env!("GOOGLE_CLIENT_ID") / "GOOGLE_CLIENT_SECRET"), so a build that had it left it in its bytes.
 
     audit_google_client.py --self-test        the detector finds a planted id and secret, bare, in an .msix member
                                               other than the exe, and in a nested archive; nothing in a clean package;
                                               and an archive it cannot read is refused
     audit_google_client.py --absent PACKAGE   exit 1 if any file of PACKAGE holds a client id or a client secret
-    audit_google_client.py --present PACKAGE  exit 1 unless its files hold both (the positive control: the direct
-                                              downloads have the client, so their package proves the bytes read are real)
+    audit_google_client.py --present PACKAGE  exit 1 unless its files hold both (a build made with STORE_GMAIL=1)
 
 PACKAGE is an .msix or a .zip (read member by member as the ZIP it is: members are deflated, so the archive's own bytes
-hide the strings), a folder, or a single file. A member that is itself a ZIP or gzip is read too; one in another archive
+hide the strings), a .tar.gz (gunzipped, then member by member as a tar), a folder, or a single file. A member that is
+itself a ZIP, gzip or tar is read too (a tar's symlinks, links and devices are skipped); one in another archive
 format (zstd, xz, 7z, cab) cannot be read, so the audit refuses it (exit 2) rather than pass it unread. Only the names
 of the files that hold a kind are printed, never what was found.
 
@@ -28,6 +29,7 @@ import gzip
 import io
 import re
 import sys
+import tarfile
 import tempfile
 import zipfile
 import zlib
@@ -40,6 +42,7 @@ CLIENT_SECRET = re.compile(rb"GOCSPX-[0-9A-Za-z_-]{16,}")
 
 ZIP_MAGIC = b"PK\x03\x04"
 GZIP_MAGIC = b"\x1f\x8b"
+TAR_MAGIC = b"ustar"  # at offset 257 of a POSIX or GNU tar header
 UNREADABLE = {
     b"\x28\xb5\x2f\xfd": "zstd",
     b"\xfd7zXZ\x00": "xz",
@@ -53,7 +56,7 @@ class Unreadable(Exception):
 
 
 def files(name: str, data: bytes, depth: int = 0) -> Iterator[tuple[str, bytes]]:
-    """(name, bytes) of every file in `data`, opening ZIP and gzip members; refuses archives it cannot read."""
+    """(name, bytes) of every file in `data`, opening ZIP, gzip and tar members; refuses archives it cannot read."""
     if depth > 4:
         raise Unreadable(f"{name}: archives nested more than 4 deep")
     for magic, kind in UNREADABLE.items():
@@ -67,6 +70,17 @@ def files(name: str, data: bytes, depth: int = 0) -> Iterator[tuple[str, bytes]]
         return
     if data.startswith(GZIP_MAGIC):
         yield from files(f"{name}(gunzip)", gzip.decompress(data), depth + 1)
+        return
+    if data[257:262] == TAR_MAGIC:
+        # A tar stores plain files raw, but a compressed member would hide its strings: open each regular member.
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+            for member in archive.getmembers():
+                if not member.isreg():
+                    continue
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise Unreadable(f"{name}/{member.name}: a tar member that cannot be read")
+                yield from files(f"{name}/{member.name}", stream.read(), depth + 1)
         return
     yield name, data
 
@@ -97,7 +111,7 @@ def report(package: Path, want_present: bool) -> int:
         return 2
     try:
         ids, secrets = scan(package)
-    except (Unreadable, zipfile.BadZipFile, OSError, EOFError, zlib.error) as error:
+    except (Unreadable, zipfile.BadZipFile, tarfile.TarError, OSError, EOFError, zlib.error) as error:
         print(f"{package.name}: refused, not read whole: {error}", file=sys.stderr)
         return 2
     except NotImplementedError as error:
@@ -121,6 +135,20 @@ def zip_bytes(members: dict[str, bytes]) -> bytes:
     return buffer.getvalue()
 
 
+def tar_gz(members: dict[str, bytes]) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+        link = tarfile.TarInfo("app/link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "bin/eBIRForms"
+        archive.addfile(link)
+    return gzip.compress(buffer.getvalue())
+
+
 def self_test() -> int:
     """The detector on planted fixtures: found wherever it sits, nothing in a clean package, unreadable refused."""
     planted_id = b"000000000000-fixturefixturefixture.apps.googleusercontent.com"
@@ -133,6 +161,9 @@ def self_test() -> int:
         "nested zip": (zip_bytes({"eBIRForms.exe": clean_exe, "nsh/inner.zip": zip_bytes({"a": planted_id})}), True, False),
         "gzip member": (zip_bytes({"eBIRForms.exe": clean_exe, "x.gz": gzip.compress(planted_secret)}), False, True),
         "clean": (zip_bytes({"eBIRForms.exe": clean_exe, "nsh/bundle.nshc": filler}), False, False),
+        "tar.gz binary": (tar_gz({"app/bin/eBIRForms": filler + planted_id + filler + planted_secret}), True, True),
+        "zip in a tar.gz": (tar_gz({"app/bin/eBIRForms": clean_exe, "app/res/inner.zip": zip_bytes({"a": planted_id})}), True, False),
+        "clean tar.gz": (tar_gz({"app/bin/eBIRForms": clean_exe, "app/res/bundle.nshc": filler}), False, False),
     }
     failures = []
     with tempfile.TemporaryDirectory() as scratch:
@@ -149,11 +180,19 @@ def self_test() -> int:
             failures.append("zstd member was not refused")
         except Unreadable:
             pass
+        refused_tar = Path(scratch, "unreadable.tar.gz")
+        refused_tar.write_bytes(tar_gz({"app/bin/eBIRForms": clean_exe, "app/x.zst": b"\x28\xb5\x2f\xfd" + filler}))
+        try:
+            scan(refused_tar)
+            failures.append("zstd member of a tar was not refused")
+        except Unreadable:
+            pass
     if failures:
         print("self-test FAILED: " + ", ".join(failures))
         return 1
-    print("self-test passed: a planted client id and secret are found bare, beside the exe, in a nested zip and in a"
-          " gzip member; a clean package has neither; an archive it cannot read is refused")
+    print("self-test passed: a planted client id and secret are found bare, beside the exe, in a nested zip, in a"
+          " gzip member, in a tar.gz's binary and in a zip inside a tar.gz; a clean package or tar.gz has neither; an"
+          " archive it cannot read is refused, in a package or in a tar")
     return 0
 
 
