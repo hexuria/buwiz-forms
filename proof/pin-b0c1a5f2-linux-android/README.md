@@ -57,3 +57,7 @@ Report files and the two recordings are in `android/`. `report.json` has no `scr
 | 11 | sign-out | not run | 0 |  | sign-up failed and the suite needs it |
 
 Android steps whose result shows `scrolled`: none. In particular, money-boxes `s14` was never reached, so the expected `scrolled: 1` measurement is absent. No step scrolled without `may_scroll` because no step scrolled at all.
+
+## with-507-recipes
+
+Part 2, using #507's whole recipe set including its smoke.json, is in `with-507-recipes/README.md`; it reaches the same Android sign-up keyboard blocker before money-boxes.

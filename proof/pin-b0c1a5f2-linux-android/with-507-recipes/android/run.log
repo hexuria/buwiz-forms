@@ -1,0 +1,11 @@
+2026-11-28T04:52:10.298Z	fresh	emulator-5554:files/nsh/dev.goldcoders.bir/test-data/bir_data.db	removed	38ms
+2026-11-28T04:52:10.298Z	launch	nsh-run-agent android $HOME/BuwizNsh/agents/e2e-android-20261128-045210.db	started	0ms
+2026-11-28T04:59:51.001Z	wait	window plane	ready	460702ms
+2026-11-28T04:59:51.061Z	wait	data plane	ready	57ms
+2026-11-28T04:59:51.089Z	app.info	database	test	27ms
+2026-11-28T04:59:54.394Z	recipe	setup-start	pass	3302ms
+2026-11-28T04:59:54.438Z	resolve	$tin_field	n3	43ms
+2026-11-28T05:00:03.541Z	recipe	sign-up	fail at s8: occluded_by: software keyboard (a press on `node 300` at (205.90475, 742.2857) lands on a key; hide the keyboard or scroll the target above it first)	8918ms
+2026-11-28T05:00:03.705Z	stop	app	stopped	164ms
+2026-11-28T05:00:03.764Z	close	android	the app stopped on the device	58ms
+2026-11-28T05:00:03.765Z	clean	$HOME/BuwizNsh/agents/e2e-android-20261128-045210.db	scratch database removed	0ms

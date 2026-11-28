@@ -1,0 +1,117 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261128-045210",
+ "out": "$HOME/BuwizNsh/evidence/e2e/android-20261128-045210",
+ "cli_version": "0.5.0",
+ "app_commit": "b3bddd4d",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3302,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-045210/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "fail",
+   "ms": 8918,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-045210/02-sign-up/recording.mp4",
+   "step": "s8",
+   "error": "occluded_by: software keyboard (a press on `node 300` at (205.90475, 742.2857) lands on a key; hide the keyboard or scroll the target above it first)",
+   "error_code": "host_error",
+   "line": "set_value new-tp-registered_address $address",
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/android-20261128-045210/02-sign-up/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/android-20261128-045210/02-sign-up/failure-tree.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "navigate",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "open-2551q",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "money-boxes",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "sheet-press",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "delete-row",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "queue",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "queue-send",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "birth-date",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "sign-out",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  }
+ ]
+}

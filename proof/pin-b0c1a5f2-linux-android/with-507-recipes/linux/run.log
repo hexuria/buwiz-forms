@@ -1,0 +1,19 @@
+2026-11-28T04:46:49.712Z	launch	nsh-run-agent linux $HOME/BuwizNsh/agents/e2e-linux-20261128-044649.db	started	0ms
+2026-11-28T04:50:46.095Z	wait	window plane	ready	236382ms
+2026-11-28T04:50:46.106Z	wait	data plane	ready	11ms
+2026-11-28T04:50:46.139Z	app.info	database	test	32ms
+2026-11-28T04:50:46.707Z	recipe	setup-start	pass	568ms
+2026-11-28T04:50:46.728Z	resolve	$tin_field	n5	19ms
+2026-11-28T04:50:58.015Z	recipe	sign-up	pass	11307ms
+2026-11-28T04:51:04.468Z	recipe	tax-year	pass	6454ms
+2026-11-28T04:51:06.337Z	recipe	navigate	pass	1868ms
+2026-11-28T04:51:08.141Z	recipe	open-2551q	pass	1804ms
+2026-11-28T04:51:21.791Z	recipe	money-boxes	pass	13650ms
+2026-11-28T04:51:21.791Z	recipe	sheet-press	skipped: no desktop variant	0ms
+2026-11-28T04:51:21.818Z	resolve	$table	no node matches {"id_regex": "^(fp-table-.+)-add$", "group": 1}	26ms
+2026-11-28T04:51:39.086Z	recipe	queue	fail at s27a: wait_until timed out: node `fp-pill-count` exists but should be absent	17200ms
+2026-11-28T04:51:39.086Z	recipe	queue-send	refused: presses a send control: run with --allow-send	0ms
+2026-11-28T04:51:45.120Z	recipe	birth-date	pass	6034ms
+2026-11-28T04:51:56.975Z	recipe	sign-out	known gap at s4: wait_until timed out: node `locked-screen` not found	11790ms
+2026-11-28T04:51:57.139Z	stop	app	stopped	164ms
+2026-11-28T04:51:57.140Z	clean	$HOME/BuwizNsh/agents/e2e-linux-20261128-044649.db	scratch database removed	0ms

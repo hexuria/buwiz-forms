@@ -1,0 +1,167 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-money-boxes-phone",
+  "fingerprint": "fnv1a64:6d6c1728cccf127c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 849,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 753
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 419
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 21
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 813
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 27
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 384
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2547
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 61,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/009-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 425
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2978
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 63,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 429
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 56,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/014-s14.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 536
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 65,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2317
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 863,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/019-s19.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/009-s9.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/014-s14.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-044649/06-money-boxes/019-s19.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 13635
+}
