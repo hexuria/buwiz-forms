@@ -529,18 +529,19 @@ impl bir_submit::TokenSource for AccountTokens {
         Box<dyn std::future::Future<Output = Result<String, bir_submit::ClientError>> + Send + '_>,
     > {
         // The account file sits next to the database, whose in-process name is per thread: the blocking
-        // thread runs under the name of the thread that asked. The owner the token is for is read
-        // here, at the call: until §5.4's SEND_OWNER lands with the wiring commit, the owner the
-        // send started under IS the stored owner of that moment.
+        // thread runs under the name of the thread that asked. The owner and epoch the token is for
+        // are the send's captured context, never whoever is stored when the fetch happens: a send of
+        // a session that ended answers SignedOut before any token work for the newer sign-in.
         let database = crate::db::capture_database_path_override();
         let device = crate::platform::capture_device_dir_override();
-        let Some(for_owner) = stored_owner() else {
+        let context = SEND_CONTEXT.try_with(|context| context.clone()).ok();
+        let Some(context) = context else {
             return Box::pin(async move { Err(bir_submit::ClientError::SignedOut) });
         };
-        // The send's context, if this fetch is a send's: the credential it produced the token
-        // from is recorded HERE, in the task's own async frame — the task-local does not reach
-        // the blocking thread, and the record must be the send's, not "now".
-        let context = SEND_CONTEXT.try_with(|context| context.clone()).ok();
+        if context.epoch != crate::session_epoch::current() {
+            return Box::pin(async move { Err(bir_submit::ClientError::SignedOut) });
+        }
+        let for_owner = context.owner.clone();
         Box::pin(async move {
             let answer = tokio::task::spawn_blocking(move || {
                 device.run(|| {
@@ -559,9 +560,7 @@ impl bir_submit::TokenSource for AccountTokens {
             .map_err(|error| bir_submit::ClientError::Other(error.to_string()))?;
             answer
                 .map(|(token, credential)| {
-                    if let Some(context) = &context {
-                        context.record_credential(credential);
-                    }
+                    context.record_credential(credential);
                     token
                 })
                 .map_err(|error| match error {

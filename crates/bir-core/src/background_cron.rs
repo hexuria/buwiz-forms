@@ -2321,29 +2321,27 @@ async fn process_submission_queue(
             key: job_key.clone(),
             active_jobs: active_jobs.clone(),
         };
-        // F7: the account this tick sends under is captured now, not read at transmit time — after
-        // a sign-out and a switch, the send must not complete under whoever signed in since.
-        let user_at_spawn = crate::cloud_account::load_stored_account()
-            .ok()
-            .flatten()
-            .map(|account| account.user_id);
+        // F7: the account and epoch this tick sends under are the session snapshot captured now,
+        // never a disk re-read at transmit time — a new sign-in is written to disk before the
+        // session section that ends the old one, and the disk alone cannot say which epoch a send
+        // belongs to.
+        let owner_at_spawn = crate::account_session::stored_owner();
+        let epoch_at_spawn = crate::session_epoch::current();
 
-        // F4: the send's context is scoped at the spawn — the owner from the stored sign-in of
-        // this moment, the epoch current now — so a 401 the send meets ends exactly that
-        // session, never whoever signed in since. The token fetch records the credential its
-        // access token came from into the same context.
-        let send_context = crate::account_session::stored_owner().map(|owner| {
-            crate::account_session::SendContext::new(owner, crate::session_epoch::current())
-        });
+        // F4: the send's context is scoped at the spawn — the owner and epoch of this moment — so
+        // a token fetch or a 401 the send meets acts for exactly that session, never whoever
+        // signed in since. The token fetch records the credential its access token came from into
+        // the same context.
+        let send_context = owner_at_spawn
+            .clone()
+            .map(|owner| crate::account_session::SendContext::new(owner, epoch_at_spawn));
         spawn_job(cleanup, async move {
             let job = async move {
-                let user_now = crate::cloud_account::load_stored_account()
-                    .ok()
-                    .flatten()
-                    .map(|account| account.user_id);
-                if user_now != user_at_spawn {
+                let owner_now = crate::account_session::stored_owner();
+                if owner_now != owner_at_spawn || crate::session_epoch::current() != epoch_at_spawn
+                {
                     warn!(
-                        "Cron: the account changed since this send was queued; the return stays queued                      for its own account's next tick"
+                        "Cron: the session changed since this send was queued; the return stays queued for its own account's next tick"
                     );
                     return;
                 }

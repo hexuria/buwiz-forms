@@ -3575,49 +3575,52 @@ mod tests {
     }
 
     /// f7: a send spawned in A, run after the switch to B, takes no token — the return stays
-    /// Queued in A's room, and B's sign-in is intact.
+    /// Queued in A's room, and B's sign-in is intact. The token read is the real
+    /// AccountTokens::access_token inside the send's captured context.
     #[test]
-    #[ignore = "commit 4"]
     fn f7_a_send_spawned_in_a_after_the_switch_takes_no_token() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        assert_invariants();
-        // A's tick spawns the send with A's owner and epoch.
-        let send_gate = hooks::pause("send.before_token");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let send = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            commit4_spawn_send(&owner, epoch_a);
-            hooks::at("send.before_token");
-        });
-        send_gate.reached();
-        // The account switches to B before the send runs.
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a, epoch_a);
         sign_out();
-        bir_core::account_session::clear_stored();
+        join_device_forget_threads();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         let epoch_b = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        assert_invariants();
-        let fetches_before = bir_core::account_session::token_fetches_for(
-            &bir_core::account_session::OwnerKey::of(
-                &bir_core::cloud_account::load_stored_account()
-                    .unwrap()
-                    .unwrap(),
-            )
-            .unwrap(),
+        open_hand(&scratch, &owner_b, epoch_b, "b-room.db");
+        let key_b = bir_core::account_session::OwnerKey {
+            origin: owner_b.origin.clone(),
+            user_id: owner_b.user_id.clone(),
+        };
+        let fetches_before = bir_core::account_session::token_fetches_for(&key_b);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(
+            context,
+            async {
+                let tokens = bir_core::account_session::AccountTokens;
+                bir_core::bir_submit::TokenSource::access_token(&tokens, false).await
+            },
+        ));
+        assert!(
+            matches!(result, Err(bir_core::bir_submit::ClientError::SignedOut)),
+            "A's dead send was answered with a token"
         );
-        send_gate.release();
-        send.join().unwrap();
-        // B's session stands; nothing of A's send touched it — and no token was ever fetched
-        // for A's dead send (the count did not move).
+        assert_eq!(
+            bir_core::account_session::token_fetches_for(&key_b),
+            fetches_before,
+            "NO token was taken for the dead send"
+        );
         assert_eq!(
             snapshot()
                 .owner
@@ -3625,18 +3628,6 @@ mod tests {
                 .map(|owner| owner.user_id.as_str()),
             Some("user-b"),
             "B's sign-in is intact"
-        );
-        assert_eq!(
-            bir_core::account_session::token_fetches_for(
-                &bir_core::account_session::OwnerKey::of(
-                    &bir_core::cloud_account::load_stored_account()
-                        .unwrap()
-                        .unwrap()
-                )
-                .unwrap()
-            ),
-            fetches_before,
-            "NO token was taken for the dead send"
         );
         assert_invariants();
     }
@@ -6087,53 +6078,48 @@ mod tests {
         assert_invariants();
     }
 
-    /// i5: a send never takes a token for another owner — its captured owner travels with it,
-    /// and the token read refuses anyone else's.
+    /// i5: a send never takes a token after its epoch ends — even when the SAME owner signs in
+    /// again. Its captured owner and epoch travel with it; the token read refuses the stale send.
     #[test]
-    #[ignore = "commit 4"]
-    fn i5_a_send_asks_no_token_for_another_owner() {
+    fn i5_a_send_asks_no_token_after_its_epoch_ends() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        // The switch before the send's token read.
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a.clone(), epoch_a);
         sign_out();
-        bir_core::account_session::clear_stored();
-        let owner_b = seed_stored("user-b", false);
-        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
-        let epoch_b = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
-        // A's send reaches its token: it must not read B's.
-        let fetches_before = bir_core::account_session::token_fetches_for(
-            &bir_core::account_session::OwnerKey::of(
-                &bir_core::cloud_account::load_stored_account()
-                    .unwrap()
-                    .unwrap(),
-            )
-            .unwrap(),
+        join_device_forget_threads();
+        let owner_again = seed_stored("user-a", false);
+        begin_open(owner_again.clone(), 1, OpenWhy::SignIn);
+        let epoch_again = snapshot().epoch;
+        assert_ne!(epoch_a, epoch_again);
+        open_hand(&scratch, &owner_again, epoch_again, "a-room-again.db");
+        let fetches_before = bir_core::account_session::token_fetches_for(&key_a);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(
+            context,
+            async {
+                let tokens = bir_core::account_session::AccountTokens;
+                bir_core::bir_submit::TokenSource::access_token(&tokens, false).await
+            },
+        ));
+        assert!(
+            matches!(result, Err(bir_core::bir_submit::ClientError::SignedOut)),
+            "the stale send was answered with the new session's token"
         );
-        commit4_spawn_send(&owner_a, epoch_a);
         assert_eq!(
-            bir_core::account_session::token_fetches_for(
-                &bir_core::account_session::OwnerKey::of(
-                    &bir_core::cloud_account::load_stored_account()
-                        .unwrap()
-                        .unwrap()
-                )
-                .unwrap()
-            ),
+            bir_core::account_session::token_fetches_for(&key_a),
             fetches_before,
-            "NO token was asked for another owner"
-        );
-        assert_eq!(
-            snapshot()
-                .owner
-                .as_ref()
-                .map(|owner| owner.user_id.as_str()),
-            Some("user-b"),
-            "nothing of A's send touched B's session"
+            "NO token was asked after the send's epoch ended"
         );
         assert_invariants();
     }
