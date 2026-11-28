@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "open-2551q-phone",
+  "fingerprint": "fnv1a64:f3d4a0e21f11a476",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 390
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 639
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 381
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 386
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 946,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/05-open-2551q/005-s5.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/05-open-2551q/005-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2744
+}

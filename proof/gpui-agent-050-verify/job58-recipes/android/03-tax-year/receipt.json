@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-tax-year-android",
+  "fingerprint": "fnv1a64:0665b867a5ccc82e",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1226
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 346
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 442
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 962
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 167
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 363
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 463
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 905
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 27
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 943
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 56
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 696
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 449
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 151
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 454
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1394
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 164,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/03-tax-year/018-s18.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/03-tax-year/018-s18.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9241
+}

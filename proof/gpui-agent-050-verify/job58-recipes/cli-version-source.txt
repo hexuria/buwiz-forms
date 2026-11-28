@@ -1,0 +1,6 @@
+E2E_GPUI_AGENT_CLI_VERSION was not set in either smoke run.
+Exact command: cargo install --list | grep gpui-agent-cli
+Exact stdout: (empty)
+grep exit status: 1
+cargo install --list has no gpui-agent-cli entry on this machine because the prebuilt installer copies the binary rather than registering a cargo source install.
+scripts/e2e/runner.py therefore fell through to pinned_gpui_agent_version() in the app Cargo.lock, where name = "gpui-agent" is version = "0.5.0".

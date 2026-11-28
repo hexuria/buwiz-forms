@@ -1,0 +1,189 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-money-boxes-paced-phone",
+  "fingerprint": "fnv1a64:219cff839a21a0b6",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1687,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s1a",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 911
+    },
+    {
+      "id": "s1b",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 767
+    },
+    {
+      "id": "s1c",
+      "ok": true,
+      "elapsed_ms": 149
+    },
+    {
+      "id": "s1d",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 977
+    },
+    {
+      "id": "s1e",
+      "ok": true,
+      "elapsed_ms": 98
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 778
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 944
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3083
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 252,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/010-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 389
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 84
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3852
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 278,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/014-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 428
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 349,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/016-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 446
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 324,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/018-s13.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 312
+    },
+    {
+      "id": "s13r",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3519
+    },
+    {
+      "id": "s13p",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1312
+    },
+    {
+      "id": "s13w",
+      "ok": true,
+      "elapsed_ms": 77
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1985,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/023-s14.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/010-s5.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/014-s9.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/016-s11.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/018-s13.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-android-j58r/06-money-boxes/023-s14.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 23013
+}
