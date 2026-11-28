@@ -2032,7 +2032,7 @@ mod tests {
                 "line_of_business": "Consulting",
                 "registered_address": "QC",
                 "zip_code": "1100",
-                "phone": "09156837000",
+                "phone": "09170000000",
                 "email": "test@example.com",
                 "default_form_type": "2551Q",
                 "taxpayer_type": "Individual",
