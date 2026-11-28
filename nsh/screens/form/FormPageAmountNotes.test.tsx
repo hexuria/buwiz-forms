@@ -232,6 +232,22 @@ for (const [period, typed, shown] of [[1, "12345678901234567890", "12,345,678,90
   }, 40_000);
 }
 
+// Focus returns to a box that holds a decimal amount: the kit (like a platform that does not select all) drops the caret
+// at the very end, past the decimal point. A digit typed there is not the entry: it lands in the centavos and rounds away
+// on leaving. The integer is the entry: the caret belongs before the point.
+test("digits typed after focus returns to a decimal amount extend the integer, never the centavos", async () => {
+  const app = await page(2025, 1);
+  await app.clear(BOX);
+  await app.type(BOX, "1000");
+  await app.submit(BOX);
+  await app.waitFor("text:✓ Saved", { timeout: 8000 });
+  await app.type(BOX, "");
+  await app.type(BOX, "5");
+  await app.submit(BOX);
+  await app.wait(600);
+  expect(app.value(BOX)).toBe("10,005.00");
+}, 30_000);
+
 test("note in a row drawer: with the drawer closed and its part folded, Queue opens both, the cell and its sentence are on screen, and the next press goes on", async () => {
   const app = await scheduleCell(2022, 3);
   await typeAndTab(app, "12345678901234567890");

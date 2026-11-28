@@ -203,6 +203,8 @@ interface MaskedProps {
   /** The text a box the filer edited settles on when left (the amount rounded to centavos); unset: the shown one. */
   settle?: (text: string) => string;
   keyboardType: KeyboardType;
+  /** The integer part is the entry: a focus whose caret the platform drops at the very end of a decimal amount moves it before the point. */
+  integerCaret?: boolean;
   /** No live formatting: focused text is left exactly as the box holds it. */
   noLiveFormat?: boolean;
   /** Whether focused text reads as a value; when false nothing is reported and the error state shows. */
@@ -573,6 +575,21 @@ function MaskedField(props: MaskedProps) {
         }
         programmaticFocus = false;
         programmaticFocusToken++;
+        if (props.integerCaret) {
+          // After the platform's own selection report: a caret dropped at the very end of a decimal amount sits in its
+          // centavos, and digits typed there are not the entry. The integer is; the caret belongs before the point. A caret
+          // the filer placed anywhere else (a click) is their choice, and one inside a key already typed is too late to move.
+          const token = programmaticFocusToken;
+          setTimeout(() => {
+            if (token !== programmaticFocusToken || !untracked(focused) || keySeen) return;
+            const held = untracked(text);
+            const point = held.lastIndexOf(".");
+            const end = held.length;
+            if (point > 0 && end - point === 3 && selected && selected.start === end && selected.end === end) {
+              writeCaret(point);
+            }
+          }, 0);
+        }
         props.field.onFocus?.();
       }}
       onBlur={() => {
@@ -646,6 +663,7 @@ export function MoneyInput(props: MoneyInputProps) {
       same={sameAmount}
       keyboardType="decimal-pad"
       noLiveFormat
+      integerCaret
       commaStates
       commaNegative={props.negative}
     />
