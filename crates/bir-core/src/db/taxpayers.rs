@@ -1201,10 +1201,16 @@ pub(crate) fn restore_year_facts(
         ..facts.clone()
     };
     write_year_facts_if_newer(conn, tin, year, &own, incoming_updated_at)?;
-    // Read the head row as it is: a seed the merge itself would create is
-    // not knowledge, and its fresh stamp must not count as "existing" below.
-    let head_existed = read_year_facts(conn, &head_tin, year)?.is_some();
-    let mut head = ensure_year_facts(conn, &head_tin, year)?;
+    // Read the head row as it is, seeding IN MEMORY only: a seed the merge
+    // itself creates is not knowledge, it must never reach the table when
+    // nothing is filled — its fresh stamp would refuse a later head archive
+    // stamped earlier, and the real facts would drop.
+    let existing_head = read_year_facts(conn, &head_tin, year)?;
+    let head_existed = existing_head.is_some();
+    let mut head = match existing_head {
+        Some(facts) => facts,
+        None => seed_year_facts(conn, &head_tin, year, true)?,
+    };
     let mut filled = false;
     if head.tax_classification.is_none() {
         head.tax_classification = facts.tax_classification.clone();

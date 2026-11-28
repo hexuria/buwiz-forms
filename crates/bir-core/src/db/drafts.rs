@@ -404,7 +404,7 @@ fn draft_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FormDraft
 }
 
 impl Database {
-    fn next_open_ended_period_number(
+    pub(crate) fn next_open_ended_period_number(
         &self,
         tin: &str,
         form_code: &str,
