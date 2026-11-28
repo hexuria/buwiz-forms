@@ -1624,6 +1624,12 @@ fn is_amount_typed_key(key: &str) -> bool {
     let tail = lower.rsplit(':').next().unwrap_or(&lower);
     // Exclude non-money numeric/code/text keys even if they contain substrings
     // like "tax" (TaxRate, TaxDec, Taxpayer, TaxAgent) or "value".
+    // L2: an Official Receipt number (txtReceipt*) and the count of
+    // installments (txtTotalN) are identifiers, never money, however numeric
+    // the value — but a gross-receipts amount keeps its money typing.
+    if tail.starts_with("txtreceipt") || tail.starts_with("txttotaln") {
+        return false;
+    }
     for excluded in [
         "rate",
         "percent",
@@ -3025,6 +3031,11 @@ fn fill_text_input(
                 || name.starts_with("derived:p2_")
                 || name.starts_with("derived:p3_")
                 || name.starts_with("derived:Sched")
+                || name.starts_with("derived:amount:")
+                || name.starts_with("refund_amount")
+                || name.rsplit(':').next().is_some_and(|tail| {
+                    tail.to_ascii_lowercase().starts_with("txttax") && is_amount_typed_key(name)
+                })
                 || is_formatted_money_amount(print));
         let lead = if amount_comb && money_join {
             ordered.len().saturating_sub(chars.len())
@@ -15733,11 +15744,10 @@ mod donor_estate_print_tests {
     }
 
     /// (b) The comb-tick exclusion fixture: on 1701MS page 2 the item-9 row's
-    /// amount combs end exactly at the strip's cut. K1: the test must catch a
-    /// wrongly stretched tick — matching by where a tick ENDS is vacuous (a
-    /// stretched tick ends far inside the strip, escaping an h < 20 filter),
-    /// so every vertical ending near the cut must stay tick-sized AND no
-    /// vertical at a tick's x may cross into the strip interior.
+    /// amount combs end exactly at the strip's cut. K1: every vertical ending
+    /// near the cut must stay tick-sized, and no vertical at a tick's x may
+    /// cross into the strip interior — a wrongly stretched tick fails the
+    /// crossing check, because it grows past the row boundary it should end at.
     #[test]
     fn rule6_comb_ticks_abutting_the_cut_stay_in_their_row() {
         let slug = "1701ms-2024";
@@ -15992,6 +16002,7 @@ mod donor_estate_print_tests {
                 .unwrap_or(html.len());
             let combs = super::page_comb_cells(&html[page_start..page_end]);
             let mut offenders = Vec::new();
+            let mut examined = 0usize;
             let mut cursor = page_start;
             while let Some(rel) = html[cursor..page_end].find("<rect ") {
                 let start = cursor + rel;
@@ -16020,6 +16031,7 @@ mod donor_estate_print_tests {
                 if x <= strip_x.0 + 0.5 || x >= strip_x.1 - 0.5 {
                     continue;
                 }
+                examined += 1;
                 // strictly inside a comb cell's span, overlapping it
                 // vertically: a digit tick — at ANY height: a wrongly
                 // stretched tick outgrows one comb row, so a height filter
@@ -16035,6 +16047,14 @@ mod donor_estate_print_tests {
                     offenders.push((x, y, h));
                 }
             }
+            assert!(
+                strip_x != (0.0, 0.0),
+                "{slug}: fixture vacuous — the strip's grey rect was not found"
+            );
+            assert!(
+                examined > 0,
+                "{slug}: fixture vacuous — no comb tick lies in the strip's horizontal span"
+            );
             assert!(
                 offenders.is_empty(),
                 "{slug}: ticks in strip {strip:?} x {strip_x:?}: {offenders:?}"
@@ -16277,22 +16297,22 @@ mod donor_estate_print_tests {
                 "1702rt-2018c",
                 "frm1702RT:txtPg1Pt3I25TaxDebitC2",
                 "p1c117",
-                "1234567",
+                "1234",
             ),
             (
                 "1702mx-2018c",
                 "frm1702MX:txtPg1Pt1I28TaxDebitC2",
                 "p1c116",
-                "1234567",
+                "1234",
             ),
             (
                 "2000-dst-2018",
                 "frm2000:sched2:txtReceipt0",
                 "p2c48",
-                "1234567",
+                "1234",
             ),
-            ("1606-2018", "frm1606:txtTotalN", "p2c110", "12"),
-            ("1706-2018", "frm1706:txtTotalN", "p2c114", "12"),
+            ("1606-2018", "frm1606:txtTotalN", "p2c110", "1"),
+            ("1706-2018", "frm1706:txtTotalN", "p2c114", "1"),
         ] {
             let mut fields = rule6_proof_fill(slug);
             fields.insert(key.to_string(), fill.to_string());
@@ -16338,6 +16358,30 @@ mod donor_estate_print_tests {
         assert!(!super::is_amount_typed_key(
             "frm1702RT:txtPg1Pt3I25TaxDebitC2"
         ));
+    }
+
+    #[test]
+    fn receipt_numbers_and_installment_counts_are_not_amount_typed() {
+        // L2: an Official Receipt number and a count of installments are
+        // identifiers — one with a "." or more than 16 digits must never
+        // become a money rectangle.
+        assert!(!super::is_amount_typed_key("frm2000:sched2:txtReceipt0"));
+        assert!(!super::is_amount_typed_key("frm2000:sched2:txtReceipt2"));
+        assert!(!super::is_amount_typed_key("frm1606:txtTotalN"));
+        assert!(!super::is_amount_typed_key("frm1706:txtTotalN"));
+        // gross receipts and real money keys keep their money typing
+        assert!(super::is_amount_typed_key("frm2551Qv2018:txtGrossReceipts"));
+        assert!(super::is_amount_typed_key("frm1800v2018:TotalAmountPayable"));
+    }
+
+    #[test]
+    fn tax_money_keys_are_amount_typed_but_not_memo_or_rate() {
+        // L1: txtTax* money keys (txtTaxPayable, txtTaxDue) count as money
+        // joins; the identifier lookalikes stay excluded.
+        assert!(super::is_amount_typed_key("frm1800v2018:txtTaxPayable"));
+        assert!(super::is_amount_typed_key("frm1801v2018:txtTaxDue_A"));
+        assert!(!super::is_amount_typed_key("frm1702RT:txtPg1Pt3I25TaxDebitC2"));
+        assert!(!super::is_amount_typed_key("frm1801v2018:txtTaxRate"));
     }
 
     #[test]
@@ -16419,9 +16463,30 @@ mod donor_estate_print_tests {
         }
         let joined = norm(&joined);
         let whole = norm(&full);
+        // as strict as #510's own: the fill fits under the cap, so the
+        // ellipsis escape hatch never fires — cell + band reconstruct the
+        // whole value exactly, the cell's first part is the whole value's
+        // beginning, and no line repeats text another line already printed.
         assert!(
-            joined == whole || lines.last().is_some_and(|l| l.trim_end().ends_with('\u{2026}')),
-            "cell + band must reconstruct the whole value or end on the ellipsis:\njoined: {joined}\nwhole: {whole}"
+            !lines.iter().any(|l| l.trim_end().ends_with('\u{2026}')),
+            "a fill that fits under the cap never ends on the ellipsis"
+        );
+        assert!(
+            whole.starts_with(cell_text.trim()),
+            "the cell keeps the value's own beginning"
+        );
+        for (i, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                continue;
+            }
+            assert!(
+                !lines[..i].iter().any(|earlier| earlier == line),
+                "no repeated continuation line"
+            );
+        }
+        assert_eq!(
+            joined, whole,
+            "cell + band must reconstruct the whole value exactly:\njoined: {joined}\nwhole: {whole}"
         );
     }
 
