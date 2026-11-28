@@ -3246,6 +3246,15 @@ fn restore_staged_database(
             "A return is being sent. Try the import again when it has finished.",
         ));
     }
+    // The room's own hand_to_clients is re-applied over the foreign archive's strip; capture it
+    // before anything replaces the live file.
+    let hand_to_clients = with_database(|db| {
+        db.get_setting(bir_core::legacy_claim::HAND_TO_CLIENTS_SETTING)
+            .ok()
+            .flatten()
+    })
+    .ok()
+    .flatten();
     if db_path.exists()
         && let Some(parent) = db_path.parent()
     {
@@ -3299,6 +3308,8 @@ fn restore_staged_database(
     } else {
         reset_database()?;
     }
+    let strip = bir_core::import::strip_foreign_archive_keys(&staged, hand_to_clients.as_deref())
+        .map_err(|error| HostError::new(error.to_string()))?;
     match staged.install() {
         Ok(()) => {
             // F1: in rooms mode nothing may serve the ephemeral placeholder past the install —
@@ -3325,7 +3336,10 @@ fn restore_staged_database(
                     }
                 }
             }
-            Ok(HostObject::new().field("kind", "database").into())
+            Ok(HostObject::new()
+                .field("kind", "database")
+                .field("clientPins", strip.client_pins)
+                .into())
         }
         Err(error) => {
             // Back on the file that is still there, now rather than at the next call.

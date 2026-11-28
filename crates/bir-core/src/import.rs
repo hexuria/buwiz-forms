@@ -439,6 +439,69 @@ fn staging_place(out_db_path: &Path) -> Result<(PathBuf, Option<PrivateTempDir>)
     }
 }
 
+/// The settings keys a foreign archive never brings into this room and this
+/// device: the other install's lock state, its agent send grants, its TIN
+/// list cache and its server URL. `hand_to_clients` is not in the list: the
+/// room's own value is re-applied by the caller after the strip.
+pub const FOREIGN_ARCHIVE_STRIPPED_SETTINGS: &[&str] = &[
+    "access_mode",
+    "admin_tin_root",
+    "app_lock_pin_hash",
+    "app_totp_secret",
+    "admin_recovery_key_hash",
+    "agent.send_grants",
+    "account_tins_cache",
+    "buwiz_server_url",
+];
+
+/// What the strip found: the restored archive carries client PINs of its own.
+pub struct ForeignStripOutcome {
+    pub client_pins: bool,
+}
+
+/// Strip a staged foreign archive of the other device's keys before it is
+/// installed, and re-apply the room's own `hand_to_clients` (the value the
+/// room held before the import, or none). The staged file is plain SQLite —
+/// the SQLCipher build encrypts it only at install — so a direct connection
+/// opens it. The client PINs (`taxpayers.pin_hash`) stay: they are the
+/// backup's own data, and the answer says so when it carries any.
+pub fn strip_foreign_archive_keys(
+    staged: &StagedDatabase,
+    hand_to_clients: Option<&str>,
+) -> Result<ForeignStripOutcome, DbError> {
+    let conn = rusqlite::Connection::open(staged.path())
+        .map_err(|error| DbError::Other(format!("the staged archive does not open: {error}")))?;
+    let keys = FOREIGN_ARCHIVE_STRIPPED_SETTINGS
+        .iter()
+        .map(|key| format!("'{key}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    conn.execute_batch(&format!(
+        "DELETE FROM settings WHERE key IN ({keys}); DELETE FROM settings WHERE key = 'hand_to_clients';"
+    ))
+    .map_err(|error| DbError::Other(format!("the staged archive does not strip: {error}")))?;
+    if let Some(value) = hand_to_clients {
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('hand_to_clients', ?1)",
+            [value],
+        )
+        .map_err(|error| DbError::Other(format!("hand_to_clients does not re-apply: {error}")))?;
+    }
+    // pin_hash exists only past migration 22; an older archive carries none.
+    let has_pin_column = conn
+        .prepare("SELECT 1 FROM pragma_table_info('taxpayers') WHERE name = 'pin_hash'")
+        .and_then(|mut statement| statement.exists([]))
+        .unwrap_or(false);
+    let client_pins = has_pin_column
+        && conn
+            .prepare(
+                "SELECT 1 FROM taxpayers WHERE pin_hash IS NOT NULL AND pin_hash != '' LIMIT 1",
+            )
+            .and_then(|mut statement| statement.exists([]))
+            .unwrap_or(false);
+    Ok(ForeignStripOutcome { client_pins })
+}
+
 /// Extract the database of the backup archive at `zip_path` and check it,
 /// without touching `out_db_path`. See [`StagedDatabase`].
 pub fn stage_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<StagedDatabase, DbError> {
@@ -2262,5 +2325,92 @@ mod tests {
             Some("encrypted".to_string())
         );
         assert_eq!(db.get_setting("kept").unwrap(), None);
+    }
+
+    /// I5 foreign archives stripped: a backup from another device lands without that device's
+    /// lock keys, send grants, TIN cache or server URL; the room's own hand_to_clients is
+    /// re-applied; the backup's client PINs stay and are reported.
+    #[test]
+    fn a_foreign_archive_is_stripped_before_it_installs() {
+        let dir = tempfile::tempdir().unwrap();
+        let scratch = dir.path();
+        let source = crate::db::Database::open(scratch.join("source.db")).unwrap();
+        for (key, value) in [
+            ("access_mode", "solo"),
+            ("admin_tin_root", "111222333"),
+            ("app_lock_pin_hash", "foreign-pin"),
+            ("app_totp_secret", "foreign-totp"),
+            ("admin_recovery_key_hash", "foreign-recovery"),
+            ("agent.send_grants", "[\"x\"]"),
+            ("account_tins_cache", "{\"tins\":[]}"),
+            ("buwiz_server_url", "https://foreign.example"),
+        ] {
+            source.set_setting(key, value).unwrap();
+        }
+        // A client PIN of the backup's own: it stays. Planted with raw SQL so the
+        // test does not depend on the taxpayer writer's shape.
+        source
+            .set_setting("hand_to_clients", "foreign-hand")
+            .unwrap();
+        source.checkpoint().unwrap();
+        let raw = rusqlite::Connection::open(scratch.join("source.db")).unwrap();
+        raw.execute(
+            "INSERT INTO taxpayers (tin_root, name, taxpayer_type, pin_hash) VALUES ('987654320', 'Pin Corp', 'corporation', 'client-pin')",
+            [],
+        )
+        .unwrap();
+        drop(raw);
+        source.checkpoint().unwrap();
+        let archive = scratch.join("foreign.zip");
+        crate::export::export_database_zip(&source, &archive).unwrap();
+        drop(source);
+
+        let staged = stage_database_zip(&archive, &scratch.join("live.db")).unwrap();
+        // Positive control: the foreign keys really are in the staged file before the strip.
+        let before = rusqlite::Connection::open(staged.path()).unwrap();
+        let planted: i64 = before
+            .query_row(
+                "SELECT COUNT(*) FROM settings WHERE key IN ('access_mode', 'agent.send_grants', 'buwiz_server_url')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            planted, 3,
+            "positive control: the foreign archive carries its keys"
+        );
+        drop(before);
+        let outcome = strip_foreign_archive_keys(&staged, Some("own-hand")).unwrap();
+        assert!(outcome.client_pins, "the backup's client PIN is reported");
+
+        let check = rusqlite::Connection::open(staged.path()).unwrap();
+        for key in crate::import::FOREIGN_ARCHIVE_STRIPPED_SETTINGS {
+            let count: i64 = check
+                .query_row(
+                    "SELECT COUNT(*) FROM settings WHERE key = ?1",
+                    [key],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 0, "{key} came with the foreign archive");
+        }
+        let hand: Option<String> = check
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'hand_to_clients'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        assert_eq!(
+            hand.as_deref(),
+            Some("own-hand"),
+            "the room's own hand_to_clients is re-applied"
+        );
+        let pin: Option<String> = check
+            .query_row("SELECT pin_hash FROM taxpayers LIMIT 1", [], |row| {
+                row.get(0)
+            })
+            .ok();
+        assert_eq!(pin.as_deref(), Some("client-pin"), "client PINs stay");
     }
 }
