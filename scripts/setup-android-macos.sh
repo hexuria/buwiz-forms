@@ -12,7 +12,9 @@
 # stay as it is (other work builds with it), put the pinned one beside it and point play-bundle there:
 #
 #   NSH_TOOLS=~/BuwizNsh/store-tools scripts/setup-android-macos.sh
-#   NSH_TOOLS=~/BuwizNsh/store-tools just play-bundle
+#   NSH_TOOLS=~/BuwizNsh/store-tools just play-bundle <n> --allow-dotenv
+#   (--allow-dotenv: the checkout's .env is meant; the bundle bakes nothing from it, and the Google client only with
+#   STORE_GMAIL=1: docs/platforms/android.md)
 #
 # Usage:
 #   scripts/setup-android-macos.sh           # check, then build what is missing
@@ -108,4 +110,4 @@ fi
 ls "$runtime"
 
 step "Ready"
-echo "NSH_TOOLS=$tools just play-bundle   (the bundle is unsigned; the owner signs it with just play-sign)"
+echo "NSH_TOOLS=$tools just play-bundle <n> --allow-dotenv   (bakes nothing from .env; unsigned: the owner signs it with just play-sign)"
