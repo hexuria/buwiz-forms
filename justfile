@@ -777,8 +777,11 @@ play-bundle *args:
         [ "${STORE_GMAIL:-}" != 1 ] || { echo "❌ STORE_GMAIL=1 builds only on the owner's Mac: the Linux container gets no Google client." >&2; exit 1; }
         # setup-linux-nsh.sh writes one wrapper per tools folder, beside it: ~/BuwizNsh/nsh2404.sh for the shared tools,
         # <folder>/../nsh2404-<name>.sh for NSH_TOOLS=<folder>/<name>.
-        if [ "$TOOLS" = "$HOME/BuwizNsh/tools" ]; then DEFAULT_WRAPPER="$HOME/BuwizNsh/nsh2404.sh"
-        else DEFAULT_WRAPPER="$(dirname "$TOOLS")/nsh2404-$(basename "$TOOLS").sh"; fi
+        # Both paths resolved as setup resolves them (realpath): a trailing slash or a linked $HOME names the same folder.
+        REAL_TOOLS="$({{PYTHON}} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$TOOLS")"
+        SHARED_TOOLS="$({{PYTHON}} -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$HOME/BuwizNsh/tools")"
+        if [ "$REAL_TOOLS" = "$SHARED_TOOLS" ]; then DEFAULT_WRAPPER="$HOME/BuwizNsh/nsh2404.sh"
+        else DEFAULT_WRAPPER="$(dirname "$REAL_TOOLS")/nsh2404-$(basename "$REAL_TOOLS").sh"; fi
         WRAPPER="${NSH_WRAPPER:-$DEFAULT_WRAPPER}"
         [ -x "$WRAPPER" ] || { echo "❌ No $WRAPPER: run scripts/setup-linux-nsh.sh (NSH_TOOLS=<folder> for a fresh one)." >&2; exit 1; }
         {{PYTHON}} scripts/play_bundle_guard.py wrapper "$WRAPPER" "$root/nsh" "$TOOLS" "$HOME"

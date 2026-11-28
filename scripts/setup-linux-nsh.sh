@@ -157,7 +157,8 @@ DOCKER_EOF
 # One wrapper per tools folder, beside it: ~/BuwizNsh/nsh2404.sh for the shared tools, <dir>/nsh2404-<name>.sh for
 # NSH_TOOLS=<dir>/<name> (`just play-bundle` looks for it there), so one setup never rewrites another's.
 wrapper_path() {
-    if [ "$TOOLS" = "$WORK/tools" ]; then printf '%s\n' "$WORK/nsh2404.sh"
+    # TOOLS is resolved (realpath -m); the shared folder is compared resolved too, as `just play-bundle` does.
+    if [ "$TOOLS" = "$(realpath -m -- "$WORK/tools")" ]; then printf '%s\n' "$WORK/nsh2404.sh"
     else printf '%s\n' "$(dirname "$TOOLS")/nsh2404-$(basename "$TOOLS").sh"; fi
 }
 
