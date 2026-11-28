@@ -777,7 +777,7 @@ fn add_error(error: ClientError) -> AddTinError {
             code: "device_not_registered".to_owned(),
             message: error.to_string(),
         },
-        ClientError::Other(message) => AddTinError::Other {
+        ClientError::Account(message) | ClientError::Other(message) => AddTinError::Other {
             code: "unreadable".to_owned(),
             message,
         },
@@ -814,7 +814,7 @@ fn tins_error(error: ClientError) -> TinsError {
         ClientError::Server { code, message, .. } | ClientError::NotATry { code, message, .. } => {
             TinsError::Server { code, message }
         }
-        ClientError::Other(message) => TinsError::Server {
+        ClientError::Account(message) | ClientError::Other(message) => TinsError::Server {
             code: "unreadable".to_owned(),
             message,
         },

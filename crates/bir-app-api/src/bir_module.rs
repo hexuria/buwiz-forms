@@ -43,7 +43,8 @@ thread_local! {
 /// does not start the submission worker, except to finish a launch that found
 /// the database held ([`open_database_at_launch`]) once the gate is open.
 /// Cloud-account settings use this while the filing UI is still locked.
-fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+pub(crate) fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError>
+{
     // A test's ephemeral injection, or this thread's already-open single-room handle, first: rooms
     // mode never populates the thread-local slot, so a filled one is never a room's stale twin.
     if let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) {
@@ -338,8 +339,9 @@ pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
 }
 
 #[cfg(test)]
-static ROOM_SOURCE_AFTER_SNAPSHOT: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>> =
-    std::sync::Mutex::new(None);
+static ROOM_SOURCE_AFTER_SNAPSHOT: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<u64, Box<dyn FnOnce() + Send>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
 /// The submission worker's rooms-mode source. Every tick's room Arc, owner and epoch are read
 /// from ONE machine snapshot; nothing is re-read from the newer session afterwards.
@@ -350,7 +352,7 @@ fn session_room_source() -> bir_core::background_cron::RoomSource {
         ROOM_SOURCE_AFTER_SNAPSHOT
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
+            .remove(&snap.epoch)
             .map(|hook| hook());
         if !matches!(
             snap.phase_kind,
@@ -867,12 +869,6 @@ pub(crate) fn with_reader<R>(
             f(&guard)
         }
     }
-}
-
-#[cfg(test)]
-pub(crate) fn open_database_slot_for_tests()
--> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
-    open_database_slot()
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
@@ -4015,12 +4011,12 @@ mod tests {
         .unwrap();
         let before = crate::session::snapshot();
         let source = session_room_source();
-        ROOM_SOURCE_AFTER_SNAPSHOT
-            .lock()
-            .unwrap()
-            .replace(Box::new(|| {
+        ROOM_SOURCE_AFTER_SNAPSHOT.lock().unwrap().insert(
+            before.epoch,
+            Box::new(|| {
                 crate::session::reset_for_tests();
-            }));
+            }),
+        );
         let tick = source().expect("the snapshot's open room makes a tick");
         assert_eq!(tick.epoch, before.epoch, "the epoch was read again");
         assert_eq!(

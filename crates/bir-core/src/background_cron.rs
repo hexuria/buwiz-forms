@@ -779,6 +779,14 @@ impl SubmissionTransport for NetworkSubmissionTransport {
 #[cfg(test)]
 static USE_TOKEN_FETCHING_TRANSPORT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(test)]
+static QUEUE_TRANSPORT_TEST_TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+#[cfg(test)]
+pub(crate) async fn queue_transport_test_turn() -> tokio::sync::MutexGuard<'static, ()> {
+    QUEUE_TRANSPORT_TEST_TURN.lock().await
+}
 #[cfg(test)]
 static TOKEN_TRANSPORT_OPENS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
@@ -2394,6 +2402,13 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(test)]
+static BEFORE_JOB_SESSION_CHECK: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
+#[cfg(test)]
+static SEND_EPOCH_REFUSALS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(test)]
+static JOB_SESSION_REFUSALS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 async fn process_submission_queue(
     profile: &TaxpayerProfile,
     db: Arc<Mutex<Database>>,
@@ -2476,6 +2491,8 @@ async fn process_submission_queue(
         #[cfg(test)]
         BEFORE_SEND_EPOCH_CHECK.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
         if crate::session_epoch::current() != epoch_at_spawn {
+            #[cfg(test)]
+            SEND_EPOCH_REFUSALS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             warn!(
                 "Cron: the session changed before this send was queued; the return stays queued for its own account's next tick"
             );
@@ -2495,9 +2512,17 @@ async fn process_submission_queue(
             .map(|owner| crate::account_session::SendContext::new(owner, epoch_at_spawn));
         spawn_job(cleanup, async move {
             let job = async move {
+                #[cfg(test)]
+                BEFORE_JOB_SESSION_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .take()
+                    .map(|hook| hook());
                 let owner_now = crate::account_session::stored_owner();
                 if owner_now != owner_at_spawn || crate::session_epoch::current() != epoch_at_spawn
                 {
+                    #[cfg(test)]
+                    JOB_SESSION_REFUSALS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     warn!(
                         "Cron: the session changed since this send was queued; the return stays queued for its own account's next tick"
                     );
@@ -3322,6 +3347,16 @@ impl Drop for JobCleanup {
 }
 
 #[cfg(test)]
+fn send_epoch_refusals() -> u64 {
+    SEND_EPOCH_REFUSALS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+#[cfg(test)]
+fn job_session_refusals() -> u64 {
+    JOB_SESSION_REFUSALS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+#[cfg(test)]
 mod tests {
     fn cron_secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
         crate::cloud_account::AccountSecrets {
@@ -3388,6 +3423,7 @@ mod tests {
     /// Queued, the transport is never opened, and neither account's token is fetched.
     #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_before_a_switch_is_never_sent_under_the_new_sign_in() {
+        let _transport_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3459,6 +3495,7 @@ mod tests {
     /// real AccountTokens ask succeeds once and the queued return is Submitted.
     #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_without_a_switch_is_submitted_and_fetches_its_context_token() {
+        let _transport_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3526,6 +3563,7 @@ mod tests {
     /// the spawn opens no transport, fetches no token and leaves A's return Queued.
     #[tokio::test(flavor = "current_thread")]
     async fn a_sign_in_between_the_room_snapshot_and_the_spawn_sends_nothing() {
+        let _transport_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3596,6 +3634,7 @@ mod tests {
     /// spawn. The owner is unchanged, so only the captured epoch can stop the stale send.
     #[tokio::test(flavor = "current_thread")]
     async fn a_same_owner_epoch_bump_before_the_spawn_sends_nothing() {
+        let _transport_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -3612,6 +3651,7 @@ mod tests {
                 crate::account_session::cache_owner(Some(key_a.clone()));
                 let epoch_a = crate::session_epoch::current() + 21;
                 crate::session_epoch::set(epoch_a);
+                let refusals_before = send_epoch_refusals();
                 BEFORE_SEND_EPOCH_CHECK.with(|hook| {
                     *hook.borrow_mut() = Some(Box::new(move || {
                         // Same owner, new session: the owner half cannot catch this one.
@@ -3630,9 +3670,74 @@ mod tests {
                 .await;
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 assert_eq!(
+                    send_epoch_refusals(),
+                    refusals_before + 1,
+                    "the pre-spawn epoch check did not refuse the stale send"
+                );
+                assert_eq!(
                     token_transport_counts(),
                     (0, 0),
                     "the same-owner stale epoch still opened the transport"
+                );
+                let stored = db
+                    .lock()
+                    .unwrap()
+                    .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(stored.status, FilingStatus::Queued);
+            },
+        )
+        .await;
+    }
+
+    /// The job check's epoch half alone: the same owner signs out and back in after the spawn.
+    /// The pre-spawn check has already passed, so only the check inside the job can stop the send.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_same_owner_epoch_bump_after_the_spawn_sends_nothing() {
+        let _transport_turn = queue_transport_test_turn().await;
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let _transport = use_token_transport();
+                let stored_a = cron_stored_for("user-a");
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let key_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(key_a.clone()));
+                let epoch_a = crate::session_epoch::current() + 41;
+                crate::session_epoch::set(epoch_a);
+                let refusals_before = job_session_refusals();
+                *BEFORE_JOB_SESSION_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(move || {
+                    crate::session_epoch::set(epoch_a + 1);
+                }));
+                let db = test_db();
+                let (queued, _summary) = stored_queued_2551q(&db);
+                process_submission_queue(
+                    &reviewed_profile(),
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    Some(key_a),
+                    epoch_a,
+                )
+                .await;
+                wait_for_no_active_jobs().await;
+                assert_eq!(
+                    job_session_refusals(),
+                    refusals_before + 1,
+                    "the in-job epoch check did not refuse the stale send"
+                );
+                assert_eq!(
+                    token_transport_counts(),
+                    (0, 0),
+                    "the same-owner post-spawn stale epoch still opened the transport"
                 );
                 let stored = db
                     .lock()
@@ -3652,6 +3757,7 @@ mod tests {
     /// load-bearing if such a state ever appears.
     #[tokio::test(flavor = "current_thread")]
     async fn an_owner_change_without_an_epoch_bump_sends_nothing() {
+        let _transport_turn = queue_transport_test_turn().await;
         let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
@@ -4716,6 +4822,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_queue_tick_does_not_panic() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let db_file = NamedTempFile::new().unwrap();
         // Since we are just testing the runner, if keyring fails we can't test.
         let db = match Database::open(db_file.path()) {

@@ -189,6 +189,10 @@ pub enum ClientError {
     /// never see it. Not a try, never tried again by itself.
     #[error("Sign out and sign in again on this device.")]
     InstallInUse,
+    /// The account credential or its store failed. This is account evidence,
+    /// never evidence about the submission being settled.
+    #[error("{0}")]
+    Account(String),
     #[error("{0}")]
     Other(String),
     /// The server says this was not a try and nothing reached the BIR: a
@@ -1142,8 +1146,10 @@ impl Submitter {
             Err(ClientError::Server { status: 404, .. }) => return Settled::Gone,
             Err(ClientError::SignedOut) => return Settled::SignedOut,
             // A token-store failure or a second `invalid_token` is account evidence, never
-            // evidence that the submission is gone: the queue keeps the noted send.
-            Err(ClientError::Other(_)) => return Settled::SignedOut,
+            // evidence that the submission is gone: the queue keeps the noted send. Other local
+            // read failures (an unreadable answer, a failed task join) say nothing about either.
+            Err(ClientError::Account(_)) => return Settled::SignedOut,
+            Err(ClientError::Other(_)) => return Settled::NotYet,
             Err(ClientError::Server {
                 status: 401,
                 ref code,
@@ -3465,6 +3471,48 @@ mod tests {
         assert!(seen.lock().unwrap().is_empty());
     }
 
+    /// Other local read failures — a captive portal answering invalid JSON, or token work that
+    /// cannot be joined — say nothing about the account or the submission, so the queue asks again.
+    #[tokio::test]
+    async fn settle_retries_local_failures_that_are_not_account_evidence() {
+        let unreadable = Answer {
+            status: 200,
+            headers: Vec::new(),
+            body: "<html>captive portal</html>".into(),
+        };
+        assert_eq!(settle_word(unreadable, true).await, "not yet");
+
+        struct JoinFailure;
+        impl TokenSource for JoinFailure {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
+            > {
+                Box::pin(async { Err(ClientError::Other("join failed".into())) })
+            }
+            fn login(&self) -> Option<String> {
+                Some("user".into())
+            }
+            fn session_ended(&self) {}
+        }
+        let client = Submitter::new(
+            SubmitConfig::new("http://127.0.0.1:9").unwrap(),
+            Box::new(crate::secrets::MemoryStore::default()),
+            std::sync::Arc::new(JoinFailure),
+        );
+        let pending = PendingSend {
+            server: client.config().server_url.clone(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: xml_hash(),
+            opening: true,
+            noted_at: Utc::now(),
+        };
+        assert!(matches!(client.settle(&pending).await, Settled::NotYet));
+    }
+
     /// F3: a token-store failure is account evidence, never evidence that a noted send is gone.
     #[tokio::test]
     async fn settle_keeps_a_send_when_the_token_store_fails() {
@@ -3476,7 +3524,7 @@ mod tests {
             ) -> std::pin::Pin<
                 Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
             > {
-                Box::pin(async { Err(ClientError::Other("the account store failed".into())) })
+                Box::pin(async { Err(ClientError::Account("the account store failed".into())) })
             }
             fn login(&self) -> Option<String> {
                 Some("user".into())

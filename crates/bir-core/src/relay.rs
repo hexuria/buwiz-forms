@@ -678,16 +678,35 @@ pub(crate) enum Settlement {
 /// `bir_submit::PendingSend` JSON) ended. Only through the client this
 /// build may send through ([`submitter`]: a development build's rules hold),
 /// and only with a sign-in for that server: otherwise nothing is asked.
+#[cfg(test)]
+static AFTER_SETTLE_DISK_CHECK: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
+
 pub(crate) async fn settle(pending: &str) -> Settlement {
     let Ok(pending) = serde_json::from_str::<bir_submit::PendingSend>(pending) else {
         return Settlement::Gone;
     };
-    if signed_in_to(&pending.server).is_err() {
-        // The disk answer is not evidence that the send is gone. Sign-out writes the disk before
-        // the epoch and room close finish, so a noted send keeps its record until its own account
-        // can be asked again.
-        return Settlement::Keep;
+    let saved = crate::cloud_account::load_stored_account().ok().flatten();
+    match saved.as_ref().map(|saved| saved.server_url.as_str()) {
+        Some(saved) if saved.trim_end_matches('/') == pending.server.trim_end_matches('/') => {}
+        Some(_) => {
+            // The account moved to another server. That is not proof that this send is gone,
+            // but it is also not a sign-in gap that can heal: let the unanswered record age into
+            // needs-attention instead of keeping it forever.
+            return Settlement::NotYet;
+        }
+        None => {
+            // The disk answer is not evidence that the send is gone. Sign-out writes the disk before
+            // the epoch and room close finish, so a noted send keeps its record until its own account
+            // can be asked again.
+            return Settlement::Keep;
+        }
     }
+    #[cfg(test)]
+    AFTER_SETTLE_DISK_CHECK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+        .map(|hook| hook());
     let Ok(submitter) = submitter() else {
         return Settlement::NotYet;
     };
@@ -1205,5 +1224,110 @@ mod tests {
             assert_eq!(error.no_receipt(), NoReceipt::Unknown);
             assert!(!error.relay_did_not_accept());
         }
+    }
+
+    fn stored_for(server: &str) -> crate::cloud_account::StoredAccount {
+        crate::cloud_account::StoredAccount {
+            server_url: server.into(),
+            access_token: "access".into(),
+            refresh_token: "refresh".into(),
+            access_expires_at_unix: i64::MAX,
+            user_id: "user".into(),
+            email: Some("filer@example.test".into()),
+            offline: true,
+            last_refresh_unix: 0,
+            practice: true,
+        }
+    }
+
+    fn pending_for(server: &str, noted_at: chrono::DateTime<chrono::Utc>) -> String {
+        serde_json::to_string(&crate::bir_submit::PendingSend {
+            server: server.into(),
+            submission_id: "s1".into(),
+            jti: "jti".into(),
+            xml_sha256: "0".repeat(64),
+            opening: false,
+            noted_at,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn settle_disk_check_keeps_a_signed_out_send_before_any_server_ask() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("account.json");
+        temp_env::with_var(
+            crate::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.as_os_str()),
+            || {
+                let pending = pending_for("http://server-a.example", chrono::Utc::now());
+                let continued = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                let mark = continued.clone();
+                *AFTER_SETTLE_DISK_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(move || {
+                    mark.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }));
+                let context = crate::account_session::SendContext::new(
+                    crate::account_session::OwnerKey {
+                        origin: "server-a.example".into(),
+                        user_id: "user".into(),
+                    },
+                    crate::session_epoch::current(),
+                );
+                let answer = tokio::runtime::Runtime::new().unwrap().block_on(
+                    crate::account_session::SEND_CONTEXT.scope(context, settle(&pending)),
+                );
+                assert!(matches!(answer, Settlement::Keep));
+                assert_eq!(continued.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+                // Positive control: when the disk holds the same server's account, the disk check
+                // passes and the settle reaches the path that would ask the server.
+                crate::account_session::save_stored(&stored_for("http://server-a.example"))
+                    .unwrap();
+                let mark = continued.clone();
+                *AFTER_SETTLE_DISK_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(move || {
+                    mark.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }));
+                let context = crate::account_session::SendContext::new(
+                    crate::account_session::OwnerKey {
+                        origin: "server-a.example".into(),
+                        user_id: "user".into(),
+                    },
+                    crate::session_epoch::current(),
+                );
+                let _answer = tokio::runtime::Runtime::new().unwrap().block_on(
+                    crate::account_session::SEND_CONTEXT.scope(context, settle(&pending)),
+                );
+                assert_eq!(continued.load(std::sync::atomic::Ordering::SeqCst), 1);
+            },
+        );
+    }
+
+    #[test]
+    fn a_pending_send_for_a_server_the_account_left_is_not_kept_for_ever() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("account.json");
+        temp_env::with_var(
+            crate::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.as_os_str()),
+            || {
+                crate::account_session::save_stored(&stored_for("http://server-b.example"))
+                    .unwrap();
+                let pending = pending_for(
+                    "http://server-a.example",
+                    chrono::Utc::now() - chrono::Duration::hours(25),
+                );
+                assert!(matches!(
+                    tokio::runtime::Runtime::new()
+                        .unwrap()
+                        .block_on(settle(&pending)),
+                    Settlement::NotYet
+                ));
+            },
+        );
     }
 }
