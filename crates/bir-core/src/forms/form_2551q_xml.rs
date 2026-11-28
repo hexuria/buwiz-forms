@@ -343,7 +343,7 @@ mod tests {
             line_of_business: "Software".into(),
             registered_address: "New Cabalan".into(),
             zip_code: "2200".into(),
-            phone: "09156837000".into(),
+            phone: "09170000000".into(),
             email: "tax@example.com".into(),
             default_form_type: "2551Qv2018".into(),
             taxpayer_type: TaxpayerType::Individual,

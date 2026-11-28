@@ -331,7 +331,12 @@ function Install-PinnedTool([string]$Crate, [string]$Version, [string[]]$ExtraAr
         Write-Host "prebuilt installs disabled for $Crate; building from source"
         return (Invoke-PrebuiltSourceInstall $Crate $Version $binary $ExtraArgs)
     }
-    if (Try-InstallPrebuilt $Crate $Version $binary) { return $true }
+    $started = Get-Date
+    if (Try-InstallPrebuilt $Crate $Version $binary) {
+        $seconds = [int][Math]::Floor(((Get-Date) - $started).TotalSeconds)
+        Write-Host "$Crate $Version prebuilt ${seconds}s"
+        return $true
+    }
     Write-Host "$Crate prebuilt $($script:PrebuiltFailedStep) failed; building from source"
     return (Invoke-PrebuiltSourceInstall $Crate $Version $binary $ExtraArgs)
 }
