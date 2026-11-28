@@ -475,6 +475,22 @@ def check_suite(suite):
             if any(step.get("key_delay_ms") is not None for step in steps) and not entry.get("needs_cli"):
                 problems.append(f"{where}: {file} paces typing (key_delay_ms): mark it \"needs_cli\": \"0.4.1\" "
                                 "with a fallback")
+        may_scroll = entry.get("may_scroll")
+        lists = may_scroll.values() if isinstance(may_scroll, dict) else [may_scroll] if may_scroll is not None else []
+        known_ids = set()
+        for file in files:
+            if (base / file).resolve().is_file():
+                try:
+                    known_ids.update(step_ids((base / file).resolve()))
+                except SuiteError:
+                    pass
+        for ids_allowed in lists:
+            if not isinstance(ids_allowed, list) or not all(isinstance(i, str) for i in ids_allowed):
+                problems.append(f"{where}: may_scroll is a list of step ids (or a map of them by target or form factor)")
+                continue
+            for step_id in ids_allowed:
+                if step_id not in known_ids:
+                    problems.append(f"{where}: may_scroll names {step_id!r}, which no recipe file of it has")
     return problems
 
 
@@ -622,6 +638,38 @@ def redact_file(path, log):
     masked = log.redact(text)
     if masked != text:
         Path(path).write_text(masked, encoding="utf-8")
+
+
+AFTER_SCROLLS = re.compile(r"after (\d+) scroll\(s\) towards the middle")
+
+
+def step_scrolled(step):
+    """How many times a step scrolled its target clear of a cover first: the plug's `scrolled` result (#28), or, for a
+    step refused after scrolling, the count its error names ("… after N scroll(s) towards the middle")."""
+    if not isinstance(step, dict):
+        return 0
+    result = step.get("result")
+    count = result.get("scrolled") if isinstance(result, dict) else None
+    if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+        return count
+    match = AFTER_SCROLLS.search(step.get("error") or "")
+    return int(match.group(1)) if match else 0
+
+
+def scroll_check(receipt, entry, context):
+    """({step id: times scrolled}, (step id, error) of the first step that scrolled without the suite allowing it).
+
+    A press that would have been refused as occluded now scrolls its container and retries by default (#28), so a
+    step written to fail when a layout moved its target under something could pass by scrolling. A step may scroll
+    only when the suite entry lists its id in `may_scroll` for this host (a floating cover is expected there)."""
+    steps = receipt.get("steps") if isinstance(receipt, dict) else None
+    scrolled = {step.get("id"): step_scrolled(step) for step in steps or [] if step_scrolled(step)}
+    allowed = for_host(entry.get("may_scroll"), context) or []
+    for step_id, count in scrolled.items():
+        if step_id not in allowed:
+            return scrolled, (step_id, f"this step scrolled {count} time(s) to reach its target; add {step_id!r} to "
+                                       "this suite entry's \"may_scroll\" if that is intended")
+    return scrolled, None
 
 
 def failing_step(receipt):
@@ -808,7 +856,16 @@ def finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, star
                   step_hint=None):
     """Fill `result` from a recipe's terminal receipt, exactly as an unsplit run reports it."""
     result["ms"] = round((time.monotonic() - started) * 1000)
+    scrolled, unasked = scroll_check(receipt, entry, context)
+    if scrolled:
+        result["scrolled"] = scrolled
     if code == 0 and isinstance(receipt, dict) and receipt.get("ok"):
+        if unasked:
+            step, error = unasked
+            result.update(status="fail", step=step, error=error, error_code="scrolled",
+                          line=wants_line_of(path, step))
+            log.line("recipe", entry["name"], f"fail at {step}: {error}", result["ms"])
+            return result
         result["status"] = "pass"
         log.line("recipe", entry["name"], "pass" + (f" ({note})" if note else ""), result["ms"])
         return result

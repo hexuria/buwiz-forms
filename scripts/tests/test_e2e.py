@@ -346,6 +346,62 @@ class SuiteTests(unittest.TestCase):
                          "unique name", "does not exist"):
             self.assertIn(expected, problems)
 
+    def test_a_step_that_scrolled_without_may_scroll_fails(self):
+        # The plug scrolls an occluded press's target clear and retries (#28): a step written to fail when a layout
+        # moved its target under something could pass that way, so it fails unless the suite allows it.
+        phone = {"target": "android", "form_factor": "phone"}
+        receipt = {"ok": True, "steps": [
+            {"id": "s13", "ok": True, "result": {"changed": True}},
+            {"id": "s14", "ok": True, "result": {"scrolled": 1}},
+        ]}
+        scrolled, failure = E2E.scroll_check(receipt, {"name": "money-boxes"}, phone)
+        self.assertEqual(scrolled, {"s14": 1})
+        self.assertEqual(failure, ("s14", "this step scrolled 1 time(s) to reach its target; add 's14' to this suite "
+                                          "entry's \"may_scroll\" if that is intended"))
+
+    def test_a_step_allowed_to_scroll_passes_and_its_count_is_recorded(self):
+        phone = {"target": "android", "form_factor": "phone"}
+        receipt = {"ok": True, "steps": [{"id": "s14", "ok": True, "result": {"scrolled": 2}}]}
+        for may_scroll in (["s14"], {"phone": ["s14"]}, {"android": ["s14"]}):
+            with self.subTest(may_scroll=may_scroll):
+                scrolled, failure = E2E.scroll_check(receipt, {"may_scroll": may_scroll}, phone)
+                self.assertEqual((scrolled, failure), ({"s14": 2}, None))
+        # Allowed on a phone is not allowed on a desktop.
+        desktop = {"target": "macos", "form_factor": "desktop"}
+        self.assertIsNotNone(E2E.scroll_check(receipt, {"may_scroll": {"phone": ["s14"]}}, desktop)[1])
+
+    def test_a_step_refused_after_scrolling_records_its_scrolls(self):
+        # The plug answers only an error then ("occluded_by: 9 after 2 scroll(s) towards the middle"): the count is
+        # read from it, so a failed step's scrolls show in the report too.
+        context = {"target": "android", "form_factor": "phone"}
+        receipt = {"ok": False, "steps": [
+            {"id": "s5", "ok": False, "error": "occluded_by: cover after 2 scroll(s) towards the middle"},
+        ]}
+        self.assertEqual(E2E.scroll_check(receipt, {"may_scroll": ["s5"]}, context), ({"s5": 2}, None))
+        self.assertEqual(E2E.scroll_check(receipt, {}, context)[0], {"s5": 2})
+        refused = {"ok": False, "steps": [{"id": "s5", "ok": False, "error": "occluded_by: cover"}]}
+        self.assertEqual(E2E.scroll_check(refused, {}, context), ({}, None))
+
+    def test_a_step_that_did_not_scroll_is_untouched(self):
+        context = {"target": "linux", "form_factor": "desktop"}
+        for result in (None, {}, {"changed": True}, {"scrolled": 0}, {"scrolled": True}, "text"):
+            with self.subTest(result=result):
+                receipt = {"ok": True, "steps": [{"id": "s1", "ok": True, "result": result}]}
+                self.assertEqual(E2E.scroll_check(receipt, {}, context), ({}, None))
+        self.assertEqual(E2E.scroll_check(None, {}, context), ({}, None))
+
+    def test_may_scroll_names_steps_its_recipes_have(self):
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "press.json", json.dumps({"name": "p", "steps": [
+                {"id": "s14", "op": "click", "target": "x"}]}))
+            good = suite_of(folder, [{"name": "p", "phone": "press.json", "may_scroll": {"phone": ["s14"]}}])
+            self.assertEqual(E2E.check_suite(good), [])
+            for may_scroll, expected in (({"phone": ["s99"]}, "may_scroll names 's99'"),
+                                         ({"phone": "s14"}, "may_scroll is a list of step ids"),
+                                         (True, "may_scroll is a list of step ids")):
+                suite = suite_of(folder, [{"name": "p", "phone": "press.json", "may_scroll": may_scroll}])
+                self.assertIn(expected, "\n".join(E2E.check_suite(suite)))
+
     def test_a_parameter_used_at_or_before_its_after_step_is_refused_by_check(self):
         cases = [
             ("click $table-add\nclick expose-table\nclick $table-delete\n", "s1"),
