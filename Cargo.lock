@@ -423,6 +423,7 @@ dependencies = [
  "gpui-agent",
  "gpui-agent-recipe",
  "libc",
+ "lopdf",
  "reqwest",
  "serde",
  "serde_json",

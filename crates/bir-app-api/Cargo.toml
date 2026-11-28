@@ -55,3 +55,4 @@ bir-core = { path = "../bir-core", default-features = false, features = ["test-s
 tempfile = "3"
 # Agent tests run a generated recipe with the runner's own parameter binding.
 gpui-agent-recipe = { workspace = true }
+lopdf = "0.34"
