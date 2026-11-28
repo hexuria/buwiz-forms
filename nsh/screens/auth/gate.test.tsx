@@ -525,10 +525,10 @@ for (const { name, size, device } of SIZES) {
     await app.press("id:gate-change-email");
     await app.waitFor("id:gate-email-page");
     expect(app.value("id:gate-email")).toBe("juana@example.com");
-    // A key goes to the focused input, and the field was not pressed: it has the focus. Headless inputs keep no selection
-    // (nsh test docs, app.type), so here the key is added at the end; on a device it replaces the selected address.
+    // A key goes to the focused input, and the field was not pressed: it has the focus. Headless inputs model the
+    // selection as a device does, so the key replaces the selected address.
     await app.keyboard.press("x");
-    expect(app.value("id:gate-email")).toBe("juana@example.comx");
+    expect(app.value("id:gate-email")).toBe("x");
   }, 60_000);
 
   test(`${name}: the code page opens with the keys in the boxes: six digits typed with no tap sign in and go Home`, async () => {

@@ -96,7 +96,7 @@ test("joint 1701: the penalty rows' boxes keep the columns of the rows above", a
   };
   const keysOf = (at: Record<string, number>) =>
     Object.keys(at).filter((k) => /frm1701:txtPg1I2[2-9][AB]/.test(k) || /frm1701:txtPg1I30[AB]/.test(k));
-  for (let i = 0; i < 40 && !app.shows("id:fp-frm1701:txtPg1I28A"); i++) await app.scroll("id:form-scroll", 800);
+  for (let i = 0; i < 40 && !app.shows("id:fp-frm1701:txtPg1I28A"); i++) await app.scroll("id:form-scroll", 800).catch(() => {});
   expect(app.count("id:fp-frm1701:txtPg1I28A")).toBe(1);
   for (let i = 0; i < 20 && keysOf(xs()).length < 10; i++) await app.wait(250);
   const shut = xs();
@@ -146,7 +146,7 @@ test("the penalty mark never covers the computed amount", async () => {
   await app.waitFor("text:BIR Form 1701");
   const frames = () =>
     JSON.parse((app.texts().find((t) => t.startsWith("boxx ")) ?? "boxx {}").slice("boxx ".length)) as Record<string, { x: number; width: number }>;
-  for (let i = 0; i < 40 && !app.shows("id:fp-frm1701:txtPg1I28A"); i++) await app.scroll("id:form-scroll", 800);
+  for (let i = 0; i < 40 && !app.shows("id:fp-frm1701:txtPg1I28A"); i++) await app.scroll("id:form-scroll", 800).catch(() => {});
   expect(app.count("id:fp-frm1701:txtPg1I28A")).toBe(1);
   await app.press("id:fp-penalty-2:6");
   for (let i = 0; i < 40 && app.count("id:fp-mark-info-frm1701:txtPg1I28A") !== 1; i++) await app.wait(250);
