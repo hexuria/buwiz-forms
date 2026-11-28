@@ -10,9 +10,12 @@ Before is main `d910f47d`; after is this branch (final head).
 
 Continuation-line cap: the rest of the value wraps over full-row-width
 added lines (spanning the row, never crossing into the greyed amount
-columns) over at most 6 added lines; only when it still does not
-fit, the last line ends with a whole-word "…" and the WHOLE value prints on
-the additional sheet (a test asserts no text is ever lost). In each pair:
+columns). The page spends only the room it has — trailing space plus what
+an elastic band yields — capped at 6 added lines, and one strip is never
+admitted when it cannot hold its 14 pt (a page with less room truncates in
+the cell instead); when the value still does not fit, the last line ends
+with a whole-word "…" and the WHOLE value prints on the additional sheet
+(a test asserts no text is ever lost). In each pair:
 
 - the original specify field holds the first part of the value (before: it
   was emptied, the whole value moved onto the inserted band);
