@@ -135,11 +135,12 @@ class SafetyTests(unittest.TestCase):
         self.assertFalse(E2E.send_env_ok({"BIR_SFTP_DRY_RUN": "1"}))
         self.assertFalse(E2E.send_env_ok({"EBIR_TEST_ENV": "1", "BIR_SFTP_DRY_RUN": "1", "BIR_SFTP_LIVE": "1"}))
 
-    def test_plan_refuses_a_send_recipe_without_allow_send_and_the_environment(self):
+    def test_plan_skips_a_send_recipe_without_allow_send_and_refuses_a_bad_environment(self):
         entry = {"name": "queue", "file": "queue.wants", "send": True}
         context = {"target": "macos", "form_factor": "desktop", "features": [], "cli_version": "0.4.0",
                    "allow_send": False, "env": {"EBIR_TEST_ENV": "1", "BIR_SFTP_DRY_RUN": "1"}}
-        self.assertEqual(E2E.plan_entry(entry, {}, context)[2], "refused")
+        self.assertEqual(E2E.plan_entry(entry, {}, context),
+                         (None, "needs --allow-send", "skipped (needs --allow-send)"))
         context["allow_send"] = True
         # The app must say it runs on a test database.
         self.assertEqual(E2E.plan_entry(entry, {}, context)[2], "refused")
@@ -284,8 +285,8 @@ class SuiteTests(unittest.TestCase):
         names = [entry["name"] for entry in suite["recipes"]]
         for flow in ("sign-up", "tax-year", "navigate", "birth-date", "money-boxes", "delete-row", "queue", "sign-out"):
             self.assertIn(flow, names)
-        queue = next(entry for entry in suite["recipes"] if entry["name"] == "queue")
-        self.assertTrue(queue["send"])
+        queue_send = next(entry for entry in suite["recipes"] if entry["name"] == "queue-send")
+        self.assertTrue(queue_send["send"])
 
     def test_problems_are_named(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -65,10 +65,11 @@ Results:
 - `needs`: skipped until a gpui-agent release or a host build carries what it needs;
 - `refused`: a send step without the safety conditions;
 - `skipped`: no variant for this form factor;
+- `skipped (needs --allow-send)`: a send recipe run without `--allow-send` (never a failure);
 - `setup`: a generated id was not found, before the recipe or at its `after` step;
 - `not run`: a required recipe before it failed.
 
-The exit status is 0 only when every recipe passed or was skipped.
+The exit status is 0 only when every recipe passed or has one of the skipped results.
 
 ## Safety, in code (`scripts/e2e/runner.py`)
 
@@ -78,8 +79,8 @@ The checks read every word of a step (flag values included) and every string of 
 - **Send steps.** A recipe that presses Queue, Send, Submit or File (or invokes a send) must be marked `"send": true`
   in its suite, or the suite does not run. It runs only with `--allow-send`, in the dry-run test environment
   (`EBIR_TEST_ENV=1`, `BIR_SFTP_DRY_RUN=1`, no `BIR_SFTP_LIVE`: the launch environment, or the runner's own with
-  `--no-launch`), and only when the app's data plane answers `app.info` with `"database": "test"`. Otherwise it is
-  `refused`.
+  `--no-launch`), and only when the app's data plane answers `app.info` with `"database": "test"`. Without
+  `--allow-send` it is `skipped (needs --allow-send)`; with it, a missing safety condition is `refused`.
 - **`--no-launch`** drives an app that is already running only when it answers `app.info` with `"database":
   "test"`; otherwise nothing runs.
 - **Secret boxes.** No step types, sets, pastes or keys into a box that says password, PIN, passcode, secret,

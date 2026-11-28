@@ -116,7 +116,7 @@
    "linux": "queue-send-phone.json",
    "phone": "queue-send-phone.json",
    "send": true,
-   "precondition": "Explicit dry-run send rehearsal. The runner refuses this entry unless --allow-send is passed with EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1 and a test database."
+   "precondition": "Explicit dry-run send rehearsal. Without --allow-send the runner reports this entry skipped (needs --allow-send); with it the runner requires EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE and a test database."
   },
   {
    "name": "birth-date",

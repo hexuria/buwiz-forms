@@ -25,7 +25,8 @@
   {
    "id": "s4",
    "op": "wait_until",
-   "target": "fp-send-line",
+   "target": "fp-status",
+   "name": "Dry run · read-only",
    "timeout_ms": 20000,
    "screenshot": true
   }

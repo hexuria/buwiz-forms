@@ -6,12 +6,14 @@
    "name": "sign-in-mock",
    "file": "sign-in-mock.wants",
    "sign_in": true,
-   "required": true
+   "required": true,
+   "known_gap": "issue #608: the mock's --auto-approve covers device codes, not the email sign-in code, and the driver cannot type that code because the focusable code box has no test id"
   },
   {
    "name": "sign-out-mock",
    "file": "sign-out.wants",
-   "phone": "sign-out-phone.wants"
+   "phone": "sign-out-phone.wants",
+   "known_gap": "issue #450: a fresh database has no local PIN or authenticator, so endSession refuses to lock the admin session, and the suite's safety rules forbid typing into a PIN or authenticator box"
   }
  ]
 }

@@ -22,8 +22,9 @@ is reported as "needs ...", never silently passed.
 
 Safety, enforced here (on every word of a step, camelCase split, and again on ids resolved from the tree):
 - a recipe whose steps press Queue / Send / Submit / File (or invoke a send) must be marked "send" in its suite, and
-  runs only with --allow-send, in a dry-run test environment (EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE),
-  against an app whose app.info says "database": "test"; with --no-launch no recipe runs against any other app;
+  runs only with --allow-send (without it, it is "skipped (needs --allow-send)", never failed), in a dry-run test
+  environment (EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE), against an app whose app.info says
+  "database": "test"; with --no-launch no recipe runs against any other app;
 - no step types, sets, pastes or keys into a password, PIN, passcode, secret, token, OTP / TOTP or code box, or
   presses the software keyboard's keys;
 - Continue / Resend on a sign-in screen only in a recipe marked "sign_in", in an app this run launched, against an
@@ -52,6 +53,8 @@ RECIPES = ROOT / "agent-recipes"
 SUITES = RECIPES / "e2e"
 SCHEMA = RECIPES / "bir.schema.json"
 TARGETS = ("macos", "linux", "windows", "ios", "android")
+SKIPPED_ALLOW_SEND = "skipped (needs --allow-send)"
+SUCCESS_STATUSES = ("pass", "skipped", SKIPPED_ALLOW_SEND)
 DEFAULT_ADDR = "127.0.0.1:17421"
 # The NSH development host's id on Android and on the iOS Simulator.
 ANDROID_HOST = "com.longbridge.nsh.host"
@@ -861,7 +864,7 @@ def plan_entry(entry, suite, context):
         return None, "; ".join(reasons), "needs"
     if entry.get("send"):
         if not context.get("allow_send"):
-            return None, "presses a send control: run with --allow-send", "refused"
+            return None, "needs --allow-send", SKIPPED_ALLOW_SEND
         if not send_env_ok(context["env"]):
             return None, "presses a send control: needs EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE", \
                 "refused"
@@ -1253,7 +1256,7 @@ def run(args):
             agent = data if entry.get("plane") == "data" else window
             result = run_entry(index, entry, suite, context, agent, log, out)
             results.append(result)
-            if entry.get("required") and result["status"] not in ("pass", "skipped"):
+            if entry.get("required") and result["status"] not in SUCCESS_STATUSES:
                 stopped = entry["name"]
     finally:
         stop(proc, log)
@@ -1264,7 +1267,7 @@ def run(args):
         if made_db:
             remove_scratch(made_db, log)
     print(f"e2e {header['suite']} on {args.target}: {summary(results)}. Report: {out / 'report.md'}")
-    return 0 if all(r["status"] in ("pass", "skipped") for r in results) else 1
+    return 0 if all(r["status"] in SUCCESS_STATUSES for r in results) else 1
 
 
 def app_database(data, log):

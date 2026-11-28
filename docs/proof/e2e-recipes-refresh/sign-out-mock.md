@@ -17,3 +17,5 @@ GPUI_AGENT_TOKEN="$token" gpui-agent-cli recipe run agent-recipes/e2e/sign-out.w
 For a phone-sized run, launch the iOS development host without the bypass (`SIMCTL_CHILD_BIR_AUTH_BYPASS=0`, with the same dry-run test settings and the iOS token handoff described by `just nsh-run-agent`) and run `sign-out-phone.wants` after `sign-in-mock.wants`. The iOS Simulator reaches the mock on the host's loopback.
 
 The sign-in recipe uses only the loopback mock account server. The sign-out recipe ends by waiting for `locked-screen`, which exists only when the bypass is absent.
+
+Known gaps, marked in `agent-recipes/e2e/sign-out-mock.json`: the mock's `--auto-approve` does not approve the email sign-in code, and the driver cannot type it because the focusable code box has no test id (#608); after that, a fresh database has no local PIN or authenticator, so `endSession` refuses to lock the admin session and the suite may not type either secret (#450). Until both close, the commands above are the manual rehearsal harness, not a passing proof.

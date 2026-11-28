@@ -13,7 +13,8 @@ echo "app $(git rev-parse --short=8 HEAD), gpui-agent-cli ${gpui_agent_version:-
 just e2e check smoke
 just e2e check rdo-row-press
 smoke() {
-    # A dry-run test build only: the runner refuses the Queue recipe without these and --allow-send.
+    # --allow-send is passed only to this dev test build, launched with the dry-run safety variables. A send recipe
+    # without --allow-send is skipped; with it the runner still refuses a non-dry-run environment or a real database.
     EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BIR_SFTP_LIVE= just e2e "$1" smoke --allow-send "${@:2}"
 }
 # A desktop machine's default run: smoke, then rdo-row-press (the SearchPick combobox under a person's presses, the
