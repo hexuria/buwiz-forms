@@ -3327,12 +3327,15 @@ mod tests {
         crate::account_session::OwnerKey::of(&cron_stored_for(user)).unwrap()
     }
 
-    struct TokenTransportReset;
+    struct TokenTransportReset {
+        epoch: u64,
+    }
 
     impl Drop for TokenTransportReset {
         fn drop(&mut self) {
             USE_TOKEN_FETCHING_TRANSPORT.store(false, std::sync::atomic::Ordering::SeqCst);
             crate::account_session::cache_owner(None);
+            crate::session_epoch::set(self.epoch);
         }
     }
 
@@ -3340,7 +3343,9 @@ mod tests {
         TOKEN_TRANSPORT_OPENS.store(0, std::sync::atomic::Ordering::SeqCst);
         TOKEN_TRANSPORT_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
         USE_TOKEN_FETCHING_TRANSPORT.store(true, std::sync::atomic::Ordering::SeqCst);
-        TokenTransportReset
+        TokenTransportReset {
+            epoch: crate::session_epoch::current(),
+        }
     }
 
     fn token_transport_counts() -> (usize, usize) {
@@ -3565,7 +3570,117 @@ mod tests {
                     .unwrap()
                     .unwrap();
                 assert_eq!(stored.status, FilingStatus::Queued, "A's return was sent");
-                get_active_jobs().lock().unwrap().clear();
+            },
+        )
+        .await;
+    }
+
+    /// The spawn refusal's epoch half alone: the same owner signs out and back in before the
+    /// spawn. The owner is unchanged, so only the captured epoch can stop the stale send.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_same_owner_epoch_bump_before_the_spawn_sends_nothing() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let _transport = use_token_transport();
+                let stored_a = cron_stored_for("user-a");
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let key_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(key_a.clone()));
+                let epoch_a = crate::session_epoch::current() + 21;
+                crate::session_epoch::set(epoch_a);
+                BEFORE_SEND_EPOCH_CHECK.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        // Same owner, new session: the owner half cannot catch this one.
+                        crate::session_epoch::set(epoch_a + 1);
+                    }));
+                });
+                let db = test_db();
+                let (queued, _summary) = stored_queued_2551q(&db);
+                process_submission_queue(
+                    &reviewed_profile(),
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    Some(key_a),
+                    epoch_a,
+                )
+                .await;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                assert_eq!(
+                    token_transport_counts(),
+                    (0, 0),
+                    "the same-owner stale epoch still opened the transport"
+                );
+                let stored = db
+                    .lock()
+                    .unwrap()
+                    .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(stored.status, FilingStatus::Queued);
+            },
+        )
+        .await;
+    }
+
+    /// The job check's owner half alone, as a defense-in-depth pin. Production cannot produce an
+    /// owner change with no epoch bump: every sign-out or replacement close bumps the machine
+    /// epoch. The cache is changed directly here only to prove the owner comparison itself is
+    /// load-bearing if such a state ever appears.
+    #[tokio::test(flavor = "current_thread")]
+    async fn an_owner_change_without_an_epoch_bump_sends_nothing() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let _transport = use_token_transport();
+                let stored_a = cron_stored_for("user-a");
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let key_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(key_a.clone()));
+                let epoch_a = crate::session_epoch::current() + 31;
+                crate::session_epoch::set(epoch_a);
+                BEFORE_SEND_EPOCH_CHECK.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        let stored_b = cron_stored_for("user-b");
+                        crate::account_session::save_stored(&stored_b).unwrap();
+                        crate::account_session::cache_owner(Some(cron_key_for("user-b")));
+                    }));
+                });
+                let db = test_db();
+                let (queued, _summary) = stored_queued_2551q(&db);
+                process_submission_queue(
+                    &reviewed_profile(),
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    Some(key_a),
+                    epoch_a,
+                )
+                .await;
+                wait_for_no_active_jobs().await;
+                assert_eq!(
+                    token_transport_counts(),
+                    (0, 0),
+                    "the owner-only change still opened the transport"
+                );
+                let stored = db
+                    .lock()
+                    .unwrap()
+                    .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(stored.status, FilingStatus::Queued);
             },
         )
         .await;
@@ -3575,6 +3690,7 @@ mod tests {
     /// another — the spawn reads a distinct key per room.
     #[tokio::test]
     async fn a_job_key_held_for_one_room_never_blocks_another_rooms_send() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let db = test_db();
         let (_queued, _summary) = stored_queued_2551q(&db);
         let profile = reviewed_profile();
@@ -3790,6 +3906,7 @@ mod tests {
     /// room B's stays untouched until the source answers B — and B's heal never lands in A.
     #[test]
     fn email_poll_and_calendar_use_the_tick_room() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -4974,6 +5091,7 @@ mod tests {
     #[cfg(not(feature = "direct-bir"))]
     #[tokio::test]
     async fn a_build_with_nowhere_to_send_leaves_the_queue_alone() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let db = test_db();
         let (queued, _) = stored_queued_2551q(&db);
         let profile = reviewed_profile();

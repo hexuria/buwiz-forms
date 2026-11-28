@@ -682,12 +682,15 @@ pub(crate) async fn settle(pending: &str) -> Settlement {
     let Ok(pending) = serde_json::from_str::<bir_submit::PendingSend>(pending) else {
         return Settlement::Gone;
     };
+    if signed_in_to(&pending.server).is_err() {
+        // The disk answer is not evidence that the send is gone. Sign-out writes the disk before
+        // the epoch and room close finish, so a noted send keeps its record until its own account
+        // can be asked again.
+        return Settlement::Keep;
+    }
     let Ok(submitter) = submitter() else {
         return Settlement::NotYet;
     };
-    if signed_in_to(&submitter.config().server_url).is_err() {
-        return Settlement::NotYet;
-    }
     settlement(submitter.settle(&pending).await)
 }
 
@@ -926,6 +929,36 @@ mod tests {
         .join()
         .unwrap();
         assert!(matches!(dead, Registration::Failed(_)), "{dead:?}");
+    }
+
+    /// F2 through the production settle entry point: when the disk cannot prove the pending
+    /// send's sign-in, the answer is Keep, never a NotYet that the queue can age into Clear.
+    #[tokio::test(flavor = "current_thread")]
+    async fn settle_keeps_a_noted_send_when_the_disk_sign_in_does_not_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let pending = serde_json::to_string(&bir_submit::PendingSend {
+                    server: "http://localhost:3008".into(),
+                    submission_id: "s1".into(),
+                    jti: "jti-1".into(),
+                    xml_sha256: "0".repeat(64),
+                    opening: true,
+                    noted_at: chrono::Utc::now(),
+                })
+                .unwrap();
+                assert!(
+                    matches!(settle(&pending).await, Settlement::Keep),
+                    "a disk-signed-out settle was left to age into Clear"
+                );
+            },
+        )
+        .await;
     }
 
     #[test]

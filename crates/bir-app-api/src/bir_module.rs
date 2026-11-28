@@ -337,6 +337,47 @@ pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     bir_core::log_files::spawn_retention();
 }
 
+#[cfg(test)]
+static ROOM_SOURCE_AFTER_SNAPSHOT: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>> =
+    std::sync::Mutex::new(None);
+
+/// The submission worker's rooms-mode source. Every tick's room Arc, owner and epoch are read
+/// from ONE machine snapshot; nothing is re-read from the newer session afterwards.
+fn session_room_source() -> bir_core::background_cron::RoomSource {
+    std::sync::Arc::new(|| {
+        let snap = crate::session::snapshot();
+        #[cfg(test)]
+        ROOM_SOURCE_AFTER_SNAPSHOT
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+            .map(|hook| hook());
+        if !matches!(
+            snap.phase_kind,
+            crate::session::PhaseKind::Open | crate::session::PhaseKind::Legacy
+        ) {
+            return None;
+        }
+        let owner = snap.owner.map(|owner| bir_core::account_session::OwnerKey {
+            origin: owner.origin,
+            user_id: owner.user_id,
+        });
+        let epoch = snap.epoch;
+        snap.room.map(|(handle, _generation, room_id, _path)| {
+            let key = match room_id {
+                Some(room) => format!("room:{}", room.as_str()),
+                None => "legacy".to_owned(),
+            };
+            bir_core::background_cron::RoomTick {
+                db: handle,
+                key,
+                owner,
+                epoch,
+            }
+        })
+    })
+}
+
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — on a Tokio runtime of its
 /// own, owned by this engine. Nothing happens while a worker runs already
@@ -398,35 +439,7 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
         if bir_core::db::single_room_database().is_some() {
             bir_core::background_cron::fixed_room_source(db)
         } else {
-            std::sync::Arc::new(|| {
-                // §5.3/AL1: the tick's room, owner and epoch come from one snapshot of the
-                // machine — no Open or Legacy phase, no tick. A sign-in after this read cannot
-                // join this room's sends to the newer account's token.
-                let snap = crate::session::snapshot();
-                if !matches!(
-                    snap.phase_kind,
-                    crate::session::PhaseKind::Open | crate::session::PhaseKind::Legacy
-                ) {
-                    return None;
-                }
-                let owner = snap.owner.map(|owner| bir_core::account_session::OwnerKey {
-                    origin: owner.origin,
-                    user_id: owner.user_id,
-                });
-                let epoch = snap.epoch;
-                snap.room.map(|(handle, _generation, room_id, _path)| {
-                    let key = match room_id {
-                        Some(room) => format!("room:{}", room.as_str()),
-                        None => "legacy".to_owned(),
-                    };
-                    bir_core::background_cron::RoomTick {
-                        db: handle,
-                        key,
-                        owner,
-                        epoch,
-                    }
-                })
-            })
+            session_room_source()
         };
     let cron = bir_core::background_cron::run_cron_jobs(source, stop.clone());
     runtime.spawn(async move {
@@ -854,6 +867,12 @@ pub(crate) fn with_reader<R>(
             f(&guard)
         }
     }
+}
+
+#[cfg(test)]
+pub(crate) fn open_database_slot_for_tests()
+-> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+    open_database_slot()
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
@@ -3976,6 +3995,43 @@ mod tests {
     use gpui_shell::HostArguments;
 
     const TIN: &str = "12345678800000";
+
+    /// AL1/e: the production rooms-mode RoomSource carries the owner and epoch of the same
+    /// snapshot as the room Arc. A session change immediately after that snapshot changes nothing
+    /// in the tick; if owner or epoch were read again afterwards this test turns red.
+    #[test]
+    fn room_source_carries_one_snapshots_owner_and_epoch() {
+        let _turn = crate::session::test_turn();
+        crate::session::reset_for_tests();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        crate::session::open_legacy_in_place_for_test(
+            &layout,
+            "user-a".into(),
+            "example.test".into(),
+        )
+        .unwrap();
+        let before = crate::session::snapshot();
+        let source = session_room_source();
+        ROOM_SOURCE_AFTER_SNAPSHOT
+            .lock()
+            .unwrap()
+            .replace(Box::new(|| {
+                crate::session::reset_for_tests();
+            }));
+        let tick = source().expect("the snapshot's open room makes a tick");
+        assert_eq!(tick.epoch, before.epoch, "the epoch was read again");
+        assert_eq!(
+            tick.owner.map(|owner| owner.user_id).as_deref(),
+            Some("user-a"),
+            "the owner was read again"
+        );
+        assert_eq!(tick.key, "legacy");
+        crate::session::reset_for_tests();
+        bir_core::platform::set_device_dir_override(None);
+    }
 
     #[test]
     fn locked_state_refuses_data_verbs() {

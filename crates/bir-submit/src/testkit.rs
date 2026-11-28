@@ -163,6 +163,7 @@ pub(crate) fn serve(
 pub(crate) struct FakeTokens {
     login: Mutex<Option<String>>,
     refused: std::sync::atomic::AtomicBool,
+    stale_device_epoch: std::sync::atomic::AtomicBool,
     asked: Mutex<Vec<bool>>,
     ended: std::sync::atomic::AtomicUsize,
 }
@@ -195,6 +196,12 @@ impl FakeTokens {
     pub fn ended(&self) -> usize {
         self.ended.load(std::sync::atomic::Ordering::SeqCst)
     }
+
+    /// Behave as a send whose captured session epoch has ended.
+    pub fn make_device_epoch_stale(&self) {
+        self.stale_device_epoch
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 impl TokenSource for FakeTokens {
@@ -216,6 +223,12 @@ impl TokenSource for FakeTokens {
 
     fn login(&self) -> Option<String> {
         self.login.lock().unwrap().clone()
+    }
+
+    fn device_key_is_current(&self) -> bool {
+        !self
+            .stale_device_epoch
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     fn session_ended(&self) {

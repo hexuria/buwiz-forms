@@ -1651,24 +1651,52 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(test)]
+static AFTER_ACCOUNT_WORK: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>> =
+    std::sync::Mutex::new(None);
+
+/// The account verb's one session snapshot and the room that snapshot opened. Tests without a
+/// session machine use their ephemeral slot, as before; production rooms mode always reads the
+/// snapshot's own Arc here, never a room re-opened after the snapshot.
+fn account_room_snapshot() -> Result<
+    (
+        crate::session::Snap,
+        std::sync::Arc<std::sync::Mutex<Database>>,
+    ),
+    HostError,
+> {
+    crate::account_gate::ensure_unlocked()?;
+    let snap = crate::session::snapshot();
+    #[cfg(test)]
+    if snap.room.is_none() {
+        return crate::bir_module::open_database_slot_for_tests().map(|handle| (snap, handle));
+    }
+    let Some((handle, _generation, _room_id, _path)) = snap.room.clone() else {
+        return Err(HostError::new(
+            "no room is open: the filing UI is behind a migration page or the gate",
+        ));
+    };
+    Ok((snap, handle))
+}
+
 /// Run the client's `work` on a thread and a runtime of its own, as the
-/// account verbs do, and answer it to the page.
+/// account verbs do, and answer it to the page. `snap` is the verb start's one snapshot: its
+/// owner and epoch scope the real AccountTokens, and an answer landing after a session change is
+/// refused rather than applied.
 fn on_account_thread<T: Send + 'static>(
     name: &str,
+    snap: crate::session::Snap,
     work: impl std::future::Future<Output = T> + Send + 'static,
     answer: impl FnOnce(T) -> HostResult + Send + 'static,
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
-    // AL2: a non-send account verb is still work for one owner and epoch. Capture both from the
-    // session snapshot at the verb's start and scope the whole client call with them, so the real
-    // AccountTokens never falls back to whoever is stored when the network answer comes back.
-    let snap = crate::session::snapshot();
+    let epoch = snap.epoch;
     let context = snap.owner.map(|owner| {
         bir_core::account_session::SendContext::new(
             bir_core::account_session::OwnerKey {
                 origin: owner.origin,
                 user_id: owner.user_id,
             },
-            snap.epoch,
+            epoch,
         )
     });
     crate::cloud_account::spawn_account(name, move || {
@@ -1676,11 +1704,21 @@ fn on_account_thread<T: Send + 'static>(
             .enable_all()
             .build()
             .map_err(|error| HostError::new(error.to_string()))?;
-        if let Some(context) = context {
-            answer(runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(context, work)))
+        let outcome = if let Some(context) = context {
+            runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(context, work))
         } else {
-            answer(runtime.block_on(work))
+            runtime.block_on(work)
+        };
+        #[cfg(test)]
+        AFTER_ACCOUNT_WORK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+            .map(|hook| hook());
+        if crate::session::snapshot().epoch != epoch {
+            return Err(HostError::new("The signed-in account changed; try again."));
         }
+        answer(outcome)
     })
 }
 
@@ -1766,10 +1804,16 @@ fn account_tins(
     arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let max_age = arguments.integer(0)?;
-    let local = with_reader(local_branches)?;
+    let (snap, room) = account_room_snapshot()?;
+    let local = {
+        let room = bir_core::lock_timing::lock(&room)
+            .map_err(|_| HostError::new("database lock poisoned"))?;
+        local_branches(&room)?
+    };
     let submitter = account_submitter()?;
     on_account_thread(
         "buwiz-account-tins",
+        snap,
         async move { submitter.account_tins(max_age).await },
         move |read| {
             let list = read.map_err(|error| HostError::new(error.to_string()))?;
@@ -1790,7 +1834,10 @@ fn activate_tin(
     let key = TinKey::parse(&tin)
         .filter(|_| tin.chars().filter(char::is_ascii_digit).count() == 14)
         .ok_or_else(|| HostError::new("Give the tax profile's TIN with its branch: 14 digits."))?;
-    let (kind, registered_name) = with_reader(|db| {
+    let (snap, room) = account_room_snapshot()?;
+    let (kind, registered_name) = {
+        let db = bir_core::lock_timing::lock(&room)
+            .map_err(|_| HostError::new("database lock poisoned"))?;
         let taxpayer = db
             .get_taxpayer(key.root())
             .map_err(host_error)?
@@ -1807,11 +1854,12 @@ fn activate_tin(
         } else {
             TinKind::NonIndividual
         };
-        Ok((kind, taxpayer.name))
-    })?;
+        (kind, taxpayer.name)
+    };
     let submitter = account_submitter()?;
     on_account_thread(
         "buwiz-account-activate-tin",
+        snap,
         async move {
             submitter
                 .add_account_tin(kind, &key, &registered_name, None)
@@ -3491,9 +3539,6 @@ mod tests {
         TEST_ACCOUNT_SUBMITTER
             .with(|slot| *slot.borrow_mut() = Some(std::sync::Arc::new(submitter)));
         let result = call_verb("account_tins", vec![json!(0)]);
-        TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
-        crate::session::reset_for_tests();
-        bir_core::account_session::clear_stored();
         let list = result
             .unwrap_or_else(|error| panic!("the real AccountTokens verb call failed: {error}"));
         assert_eq!(list["complete"], true);
@@ -3504,6 +3549,31 @@ mod tests {
                 .iter()
                 .any(|row| { row["tin_root"] == "123456788" && row["state"] == "activated" }),
             "the account row did not list: {list}"
+        );
+
+        // F5's positive control through the same real AccountTokens wiring: activate_tin posts
+        // the snapshot room's profile and answers its row while the session is unchanged.
+        add_branch("00001");
+        let row = call_verb("activate_tin", vec![json!("12345678800001")])
+            .unwrap_or_else(|error| panic!("the real AccountTokens activate call failed: {error}"));
+        assert_eq!(row["tin_root"], ROOT);
+        assert!(mock.tax_profile_posts() >= 1, "activate_tin never posted");
+
+        // A session change after the client call drops the answer instead of applying it. The
+        // write itself was still made under the verb snapshot's owner and epoch; nothing of the
+        // newer session supplies either the profile data or the token.
+        add_branch("00002");
+        AFTER_ACCOUNT_WORK.lock().unwrap().replace(Box::new(|| {
+            crate::session::reset_for_tests();
+        }));
+        let answer = call_verb("activate_tin", vec![json!("12345678800002")]);
+        TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
+        crate::session::reset_for_tests();
+        bir_core::account_session::clear_stored();
+        assert_eq!(
+            answer,
+            Err("The signed-in account changed; try again.".to_owned()),
+            "an answer from before the session change was applied"
         );
     }
 

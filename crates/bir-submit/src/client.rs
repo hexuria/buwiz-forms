@@ -98,6 +98,11 @@ pub trait TokenSource: Send + Sync {
     fn login(&self) -> Option<String>;
     /// The server ended the sign-in (`403 device_revoked`): the host signs the user out.
     fn session_ended(&self);
+    /// Whether device-key deletion still belongs to the session that made this call. Hosts with
+    /// per-session sends override it; the default keeps single-session clients unchanged.
+    fn device_key_is_current(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -704,11 +709,15 @@ impl Submitter {
                 Err(ClientError::Server {
                     status: 401, code, ..
                 }) if code == "unknown_device" && !registered_again => {
-                    self.forget_device()?;
+                    if self.tokens.device_key_is_current() {
+                        self.forget_device()?;
+                    }
                     registered_again = true;
                 }
                 Err(ClientError::Server { code, .. }) if code == "device_revoked" => {
-                    self.forget_device()?;
+                    if self.tokens.device_key_is_current() {
+                        self.forget_device()?;
+                    }
                     self.tokens.session_ended();
                     return Err(ClientError::DeviceRevoked);
                 }
@@ -1132,6 +1141,16 @@ impl Submitter {
             Ok(view) => view,
             Err(ClientError::Server { status: 404, .. }) => return Settled::Gone,
             Err(ClientError::SignedOut) => return Settled::SignedOut,
+            // A token-store failure or a second `invalid_token` is account evidence, never
+            // evidence that the submission is gone: the queue keeps the noted send.
+            Err(ClientError::Other(_)) => return Settled::SignedOut,
+            Err(ClientError::Server {
+                status: 401,
+                ref code,
+                ..
+            }) if code == "invalid_token" => {
+                return Settled::SignedOut;
+            }
             Err(_) => return Settled::NotYet,
         };
         let Some(status) = view["status"]
@@ -1915,6 +1934,32 @@ mod tests {
         assert_eq!(client.login(), None, "the host signed out");
     }
 
+    /// F8: an ended send's `device_revoked` must not delete the newer session's key. The client
+    /// asks its token source whether the device epoch is still current before forgetting anything.
+    #[tokio::test]
+    async fn a_revoked_device_of_an_old_epoch_is_not_forgotten() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                403,
+                &json!({"error": {"code": "device_revoked", "message": "revoked"}}),
+            )
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.device_key().unwrap();
+        tokens.make_device_epoch_stale();
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ClientError::DeviceRevoked), "{error:?}");
+        assert!(
+            client.store.get(DEVICE_KEY).unwrap().is_some(),
+            "the newer session's device key was deleted"
+        );
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d"));
+    }
+
     /// `401 unknown_device` (the device is another sign-in's): the device
     /// is forgotten, a new key registered once and the call made once more.
     #[tokio::test]
@@ -2083,6 +2128,34 @@ mod tests {
     }
 
     /// The device key is gone while still signed in: the server does not
+    /// F8: an ended send's `unknown_device` must not delete the newer session's key either.
+    #[tokio::test]
+    async fn an_unknown_device_of_an_old_epoch_is_not_forgotten() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                401,
+                &json!({"error": {"code": "unknown_device", "message": "who?"}}),
+            )
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.device_key().unwrap();
+        tokens.make_device_epoch_stale();
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, ClientError::Server { status: 401, code, .. } if code == "unknown_device"),
+            "{error:?}"
+        );
+        assert!(
+            client.store.get(DEVICE_KEY).unwrap().is_some(),
+            "the newer session's device key was deleted"
+        );
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d"));
+    }
+
     /// know the new key (`401 unknown_device`), the one registration again is
     /// refused (`409`): one plain sentence, held, never a loop.
     #[tokio::test]
@@ -3346,6 +3419,15 @@ mod tests {
         assert_eq!(settle_word(not_found, true).await, "gone");
         let broken = Answer::json(500, &json!({"error": {"code": "internal", "message": "x"}}));
         assert_eq!(settle_word(broken, true).await, "not yet");
+        let invalid = Answer::json(
+            401,
+            &json!({"error": {"code": "invalid_token", "message": "expired"}}),
+        );
+        assert_eq!(
+            settle_word(invalid, true).await,
+            "signed out",
+            "a second invalid_token keeps the noted send"
+        );
         let held = Answer::json(
             503,
             &json!({"error": {"code": "restarting", "message": "x"}}),
@@ -3381,6 +3463,40 @@ mod tests {
         };
         assert!(matches!(client.settle(&elsewhere).await, Settled::NotYet));
         assert!(seen.lock().unwrap().is_empty());
+    }
+
+    /// F3: a token-store failure is account evidence, never evidence that a noted send is gone.
+    #[tokio::test]
+    async fn settle_keeps_a_send_when_the_token_store_fails() {
+        struct BrokenTokens;
+        impl TokenSource for BrokenTokens {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
+            > {
+                Box::pin(async { Err(ClientError::Other("the account store failed".into())) })
+            }
+            fn login(&self) -> Option<String> {
+                Some("user".into())
+            }
+            fn session_ended(&self) {}
+        }
+        let client = Submitter::new(
+            SubmitConfig::new("http://127.0.0.1:9").unwrap(),
+            Box::new(crate::secrets::MemoryStore::default()),
+            std::sync::Arc::new(BrokenTokens),
+        );
+        let pending = PendingSend {
+            server: client.config().server_url.clone(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: xml_hash(),
+            opening: true,
+            noted_at: Utc::now(),
+        };
+        assert!(matches!(client.settle(&pending).await, Settled::SignedOut));
     }
 
     #[test]

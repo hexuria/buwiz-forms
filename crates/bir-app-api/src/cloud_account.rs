@@ -295,11 +295,12 @@ fn verb_refresh(
     // could never have answered it.)
     let force = stored.access_expires_at_unix > now.saturating_add(30);
     // B1: the rejected access token goes in — the fast paths never answer it back.
-    match bir_core::account_session::access_token_rejecting(
+    match bir_core::account_session::access_token_rejecting_at_epoch(
         http,
         now,
         force,
         owner,
+        epoch,
         Some(&stored.access_token),
     ) {
         Ok((access, credential)) => {
