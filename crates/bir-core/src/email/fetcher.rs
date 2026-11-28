@@ -552,17 +552,43 @@ mod tests {
         chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").expect("a day")
     }
 
-    /// The lab taxpayer on `INBOX` with one 1601C of December 2026 in `status`, sent at `sent` (`None`: no send time).
-    fn inbox_with(status: crate::forms::FilingStatus, sent: Option<&str>) -> Database {
+    /// The lab taxpayer on `INBOX` with one 1601C of December 2025: sent by the worker's own path and given the send
+    /// time `sent` (`None`: none), or, when `sent_at_all` is false, only a draft.
+    fn inbox_with(sent_at_all: bool, sent: Option<&str>) -> Database {
         let db = Database::open_ephemeral().unwrap();
         let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
         profile.imap_email = Some(INBOX.to_string());
         profile.email_tracking_enabled = true;
+        let tin = profile.tin.full();
         db.save_profile(profile).unwrap();
-        let mut draft = crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 12);
-        draft.status = status;
-        draft.submitted_at = sent.map(str::to_string);
-        db.save_1601c_draft(&draft).unwrap();
+        let mut draft = crate::filing_queue::mandatory_lab_1601c_draft_for(2025, 12);
+        if !sent_at_all {
+            db.save_1601c_draft(&draft).unwrap();
+            return db;
+        }
+        draft.transition_to_queued().unwrap();
+        db.save_queued_1601c_draft(&draft).unwrap();
+        let claim = db
+            .claim_queued_1601c_submission(
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                &draft.queued_submission_fingerprint,
+                &draft.next_retry_at,
+                0,
+            )
+            .unwrap();
+        let crate::db::Claim1601CSubmissionResult::Claimed {
+            draft: mut claimed,
+            token,
+        } = claim
+        else {
+            panic!("expected a claim");
+        };
+        claimed.transition_to_submitted(draft.default_submission_filename(), false);
+        db.finish_claimed_1601c_submission(&claimed, &token)
+            .unwrap();
+        db.set_sent_at_for_tests(&tin, sent);
         db
     }
 
@@ -570,8 +596,7 @@ mod tests {
     /// explicit check does, from the day before it was sent, so its email is found and the return confirmed.
     #[test]
     fn an_explicit_check_searches_back_to_a_return_past_the_window() {
-        use crate::forms::FilingStatus::Submitted;
-        let db = inbox_with(Submitted, Some("2026-12-20T10:00:00+08:00"));
+        let db = inbox_with(true, Some("2026-12-20T10:00:00+08:00"));
         let now = at("2027-01-29T03:00:00Z");
         assert_eq!(search_since(&db, INBOX, now, false), None);
         assert_eq!(search_since(&db, INBOX, now, true), Some(day("2026-12-19")));
@@ -581,8 +606,7 @@ mod tests {
     /// the server's timezone); an explicit check reaches the day before the send when that is earlier.
     #[test]
     fn a_waiting_return_is_searched_from_the_window_with_a_day_to_spare() {
-        use crate::forms::FilingStatus::Submitted;
-        let db = inbox_with(Submitted, Some("2027-01-20T10:00:00+08:00"));
+        let db = inbox_with(true, Some("2027-01-20T10:00:00+08:00"));
         let now = at("2027-01-29T03:00:00Z");
         let window = day("2026-12-29");
         assert_eq!(window_since(now), window);
@@ -590,11 +614,10 @@ mod tests {
         assert_eq!(search_since(&db, INBOX, now, true), Some(window));
     }
 
-    /// Nothing unconfirmed: neither searches (a confirmed return, or none at all).
+    /// Nothing unconfirmed (only a draft, never sent): neither searches.
     #[test]
     fn nothing_unconfirmed_is_not_searched_for() {
-        use crate::forms::FilingStatus::Confirmed;
-        let db = inbox_with(Confirmed, Some("2027-01-20T10:00:00+08:00"));
+        let db = inbox_with(false, None);
         let now = at("2027-01-29T03:00:00Z");
         assert_eq!(search_since(&db, INBOX, now, false), None);
         assert_eq!(search_since(&db, INBOX, now, true), None);
@@ -604,9 +627,8 @@ mod tests {
     /// poll leaves it, an explicit check searches the whole year back.
     #[test]
     fn a_return_without_a_send_time_is_past_the_window_and_searched_a_year_back() {
-        use crate::forms::FilingStatus::Submitted;
         for sent in [None, Some(""), Some("not a time")] {
-            let db = inbox_with(Submitted, sent);
+            let db = inbox_with(true, sent);
             let now = at("2027-01-29T03:00:00Z");
             let tin = crate::filing_queue::mandatory_lab_1601c_profile()
                 .tin

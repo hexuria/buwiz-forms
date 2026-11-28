@@ -371,14 +371,13 @@ mod tests {
         assert!(inbox_emails_match(auth.inbox_email(), SHARED_INBOX));
     }
 
-    /// A lab 1601C of `year`/`month` already sent (for real unless `dry_run`) at `sent`, an RFC 3339 time.
+    /// A lab 1601C of `year`/`month` sent by the worker's own path (for real unless `dry_run`), then given the send
+    /// time `sent`, an RFC 3339 time.
     fn sent_1601c(db: &Database, year: u16, month: u8, sent: &str, dry_run: bool) {
-        let mut draft = crate::filing_queue::mandatory_lab_1601c_draft_for(year, month);
-        draft.status = FilingStatus::Submitted;
-        draft.submitted_at = Some(sent.to_string());
-        draft.submitted_dry_run = dry_run;
-        db.save_1601c_draft(&draft)
-            .expect("the sent return is saved");
+        let draft = crate::filing_queue::mandatory_lab_1601c_draft_for(year, month);
+        let tin = draft.tin.clone();
+        submit_lab_1601c_as(db, draft, dry_run);
+        db.set_sent_at_for_tests(&tin, Some(sent));
     }
 
     fn at(time: &str) -> chrono::DateTime<chrono::Utc> {
@@ -398,24 +397,24 @@ mod tests {
             // (what, taxable year, month, sent, polled)
             (
                 "sent 29 December, polled 2 January",
-                2026,
+                2025,
                 12,
-                "2026-12-29T15:00:00+08:00",
-                "2027-01-02T01:00:00Z",
+                "2025-12-29T15:00:00+08:00",
+                "2026-01-02T01:00:00Z",
             ),
             (
                 "a December return sent in January",
-                2026,
+                2025,
                 12,
-                "2027-01-08T10:00:00+08:00",
-                "2027-01-10T01:00:00Z",
+                "2026-01-08T10:00:00+08:00",
+                "2026-01-10T01:00:00Z",
             ),
             (
                 "last year's return sent in April",
-                2026,
+                2025,
                 12,
-                "2027-04-14T09:00:00+08:00",
-                "2027-04-20T01:00:00Z",
+                "2026-04-14T09:00:00+08:00",
+                "2026-04-20T01:00:00Z",
             ),
         ];
         for (what, year, month, sent, polled) in cases {
@@ -441,7 +440,7 @@ mod tests {
             .tin
             .full();
         let db = Database::open_ephemeral().unwrap();
-        sent_1601c(&db, 2026, 12, "2026-12-29T15:00:00+08:00", false);
+        sent_1601c(&db, 2025, 12, "2026-12-29T15:00:00+08:00", false);
         let window = crate::email::BIR_EMAIL_WINDOW_DAYS;
         let last_day = at("2026-12-29T07:00:00Z") + chrono::Duration::days(window);
         assert!(db.has_return_awaiting_bir_email(&tin, last_day).unwrap());
@@ -450,7 +449,7 @@ mod tests {
         assert!(db.has_return_past_bir_email_window(&tin, after).unwrap());
 
         let dry = Database::open_ephemeral().unwrap();
-        sent_1601c(&dry, 2026, 12, "2026-12-29T15:00:00+08:00", true);
+        sent_1601c(&dry, 2025, 12, "2026-12-29T15:00:00+08:00", true);
         for polled in ["2027-01-02T01:00:00Z", "2027-03-01T01:00:00Z"] {
             assert!(!dry.has_return_awaiting_bir_email(&tin, at(polled)).unwrap());
             assert!(
@@ -467,7 +466,7 @@ mod tests {
         let mut juan = crate::filing_queue::mandatory_lab_1601c_profile();
         juan.imap_email = Some(SHARED_INBOX.to_string());
         save(&db, juan);
-        sent_1601c(&db, 2026, 12, "2026-12-29T15:00:00+08:00", false);
+        sent_1601c(&db, 2025, 12, "2026-12-29T15:00:00+08:00", false);
         let plan = plan_email_poll_for_address(&db, SHARED_INBOX, at("2027-01-02T01:00:00Z"));
         assert!(plan.still_pending);
         assert!(!plan.past_window);

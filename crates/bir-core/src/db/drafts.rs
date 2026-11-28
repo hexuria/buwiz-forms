@@ -7273,3 +7273,20 @@ mod tests {
         assert_eq!(summaries[1].month, None);
     }
 }
+
+#[cfg(test)]
+impl Database {
+    /// Tests only: rewrite the stored send time (`submitted_at`) of `tin`'s sent returns; `None` removes it. A sent
+    /// return is made through the worker's own path, which stamps the real time; tests of the inbox window need others.
+    pub(crate) fn set_sent_at_for_tests(&self, tin: &str, sent: Option<&str>) {
+        self.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = CASE WHEN ?2 IS NULL
+                    THEN json_remove(data_json, '$.submitted_at')
+                    ELSE json_set(data_json, '$.submitted_at', ?2) END
+                  WHERE tin = ?1 AND status IN ('Submitted', 'Filed')",
+                params![tin, sent],
+            )
+            .expect("the send time is rewritten");
+    }
+}
