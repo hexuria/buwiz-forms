@@ -598,6 +598,18 @@ pub struct LegacyClaim {
     mode: Option<NotHere>,
 }
 
+/// Whether the record's owner fields name `who`. They are written with the room at unlock; an
+/// older or partial record they cannot identify is treated as the claimant's, failing closed.
+fn record_is_claimant(record: &Record, who: &Claimant) -> bool {
+    let (Some(origin), Some(user_id)) = (&record.origin, &record.user_id) else {
+        return true;
+    };
+    let Ok(who_origin) = crate::rooms::room_origin(&who.server_url) else {
+        return true;
+    };
+    origin == &who_origin && user_id == &who.user_id
+}
+
 impl LegacyClaim {
     /// The claim of this process: the device folder of [`Layout::here`], refused in single-room mode and while the dev
     /// database is chosen.
@@ -787,9 +799,17 @@ impl LegacyClaim {
         // failure is definitive: the claim is over, and the account opens its empty room.
         let definitive = match &inner {
             // The ruling's item 6: a finish that lands on a transient after the move (the record at
-            // Moved or RoomRow) is no definitive answer either — the move is still unfinished, and
-            // the guards' step check is what stands between it and a room open.
-            Ok(Start::Finished(Outcome::Transient(_))) | Err(Failure::Transient(_)) => false,
+            // Moved or RoomRow) is no definitive answer for the claimer — the move is still
+            // unfinished, and the guards' step check is what stands between it and that room open.
+            // When the record names somebody else, though, it is definitive for the account asking
+            // now: nothing of theirs is unfinished, and the evidence rule still guards the claimer's
+            // own room by name.
+            Ok(Start::Finished(Outcome::Transient(_))) => self
+                .record()
+                .ok()
+                .flatten()
+                .is_some_and(|record| !record_is_claimant(&record, who)),
+            Err(Failure::Transient(_)) => false,
             Ok(_) | Err(Failure::Permanent(_)) => true,
         };
         if definitive {
@@ -1299,6 +1319,12 @@ impl LegacyClaim {
         drop(db);
 
         let device = (|| -> Result<(), DeviceStoreError> {
+            #[cfg(feature = "test-support")]
+            if FAIL_DEVICE_ROWS_FOR_TEST.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                return Err(DeviceStoreError::Io(std::io::Error::from(
+                    std::io::ErrorKind::StorageFull,
+                )));
+            }
             if let Some(error) = injected(Inject::DeviceRows) {
                 return Err(DeviceStoreError::Io(error));
             }
@@ -2103,7 +2129,7 @@ pub(crate) enum Inject {
     OpenCheck,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     pub(crate) static INJECT_AT: std::cell::Cell<Option<Inject>> = const { std::cell::Cell::new(None) };
 }
@@ -2119,14 +2145,25 @@ thread_local! {
 /// A test's full disk at `point`, once; nothing outside tests.
 #[inline]
 pub(crate) fn injected(point: Inject) -> Option<std::io::Error> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if INJECT_AT.with(|at| at.get()) == Some(point) {
         INJECT_AT.with(|at| at.set(None));
         return Some(std::io::Error::from(std::io::ErrorKind::StorageFull));
     }
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let _ = point;
     None
+}
+
+#[cfg(feature = "test-support")]
+static FAIL_DEVICE_ROWS_FOR_TEST: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Another crate's host test: the next device-store row write of a finish after the move fails
+/// once, as a full disk or a transient store error would. `test-support` never ships in the app.
+#[cfg(feature = "test-support")]
+pub fn fail_next_device_rows_write_for_test() {
+    FAIL_DEVICE_ROWS_FOR_TEST.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// A full disk as SQLite reports it (`SQLITE_FULL`), for [`Inject::Fixups`].

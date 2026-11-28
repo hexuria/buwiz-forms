@@ -1178,24 +1178,31 @@ enum LookupNote {
     Offered,
 }
 
-/// The account's room by the device-store lookup (rooms A1): known, or new and empty.
-fn lookup_target(layout: &Layout, owner: &Owner, note: LookupNote) -> (Target, Option<OpenSpec>) {
+/// The account's own room id by the device-store lookup (rooms A1): known, or the id a new empty
+/// room would get. Never the room of a claim record made for somebody else.
+fn lookup_room_id(layout: &Layout, owner: &Owner) -> Result<bir_core::rooms::RoomId, String> {
     let store = bir_core::rooms::DeviceStore::open(layout).ok();
     let stored = crate::cloud_account::load_stored().ok().flatten();
     let server_url = stored
         .as_ref()
         .map(|stored| stored.server_url.clone())
         .unwrap_or_default();
-    let lookup = bir_core::rooms::room_for(store.as_ref(), &server_url, &owner.user_id);
-    let room_id = match lookup {
-        Ok(bir_core::rooms::RoomLookup::Known(record)) => record.room_id,
-        Ok(bir_core::rooms::RoomLookup::New { room_id, .. }) => room_id,
+    match bir_core::rooms::room_for(store.as_ref(), &server_url, &owner.user_id) {
+        Ok(lookup) => Ok(lookup.room_id().clone()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+/// The account's room by the device-store lookup (rooms A1): known, or new and empty.
+fn lookup_target(layout: &Layout, owner: &Owner, note: LookupNote) -> (Target, Option<OpenSpec>) {
+    let room_id = match lookup_room_id(layout, owner) {
+        Ok(room_id) => room_id,
         Err(error) => {
             tracing::warn!("room lookup failed: {error}");
             return (
                 Target::Blocked(Blocked::Transient {
                     copy_saved: false,
-                    detail: error.to_string(),
+                    detail: error,
                 }),
                 None,
             );
@@ -1220,6 +1227,60 @@ fn lookup_target(layout: &Layout, owner: &Owner, note: LookupNote) -> (Target, O
             copy_saved: false,
         }),
     )
+}
+
+/// Whether the claim record a finished resume acted on belongs to `owner`. The record's owner
+/// fields decide when they are there; otherwise the room is compared with the owner's own lookup.
+/// A record that cannot be tied to the owner is never a licence to open its room.
+fn finished_record_is_owner(
+    layout: &Layout,
+    owner: &Owner,
+    record: Option<&bir_core::legacy_claim::Record>,
+    outcome_room: Option<&bir_core::rooms::RoomId>,
+) -> bool {
+    let Some(record) = record else {
+        return false;
+    };
+    if let (Some(origin), Some(user_id)) = (&record.origin, &record.user_id) {
+        return origin == &owner.origin && user_id == &owner.user_id;
+    }
+    let room = record
+        .room
+        .as_deref()
+        .and_then(bir_core::rooms::RoomId::parse)
+        .or_else(|| outcome_room.cloned());
+    let Some(room) = room else {
+        return false;
+    };
+    lookup_room_id(layout, owner)
+        .map(|owner_room| owner_room == room)
+        .unwrap_or(false)
+}
+
+/// What a Finished start leaves open. A resume may finish the claim of an account that signed
+/// out since the move; that finish stands in the claim record, but the account signing in now
+/// opens only its own room.
+fn finished_outcome_target(
+    layout: &Layout,
+    owner: &Owner,
+    outcome: Outcome,
+    record: Option<&bir_core::legacy_claim::Record>,
+) -> (Target, Option<OpenSpec>) {
+    let outcome_room = match &outcome {
+        Outcome::Done { room, .. } => Some(room),
+        Outcome::MovedNotOpened(moved) => Some(&moved.room),
+        _ => None,
+    };
+    if matches!(outcome, Outcome::Permanent(_))
+        || finished_record_is_owner(layout, owner, record, outcome_room)
+    {
+        outcome_target(layout, owner, outcome)
+    } else {
+        tracing::warn!(
+            "a resumed claim finished for another account; opening the sign-in's own room"
+        );
+        lookup_target(layout, owner, LookupNote::None)
+    }
 }
 
 /// What an outcome of the claim leaves open (§A.3.4): Done is the claimer's room; transient opens
@@ -1370,7 +1431,21 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
             (Target::NotHere(PathBuf::new()), Some(OpenSpec::NamedFile))
         }
         Start::Locked(_locked) => legacy_in_place(&layout),
-        Start::Finished(outcome) => outcome_target(&layout, owner, outcome),
+        Start::Finished(outcome) => {
+            let record = match claim.record() {
+                Ok(record) => record,
+                Err(error) => {
+                    return (
+                        Target::Blocked(Blocked::Transient {
+                            copy_saved: false,
+                            detail: format!("the migration record cannot be read: {error}"),
+                        }),
+                        None,
+                    );
+                }
+            };
+            finished_outcome_target(&layout, owner, outcome, record.as_ref())
+        }
         Start::Offer(offer) => match offer {
             bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => legacy_in_place(&layout),
             bir_core::legacy_claim::OfferStart::Open(_open_offer) => {
@@ -1788,6 +1863,18 @@ pub fn check_invariants() -> Result<(), String> {
         breaches.push(format!(
             "I2: a {:?} slot is open for an owner who is not the stored sign-in",
             snap.phase_kind
+        ));
+    }
+    // I3: the room open under an account phase is that account's own room, never the room a
+    // resumed claim record names for another sign-in.
+    if open_kind
+        && let Some(owner) = &snap.owner
+        && let Some((_, _, Some(room_id), _)) = &snap.room
+        && room_id != &bir_core::rooms::room_id_for(&owner.origin, &owner.user_id)
+    {
+        breaches.push(format!(
+            "I3: room {room_id} is open for {} but is not that owner's room",
+            owner.user_id
         ));
     }
     // I4: no room is open while the claim's move evidence for it is pending.
@@ -2593,6 +2680,158 @@ mod tests {
             rusqlite::params![serde_json::to_string(&record).unwrap()],
         )
         .unwrap();
+    }
+
+    fn sha256_file(path: &std::path::Path) -> String {
+        use sha2::Digest;
+        let mut file = std::fs::File::open(path).unwrap();
+        let mut hash = sha2::Sha256::new();
+        std::io::copy(&mut file, &mut hash).unwrap();
+        hash.finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    /// A crash image of A's move already in A's room, with the legacy name gone: a valid closed
+    /// database copied there, and A's claim record at `step`.
+    fn write_moved_claim_image(
+        scratch: &Scratch,
+        owner: &Owner,
+        step: bir_core::legacy_claim::Step,
+    ) -> (bir_core::rooms::RoomId, std::path::PathBuf) {
+        let legacy = scratch.layout.legacy_database();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        drop(store);
+        Database::open(&legacy).unwrap().close().unwrap();
+        let room_id = bir_core::rooms::room_id_for(&owner.origin, &owner.user_id);
+        let room_file = scratch.layout.room_database(&room_id);
+        std::fs::create_dir_all(room_file.parent().unwrap()).unwrap();
+        std::fs::copy(&legacy, &room_file).unwrap();
+        std::fs::remove_file(&legacy).unwrap();
+        let raw_sha256 = sha256_file(&room_file);
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        let record = bir_core::legacy_claim::Record {
+            stamp: "test-stamp".into(),
+            room: Some(room_id.as_str().to_owned()),
+            origin: Some(owner.origin.clone()),
+            user_id: Some(owner.user_id.clone()),
+            email: Some(format!("{}@example.test", owner.user_id)),
+            unlocked_by: Some(bir_core::legacy_claim::UnlockedBy::NoLock),
+            empty_room_aside: false,
+            empty_room_file: None,
+            os_login_used: false,
+            raw_user_version: None,
+            raw_sha256: Some(raw_sha256),
+            zip: None,
+            zip_sha256: None,
+            hash_checked: false,
+            open_checked: false,
+            step,
+            failure: None,
+            done_at: None,
+            launch_days: vec![],
+            room_opened_since: false,
+            zip_deleted_at: None,
+            legacy_file: None,
+            owner_pin_phc: None,
+        };
+        conn.execute(
+            "INSERT OR REPLACE INTO migration (key, value) VALUES ('legacy', ?1)",
+            rusqlite::params![serde_json::to_string(&record).unwrap()],
+        )
+        .unwrap();
+        (room_id, room_file)
+    }
+
+    fn claim_record(scratch: &Scratch) -> bir_core::legacy_claim::Record {
+        bir_core::legacy_claim::LegacyClaim::at(scratch.layout.clone())
+            .unwrap()
+            .record()
+            .unwrap()
+            .expect("a claim record")
+    }
+
+    /// L1: a crash between A's move and Done is finished by B's sign-in, but B opens B's room —
+    /// never A's. The claim's finish stands in its record.
+    #[test]
+    fn l1_a_crash_after_as_move_finished_by_b_opens_bs_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner_b.origin, &owner_b.user_id),
+            "B's sign-in opened the room the record's move belonged to"
+        );
+        assert_eq!(
+            claim_record(&scratch).step,
+            bir_core::legacy_claim::Step::Done,
+            "A's finish did not stand"
+        );
+    }
+
+    /// L1: the transient-after-move shape. A's finish is still stuck on a transient store write when B
+    /// signs in; that transient is A's claim's business, not a reason to keep B out of B's room.
+    #[test]
+    fn l1_a_transient_after_as_move_under_b_opens_bs_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        bir_core::legacy_claim::fail_next_device_rows_write_for_test();
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner_b.origin, &owner_b.user_id),
+            "A's unfinished transient must not block or replace B's own room"
+        );
+        assert!(
+            matches!(
+                claim_record(&scratch).failure,
+                Some(bir_core::legacy_claim::RecordedFailure::Transient { .. })
+            ),
+            "A's unfinished transient was not recorded"
+        );
+    }
+
+    /// L1: the resume runs before the practice-account refusal, so a practice sign-in can meet
+    /// A's moved record. It still opens only the practice account's own empty room.
+    #[test]
+    fn l1_a_practice_sign_in_after_as_move_opens_the_practice_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        let practice = seed_stored("practice-user", true);
+        permit_claim_threads();
+        begin_open(practice.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let (_, _, room_id, _) = snapshot().room.expect("the practice room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&practice.origin, &practice.user_id),
+            "the practice account opened A's claimed room"
+        );
+        assert_eq!(
+            claim_record(&scratch).step,
+            bir_core::legacy_claim::Step::Done,
+            "A's finish did not stand for the practice resume"
+        );
     }
 
     /// F1: the invariants are not decoration — a deliberate I1 break (the raw gate unlocked
