@@ -360,6 +360,8 @@ for (const size of SIZES) {
     expect(readout(app, "Amount:")).toBe("Amount: 99999999.99");
     expect(readout(app, "Text writes:")).toBe(beforePasteText);
     expect(readout(app, "Caret writes:")).toBe(beforePasteCaret);
+    // Headless inputs keep a caret now; a paste leaves it where it was, so move it to the end as a hardware keyboard does.
+    for (let i = 0; i < "99999999.99".length; i++) await app.keyboard.press("right");
     const beforeText = readout(app, "Text writes:");
     const beforeCaret = readout(app, "Caret writes:");
     await app.type("id:m-amount", "5");
