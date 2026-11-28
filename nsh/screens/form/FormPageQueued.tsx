@@ -7,6 +7,7 @@
 //   fx-dry    the worker's next send is a dry run: the host's open answers `submitted_dry_run` (press it before fx-send)
 //   fx-list   the lists say Submitted while the host's open still says Queued (a page the lists keep disagreeing with)
 //   fx-retry  the worker moves the next try two hours ahead and the lists are read again, as after a try that backed off
+//   fx-sending  the worker picks the return up: host and lists say sending
 //   fx-hide   the page goes away (the route changed)
 //   fx-hold   the host's next open waits (a slow read: the real one takes a few tenths of a second) until fx-release answers it
 // host.params { send, nextTry, refuse }: the host's open answers `send` as the stage `send` names (send_state.rs; a "refused" return
@@ -131,6 +132,15 @@ function Fixture() {
           onPress={() => {
             opened = "Submitted";
             listed = "Submitted";
+          }}
+        />
+        <AppButton
+          testID="fx-sending"
+          size="sm"
+          label="Sending"
+          onPress={() => {
+            if (send) send = { ...send, stage: "sending", line: LINES.sending, next_try_at: null };
+            store.forgetWhere(POLL_KEYS);
           }}
         />
         <AppButton testID="fx-dry" size="sm" label="Dry" onPress={() => void (dryRun = true)} />

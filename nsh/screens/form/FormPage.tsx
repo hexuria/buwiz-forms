@@ -101,6 +101,10 @@ function sameSend(a: SendState | null, b: SendState | null): boolean {
   return a.stage === b.stage && a.line === b.line && a.code === b.code && a.next_try_at === b.next_try_at && a.can_resolve === b.can_resolve;
 }
 
+function sendKey(send: SendState | null | undefined): string {
+  return send ? [send.stage, send.line, send.code, send.next_try_at, send.can_resolve].join("\u001f") : "none";
+}
+
 export function FormPage(props: FormPageProps) {
   const hooks: SessionHooks = {
     toast: (message, o) => {
@@ -128,12 +132,14 @@ export function FormPage(props: FormPageProps) {
   // and a queue action at once and after 1, 3 and 10 s), so while this page says Queued it looks at what the lists hold: once they no longer
   // list this return as Queued, or their send state is not the one this page drew, the session reads it again (the page stays drawn) and shows
   // what is stored. The lists are read only while the page says Queued, nothing here asks the host itself or runs a timer, and the effect ends
-  // with the page. A page the lists keep disagreeing with reads once: `behind` is a boolean, so only its change moves the effect, not each look.
+  // with the page. A page the lists keep disagreeing with reads once: the row/session pair is the effect's value, so only a changed
+  // disagreement reads again, not each look, and a jump past a middle state still reads again.
   const shownQueued = computed(() => s.queuedShown());
   const behind = computed(() => {
-    if (!shownQueued()) return false;
+    if (!shownQueued()) return "";
     const row = store.returns("filed").find((r) => s.isReturn(r.id));
-    return !row || row.status !== "Queued" || !sameSend(row.send, s.queuedSend());
+    if (row && row.status === "Queued" && sameSend(row.send, s.queuedSend())) return "";
+    return `${row?.status ?? "missing"}|${sendKey(row?.send)}>${sendKey(s.queuedSend())}`;
   });
   effect(() => {
     if (behind()) untracked(() => s.refreshQueued());

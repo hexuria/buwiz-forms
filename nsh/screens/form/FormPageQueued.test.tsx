@@ -39,6 +39,22 @@ test("desktop: a still-Queued page reads again when the worker moves its next tr
   expect(opens(app)).toBe(2);
 });
 
+test("desktop: a Queued page follows a send that jumps past Sending", async () => {
+  const future = new Date(Date.now() + 60_000).toISOString();
+  const app = await open(ENTRY, DESK({ send: "waiting", nextTry: future }));
+  await app.waitFor("text:Queued · read-only", { timeout: 15_000 });
+  await app.waitUntil(() => opens(app) === 1);
+
+  await app.press("id:fx-sending");
+  await app.waitUntil(() => opens(app) === 2, { timeout: 10_000 });
+  await app.waitFor("text:Sending now. Keep eBIRForms open.", { timeout: 10_000 });
+
+  await app.press("id:fx-send");
+  await look(app);
+  await app.waitUntil(() => opens(app) === 3, { timeout: 10_000 });
+  await app.waitFor("text:Submitted · read-only", { timeout: 10_000 });
+});
+
 test("desktop: a Queued page moves on once the lists stop listing it as Queued, reads once, and stays quiet after", async () => {
   const app = await open(ENTRY, DESKTOP);
   await app.waitFor("text:Queued · read-only", { timeout: 15_000 });
