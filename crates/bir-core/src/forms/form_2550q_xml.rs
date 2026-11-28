@@ -2201,7 +2201,7 @@ mod tests {
             "registered_address": "OLONGAPO",
             "zip_code": "2200",
             "phone": "09123456789",
-            "email": "CODEITLIKEMILEY@GMAIL.COM",
+            "email": "Filer@Example.com",
             "default_form_type": "2550Qv2024",
             "taxpayer_type": "Individual",
             "tax_classification": "SelfEmployed",
@@ -2270,10 +2270,7 @@ mod tests {
             ("frm2550qv2024:taxpayerAddress", "OLONGAPO"),
             ("frm2550qv2024:taxpayerZip", "2200"),
             ("frm2550qv2024:taxpayerContactNumber", "09123456789"),
-            (
-                "frm2550qv2024:taxpayerEmailAddress",
-                "CODEITLIKEMILEY@GMAIL.COM",
-            ),
+            ("frm2550qv2024:taxpayerEmailAddress", "Filer@Example.com"),
             ("frm2550qv2024:taxPayerClassification1", "false"),
             ("frm2550qv2024:taxPayerClassification2", "false"),
             ("frm2550qv2024:taxPayerClassification3", "true"),
@@ -2605,10 +2602,7 @@ mod tests {
             ("frm2550qv2024:taxpayerAddress", "OLONGAPO"),
             ("frm2550qv2024:taxpayerZip", "2200"),
             ("frm2550qv2024:taxpayerContactNumber", "09123456789"),
-            (
-                "frm2550qv2024:taxpayerEmailAddress",
-                "CODEITLIKEMILEY@GMAIL.COM",
-            ),
+            ("frm2550qv2024:taxpayerEmailAddress", "Filer@Example.com"),
         ];
         let coherent = reviewed_sample_draft();
         for (field_key, raw) in expected {

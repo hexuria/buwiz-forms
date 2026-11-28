@@ -3311,7 +3311,7 @@ mod tests {
         assert_eq!(title, "1601C 09/26 submitted \u{2014} Juan Dela Cruz");
         assert_eq!(
             body,
-            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under codeitlikemiley@gmail.com"
+            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under filer@example.com"
         );
     }
 
@@ -3324,12 +3324,12 @@ mod tests {
             "10/26",
             "00000000000000-1601Cv2018-102026.xml",
             "12 September 2026, 11:43 AM",
-            "codeitlikemiley@gmail.com",
+            "filer@example.com",
         );
         assert_eq!(title, "BIR received 1601C 10/26 \u{2014} Juan Dela Cruz");
         assert_eq!(
             body,
-            "TIN 000-000-000-00000\nFile 00000000000000-1601Cv2018-102026.xml\nReceived by BIR 12 September 2026, 11:43 AM\nConfirmation in codeitlikemiley@gmail.com"
+            "TIN 000-000-000-00000\nFile 00000000000000-1601Cv2018-102026.xml\nReceived by BIR 12 September 2026, 11:43 AM\nConfirmation in filer@example.com"
         );
         assert_eq!(
             display_received_at("2026-09-12", "12:11:00"),
@@ -5935,7 +5935,7 @@ mod tests {
     async fn mandatory_fixture_dry_run_transport_submits_without_imap() {
         let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
         profile.email_tracking_enabled = true;
-        profile.imap_email = Some("codeitlikemiley@gmail.com".to_string());
+        profile.imap_email = Some("filer@example.com".to_string());
         let mut queued = crate::filing_queue::mandatory_lab_1601c_draft();
         queued.transition_to_queued().unwrap();
         let db = Arc::new(Mutex::new(
@@ -5953,7 +5953,7 @@ mod tests {
         assert_eq!(transport.calls().len(), 1);
         assert_eq!(
             transport.calls()[0].filename,
-            "00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml"
+            "00000000000000-1601Cv2018-092026#filer@example.com#.xml"
         );
         let submitted = db
             .lock()
@@ -5979,7 +5979,7 @@ mod tests {
     fn schedule_email_poll_uses_period_dashed_tin_and_optional_email() {
         let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
         profile.email_tracking_enabled = true;
-        profile.imap_email = Some("codeitlikemiley@gmail.com".to_string());
+        profile.imap_email = Some("filer@example.com".to_string());
         let draft = crate::filing_queue::mandatory_lab_1601c_draft();
         let db = Mutex::new(
             Database::open_in_memory_for_tests()
@@ -6014,11 +6014,11 @@ mod tests {
         );
         assert_eq!(
             jobs[0].name,
-            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (filer@example.com)"
         );
         assert_eq!(
             jobs[0].command.as_deref(),
-            Some("bir_poll_email codeitlikemiley@gmail.com")
+            Some("bir_poll_email filer@example.com")
         );
         assert_eq!(jobs[0].status, "Queued");
         assert_eq!(jobs[0].job_type, "System");
@@ -6063,9 +6063,9 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "Waiting for 1601C Oct 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+                "Waiting for 1601C Oct 2026 confirmation for 000-000-000-00000 (filer@example.com)"
                     .to_string(),
-                "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+                "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (filer@example.com)"
                     .to_string(),
             ]
         );

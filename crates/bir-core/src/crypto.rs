@@ -285,7 +285,7 @@ mod tests {
     #[ignore]
     fn test_decryption_with_hardcoded_key() {
         let iaf_path =
-            "../../../IAF_RDO_Copy/010558054000-2551Qv2018-122026Q1#codeitlikemiley@gmail.com#.xml";
+            "../../../IAF_RDO_Copy/010558054000-2551Qv2018-122026Q1#filer@example.com#.xml";
         let ciphertext = fs::read(iaf_path).expect("Missing IAF file");
 
         let passphrase = "T0081gP45sy0rd-To+R3m3m63r!@4/<>"; // Extracted from Encrypt.exe

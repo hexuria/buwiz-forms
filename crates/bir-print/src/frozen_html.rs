@@ -8605,7 +8605,7 @@ mod tests {
             filename: "00000000000000-1601Cv2018-112026.xml".into(),
             subject: "Tax Return Receipt Confirmation".into(),
             from: "ebirforms-noreply@bir.gov.ph".into(),
-            to: "codeitlikemiley@gmail.com".into(),
+            to: "filer@example.com".into(),
             received_at: "12 September 2026, 02:52 PM".into(),
             email_received_at: Some("12 September 2026, 02:59 PM".into()),
             body_text: "This confirms receipt <of> your submission".into(),
@@ -8640,7 +8640,7 @@ mod tests {
             with.contains("12 September 2026, 02:59 PM"),
             "email arrival time shown"
         );
-        assert!(with.contains("To: codeitlikemiley@gmail.com"));
+        assert!(with.contains("To: filer@example.com"));
         assert!(!with.contains("<th"), "no label table of our own");
         assert!(
             !with.contains("receipt &lt;of&gt;"),

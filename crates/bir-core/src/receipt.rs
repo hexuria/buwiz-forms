@@ -269,7 +269,7 @@ Penalties may be imposed for any violation of the provisions of the NIRC and iss
             "plaintext savefile stem must parse TIN/form/period"
         );
         assert_eq!(
-            split_bir_filename("00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml"),
+            split_bir_filename("00000000000000-1601Cv2018-092026#filer@example.com#.xml"),
             expected,
             "IAF #email# suffix must not leak into period"
         );
@@ -294,7 +294,7 @@ Penalties may be imposed for any violation of the provisions of the NIRC and iss
     #[test]
     fn split_bir_filename_keeps_reviewed_period_suffixes_after_stripping_email() {
         assert_eq!(
-            split_bir_filename("00000000000000-0619F-042026WB#codeitlikemiley@gmail.com#.xml"),
+            split_bir_filename("00000000000000-0619F-042026WB#filer@example.com#.xml"),
             Some((
                 "00000000000000".to_string(),
                 "0619F".to_string(),
@@ -328,7 +328,7 @@ Time received by BIR: 3:13 PM
         );
         assert_eq!(
             split_bir_filename(&receipt.filename),
-            split_bir_filename("00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml")
+            split_bir_filename("00000000000000-1601Cv2018-102026#filer@example.com#.xml")
         );
         assert_eq!(
             split_bir_filename(&receipt.filename),

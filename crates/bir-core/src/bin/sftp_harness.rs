@@ -25,7 +25,7 @@ use std::process::ExitCode;
 const DUMMY_TIN: &str = "00000000000000";
 const DUMMY_FORM: &str = "1601Cv2018";
 const DUMMY_IAF: &str =
-    r"C:\eBIRForms\IAF_RDO_Copy\00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml";
+    r"C:\eBIRForms\IAF_RDO_Copy\00000000000000-1601Cv2018-092026#filer@example.com#.xml";
 
 fn placeholder_filename() -> String {
     let tin = Tin {

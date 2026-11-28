@@ -766,10 +766,7 @@ mod tests {
             ("frm0619F:txtTelNum".to_string(), "09123456789".to_string()),
             ("frm0619F:optCategory:P".to_string(), "true".to_string()),
             ("frm0619F:optCategory:G".to_string(), "false".to_string()),
-            (
-                "txtEmail".to_string(),
-                "codeitlikemiley@gmail.com".to_string(),
-            ),
+            ("txtEmail".to_string(), "filer@example.com".to_string()),
             ("frm0619F:txtTax13".to_string(), "1,000.00".to_string()),
             ("frm0619F:txtTax14".to_string(), "0.00".to_string()),
             ("frm0619F:txtTax15".to_string(), "1,000.00".to_string()),

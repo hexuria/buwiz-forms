@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn imported_filename_parser_matches_split_bir_filename_for_savefile_and_iaf() {
         let savefile = "00000000000000-1601Cv2018-092026.xml";
-        let iaf = "00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml";
+        let iaf = "00000000000000-1601Cv2018-092026#filer@example.com#.xml";
         let expected = (
             "00000000000000".to_string(),
             "1601Cv2018".to_string(),

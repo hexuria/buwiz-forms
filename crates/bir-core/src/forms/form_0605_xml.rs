@@ -918,7 +918,7 @@ mod tests {
             ("ebirOnlineConfirmUsername", ""),
             ("ebirOnlineSecret", ""),
             ("ebirOnlineUsername", ""),
-            ("txtEmail", "codeitlikemiley@gmail.com"),
+            ("txtEmail", "filer@example.com"),
             ("txtEnroll", "Y"),
             ("txtFinalFlag", "1"),
             ("frm0605:itemFiscalStartMonth:_1", "true"),
