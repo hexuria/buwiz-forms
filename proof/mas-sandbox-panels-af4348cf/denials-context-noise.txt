@@ -1,0 +1,10 @@
+2026-11-27 19:00:36.255 Df kernel[0:dab18] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-xattr /Users/devin/a3c-app/eBIRForms.app
+2026-11-27 19:00:36.256 Df kernel[0:dab18] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-xattr /Users/devin/a3c-app/eBIRForms.app
+2026-11-27 19:00:59.782 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-data /Users/devin/a3c-app/eBIRForms.app
+2026-11-27 19:00:59.782 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-data /Users/devin/a3c-app/eBIRForms.app/Contents
+2026-11-27 19:00:59.782 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-data /Users/devin/a3c-app/eBIRForms.app/Contents/Info.plist
+2026-11-27 19:00:59.783 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-data /Users/devin/a3c-app/eBIRForms.app
+2026-11-27 19:00:59.783 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-data /Users/devin/a3c-app/eBIRForms.app/Contents/MacOS/eBIRForms
+2026-11-27 19:00:59.783 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] 1 duplicate report for Sandbox: ContextStoreAgent(629) allow file-read-data /Users/devin/a3c-app/eBIRForms.app/Contents/MacOS/eBIRForms
+2026-11-27 19:00:59.783 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-xattr /Users/devin/a3c-app/eBIRForms.app/Contents/MacOS/eBIRForms
+2026-11-27 19:00:59.784 Df kernel[0:dada0] [com.apple.sandbox.reporting:violation] Sandbox: ContextStoreAgent(629) allow file-read-data /Users/devin/a3c-app/eBIRForms.app/Contents/Info.plist
