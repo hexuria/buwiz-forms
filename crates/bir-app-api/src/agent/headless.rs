@@ -128,19 +128,34 @@ pub const NOT_SIGNED_IN: &str = "Sign in in the eBIRForms app first.";
 /// Otherwise it refuses with [`NOT_SIGNED_IN`]. It never creates `data_dir()/bir_data.db` or a room, and it never
 /// makes `device.db`.
 pub fn serve_database_path() -> Result<std::path::PathBuf, String> {
+    serve_database_path_and_account().map(|(path, _)| path)
+}
+
+/// [`serve_database_path`] plus the stored sign-in its one read saw — #3: the read that picks
+/// the room is the read the daemon captures its expected owner from, and it happens inside
+/// serve's retry loop, so a `--wait` retry never opens the new account's room under the old
+/// account's expectation. Single-room and dev modes carry the same read: the daemon's
+/// sign-in check means the same there.
+fn serve_database_path_and_account() -> Result<
+    (
+        std::path::PathBuf,
+        Option<bir_core::cloud_account::StoredAccount>,
+    ),
+    String,
+> {
     if let Some(why) = ignored_override_refusal(db::ignored_database_path().as_deref()) {
         return Err(why);
     }
-    if let Some(named) = db::single_room_database() {
-        return Ok(named);
-    }
-    if let Some(dev) = bir_core::dev_mode::dev_database_path() {
-        return Ok(dev);
-    }
-    let stored = bir_core::cloud_account::load_stored_account()
+    let stored = bir_core::cloud_account::load_stored_account_shared()
         .ok()
         .flatten();
-    serve_database_for(&bir_core::rooms::Layout::here(), stored.as_ref())
+    if let Some(named) = db::single_room_database() {
+        return Ok((named, stored));
+    }
+    if let Some(dev) = bir_core::dev_mode::dev_database_path() {
+        return Ok((dev, stored));
+    }
+    serve_database_for(&bir_core::rooms::Layout::here(), stored.as_ref()).map(|path| (path, stored))
 }
 
 /// Why `serve` refuses a database it was named but would not obey (`BIR_DATABASE_PATH` or the in-process name in a
@@ -212,8 +227,22 @@ pub(crate) fn signed_in_room_database(
 /// Uses [`db::open_serve_database_at`] (`Database::open` + exclusive owner lock),
 /// not `open_or_recreate`: a daemon must not quarantine a taxpayer DB.
 pub fn open_serve_database() -> Result<(Database, std::path::PathBuf), String> {
-    let path = serve_database_path()?;
-    db::open_serve_database_at(&path).map_err(|error| format_serve_open_error(&path, error))
+    open_serve_database_with_account().map(|(opened, path, _)| (opened, path))
+}
+
+/// [`open_serve_database`] plus the stored sign-in of the read that picked the room (#3).
+fn open_serve_database_with_account() -> Result<
+    (
+        Database,
+        std::path::PathBuf,
+        Option<bir_core::cloud_account::StoredAccount>,
+    ),
+    String,
+> {
+    let (path, stored) = serve_database_path_and_account()?;
+    db::open_serve_database_at(&path)
+        .map(|(opened, opened_path)| (opened, opened_path, stored))
+        .map_err(|error| format_serve_open_error(&path, error))
 }
 
 fn format_serve_open_error(path: &std::path::Path, error: db::DbError) -> String {
@@ -473,7 +502,10 @@ pub(crate) const ACCOUNT_CHANGED: &str = "the signed-in account changed; start b
 type HeadlessRoomSlot = Arc<Mutex<Option<Arc<Mutex<Database>>>>>;
 
 fn stored_owner_and_server() -> Option<(bir_core::account_session::OwnerKey, String)> {
-    let stored = bir_core::cloud_account::load_stored_account()
+    // #4: the shared read holds the account-session lock the save writes under — a same-owner
+    // refresh is never read back in its write window — and an unchanged file (by modification
+    // time) answers from memory, so a batch costs no keychain call.
+    let stored = bir_core::cloud_account::load_stored_account_shared()
         .ok()
         .flatten()?;
     let owner = bir_core::account_session::OwnerKey::of(&stored)?;
@@ -485,11 +517,14 @@ fn stored_owner_and_server() -> Option<(bir_core::account_session::OwnerKey, Str
 fn headless_account_error(
     expected: &Option<(bir_core::account_session::OwnerKey, String)>,
 ) -> Result<Option<bir_core::account_session::OwnerKey>, String> {
-    let current = stored_owner_and_server();
-    if current != *expected {
+    // The owner is the account: the normalised origin key, so a trailing slash or a server
+    // string rewrite resolving to the same origin is not a change (#4). The raw server string
+    // rides in the tuple for the capture site only; it is never compared here.
+    let owner = stored_owner_and_server().map(|(owner, _)| owner);
+    if owner != expected.as_ref().map(|(owner, _)| owner.clone()) {
         return Err(ACCOUNT_CHANGED.to_owned());
     }
-    Ok(current.map(|(owner, _)| owner))
+    Ok(owner)
 }
 
 /// The daemon cron's room source: the same account check on every tick, with the handle held in
@@ -497,11 +532,15 @@ fn headless_account_error(
 fn headless_room_source(
     slot: HeadlessRoomSlot,
     expected: Option<(bir_core::account_session::OwnerKey, String)>,
+    close_flag: Arc<std::sync::atomic::AtomicBool>,
 ) -> bir_core::background_cron::RoomSource {
     Arc::new(move || {
         let owner = match headless_account_error(&expected) {
             Ok(owner) => owner,
             Err(_) => {
+                // THE RULING: the first refusal from the worker's tick asks the serve loop for
+                // the one shared close and the exit — the daemon does not live on.
+                close_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                 *slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
                 bir_core::account_session::cache_owner(None);
                 return None;
@@ -520,9 +559,55 @@ fn headless_room_source(
     })
 }
 
+/// THE RULING's one shared close (#613 follow-up): the daemon does not live on after an
+/// account change. The FIRST refusal — a batch in the serve loop or the cron worker's tick
+/// through `close_flag` — runs this once:
+/// - an in-flight send that already holds the old account's token completes under it into the
+///   old room, with a bounded wait for the sending keys to drain;
+/// - mail and the other generic jobs STOP (`request_shutdown`) instead of running on in the
+///   old room;
+/// - every handle to the room drops — the host Session's Arc too — so the exclusive owner
+///   lock is released and the room can be opened again;
+/// - the pid file, the discovery record and the port belong to the serve loop's guards and
+///   listener: setting `shutdown` ends the loop and they drop with it, and the process exits.
+fn close_for_account_change(
+    host: &Arc<Mutex<Session>>,
+    room_slot: &HeadlessRoomSlot,
+    shutdown: &std::sync::atomic::AtomicBool,
+) {
+    eprintln!("the signed-in account changed; bir serve has stopped");
+    // 1. bounded wait: the sending keys of THIS room drain. A send holding the old account's
+    //    token finishes into the old room; it is never cut off mid-flight here.
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        let busy = bir_core::background_cron::get_active_jobs()
+            .lock()
+            .map(|jobs| {
+                jobs.iter().any(|key| {
+                    bir_core::background_cron::room_of_job_key(key)
+                        == bir_core::background_cron::fixed_room_key()
+                })
+            })
+            .unwrap_or(false);
+        if !busy || std::time::Instant::now() >= deadline {
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    // 2. mail and the generic jobs stop with the room.
+    bir_core::background_cron::request_shutdown();
+    // 3. every handle to the room drops.
+    host.lock().expect("host").rebuild();
+    *room_slot
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    bir_core::account_session::cache_owner(None);
+    // 4. the guards and the listener end with the serve loop.
+    shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn serve(wait: bool) -> Result<(), ExitCode> {
     bir_core::account_session::fill_owner_cache();
-    let expected_account = stored_owner_and_server();
     let mut config = load_serve_config()?;
     // `--wait` exists to wait for the port (restart handoff), so it must not
     // fall back to an ephemeral port while the old server still holds it.
@@ -536,7 +621,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         // (what `serve_blocker` does) is closed before that listen. On
         // Windows, closing the previous socket — listening or not — can
         // leave the next listener unable to accept.
-        let (opened, path) = match open_serve_database() {
+        let (opened, path, opened_account) = match open_serve_database_with_account() {
             Ok(opened) => opened,
             Err(error) if wait && error.contains("already open") => {
                 eprintln!("waiting for live DB owner lock …");
@@ -548,6 +633,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                 return Err(ExitCode::from(1));
             }
         };
+        // #3: the expectation is the same read that opened this room, captured here in the
+        // retry loop — a `--wait` retry re-reads and can never open the new account's room
+        // still expecting the old one.
+        let expected_account = opened_account.and_then(|stored| {
+            bir_core::account_session::OwnerKey::of(&stored).map(|owner| (owner, stored.server_url))
+        });
 
         let db = Arc::new(Mutex::new(opened));
         let room_slot: HeadlessRoomSlot = Arc::new(Mutex::new(Some(db.clone())));
@@ -591,7 +682,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             return Err(ExitCode::from(2));
         }
 
-        let cron_source = headless_room_source(room_slot.clone(), expected_account.clone());
+        let account_close = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cron_source = headless_room_source(
+            room_slot.clone(),
+            expected_account.clone(),
+            account_close.clone(),
+        );
         thread::spawn(move || {
             if let Ok(rt) = tokio::runtime::Runtime::new() {
                 rt.block_on(async move {
@@ -667,20 +763,23 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         // run), and fall back to the idle interval once it goes quiet.
         let mut last_request = None::<std::time::Instant>;
         while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
+            // THE RULING: the first refusal from the worker's tick — or right here below —
+            // runs the one shared close and the daemon exits.
+            if account_close.load(std::sync::atomic::Ordering::SeqCst) {
+                close_for_account_change(&host, &room_slot, &shutdown);
+                break;
+            }
             let batch = mailbox.take();
             if !batch.is_empty()
                 && let Err(message) = headless_account_error(&expected_account)
             {
-                host.lock().expect("host").rebuild();
-                *room_slot
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-                bir_core::account_session::cache_owner(None);
+                // the client that triggered the refusal still gets its clear error first
                 for posted in batch {
                     let id = posted.request.id.clone();
                     posted.reply(gpui_agent::Response::err(id, message.clone()));
                 }
-                continue;
+                close_for_account_change(&host, &room_slot, &shutdown);
+                break;
             }
             for posted in batch {
                 last_request = Some(std::time::Instant::now());
@@ -989,7 +1088,11 @@ mod tests {
                     }
                     let slot: super::HeadlessRoomSlot =
                         std::sync::Arc::new(std::sync::Mutex::new(Some(db.clone())));
-                    let source = super::headless_room_source(slot.clone(), expected.clone());
+                    let source = super::headless_room_source(
+                        slot.clone(),
+                        expected.clone(),
+                        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    );
                     let stop = bir_core::background_cron::CronStop::new();
                     let worker = tokio::spawn(bir_core::background_cron::run_cron_jobs(
                         source.clone(),
@@ -1078,6 +1181,43 @@ mod tests {
         assert_eq!(
             serve_database_for(&layout, None).unwrap_err(),
             NOT_SIGNED_IN
+        );
+    }
+
+    /// #4: the account check compares the OwnerKey — the normalized origin — not the raw
+    /// server_url string: a trailing slash appearing or going in a same-account token refresh
+    /// is not an account change, and the daemon does not exit for nothing.
+    /// Positive control: a different user_id still errors.
+    #[test]
+    fn the_account_check_compares_the_owner_not_the_raw_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_var(
+            bir_core::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.to_str().unwrap()),
+            || {
+                let slashed = stored_for("http://localhost:3008/", "user-1");
+                bir_core::account_session::save_stored(&slashed).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&slashed).unwrap();
+                // The expected tuple as a start under the unslashed spelling captured it.
+                let unslashed = stored_for("http://localhost:3008", "user-1");
+                let expected = Some((
+                    bir_core::account_session::OwnerKey::of(&unslashed).unwrap(),
+                    unslashed.server_url.clone(),
+                ));
+                assert_eq!(owner, expected.clone().unwrap().0, "the owner keys are one");
+                assert!(
+                    super::headless_account_error(&expected).is_ok(),
+                    "a trailing slash is not an account change"
+                );
+                // Positive control: another user really is a change.
+                let other = stored_for("http://localhost:3008", "user-2");
+                bir_core::account_session::save_stored(&other).unwrap();
+                assert!(
+                    super::headless_account_error(&expected).is_err(),
+                    "another account errors"
+                );
+            },
         );
     }
 }

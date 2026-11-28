@@ -874,6 +874,53 @@ pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
     StoredAccount::decode(&raw).map(Some)
 }
 
+/// The stored sign-in for a process that re-reads it per unit of work (the headless daemon's
+/// per-batch check, #4): the read holds the account-session lock the save writes under, so a
+/// same-owner refresh is never read back in its write window; and a file whose modification
+/// time has not changed answers from memory — no keychain call per batch.
+///
+/// The cache key is the file's modification time. A sign-in that lives only in the keychain
+/// (no file) is never cache-shaped, so those reads always go through.
+pub fn load_stored_account_shared() -> Result<Option<StoredAccount>, CloudError> {
+    use std::sync::Mutex;
+    static CACHE: Mutex<
+        Option<(
+            std::path::PathBuf,
+            Option<std::time::SystemTime>,
+            Option<StoredAccount>,
+        )>,
+    > = Mutex::new(None);
+    let _account = crate::account_session::lock();
+    let path = account_file_path();
+    let mtime = std::fs::metadata(&path)
+        .and_then(|meta| meta.modified())
+        .ok();
+    // A file exists but its mtime cannot be read: never cache-shaped. No file at all: the
+    // keychain alone decides, again never cache-shaped — either way read through.
+    if path.exists() && mtime.is_some() {
+        let mut cache = CACHE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((seen_path, seen_mtime, cached)) = cache.as_ref()
+            && *seen_path == path
+            && *seen_mtime == mtime
+        {
+            return Ok(cached.clone());
+        }
+        let fresh = load_stored_account()?;
+        *cache = Some((path.clone(), mtime, fresh.clone()));
+        return Ok(fresh);
+    }
+    let fresh = load_stored_account()?;
+    // The file having gone away invalidates any cached answer keyed by its old mtime only when
+    // the file comes back with the same stamp — a vanishingly wide window nobody can hit on
+    // purpose, and the next real write moves the stamp. Still, drop it: cheap and exact.
+    if let Ok(mut cache) = CACHE.lock() {
+        *cache = None;
+    }
+    Ok(fresh)
+}
+
 /// Write the desktop account to the keychain and the private file.
 /// The file is always written: a keyring build without a real backend can
 /// report success and then forget the secret when the process exits.
@@ -936,23 +983,53 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
             CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
         })?;
     }
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&path)
-        .map_err(|error| {
+    // Atomic (#4): the content lands in a sibling temporary file first and one rename puts it
+    // over the live one — a reader (the headless daemon's per-batch check) sees the old sign-in
+    // whole or the new one whole, never the empty or torn window of a truncate-then-write.
+    let mut temp_name = path.as_os_str().to_os_string();
+    temp_name.push(format!(".write-{}", std::process::id()));
+    let temp = std::path::PathBuf::from(temp_name);
+    let written = (|| -> Result<(), CloudError> {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&temp)
+            .map_err(|error| {
+                CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
+            })?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+        }
+        file.write_all(raw.as_bytes()).map_err(|error| {
             CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
         })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+        let _ = file.sync_all();
+        drop(file);
+        // Windows refuses a rename over an existing target; the remove-then-rename gap there is
+        // still far smaller than a truncate-then-write window, and POSIX — the daemon's home —
+        // replaces atomically.
+        #[cfg(windows)]
+        if path.exists() {
+            let _ = std::fs::remove_file(&path);
+        }
+        std::fs::rename(&temp, &path).map_err(|error| {
+            CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
+        })?;
+        #[cfg(unix)]
+        if let Some(folder) = path.parent().filter(|p| !p.as_os_str().is_empty())
+            && let Ok(folder) = std::fs::File::open(folder)
+        {
+            let _ = folder.sync_all();
+        }
+        Ok(())
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
     }
-    file.write_all(raw.as_bytes()).map_err(|error| {
-        CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
-    })?;
-    drop(file);
+    written?;
     bir_submit::ios_storage::protect_file(&path);
     Ok(())
 }
@@ -1991,5 +2068,63 @@ mod tests {
                 clear_stored_account();
             },
         );
+    }
+
+    /// #4: the save is atomic — a temporary file plus a rename — so a reader during a write sees
+    /// the old sign-in whole or the new one whole, never a truncated or torn file. Large tokens
+    /// widen the write window so a truncate-then-write save is caught within the iterations.
+    /// Positive control: every non-empty read the test makes parses as one whole account.
+    #[test]
+    fn a_reader_during_a_write_never_sees_a_partial_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_var(ENV_ACCOUNT_FILE, Some(path.to_str().unwrap()), || {
+            let big_a = "a".repeat(1_000_000);
+            let big_b = "b".repeat(1_000_000);
+            let first = StoredAccount::from_secrets(&AccountSecrets {
+                server_url: "http://localhost:3008".into(),
+                access_token: big_a,
+                refresh_token: "refresh-a".into(),
+                access_expires_at_unix: 4_000_000_000,
+                user_id: "user-1".into(),
+                email: None,
+                offline: false,
+                practice: true,
+            });
+            let mut second = first.clone();
+            second.access_token = big_b.clone();
+            save_stored_account(&first).unwrap();
+            let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let writer_stop = stop.clone();
+            let writer = std::thread::spawn(move || {
+                let mut flip = false;
+                while !writer_stop.load(std::sync::atomic::Ordering::SeqCst) {
+                    let account = if flip { &second } else { &first };
+                    save_stored_account(account).unwrap();
+                    flip = !flip;
+                }
+            });
+            let mut partial = 0usize;
+            let mut reads = 0usize;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while std::time::Instant::now() < deadline {
+                reads += 1;
+                let Ok(raw) = std::fs::read(&path) else {
+                    continue;
+                };
+                // No erase happens in this test — only saves. An EMPTY file is already the torn
+                // state of a truncate-then-write save (the window #4's same-owner refresh hits:
+                // the read answers None and the daemon would exit for nothing), a partial file
+                // is the other half of it.
+                let text = String::from_utf8_lossy(&raw);
+                if raw.is_empty() || serde_json::from_str::<serde_json::Value>(&text).is_err() {
+                    partial += 1;
+                }
+            }
+            stop.store(true, std::sync::atomic::Ordering::SeqCst);
+            writer.join().unwrap();
+            assert!(reads > 100, "the reader really read: {reads}");
+            assert_eq!(partial, 0, "partial reads seen: positive control failed");
+        });
     }
 }
