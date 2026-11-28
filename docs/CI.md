@@ -1,7 +1,8 @@
 # CI
 
-Pull requests run quick checks, on Linux. The test suites run when someone asks for them: with a `ci:suite*`
-label on the pull request, by pushing the commit to a `test/...` branch, by hand, and every night on `main`.
+Pull requests run quick checks, chiefly on Linux; script-input changes also run the Python script tests on Windows.
+The test suites run when someone asks for them: with a `ci:suite*` label on the pull request, by pushing the commit
+to a `test/...` branch, by hand, and every night on `main`.
 The tests themselves are not slow. The GitHub queue is,
 and we were the ones filling it: about 20 jobs for each pull request, with macOS jobs waiting hours for a runner.
 
@@ -49,6 +50,12 @@ The quick checks are:
   is planned as app code and runs the quick checks.
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.
+
+Script changes also have Windows proof before merge: a pull request touching `scripts/`, `.githooks/`, `.github/workflows/` or the `justfile`
+plans `Python script tests (Windows)`, and `ci-ok` counts that job; the job is not itself a required check name. In the workspace test job
+the Python script tests and Rust tests are independent: `cargo test --locked --workspace` runs with `--no-fail-fast`, a failure in either
+does not stop the other from starting, the job stays red if either failed, and `Summarize failing tests` lists every failing test name found
+in the two captured logs.
 
 A pull request whose files are all plain docs costs two small Linux jobs (`changes`, then `ci-ok`) and one dependency wait.
 The legacy scans read Markdown and docs paths too, so `changes` runs them before `ci-ok`; `nsh.yml` starts no job.
