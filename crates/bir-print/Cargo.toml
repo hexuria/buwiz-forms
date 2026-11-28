@@ -30,3 +30,4 @@ windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Storage
 [dev-dependencies]
 # Tests keep out of the real data folder and keychain (bir-core's test-build rule).
 bir-core = { path = "../bir-core", version = "0.2.1", default-features = false, features = ["test-support"] }
+sha2 = "0.10"

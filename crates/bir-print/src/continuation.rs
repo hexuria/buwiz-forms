@@ -123,13 +123,17 @@ impl FilledDocument {
         let mut lines = self.overflow.warning_lines();
         let cell_warnings = self.cell_overflow_warnings();
         if !cell_warnings.is_empty() {
+            // Blank cells carry no value: an empty amount-small mark is no
+            // overflow of the filer's, so it neither reaches the additional
+            // sheet nor counts here.
+            let non_blank = |w: &&frozen_html::OverflowWarning| !w.value.trim().is_empty();
             let amount_count = cell_warnings
                 .iter()
-                .filter(|w| w.kind == "amount-comb")
+                .filter(|w| w.kind == "amount-comb" && non_blank(w))
                 .count();
             let small_count = cell_warnings
                 .iter()
-                .filter(|w| w.kind == "amount-small")
+                .filter(|w| w.kind == "amount-small" && non_blank(w))
                 .count();
             if small_count == 1 {
                 lines.push(
@@ -405,6 +409,12 @@ pub fn collect_truncated_entries(
                 warning.kind.as_str(),
                 "text-truncated" | "amount-small" | "identifier-small"
             ) {
+                continue;
+            }
+            // A blank row of a converted column is blanked to nothing: its
+            // empty amount-small mark carries no value, and an empty entry
+            // on the additional sheet would read as a missing figure.
+            if warning.value.is_empty() {
                 continue;
             }
             let cell_id = warning.cell.strip_suffix("-i").unwrap_or(&warning.cell);
