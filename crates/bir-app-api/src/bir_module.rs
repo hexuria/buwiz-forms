@@ -150,6 +150,61 @@ pub fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, H
     open_database_slot()
 }
 
+/// Whether a room — the machine's open room, or legacy mode's single-room slot — is open.
+pub(crate) fn room_is_open() -> bool {
+    crate::session::snapshot().room.is_some()
+        || bir_core::db::open_room_id().is_some()
+        || bir_core::db::single_room_database().is_some()
+        || DATABASE.with(|slot| slot.borrow().is_some())
+}
+
+/// Whether the filing file itself holds a credential a lock page can check: the admin's, or any client's.
+fn database_has_lock_configured(db: &Database, legacy: bool) -> Result<bool, HostError> {
+    let mode = access_mode(db)?;
+    if legacy && mode.is_none() {
+        return Ok(false);
+    }
+    if let Some(mode) = &mode {
+        let credentials = admin_credentials(db, mode)?;
+        if credentials.pin_hash.is_some() || credentials.totp_secret.is_some() {
+            return Ok(true);
+        }
+    }
+    for taxpayer in db.list_taxpayers().map_err(db_error)? {
+        let credentials = taxpayer_credentials(db, &taxpayer.taxpayer.tin_root)?;
+        if credentials.pin_hash.is_some() || credentials.totp_secret.is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Whether the open room has no lock the host could ever check. Rooms mode reads the room's owner lock in
+/// `device.db` and the client credentials in its filing file; legacy mode reads the filing file's access mode.
+/// A lost lock store is a lock, never "no lock".
+pub(crate) fn open_room_has_no_lock_configured() -> Result<bool, HostError> {
+    if let Some(room) = crate::session::snapshot()
+        .room
+        .and_then(|(_, _, room, _)| room)
+        .or_else(bir_core::db::open_room_id)
+    {
+        let store = bir_core::rooms::device_store_here();
+        let lost = bir_core::owner_lock::store_lost(&store, &room).unwrap_or(true);
+        if lost {
+            return Ok(false);
+        }
+        let owner_lock_configured = bir_core::owner_lock::owner_lock(&store, &room)
+            .ok()
+            .flatten()
+            .is_some_and(|lock| lock.pin_phc.is_some() || lock.biometrics_on);
+        if owner_lock_configured {
+            return Ok(false);
+        }
+        return with_account_database(|db| Ok(!database_has_lock_configured(db, false)?));
+    }
+    with_account_database(|db| Ok(!database_has_lock_configured(db, true)?))
+}
+
 /// The calling thread's own slot when one is filled — a test's ephemeral
 /// database, or single-room mode's handle — re-opened through
 /// [`open_database_slot`] when the worker's end released it. Rooms mode never
@@ -694,6 +749,7 @@ pub fn device_setting(key: &str) -> Option<String> {
 /// the open database, which every reader falls back to (O1).
 fn set_device_setting(key: &str, value: &str) -> Result<(), HostError> {
     crate::account_gate::ensure_unlocked()?;
+    ensure_not_client_scoped()?;
     match bir_core::rooms::set_device_setting(key, value) {
         Ok(()) => Ok(()),
         Err(error) if error.is_unusable() => with_database(|db| {
@@ -813,6 +869,42 @@ pub(crate) fn with_account_database<R>(
     let guard = bir_core::lock_timing::lock(&handle)
         .map_err(|_| HostError::new("database lock poisoned"))?;
     f(&guard)
+}
+
+const CLIENT_SETTINGS_REFUSED: &str = "A taxpayer session cannot change this computer's settings.";
+
+fn database_scope_key() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+    open_database_slot()
+}
+
+/// The client scope of the room open now; a scope of another test handle or of a closed room is nothing.
+pub(crate) fn current_client_scope() -> Option<String> {
+    database_scope_key()
+        .ok()
+        .and_then(|room| crate::account_gate::client_scope_for_room(&room))
+}
+
+/// Refuse a computer-wide settings change while a taxpayer, not the owner or help desk, is signed in.
+fn ensure_not_client_scoped() -> Result<(), HostError> {
+    if current_client_scope().is_some() {
+        Err(HostError::new(CLIENT_SETTINGS_REFUSED))
+    } else {
+        Ok(())
+    }
+}
+
+/// Whether `tin` belongs to the signed-in taxpayer scope. No scope means the owner/help desk is in.
+fn client_scope_allows_tin(tin: &str) -> bool {
+    current_client_scope()
+        .is_none_or(|scope| tin.replace('-', "").len() >= 9 && tin.replace('-', "")[..9] == scope)
+}
+
+/// The lock page's database access: signed in, but deliberately not the room unlock it is itself opening.
+fn with_lock_database<R>(
+    f: impl FnOnce(&Database) -> Result<R, HostError>,
+) -> Result<R, HostError> {
+    crate::account_gate::ensure_signed_in()?;
+    with_account_database(f)
 }
 
 /// A read on the read-only connection, so it does not wait for the
@@ -1144,6 +1236,7 @@ fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 /// Written to `device_settings` (accounts-and-lock A1).
 fn set_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
+    ensure_not_client_scoped()?;
     let key = page_setting_key(arguments)?;
     let value = arguments.string(1)?.to_owned();
     set_device_setting(&key, &value)?;
@@ -1536,6 +1629,7 @@ fn generate_totp_secret(arguments: &gpui_shell::HostArguments) -> HostResult {
 /// fallback cannot bring an old value back.
 fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
     let key = page_setting_key(arguments)?;
+    ensure_not_client_scoped()?;
     with_database(|db| {
         bir_core::rooms::delete_device_setting(&key)
             .map_err(|error| HostError::new(error.to_string()))?;
@@ -1547,7 +1641,7 @@ fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 /// What the lock screen and first-launch setup read once per render.
 fn auth_state() -> HostResult {
-    with_database(|db| {
+    with_lock_database(|db| {
         let mode = access_mode(db)?;
         let credentials = match &mode {
             Some(mode) => admin_credentials(db, mode)?,
@@ -1579,7 +1673,7 @@ fn auth_state() -> HostResult {
 
 fn taxpayer_auth(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
-    with_database(|db| {
+    with_lock_database(|db| {
         let credentials = taxpayer_credentials(db, &tin_root)?;
         Ok(HostObject::new()
             .field("has_pin", credentials.pin_hash.is_some())
@@ -1632,7 +1726,7 @@ fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let pin = arguments.string(1)?;
     let mut rehash = None;
     let ok = auth_limiter::guarded_client(&tin_root, || {
-        with_database(|db| {
+        with_lock_database(|db| {
             let credentials = taxpayer_credentials(db, &tin_root)?;
             let (matched, upgrade) =
                 client_pin_check(&tin_root, credentials.pin_hash.as_deref(), pin);
@@ -1641,6 +1735,11 @@ fn verify_taxpayer_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
         })
     })?;
     start_rehash_after(ok, rehash);
+    if ok {
+        let room = database_scope_key()?;
+        crate::account_gate::set_client_scope(tin_root, &room);
+        crate::account_gate::set_room_unlocked(true);
+    }
     Ok(HostValue::Bool(ok))
 }
 
@@ -1648,11 +1747,16 @@ fn verify_taxpayer_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin_root = tin_root_argument(arguments.string(0)?)?;
     let token = arguments.string(1)?;
     let ok = auth_limiter::guarded_client(&tin_root, || {
-        with_database(|db| {
+        with_lock_database(|db| {
             let credentials = taxpayer_credentials(db, &tin_root)?;
             Ok(totp_matches(credentials.totp_secret.as_deref(), token))
         })
     })?;
+    if ok {
+        let room = database_scope_key()?;
+        crate::account_gate::set_client_scope(tin_root, &room);
+        crate::account_gate::set_room_unlocked(true);
+    }
     Ok(HostValue::Bool(ok))
 }
 
@@ -1683,7 +1787,7 @@ fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
     let pin = arguments.string(0)?;
     let mut rehash = None;
     let ok = auth_limiter::guarded(auth_limiter::ADMIN, || {
-        with_database(|db| {
+        with_lock_database(|db| {
             Ok(match access_mode(db)? {
                 Some(mode) => {
                     let (matched, upgrade) = admin_pin_check(db, &mode, pin)?;
@@ -1695,13 +1799,17 @@ fn verify_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
         })
     })?;
     start_rehash_after(ok, rehash);
+    if ok {
+        crate::account_gate::clear_client_scope();
+        crate::account_gate::set_room_unlocked(true);
+    }
     Ok(HostValue::Bool(ok))
 }
 
 fn verify_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
     let token = arguments.string(0)?;
     let ok = auth_limiter::guarded(auth_limiter::ADMIN, || {
-        with_database(|db| {
+        with_lock_database(|db| {
             Ok(match access_mode(db)? {
                 Some(mode) => {
                     totp_matches(admin_credentials(db, &mode)?.totp_secret.as_deref(), token)
@@ -1710,6 +1818,10 @@ fn verify_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
             })
         })
     })?;
+    if ok {
+        crate::account_gate::clear_client_scope();
+        crate::account_gate::set_room_unlocked(true);
+    }
     Ok(HostValue::Bool(ok))
 }
 
@@ -1719,6 +1831,7 @@ const KEEP_ONE_WAY_IN: &str = "The admin must keep at least one way to sign in. 
 /// allowed). Help desk: the settings PIN, refused to clear without an
 /// authenticator. Only the hash is stored; the script never sees it.
 fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
+    ensure_not_client_scoped()?;
     let pin = pin_argument(arguments.value(0)?)?;
     with_database(|db| match require_access_mode(db)? {
         AccessMode::Solo(root) => write_taxpayer_pin(db, &root, pin.as_deref()),
@@ -1739,6 +1852,7 @@ fn set_admin_pin(arguments: &gpui_shell::HostArguments) -> HostResult {
 /// Set (with a current code) or clear the admin authenticator, mode-aware
 /// like [`set_admin_pin`].
 fn set_admin_totp(arguments: &gpui_shell::HostArguments) -> HostResult {
+    ensure_not_client_scoped()?;
     let secret = totp_argument(arguments, 0)?;
     with_database(|db| match require_access_mode(db)? {
         AccessMode::Solo(root) => db
@@ -1882,6 +1996,7 @@ fn check_new_owner(db: &Database, root: &str) -> Result<(), HostError> {
 /// may be `null`). Help desk's admin PIN and authenticator are removed.
 /// Answers a new recovery key.
 fn change_owner(arguments: &gpui_shell::HostArguments) -> HostResult {
+    ensure_not_client_scoped()?;
     let root = tin_root_argument(arguments.string(0)?)?;
     let pin = optional_text(arguments, 1);
     let code = optional_text(arguments, 2);
@@ -1907,6 +2022,7 @@ fn change_owner(arguments: &gpui_shell::HostArguments) -> HostResult {
 /// stays an ordinary taxpayer with their own PIN. Answers a new recovery
 /// key.
 fn change_to_helpdesk(arguments: &gpui_shell::HostArguments) -> HostResult {
+    ensure_not_client_scoped()?;
     let pin = optional_text(arguments, 0);
     let code = optional_text(arguments, 1);
     let new_pin =
@@ -1941,6 +2057,7 @@ fn store_new_recovery_key(db: &Database) -> HostResult {
 }
 
 fn create_recovery_key() -> HostResult {
+    ensure_not_client_scoped()?;
     with_database(|db| {
         require_access_mode(db)?;
         store_new_recovery_key(db)
@@ -1952,7 +2069,7 @@ fn create_recovery_key() -> HostResult {
 fn use_recovery_key(arguments: &gpui_shell::HostArguments) -> HostResult {
     let typed = bir_core::crypto::hash_recovery_key(arguments.string(0)?);
     let matches = auth_limiter::guarded(auth_limiter::RECOVERY_KEY, || {
-        with_database(|db| {
+        with_lock_database(|db| {
             let matches = setting(db, RECOVERY_KEY_HASH)?.is_some_and(|stored| stored == typed);
             if matches {
                 db.delete_setting(RECOVERY_KEY_HASH).map_err(db_error)?;
@@ -1960,6 +2077,10 @@ fn use_recovery_key(arguments: &gpui_shell::HostArguments) -> HostResult {
             Ok(matches)
         })
     })?;
+    if matches {
+        crate::account_gate::clear_client_scope();
+        crate::account_gate::set_room_unlocked(true);
+    }
     Ok(HostValue::Bool(matches))
 }
 
@@ -1974,6 +2095,7 @@ fn mac_login_available() -> bool {
 fn mac_login(
     arguments: &gpui_shell::HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    crate::account_gate::ensure_signed_in()?;
     let reason = arguments
         .get(0)
         .and_then(HostValue::as_str)
@@ -1993,7 +2115,14 @@ fn mac_login(
         let _ = reason;
         let _ = sender.send(false);
     }
-    Ok(async move { Ok(HostValue::Bool(receiver.await.unwrap_or(false))) })
+    Ok(async move {
+        let matched = receiver.await.unwrap_or(false);
+        if matched {
+            crate::account_gate::clear_client_scope();
+            crate::account_gate::set_room_unlocked(true);
+        }
+        Ok(HostValue::Bool(matched))
+    })
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -3356,6 +3485,11 @@ fn export_profile(
         ));
     }
     let tin = arguments.string(0)?.to_string();
+    if !client_scope_allows_tin(&tin) {
+        return Err(HostError::new(
+            "A taxpayer session cannot export another taxpayer.",
+        ));
+    }
     let pin = match arguments.get(1) {
         None | Some(HostValue::Null) => None,
         Some(HostValue::Str(pin)) => Some(pin.clone()),
@@ -4919,6 +5053,10 @@ mod tests {
         assert!(truthy(verify_admin_pin(&args(vec![s("4321")]))));
         assert!(!truthy(verify_admin_pin(&args(vec![s("0817")]))));
         assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("0817")]))));
+        assert!(
+            truthy(verify_admin_pin(&args(vec![s("4321")]))),
+            "back in as admin"
+        );
         // The former owner is no longer protected from archiving.
         set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(true)])).unwrap();
         set_taxpayer_archived(&args(vec![s(ROOT), HostValue::Bool(false)])).unwrap();
@@ -4965,6 +5103,10 @@ mod tests {
         assert!(truthy(verify_admin_pin(&args(vec![s("0817")]))));
         set_admin_pin(&args(vec![s("4321")])).unwrap();
         assert!(truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s("4321")]))));
+        assert!(
+            truthy(verify_admin_pin(&args(vec![s("4321")]))),
+            "back in as admin"
+        );
         set_admin_totp(&args(vec![s(SECRET), s(&current_code(SECRET))])).unwrap();
         assert!(has_totp());
         assert!(truthy(verify_admin_totp(&args(vec![s(&current_code(
@@ -5434,11 +5576,13 @@ mod tests {
         assert!(!taxpayer_pin("0817"), "the PIN set_profile_pin replaced");
 
         setup_solo(&args(vec![s(ROOT)])).unwrap();
+        assert!(admin_pin("2468"), "back in as the solo admin");
         set_admin_pin(&args(vec![s("4321")])).unwrap();
         round_trip("4321");
         assert!(admin_pin("4321"), "set_admin_pin's solo PIN");
         assert!(taxpayer_pin("4321"), "the solo admin PIN is the owner's");
         assert!(!taxpayer_pin("2468"), "the PIN set_admin_pin replaced");
+        assert!(admin_pin("4321"), "back in as admin");
 
         change_to_helpdesk(&args(vec![s("4321"), null(), s("5555")])).unwrap();
         round_trip("5555");
@@ -5448,6 +5592,7 @@ mod tests {
             "the admin PIN change_to_helpdesk replaced"
         );
         assert!(taxpayer_pin("4321"), "the former owner keeps their PIN");
+        assert!(admin_pin("5555"), "back in as admin");
 
         set_admin_pin(&args(vec![s("6666")])).unwrap();
         round_trip("6666");
@@ -7628,6 +7773,9 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod lock_tests;
 
 #[cfg(test)]
 mod reader_tests;

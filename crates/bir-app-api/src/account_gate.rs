@@ -1,16 +1,23 @@
 //! Whether this process may read the filing database.
 //!
-//! The welcome screen is not the lock. Host verbs that touch taxpayer data
-//! call [`ensure_unlocked`] and refuse while the Buwiz account is signed out.
-//! A debug test bypass exists so `cargo test` and the demo launcher can open
-//! a scratch database; release builds compile that check out.
+//! The welcome screen is not the room lock. Host verbs that touch taxpayer
+//! data call [`ensure_unlocked`], which requires a signed-in account, an open
+//! room and the host's own unlock of that room. Verbs of the lock screen call
+//! [`ensure_signed_in`], the account gate as it was before the room lock. A
+//! debug test bypass exists so `cargo test` and the demo launcher can open a
+//! scratch database; release builds compile that check out.
 
 use std::cell::Cell;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui_shell::HostError;
 
 static UNLOCKED: AtomicBool = AtomicBool::new(false);
+static ROOM_UNLOCKED: AtomicBool = AtomicBool::new(false);
+static CLIENT_SCOPE: Mutex<Option<String>> = Mutex::new(None);
+static CLIENT_SCOPE_ROOM: Mutex<Option<std::sync::Weak<std::sync::Mutex<bir_core::db::Database>>>> =
+    Mutex::new(None);
 
 thread_local! {
     static FORCE_LOCKED: Cell<bool> = const { Cell::new(false) };
@@ -43,6 +50,8 @@ pub fn auth_bypass_enabled() -> bool {
     false
 }
 
+/// Whether the account is signed in. The submission worker uses this meaning:
+/// it keeps sending a queued filing while the room is locked.
 pub fn is_unlocked() -> bool {
     if FORCE_LOCKED.with(Cell::get) {
         return false;
@@ -59,8 +68,9 @@ pub(crate) fn unlocked_flag() -> bool {
 
 pub fn set_unlocked(unlocked: bool) {
     UNLOCKED.store(unlocked, Ordering::SeqCst);
-    // Signing out leaves the gate. Filing menus must not survive into it.
     if !unlocked {
+        clear_room_unlocked();
+        // Signing out leaves the gate. Filing menus must not survive into it.
         crate::hooks::hooks().set_shell_chrome_open(false);
     }
     // The worker may already be running from an earlier sign-in in this
@@ -70,8 +80,89 @@ pub fn set_unlocked(unlocked: bool) {
     bir_core::background_cron::set_submission_paused(paused);
 }
 
-pub fn ensure_unlocked() -> Result<(), HostError> {
+/// Whether the host's own checks unlocked the open room in this process.
+pub fn room_unlocked() -> bool {
+    ROOM_UNLOCKED.load(Ordering::SeqCst)
+}
+
+pub fn set_room_unlocked(unlocked: bool) {
+    ROOM_UNLOCKED.store(unlocked, Ordering::SeqCst);
+}
+
+pub fn clear_room_unlocked() {
+    ROOM_UNLOCKED.store(false, Ordering::SeqCst);
+    clear_client_scope();
+}
+
+/// The taxpayer whose own PIN or authenticator opened a client session.
+pub fn client_scope() -> Option<String> {
+    CLIENT_SCOPE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+pub(crate) fn set_client_scope(
+    tin_root: String,
+    room: &std::sync::Arc<std::sync::Mutex<bir_core::db::Database>>,
+) {
+    *CLIENT_SCOPE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(tin_root);
+    *CLIENT_SCOPE_ROOM
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(std::sync::Arc::downgrade(room));
+}
+
+/// The taxpayer scope only while the room it was checked against is still the open handle.
+pub(crate) fn client_scope_for_room(
+    room: &std::sync::Arc<std::sync::Mutex<bir_core::db::Database>>,
+) -> Option<String> {
+    let matches = CLIENT_SCOPE_ROOM
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_ref()
+        .and_then(std::sync::Weak::upgrade)
+        .is_some_and(|scoped| std::sync::Arc::ptr_eq(&scoped, room));
+    matches.then(client_scope).flatten()
+}
+
+pub fn clear_client_scope() {
+    *CLIENT_SCOPE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    *CLIENT_SCOPE_ROOM
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+}
+
+/// The account gate as it was before the room lock: signed in, with no filing-data or room check.
+pub fn ensure_signed_in() -> Result<(), HostError> {
     if is_unlocked() {
+        Ok(())
+    } else {
+        Err(HostError::new(LOCKED_MESSAGE))
+    }
+}
+
+/// The one filing-data checkpoint: signed in, a room open and this process's
+/// host-checked room unlock. A room with no lock configured is opened by the
+/// host here, so first launch, the store-review account and a legacy file with
+/// no access mode keep working.
+pub fn ensure_unlocked() -> Result<(), HostError> {
+    ensure_signed_in()?;
+    if !crate::bir_module::room_is_open() {
+        return Err(HostError::new(LOCKED_MESSAGE));
+    }
+    if !room_unlocked() && crate::bir_module::open_room_has_no_lock_configured()? {
+        set_room_unlocked(true);
+    }
+    let owner_pin_open = crate::session::snapshot()
+        .room
+        .and_then(|(_, _, room, _)| room)
+        .or_else(bir_core::db::open_room_id)
+        .is_some_and(|room| crate::owner_lock_module::is_unlocked(&room));
+    if room_unlocked() || owner_pin_open {
         Ok(())
     } else {
         Err(HostError::new(LOCKED_MESSAGE))
@@ -120,7 +211,7 @@ mod tests {
         assert!(is_unlocked());
         force_locked(|| {
             assert!(!is_unlocked());
-            assert!(ensure_unlocked().is_err());
+            assert!(ensure_signed_in().is_err());
         });
         assert!(is_unlocked());
     }

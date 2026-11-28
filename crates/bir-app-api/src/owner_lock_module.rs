@@ -46,7 +46,7 @@ fn unlock_state() -> std::sync::MutexGuard<'static, Unlock> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn is_unlocked(room: &RoomId) -> bool {
+pub(crate) fn is_unlocked(room: &RoomId) -> bool {
     unlock_state().room.as_ref() == Some(room)
 }
 
@@ -56,11 +56,13 @@ fn locks_so_far() -> u64 {
 }
 
 /// Unlock `room`, unless a lock came in since `locks_then` was taken (N7: the lock wins).
-fn unlock_unless_locked_since(room: RoomId, locks_then: u64) {
+fn unlock_unless_locked_since(room: RoomId, locks_then: u64) -> bool {
     let mut state = unlock_state();
     if state.locks == locks_then {
         state.room = Some(room);
+        return true;
     }
+    false
 }
 
 fn host_error(error: impl std::fmt::Display) -> HostError {
@@ -87,7 +89,7 @@ fn pin_text(arguments: &HostArguments) -> Result<Zeroizing<String>, HostError> {
 /// What the lock page reads: whether a room is open, whether its lock store was lost, whether it has an owner PIN
 /// (and since when), whether this process unlocked it, and the owner's count and wait.
 fn owner_lock_state() -> HostResult {
-    crate::account_gate::ensure_unlocked()?;
+    crate::account_gate::ensure_signed_in()?;
     let Some(room) = bir_core::db::open_room_id() else {
         return Ok(HostObject::new()
             .field("room_open", false)
@@ -195,7 +197,7 @@ fn off_the_engine(
 /// while its lock store is lost (I2). The room counts as unlocked afterwards (the owner just chose it). A lock that
 /// came in after the set was asked for wins: no PIN is stored, and the answer says the device was locked (N7, F2).
 fn set_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> {
-    crate::account_gate::ensure_unlocked()?;
+    crate::account_gate::ensure_signed_in()?;
     let typed = pin_text(arguments)?;
     let room = open_room()?;
     let store = bir_core::rooms::device_store_here();
@@ -219,6 +221,7 @@ fn set_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> {
             }
             write()?;
             state.room = Some(room.clone());
+            crate::account_gate::clear_client_scope();
             Ok(())
         })
         .map_err(host_error)?;
@@ -230,7 +233,7 @@ fn set_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> {
 /// from then on, whatever thread the check ended on, unless a lock came in while it hashed), false on a miss; a
 /// wait running, or started by this miss, is an error that says how long.
 fn verify_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> {
-    crate::account_gate::ensure_unlocked()?;
+    crate::account_gate::ensure_signed_in()?;
     let typed = pin_text(arguments)?;
     let room = open_room()?;
     let store = bir_core::rooms::device_store_here();
@@ -240,8 +243,8 @@ fn verify_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> 
         let attempt =
             owner_lock::verify_owner_pin(&store, &room, &typed, &now).map_err(host_error)?;
         let matched = crate::auth_limiter::answer(attempt)?;
-        if matched {
-            unlock_unless_locked_since(room, locks_then);
+        if matched && unlock_unless_locked_since(room, locks_then) {
+            crate::account_gate::clear_client_scope();
         }
         Ok(HostValue::Bool(matched))
     })
@@ -251,23 +254,19 @@ fn verify_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> 
 /// unlocked) and this process forgot its unlock; false, and nothing done, in a room with no lock (N5) or with no
 /// room open. B2 makes the host enforce it.
 fn lock_now() -> HostResult {
-    crate::account_gate::ensure_unlocked()?;
-    let Some(room) = bir_core::db::open_room_id() else {
-        return Ok(HostValue::Bool(false));
-    };
-    let store = bir_core::rooms::device_store_here();
-    let locked = owner_lock::store_lost(&store, &room).map_err(host_error)?
-        || owner_lock::owner_lock(&store, &room)
-            .map_err(host_error)?
-            .is_some_and(|lock| lock.pin_phc.is_some());
-    if !locked {
+    crate::account_gate::ensure_signed_in()?;
+    if !crate::bir_module::room_is_open() || crate::bir_module::open_room_has_no_lock_configured()?
+    {
         return Ok(HostValue::Bool(false));
     }
-    let mut state = unlock_state();
-    state.locks += 1;
-    if state.room.as_ref() == Some(&room) {
-        state.room = None;
+    if let Some(room) = bir_core::db::open_room_id() {
+        let mut state = unlock_state();
+        state.locks += 1;
+        if state.room.as_ref() == Some(&room) {
+            state.room = None;
+        }
     }
+    crate::account_gate::clear_room_unlocked();
     Ok(HostValue::Bool(true))
 }
 
@@ -400,6 +399,13 @@ mod tests {
         assert_eq!(call("lock_now", vec![]).unwrap(), HostValue::Bool(true));
         assert_eq!(state()["unlocked"], false, "the lock is recorded");
         assert_eq!(
+            crate::account_gate::ensure_unlocked()
+                .unwrap_err()
+                .message(),
+            crate::account_gate::LOCKED_MESSAGE,
+            "the host enforces the recorded lock"
+        );
+        assert_eq!(
             call("set_owner_pin", pin("2468")).unwrap_err().message(),
             "Unlock with your current PIN first."
         );
@@ -414,6 +420,10 @@ mod tests {
         );
         let open = state();
         assert_eq!(open["unlocked"], true);
+        assert!(
+            crate::account_gate::ensure_unlocked().is_ok(),
+            "positive control"
+        );
         assert_eq!(open["failures"], 0.0);
 
         // Six wrong in a row: the sixth says how long, and even the right PIN waits.
