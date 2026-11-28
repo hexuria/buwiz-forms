@@ -27,7 +27,7 @@ class NshWindowsReleaseTests(unittest.TestCase):
         release = (ROOT / '.github/workflows/release.yml').read_text()
         for workflow in (ci, release):
             self.assertIn('uses: ./.github/workflows/release-windows.yml', workflow)
-        self.assertIn('artifacts/**/*.msix', release)
+        self.assertNotIn('.msix', release.split('files: |', 1)[1].split('\n\n', 1)[0])
         self.assertIn('artifacts/**/*-windows-x86_64.zip', release)
 
     def test_setup_and_updater_zip_do_not_require_a_vc_redistributable(self):
@@ -64,6 +64,27 @@ class NshWindowsReleaseTests(unittest.TestCase):
                     result = subprocess.run(
                         ['pwsh', '-NoProfile', '-File', str(script), '-PackageRoot', str(package), '-OutDir', str(out)],
                         env={**os.environ, 'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': tag, 'NO_COLOR': '1'},
+                        capture_output=True, text=True, timeout=20,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
+                    self.assertFalse(out.exists())
+
+    @unittest.skipUnless(shutil.which('pwsh'), 'requires PowerShell')
+    def test_store_and_direct_switches_refuse_what_they_cannot_build(self):
+        cases = (
+            (['-MsixOnly', '-NoMsix'], {}, 'Pass -MsixOnly or -NoMsix, not both'),
+            (['-NoMsix', '-SmokeMsix'], {}, '-SmokeMsix needs the .msix'),
+            (['-MsixOnly'], {'WINDOWS_CERTIFICATE_PFX': 'AAAA'}, 'The Store package is never signed here'),
+        )
+        with tempfile.TemporaryDirectory() as scratch:
+            out = Path(scratch) / 'out'
+            for switches, env, error in cases:
+                with self.subTest(switches=switches, env=sorted(env)):
+                    result = subprocess.run(
+                        ['pwsh', '-NoProfile', '-File', str(ROOT / 'scripts/package_nsh_windows.ps1'),
+                         '-PackageRoot', scratch, '-OutDir', str(out), *switches],
+                        env={**os.environ, 'WINDOWS_CERTIFICATE_PFX': '', **env, 'NO_COLOR': '1'},
                         capture_output=True, text=True, timeout=20,
                     )
                     self.assertNotEqual(result.returncode, 0)

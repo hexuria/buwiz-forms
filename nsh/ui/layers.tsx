@@ -408,7 +408,7 @@ function ToastCard(props: { entry: ToastEntry }) {
       startingClass="opacity-0 translate-y-4"
       endingClass="opacity-0 scale-95"
     >
-      <View class="flex-row items-center gap-2.5 px-3.5 py-2.5">
+      <View testID="toast" class="flex-row items-center gap-2.5 px-3.5 py-2.5">
         <Icon name={c()?.icon ?? "circle-check"} tone="primaryFg" />
         <Text variant="control" tone="primaryFg" class="min-w-0 flex-1">{c()?.message ?? ""}</Text>
         <If when={c()?.action}>

@@ -40,6 +40,8 @@ A store package comes only from the pinned NSH, `NSH_PINNED_REF` in `.github/wor
 - the `../nsh` checkout beside this one must be at that commit;
 - otherwise `just ios-appstore` (and the Mac App Store package, `just app`) refuses to start.
 
+**Gmail Connect is left out unless `STORE_GMAIL=1`.** `just ios-appstore` and `just app` drop `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` right after reading `.env`, and check the finished app (`scripts/store_gmail.py check`): with the switch off it fails if the app holds a Google client id or secret, with it on it fails if the app lacks either. Connect asks Google for the restricted `https://mail.google.com/` scope; set the switch only once the Google Cloud project's consent screen is In production and verified for that scope (`features/ios-store/CUT-1.0.0.md`). Without it the app offers no Connect and says to use an app password.
+
 The shared `~/BuwizNsh/tools` is the everyday tool. It is not rebuilt for a store build, because other sessions use it. The pinned tool lives side by side in `~/BuwizNsh/store-tools`; its `nsh-ref` file names the commit it was built at. It is shared with the Google Play build (`just play-bundle`), so it is rebuilt only when the pin moves. Point `NSH_TOOLS` at it.
 
 Each package builds in the checkout's own folder (`target/nsh-store`), not the shared `~/BuwizNsh/target-nsh`. Cargo cannot tell two checkouts of the same crate version apart, so a shared folder could put another branch's form data in the package.

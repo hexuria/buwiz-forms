@@ -2,11 +2,14 @@
 """Decides what a CI run does: the `changes` job of ci.yml and the `plan` job of nsh.yml both run this, so the two
 workflows always agree. docs/CI.md says the same in words.
 
-Five lanes:
-  none     a pull request that closed (or merged), or one that is a draft: nothing. ci.yml's jobs carry the same rule
-           in their `if`, so these events take no runner at all; marking a draft ready starts the quick lane.
+Six lanes:
+  none     a pull request that closed (or merged), one that is a draft (except an explicit suite-label request), or a
+           labeled event whose label is not a suite label: nothing. ci.yml's jobs carry the closed/draft rule in their
+           `if`, so those events take no runner at all; marking a draft ready starts the quick lane.
   quick    a pull request, or a push to main or codex/**: the quick checks on Linux only (ci.yml).
   tests    a push to test/**: the test suites; the branch name picks the systems.
+  suite    a pull_request labeled event whose label is ci:suite*: the quick checks and the test suites; the label
+           picks the systems. Only the labeled event asks for this lane, so a later push plans quick alone.
   manual   workflow_dispatch: the systems, suites, screen-test filter and shard the inputs name.
   nightly  the schedule: everything, on all three systems.
 
@@ -31,6 +34,17 @@ SUITES = ("rust", "screens", "build", "installer", "validation")
 # A test/** push and a manual run on a branch split the screen tests over this many runners.
 SHARDS = 3
 
+# The pull-request labels that ask for the suites, and the systems each asks for. GitHub's expression equality
+# is ordinal-ignore-case (it upper-cases), so the planner compares upper-case keys too; anything else plans nothing.
+SUITE_LABEL_SYSTEMS = {
+    "ci:suite": ("linux", "windows"),
+    "ci:suite-linux": ("linux",),
+    "ci:suite-windows": ("windows",),
+    "ci:suite-macos": ("macos",),
+    "ci:suite-all": SYSTEMS,
+}
+SUITE_LABEL_SYSTEMS_BY_UPPER = {name.upper(): systems for name, systems in SUITE_LABEL_SYSTEMS.items()}
+
 # The `check` job's runner and toolchain target for each system, in the matrix order ci.yml has always used.
 CHECK_OS = {
     "macos": {"os": "macos-15", "target": "aarch64-apple-darwin"},
@@ -38,10 +52,26 @@ CHECK_OS = {
     "windows": {"os": "windows-latest", "target": "x86_64-pc-windows-msvc"},
 }
 
+# Docs a Python script or script test reads are inputs to those tests, not plain docs. One list owns the rule;
+# scripts/tests/test_ci_plan.py scans the scripts and fails when one reads a docs path missing here. A trailing
+# slash is a prefix: check_fix_order_goal.py reads the local findings files under docs/form-findings/.
+SCRIPT_INPUT_DOCS = (
+    "docs/platforms/devin-blueprint.yml",
+    "docs/CI.md",
+    "docs/platforms/devin-environment.md",
+    "docs/form-findings/",
+)
+
+
+def script_input_doc(path: str) -> bool:
+    return any(path == item or (item.endswith("/") and path.startswith(item)) for item in SCRIPT_INPUT_DOCS)
+
+
 # Read by people only. assets/brand and assets/badges feed local recipes (`just icons`, `just badges`), not a build;
-# Markdown in nsh/ is not bundled or type checked. Markdown under rules/ or scripts/ and crate README files are NOT
+# assets/readme holds the pictures README.md shows and nothing builds from it (a README picture change used to run
+# every quick check as app code, #494). Markdown in nsh/ is not bundled or type checked. Markdown under rules/ or scripts/ and crate README files are NOT
 # here: they feed code generation or policy checks.
-DOCS = re.compile(r"^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$|assets/(brand|badges)/|nsh/.*\.md$)")
+DOCS = re.compile(r"^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$|assets/(brand|badges|readme)/|nsh/.*\.md$)")
 # The Windows installer. nsh.yml owns the NSH pin that generates the installer source.
 WINDOWS_PKG = re.compile(
     r"^(assets/windows/|packaging/windows/|scripts/(audit_final_setup|package_msix|package_nsh_windows|smoke_msix)\.ps1$"
@@ -87,6 +117,8 @@ class PlanError(ValueError):
 
 
 def classify(path: str) -> str:
+    if script_input_doc(path):
+        return "scripts"
     if DOCS.match(path):
         return "docs"
     if WINDOWS_PKG.match(path):
@@ -106,7 +138,7 @@ def what_changed(changed: list[str] | None) -> dict[str, bool]:
     """What the change can affect. None (unknown range) and an empty list mean everything."""
     if not changed:
         return dict(app=True, windows_pkg=True, other=True, nsh=True, nsh_check=True, nsh_agent_check=True,
-                    nsh_beyond_tests=True, core_inputs=True, validation_paths=False, known=False)
+                    nsh_beyond_tests=True, core_inputs=True, validation_paths=False, known=False, docs_only=False)
     classes = [classify(path) for path in changed]
     nsh_paths = [path for path in changed if NSH_INPUTS.match(path) and not DOCS.match(path)]
     return dict(
@@ -121,6 +153,7 @@ def what_changed(changed: list[str] | None) -> dict[str, bool]:
         core_inputs=any(not path.startswith("nsh/") for path in nsh_paths),
         validation_paths=any(VALIDATION.match(path) for path in changed),
         known=True,
+        docs_only=all(class_name == "docs" for class_name in classes),
     )
 
 
@@ -140,13 +173,63 @@ def branch_systems(ref: str) -> list[str]:
     return {"linux": ["linux"], "windows": ["windows"], "macos": ["macos"], "all": list(SYSTEMS)}.get(first, ["linux", "windows"])
 
 
+def has_label(labels: tuple[str, ...], wanted: str) -> bool:
+    """Label membership with GitHub's ordinal-ignore-case name comparison."""
+    wanted_key = wanted.upper()
+    return any(label.upper() == wanted_key for label in labels)
+
+
+def plan_quick_checks(plan: dict, *, event: str, branch: str, labels: tuple[str, ...], seen: dict[str, bool],
+                      reasons: list[str]) -> None:
+    """The quick lane's part of a plan."""
+    if not seen["known"]:
+        reasons.append("change range unknown or empty: every quick check")
+    plan["check_systems"] = ["linux"] if seen["app"] else []
+    plan["nsh_check"] = seen["nsh_check"]
+    # Compile-proof the agent plug on pull requests only: the pin must be green before merge, while main and the
+    # test lane already have the complete NSH suite's agent build.
+    plan["nsh_agent_check"] = event == "pull_request" and seen["nsh_agent_check"]
+    # `check` runs the Python script tests itself.
+    plan["scripts"] = not seen["app"] and (seen["other"] or seen["windows_pkg"])
+    # The validation-rules audits: Linux only, and only when asked for by a path, the label or the branch. An
+    # unknown range does not start them (a new branch or a force push must not start six jobs).
+    if seen["validation_paths"]:
+        plan["validation_systems"] = ["linux"]
+        reasons.append("validation-rules audits: validation-rules paths changed")
+    elif event == "pull_request" and has_label(labels, "run-validation"):
+        plan["validation_systems"] = ["linux"]
+        reasons.append("validation-rules audits: run-validation label")
+    elif branch.startswith("ebirforms-"):
+        plan["validation_systems"] = ["linux"]
+        reasons.append(f"validation-rules audits: branch {branch}")
+
+
+def plan_test_suites(plan: dict, *, chosen: list[str], seen: dict[str, bool], reasons: list[str], source: str) -> None:
+    """The test suites the changed files ask for on the chosen systems. test/** pushes and suite labels share this."""
+    if not seen["known"]:
+        reasons.append("change range against main unknown or empty: every suite")
+    plan["chosen_systems"] = list(chosen)
+    plan["check_systems"] = chosen if seen["app"] else []
+    plan["check_tests"] = True
+    plan["installer"] = seen["windows_pkg"] and "windows" in chosen
+    plan["screens"] = seen["nsh"]
+    plan["build"] = plan["nsh_rust"] = seen["nsh_beyond_tests"]
+    plan["core_plain"] = seen["core_inputs"] and "linux" in chosen
+    plan["nsh_systems"] = chosen if seen["nsh"] else []
+    plan["shards"], plan["shard_count"] = list(range(SHARDS)), SHARDS
+    reasons.append(f"systems from {source}: {', '.join(chosen)}")
+
+
 def decide(
     *,
     event: str,
     ref: str,
     action: str = "",
+    label: str = "",
+    state: str = "",
     draft: bool = False,
     branch: str = "",
+    sync_lane: str = "quick",
     changed: list[str] | None = None,
     labels: tuple[str, ...] = (),
     systems: str = "",
@@ -158,11 +241,28 @@ def decide(
     on_main = ref == "refs/heads/main"
     reasons: list[str] = []
     test_push = event == "push" and ref.startswith("refs/heads/test/")
+    if sync_lane not in ("quick", "none"):
+        raise PlanError(f"unknown pull-request synchronize lane {sync_lane}: use quick or none")
 
-    if event == "pull_request" and (action == "closed" or draft):
+    suite_systems = (SUITE_LABEL_SYSTEMS_BY_UPPER.get(label.upper())
+                     if event == "pull_request" and action == "labeled" else None)
+    closed = action == "closed" or state.lower() == "closed"
+
+    if event == "pull_request" and closed:
         lane = "none"
-        reasons.append("closed pull request: nothing runs" if action == "closed"
-                       else "draft pull request: nothing runs until it is marked ready")
+        reasons.append("closed pull request: nothing runs")
+    elif event == "pull_request" and action == "labeled" and suite_systems is None:
+        lane = "none"
+        reasons.append("pull request label is not a suite label: nothing runs")
+    elif event == "pull_request" and action == "synchronize" and sync_lane == "none":
+        lane = "none"
+        reasons.append("pull request synchronize: nothing runs")
+    elif event == "pull_request" and draft and suite_systems is None:
+        lane = "none"
+        reasons.append("draft pull request: nothing runs until it is marked ready")
+    elif suite_systems is not None:
+        lane = "suite"
+        reasons.append(f"suite label: {label}")
     elif event in ("pull_request", "push") and not test_push:
         lane = "quick"
     elif test_push:
@@ -174,48 +274,24 @@ def decide(
     else:
         raise PlanError(f"no lane for event {event}")
 
-    plan = dict(lane=lane, check_systems=[], check_tests=False, nsh_check=False, nsh_agent_check=False, scripts=False,
-                installer=False, validation_systems=[], nsh_systems=[], screens=False, build=False, nsh_rust=False,
-                core_plain=False, shards=[0], shard_count=1, screens_filter="")
+    plan = dict(lane=lane, chosen_systems=[], check_systems=[], check_tests=False, nsh_check=False,
+                nsh_agent_check=False, scripts=False, installer=False, validation_systems=[], nsh_systems=[],
+                screens=False, build=False, nsh_rust=False, core_plain=False, shards=[0], shard_count=1,
+                screens_filter="", docs_only=False, legacy_in_changes=False, legacy_guard=False)
 
-    if lane == "quick":
+    if lane in ("quick", "suite"):
         seen = what_changed(changed)
-        if not seen["known"]:
-            reasons.append("change range unknown or empty: every quick check")
-        plan["check_systems"] = ["linux"] if seen["app"] else []
-        plan["nsh_check"] = seen["nsh_check"]
-        # Compile-proof the agent plug on pull requests only: the pin must be green before merge, while main and the
-        # test lane already have the complete NSH suite's agent build.
-        plan["nsh_agent_check"] = event == "pull_request" and seen["nsh_agent_check"]
-        # `check` runs the Python script tests itself.
-        plan["scripts"] = not seen["app"] and (seen["other"] or seen["windows_pkg"])
-        # The validation-rules audits: Linux only, and only when asked for by a path, the label or the branch. An
-        # unknown range does not start them (a new branch or a force push must not start six jobs).
-        if seen["validation_paths"]:
-            plan["validation_systems"] = ["linux"]
-            reasons.append("validation-rules audits: validation-rules paths changed")
-        elif event == "pull_request" and "run-validation" in labels:
-            plan["validation_systems"] = ["linux"]
-            reasons.append("validation-rules audits: run-validation label")
-        elif branch.startswith("ebirforms-"):
-            plan["validation_systems"] = ["linux"]
-            reasons.append(f"validation-rules audits: branch {branch}")
+        plan["docs_only"] = seen["docs_only"]
+        plan_quick_checks(plan, event=event, branch=branch, labels=labels, seen=seen, reasons=reasons)
 
-    elif lane == "tests":
+    if lane == "tests":
         chosen = branch_systems(ref)
         seen = what_changed(changed)
-        if not seen["known"]:
-            reasons.append("change range against main unknown or empty: every suite")
-        plan["check_systems"] = chosen if seen["app"] else []
-        plan["check_tests"] = True
-        plan["installer"] = seen["windows_pkg"] and "windows" in chosen
-        plan["screens"] = seen["nsh"]
-        plan["build"] = plan["nsh_rust"] = seen["nsh_beyond_tests"]
-        plan["core_plain"] = seen["core_inputs"] and "linux" in chosen
-        plan["nsh_systems"] = chosen if seen["nsh"] else []
-        plan["shards"], plan["shard_count"] = list(range(SHARDS)), SHARDS
-        reasons.append(f"systems from the branch name: {', '.join(chosen)}")
-
+        plan["docs_only"] = seen["docs_only"]
+        plan_test_suites(plan, chosen=chosen, seen=seen, reasons=reasons, source="the branch name")
+    elif lane == "suite":
+        chosen = list(suite_systems)
+        plan_test_suites(plan, chosen=chosen, seen=seen, reasons=reasons, source="the label")
     elif lane == "manual":
         chosen = parse_names(systems, SYSTEMS, "linux,windows", "system")
         wanted = parse_names(suites, SUITES, "all", "suite")
@@ -224,6 +300,7 @@ def decide(
             # it for good: a partial run on main could save a cache missing what the full jobs need.
             reasons.append("main: suites, screen filter and shard ignored, so the caches main saves stay complete")
             wanted, screens, shard = list(SUITES), "", "all"
+        plan["chosen_systems"] = list(chosen)
         plan["check_systems"] = chosen if "rust" in wanted else []
         plan["check_tests"] = True
         plan["installer"] = "installer" in wanted and "windows" in chosen
@@ -243,10 +320,14 @@ def decide(
         reasons.append(f"manual run: systems {', '.join(chosen)}; suites {', '.join(wanted)}")
 
     elif lane == "nightly":
-        plan.update(check_systems=list(SYSTEMS), check_tests=True, installer=True, validation_systems=list(SYSTEMS),
-                    screens=True, build=True, nsh_rust=True, core_plain=True, nsh_systems=list(SYSTEMS), shards=[0])
+        plan.update(chosen_systems=list(SYSTEMS), check_systems=list(SYSTEMS), check_tests=True, installer=True,
+                    validation_systems=list(SYSTEMS), screens=True, build=True, nsh_rust=True, core_plain=True,
+                    nsh_systems=list(SYSTEMS), shards=[0])
         reasons.append("nightly run: everything on all three systems")
 
+    plan["legacy_in_changes"] = lane in ("quick", "suite") and plan["docs_only"]
+    plan["legacy_guard"] = (not ref.startswith("refs/heads/test/") and lane in ("quick", "suite", "manual", "nightly")
+                            and not plan["legacy_in_changes"])
     if not plan["screens"]:
         # Without screen tests only the lead shard has work.
         plan["shards"], plan["shard_count"] = [0], 1
@@ -268,6 +349,10 @@ def outputs(plan: dict) -> dict[str, str]:
     shards = plan["shards"]
     return {
         "lane": plan["lane"],
+        "chosen_systems": ",".join(plan["chosen_systems"]),
+        "docs_only": flag(plan["docs_only"]),
+        "legacy_in_changes": flag(plan["legacy_in_changes"]),
+        "legacy_guard": flag(plan["legacy_guard"]),
         "check": flag(bool(check)),
         "check_matrix": json.dumps({"include": check}, separators=(",", ":")),
         "nsh_check": flag(plan["nsh_check"]),
@@ -305,7 +390,10 @@ def changed_files(env: dict[str, str]) -> list[str] | None:
         span = f"{before}..{after}"
     else:
         return None
-    result = subprocess.run(["git", "diff", "--name-only", span], capture_output=True, text=True, check=False)
+    # --no-renames: with rename detection git prints only a moved file's NEW path, so a script moved into docs/
+    # would read as one docs file while a code input is deleted. Both paths must be classified.
+    result = subprocess.run(["git", "diff", "--name-only", "--no-renames", span], capture_output=True, text=True,
+                            check=False)
     if result.returncode != 0:
         return None
     return [line for line in result.stdout.splitlines() if line]
@@ -329,8 +417,11 @@ def main() -> int:
             event=env.get("EVENT", ""),
             ref=env.get("REF", ""),
             action=env.get("ACTION", ""),
+            label=env.get("LABEL", ""),
+            state=env.get("PR_STATE", ""),
             draft=env.get("DRAFT", "") == "true",
             branch=env.get("BRANCH", ""),
+            sync_lane=env.get("PR_SYNC_LANE", "quick"),
             changed=changed_files(env) if env.get("EVENT") in ("pull_request", "push") else None,
             labels=pull_request_labels(env),
             systems=env.get("IN_SYSTEMS", ""),

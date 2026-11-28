@@ -40,7 +40,7 @@ there, but nobody has run it on that platform.
 | PIN or authenticator app lock | ✓ | Shared code. |
 | In-app notifications drawer and toasts | ✓ | Shared code. |
 | Background refresh when the database changes | ✓ | Shared code. |
-| Gmail connect for BIR receipt tracking | partial | Settings → Account → Google, or the taxpayer inbox card. The host opens the default browser — an OS call untested on real Windows. |
+| Gmail connect for BIR receipt tracking | partial | Settings → Account → Google, or the taxpayer inbox card, in a build given a Google client (none in 1.0.0: an app password instead). The host opens the default browser — an OS call untested on real Windows. |
 | Keyboard shortcuts | ✓ | Shared code; Ctrl based; the menu keymap is covered by `nsh/shell/desktop/menu_model.test.ts` in CI. |
 | Store build never self-updates (Microsoft Store) | ✓ | `ebirforms-store-package` marker (`store_managed()` in `nsh/src/desktop.rs`). |
 | Packaging | untested | `Setup.exe`, `.msi` and `.msix` from CI, or locally with `scripts\package_nsh_windows.ps1`. |
@@ -55,8 +55,12 @@ there, but nobody has run it on that platform.
 - `windows-release` contains `eBIRForms-Windows-x64-<version>-Setup.exe`
   (Inno Setup) and `eBIRForms-Windows-x64-<version>.msi` (WiX). The installer
   adds a Start menu entry and offers an optional desktop icon.
-- The `.msix` in `windows-release` is the package for the Microsoft Store. Built without a signing certificate it is
-  unsigned and keeps the Store identity from `assets\windows\AppxManifest.xml`, which is what Partner Center takes (the
+- The `.msix` is the package for the Microsoft Store. A test run puts it in `windows-release`. A release builds it
+  in its own job, `build-windows-store`, as the `windows-store` artifact with `SHA256SUMS-windows-store-x64.txt`
+  (`package_nsh_windows.ps1 -MsixOnly`). The direct job then leaves it out (`-NoMsix`). Neither job gets the Google
+  OAuth client unless the repository variable `STORE_GMAIL` is `1` (1.0.0 ships none). Otherwise each checks its package, the `.msix` or
+  the updater ZIP, holds no client id or secret (`scripts/audit_google_client.py --absent`, after its `--self-test` finds planted ones). Built without a
+  signing certificate it is unsigned and keeps the Store identity from `assets\windows\AppxManifest.xml`, which is what Partner Center takes (the
   Store signs it). A run with `WINDOWS_CERTIFICATE_PFX` puts the certificate's subject in as publisher, which makes a
   sideload package that the Store refuses. The package carries `ebirforms-store-package` beside the executable, so the
   app in it never asks GitHub for a newer version (`nsh/src/desktop.rs` `store_managed`).
@@ -149,7 +153,8 @@ there, but nobody has run it on that platform.
   `.github/workflows/release-windows.yml`. Release runs require
   `WINDOWS_CERTIFICATE_PFX` (base64-encoded `.pfx`) and
   `WINDOWS_CERTIFICATE_PASSWORD`; pull-request and manually dispatched builds
-  may be unsigned. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are optional.
+  may be unsigned. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are used only when the repository variable
+  `STORE_GMAIL` is `1`; 1.0.0 leaves it unset, so no build carries them.
 - `windows-release` contains only the Setup program and MSI for public GitHub
   releases. The MSIX packages are CI artifacts for testers and Store upload,
   not public release attachments.

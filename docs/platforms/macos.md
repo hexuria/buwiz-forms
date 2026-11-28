@@ -24,7 +24,7 @@ there, but nobody has run it on that platform.
 | PIN or authenticator app lock | ✓ |  |
 | In-app notifications drawer and toasts | ✓ | The bell in the top bar (⌘⇧N); in-app toasts. |
 | Background refresh when the database changes | ✓ | The paced watch in `nsh/shell/app.ts` re-reads. |
-| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card; the host opens the browser. |
+| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card, in a build given a Google client (none in 1.0.0: an app password instead); the host opens the browser. |
 | Keyboard shortcuts | ✓ | Cmd based; also Cmd+H, Cmd+M, Cmd+Ctrl+F. |
 | Packaging | ✓ | Signed and notarized `.app` and `.dmg`; Mac App Store package. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
@@ -106,15 +106,29 @@ there, but nobody has run it on that platform.
   builds a DMG, notarizes it with `notarytool` and checks it with `spctl`.
   It needs the Apple secrets listed in
   [DEVELOPMENT.md](../DEVELOPMENT.md#cicd-secrets--codesigning).
-- The sandboxed Mac App Store package is built by
-  `just _package-mac-appstore` and the release workflow: it adds the
-  app's `mas_build` feature (no global hotkey or self-updater) to the
-  generated host's build, embeds
-  `assets/macos/embedded.provisionprofile`, signs with
-  `entitlements.plist` (sandbox), adds `print-overrides/` under
-  `Contents/Resources` and wraps the app with `productbuild`. A store
-  build never offers self-updates (`store_managed()` in
-  `nsh/src/desktop.rs`).
+- The sandboxed Mac App Store package is built by `just app` (which runs
+  `just _package-mac-appstore`) on the owner's Mac; no workflow builds it.
+  It adds the app's `mas_build` feature (no global hotkey or self-updater)
+  to the generated host's build, embeds
+  `assets/macos/embedded.provisionprofile`, signs with the store
+  entitlements that `scripts/store_gmail.py entitlements` writes from
+  `entitlements.plist` (sandbox), adds `print-overrides/` and the privacy
+  manifest under `Contents/Resources` and wraps the app with
+  `productbuild`. A store build never offers self-updates
+  (`store_managed()` in `nsh/src/desktop.rs`).
+- **Gmail Connect is out of the store builds unless `STORE_GMAIL=1`**
+  (`just app` and `just ios-appstore`; scripts/store_gmail.py). Connect
+  asks Google for the restricted `https://mail.google.com/` scope, which a
+  public app may use only after Google verifies the consent screen. Without
+  the switch the recipes drop `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+  from the build, a check after packaging fails the build if the app holds
+  either (with the switch on it fails if the app lacks either), and the Mac
+  App Store package has no `com.apple.security.network.server` (kept only
+  for Connect's one-shot 127.0.0.1 OAuth listener or an `--agent` build).
+  The app then offers no Connect and says to use an app password. The
+  direct downloads follow the same rule: no release build on any platform
+  gets the client unless the repository variable `STORE_GMAIL` is `1`
+  (`release-macos.yml`, `release.yml`; scripts/tests/test_store_gmail.py).
 - Entitlement files are in `assets/macos/` and at the repository root.
 
 ## Agent control

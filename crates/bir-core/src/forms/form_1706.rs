@@ -564,6 +564,9 @@ impl Form1706Draft {
         if !self.is_amended {
             self.tax_paid_previous = 0.0;
         }
+        if self.property_class != Some(Form1706PropertyClass::Others) {
+            self.property_class_other.clear();
+        }
         if self.seller_type == Some(Form1706SellerType::Corporation) {
             self.principal_residence = None;
             self.new_residence_within_18_months = None;
@@ -1720,6 +1723,12 @@ mod tests {
             .queue(crate::filing_queue::QueueAuthSource::Gui)
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
+        draft.property_class_other = "LEGACY DETAIL".to_string();
+        assert!(
+            draft.revalidate_queued_before_submission().is_ok(),
+            "queue revalidation recomputes legacy gated detail before validating"
+        );
+        assert!(draft.property_class_other.is_empty());
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
