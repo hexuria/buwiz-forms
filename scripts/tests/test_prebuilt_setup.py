@@ -379,6 +379,11 @@ class PrebuiltShellTests(unittest.TestCase):
                 {"FAKE_HASH_OUTPUT": pin},
             )
         self.assertEqual(data["result"].returncode, 0, data["output"])
+        self.assertEqual(len(data["stdout"].splitlines()), 1, data["output"])
+        self.assertRegex(
+            data["stdout"].splitlines()[0],
+            rf"^gpui-agent-cli {re.escape(CLI)} prebuilt [0-9]+s$",
+        )
         self.assertNotIn("cargo ", data["log"])
         archive = f"gpui-agent-cli-x86_64-unknown-linux-gnu-v{CLI}.tgz"
         self.assertIn(
@@ -412,6 +417,10 @@ class PrebuiltShellTests(unittest.TestCase):
         )
         self.assertEqual(data["output"].count("building from source"), 1, data["output"])
         self.assertIn("digest", data["output"])
+        self.assertNotRegex(
+            data["output"],
+            rf"(?m)^gpui-agent-cli {re.escape(CLI)} prebuilt [0-9]+s$",
+        )
         self.assertEqual(data["tmp_entries"], [])
         digest = sha256_bytes(f"source-gpui-agent-cli-{CLI}\n".encode())
         self.assertEqual(
@@ -820,6 +829,8 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
         self.assertIn("COUNT:1", data["stdout"], data["output"])
         self.assertIn("TYPE:Boolean", data["stdout"], data["output"])
         self.assertIn("VALUE:True", data["stdout"], data["output"])
+        prebuilt_line = rf"(?m)^gpui-agent-cli {re.escape(CLI)} prebuilt [0-9]+s$"
+        self.assertEqual(len(re.findall(prebuilt_line, data["output"])), 1, data["output"])
         self.assertNotIn("cargo ", data["log"])
         self.assertNotIn(".sha256", data["log"])
         digest = sha256_bytes(b"prebuilt binary payload")
@@ -841,6 +852,10 @@ class PrebuiltPowerShellRunTests(unittest.TestCase):
         self.assertIn("VALUE:True", data["stdout"], data["output"])
         self.assertNotIn(".sha256", data["log"])
         self.assertEqual(data["output"].count("building from source"), 1, data["output"])
+        self.assertNotRegex(
+            data["output"],
+            rf"(?m)^gpui-agent-cli {re.escape(CLI)} prebuilt [0-9]+s$",
+        )
         self.assertIn(
             f"cargo [install] [gpui-agent-cli] [--version] [={CLI}]",
             data["log"],

@@ -157,7 +157,7 @@ fn profile_with_start(business_start_date: Option<NaiveDate>) -> TaxpayerProfile
         line_of_business: "Services".into(),
         registered_address: "QC".into(),
         zip_code: "1100".into(),
-        phone: "09156837000".into(),
+        phone: "09170000000".into(),
         email: "start@example.com".into(),
         default_form_type: "2551Q".into(),
         taxpayer_type: TaxpayerType::Individual,
