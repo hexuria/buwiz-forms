@@ -255,6 +255,30 @@ class QuickLaneTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assert_quick(pr(path), check=False, nsh_check=False, scripts=True)
 
+    def test_script_input_paths_run_the_script_tests_on_windows_for_pull_requests(self):
+        plan = pr("docs/x.md")
+        self.assertIn("scripts_windows", plan)
+        self.assertFalse(plan["scripts_windows"])
+        self.assertEqual(ci_plan.outputs(plan).get("scripts_windows"), "false")
+        for path in ("scripts/ci_plan.py", "scripts/tests/test_ci_plan.py", "scripts/ci/apt_update.sh",
+                     ".githooks/pre-push", ".github/workflows/ci.yml", ".github/workflows/release.yml", "justfile"):
+            with self.subTest(path=path):
+                plan = pr(path)
+                self.assertTrue(plan.get("scripts_windows"), path)
+                self.assertEqual(ci_plan.outputs(plan).get("scripts_windows"), "true")
+        for path in ("scripts", "scripts2/x.py", ".githooksx/pre-push", ".github/workflowsx/ci.yml",
+                     "nested/justfile", "docs/x.md"):
+            with self.subTest(path=path):
+                self.assertFalse(pr(path).get("scripts_windows"), path)
+
+    def test_the_windows_script_tests_are_a_pull_request_check_only(self):
+        self.assertFalse(push_to("main", "scripts/ci_plan.py").get("scripts_windows"))
+        self.assertFalse(push_to("codex/x", "scripts/ci_plan.py").get("scripts_windows"))
+        self.assertFalse(push_to("test/windows/x", "scripts/ci_plan.py").get("scripts_windows"))
+        self.assertFalse(ci_plan.decide(event="schedule", ref="refs/heads/main").get("scripts_windows"))
+        self.assertFalse(manual().get("scripts_windows"))
+        self.assertTrue(pr("scripts/ci_plan.py", action="labeled", label="ci:suite-windows").get("scripts_windows"))
+
     def test_nsh_manifest_and_workflow_run_the_script_tests_and_the_type_check(self):
         for path in ("nsh/nsh.json", ".github/workflows/nsh.yml"):
             with self.subTest(path=path):
@@ -291,6 +315,7 @@ class QuickLaneTests(unittest.TestCase):
             with self.subTest(changed=changed):
                 plan = ci_plan.decide(event="pull_request", ref="refs/pull/1/merge", changed=changed)
                 self.assert_quick(plan, check=True, nsh_check=True, nsh_agent_check=True)
+                self.assertTrue(plan.get("scripts_windows"))
 
     def test_agent_compile_check_follows_the_plug_pin_and_agent_only_files(self):
         for path in ("nsh/Cargo.toml", "nsh/Cargo.lock", "nsh/src/agent.rs", "nsh/tests/agent.rs",
@@ -321,9 +346,9 @@ class ClosedAndDraftTests(unittest.TestCase):
     def assert_nothing(self, plan):
         self.assertEqual(plan["lane"], "none")
         out = ci_plan.outputs(plan)
-        for name in ("check", "nsh_check", "nsh_agent_check", "scripts", "installer", "validation", "nsh_macos", "nsh_linux",
-                     "nsh_windows", "screens", "build", "nsh_rust", "core_plain", "linux_packages", "docs_only",
-                     "legacy_in_changes", "legacy_guard"):
+        for name in ("check", "nsh_check", "nsh_agent_check", "scripts", "scripts_windows", "installer", "validation",
+                     "nsh_macos", "nsh_linux", "nsh_windows", "screens", "build", "nsh_rust", "core_plain", "linux_packages",
+                     "docs_only", "legacy_in_changes", "legacy_guard"):
             self.assertEqual(out[name], "false", name)
         self.assertEqual(json.loads(out["check_matrix"]), {"include": []})
         self.assertEqual(json.loads(out["validation_matrix"]), [])
@@ -667,6 +692,62 @@ class OutputTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    @staticmethod
+    def step(job_text: str, name: str) -> str:
+        match = re.search(rf"(?ms)^    - name: {re.escape(name)}\n(.*?)(?=^    - |\Z)", job_text)
+        if match is None:
+            raise AssertionError(f"missing step {name}")
+        return match.group(0)
+
+    def test_workspace_python_and_rust_tests_do_not_hide_each_other_and_are_summarized(self):
+        check = job(CI, "check")
+        python_step = self.step(check, "Test Python scripts")
+        self.assertIn("if: ${{ !cancelled() }}", python_step)
+        self.assertIn("shell: bash", python_step)
+        self.assertIn("python -m unittest discover -s scripts/tests -v", python_step)
+        self.assertIn("tee tmp/ci-test-logs/python-tests.txt", python_step)
+
+        rust_step = self.step(check, "Test")
+        self.assertIn("if: ${{ matrix.tests && !cancelled() }}", rust_step)
+        self.assertIn("shell: bash", rust_step)
+        self.assertIn("cargo test --locked --workspace --no-fail-fast", rust_step)
+        self.assertIn("tee tmp/ci-test-logs/rust-tests.txt", rust_step)
+        self.assertNotIn("continue-on-error", python_step + rust_step)
+
+        summary = self.step(check, "Summarize failing tests")
+        self.assertIn("if: ${{ !cancelled() }}", summary)
+        self.assertIn("python scripts/ci/test_failure_summary.py "
+                      "tmp/ci-test-logs/python-tests.txt tmp/ci-test-logs/rust-tests.txt", summary)
+        self.assertLess(check.index("    - name: Test Python scripts\n"), check.index("    - name: Test\n"))
+        self.assertLess(check.index("    - name: Test\n"), check.index("    - name: Summarize failing tests\n"))
+
+        for name in ("Install Linux Dependencies", "Restore OpenSSL", "Install Windows Dependencies"):
+            with self.subTest(step=name):
+                setup = self.step(check, name)
+                self.assertIn("!cancelled()", setup)
+                self.assertIn("(matrix.tests || success())", setup)
+        display = self.step(check, "Start virtual display")
+        self.assertIn("matrix.tests && !cancelled()", display)
+
+    def test_windows_script_tests_are_planned_for_script_inputs_and_count_in_the_gates(self):
+        changes = job(CI, "changes")
+        self.assertIn("      scripts_windows: ${{ steps.decide.outputs.scripts_windows }}\n", changes)
+        windows = job(CI, "scripts-windows")
+        self.assertIn("    needs: changes\n    if: needs.changes.outputs.scripts_windows == 'true'\n"
+                      "    runs-on: windows-latest\n", windows)
+        self.assertIn("python-version: '3.13'", windows)
+        self.assertIn("toolchain: 1.99.0", windows)
+        self.assertIn("cargo install just --version 1.45.0 --locked", windows)
+        self.assertIn("run: python -m unittest discover -s scripts/tests -v", windows)
+        for gate_name in ("ci-ok", "tests-ok"):
+            with self.subTest(gate=gate_name):
+                gate = job(CI, gate_name)
+                self.assertIn("needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, scripts-windows, "
+                              "validation-rules-v1, validation-rules-v2, legacy-guard ]", gate)
+                self.assertIn("SCRIPTS_WINDOWS: ${{ needs.scripts-windows.result }}", gate)
+                self.assertIn("WANT_SCRIPTS_WINDOWS: ${{ needs.changes.outputs.scripts_windows }}", gate)
+                self.assertIn('expect scripts-windows "$SCRIPTS_WINDOWS" "$WANT_SCRIPTS_WINDOWS"', gate)
+
     def test_both_workflows_plan_with_the_same_script_and_concurrency(self):
         # A non-suite labeled event gets its own group (its run id) and cancels nothing: it must not cancel the pull
         # request's quick run. A ci:suite* labeled event stays in the pull request's group, so it replaces that quick
@@ -791,8 +872,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertRegex(header, r"(?m)^    if: needs\.changes\.outputs\.check == 'true'\s*$")
         self.assertIn("matrix: ${{ fromJSON(needs.changes.outputs.check_matrix) }}", header)
         self.assertNotIn("needs.changes.outputs", steps)
-        for step in ("Test", "Page-versus-print audit (all 43 forms)"):
-            self.assertRegex(steps, rf"(?m)^    - name: {re.escape(step)}\n      if: matrix\.tests\n")
+        self.assertRegex(steps, r"(?m)^    - name: Page-versus-print audit \(all 43 forms\)\n      if: matrix\.tests\n")
         # Only a complete (test-lane) run on main writes the shared workspace cache.
         self.assertIn("save-if: ${{ github.ref == 'refs/heads/main' && matrix.tests }}", steps)
         # The quick lane keeps formatting, clippy, the direct-bir checks and the production boundary.
@@ -811,12 +891,12 @@ class WorkflowTests(unittest.TestCase):
         needs = re.search(r"(?m)^    needs: \[(.*)\]\s*$", gate)
         assert needs is not None
         self.assertEqual([name.strip() for name in needs.group(1).split(",")],
-                         ["changes", "check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1",
-                          "validation-rules-v2", "legacy-guard"])
+                         ["changes", "check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "scripts-windows",
+                          "validation-rules-v1", "validation-rules-v2", "legacy-guard"])
         self.assertIn('[[ "$CHANGES" == success ]]', gate)
         self.assertIn(CI_OK_NAME, gate)
-        for name in ("check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1", "validation-rules-v2",
-                     "legacy-guard"):
+        for name in ("check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "scripts-windows",
+                     "validation-rules-v1", "validation-rules-v2", "legacy-guard"):
             self.assertIn(f"expect {name} ", gate)
         # Folded into ci-ok; nothing waits for a runner just to read two results.
         self.assertNotIn("\n  validation-rules:\n", CI)
@@ -825,10 +905,10 @@ class WorkflowTests(unittest.TestCase):
         ci_gate = job(CI, "tests-ok")
         self.assertIn(CI_TESTS_OK_NAME, ci_gate)
         self.assertIn("always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite'", ci_gate)
-        self.assertIn("needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, "
-                      "validation-rules-v2, legacy-guard ]", ci_gate)
-        for name in ("check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "validation-rules-v1",
-                     "validation-rules-v2", "legacy-guard"):
+        self.assertIn("needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, scripts-windows, "
+                      "validation-rules-v1, validation-rules-v2, legacy-guard ]", ci_gate)
+        for name in ("check", "nsh-check", "nsh-agent-check", "windows-setup", "scripts", "scripts-windows",
+                     "validation-rules-v1", "validation-rules-v2", "legacy-guard"):
             self.assertIn(f"expect {name} ", ci_gate)
 
         self.assertIn("lane: ${{ steps.decide.outputs.lane }}", job(NSH, "plan"))
@@ -842,6 +922,7 @@ class WorkflowTests(unittest.TestCase):
     def test_every_heavy_job_waits_for_the_plan(self):
         for name, flag in (("windows-setup", "installer"), ("nsh-check", "nsh_check"),
                            ("nsh-agent-check", "nsh_agent_check"), ("scripts", "scripts"),
+                           ("scripts-windows", "scripts_windows"),
                            ("validation-rules-v1", "validation"), ("validation-rules-v2", "validation")):
             self.assertIn(f"    if: needs.changes.outputs.{flag} == 'true'\n", job(CI, name))
         for name, flag in (("nsh-macos", "nsh_macos"), ("nsh-linux", "nsh_linux"), ("nsh-windows", "nsh_windows"),
@@ -916,6 +997,9 @@ class WorkflowTests(unittest.TestCase):
     def test_the_ci_docs_state_the_docs_only_cost_and_the_script_input_docs(self):
         docs = (ROOT / "docs/CI.md").read_text(encoding="utf-8")
         self.assertIn("two small Linux jobs (`changes`, then `ci-ok`) and one dependency wait", docs)
+        self.assertIn("--no-fail-fast", docs)
+        self.assertIn("Python script tests (Windows)", docs)
+        self.assertIn("`scripts/`, `.githooks/`, `.github/workflows/` or the `justfile`", docs)
         for path in ci_plan.SCRIPT_INPUT_DOCS:
             self.assertIn(path.rstrip("/"), docs)
 
