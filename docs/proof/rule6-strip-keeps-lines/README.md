@@ -9,8 +9,9 @@ every one of those lines broke at the strip; to the right of a narrowed
 band the strip printed as blank white inside the table grid.
 
 The official sheet prints continuous frame lines through that area
-(`official-1701ms-same-area.png`: empty fill — the sheet as it is drawn,
-same crop): the amount columns' dividers and the rows' comb ticks run
+(`official-1701ms-same-area.png`: empty fill — the sheet as it is drawn;
+it shows the same area of the sheet but is a different crop — another
+size, starting at another row — not the before/after pair's crop): the amount columns' dividers and the rows' comb ticks run
 down without interruption. So the gap is a print fault.
 
 The fix: a vertical line segment that ends exactly at the insertion cut
@@ -41,6 +42,12 @@ fc0c2aee5ce9a1e86d59daa5169560a1761e05ba07720e3b484e1b0b91880eb1  before-1701ms-
 d244d92e66feb13d4053b9736df9d486c09a5e289c0ee8323582df0a3a0a5d8d  official-1701ms-same-area.png
 ```
 
-Golden: `overflow-goldens.json` moves on `1701ms-2024` only — the one
-sheet whose long-text probe inserts a narrowed band over abutting frame
-lines; every other sheet's hash is unchanged.
+* `after-1701q-page2-stacked-strips.png` — 1701q page 2: the strips for
+  items 43 and 48 (`p2c148`, `p2c150`, `p2c152` stack) both keep the
+  table's frame lines — the dividers run continuously through every
+  strip, the second strip no longer breaks them (the stretch guard that
+  stopped at the first strip above is removed).
+
+Golden: `overflow-goldens.json` moves on the sheets whose long-text probe
+inserts a band over abutting frame lines — in this tree 1701q-2018 among
+them (stacked strips) — every unrelated sheet's hash is unchanged.

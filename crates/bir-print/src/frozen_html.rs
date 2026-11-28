@@ -3009,9 +3009,19 @@ fn fill_text_input(
             }
             return;
         }
+        // An amount in a peso comb without a point column right-aligns: the
+        // owner's ruling — the last digit sits in the right-most box, the
+        // leading boxes stay empty. Text and identifiers spread from the
+        // first box as before.
+        let lead = if amount_comb {
+            ordered.len().saturating_sub(chars.len())
+        } else {
+            0
+        };
         for (offset, index) in ordered.into_iter().enumerate() {
-            let ch = chars
-                .get(offset)
+            let ch = offset
+                .checked_sub(lead)
+                .and_then(|at| chars.get(at))
                 .copied()
                 .map(|c| c.to_string())
                 .unwrap_or_default();
@@ -5476,6 +5486,7 @@ struct Rule6Insertion {
     truncated: bool,
     input_classes: String,
     greys: Vec<(f64, f64)>,
+    frame_pt: f64,
 }
 
 /// RULES.md rule 6: when a named inline "(specify)" field in
@@ -5625,17 +5636,18 @@ fn compose_rule6_cell_and_band(
     cell_room: Option<f64>,
     band_room: f64,
     full_val: &str,
+    max_lines: usize,
 ) -> Rule6Composition {
     let Some(cr) = cell_room else {
         return Rule6Composition::Legacy;
     };
-    if cr < 12.0 {
+    if cr < 12.0 || max_lines == 0 {
         return Rule6Composition::Legacy;
     }
     // The largest size in [PLAIN_TEXT_MIN_PT, 8.5] at which the whole value wraps
     // inside the cell's line plus the band's lines, at a whole hundredth of a point.
     let mut widths: Vec<f64> = vec![cr];
-    widths.extend(std::iter::repeat_n(band_room, RULE6_MAX_BAND_LINES));
+    widths.extend(std::iter::repeat_n(band_room, max_lines));
     let mut hundredths = 850i64;
     let floor = (PLAIN_TEXT_MIN_PT * 100.0) as i64;
     while hundredths >= floor {
@@ -5672,11 +5684,11 @@ fn compose_rule6_cell_and_band(
     }
     let mut rest = full_val[c1..].trim_start().to_string();
     let mut band_lines: Vec<String> = Vec::new();
-    for line_no in 0..RULE6_MAX_BAND_LINES {
+    for line_no in 0..max_lines {
         if rest.is_empty() {
             break;
         }
-        if line_no + 1 == RULE6_MAX_BAND_LINES {
+        if line_no + 1 == max_lines {
             // The cap line: everything left, whole-word truncated with "...".
             let consumed = wrap_one_line_at(sheet, letter, band_room, &rest, s);
             let fits = consumed >= rest.trim_end().len();
@@ -5747,6 +5759,36 @@ fn apply_rule6_specify_bands(
         let mut insertions: Vec<Rule6Insertion> = Vec::new();
         let value_cells = page_value_cells(&page_html);
 
+        // The page's height is fixed: inserted lines may only spend the
+        // trailing space plus what the page's elastic boxes can shrink, or a
+        // row below the last insertion prints past the page's bottom edge and
+        // the PDF clips it (a value — tax-due digits — would be LOST on
+        // paper). Lines beyond the room budget are not drawn: the band caps
+        // at fewer lines, truncating whole-word with "..." and carrying the
+        // whole value on the additional sheet; with no room at all the cell
+        // falls back to the sheet's own truncation path.
+        let pitch_pt = 11.0f64;
+        let min_cut = page
+            .rule6_fields
+            .iter()
+            .map(|r| r.insert_after_y)
+            .fold(f64::INFINITY, f64::min);
+        let trailing_budget: f64 = (page
+            .bands
+            .iter()
+            .filter(|b| b.kind == "trailing_space")
+            .map(|b| (b.y1 - b.y0).max(0.0))
+            .sum::<f64>()
+            - 4.0)
+            .max(0.0);
+        let elastic_budget: f64 = page
+            .bands
+            .iter()
+            .filter(|b| b.kind == "elastic_box" && b.y0 >= min_cut - 0.5)
+            .filter_map(|b| b.min_height_pt.map(|mh| (b.y1 - b.y0 - mh).max(0.0)))
+            .sum();
+        let mut line_budget = trailing_budget + elastic_budget;
+
         for r6 in &page.rule6_fields {
             let Some(full_val) = fields
                 .get(&r6.writer_key)
@@ -5768,18 +5810,28 @@ fn apply_rule6_specify_bands(
             let input_classes = "fi".to_string();
             let letter = sheet.letter;
 
-            let base_cut_y = page
-                .bands
+            let row_right = value_cells
                 .iter()
-                .find(|b| b.id == r6.band_id)
-                .map(|b| {
-                    if b.y1 > r6.insert_after_y && (b.y1 - r6.insert_after_y) <= 6.0 {
-                        b.y1
-                    } else {
-                        r6.insert_after_y
-                    }
+                .map(|(_, l, _, w, _)| l + w)
+                .fold(r6.x1, f64::max);
+            let frame_snap =
+                row_bottom_frame_line_y(&page_html, r6.x0, row_right, r6.insert_after_y)
+                    .map(|(y, _)| y);
+            let base_cut_y = frame_snap
+                .or_else(|| {
+                    // No frame line scanned (an unframed row): the band
+                    // record's own bottom still snaps the cut when it sits
+                    // just below insert_after_y.
+                    page.bands
+                        .iter()
+                        .find(|b| b.id == r6.band_id)
+                        .and_then(|b| {
+                            (b.y1 > r6.insert_after_y && (b.y1 - r6.insert_after_y) <= 6.0)
+                                .then_some(b.y1)
+                        })
                 })
                 .unwrap_or(r6.insert_after_y);
+            let frame_pt = sheet_frame_thickness_pt(&page_html);
 
             let (x1, cut_y) = rule6_place_band(r6.x0, r6.x1, base_cut_y, &r6.cell_id, &value_cells);
 
@@ -5816,7 +5868,10 @@ fn apply_rule6_specify_bands(
             let room = shrunk_room(((text_right - row_x0) - 6.0).max(20.0));
             let cell_room =
                 cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
-            let composed = compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val);
+            let lines_cap = ((line_budget - 1.0) / pitch_pt).floor().max(0.0) as usize;
+            let cap = lines_cap.min(RULE6_MAX_BAND_LINES);
+            let composed =
+                compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val, cap);
             if matches!(composed, Rule6Composition::Legacy) {
                 continue;
             }
@@ -5838,8 +5893,9 @@ fn apply_rule6_specify_bands(
             let Some((band_display, band_lines, band_truncated)) = band else {
                 continue;
             };
-            let pitch = 11.0f64;
+            let pitch = pitch_pt;
             let dh = (pitch * band_lines as f64 + 1.0).max(14.0);
+            line_budget -= dh;
             // The original input's own column, for the underline freeze: the
             // field's box stays closed at its sheet position.
             let (text_x, text_w) = rule6_input_column(&page_html, &r6.cell_id, &inp_tag)
@@ -5860,6 +5916,7 @@ fn apply_rule6_specify_bands(
                 truncated: band_truncated,
                 input_classes,
                 greys,
+                frame_pt,
             });
         }
 
@@ -5912,6 +5969,64 @@ fn apply_rule6_specify_bands(
 /// has room a person can read.
 const RULE6_BAND_FLOOR_PT: f64 = 120.0;
 
+/// The y of the horizontal frame line closing the row that contains
+/// `after_y`, scanned from the page's svg rects, with the line's thickness:
+/// the first line spanning most of `x0..x1` whose top sits within the row's own height
+/// below `after_y` (never into the next row). Rule 6 strips cut on this line, so nothing of the row
+/// is left below the strip. The thickness tolerance reads the sheet's own
+/// frame lines — 1701MS-2024 draws its row closers at 1.5 pt, thin-line
+/// sheets like 1702MX at 0.48 pt — so anything up to 2.0 pt is a frame
+/// line, not a fill.
+fn row_bottom_frame_line_y(page_html: &str, x0: f64, x1: f64, after_y: f64) -> Option<(f64, f64)> {
+    let mut best: Option<(f64, f64)> = None;
+    let mut sc = 0;
+    while let Some(rel) = page_html[sc..].find("<rect ") {
+        let rs = sc + rel;
+        let Some(re_rel) = page_html[rs..].find('>') else {
+            break;
+        };
+        let tag = &page_html[rs..rs + re_rel];
+        let get = |n: &str| attr(tag, n).and_then(|v| v.parse::<f64>().ok());
+        if let (Some(y), Some(w), Some(x), Some(h)) =
+            (get("y"), get("width"), get("x"), get("height"))
+        {
+            let spans_row = w >= (x1 - x0) * 0.8 && x <= x0 + 2.0 && h <= 2.0;
+            if spans_row && y > after_y + 0.1 && y <= after_y + 8.0 {
+                best = Some(best.map_or((y, h), |b: (f64, f64)| if y < b.0 { (y, h) } else { b }));
+            }
+        }
+        sc = rs + re_rel;
+    }
+    best
+}
+
+/// The sheet's own frame-line thickness on this page: the thickest wide
+/// horizontal frame line, defaulting to the legacy 1.2 pt when the page
+/// draws none.
+fn sheet_frame_thickness_pt(page_html: &str) -> f64 {
+    let mut best = 0.0f64;
+    let mut sc = 0;
+    while let Some(rel) = page_html[sc..].find("<rect ") {
+        let rs = sc + rel;
+        let Some(re_rel) = page_html[rs..].find('>') else {
+            break;
+        };
+        let tag = &page_html[rs..rs + re_rel];
+        let get = |n: &str| attr(tag, n).and_then(|v| v.parse::<f64>().ok());
+        if let (Some(w), Some(h)) = (get("width"), get("height")) {
+            if w >= 200.0 && h <= 2.0 {
+                best = best.max(h);
+            }
+        }
+        sc = rs + re_rel;
+    }
+    if best > 0.0 {
+        best
+    } else {
+        1.2
+    }
+}
+
 /// The width a Rule 6 band's text is fitted to and drawn at: one value, so
 /// nothing is ever fitted wider than it is drawn (a value fitted to a wider
 /// measure would print clipped, and the fitter would not carry it to the
@@ -5951,7 +6066,12 @@ fn rule6_place_band(
             if *top >= cut_y - 0.05 || bottom - (cut_y + 0.5) <= 0.05 {
                 continue;
             }
-            let limit = *left - 2.0;
+            // The strip is the row: its grey reaches the companion cell's
+            // own left edge exactly (the column divider). A gutter short of
+            // it leaves an un-greyed sliver inside the row; the edge and the
+            // divider are both black and the divider prints over the strip's
+            // lines, so there is no double line.
+            let limit = *left;
             if *left > x0 + 1.0 && rule6_band_width(x0, limit) >= RULE6_BAND_FLOOR_PT {
                 narrow = Some(narrow.map_or(limit, |n: f64| n.min(limit)));
             } else {
@@ -6252,7 +6372,7 @@ fn shift_page_and_insert_rule6(
                         let inside_comb = is_comb_tick(comb_cells, x, y_val, h_val);
                         if inside_comb {
                             d_bot = d_top;
-                        } else if h_val >= 3.0 && d_top.abs() <= 1e-4 {
+                        } else if h_val >= 3.0 {
                             for ins in insertions {
                                 if ((y_val + h_val) - ins.cut_y).abs() <= 0.75
                                     && continues_below(x, ins.cut_y)
@@ -6325,6 +6445,21 @@ fn shift_page_and_insert_rule6(
             fills.push_str(&format!(
                 "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#e3e3e3\"/>",
                 ins.x0, y, w, ins.dh
+            ));
+            // The strip keeps its side edges — without them a strip with no
+            // grey columns prints edgeless — drawn at the sheet's own
+            // frame-line thickness, never lighter than the sheet's lines.
+            let ft = ins.frame_pt;
+            fills.push_str(&format!(
+                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#000000\"/>",
+                ins.x0, y, ft, ins.dh
+            ));
+            fills.push_str(&format!(
+                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#000000\"/>",
+                ins.x1 - ft,
+                y,
+                ft,
+                ins.dh
             ));
             // The amount columns on the added lines grey out one shade darker,
             // still under every frame and divider line.
@@ -11798,9 +11933,11 @@ mod tests {
                 }
             }
         }
-        // Every Rule 6 band the long fills print (14 sheets), counted so a
-        // change that drops them cannot pass by checking none.
-        assert_eq!(bands, 62, "Rule 6 bands printed by the long fills");
+        // Every Rule 6 band the long fills print, counted so a change that
+        // drops them cannot pass by checking none. Pages without the room
+        // fall back to the sheet's own truncation path instead of inserting
+        // a band, so the count is below the field count.
+        assert_eq!(bands, 51, "Rule 6 bands printed by the long fills");
         misplaced.dedup();
         assert!(
             misplaced.is_empty(),
@@ -12423,7 +12560,7 @@ mod tests {
             ("c2".to_string(), 200.0, 99.0, 100.0, 30.0),
         ];
         let (x1, cut_y) = super::rule6_place_band(14.0, 590.0, 112.0, "c1", &cells);
-        assert_eq!(x1, 198.0, "the band ends 2 pt before the cell");
+        assert_eq!(x1, 200.0, "the band ends exactly at the cell's left edge");
         assert_eq!(cut_y, 112.0, "the band keeps its line");
     }
 
@@ -15436,6 +15573,362 @@ mod donor_estate_print_tests {
         assert!(checked > 0, "the band prints line inputs");
     }
 
+    /// The reviewer's frame-line snap: the cut lands on the row-closing
+    /// horizontal frame line, whatever the sheet's line thickness — 1701MS
+    /// draws its row closers at 1.5 pt, 1702MX at 0.48 pt — so no comb tick
+    /// of the row is ever split by the strip.
+    #[test]
+    fn rule6_cut_snaps_to_the_row_closing_frame_line() {
+        let mut fills: Vec<(&str, &str, BTreeMap<String, String>)> = Vec::new();
+        fills.push(("1701ms-2024", "p2c179", rule6_proof_fill("1701ms-2024")));
+        let mut mx = rule6_proof_fill("1702mx-2018c");
+        let long = "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA".to_string();
+        for key in [
+            "frm1702MX:txtPg2Sc3It31B",
+            "frm1702MX:txtPg2Sc3It30",
+            "frm1702MX:txtPg2Sc3It31",
+        ] {
+            mx.insert(key.to_string(), long.clone());
+        }
+        fills.push(("1702mx-2018c", "", mx));
+        for (slug, cell, fields) in &fills {
+            let html = filled_document(slug, fields).unwrap();
+            let marker = if cell.is_empty() {
+                "data-rule6-of=\"".to_string()
+            } else {
+                format!("data-rule6-of=\"{}\"", cell)
+            };
+            let band_at = html
+                .find(&marker)
+                .unwrap_or_else(|| panic!("{slug} {cell} band"));
+            let div_start = html[..band_at].rfind("<div ").unwrap();
+            let div_end = html[div_start..].find('>').unwrap() + div_start;
+            let div_tag = &html[div_start..=div_end];
+            let band_top = super::style_pt_prop(div_tag, "top").unwrap();
+            let band_bottom = band_top + super::style_pt_prop(div_tag, "height").unwrap();
+            // the strip must sit exactly on the row-closing horizontal frame
+            // line: the line either stays at the strip's top edge or shifts
+            // with the row's content to the strip's bottom edge — either way
+            // no comb tick of the row is split.
+            let page_start = html[..band_at].rfind("class=\"page page-").unwrap_or(0);
+            let page_end = html[band_at..]
+                .find("class=\"page page-")
+                .map(|e| band_at + e)
+                .unwrap_or(html.len());
+            let mut found = false;
+            let mut cursor = page_start;
+            while let Some(rel) = html[cursor..page_end].find("<rect ") {
+                let start = cursor + rel;
+                let Some(e) = html[start..].find('>') else {
+                    break;
+                };
+                let tag = &html[start..start + e + 1];
+                cursor = start + e + 1;
+                let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(w), Some(y), Some(h)) = (num("width"), num("y"), num("height")) {
+                    if w >= 200.0
+                        && h <= 2.0
+                        && ((y - band_top).abs() <= 1.0 || (y - band_bottom).abs() <= 1.0)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            assert!(
+                found,
+                "{slug} {cell}: no wide frame line at the strip edges {band_top:.2}..{band_bottom:.2} — the cut did not snap to the row-closing line"
+            );
+        }
+    }
+
+    /// The reviewer's side edges: every strip keeps black side edges at the
+    /// sheet's own frame thickness — never edgeless, never lighter than the
+    /// sheet's own lines (1701MS draws 1.5 pt).
+    /// (a) A second strip on the same page keeps its frame lines too: on
+    /// 1701q page 2 the strips for p2c148, p2c150 and p2c152 stack, and the
+    /// page's left frame edge (x = 12.72) must run continuously through ALL
+    /// of them — the `d_top.abs() <= 1e-4` guard used to stop the stretch
+    /// once an earlier strip sat above the segment.
+    #[test]
+    fn a_second_rule6_strip_on_a_page_keeps_the_frame_lines() {
+        let slug = "1701q-2018";
+        let doc = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
+
+        let mut bands: Vec<(f64, f64)> = Vec::new();
+        let mut cursor = 0usize;
+        while let Some(rel) = doc[cursor..].find("data-rule6-band=\"true\" ") {
+            let band_at = cursor + rel;
+            let Some(srel) = doc[band_at..band_at + 200].find("style=\"") else {
+                break;
+            };
+            let at = band_at + srel + "style=\"".len();
+            let style = &doc[at..at + 130];
+            let pt = |name: &str| -> f64 {
+                let key = format!("{name}:");
+                let from = style.find(&key).unwrap() + key.len();
+                style[from..].split("pt").next().unwrap().parse().unwrap()
+            };
+            bands.push((pt("top"), pt("top") + pt("height")));
+            cursor = at + 100;
+        }
+        assert!(
+            bands.len() >= 2,
+            "1701q page 2 stacks several strips, got {bands:?}"
+        );
+
+        let rects = |f: &dyn Fn(f64, f64, f64, f64) -> bool| -> Vec<(f64, f64, f64, f64)> {
+            let mut out = Vec::new();
+            let mut cur = 0;
+            while let Some(rel) = doc[cur..].find("<rect ") {
+                let start = cur + rel;
+                let Some(end_rel) = doc[start..].find('>') else {
+                    break;
+                };
+                let tag = &doc[start..start + end_rel + 1];
+                let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    if f(x, y, w, h) {
+                        out.push((x, y, w, h));
+                    }
+                }
+                cur = start + end_rel + 1;
+            }
+            out
+        };
+        for (band_top, band_bottom) in &bands {
+            let bridging = rects(&|x, y, w, h| {
+                w <= 1.6
+                    && (x - 12.72).abs() <= 1.0
+                    && y < band_top - 1.0
+                    && y + h >= band_bottom - 0.75
+            });
+            assert!(
+                !bridging.is_empty(),
+                "the left frame edge x=12.72 does not bridge the strip {band_top}..{band_bottom}"
+            );
+        }
+    }
+
+    /// (b) The comb-tick exclusion fixture: on 1701MS page 2 the item-9 row's
+    /// amount combs end exactly at the strip's cut. K1: the test must catch a
+    /// wrongly stretched tick — matching by where a tick ENDS is vacuous (a
+    /// stretched tick ends far inside the strip, escaping an h < 20 filter),
+    /// so every vertical ending near the cut must stay tick-sized AND no
+    /// vertical at a tick's x may cross into the strip interior.
+    #[test]
+    fn rule6_comb_ticks_abutting_the_cut_stay_in_their_row() {
+        let slug = "1701ms-2024";
+        let doc = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
+
+        let band_marker = "data-rule6-of=\"p2c179\"";
+        let at = doc.find(band_marker).unwrap();
+        let style_at = doc[at..at + 220].find("style=\"").unwrap() + at + "style=\"".len();
+        let style = &doc[style_at..style_at + 120];
+        let pt = |name: &str| -> f64 {
+            let key = format!("{name}:");
+            let from = style.find(&key).unwrap() + key.len();
+            style[from..].split("pt").next().unwrap().parse().unwrap()
+        };
+        let band_top = pt("top");
+        let band_bottom = band_top + pt("height");
+
+        let mut verticals: Vec<(f64, f64, f64)> = Vec::new();
+        let mut cur = 0;
+        while let Some(rel) = doc[cur..].find("<rect ") {
+            let start = cur + rel;
+            let Some(end_rel) = doc[start..].find('>') else {
+                break;
+            };
+            let tag = &doc[start..start + end_rel + 1];
+            let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+            if let (Some(x), Some(y), Some(w), Some(h)) =
+                (num("x"), num("y"), num("width"), num("height"))
+            {
+                if w <= 1.6 && h >= 3.0 {
+                    verticals.push((x, y, h));
+                }
+            }
+            cur = start + end_rel + 1;
+        }
+
+        // the fixture hits the exclusion: at least one comb tick ends at the
+        // row boundary just above the strip.
+        let ticks_at_cut: Vec<_> = verticals
+            .iter()
+            .filter(|&&(_x, y, h)| {
+                let end = y + h;
+                end <= band_top + 0.5 && end > band_top - 8.0
+            })
+            .cloned()
+            .collect();
+        assert!(
+            !ticks_at_cut.is_empty(),
+            "fixture vacuous: no comb tick ends at item 9's row boundary above the strip"
+        );
+        // each stays tick-sized: a stretched tick grows by the strip's height
+        // (20 pt a line) and can no longer end there, so it is caught by the
+        // crossing check below, never by a height filter alone.
+        for &(x, y, h) in &ticks_at_cut {
+            assert!(
+                h <= 10.0,
+                "tick at x={x} y={y} grew to h={h}: stretched instead of ending in its row"
+            );
+            // no vertical at this tick's x crosses into the strip interior
+            // (frame dividers bridge the WHOLE strip and end below it).
+            let crossing: Vec<_> = verticals
+                .iter()
+                .filter(|&&(vx, vy, vh)| {
+                    (vx - x).abs() <= 1.0
+                        && vy < band_top - 0.75
+                        && vy + vh > band_top + 1.0
+                        && vy + vh < band_bottom - 0.75
+                })
+                .cloned()
+                .collect();
+            assert!(
+                crossing.is_empty(),
+                "a comb tick at x={x} reaches into the strip interior: {crossing:?}"
+            );
+        }
+    }
+
+    /// B2/A1: the page's height is fixed — inserted lines may never push a
+    /// value cell past the page's bottom edge (the PDF clips it and the
+    /// digits are lost on paper). 1701 with every specify/description join
+    /// at 200 words is the worst case: item 19's multi-line continuation
+    /// must cap at the room the page has and truncate whole-word instead.
+    #[test]
+    fn rule6_insertions_never_push_a_value_cell_off_the_page() {
+        for slug in ["1701-2018", "1701ms-2024", "1701q-2018", "2000-ot-2018"] {
+            let html = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
+            let mut cur = 0;
+            let mut pages: Vec<(f64, usize, usize)> = Vec::new();
+            while let Some(rel) = html[cur..].find("class=\"page ") {
+                let start = cur + rel;
+                let ds = html[..start].rfind("<div ").unwrap();
+                let de = html[ds..].find('>').unwrap() + ds;
+                let tag = &html[ds..=de];
+                let h = super::style_pt_prop(tag, "height").unwrap_or(792.0);
+                pages.push((h, ds, 0));
+                cur = start + 10;
+            }
+            // end of each page = start of next or doc end
+            let mut spans: Vec<(f64, usize, usize)> = Vec::new();
+            for (i, (h, s, _)) in pages.iter().enumerate() {
+                let e = if i + 1 < pages.len() {
+                    pages[i + 1].1
+                } else {
+                    html.len()
+                };
+                spans.push((*h, *s, e));
+            }
+            let mut offenders: Vec<String> = Vec::new();
+            for (ph, ps, pe) in &spans {
+                let body = &html[*ps..*pe];
+                let mut c2 = 0usize;
+                while let Some(rel) = body[c2..].find("<div ") {
+                    let start = c2 + rel;
+                    let Some(end_rel) = body[start..].find('>') else {
+                        break;
+                    };
+                    let tag = &body[start..start + end_rel + 1];
+                    c2 = start + end_rel + 1;
+                    if !tag.contains("data-cell-kind=\"field\"") {
+                        continue;
+                    }
+                    if let (Some(top), Some(height)) = (
+                        super::style_pt_prop(tag, "top"),
+                        super::style_pt_prop(tag, "height"),
+                    ) {
+                        let bottom = top + height;
+                        if bottom > ph + 1.0 {
+                            let id = super::attr(tag, "id").unwrap_or("?");
+                            offenders.push(format!("{id} bottom {bottom:.1} > page {ph:.1}"));
+                        }
+                    }
+                }
+            }
+            assert!(
+                offenders.is_empty(),
+                "{slug}: value cells print past the page bottom: {:?}",
+                &offenders[..offenders.len().min(5)]
+            );
+        }
+    }
+
+    #[test]
+    fn rule6_strip_keeps_black_side_edges_at_sheet_thickness() {
+        for (slug, cell, want) in [
+            ("1701ms-2024", "p2c179", 1.5f64),
+            ("1701-2018", "p4c213", 0.0f64),
+        ] {
+            let html = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
+            let band_at = html
+                .find(&format!("data-rule6-of=\"{}\"", cell))
+                .unwrap_or_else(|| panic!("{slug} {cell} band"));
+            let div_start = html[..band_at].rfind("<div ").unwrap();
+            let div_end = html[div_start..].find('>').unwrap() + div_start;
+            let div_tag = &html[div_start..=div_end];
+            let band_top = super::style_pt_prop(div_tag, "top").unwrap();
+            // the strip span from the grey fill
+            let mut strip = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+            for (ri, _) in html.match_indices("fill=\"#e3e3e3\"") {
+                let rs = html[..ri].rfind("<rect ").unwrap();
+                let rtag = &html[rs..ri + 30];
+                let num = |a: &str| super::attr(rtag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(rx), Some(ry), Some(rw), Some(rh)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    if (ry - band_top).abs() < 2.0 {
+                        strip = (rx, rx + rw, ry, rh);
+                        break;
+                    }
+                }
+            }
+            assert!(strip.1 > strip.0, "{slug}: grey strip found");
+            let mut left_edge = false;
+            let mut right_edge = false;
+            let mut thickness = 0.0f64;
+            let mut cursor = 0;
+            while let Some(rel) = html[cursor..].find("<rect ") {
+                let start = cursor + rel;
+                let Some(e) = html[start..].find('>') else {
+                    break;
+                };
+                let tag = &html[start..start + e + 1];
+                cursor = start + e + 1;
+                if !tag.contains("fill=\"#000000\"") {
+                    continue;
+                }
+                let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    if (y - strip.2).abs() < 1.0 && (h - strip.3).abs() < 1.0 && w <= 2.0 {
+                        if (x - strip.0).abs() < 0.6 {
+                            left_edge = true;
+                            thickness = w;
+                        }
+                        if (x + w - strip.1).abs() < 0.6 {
+                            right_edge = true;
+                        }
+                    }
+                }
+            }
+            assert!(left_edge, "{slug} {cell}: strip has no left side edge");
+            assert!(right_edge, "{slug} {cell}: strip has no right side edge");
+            if want > 0.0 {
+                assert!(
+                    (thickness - want).abs() < 0.3,
+                    "{slug}: side edge thickness {thickness:.2} should read the sheet's own {want:.2} pt lines"
+                );
+            }
+        }
+    }
+
     /// (2) Comb ticks end at the cell's original bottom on 1701 item 9 and
     /// 2000-OT row C: no interior comb vertical spans the inserted strip.
     #[test]
@@ -15671,12 +16164,10 @@ mod donor_estate_print_tests {
     /// amount's last digit in its last slot, never padded on the right.
     #[test]
     fn rule6_amount_in_comb_keeps_last_digit_rightmost() {
-        let mut fields = rule6_proof_fill("1701ms-2024");
-        for value in fields.values_mut() {
-            if value.as_str() == "1000" {
-                *value = "1000.00".to_string();
-            }
-        }
+        // B4: the fill stays "1000" — a plain integer the comb accepts; a
+        // decimal override prints over the slots as an amount rectangle and
+        // the comb assertion below would check nothing.
+        let fields = rule6_proof_fill("1701ms-2024");
         let doc = filled_document("1701ms-2024", &fields).unwrap();
         // the peso comb of item 9's amount row: slots of p2c132 — the last
         // peso slot (before the 2 centavo slots) holds the amount's last
@@ -15711,6 +16202,10 @@ mod donor_estate_print_tests {
             .iter()
             .rposition(|(_, v, _)| !v.trim().is_empty());
         let first_digit_at = peso_slots.iter().position(|(_, v, _)| !v.trim().is_empty());
+        assert!(
+            first_digit_at.is_some(),
+            "fixture vacuous: no digit in p2c132's peso comb — the fill did not stay in the comb"
+        );
         if let (Some(first), Some(last)) = (first_digit_at, last_digit_at) {
             assert_eq!(
                 last,
@@ -15778,36 +16273,57 @@ mod donor_estate_print_tests {
             }
         }
         let _ = rect_checked;
+        assert!(
+            rect_checked > 0,
+            "fixture vacuous: no amount printed as a rectangle — the over-comb fill must overflow into one"
+        );
     }
 
-    /// No text is ever lost: whenever a band truncates, the additional
-    /// sheet carries the WHOLE value (the band's data-writer-value).
+    /// B6: a band the page has no room for truncates whole-word with "..." —
+    /// and the additional sheet must carry the WHOLE value, checked by
+    /// contents, not by the attribute's presence: the warning input's
+    /// data-writer-value decodes back to exactly the fill the writer put in,
+    /// tail included. 1701 item 19 (`p2c134`, Schedule 3) truncates under
+    /// the page-room cap on a 4x fill.
     #[test]
     fn rule6_truncated_band_never_loses_text() {
-        for slug in ["1701ms-2024", "1701-2018", "2000-ot-2018"] {
-            let html = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
+        let piece =
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA";
+        let long = format!("{piece} {piece} {piece} {piece}");
+        for (slug, key, cell) in [
+            ("1701-2018", "frm1701:txtPg2IShed3_19Desc", "p2c134"),
+            ("1701ms-2024", "derived:other_credits_description", "p2c179"),
+        ] {
+            let mut fields = rule6_proof_fill(slug);
+            fields.insert(key.to_string(), long.clone());
+            let html = filled_document(slug, &fields).unwrap();
+            let needle = format!("data-overflow-of=\"{cell}\"");
             let mut cursor = 0usize;
-            let mut bands = 0usize;
-            while let Some(rel) = html[cursor..].find("data-rule6-band") {
+            let mut truncated: Vec<String> = Vec::new();
+            while let Some(rel) = html[cursor..].find(&needle) {
                 let at = cursor + rel;
-                bands += 1;
-                let Some(e) = html[at..].find("</div>") else {
-                    break;
-                };
-                let band = &html[at..at + e];
-                cursor = at + e;
-                let truncated = band.contains("data-overflow-warning")
-                    || band.contains("&#10;...")
-                    || band.ends_with("...");
-                let has_ellipsis = band.matches("...").count() > 0;
-                if truncated || has_ellipsis {
-                    assert!(
-                        band.contains("data-writer-value="),
-                        "{slug}: a truncated band must carry the whole value to the additional sheet"
-                    );
+                let s = html[..at].rfind("<input").unwrap_or(at);
+                let e = html[at..].find('>').unwrap() + at;
+                let tag = html[s..e + 1].to_string();
+                cursor = e;
+                if tag.contains("data-overflow-warning") {
+                    truncated.push(tag);
                 }
             }
-            assert!(bands > 0, "{slug} inserts bands");
+            assert!(
+                !truncated.is_empty(),
+                "{slug} {cell}: a 4x fill must truncate under the page cap — vacuous without one"
+            );
+            for tag in &truncated {
+                let wv = super::attr(tag, "data-writer-value").unwrap_or_else(|| {
+                    panic!("{slug} {cell}: truncated input carries no writer value")
+                });
+                let decoded = wv.replace("&amp;", "&");
+                assert_eq!(
+                    decoded, long,
+                    "{slug} {cell}: the additional sheet must carry the WHOLE value"
+                );
+            }
         }
     }
 }
