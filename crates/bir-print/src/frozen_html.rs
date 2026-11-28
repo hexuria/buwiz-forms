@@ -5395,8 +5395,10 @@ pub(crate) fn fill_continuation_fragment(
             &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
         );
         let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
-        let filled = blank_empty_forced_cells(&filled, forced, &sheet);
+        let cent_pairs = cent_pair_map(&cells.money_joins);
+        let filled = blank_empty_forced_cells(&filled, forced, &sheet, &cent_pairs);
         let filled = unify_group_font_sizes(&filled);
+        let filled = reconcile_amount_warning_marks(&filled, forced);
         Ok(strip_converted_rect_separators(&filled))
     };
     let first = fill_pass(&BTreeSet::new())?;
@@ -5487,8 +5489,10 @@ fn fill_bundle(
             &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
         );
         let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
-        let filled = blank_empty_forced_cells(&filled, forced, &sheet);
+        let cent_pairs = cent_pair_map(&cells.money_joins);
+        let filled = blank_empty_forced_cells(&filled, forced, &sheet, &cent_pairs);
         let filled = unify_group_font_sizes(&filled);
+        let filled = reconcile_amount_warning_marks(&filled, forced);
         let filled = strip_converted_rect_separators(&filled);
         Ok(apply_rule6_specify_bands(&filled, fields, &sheet))
     };
@@ -7115,10 +7119,10 @@ pub fn overflow_warnings(document: &str) -> Vec<OverflowWarning> {
 //
 // When one amount in a section's column overflows its comb, every amount of
 // that column prints as a plain right-aligned line, so the column stays
-// uniform. Groups are derived geometrically: comb cells sharing a column
-// (same x within 2 pt), the same capacity and contiguous rows (uniform pitch;
-// a taller gap breaks the group). Spouse columns sit at a different x, so
-// they group independently.
+// uniform. A group is a printed section's column: from the section's
+// Part/Schedule band heading to the next band on that page, at one column x
+// (within 2 pt) — never a pitch ratio. Spouse columns sit at a different x,
+// so they group independently.
 
 /// One comb cell's geometry, parsed from the frozen sheet.
 #[derive(Clone, Debug)]
@@ -7127,6 +7131,7 @@ struct CombGeom {
     page: String,
     x: f64,
     y: f64,
+    cap: u32,
 }
 
 /// The sheet page a cell id belongs to: `p4c66` is on page `p4`. Ids of
@@ -7155,6 +7160,12 @@ fn comb_geometries(html: &str) -> Vec<CombGeom> {
         };
         let tag = &html[open..end];
         from = end + 1;
+        // A band row inside a `<template>` is the sheet's cloning master,
+        // never a printed row: where a cell id appears in both, the printed
+        // row's coordinates are the truth (1600PT Item 13's tax bases).
+        if inside_template(html, open) {
+            continue;
+        }
         let Some(cap) = attr(tag, "data-comb-capacity").and_then(|v| v.parse::<u32>().ok()) else {
             continue;
         };
@@ -7175,6 +7186,7 @@ fn comb_geometries(html: &str) -> Vec<CombGeom> {
             page: cell_page_key(id),
             x,
             y,
+            cap,
         });
     }
     out
@@ -7182,7 +7194,7 @@ fn comb_geometries(html: &str) -> Vec<CombGeom> {
 
 /// A printed section heading of the sheet: the page and top y of a
 /// `Part`/`Schedule` band's text line, from the sheet's own text divs.
-fn section_headings(html: &str) -> Vec<(String, f64)> {
+fn section_headings(html: &str) -> Vec<(String, f64, String)> {
     let mut out = Vec::new();
     let needle = "<div class=\"t\"";
     let mut from = 0;
@@ -7211,46 +7223,200 @@ fn section_headings(html: &str) -> Vec<(String, f64)> {
         }
         text.push_str(rest);
         let text = text.trim();
-        // A band heading: `Part`/`PART`/`Schedule`/`SCHEDULE` then a numeral
-        // (`Part IV`, `Schedule 1`): never `Particulars` or a body line that
-        // merely mentions a part.
-        let lower = text.to_ascii_lowercase();
-        let after = lower
-            .strip_prefix("part")
-            .or_else(|| lower.strip_prefix("schedule"))
-            .map(str::trim_start);
-        let heading = after
-            .map(|a| {
-                a.chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_digit() || matches!(c, 'i' | 'v' | 'x'))
-            })
-            .unwrap_or(false);
-        if heading {
-            out.push((cell_page_key(id), y));
+        if is_section_band_heading(text) {
+            out.push((cell_page_key(id), y, text.to_string()));
         }
     }
+    // A heading split across adjacent divs ("P" + "art II"): a div whose
+    // whole text is a strict prefix of `part`/`schedule` joins its nearest
+    // right neighbour on the same line, and the joined text is tested again.
+    let mut fragments: Vec<(String, f64, f64, String)> = Vec::new();
+    let mut from2 = 0;
+    while let Some(rel) = html[from2..].find(needle) {
+        let open = from2 + rel;
+        let Some(end) = html[open..].find('>').map(|e| open + e) else {
+            break;
+        };
+        let tag = &html[open..end];
+        let close = html[end..].find("</div>").map(|c| end + c);
+        from2 = end + 1;
+        let (Some(id), Some(y), Some(x), Some(close)) = (
+            attr(tag, "id"),
+            parse_style_pt(tag, "top"),
+            parse_style_pt(tag, "left"),
+            close,
+        ) else {
+            continue;
+        };
+        let inner = &html[end + 1..close];
+        let mut text = String::new();
+        let mut rest = inner;
+        while let Some(lt) = rest.find('<') {
+            text.push_str(&rest[..lt]);
+            match rest[lt..].find('>') {
+                Some(gt) => rest = &rest[lt + gt + 1..],
+                None => break,
+            }
+        }
+        text.push_str(rest);
+        fragments.push((cell_page_key(id), y, x, text.trim().to_string()));
+    }
+    for (page, y, x, text) in &fragments {
+        let lower = text.to_ascii_lowercase();
+        let partial = !lower.is_empty()
+            && ("part".starts_with(lower.as_str()) || "schedule".starts_with(lower.as_str()))
+            && lower.len() < 8;
+        if !partial {
+            continue;
+        }
+        // The nearest fragment to the right on the same line.
+        let mut best: Option<(&String, f64)> = None;
+        for (page2, y2, x2, text2) in &fragments {
+            if page2 == page
+                && (y2 - y).abs() <= 2.0
+                && *x2 > *x
+                && best.is_none_or(|(_, bx)| *x2 < bx)
+            {
+                best = Some((text2, *x2));
+            }
+        }
+        if let Some((tail, _)) = best {
+            let joined = format!("{text}{tail}");
+            if is_section_band_heading(&joined) && !is_section_band_heading(text) {
+                out.push((page.clone(), *y, joined));
+            }
+        }
+    }
+    out.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    out.dedup();
     out
+}
+
+/// Whether a text line is a section band heading: `Part`/`Schedule` (any
+/// case), a word boundary, then a numeral — arabic digits, or a roman
+/// numeral run (`i`/`v`/`x`/`l`/`c`/`d`/`m` letters) ended by a non-letter
+/// or the line's end. Never `Particulars`, never a body line mentioning a
+/// part.
+fn is_section_band_heading(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let after = if let Some(a) = lower.strip_prefix("part") {
+        a
+    } else if let Some(a) = lower.strip_prefix("schedule") {
+        a
+    } else {
+        return false;
+    };
+    // A word boundary must separate the word from what follows: the next
+    // character is not a letter (`Part IV`, `Part-IV`, never `Particulars`).
+    if after
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic())
+    {
+        return false;
+    }
+    let rest = after.trim_start_matches(|c: char| c.is_whitespace() || c == '-' || c == '\u{2013}');
+    let mut chars = rest.chars().peekable();
+    let numeral = match chars.peek() {
+        Some(c) if c.is_ascii_digit() => true,
+        Some('i' | 'v' | 'x' | 'l' | 'c' | 'd' | 'm') => {
+            while matches!(chars.peek(), Some(c) if matches!(c, 'i' | 'v' | 'x' | 'l' | 'c' | 'd' | 'm'))
+            {
+                chars.next();
+            }
+            // The roman run must end at a non-letter or the line's end:
+            // `Part IV` yes, a letter tail no.
+            !chars.peek().is_some_and(|c| c.is_ascii_alphabetic())
+        }
+        _ => false,
+    };
+    if !numeral {
+        return false;
+    }
+    // A band heading names its section, never another: a line that goes on
+    // to mention an item or a second part/schedule is a body cross-reference
+    // ("Schedule 2 Item 4A and Part VII Item 5A" is a note inside Schedule 1
+    // of 1701, not a band).
+    let tail = &lower[lower.len() - rest.len()..];
+    let body_mention = ["item", "part", "schedule"].iter().any(|word| {
+        tail.split(|c: char| !c.is_ascii_alphabetic())
+            .any(|w| w == *word)
+    });
+    !body_mention
 }
 
 /// The section a row belongs to: the nearest Part/Schedule band above it on
 /// its page (`None` above the first band: the header rows or a part continued
 /// from the page before).
-fn section_of(headings: &[(String, f64)], page: &str, y: f64) -> Option<f64> {
+fn section_of(headings: &[(String, f64, String)], page: &str, y: f64) -> Option<f64> {
     headings
         .iter()
-        .filter(|(hp, hy)| hp == page && *hy <= y + 1.0)
-        .map(|(_, hy)| *hy)
+        .filter(|(hp, hy, _)| hp == page && *hy <= y + 1.0)
+        .map(|(_, hy, _)| *hy)
         .reduce(f64::max)
+}
+
+/// A text line of the sheet with its geometry: page, top y, and the x
+/// interval it occupies (width estimated from its length and font size).
+fn text_lines(html: &str) -> Vec<(String, f64, f64, f64)> {
+    let mut out = Vec::new();
+    let needle = "<div class=\"t\"";
+    let mut from = 0;
+    while let Some(rel) = html[from..].find(needle) {
+        let open = from + rel;
+        let Some(end) = html[open..].find('>').map(|e| open + e) else {
+            break;
+        };
+        let tag = &html[open..end];
+        let close = html[end..].find("</div>").map(|c| end + c);
+        from = end + 1;
+        let (Some(id), Some(y), Some(x), Some(close)) = (
+            attr(tag, "id"),
+            parse_style_pt(tag, "top"),
+            parse_style_pt(tag, "left"),
+            close,
+        ) else {
+            continue;
+        };
+        if inside_template(html, open) {
+            continue;
+        }
+        let inner = &html[end + 1..close];
+        let mut len = inner.len() as f64;
+        let mut rest = inner;
+        while let Some(lt) = rest.find('<') {
+            match rest[lt..].find('>') {
+                Some(gt) => {
+                    len -= (gt + 1) as f64;
+                    rest = &rest[lt + gt + 1..];
+                }
+                None => break,
+            }
+        }
+        let size = tag
+            .split("font-size:")
+            .nth(1)
+            .and_then(|s| s.split("pt").next())
+            .and_then(|s| s.trim().parse::<f64>().ok())
+            .unwrap_or(8.0);
+        // Arimo sets about half its point size per character.
+        let width = len * size * 0.5;
+        out.push((cell_page_key(id), y, x, x + width));
+    }
+    out
 }
 
 /// Group amount-sized comb cells into a printed section's columns. A group is
 /// one section's column: from the section's Part/Schedule band to the next
 /// band on that page, at one column x (within 2 pt). Never a pitch ratio:
-/// the bands are the sheet's own text lines.
+/// the bands are the sheet's own text lines. A column also splits where a
+/// text line crosses it between two rows — a sub-table's column headers
+/// (1702RT Schedule III's stacked NOLCO tables share one x but are separate
+/// columns of figures).
 fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
     let geoms = comb_geometries(html);
     let headings = section_headings(html);
+    let lines = text_lines(html);
     let mut columns: Vec<(String, Option<f64>, Vec<&CombGeom>)> = Vec::new();
     'cells: for geom in &geoms {
         let section = section_of(&headings, &geom.page, geom.y);
@@ -7266,16 +7432,38 @@ fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
         columns.push((geom.page.clone(), section, vec![geom]));
     }
     let mut groups = Vec::new();
-    for (_, _, mut column) in columns {
+    for (page, _, mut column) in columns {
         column.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
-        let mut seen: Vec<String> = Vec::new();
+        // A text line overlapping the column's x between two rows breaks the
+        // group: cells are narrow, and a header centred over the column
+        // starts within about a comb width of its left edge.
+        let col_x = column[0].x;
+        let mut current: Vec<String> = Vec::new();
+        let mut prev_y: Option<f64> = None;
         for geom in column {
-            if !seen.contains(&geom.id) {
-                seen.push(geom.id.clone());
+            if let Some(py) = prev_y {
+                // A column header sits OVER its column: it starts inside
+                // the comb's own horizontal span. A row label or a marginal
+                // note comes from the left margin and never splits anything.
+                let comb_right = col_x + f64::from(geom.cap) * 5.5;
+                let crossed = lines.iter().any(|(lp, ly, lx0, _lx1)| {
+                    *lp == page
+                        && *ly > py + 1.0
+                        && *ly < geom.y - 1.0
+                        && *lx0 >= col_x - 2.0
+                        && *lx0 <= comb_right
+                });
+                if crossed && !current.is_empty() {
+                    groups.push(std::mem::take(&mut current));
+                }
             }
+            if !current.contains(&geom.id) {
+                current.push(geom.id.clone());
+            }
+            prev_y = Some(geom.y);
         }
-        if !seen.is_empty() {
-            groups.push(seen);
+        if !current.is_empty() {
+            groups.push(current);
         }
     }
     groups
@@ -7308,8 +7496,18 @@ fn converted_amount_cells(html: &str) -> std::collections::BTreeSet<String> {
             let tag = &html[ts..tag_end.min(html.len())];
             // Only amount conversions widen to the section, not identifier
             // or date overflow lines.
-            if tag.contains("amount-comb") || tag.contains("amount-small") {
+            if tag.contains("amount-comb") {
                 out.insert(html[start..end].to_string());
+            } else if tag.contains("amount-small") {
+                // A shrunk line widens its column only when it is money:
+                // `amount-small` also marks long non-money figures, which
+                // must never force a column of amount boxes into lines.
+                let money = attr(tag, "data-writer-value")
+                    .or_else(|| attr(tag, "value"))
+                    .is_some_and(is_formatted_money_amount);
+                if money {
+                    out.insert(html[start..end].to_string());
+                }
             }
         }
         from = end + 1;
@@ -7339,6 +7537,86 @@ fn uniform_amount_forced_cells(
     forced
 }
 
+/// The peso-comb → centavo-comb pairing of a sheet's money joins, so a
+/// blanked row can blank both combs.
+fn cent_pair_map(joins: &[MoneyJoin]) -> std::collections::HashMap<&str, &str> {
+    let mut out = std::collections::HashMap::new();
+    for join in joins {
+        for cells in &join.cells {
+            if let Some(cent) = &cells.cent_html_id {
+                out.insert(cells.peso_html_id.as_str(), cent.as_str());
+            }
+        }
+    }
+    out
+}
+
+/// Reconcile the overflow marks of a converted column after the font sizes
+/// are unified:
+///
+/// - a line whose size ended below [`SMALL_WHOLE_BELOW_PT`] — the real
+///   overflow's or a forced group mate's — is marked `amount-small` with its
+///   value, so the additional sheet carries it in full (a line that small
+///   cannot be read on the page);
+/// - a forced conversion that fits at a readable size carries no warning at
+///   all: nothing went wrong for it, so the preview reports only the real
+///   overflow, never ten "fitted lines" for one.
+fn reconcile_amount_warning_marks(
+    html: &str,
+    forced: &std::collections::BTreeSet<String>,
+) -> String {
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    let needle = "data-overflow-warning=\"amount-comb\"";
+    let mut from = 0;
+    while let Some(rel) = html[from..].find(needle) {
+        let at = from + rel;
+        from = at + needle.len();
+        let Some(ts) = html[..at].rfind("<input") else {
+            continue;
+        };
+        if html[ts..at].contains('>') {
+            continue;
+        }
+        let Some(end) = html[at..].find('>').map(|e| at + e) else {
+            continue;
+        };
+        let tag = &html[ts..end];
+        let Some(cell) = attr(tag, "data-overflow-of") else {
+            continue;
+        };
+        let size = tag
+            .split("font-size:")
+            .nth(1)
+            .and_then(|s| s.split("pt").next())
+            .and_then(|s| s.trim().parse::<f64>().ok())
+            .unwrap_or(PLAIN_MAX_PT);
+        if size < SMALL_WHOLE_BELOW_PT {
+            // Small enough that the additional sheet must carry it: upgrade
+            // the mark and put the value where the sheet reader looks.
+            let value = attr(tag, "value").unwrap_or("");
+            let mut out = tag.to_string();
+            out = out.replacen(
+                "data-overflow-warning=\"amount-comb\"",
+                &format!(
+                    "data-overflow-warning=\"amount-small\" data-writer-value=\"{}\"",
+                    html_escape(value)
+                ),
+                1,
+            );
+            replacements.push((ts, end, out));
+        } else if forced.contains(cell) {
+            // A forced conversion at a readable size: no warning.
+            let out = tag.replacen(" data-overflow-warning=\"amount-comb\"", "", 1);
+            replacements.push((ts, end, out));
+        }
+    }
+    if replacements.is_empty() {
+        return html.to_string();
+    }
+    replacements.sort_by_key(|(at, _, _)| *at);
+    apply_replacements(html, replacements)
+}
+
 /// Blank the comb boxes of a forced group's cells that hold no amount: in a
 /// converted column the boxes go even where the row is empty, so the column
 /// never shows boxes beside lines. Cells already converted or holding a
@@ -7347,6 +7625,7 @@ fn blank_empty_forced_cells(
     html: &str,
     forced: &std::collections::BTreeSet<String>,
     sheet: &SheetType,
+    cent_pairs: &std::collections::HashMap<&str, &str>,
 ) -> String {
     if forced.is_empty() {
         return html.to_string();
@@ -7361,7 +7640,17 @@ fn blank_empty_forced_cells(
         let Some(indices) = grouped.get(cell.as_str()) else {
             continue;
         };
-        let ordered = ordered_comb_indices(&tags, indices);
+        let mut ordered = ordered_comb_indices(&tags, indices);
+        // The paired centavo comb (two slots) never joins a group on its
+        // own, but in a blanked row its boxes and the printed point go with
+        // the peso boxes: the union rectangle covers both, so the column
+        // never shows boxes or a stray point beside a blank line.
+        let cent_cell = cent_pairs.get(cell.as_str()).copied();
+        if let Some(cent) = cent_cell {
+            if let Some(cent_indices) = grouped.get(cent) {
+                ordered.extend(ordered_comb_indices(&tags, cent_indices));
+            }
+        }
         let written = ordered
             .iter()
             .any(|&index| attr(tags[index].tag, "value").is_some_and(|v| !v.is_empty()));
@@ -7372,7 +7661,7 @@ fn blank_empty_forced_cells(
             html,
             &tags,
             &ordered,
-            (cell, None),
+            (cell, cent_cell),
             "",
             None,
             sheet,
@@ -7390,50 +7679,68 @@ fn blank_empty_forced_cells(
 /// group needs applies to every line of the group, so the column reads
 /// uniform.
 fn unify_group_font_sizes(html: &str) -> String {
-    let groups = amount_column_groups(html);
-    // The rect inputs of one group, with the size each was drawn at.
+    // Nothing converted: no rect inputs, nothing to unify — never scan 1.8 MB
+    // per candidate cell.
+    if !html.contains("data-overflow-of=\"") {
+        return html.to_string();
+    }
+    // One scan: every amount conversion's rect input, keyed by its cell.
     struct Rect {
         at: usize,
         end: usize,
         size: f64,
     }
-    let mut rects: Vec<Vec<Rect>> = Vec::new();
-    let mut any = false;
-    for group in &groups {
-        let mut members: Vec<Rect> = Vec::new();
-        for cell in group {
-            let needle = format!("data-overflow-of=\"{cell}\"");
-            if let Some(at) = html.find(&needle) {
-                let Some(ts) = html[..at].rfind("<input") else {
-                    continue;
-                };
-                if html[ts..at].contains('>') {
-                    continue;
-                }
-                let end = html[at..]
-                    .find('>')
-                    .map(|e| at + e + 1)
-                    .unwrap_or(html.len());
-                let tag = &html[ts..end];
-                // Only amount conversions read as one column: identifier and
-                // text overflow lines keep their own sizes.
-                if !tag.contains("amount-comb") && !tag.contains("amount-small") {
-                    continue;
-                }
-                let size = tag
-                    .split("font-size:")
-                    .nth(1)
-                    .and_then(|s| s.split("pt").next())
-                    .and_then(|s| s.trim().parse::<f64>().ok());
-                if let Some(size) = size {
-                    members.push(Rect { at: ts, end, size });
-                }
-            }
+    let mut rects_by_cell: std::collections::HashMap<String, Rect> =
+        std::collections::HashMap::new();
+    let needle = "data-overflow-of=\"";
+    let mut from = 0;
+    while let Some(rel) = html[from..].find(needle) {
+        let at = from + rel;
+        from = at + needle.len();
+        let Some(id_end) = html[at + needle.len()..]
+            .find('"')
+            .map(|e| at + needle.len() + e)
+        else {
+            break;
+        };
+        let cell = &html[at + needle.len()..id_end];
+        let Some(ts) = html[..at].rfind("<input") else {
+            continue;
+        };
+        if html[ts..at].contains('>') {
+            continue;
         }
-        rects.push(members);
+        let end = html[at..]
+            .find('>')
+            .map(|e| at + e + 1)
+            .unwrap_or(html.len());
+        let tag = &html[ts..end.min(html.len())];
+        // Only amount conversions read as one column: identifier and
+        // text overflow lines keep their own sizes.
+        if !tag.contains("amount-comb") && !tag.contains("amount-small") {
+            continue;
+        }
+        let size = tag
+            .split("font-size:")
+            .nth(1)
+            .and_then(|s| s.split("pt").next())
+            .and_then(|s| s.trim().parse::<f64>().ok());
+        if let Some(size) = size {
+            rects_by_cell
+                .entry(cell.to_string())
+                .or_insert(Rect { at: ts, end, size });
+        }
     }
+    if rects_by_cell.is_empty() {
+        return html.to_string();
+    }
+    let groups = amount_column_groups(html);
     let mut replacements: Vec<(usize, usize, String)> = Vec::new();
-    for members in &rects {
+    for group in &groups {
+        let members: Vec<&Rect> = group
+            .iter()
+            .filter_map(|cell| rects_by_cell.get(cell))
+            .collect();
         if members.len() < 2 {
             continue;
         }
@@ -7459,14 +7766,12 @@ fn unify_group_font_sizes(html: &str) -> String {
                     &tag[num_start + pt + 2..]
                 );
                 replacements.push((rect.at, rect.end, rewritten));
-                any = true;
             }
         }
     }
-    if !any {
+    if replacements.is_empty() {
         return html.to_string();
     }
-    replacements.sort_by_key(|(at, _, _)| *at);
     apply_replacements(html, replacements)
 }
 
@@ -7921,9 +8226,10 @@ no bundle
                 groups.len(),
                 n_amount
             ));
+            let headings = section_headings(loaded.html);
             out.push_str(
-                "| rows | cells | amount writer keys |
-|---|---|---|
+                "| rows | cells | section | amount writer keys |
+|---|---|---|---|
 ",
             );
             for group in &groups {
@@ -7932,18 +8238,90 @@ no bundle
                     .filter_map(|c| joined.get(c.as_str()).copied())
                     .collect();
                 let first = keys.first().copied().unwrap_or("");
+                let first_cell = group.first().unwrap();
+                let section = cell_tag(loaded.html, first_cell)
+                    .and_then(|(_, tag)| parse_style_pt(tag, "top"))
+                    .and_then(|y| {
+                        let band_y = section_of(&headings, &cell_page_key(first_cell), y)?;
+                        headings
+                            .iter()
+                            .find(|(hp, hy, _)| hp == &cell_page_key(first_cell) && *hy == band_y)
+                            .map(|(_, _, text)| text.as_str())
+                    })
+                    .unwrap_or("(header)");
                 out.push_str(&format!(
-                    "| {} | {}..{} | {} |
+                    "| {} | {}..{} | {} | {} |
 ",
                     group.len(),
                     group.first().unwrap(),
                     group.last().unwrap(),
+                    section,
                     first
                 ));
             }
             out.push('\n');
         }
         out
+    }
+
+    /// P5/P2: the reconcile pass upgrades a sub-floor line to amount-small
+    /// with its value, and strips the warning of a forced conversion that
+    /// reads fine.
+    #[test]
+    fn reconcile_marks_tiny_lines_small_and_strips_forced_warnings() {
+        let html = concat!(
+            "<input type=\"text\" readonly value=\"1,234,567,890\" style=\"font-size:4.20pt\" data-overflow-warning=\"amount-comb\" data-overflow-of=\"p1c10\" data-rect-box=\"1,2,3,4\">",
+            "<input type=\"text\" readonly value=\"1,000\" style=\"font-size:9.00pt\" data-overflow-warning=\"amount-comb\" data-overflow-of=\"p1c11\" data-rect-box=\"1,2,3,4\">",
+        );
+        let mut forced = std::collections::BTreeSet::new();
+        forced.insert("p1c11".to_string());
+        let out = super::reconcile_amount_warning_marks(html, &forced);
+        // The tiny line becomes amount-small and carries its value.
+        assert!(out.contains(
+            "data-overflow-warning=\"amount-small\" data-writer-value=\"1,234,567,890\""
+        ));
+        assert!(out.contains("data-overflow-of=\"p1c10\""));
+        // The forced conversion at a readable size warns not at all.
+        let pos = out.find("data-overflow-of=\"p1c11\"").unwrap();
+        let tag_start = out[..pos].rfind("<input").unwrap();
+        assert!(!out[tag_start..pos].contains("data-overflow-warning"));
+    }
+
+    /// P3: the band-heading rule — numerals yes, cross-references and
+    /// particulars no.
+    #[test]
+    fn section_band_heading_rule() {
+        for yes in [
+            "Part IV",
+            "PART II",
+            "Schedule 1",
+            "SCHEDULE 4",
+            "Part IV – Computation",
+            "Schedule 1 – Gross Compensation Income and Tax Withheld",
+            "Part-IV",
+            "part ii",
+        ] {
+            assert!(
+                super::is_section_band_heading(yes),
+                "{yes} must be a heading"
+            );
+        }
+        for no in [
+            "Particulars",
+            "PARTICULARS",
+            "Part-iculars",
+            "Schedule 2 Item 4A and Part VII Item 5A",
+            "Partial",
+            "Part",
+            "Schedule",
+            "See Part IV",
+            "Particularly",
+        ] {
+            assert!(
+                !super::is_section_band_heading(no),
+                "{no} must not be a heading"
+            );
+        }
     }
 
     #[test]

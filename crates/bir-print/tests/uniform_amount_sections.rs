@@ -166,9 +166,29 @@ fn centavos_in_a_whole_peso_comb_also_convert_the_column() {
 #[test]
 fn sections_of_one_column_are_independent() {
     // Overflow in Part VII must not convert Part VI (the section above it on
-    // the same page, same column x): its rows keep their combs.
-    let d = part7_draft(Form1701Party::Taxpayer);
-    let doc = filled_document("1701-2018", &d.print_field_map()).expect("1701-2018 render");
+    // the same page, same column x): its rows keep their combs. Part VI
+    // carries amounts too — empty boxes could never convert either way and
+    // the test would prove nothing.
+    let profile = demo_profile();
+    let mut d = Form1701Draft::new_from_profile(&profile, 2025, 12);
+    for item in 1u8..=10 {
+        let amount = if item == 2 {
+            1_234_567_890.0
+        } else {
+            1_000.0 + item as f64
+        };
+        d.set_amount(
+            Form1701AmountSection::PartVii,
+            item,
+            Form1701Party::Taxpayer,
+            Some(amount),
+        );
+    }
+    let mut fields = d.print_field_map();
+    for item in 1u8..=5 {
+        fields.insert(format!("frm1701:txtPg4ISc6_{item}A"), "1000.00".to_string());
+    }
+    let doc = filled_document("1701-2018", &fields).expect("1701-2018 render");
     // Part VI column A rows sit directly above Part VII in the same column
     // (p4c50..p4c63 area); none may convert.
     for cell in ["p4c50", "p4c53", "p4c56", "p4c59", "p4c62"] {
@@ -344,18 +364,32 @@ fn s1701_part_iv_schedule3_is_one_group() {
         map.insert(key.clone(), amount.to_string());
     }
     let doc = bir_print::frozen_html::filled_document("1701-2018", &map).expect("render");
-    // The cells are the peso-join targets; read them from the printed lines.
-    let mut converted = 0;
+    // Column A of Schedule 3 (items 8..=18) is the 18-row group
+    // p2c98..p2c156 of GROUPS.md: every one of its rows converts, and
+    // nothing outside the two Schedule 3 columns does.
+    let mut in_column = 0;
+    let mut outside = 0;
     for m in doc.match_indices("data-overflow-of=\"p2c") {
-        let at = m.0 + 18;
-        let id = &doc[at..at + 5];
-        if id.starts_with("p2c") {
-            converted += 1;
+        let at = m.0 + "data-overflow-of=\"p2c".len();
+        let num: u32 = doc[at..at + 3]
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse()
+            .unwrap_or(0);
+        if (98..=157).contains(&num) {
+            in_column += 1;
+        } else {
+            outside += 1;
         }
     }
-    assert!(
-        converted >= 10,
-        "1701 Part IV Schedule 3: the whole column must convert with item 10, saw {converted} lines"
+    assert_eq!(
+        in_column, 18,
+        "1701 Schedule 3 column A: all 18 rows must convert with item 10, saw {in_column}"
+    );
+    assert_eq!(
+        outside, 0,
+        "no cell outside the Schedule 3 columns may convert (saw {outside})"
     );
 }
 
@@ -412,9 +446,12 @@ fn converted_group_shares_one_font_size() {
     let doc = bir_print::frozen_html::filled_document("1701-2018", &map).expect("render");
     let mut sizes = std::collections::BTreeSet::new();
     for cell in PART7_A {
-        if let Some((_, Some(size))) = Some(printed_cell(&doc, cell)) {
-            sizes.insert(size.to_string());
-        }
+        assert!(
+            line_not_comb(&doc, cell),
+            "{cell} must print as a line for the font comparison to mean anything"
+        );
+        let (_, size) = printed_cell(&doc, cell);
+        sizes.insert(size.expect("a line carries its font size").to_string());
     }
     assert_eq!(
         sizes.len(),
@@ -469,4 +506,175 @@ fn ten_digits_in_a_nine_box_part7_item_convert_the_section() {
     }
     // Item 2's line keeps every digit.
     assert_eq!(printed_cell(&doc, "p4c66").0, "1,000,000");
+}
+
+// ---- #499 review round 2 ------------------------------------------------
+
+/// The rect box (l,t,r,b) of the line printed over `cell`, parsed from
+/// `data-rect-box`.
+fn rect_box(doc: &str, cell: &str) -> (f64, f64, f64, f64) {
+    let needle = format!("data-overflow-of=\"{cell}\"");
+    let at = doc
+        .find(&needle)
+        .unwrap_or_else(|| panic!("{cell} has no line"));
+    let tag_start = doc[..at].rfind("<input").unwrap();
+    let tag_end = at + doc[at..].find('>').unwrap();
+    let tag = &doc[tag_start..tag_end];
+    let rb = tag.split("data-rect-box=\"").nth(1).expect("rect box");
+    let vals: Vec<f64> = rb[..rb.find('"').unwrap()]
+        .split(',')
+        .map(|s| s.trim().parse().unwrap())
+        .collect();
+    (vals[0], vals[1], vals[2], vals[3])
+}
+
+/// P1: a blanked row of a converted centavo column loses the PAIRED centavo
+/// comb too — its covering rectangle spans the same peso+centavo union as a
+/// written row's, never leaving the two centavo boxes beside the blank line.
+#[test]
+fn blanked_row_blanks_the_paired_centavo_comb() {
+    let mut map = std::collections::BTreeMap::new();
+    // 1601C Part II: item 14 (peso p1c56, centavo p1c58) overflows; item 15
+    // (peso p1c61, centavo p1c63) stays empty.
+    map.insert(
+        "frm1601c:txtTax14".to_string(),
+        "12345678901234.00".to_string(),
+    );
+    let doc = bir_print::frozen_html::filled_document("1601c-2018", &map).expect("1601c render");
+    assert!(
+        line_not_comb(&doc, "p1c61"),
+        "the empty row's peso cell must be covered like the rest of the column"
+    );
+    let written = rect_box(&doc, "p1c56");
+    let blank = rect_box(&doc, "p1c61");
+    assert!(
+        (written.2 - blank.2).abs() < 1.0,
+        "the blank row's covering rectangle must span the centavo comb too: written right edge {}, blank right edge {}",
+        written.2,
+        blank.2
+    );
+}
+
+/// P2: one overflow warns once — the forced conversions of its column mates
+/// are uniform by design, not warnings.
+#[test]
+fn one_overflow_reports_one_fitted_line_warning() {
+    let d = part7_draft(Form1701Party::Taxpayer);
+    let doc = filled_document("1701-2018", &d.print_field_map()).expect("1701-2018 render");
+    let warnings = bir_print::frozen_html::overflow_warnings(&doc);
+    let fitted = warnings.iter().filter(|w| w.kind == "amount-comb").count();
+    assert_eq!(
+        fitted, 1,
+        "one overflow must warn once, saw {fitted} amount-comb warnings"
+    );
+}
+
+/// P3: 1701 page 2 Schedule 1 — items 1, 2, 3A and 3B are ONE group: the
+/// cross-reference line "Schedule 2 Item 4A and Part VII Item 5A" printed
+/// inside the section is not a band and must not cut item 3B off.
+#[test]
+fn s1701_schedule1_item3b_groups_with_items_1_to_3a() {
+    let mut map = std::collections::BTreeMap::new();
+    for (key, amount) in [
+        ("frm1701:txtPg2IShed1c_1CI", "12345678901234.00"),
+        ("frm1701:txtPg2IShed1c_2CI", "1000.00"),
+        ("frm1701:txtPg2IShed1c_3ACI", "1000.00"),
+        ("frm1701:txtPg2IShed1c_3BCI", "1000.00"),
+    ] {
+        map.insert(key.to_string(), amount.to_string());
+    }
+    let doc = bir_print::frozen_html::filled_document("1701-2018", &map).expect("render");
+    for cell in ["p2c68", "p2c77"] {
+        assert!(
+            line_not_comb(&doc, cell),
+            "Schedule 1 CI column: {cell} must print as a line with item 1"
+        );
+    }
+}
+
+/// Byte-identical pins, one per sheet shape: a centavo sheet (2551Q,
+/// quarterly) and an annual-corporate sheet (1702EX) with no conversion are
+/// untouched by the uniformity passes.
+#[test]
+fn no_overflow_documents_are_byte_identical_on_more_sheets() {
+    use sha2::{Digest, Sha256};
+    let pins: [(&str, &str, &str); 2] = [
+        (
+            "2551q-2018",
+            "frm2551q:txtTax14",
+            "c713f49efa74bc5e4909186768d6678842f54d5003e8e00a731202026ecb478f",
+        ),
+        (
+            "1702ex-2018",
+            "frm1702EX:txtPg1Pt2I14TotalIncome",
+            "2dd2b2b9005137237f98cc400bcf32d5f12874556af817ad63ba04a299d17694",
+        ),
+    ];
+    for (slug, key, pin) in pins {
+        let mut map = std::collections::BTreeMap::new();
+        map.insert(key.to_string(), "1000.00".to_string());
+        let doc = bir_print::frozen_html::filled_document(slug, &map).expect("render");
+        let hash = format!("{:x}", Sha256::digest(doc.as_bytes()));
+        assert_eq!(hash, pin, "{slug}: no-overflow document moved");
+    }
+}
+
+/// Finding 1: 1600PT's tax-base rows print through cloned template rows; the
+/// printed rows' coordinates, never the hidden template's, decide the group.
+/// One overflowing tax base converts the other four.
+#[test]
+fn f1600pt_tax_bases_group_by_the_printed_rows() {
+    let mut map = std::collections::BTreeMap::new();
+    for row in 1u8..=5 {
+        let amount = if row == 1 {
+            "12345678901234.00"
+        } else {
+            "1000.00"
+        };
+        map.insert(
+            format!("frm1600PT:txtPg1P2TaxBase{row}"),
+            amount.to_string(),
+        );
+    }
+    let doc = bir_print::frozen_html::filled_document("1600-pt-2018", &map).expect("render");
+    for cell in ["p1c51", "p1c61", "p1c71", "p1c81", "p1c91"] {
+        assert!(
+            line_not_comb(&doc, cell),
+            "1600PT tax base {cell} must print as a line with row 1"
+        );
+    }
+}
+
+/// Finding 3: 1702RT Schedule IIIA — the stacked NOLCO sub-tables share one
+/// column x but their column headers split them: an overflow in the amount
+/// column must not convert the unapplied-loss column.
+#[test]
+fn f1702rt_nolco_columns_split_at_their_headers() {
+    // The upper sub-table's x=412 column (C3, cells p4c25..p4c46) and the
+    // lower sub-table's x=412 column (C6 unapplied, cells p4c54..p4c66) share
+    // one x: only their column headers separate them.
+    let mut map = std::collections::BTreeMap::new();
+    for row in 4u8..=7 {
+        let amount = if row == 4 {
+            "12345678901234.00"
+        } else {
+            "1000.00"
+        };
+        map.insert(format!("frm1702RT:txtPg4Sc3AI{row}C3"), amount.to_string());
+        map.insert(
+            format!("frm1702RT:txtPg4Sc3AI{row}C6"),
+            "1000.00".to_string(),
+        );
+    }
+    let doc = bir_print::frozen_html::filled_document("1702rt-2018c", &map).expect("render");
+    // The upper table's column converts with row 4…
+    assert!(
+        line_not_comb(&doc, "p4c25"),
+        "the overflowing upper-table column must print as lines"
+    );
+    // …but the lower table's unapplied column at the same x keeps its combs.
+    assert!(
+        !line_not_comb(&doc, "p4c54"),
+        "the unapplied-loss column below the headers must keep its combs"
+    );
 }
