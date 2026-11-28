@@ -5395,6 +5395,8 @@ pub(crate) fn fill_continuation_fragment(
             &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
         );
         let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
+        let filled = blank_empty_forced_cells(&filled, forced, &sheet);
+        let filled = unify_group_font_sizes(&filled);
         Ok(strip_converted_rect_separators(&filled))
     };
     let first = fill_pass(&BTreeSet::new())?;
@@ -5485,6 +5487,8 @@ fn fill_bundle(
             &fill_xbox_joins(&filled, fields, &cells.xbox_joins),
         );
         let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
+        let filled = blank_empty_forced_cells(&filled, forced, &sheet);
+        let filled = unify_group_font_sizes(&filled);
         let filled = strip_converted_rect_separators(&filled);
         Ok(apply_rule6_specify_bands(&filled, fields, &sheet))
     };
@@ -6549,10 +6553,24 @@ fn input_tags(html: &str) -> Vec<InputTag<'_>> {
 
 fn attr<'a>(tag: &'a str, key: &str) -> Option<&'a str> {
     let needle = format!("{key}=\"");
-    let start = tag.find(&needle)? + needle.len();
-    let rest = tag.get(start..)?;
-    let end = rest.find('"')?;
-    rest.get(..end)
+    let mut from = 0;
+    loop {
+        let at = tag.get(from..)?.find(&needle)? + from;
+        // The name must be exact: a byte before it that is not whitespace or
+        // a tag edge means a longer name ending in `key` (data-cell-id vs id).
+        let before = at
+            .checked_sub(1)
+            .and_then(|i| tag.as_bytes().get(i))
+            .copied();
+        let exact = matches!(before, None | Some(b' ' | b'\t' | b'\n' | b'\r' | b'/'));
+        if exact {
+            let start = at + needle.len();
+            let rest = tag.get(start..)?;
+            let end = rest.find('"')?;
+            return rest.get(..end);
+        }
+        from = at + needle.len();
+    }
 }
 
 fn set_value(tag: &str, value: &str, writer_value: Option<&str>) -> String {
@@ -7065,7 +7083,6 @@ pub fn overflow_warnings(document: &str) -> Vec<OverflowWarning> {
 struct CombGeom {
     id: String,
     page: String,
-    capacity: u32,
     x: f64,
     y: f64,
 }
@@ -7114,7 +7131,6 @@ fn comb_geometries(html: &str) -> Vec<CombGeom> {
         out.push(CombGeom {
             id: id.to_string(),
             page: cell_page_key(id),
-            capacity: cap,
             x,
             y,
         });
@@ -7122,56 +7138,102 @@ fn comb_geometries(html: &str) -> Vec<CombGeom> {
     out
 }
 
-/// Group amount-sized comb cells into (column, section) runs. Rows belong to
-/// one group when they share a column x (within 2 pt) and capacity, and each
-/// row's pitch from the previous never exceeds 1.7 times the column's
-/// smallest pitch: a taller gap marks a new section.
-pub fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
-    let geoms = comb_geometries(html);
-    let mut columns: Vec<Vec<&CombGeom>> = Vec::new();
-    'cells: for geom in &geoms {
-        for column in &mut columns {
-            let first = column[0];
-            if (first.x - geom.x).abs() <= 2.0
-                && first.capacity == geom.capacity
-                && first.page == geom.page
-            {
-                column.push(geom);
-                continue 'cells;
+/// A printed section heading of the sheet: the page and top y of a
+/// `Part`/`Schedule` band's text line, from the sheet's own text divs.
+fn section_headings(html: &str) -> Vec<(String, f64)> {
+    let mut out = Vec::new();
+    let needle = "<div class=\"t\"";
+    let mut from = 0;
+    while let Some(rel) = html[from..].find(needle) {
+        let open = from + rel;
+        let Some(end) = html[open..].find('>').map(|e| open + e) else {
+            break;
+        };
+        let tag = &html[open..end];
+        let close = html[end..].find("</div>").map(|c| end + c);
+        from = end + 1;
+        let (Some(id), Some(y), Some(close)) = (attr(tag, "id"), parse_style_pt(tag, "top"), close)
+        else {
+            continue;
+        };
+        let inner = &html[end + 1..close];
+        // Strip any inline markup and entities enough to read the band text.
+        let mut text = String::new();
+        let mut rest = inner;
+        while let Some(lt) = rest.find('<') {
+            text.push_str(&rest[..lt]);
+            match rest[lt..].find('>') {
+                Some(gt) => rest = &rest[lt + gt + 1..],
+                None => break,
             }
         }
-        columns.push(vec![geom]);
+        text.push_str(rest);
+        let text = text.trim();
+        // A band heading: `Part`/`PART`/`Schedule`/`SCHEDULE` then a numeral
+        // (`Part IV`, `Schedule 1`): never `Particulars` or a body line that
+        // merely mentions a part.
+        let lower = text.to_ascii_lowercase();
+        let after = lower
+            .strip_prefix("part")
+            .or_else(|| lower.strip_prefix("schedule"))
+            .map(str::trim_start);
+        let heading = after
+            .map(|a| {
+                a.chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_digit() || matches!(c, 'i' | 'v' | 'x'))
+            })
+            .unwrap_or(false);
+        if heading {
+            out.push((cell_page_key(id), y));
+        }
+    }
+    out
+}
+
+/// The section a row belongs to: the nearest Part/Schedule band above it on
+/// its page (`None` above the first band: the header rows or a part continued
+/// from the page before).
+fn section_of(headings: &[(String, f64)], page: &str, y: f64) -> Option<f64> {
+    headings
+        .iter()
+        .filter(|(hp, hy)| hp == page && *hy <= y + 1.0)
+        .map(|(_, hy)| *hy)
+        .reduce(f64::max)
+}
+
+/// Group amount-sized comb cells into a printed section's columns. A group is
+/// one section's column: from the section's Part/Schedule band to the next
+/// band on that page, at one column x (within 2 pt). Never a pitch ratio:
+/// the bands are the sheet's own text lines.
+fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
+    let geoms = comb_geometries(html);
+    let headings = section_headings(html);
+    let mut columns: Vec<(String, Option<f64>, Vec<&CombGeom>)> = Vec::new();
+    'cells: for geom in &geoms {
+        let section = section_of(&headings, &geom.page, geom.y);
+        for (cpage, csection, column) in &mut columns {
+            if *cpage == geom.page && *csection == section {
+                let first = column[0];
+                if (first.x - geom.x).abs() <= 2.0 {
+                    column.push(geom);
+                    continue 'cells;
+                }
+            }
+        }
+        columns.push((geom.page.clone(), section, vec![geom]));
     }
     let mut groups = Vec::new();
-    for mut column in columns {
+    for (_, _, mut column) in columns {
         column.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
-        column.dedup_by(|a, b| a.id == b.id);
-        if column.len() < 2 {
-            if !column.is_empty() {
-                groups.push(column.iter().map(|g| g.id.clone()).collect());
-            }
-            continue;
-        }
-        let mut min_pitch = f64::MAX;
-        for pair in column.windows(2) {
-            let pitch = pair[1].y - pair[0].y;
-            if pitch > 1.0 && pitch < min_pitch {
-                min_pitch = pitch;
+        let mut seen: Vec<String> = Vec::new();
+        for geom in column {
+            if !seen.contains(&geom.id) {
+                seen.push(geom.id.clone());
             }
         }
-        if !min_pitch.is_finite() {
-            min_pitch = 14.0;
-        }
-        let mut current: Vec<String> = vec![column[0].id.clone()];
-        for pair in column.windows(2) {
-            let pitch = pair[1].y - pair[0].y;
-            if pitch > min_pitch * 1.7 {
-                groups.push(std::mem::take(&mut current));
-            }
-            current.push(pair[1].id.clone());
-        }
-        if !current.is_empty() {
-            groups.push(current);
+        if !seen.is_empty() {
+            groups.push(seen);
         }
     }
     groups
@@ -7184,16 +7246,29 @@ fn converted_amount_cells(html: &str) -> std::collections::BTreeSet<String> {
     let needle = "data-overflow-of=\"";
     let mut from = 0;
     while let Some(rel) = html[from..].find(needle) {
-        let start = from + rel + needle.len();
+        let attr_at = from + rel;
+        let start = attr_at + needle.len();
         let Some(end) = html[start..].find('\"').map(|e| start + e) else {
             break;
         };
-        // Only amount conversions widen to the section, not identifier or
-        // date overflow lines.
-        let tag_start = html[..from + rel].rfind("<input").unwrap_or(0);
-        let tag = &html[tag_start..end.min(start + 400).min(html.len())];
-        if tag.contains("amount-comb") || tag.contains("amount-small") {
-            out.insert(html[start..end].to_string());
+        // Anchor on the one `<input` element this attribute belongs to: the
+        // nearest `<input` before it, with no `>` in between (anything else
+        // means the attribute is read past its element's end, e.g. into an
+        // added line's span).
+        let tag_start = html[..attr_at].rfind("<input");
+        let owned = tag_start.is_some_and(|ts| !html[ts..attr_at].contains('>'));
+        if owned {
+            let ts = tag_start.unwrap();
+            let tag_end = html[attr_at..]
+                .find('>')
+                .map(|e| attr_at + e)
+                .unwrap_or(html.len());
+            let tag = &html[ts..tag_end.min(html.len())];
+            // Only amount conversions widen to the section, not identifier
+            // or date overflow lines.
+            if tag.contains("amount-comb") || tag.contains("amount-small") {
+                out.insert(html[start..end].to_string());
+            }
         }
         from = end + 1;
     }
@@ -7220,6 +7295,137 @@ fn uniform_amount_forced_cells(
         }
     }
     forced
+}
+
+/// Blank the comb boxes of a forced group's cells that hold no amount: in a
+/// converted column the boxes go even where the row is empty, so the column
+/// never shows boxes beside lines. Cells already converted or holding a
+/// written value are untouched.
+fn blank_empty_forced_cells(
+    html: &str,
+    forced: &std::collections::BTreeSet<String>,
+    sheet: &SheetType,
+) -> String {
+    if forced.is_empty() {
+        return html.to_string();
+    }
+    let tags = input_tags(html);
+    let grouped = grouped_input_indices(&tags);
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for cell in forced {
+        if html.contains(&format!("data-overflow-of=\"{cell}\"")) {
+            continue;
+        }
+        let Some(indices) = grouped.get(cell.as_str()) else {
+            continue;
+        };
+        let ordered = ordered_comb_indices(&tags, indices);
+        let written = ordered
+            .iter()
+            .any(|&index| attr(tags[index].tag, "value").is_some_and(|v| !v.is_empty()));
+        if written {
+            continue;
+        }
+        amount_rect(
+            html,
+            &tags,
+            &ordered,
+            (cell, None),
+            "",
+            None,
+            sheet,
+            &mut replacements,
+        );
+    }
+    if replacements.is_empty() {
+        return html.to_string();
+    }
+    replacements.sort_by_key(|(at, _, _)| *at);
+    apply_replacements(html, replacements)
+}
+
+/// One font size per converted group: the smallest size any amount of the
+/// group needs applies to every line of the group, so the column reads
+/// uniform.
+fn unify_group_font_sizes(html: &str) -> String {
+    let groups = amount_column_groups(html);
+    // The rect inputs of one group, with the size each was drawn at.
+    struct Rect {
+        at: usize,
+        end: usize,
+        size: f64,
+    }
+    let mut rects: Vec<Vec<Rect>> = Vec::new();
+    let mut any = false;
+    for group in &groups {
+        let mut members: Vec<Rect> = Vec::new();
+        for cell in group {
+            let needle = format!("data-overflow-of=\"{cell}\"");
+            if let Some(at) = html.find(&needle) {
+                let Some(ts) = html[..at].rfind("<input") else {
+                    continue;
+                };
+                if html[ts..at].contains('>') {
+                    continue;
+                }
+                let end = html[at..]
+                    .find('>')
+                    .map(|e| at + e + 1)
+                    .unwrap_or(html.len());
+                let tag = &html[ts..end];
+                // Only amount conversions read as one column: identifier and
+                // text overflow lines keep their own sizes.
+                if !tag.contains("amount-comb") && !tag.contains("amount-small") {
+                    continue;
+                }
+                let size = tag
+                    .split("font-size:")
+                    .nth(1)
+                    .and_then(|s| s.split("pt").next())
+                    .and_then(|s| s.trim().parse::<f64>().ok());
+                if let Some(size) = size {
+                    members.push(Rect { at: ts, end, size });
+                }
+            }
+        }
+        rects.push(members);
+    }
+    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+    for members in &rects {
+        if members.len() < 2 {
+            continue;
+        }
+        let min = members
+            .iter()
+            .map(|r| r.size)
+            .reduce(f64::min)
+            .unwrap_or(0.0);
+        for rect in members {
+            if (rect.size - min).abs() < 0.001 {
+                continue;
+            }
+            let tag = &html[rect.at..rect.end];
+            if let Some(pos) = tag.find("font-size:") {
+                let num_start = pos + "font-size:".len();
+                let Some(pt) = tag[num_start..].find("pt") else {
+                    continue;
+                };
+                let rewritten = format!(
+                    "{}font-size:{}pt{}",
+                    &tag[..pos],
+                    min,
+                    &tag[num_start + pt + 2..]
+                );
+                replacements.push((rect.at, rect.end, rewritten));
+                any = true;
+            }
+        }
+    }
+    if !any {
+        return html.to_string();
+    }
+    replacements.sort_by_key(|(at, _, _)| *at);
+    apply_replacements(html, replacements)
 }
 
 /// holding `text` left-aligned in a font small enough to fit. Returns the
@@ -7564,6 +7770,34 @@ mod tests {
     #[test]
     #[ignore = "writes the group table report"]
     fn uniform_amount_group_table() {
+        let path =
+            std::env::var("GROUP_TABLE_OUT").unwrap_or_else(|_| "../../group-table.md".to_string());
+        let out = uniform_amount_group_table_markdown();
+        std::fs::write(&path, &out).expect("write group table");
+        eprintln!("wrote {path} ({} bytes)", out.len());
+    }
+
+    /// The group table must be regenerated whenever a sheet's grouping moves:
+    /// this test fails until docs/proof/print-uniform-amount-sections/GROUPS.md
+    /// is updated with `cargo test -p bir-print uniform_amount_group_table --
+    /// --ignored` (GROUP_TABLE_OUT=<the file>).
+    #[test]
+    fn uniform_amount_group_table_matches_the_committed_file() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../docs/proof/print-uniform-amount-sections/GROUPS.md"
+        );
+        let committed = std::fs::read_to_string(path)
+            .expect("docs/proof/print-uniform-amount-sections/GROUPS.md must exist")
+            .replace("\r\n", "\n");
+        assert_eq!(
+            uniform_amount_group_table_markdown(),
+            committed,
+            "GROUPS.md is stale: regenerate it (GROUP_TABLE_OUT) and commit"
+        );
+    }
+
+    fn uniform_amount_group_table_markdown() -> String {
         let slugs = [
             "0605-1999",
             "0619e-2018",
@@ -7667,10 +7901,7 @@ no bundle
             }
             out.push('\n');
         }
-        let path =
-            std::env::var("GROUP_TABLE_OUT").unwrap_or_else(|_| "../../group-table.md".to_string());
-        std::fs::write(&path, &out).expect("write group table");
-        eprintln!("wrote {path} ({} bytes)", out.len());
+        out
     }
 
     #[test]
@@ -10823,7 +11054,10 @@ no bundle
         assert_eq!(comb_text(&html, "p3c81"), "");
         assert_eq!(printed_cell(&html, "p3c81").0, "SAMPLE DEDUCTION");
         assert_eq!(comb_text(&html, "p3c87"), "");
-        assert_eq!(comb_text(&html, "p2c47"), "        1000");
+        // Part IV is one section on page 2 (no Schedule band inside it):
+        // the centavo conversion of p2c9 widens to the whole column (#477).
+        assert_eq!(comb_text(&html, "p2c47"), "");
+        assert_eq!(printed_cell(&html, "p2c47").0, "1,000");
         // 1702EX shows a negative with a minus (formatCurrency).
         assert_eq!(comb_text(&html, "p1c83"), "       -1000");
         for checked in ["p1c7", "p1c13", "p1c15", "p1c11", "p1c56", "p1c86"] {
