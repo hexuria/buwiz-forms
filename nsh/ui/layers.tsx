@@ -125,7 +125,17 @@ export function sheetSides(): { marginLeft: number; marginRight: number } {
  */
 export function sheetCap(windowHeight: number, safeTop: number, safeBottom: number, keyboardHeight: number, android: boolean): number {
   const keyboard = android ? Math.max(0, keyboardHeight) : Math.max(0, keyboardHeight - safeBottom);
-  return Math.max(160, windowHeight - safeTop - keyboard - 24);
+  // The hard room: the status bar down to the keyboard's top. The 160 floor is clamped to it: a short window
+  // (landscape, split screen) has less than 160 above the keyboard, and a floor past the room would put the
+  // sheet's top off the screen, breaking the invariant the cap exists for. On Android API 29 and below the
+  // keyboard inset is never reported (the kit's keyboardBottom stays unset), so the cap is the no-keyboard
+  // room — exactly what the formula was before it was keyboard-aware, never worse. The same fallback happens
+  // on API 30+ while a dialog holds the keyboard and the activity's inset stays 0 (the kit's ModalHost
+  // comment): the sheet still positions above the keyboard, since the modal shrinks by the dialog's own
+  // inset; only the height cap cannot see it — that needs the engine scope fix of hexuria/buwiz-forms#645.
+  const space = Math.max(0, windowHeight - safeTop - keyboard);
+  const floor = Math.min(160, space);
+  return Math.min(space, Math.max(floor, space - 24));
 }
 
 export function sheetMaxHeight(): number {

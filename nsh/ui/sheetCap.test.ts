@@ -23,6 +23,19 @@ test("a tall sheet with the keyboard up never extends under the keyboard or off 
   // iOS (390x844, top inset 47, home strip 34, keyboard 300 over it): unchanged — the keyboard sits above the strip and
   // only the height over it counts.
   expect(sheetCap(844, 47, 34, 300, false)).toBe(844 - 47 - (300 - 34) - 24);
-  // The 160 floor: a sheet never collapses to nothing, however tall the keyboard.
-  expect(sheetCap(914, 24, 48, 800, true)).toBe(160);
+  // The 160 floor holds while the room allows it (portrait, a normal keyboard).
+  expect(sheetCap(914, 24, 48, 384, true)).toBe(914 - 24 - 384 - 24);
+  // Landscape or split screen (360 tall, keyboard 200): the room is 360 - 24 - 200 = 136, and the floor is
+  // clamped to it — never past it, so the sheet's top is never off the screen.
+  const short = sheetCap(360, 24, 0, 200, true);
+  expect(short).toBe(136);
+  expect(sheetTop(360, 200, short)).toBeGreaterThanOrEqual(24);
+  // API 29 and below: the keyboard inset is never reported, so the cap is the no-keyboard room — exactly the
+  // formula before it was keyboard-aware (never worse than main's).
+  const withoutKeyboard = sheetCap(914, 24, 48, 0, true);
+  expect(withoutKeyboard).toBe(914 - 24 - 24);
+  const mainFormula = Math.max(160, 914 - 24 - Math.max(0, 0 - 48) - 24);
+  expect(withoutKeyboard).toBe(mainFormula);
+  // Nothing left above the keyboard at all: the cap is 0 rather than negative or off the top.
+  expect(sheetCap(360, 24, 0, 336, true)).toBe(0);
 });
