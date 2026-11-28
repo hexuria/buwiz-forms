@@ -39,6 +39,17 @@ is one sheet point, same method as docs/proof/r6-510-render).
   separator column stayed white inside the strip; in #495 the greyed span is
   continuous from the first amount column to the right border.
 
+## BEFORE and AFTER
+
+The `before-*.png` set renders main at `d91df05d4` with the same fills through the
+same committed print path, cropped exactly like `n4a`/`n4b`/`n4c`/`n4r2`. At main the
+cell line goes EMPTY and the whole value jumps to the strip line, the strip shows the
+row's comb ticks, item 20 strips too, and rows 21–25 push down off the page. The
+`n4*.png` set is the AFTER at the fixed head: the cell keeps its first line, the strip
+is a clean white row with plain grey amount columns (no ticks — only the columns'
+divider and right border), item 20 truncates whole-word, and the rows keep their
+positions. Verified by eye against #510's r1a/r2: the strips draw the same.
+
 ## Numbers at this head
 
 - band `data-rule6-of="p2c134"` (item 19): top 822.98 pt, height 11.00 pt; the strip
