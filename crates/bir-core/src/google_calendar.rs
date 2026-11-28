@@ -1002,7 +1002,12 @@ impl GoogleCalendarClient {
             }
             if !status.is_success() {
                 return Err(anyhow::anyhow!(
-                    "Google Calendar API error ({status}): {text}"
+                    "{}",
+                    crate::email::google_error::failed_request(
+                        "Google Calendar API error",
+                        status,
+                        &text
+                    )
                 ));
             }
             return Ok(text);
@@ -1024,7 +1029,12 @@ impl GoogleCalendarClient {
         let text = response.text()?;
         if !status.is_success() {
             return Err(anyhow::anyhow!(
-                "Google token refresh failed ({status}): {text}"
+                "{}",
+                crate::email::google_error::failed_request(
+                    "Google token refresh failed",
+                    status,
+                    &text
+                )
             ));
         }
         let body: Value = serde_json::from_str(&text)?;
@@ -1065,7 +1075,8 @@ fn start_calendar_oauth_flow() -> Result<GoogleCalendarCredential, anyhow::Error
         urlencoding::encode(&challenge),
         urlencoding::encode(&state),
     );
-    open::that(&auth_url)?;
+    open::that(&auth_url)
+        .map_err(|e| anyhow::anyhow!("{}", crate::email::google_error::browser_not_opened(&e)))?;
     let code = rx
         .recv()
         .map_err(|_| anyhow::anyhow!("OAuth callback was cancelled"))?
@@ -1084,7 +1095,10 @@ fn start_calendar_oauth_flow() -> Result<GoogleCalendarCredential, anyhow::Error
     let status = response.status();
     let text = response.text()?;
     if !status.is_success() {
-        return Err(anyhow::anyhow!("Google OAuth failed ({status}): {text}"));
+        return Err(anyhow::anyhow!(
+            "{}",
+            crate::email::google_error::failed_request("Google OAuth failed", status, &text)
+        ));
     }
     let tokens: Value = serde_json::from_str(&text)?;
     let access_token = tokens

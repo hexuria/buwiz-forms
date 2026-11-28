@@ -233,23 +233,9 @@ fn classify(request: &str, expected_state: &str) -> Callback {
     }
     match (code, error) {
         (_, Some("access_denied")) => Callback::Cancelled,
-        (_, Some(error)) => Callback::Refused(error_code(error)),
+        (_, Some(error)) => Callback::Refused(super::google_error::plain_code(error)),
         (Some(code), None) if !code.is_empty() => Callback::Code(code.to_string()),
         _ => Callback::WrongState,
-    }
-}
-
-/// Google's error code as a short, plain word (it names the reason, never anything about the person).
-fn error_code(error: &str) -> String {
-    let code: String = error
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .take(40)
-        .collect();
-    if code.is_empty() {
-        "unknown".into()
-    } else {
-        code
     }
 }
 

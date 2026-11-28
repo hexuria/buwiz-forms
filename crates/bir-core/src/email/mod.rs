@@ -8,6 +8,7 @@ mod auth_oauth;
 mod auth_password;
 mod fetcher;
 pub mod gmail_api;
+pub(crate) mod google_error;
 mod inbox;
 pub(crate) mod oauth_server;
 
