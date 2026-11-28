@@ -15,7 +15,7 @@
 
 ## Inventory proof
 
-The dummy editable save has 172 unique serialized keys. Joining those keys in emitted order with a trailing newline hashes to `a135fd015a3e3c349f4e6baffce52317734cb478e8a3a1d62072901c050acb3d`, exactly matching `EXACT_EDITABLE_FIELD_IDS_SHA256` in the existing Rust mapping. The runtime has 173 serializable elements because `txtAddress` and `txtAddress2` are combined into one editable-save field.
+The dummy editable save has 172 unique serialized keys. The representative save's email value is redacted as `#email-redacted#` in captured field metadata. Joining those keys in emitted order with a trailing newline hashes to `a135fd015a3e3c349f4e6baffce52317734cb478e8a3a1d62072901c050acb3d`, exactly matching `EXACT_EDITABLE_FIELD_IDS_SHA256` in the existing Rust mapping. The runtime has 173 serializable elements because `txtAddress` and `txtAddress2` are combined into one editable-save field.
 
 The generated field inventory has no null labels. All 37 radio/checkbox records preserve the official HTA choice value, group, and printed caption separately from the XML serialized true/false selection state, and Part IV payment fields identify their printed subcolumns. No radio-button HTML value is treated as a saved default.
 
