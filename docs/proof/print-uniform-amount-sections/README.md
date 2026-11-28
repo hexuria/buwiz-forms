@@ -44,8 +44,8 @@ prints). The inputs are identical in both runs; only the grouping code differs.
 
 | | sha256 |
 |---|---|
-| before-1702q-sched4-overflow.html | `49a2eefd7dc2a789723cb66b64c2cfbc1d144b8f4fb068243d128d616f6e588c` |
-| after-1702q-sched4-overflow.html | `19d43eedf83c9a0df6e843effe4cd4a9cf8a678e2a1bf877b71f4319a2d8d0f0` |
+| before-1702q-sched4-overflow.html | `55ef12eb85d00c08dc29c56b0d4f02c42bbcdfc48442e3519fa689f2e12e09a8` |
+| after-1702q-sched4-overflow.html | `bcbe517ee597c1b7b2e935c39739acbf8d6415c84c86032f81362d5ddfb866ac` |
 
 before/after DIFFER — before, item 2 alone prints as a line beside boxed rows;
 after, the whole Schedule 4 column prints as uniform right-aligned lines.
@@ -76,18 +76,18 @@ alone prints as a line beside boxed rows.
 
 | 1702q-sched4-overflow | sha256 |
 |---|---|
-| before | `cab6ca2ea854d58418c6fdccde5a2454ac94e5d79a6dcfdf4d3571263b92cab0` |
-| after | `61f8ba11ba3b721093c4c5fbbec3e48f626ff2cb1c323a03ce4cceb5a8c1ddb1` |
+| before | `0939eb9d8af2da441b9735ab41464e627d515b711620817f88954c568c75174f` |
+| after | `c249da496b3f0c41056eb0cb85172ce54099d0c5e652f9ad1d8bbedf8f328192` |
 
 | 1701-part4-overflow | sha256 |
 |---|---|
-| before | `357399970a206acbe26d739864f6b62b467f280bf89dcb41ced433efc8b49bd8` |
-| after | `4bc671846ec243913d60a02bb8fbc06a1ba8e7b5dcd444e7fd0eb748c6796fb7` |
+| before | `4865cb91c3b122538989653c0b1239f8ac10155ab6d3a9d854ee615c5220af2b` |
+| after | `29bcd216dda0baf7e295811f834d68ba75a85ae370675b167e8925d85ef94b9c` |
 
 | 1601c-centavo-blank | sha256 |
 |---|---|
-| before | `399fd95f72020722246d02474958c674f668257f8fd8d8ca6f4c632ce5537729` |
-| after | `f86afd33f44680b6ec96e5d089c285d980f77e89296578b8c40e16cdf54ad0ab` |
+| before | `68431c58fda3e6c9dc3e2f67d29dc01d1c62f0fad56b63341e728d5e94b8db8b` |
+| after | `21a1517a7e967a011cd6fce0fb666f1ff31371ef1f3ed51ee8dbf943da019212` |
 
 Every pair differs. The no-overflow byte-identity claim is not a picture pair;
 it is pinned inside the test suite (`no_overflow_documents_are_byte_identical_on_more_sheets`

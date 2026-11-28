@@ -30,24 +30,39 @@ fn write_uniform_section_renders() {
             slug, &html, true,
         ))
     };
-    // 1702Q Schedule 4, item 2 overflows.
-    let q: Vec<(&str, &str)> = [
-        // formatted exactly as the draft's print_field_map emits them: a raw
-        // "1000" is a string the app never prints.
-        ("derived:Sched4:txtTax1", "1,000.00"),
-        ("derived:Sched4:txtTax2", "12,345,678,901,234.00"),
-        ("derived:Sched4:txtTax3", "1,000.00"),
-        ("derived:Sched4:txtTax4", "1,000.00"),
-        ("derived:Sched4:txtTax5", "1,000.00"),
-        ("derived:Sched4:txtTax6", "1,000.00"),
-        ("derived:Sched4:txtOthrTxCrdtAmnt0", "1,000.00"),
-        ("derived:Sched4:txtOthrTxCrdtAmnt1", "1,000.00"),
-        ("derived:Sched4:txtTax7", "1,000.00"),
-    ]
-    .into();
+    // 1702Q Schedule 4, item 2 overflows — filled through the draft itself,
+    // the keys and the formatting the app prints with.
+    let qprofile: bir_core::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+        "id": null,
+        "tin": { "segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000" },
+        "rdo_code": "044",
+        "full_name": "SANTOS, JUANA",
+        "registered_address": "123 RIZAL AVE, MAKATI CITY",
+        "zip_code": "1200",
+        "phone": "09171234567",
+        "email": "juana.santos@example.test",
+        "line_of_business": "SERVICES",
+        "default_form_type": "1702Q"
+    }))
+    .unwrap();
+    let mut qdraft = bir_core::forms::form_1702q::Form1702qDraft::new_from_profile(&qprofile, 2025, 2);
+    qdraft.prior_year_excess_credits = 100.0;
+    qdraft.previous_quarters_payments = 12_345_678_901_234.0;
+    qdraft.previous_quarters_mcit_payments = 100.0;
+    qdraft.previous_quarters_cwt = 100.0;
+    qdraft.cwt_this_quarter = 100.0;
+    qdraft.previously_filed = 100.0;
+    qdraft.recompute();
+    let qmap = qdraft.to_print_field_map();
+    let qhtml = bir_print::frozen_html::filled_document_with_receipt("1702q-2018", &qmap, None)
+        .expect("1702q render");
     std::fs::write(
         root.join(format!("{tag}-1702q-sched4-overflow.html")),
-        render("1702q-2018", &q),
+        bir_app_api::static_html::staticize(&bir_app_api::print_sheet::prepare_html_for(
+            "1702q-2018",
+            &qhtml,
+            true,
+        )),
     )
     .unwrap();
     // 1701 Part VII column A, item 2 overflows — filled through the draft's

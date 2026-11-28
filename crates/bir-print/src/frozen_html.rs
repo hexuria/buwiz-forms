@@ -8489,6 +8489,7 @@ no bundle
         assert!(!is_formatted_money_amount("0"));
     }
 
+    #[test]
     fn section_band_heading_rule() {
         for yes in [
             "Part IV",
