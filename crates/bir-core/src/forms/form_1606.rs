@@ -562,6 +562,17 @@ impl Form1606Draft {
         if !self.is_amended {
             self.tax_remitted_previous = 0.0;
         }
+        // `enableInstallment`: Items 22 to 26 are installment-sale entries.
+        // Closing Item 20's gate clears them in the model too, so a typed
+        // amount cannot lie dormant in a draft. Item 21 is only a copy of
+        // Item 28A's gross selling price and has no separate amount to clear.
+        if self.transaction != Some(Form1606Transaction::InstallmentSale) {
+            self.cost_and_expenses = 0.0;
+            self.mortgage_assumed = 0.0;
+            self.initial_year_payments = 0.0;
+            self.installment_this_month = 0.0;
+            self.number_of_installments = 0.0;
+        }
         for value in [
             &mut self.cost_and_expenses,
             &mut self.mortgage_assumed,
@@ -1553,6 +1564,44 @@ mod tests {
             installment.to_bir_field_map()["frm1606:txtSelling"],
             "5,000,000.01"
         );
+    }
+
+    #[test]
+    fn installment_amounts_clear_when_item_20_is_not_an_installment_sale() {
+        let mut unanswered = sample();
+        unanswered.transaction = None;
+        unanswered.cost_and_expenses = 42.0;
+        unanswered.mortgage_assumed = 43.0;
+        unanswered.initial_year_payments = 44.0;
+        unanswered.installment_this_month = 45.0;
+        unanswered.number_of_installments = 4.0;
+        unanswered.recompute();
+        assert_eq!(unanswered.cost_and_expenses, 0.0);
+        assert_eq!(unanswered.mortgage_assumed, 0.0);
+        assert_eq!(unanswered.initial_year_payments, 0.0);
+        assert_eq!(unanswered.installment_this_month, 0.0);
+        assert_eq!(unanswered.number_of_installments, 0.0);
+
+        let mut installment = sample();
+        installment.set_transaction(Form1606Transaction::InstallmentSale);
+        installment.cost_and_expenses = 42.0;
+        installment.mortgage_assumed = 43.0;
+        installment.initial_year_payments = 44.0;
+        installment.installment_this_month = 45.0;
+        installment.number_of_installments = 4.0;
+        installment.recompute();
+        assert_eq!(installment.cost_and_expenses, 42.0);
+        assert_eq!(installment.mortgage_assumed, 43.0);
+        assert_eq!(installment.initial_year_payments, 44.0);
+        assert_eq!(installment.installment_this_month, 45.0);
+        assert_eq!(installment.number_of_installments, 4.0);
+
+        installment.set_transaction(Form1606Transaction::CashSale);
+        assert_eq!(installment.cost_and_expenses, 0.0);
+        assert_eq!(installment.mortgage_assumed, 0.0);
+        assert_eq!(installment.initial_year_payments, 0.0);
+        assert_eq!(installment.installment_this_month, 0.0);
+        assert_eq!(installment.number_of_installments, 0.0);
     }
 
     #[test]
