@@ -24,6 +24,7 @@ test("phone: Just me types the first taxpayer with no chrome; Cancel goes back; 
   await app.press("id:new-tp-rdo_code-trigger");
   await app.type("id:new-tp-rdo_code-search", "039");
   await app.press("id:new-tp-rdo_code-opt-039");
+  await app.waitFor("id:new-tp-rdo_code-opt-039", { state: "gone" });
   await app.press("id:new-tp-zip_code-trigger");
   await app.type("id:new-tp-zip_code-search", "1100");
   await app.press("id:new-tp-zip_code-opt-1100 >> nth=0");
