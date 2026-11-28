@@ -289,8 +289,10 @@ class SuiteTests(unittest.TestCase):
         self.assertTrue(queue_send["send"])
         sign_up = next(entry for entry in suite["recipes"] if entry["name"] == "sign-up")
         tax_year = next(entry for entry in suite["recipes"] if entry["name"] == "tax-year")
+        delete_row = next(entry for entry in suite["recipes"] if entry["name"] == "delete-row")
         self.assertEqual(sign_up["android"], "sign-up-android.json")
         self.assertEqual(tax_year["android"], "tax-year-android.json")
+        self.assertEqual(delete_row["android"], "delete-row.json")
 
     def test_problems_are_named(self):
         with tempfile.TemporaryDirectory() as folder:

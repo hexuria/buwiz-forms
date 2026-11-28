@@ -202,7 +202,7 @@ a Windows file is named.
 | 5 | `open-2551q` | New return > 2551Q | `open-2551q.wants`; Windows `open-2551q-windows.wants` (also the facts 2551Q validates) | `open-2551q-phone.wants` | `open-2551q-phone.wants` |
 | 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | `money-boxes-paced-phone.json` (awaits the software keyboard), fallback `money-boxes-phone.json` |
 | 7 | `queue` | Queue in the dry-run test build (send) | `queue.wants`; Windows `queue-windows.wants` (answers Part I) | `queue.wants` | `queue.wants` |
-| 8 | `delete-row` | a schedule row added, filled and deleted | `delete-row.wants` | same | same |
+| 8 | `delete-row` | a schedule row added, filled and deleted | `delete-row.wants` | same | same; Android `delete-row.json` opens Schedule 1 first |
 | 9 | `birth-date` | the birth date, typed in the date box / the date sheet, read back, saved | `birth-date.wants` | `birth-date-phone.json` | `birth-date-phone.json` |
 | 10 | `sign-out` | Log out; the lock screen | `sign-out.wants` | `sign-out-phone.wants` | `sign-out-phone.wants` |
 

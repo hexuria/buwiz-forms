@@ -9,22 +9,16 @@
  ],
  "steps": [
   {
-   "id": "s0",
-   "op": "wait_until",
+   "id": "s1",
+   "op": "click",
    "target": "fp-frm2551Qv2018:amendedRtn_1",
-   "timeout_ms": 8000
+   "screenshot": true
   },
   {
    "id": "s1a",
    "op": "scroll",
    "target": "form-scroll",
    "dy": 300
-  },
-  {
-   "id": "s1",
-   "op": "click",
-   "target": "fp-frm2551Qv2018:amendedRtn_1",
-   "screenshot": true
   },
   {
    "id": "s1b",
@@ -122,6 +116,11 @@
    "target": "fp-frm2551Qv2018:txt15",
    "value": "$amount_shown",
    "screenshot": true
+  },
+  {
+   "id": "s13h",
+   "op": "system",
+   "action": "keyboard_hide"
   },
   {
    "id": "s13r",

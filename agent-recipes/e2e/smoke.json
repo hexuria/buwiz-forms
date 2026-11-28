@@ -90,6 +90,7 @@
   {
    "name": "delete-row",
    "file": "delete-row.wants",
+   "android": "delete-row.json",
    "resolve": {
     "table": {
      "id_regex": "^(fp-table-.+)-add$",
