@@ -4,7 +4,7 @@
 // the selection the input reported before each edit goes to the mask so the edit is read exactly (NSH: onKeyPress comes
 // before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
 import type { InputRef, JSX, ViewRef } from "nsh";
-import { cleanup, effect, platform, signal, Text as NText, untracked, View } from "nsh";
+import { cleanup, effect, lifecycle, platform, signal, Text as NText, untracked, View } from "nsh";
 import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
@@ -464,6 +464,12 @@ function MaskedField(props: MaskedProps) {
         programmaticFocusToken++;
         props.field.onBlur?.();
   };
+
+  // Android keeps a focused input's IME composition alive across Home and back. Leaving the field as the app
+  // backgrounds settles the controlled text and ends that composition before a restarted input method can replay it.
+  effect(() => {
+    if (platform.os === "android" && lifecycle() !== "active" && untracked(focused)) input?.blur();
+  });
 
   cleanup(() => {
     if (untracked(focused)) finishLeave(false);

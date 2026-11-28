@@ -6,6 +6,18 @@ const commaHint = " Use a point for centavos, and commas only between thousands.
 const leftSentence = (typed: string, kept: string) =>
   `${typed} is not an amount. ${kept === "" ? "The box was left blank." : `The box kept ${kept}.`}${typed.includes(",") ? commaHint : ""}`;
 
+test("android: going to the background settles a focused amount before input restarts", async () => {
+  const app = await open("./masked.fixture.tsx", { platform: "android" });
+  await app.type("id:m-cb", "");
+  expect(app.texts()).toContain("Cb blurs: 0");
+  await app.setLifecycle("background");
+  expect(app.texts()).toContain("Cb blurs: 1");
+  expect(app.value("id:m-cb")).toBe("2,000.00");
+  await app.setLifecycle("active");
+  expect(app.value("id:m-cb")).toBe("2,000.00");
+  expect(app.texts()).toContain("Cb blurs: 1");
+});
+
 for (const size of SIZES) {
   test(`${size.name}: touch date sheet validates Done, discards dismissal and clears`, async () => {
     const app = await openKit("../BasePreview.tsx", size.options);
