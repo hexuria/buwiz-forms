@@ -10,6 +10,14 @@
 //! name with the taxpayer's box, so its probe also checks the row owner.
 
 use serde_json::{Map, Value, json};
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+
+thread_local! {
+    static PROBE_COMPUTES: Cell<usize> = const { Cell::new(0) };
+    static PROBE_CACHE: RefCell<HashMap<(String, String, String), bool>> =
+        RefCell::new(HashMap::new());
+}
 
 use crate::forms::agent::{self, AgentFormKind, Binding};
 use crate::forms::form_1701::{Form1701Atc, Form1701Draft, Form1701Party};
@@ -479,20 +487,36 @@ fn probe_closed(kind: AgentFormKind, draft: &Value, key: &str) -> bool {
     let Some((path, probe_kind)) = binding_path(&bound.binding) else {
         return false;
     };
+    let draft_json = serde_json::to_string(draft).unwrap_or_default();
+    let cache_key = (kind.form_code().to_string(), draft_json, key.to_string());
+    if let Some(closed) = PROBE_CACHE.with(|cache| cache.borrow().get(&cache_key).copied()) {
+        return closed;
+    }
     let mut copy = draft.clone();
     let probe = match probe_kind {
         ProbeKind::Text => json!("PROBE"),
         ProbeKind::Amount => json!(42.0),
         ProbeKind::Whole => json!(42),
     };
-    if !set_path(&mut copy, path, probe) {
-        return false;
-    }
-    if agent::compute(kind, &mut copy).is_err() {
-        return false;
-    }
-    copy.pointer(path)
-        .is_none_or(|value| empty_for_kind(value, probe_kind))
+    let closed = if !set_path(&mut copy, path, probe) {
+        false
+    } else {
+        PROBE_COMPUTES.with(|count| count.set(count.get() + 1));
+        if agent::compute(kind, &mut copy).is_err() {
+            false
+        } else {
+            copy.pointer(path)
+                .is_none_or(|value| empty_for_kind(value, probe_kind))
+        }
+    };
+    PROBE_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= 512 {
+            cache.clear();
+        }
+        cache.insert(cache_key, closed);
+    });
+    closed
 }
 
 /// The reviewed lock reason for a shut gated row box.
@@ -786,4 +810,26 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
         }
     }
     cleared
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeated_lock_probe_for_one_draft_recomputes_once() {
+        let draft = json!({});
+        PROBE_COMPUTES.with(|count| count.set(0));
+        let _ = lock_reason(
+            AgentFormKind::Queueable(crate::forms::queueable::QueueableKind::Form1701A),
+            &draft,
+            "frm1701A:txtForeignTaxNumber",
+        );
+        let _ = lock_reason(
+            AgentFormKind::Queueable(crate::forms::queueable::QueueableKind::Form1701A),
+            &draft,
+            "frm1701A:txtForeignTaxNumber",
+        );
+        assert_eq!(PROBE_COMPUTES.with(Cell::get), 1);
+    }
 }

@@ -733,6 +733,15 @@ impl Session {
         } else {
             None
         };
+        if asks.is_some() {
+            // The window's removal question is already this clearing's one
+            // showing. Nothing is stored until Continue, but the draft id
+            // exists from the open, so report the same gates the page's own
+            // fill would have reported inline; otherwise the save after
+            // Continue writes the pending notice and the event is said twice.
+            let shown = crate::screen_form_module::inline_clearances_between(kind, &before, &draft);
+            crate::screen_form_module::remember_inline_clearances(draft["id"].as_i64(), &shown);
+        }
         if !filled.is_empty() || !forgot.is_empty() {
             if asks.is_none() {
                 agent::save_draft_with_clearance_context(
@@ -3956,6 +3965,47 @@ mod tests {
     }
 
     #[test]
+    fn an_assistant_yes_to_no_shown_in_the_window_reports_its_clearing() {
+        let mut session = session();
+        save_complete(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2000", "year": 2026, "period": 6, "tin": TIN}),
+        )
+        .unwrap();
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm2000:optParty_1": "true"}}),
+        )
+        .unwrap();
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm2000:txtOtherName": "Lender Corp", "frm2000:txtOtherTIN": "123456789000"}}),
+        )
+        .unwrap();
+        let id = session.open.as_ref().unwrap().draft["id"]
+            .as_i64()
+            .expect("the open saved the draft");
+        while session.commands.pop().is_some() {}
+
+        let error = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm2000:optParty_3": "true"}}),
+        )
+        .unwrap_err();
+        assert!(error.starts_with("approval required:"), "{error}");
+        let reported = crate::screen_form_module::reported_inline_clearances(Some(id));
+        assert!(
+            reported.contains("2000_other_party_name"),
+            "the window's approval is the one showing of this clearing; reported: {reported:?}"
+        );
+    }
+
+    #[test]
     fn form_open_records_a_dormant_2551q_item16_clearing_as_pending() {
         let mut session = session();
         call(
@@ -4346,6 +4396,64 @@ mod tests {
             agent::field_map(AgentFormKind::Form2551Q, &queued).unwrap()[item16],
             "0.00"
         );
+    }
+
+    #[test]
+    fn form_send_queues_a_valid_form_with_gated_rows() {
+        use bir_core::forms::form_2000::{
+            Form2000AffixtureMode, Form2000Draft, Form2000OtherParty, Form2000PaymentRow,
+            Form2000RemittanceRow, form_2000_atc_option,
+        };
+
+        let mut session = session();
+        call(
+            &mut session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        session.lock_db().unwrap().grant_send(TIN, "2000").unwrap();
+        {
+            let db = session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form2000Draft::new_from_profile(&profile, 2026, 6);
+            draft.other_party = Form2000OtherParty::Creditor;
+            draft.other_party_name = "Sample Creditor Corp".into();
+            draft.other_party_tin = "987654321000".into();
+            draft.affixture_mode = Form2000AffixtureMode::Constructive;
+            let pick = |code, description| form_2000_atc_option(code, description).unwrap();
+            draft
+                .set_atc(0, pick("DS101", "ORIGINAL ISSUE OF SHARES OF STOCKS"))
+                .unwrap();
+            draft.schedule1[0].tax_base = 123_456.78;
+            draft.ds106_term_under_a_year = Some(true);
+            draft.ds106_term_days = 90;
+            draft.schedule2 = vec![Form2000PaymentRow {
+                date: "06/05/2026".into(),
+                receipt_number: "Rcpt1001".into(),
+                amount: 1_000.50,
+            }];
+            draft.schedule4 = vec![Form2000RemittanceRow {
+                rco_code: "Rco01".into(),
+                date: "06/25/2026".into(),
+                bank: "Sample Bank".into(),
+                amount: 5_000.0,
+                number_from: "1001".into(),
+                number_to: "1100".into(),
+            }];
+            draft.recompute();
+            db.save_queueable_draft(&draft).unwrap();
+        }
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2000", "year": 2026, "period": 6, "tin": TIN}),
+        )
+        .unwrap();
+        let sent = call(&mut session, "form.send", json!({})).unwrap();
+        assert_eq!(sent["queued"], true, "{sent}");
     }
 
     #[test]

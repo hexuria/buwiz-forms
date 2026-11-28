@@ -3409,7 +3409,7 @@ thread_local! {
         const { RefCell::new(BTreeMap::new()) };
 }
 
-fn remember_inline_clearances(id: Option<i64>, gates: &BTreeSet<String>) {
+pub(crate) fn remember_inline_clearances(id: Option<i64>, gates: &BTreeSet<String>) {
     if gates.is_empty() {
         return;
     }
@@ -3425,7 +3425,7 @@ fn remember_inline_clearances(id: Option<i64>, gates: &BTreeSet<String>) {
     });
 }
 
-fn reported_inline_clearances(id: Option<i64>) -> BTreeSet<String> {
+pub(crate) fn reported_inline_clearances(id: Option<i64>) -> BTreeSet<String> {
     let Some(id) = id else {
         return BTreeSet::new();
     };
@@ -3436,6 +3436,63 @@ fn reported_inline_clearances(id: Option<i64>) -> BTreeSet<String> {
 
 fn clear_inline_clearances(draft_id: i64) {
     INLINE_CLEARANCE_REPORTS.with(|reports| reports.borrow_mut().remove(&draft_id));
+}
+
+/// The pending-notice gates whose clearing `before -> after` shows inline.
+/// This is the same host-side report a page fill makes; the assistant uses
+/// it when a shown window is already asking the filer to approve that same
+/// clearing, so the later save does not say it again.
+pub(crate) fn inline_clearances_between(
+    kind: AgentFormKind,
+    before: &Value,
+    after: &Value,
+) -> BTreeSet<String> {
+    let mut gates = BTreeSet::new();
+    if kind == AgentFormKind::Form2551Q {
+        let was = before["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        let now = after["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        if was.abs() >= 0.005
+            && now.abs() < 0.005
+            && bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(after).is_some()
+        {
+            gates.insert("2551q_item16".to_string());
+        }
+    }
+    if kind.form_code() == "1606" {
+        let cleared = bir_core::forms::agent::draft_locks::installment_1606::AMOUNT_FIELDS
+            .iter()
+            .any(|field| {
+                before[field].as_f64().unwrap_or(0.0).abs() >= 0.005
+                    && after[field].as_f64().unwrap_or(0.0).abs() < 0.005
+            });
+        if cleared
+            && bir_core::forms::agent::draft_locks::installment_1606::lock_reason(after).is_some()
+        {
+            gates.insert("1606_installment".to_string());
+        }
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+        let was = before[spec.path].as_f64().unwrap_or(0.0);
+        let now = after[spec.path].as_f64().unwrap_or(0.0);
+        if was.abs() >= 0.005
+            && now.abs() < 0.005
+            && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, after)
+                .is_some()
+        {
+            gates.insert(bir_core::forms::agent::draft_locks::previous_payment::gate_key(spec));
+        }
+    }
+    if kind.form_code() == "1601FQ" {
+        use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+        let clearances = gate::row_clearances(kind, before, after);
+        if let Some((event_gate, _)) = gate::clearance_event(&clearances) {
+            gates.insert(event_gate);
+        }
+    }
+    for clearance in bir_core::forms::agent::gated_rows::clearances(kind, before, after) {
+        gates.insert(clearance.gate);
+    }
+    gates
 }
 
 /// Queue and print take a return, never a Form library sample: the page
@@ -5367,7 +5424,6 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let clearance_report_id = draft["id"]
         .as_i64()
         .or_else(|| amendment.as_ref().and_then(|mark| mark["id"].as_i64()));
-    let mut inline_clearances = BTreeSet::new();
     let edits = arguments
         .value(2)?
         .as_object()
@@ -5456,7 +5512,6 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
                 bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(&draft)
         {
             relock_notes.insert(item16.to_string(), json!(note));
-            inline_clearances.insert("2551q_item16".to_string());
         }
     }
     // When 1606's installment gate closes with installment-only values
@@ -5473,7 +5528,6 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         if cleared
             && bir_core::forms::agent::draft_locks::installment_1606::lock_reason(&draft).is_some()
         {
-            inline_clearances.insert("1606_installment".to_string());
             for key in bir_core::forms::agent::draft_locks::installment_1606::KEYS {
                 relock_notes.insert(
                     key.to_string(),
@@ -5491,20 +5545,12 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
                 .is_some()
         {
             relock_notes.insert(spec.key.to_string(), json!(spec.cleared));
-            inline_clearances
-                .insert(bir_core::forms::agent::draft_locks::previous_payment::gate_key(spec));
         }
     }
     if kind.form_code() == "1601FQ" {
         use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
         let clearances = gate::row_clearances(kind, &before, &draft);
-        // The page shows this clearing inline, so its one pending notice (the
-        // event's gate, as `clearance_event` keys it) is reported as shown.
-        let event = gate::clearance_event(&clearances);
-        if let Some((event_gate, _)) = event.as_ref() {
-            inline_clearances.insert(event_gate.clone());
-        }
-        let event_text = event.map(|(_, text)| text);
+        let event_text = gate::clearance_event(&clearances).map(|(_, text)| text);
         for clearance in clearances {
             if let (Some(row), Some(text)) =
                 (gate::row_index(&before, &clearance.id), event_text.as_ref())
@@ -5515,13 +5561,24 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             }
         }
     }
+    let other_party_removal_acknowledged =
+        removes.is_some() && edits.keys().any(|key| key.starts_with("frm2000:optParty_"));
     for clearance in bir_core::forms::agent::gated_rows::clearances(kind, &before, &draft) {
-        inline_clearances.insert(clearance.gate.clone());
+        // Item 10's removal question and its Undo toast already name this
+        // exact clearing (items 11 and 12). A third inline/pending copy of
+        // the same sentence would only repeat what the filer approved.
+        if other_party_removal_acknowledged && clearance.gate == "2000_other_party_name" {
+            continue;
+        }
         for key in clearance.keys {
             if relocks.contains_key(key) {
                 relock_notes.insert(key.to_string(), json!(clearance.text.clone()));
             }
         }
+    }
+    let mut inline_clearances = inline_clearances_between(kind, &before, &draft);
+    if other_party_removal_acknowledged {
+        inline_clearances.remove("2000_other_party_name");
     }
     remember_inline_clearances(clearance_report_id, &inline_clearances);
     put_sample_mark(&mut draft, sample.as_ref());
@@ -5807,11 +5864,14 @@ fn apply_screen_edits_here(
         .any(|(key, _)| recompute_gated.contains(key.as_str()))
     {
         let def = kind.definition();
-        planned.sort_by_key(|(key, _)| {
-            usize::from(!matches!(
-                def.bindings.get(key).map(|bound| &bound.binding),
-                Some(bir_core::forms::agent::Binding::Choice { .. })
-            ))
+        planned.sort_by_key(|(key, step)| {
+            let opening_answer = match def.bindings.get(key).map(|bound| &bound.binding) {
+                Some(bir_core::forms::agent::Binding::Choice { .. }) => true,
+                Some(bir_core::forms::agent::Binding::Text { date: Some(_), .. }) => true,
+                _ => false,
+            } || matches!(step, ChoiceStep::Set(_) | ChoiceStep::Untick)
+                || key == "frm1702RT:txtPg1Pt1I10";
+            usize::from(!opening_answer)
         });
     }
     // The draft paths this batch's picks write — a member's pick, a group
@@ -7386,6 +7446,11 @@ fn save_amendment(
             .ok_or("this amendment does not say which filed return it amends; amend it again")?,
         updated_at: mark["updated_at"].as_str().unwrap_or("").to_string(),
     };
+    // N3 trade-off on this first save: the only pre-image is the filed
+    // original. If it still holds a gated value, the pending-notice layer
+    // treats the recompute as the clearer even when the filer had already
+    // blanked that open box before closing the gate; the copying amendment
+    // has no separate pre-edit draft with which to tell those apart.
     let incoming = mark["id"]
         .as_i64()
         .and_then(|id| db.draft_summary_and_json(id).ok().flatten())

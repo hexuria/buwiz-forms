@@ -216,6 +216,35 @@ fn form_2552_tax_relief_specification_is_gated_and_said_once() {
 }
 
 #[test]
+fn a_batch_writes_an_opening_date_before_a_gated_mcit_row() {
+    setup();
+    let date = "frm1702RT:txtPg1Pt1I10";
+    let year = "frm1702RT:txtPg4Sc4I1C1";
+    let opened = open("1702RT", 0);
+    let young = fill("1702RT", &opened["draft"], json!({date: "06/30/2024"}));
+    assert_eq!(
+        young["relocks"][year],
+        json!("MCIT applies to this return."),
+        "the row starts shut: {:?}",
+        young["relocks"]
+    );
+
+    let mut batch = serde_json::Map::new();
+    batch.insert(year.to_string(), json!("2023"));
+    batch.insert(date.to_string(), json!("06/30/2019"));
+    let opened_by_batch = fill("1702RT", &young["draft"], Value::Object(batch));
+    assert!(
+        opened_by_batch["rejected"].get(year).is_none(),
+        "the date opens the row before the row write is judged: {:?}",
+        opened_by_batch["rejected"]
+    );
+    assert_eq!(
+        opened_by_batch["draft"]["schedule_4"]["rows"][0]["year"],
+        "2023"
+    );
+}
+
+#[test]
 fn form_2000_other_party_and_balance_are_gated() {
     setup();
     let name = "frm2000:txtOtherName";
@@ -266,7 +295,8 @@ fn form_2000_other_party_and_balance_are_gated() {
     for key in [name, tin] {
         assert_eq!(
             none["relock_notes"][key],
-            json!("The other-party details were cleared: Item 11 names no other party.")
+            json!("The other-party details need Item 11 Creditor or Debtor."),
+            "the removal question and its Undo toast already say this clearing"
         );
     }
 

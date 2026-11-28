@@ -798,17 +798,25 @@ impl Form1601FqDraft {
         let ordinal = |id: &StableInstanceId| id.as_str().strip_prefix("row-")?.parse::<u64>().ok();
         let mut used = BTreeSet::new();
         let mut next = self.schedule1_next_row_ordinal.max(1);
+        // Keep every existing id before allocating any missing one. An
+        // imported row without an id can sit before a row that already has
+        // one; allocating in one pass would hand that later row's id to the
+        // earlier row and then move the later row.
         for row in &mut self.schedule1 {
             if let Some(id) = row.instance_id.as_ref() {
                 if let Some(ordinal) = ordinal(id) {
                     next = next.max(ordinal + 1);
                 }
-                if used.insert(id.clone()) {
-                    continue;
+                if !used.insert(id.clone()) {
+                    // A duplicated imported id cannot name a row: the first row
+                    // keeps it and this row receives a fresh one below.
+                    row.instance_id = None;
                 }
-                // A duplicated imported id cannot name a row: the first row
-                // keeps it and this row receives a fresh one below.
-                row.instance_id = None;
+            }
+        }
+        for row in &mut self.schedule1 {
+            if row.instance_id.is_some() {
+                continue;
             }
             loop {
                 let id =
@@ -825,7 +833,8 @@ impl Form1601FqDraft {
         }
     }
 
-    /// Item 4. "No" clears Part II and Schedule 1 like `cancelAllCompute`.
+    /// Item 4. "No" clears the entries in Part II and Schedule II like
+    /// `cancelAllCompute`; the first- and second-month remittances stay.
     pub fn set_any_tax_withheld(&mut self, withheld: bool) {
         self.ensure_schedule1_row_ids();
         self.any_tax_withheld = Some(withheld);
@@ -2064,6 +2073,18 @@ mod tests {
             .filter_map(|row| row.instance_id.clone())
             .collect();
         assert_eq!(ids.len(), FORM_1601FQ_SCHEDULE1_ROWS);
+    }
+
+    #[test]
+    fn an_imported_idless_row_never_takes_a_later_rows_instance_id() {
+        let mut draft = sample();
+        let existing = StableInstanceId::parse("row-00000000000000000001").unwrap();
+        draft.schedule1[0].instance_id = None;
+        draft.schedule1[1].instance_id = Some(existing.clone());
+        draft.schedule1_next_row_ordinal = 0;
+        draft.ensure_schedule1_row_ids();
+        assert_eq!(draft.schedule1[1].instance_id.as_ref(), Some(&existing));
+        assert_ne!(draft.schedule1[0].instance_id.as_ref(), Some(&existing));
     }
 
     #[test]
