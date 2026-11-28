@@ -6,6 +6,7 @@ fixtures/e2e/snapshot-phone-2551q.json is written by hand in the strict adapter'
 recorded on a proof branch): it has the `system-keyboard` node a host with feature software_keyboard reports.
 """
 import importlib.util
+import io
 import json
 import os
 import stat
@@ -592,15 +593,152 @@ class AccountsMockTests(unittest.TestCase):
         self.assertIn("dev.env", writes[0][0][-1])
         self.assertEqual(writes[0][1], "BIR_AUTH_BYPASS=\nBUWIZ_SERVER_URL=http://127.0.0.1:3008\n")
 
+    def test_the_android_mock_dev_env_restores_a_previous_file(self):
+        previous = "BIR_AUTH_BYPASS=1\nBUWIZ_SERVER_URL=http://localhost:3008\n"
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append((command, kwargs.get("input")))
+            if command[4:6] == ["pm", "path"]:
+                return subprocess.CompletedProcess(command, 0, "package:/data/app/nsh", "")
+            shell = command[-1]
+            if "cat " + E2E.ANDROID_DEV_ENV in shell and "cat >" not in shell:
+                return subprocess.CompletedProcess(command, 0, previous, "")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        state = {}
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E.subprocess, "run", side_effect=run):
+            E2E.write_android_dev_env("adb", "emulator-5554", "PINNED\n", log, state=state)
+            E2E.restore_android_dev_env(state, log)
+        writes = [text for command, text in calls if text is not None]
+        self.assertEqual(writes, ["PINNED\n", previous])
+
+    def test_an_interrupted_android_dev_env_write_restores_the_previous_file_at_once(self):
+        previous = "BIR_AUTH_BYPASS=1\n"
+        writes = []
+
+        def run(command, **kwargs):
+            if command[4:6] == ["pm", "path"]:
+                return subprocess.CompletedProcess(command, 0, "package:/data/app/nsh", "")
+            shell = command[-1]
+            if "cat " + E2E.ANDROID_DEV_ENV in shell and "cat >" not in shell:
+                return subprocess.CompletedProcess(command, 0, previous, "")
+            if kwargs.get("input") == "PINNED\n":
+                writes.append(kwargs.get("input"))
+                raise KeyboardInterrupt
+            writes.append(kwargs.get("input"))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        state = {}
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E.subprocess, "run", side_effect=run), \
+                self.assertRaises(KeyboardInterrupt):
+            E2E.write_android_dev_env("adb", "emulator-5554", "PINNED\n", log, state=state)
+        self.assertEqual(writes, ["PINNED\n", previous])
+        self.assertFalse(state["written"])
+
+    def test_the_android_mock_dev_env_is_removed_when_none_existed_before(self):
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append((command, kwargs.get("input")))
+            if command[4:6] == ["pm", "path"]:
+                return subprocess.CompletedProcess(command, 0, "package:/data/app/nsh", "")
+            shell = command[-1]
+            if "cat " + E2E.ANDROID_DEV_ENV in shell and "cat >" not in shell:
+                return subprocess.CompletedProcess(command, 44, "", "not found")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        state = {}
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E.subprocess, "run", side_effect=run):
+            E2E.write_android_dev_env("adb", "emulator-5554", "PINNED\n", log, state=state)
+            E2E.restore_android_dev_env(state, log)
+        self.assertTrue(any("rm -f " + E2E.ANDROID_DEV_ENV in command[-1] for command, _ in calls), calls)
+
+    def test_a_bypass_android_run_refuses_a_dev_env_with_mock_settings(self):
+        def run(command, **kwargs):
+            if command[4:6] == ["pm", "path"]:
+                return subprocess.CompletedProcess(command, 0, "package:/data/app/nsh", "")
+            return subprocess.CompletedProcess(
+                command, 0, "BIR_AUTH_BYPASS=\nBUWIZ_SERVER_URL=http://127.0.0.1:3008\n", "")
+
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E, "android_adb", return_value="adb"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=run), \
+                self.assertRaises(E2E.SuiteError) as raised:
+            E2E.assert_android_dev_env_not_mock({"ANDROID_SERIAL": "emulator-5554"}, log)
+        self.assertIn("dev.env", str(raised.exception))
+        self.assertIn("mock", str(raised.exception))
+        self.assertNotIn("3008", str(raised.exception), "the refusal names the settings, not the file's contents")
+
+    def test_mock_dev_env_settings_are_found_by_key_without_repeating_values(self):
+        mock = "BIR_AUTH_BYPASS=1\nBUWIZ_SERVER_URL=http://localhost:3008/\n"
+        self.assertEqual(E2E.android_dev_env_mock_settings(mock), ["BUWIZ_SERVER_URL"])
+        plain = "BIR_AUTH_BYPASS=1\nBUWIZ_SERVER_URL=http://localhost:3009\n"
+        self.assertEqual(E2E.android_dev_env_mock_settings(plain), [])
+
+    def test_a_dev_env_read_error_does_not_repeat_file_contents(self):
+        def run(command, **kwargs):
+            if command[4:6] == ["pm", "path"]:
+                return subprocess.CompletedProcess(command, 0, "package:/data/app/nsh", "")
+            return subprocess.CompletedProcess(command, 1, "BUWIZ_TRUST_KEYS=partial-secret\n", "")
+
+        with mock.patch.object(E2E.subprocess, "run", side_effect=run), \
+                self.assertRaises(E2E.SuiteError) as raised:
+            E2E.read_android_dev_env("adb", "emulator-5554")
+        self.assertNotIn("partial-secret", str(raised.exception))
+
+    def test_a_bypass_android_run_accepts_a_plain_dev_env(self):
+        def run(command, **kwargs):
+            if command[4:6] == ["pm", "path"]:
+                return subprocess.CompletedProcess(command, 0, "package:/data/app/nsh", "")
+            return subprocess.CompletedProcess(command, 0, "BIR_AUTH_BYPASS=1\nEBIR_TEST_ENV=1\n", "")
+
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E, "android_adb", return_value="adb"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=run):
+            E2E.assert_android_dev_env_not_mock({"ANDROID_SERIAL": "emulator-5554"}, log)
+
+    def test_the_bypass_android_dev_env_check_runs_before_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            write(folder, "x.wants", "click x\n")
+            suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [{"name": "x", "file": "x.wants"}]}))
+            args = E2E.parse_args(["android", str(suite), "--db", str(folder / "scratch.db"),
+                                   "--out", str(folder / "out")])
+
+            class AliveProcess:
+                def poll(self):
+                    return None
+
+            with mock.patch.object(E2E, "check_suite", return_value=[]), \
+                    mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "assert_android_dev_env_not_mock",
+                                      side_effect=E2E.SuiteError("stale mock dev.env")) as guard, \
+                    mock.patch.object(E2E, "fresh_android") as fresh, \
+                    mock.patch.object(E2E, "launch", return_value=AliveProcess()) as launched, \
+                    mock.patch.object(E2E, "wait_for", return_value=True), \
+                    mock.patch.object(E2E, "app_database", return_value="test"), \
+                    mock.patch.object(E2E, "run_entry", return_value={"name": "x", "status": "pass", "ms": 0}), \
+                    mock.patch.object(E2E, "stop"), mock.patch.object(E2E, "close_device"):
+                with self.assertRaises(E2E.SuiteError):
+                    E2E.run(args)
+            guard.assert_called_once()
+            fresh.assert_not_called()
+            launched.assert_not_called()
+
     def test_gate_preflight_requires_the_real_gate_node_and_names_bypass_sources(self):
         class PastGate:
             def snapshot(self):
-                return {"tree": {"nodes": [{"id": "home-root", "role": "group"}]}}
+                return {"tree": {"nodes": [{"id": "home", "role": "group"}]}}
 
         with self.assertRaises(E2E.SuiteError) as raised:
             E2E.assert_sign_in_gate(PastGate())
         message = str(raised.exception)
-        self.assertIn("the app started past the sign-in gate: a bypass reached it", message)
+        self.assertIn("the app started past the sign-in gate", message)
+        self.assertIn("a bypass reached it", message)
         for source in (".env", "wrapper", "dev.env", "SIMCTL_CHILD"):
             self.assertIn(source, message)
 
@@ -610,6 +748,67 @@ class AccountsMockTests(unittest.TestCase):
                 return {"tree": {"nodes": [{"id": "gate-root", "role": "group"}]}}
 
         E2E.assert_sign_in_gate(AtGate())
+
+    def test_gate_preflight_waits_for_a_late_gate(self):
+        class Clock:
+            def __init__(self):
+                self.now = 0.0
+
+            def sleep(self, seconds):
+                self.now += seconds
+
+        class Driver:
+            def __init__(self):
+                self.trees = [
+                    {"tree": {"nodes": []}},
+                    {"tree": {"nodes": []}},
+                    {"tree": {"nodes": [{"id": "gate-root", "role": "group"}]}},
+                ]
+
+            def snapshot(self):
+                return self.trees.pop(0)
+
+        clock = Clock()
+        driver = Driver()
+        E2E.assert_sign_in_gate(driver, timeout_s=5, poll_s=0.5, sleep=clock.sleep, now=lambda: clock.now)
+        self.assertEqual(driver.trees, [])
+        self.assertEqual(clock.now, 1.0)
+
+    def test_gate_preflight_refuses_home_at_once(self):
+        class Driver:
+            def __init__(self):
+                self.snapshots = 0
+
+            def snapshot(self):
+                self.snapshots += 1
+                return {"tree": {"nodes": [{"id": "home", "role": "group"}]}}
+
+        driver = Driver()
+        with self.assertRaises(E2E.SuiteError) as raised:
+            E2E.assert_sign_in_gate(driver, timeout_s=5, poll_s=0.5, sleep=lambda seconds: None,
+                                    now=lambda: 0.0)
+        self.assertEqual(driver.snapshots, 1)
+        self.assertIn("home", str(raised.exception))
+        self.assertIn("gate-root", str(raised.exception))
+
+    def test_gate_preflight_refuses_when_nothing_shows_before_the_timeout(self):
+        class Clock:
+            def __init__(self):
+                self.now = 0.0
+
+            def sleep(self, seconds):
+                self.now += seconds
+
+        class Driver:
+            def snapshot(self):
+                return {"tree": {"nodes": []}}
+
+        clock = Clock()
+        with self.assertRaises(E2E.SuiteError) as raised:
+            E2E.assert_sign_in_gate(Driver(), timeout_s=1, poll_s=0.5, sleep=clock.sleep,
+                                    now=lambda: clock.now)
+        self.assertGreaterEqual(clock.now, 1.0)
+        self.assertIn("gate-root", str(raised.exception))
 
     def test_a_mock_run_refuses_a_past_gate_app_before_the_first_recipe(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -633,7 +832,7 @@ class AccountsMockTests(unittest.TestCase):
                     return {"ready": True, "platform": "desktop", "features": []}
 
                 def snapshot(self):
-                    return {"tree": {"nodes": [{"id": "home-root", "role": "group"}]}}
+                    return {"tree": {"nodes": [{"id": "home", "role": "group"}]}}
 
             with mock.patch.object(E2E, "check_suite", return_value=[]), \
                     mock.patch.object(E2E, "port_answers", return_value=False), \
@@ -649,6 +848,117 @@ class AccountsMockTests(unittest.TestCase):
                     E2E.run(args)
             self.assertIn("the app started past the sign-in gate", str(raised.exception))
             self.assertEqual(entries, [])
+
+    def test_an_android_mock_failure_restores_the_dev_env_in_the_run_finally(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            write(folder, "x.wants", "click x\n")
+            suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [{"name": "x", "file": "x.wants"}]}))
+            args = E2E.parse_args(["android", str(suite), "--accounts", "mock", "--db", str(folder / "scratch.db"),
+                                   "--out", str(folder / "out")])
+            entries = []
+
+            class AliveProcess:
+                def poll(self):
+                    return None
+
+            class FakeAgent:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def hello(self):
+                    return {"ready": True, "platform": "mobile", "features": []}
+
+                def snapshot(self):
+                    return {"tree": {"nodes": [{"id": "home", "role": "group"}]}}
+
+            def fresh(env, log, dev_env=None, dev_env_state=None):
+                dev_env_state.update({"adb": "adb", "serial": "emulator-5554", "written": True, "exists": False})
+
+            with mock.patch.object(E2E, "check_suite", return_value=[]), \
+                    mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "android_mock_reverse", return_value=("adb", "emulator-5554")), \
+                    mock.patch.object(E2E, "remove_android_mock_reverse"), \
+                    mock.patch.object(E2E, "fresh_android", side_effect=fresh), \
+                    mock.patch.object(E2E, "launch", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "Agent", FakeAgent), \
+                    mock.patch.object(E2E, "restore_android_dev_env") as restore, \
+                    mock.patch.object(E2E, "run_entry", side_effect=lambda *rest: entries.append(rest) or
+                                     {"name": "x", "status": "pass", "ms": 0}), \
+                    mock.patch.object(E2E, "stop"), mock.patch.object(E2E, "close_device"), \
+                    mock.patch.object(E2E, "stop_mock_account"):
+                with self.assertRaises(E2E.SuiteError):
+                    E2E.run(args)
+            restore.assert_called_once()
+            self.assertEqual(entries, [])
+
+    def run_fake_mock_suite(self, folder, recipes, events, database="test"):
+        folder = Path(folder)
+        for name in {entry["file"] for entry in recipes}:
+            write(folder, name, "click x\n")
+        suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": recipes}))
+        args = E2E.parse_args(["macos", str(suite), "--accounts", "mock", "--db", str(folder / "scratch.db"),
+                               "--out", str(folder / "out")])
+
+        class AliveProcess:
+            def poll(self):
+                return None
+
+        class FakeAgent:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def hello(self):
+                return {"ready": True, "platform": "desktop", "features": []}
+
+            def snapshot(self):
+                return {"tree": {"nodes": [{"id": "gate-root", "role": "group"}]}}
+
+        def run_entry(index, entry, *rest):
+            events.append("recipe:" + entry["name"])
+            return {"name": entry["name"], "status": "pass", "ms": 0}
+
+        def app_database(*rest):
+            events.append("app.info")
+            return database
+
+        patches = [mock.patch.object(E2E, "check_suite", return_value=[]),
+                   mock.patch.object(E2E, "port_answers", return_value=False),
+                   mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()),
+                   mock.patch.object(E2E, "launch", return_value=AliveProcess()),
+                   mock.patch.object(E2E, "Agent", FakeAgent),
+                   mock.patch.object(E2E, "installed_cli_version", return_value="test"),
+                   mock.patch.object(E2E, "git_head", return_value="test"),
+                   mock.patch.object(E2E, "app_database", side_effect=app_database),
+                   mock.patch.object(E2E, "run_entry", side_effect=run_entry),
+                   mock.patch.object(E2E, "stop"), mock.patch.object(E2E, "stop_mock_account")]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+        return args
+
+    def test_the_mock_database_proof_waits_for_sign_in_and_precedes_the_first_write_recipe(self):
+        with tempfile.TemporaryDirectory() as folder:
+            events = []
+            recipes = [
+                {"name": "sign-in-start", "file": "a.wants", "sign_in": True},
+                {"name": "sign-in-finish", "file": "b.wants", "sign_in": True},
+                {"name": "write", "file": "c.wants"},
+            ]
+            args = self.run_fake_mock_suite(folder, recipes, events)
+            self.assertEqual(E2E.run(args), 0)
+        self.assertEqual(events, ["recipe:sign-in-start", "recipe:sign-in-finish", "app.info", "recipe:write"])
+
+    def test_a_mock_write_recipe_does_not_run_without_the_scratch_database_proof(self):
+        with tempfile.TemporaryDirectory() as folder:
+            events = []
+            args = self.run_fake_mock_suite(folder, [{"name": "write", "file": "a.wants"}], events,
+                                            database=None)
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.run(args)
+        self.assertIn("scratch database", str(raised.exception))
+        self.assertEqual(events, ["app.info"])
 
     def test_a_recipe_failure_still_stops_the_mock(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -704,6 +1014,44 @@ class AccountsMockTests(unittest.TestCase):
             without = "\n".join(E2E.check_suite(suite))
             self.assertIn("$account_a", without)
             self.assertEqual(E2E.check_suite(suite, extra_params=E2E.mock_account_params()), [])
+
+    def test_mock_mode_allows_exact_runner_code_fixtures_only_in_the_gate_code_box(self):
+        params = E2E.mock_account_params()
+        fixture = {"op": "type", "target": "gate-code-boxes", "text": "$code_1"}
+        self.assertFalse(E2E.is_secret_entry(fixture, params, accounts="mock"))
+        self.assertTrue(E2E.is_secret_entry(fixture, params), "bypass mode still refuses the code box")
+        for text in ("246810", "${code_1}x", "$code_9", "$account_a", ""):
+            with self.subTest(text=text):
+                step = {**fixture, "text": text}
+                self.assertTrue(E2E.is_secret_entry(step, params, accounts="mock"))
+        for target in ("auth-tp-totp", "setup-change-code-cells", "login-password", "x-gate-code-boxes"):
+            with self.subTest(target=target):
+                step = {**fixture, "target": target}
+                self.assertTrue(E2E.is_secret_entry(step, params, accounts="mock"))
+        for op in ("set_value", "paste", "key"):
+            with self.subTest(op=op):
+                step = {**fixture, "op": op}
+                self.assertTrue(E2E.is_secret_entry(step, params, accounts="mock"))
+        wrong = dict(params)
+        wrong["code_1"] = "000000"
+        self.assertTrue(E2E.is_secret_entry(fixture, wrong, accounts="mock"))
+
+    def test_check_suite_plumbs_the_mock_code_exception_and_bypass_still_refuses(self):
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "sign-in.wants", "type gate-code-boxes $code_1\n")
+            suite = suite_of(folder, [{"name": "sign-in", "file": "sign-in.wants", "sign_in": True}])
+            bypass = "\n".join(E2E.check_suite(suite, extra_params=E2E.mock_account_params()))
+            self.assertIn("code box", bypass)
+            self.assertEqual(E2E.check_suite(suite, extra_params=E2E.mock_account_params(), accounts="mock"), [])
+
+    def test_the_check_command_uses_the_mock_code_exception_only_in_mock_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "sign-in.wants", "type gate-code-boxes $code_1\n")
+            suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [
+                {"name": "sign-in", "file": "sign-in.wants", "sign_in": True}]}))
+            with mock.patch.object(sys, "stdout", io.StringIO()):
+                self.assertEqual(E2E.check(str(suite), "missing-gpui-agent", accounts="mock"), 0)
+                self.assertEqual(E2E.check(str(suite), "missing-gpui-agent"), 1)
 
     def test_runner_account_params_win_over_suite_and_entry_values(self):
         context = {"params": E2E.mock_account_params()}
@@ -772,6 +1120,12 @@ class AccountsMockTests(unittest.TestCase):
 
 
 class ProcessControlTests(unittest.TestCase):
+    def test_the_e2e_docs_name_the_cancellation_boundary_and_fresh_queue_database(self):
+        text = (E2E.ROOT / "docs" / "proof" / "E2E.md").read_text(encoding="utf-8")
+        self.assertIn("SIGTERM and SIGHUP", text)
+        self.assertIn("Verification boundary", text)
+        self.assertIn("`queue` and `queue-send` recipes need a fresh database", text)
+
     @unittest.skipUnless(os.name == "posix", "SIGHUP is POSIX-only")
     def test_sigterm_and_sighup_are_converted_to_keyboard_interrupts(self):
         before = {name: E2E.signal.getsignal(getattr(E2E.signal, name)) for name in ("SIGTERM", "SIGHUP")}
@@ -818,7 +1172,27 @@ class FileTests(unittest.TestCase):
             for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm"), *state_files):
                 path.write_text("x")
             E2E.remove_scratch(db, log)
-            self.assertEqual(sorted(p.name for p in folder.iterdir()), ["receipt.json"])
+            self.assertEqual(sorted(p.name for p in folder.iterdir()), [
+                "buwiz-cloud-account.json", "buwiz-pending-sign-in.json", "e2e.db.buwiz-cloud-account.json",
+                "e2e.db.buwiz-pending-sign-in.json", "receipt.json"])
+
+    def test_the_mock_sign_in_pin_shadows_stale_defaults_and_cleanup_removes_only_the_pin(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            db = folder / "e2e.db"
+            defaults = (folder / "buwiz-cloud-account.json", folder / "buwiz-pending-sign-in.json")
+            for path in defaults:
+                path.write_text("stale shared sign-in")
+            env = {}
+            pinned = E2E.pin_account_state(env, db)
+            self.assertNotEqual(pinned, defaults)
+            self.assertEqual(env["BUWIZ_CLOUD_ACCOUNT_FILE"], str(pinned[0]))
+            self.assertEqual(env["BUWIZ_PENDING_SIGN_IN_FILE"], str(pinned[1]))
+            for path in pinned:
+                path.write_text("this run's sign-in")
+            E2E.remove_files(pinned, E2E.RunLog(None, echo=False))
+            self.assertEqual([path.read_text() for path in defaults], ["stale shared sign-in"] * 2)
+            self.assertFalse(any(path.exists() for path in pinned))
 
     def test_on_windows_a_scratch_database_still_held_is_retried_elsewhere_reported_at_once(self):
         real_unlink = Path.unlink

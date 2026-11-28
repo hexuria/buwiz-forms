@@ -29,19 +29,35 @@ recipes that must prove sign-in and per-account behavior in the real app. It sta
 end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and sets `BIR_AUTH_BYPASS`
 to the empty string: the gate reads only the exact value `1`, and the app's dotenv does not replace a variable that is
 already set. The saved and pending sign-in files are pinned beside the run's own database, removed before launch and
-afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. After launch the runner requires
-the app's real sign-in-gate node before the first recipe.
+afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. Only those pinned files are
+removed: scratch cleanup never touches a sign-in file in the app's shared device folder, and a plain bypass-mode run
+touches no shared sign-in file there. After launch the runner waits a bounded time for the app's real sign-in-gate
+node (`gate-root`) before the first recipe; `setup-root`, `home` or `sign-in` appearing first proves the run is already
+past the gate and refuses at once.
 
 On Android it writes the same pinned set over the emulator's private `dev.env`, refuses `--keep-data`, and adds the
 same `adb reverse tcp:3008 tcp:3008` the Android script uses after first refusing an existing reverse on that port;
-a fresh run removes the test database and the saved sign-in beside it, never files outside `test-data`.
+a fresh run removes the test database and the saved sign-in beside it, never files outside `test-data`. The previous
+`dev.env` is captured before the overwrite and restored in the same cleanup that stops the mock (or the mock-written
+file is removed when none existed), on success, failure and interruption alike. A bypass-mode Android run first reads
+that private file and refuses one carrying mock settings, because dev.env wins over the next launch's baked settings.
 
 The mode refuses `--no-launch`, refuses when either account URL in the environment is not loopback (`127.0.0.1`,
 `[::1]` or `localhost`), and refuses when port 3008 is already taken: the mock has no health or version route by
 which another listener can be identified. The dry-run release and database guards are the same as any other run.
 Recipes can use the runner-supplied `$account_a` and `$account_b` (both invented
-`example.com` addresses) and `$code_1` through `$code_8` (`246810`, then counting up as the mock does). Today a recipe
-still cannot type that code until the sign-in page fix of #608 lands; that fix is not part of the runner change.
+`example.com` addresses) and `$code_1` through `$code_8` (`246810`, then counting up as the mock does). In mock mode
+only, a `type` step may put exactly one of those runner-supplied `$code_N` fixtures into the sign-in gate's code box;
+the literal code, any other placeholder or value, any other secret box, and every other input operation or mode stay
+refused. Whether a typed digit then lands in the real page is the sign-in page fix of #608, not part of this runner
+change.
+
+The account gate locks the data plane as well as the window: even `hello` is refused there. A mock run therefore does
+not ask that plane for the scratch-database proof before sign-in. Recipes marked `"sign_in": true` are the boundary
+that may run first (they write account sign-in state, not the filing database); before the first later recipe — and
+before any data-plane recipe — the runner waits for the data plane and requires `app.info` to answer `"database":
+"test"`. If it does not, that recipe is never run. In a plain run the proof still happens before the first recipe, as
+before.
 
 ## The rule
 
@@ -56,6 +72,15 @@ still cannot type that code until the sign-in page fix of #608 lands; that fix i
 
 ## What a run does
 
+**Cancellation model.** The runner owns only the processes it started: the mock-account server, the app launcher, and
+any emulator reverse it added. Ctrl+C, SIGTERM and SIGHUP (where the platform has them) are one boundary at the
+runner: `finally` stops the app process group and the mock in reverse ownership order, closes the device-side app
+and forwards, restores or removes a mock-written Android `dev.env`, redacts and writes the evidence, then removes
+the scratch database and the mock-run's pinned sign-in files. Verification boundary: `scripts/tests/test_e2e.py`
+proves the SIGTERM/SIGHUP conversion and handler restoration in Python and the cleanup seams with fakes; it does not
+prove OS signal delivery or process-group behavior inside every platform terminal, only the runner's ownership and
+ordering once the signal or interrupt reaches Python.
+
 1. Checks the suite (below), and refuses to start if anything already listens on the agent's ports.
 2. Starts the app with `just nsh-run-agent <target> <db>`. That is a debug build in dry-run mode
    (`EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1`, never `BIR_SFTP_LIVE`); a plain run adds
@@ -63,8 +88,9 @@ still cannot type that code until the sign-in page fix of #608 lands; that fix i
    - The database is new, under `~/BuwizNsh/agents/`.
    - On Android, the emulator's guarded test database is removed first, so the run starts at first-run setup.
    - The token is `GPUI_AGENT_TOKEN` if set, else one made for the run. It is never printed, and the run log masks it.
-3. Waits for the window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`) and the data plane on the next
-   port. The first build can take a long time: `--launch-timeout` is an hour by default.
+3. Waits for the window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`). A plain run also proves the
+   data plane on the next port now; a mock run defers that locked plane's scratch-database proof as above. The first
+   build can take a long time: `--launch-timeout` is an hour by default.
 4. Runs each recipe with `gpui-agent recipe run`, in the variant for what the host reports:
    - **Variant.** `phone` when `hello.platform` is mobile (iPhone, iPad and Android tablets use the phone layout),
      otherwise `desktop`. A variant named after the target (`windows`, `linux`, `android`, ...) wins on that target
@@ -109,15 +135,19 @@ The checks read every word of a step (flag values included) and every string of 
   token, recovery, OTP or TOTP, also inside a word (`newpin`, `confirmPin`, `adminotp`, `newcode`), or a code box
   (`…-code-boxes`, `…-code-cells`, a node named "6-digit code", "Authenticator code" or "Verification code"), and no
   step presses the software keyboard's keys (`system-keyboard…`). Nested selectors (`{"target": {"id": …}}`) are
-  read, and a resolved id is checked by its node's name and role wherever it appears in a selector. The store review
+  read, and a resolved id is checked by its node's name and role wherever it appears in a selector. The one exception
+  is the mock-account mode's exact runner-generated `$code_N` in a `type` step into exactly `gate-code-boxes`:
+  invented loopback fixture data only, never a stored or typed secret. The store review
   account's fixed code never goes in a file.
 - **Sign-in.** Every press, key or typing on a sign-in screen (`gate-*`, `auth-*`: Enter in the email box sends the
   code), and Continue, Verify or Resend there, only in a recipe marked `"sign_in": true`, in an app this run launched,
   against an account server on this machine. `assert` and `wait_until` there are fine.
 - **The token** stays in the environment of the processes that need it, and is masked in `run.log`, the receipts,
   the failure trees and `app.log`.
-- **Afterwards** the app is stopped, on the Simulator or emulator too (and the emulator's forwarded ports removed),
-  and the run's scratch database and its pinned sign-in state are deleted; the evidence folder stays.
+- **Afterwards** the app is stopped, on the Simulator or emulator too (and the emulator's forwarded ports removed);
+  the scratch database is deleted, a mock run's pinned sign-in files are deleted, and a mock-written Android
+  `dev.env` is restored or removed. Shared default-location sign-in files are never deleted. The evidence folder
+  stays.
 
 ## Per machine type
 
@@ -206,15 +236,15 @@ step must not use `$table`) and only then clicks `$table-add`, the entry's spec 
 - a param resolved `after` a step is not used at or before that step;
 - in a JSON recipe, the cut after that step does not separate a step from a step it `needs`;
 - send steps are marked;
-- no secret box is typed into;
+- no secret box is typed into (apart from the one mock-fixture exception above);
 - `key_delay_ms` appears only on `type`, and only in entries with `needs_cli`;
 - then `gpui-agent recipe validate` on each file the installed client can read.
 
 ## The smoke suite (`agent-recipes/e2e/smoke.json`)
 
 On a fresh database, in this order (the three recipes that open sheets run last: on a phone a sheet that cannot be
-closed swallows every later press). Files are relative to `agent-recipes/e2e/`; "desktop" is macOS and Windows unless
-a Windows file is named.
+closed swallows every later press). The `queue` and `queue-send` recipes need a fresh database. Files are relative to
+`agent-recipes/e2e/`; "desktop" is macOS and Windows unless a Windows file is named.
 
 | # | Recipe | What it proves | Desktop | Linux (narrow) | iOS / Android |
 | --- | --- | --- | --- | --- | --- |

@@ -8,7 +8,8 @@
 1. checks the suite (every recipe file parses, its params are supplied, the safety rules below hold);
 2. starts the app with `just nsh-run-agent <target> <scratch db>` (a debug build, dry run, no keychain), a token it
    makes itself unless GPUI_AGENT_TOKEN is set, never printed;
-3. waits for the window's control plane (GPUI_AGENT_ADDR, default 127.0.0.1:17421) and the data plane (the next port);
+3. waits for the window's control plane (GPUI_AGENT_ADDR, default 127.0.0.1:17421); a plain run proves the data plane
+   at once, while a mock run proves it after sign-in and before the first recipe outside that boundary;
 4. runs each recipe of the suite with `gpui-agent recipe run`, the variant for the form factor the app reports
    (phone or desktop; the target's own variant, e.g. linux or android, where one exists), its generated ids read
    from a snapshot first;
@@ -25,12 +26,14 @@ Safety, enforced here (on every word of a step, camelCase split, and again on id
   runs only with --allow-send, in a dry-run test environment (EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE),
   against an app whose app.info says "database": "test"; with --no-launch no recipe runs against any other app;
 - no step types, sets, pastes or keys into a password, PIN, passcode, secret, token, OTP / TOTP or code box, or
-  presses the software keyboard's keys;
+  presses the software keyboard's keys; the one exception is mock mode's exact runner-generated `$code_N` typed into
+  exactly `gate-code-boxes`;
 - Continue / Resend on a sign-in screen only in a recipe marked "sign_in", in an app this run launched, against an
   account server on this machine (a debug build's default is the local mock);
 - the app's environment has none of the live SFTP or relay variables (BIR_SFTP_HOST, _PASSWORD, ... BIR_RELAY_URL);
 - the token is masked in run.log, the receipts, the failure trees and app.log;
-- afterwards the app is stopped (on the Simulator or emulator too) and the scratch database removed.
+- afterwards the app is stopped (on the Simulator or emulator too), the scratch database removed, a mock run's own
+  pinned sign-in files removed, and a mock-written Android dev.env restored or removed.
 """
 import argparse
 import datetime as dt
@@ -77,6 +80,8 @@ CODE_KIND_WORDS = {"authenticator", "verification", "security", "confirmation", 
 SIGN_IN_WORDS = {"gate", "signin", "login", "auth"}
 # The Buwiz account gate's own root testID (nsh/screens/auth/Gate.tsx). A mock-mode run must start there.
 SIGN_IN_GATE_NODE = "gate-root"
+# Nodes that prove a mock run reached a screen beyond that gate before the gate itself appeared.
+PAST_SIGN_IN_GATE_NODES = ("setup-root", "home", "sign-in")
 # Ops that put text or keys into a box.
 TYPING_OPS = {"type", "set_value", "paste", "key"}
 # Step fields that are what is typed or expected, not what is acted on.
@@ -329,9 +334,25 @@ def is_send_step(step, params=None):
     return False
 
 
-def is_secret_entry(step, params=None, names=None):
+def is_sign_in_code_box(text):
+    """Exactly the account gate's sign-in code box, by its stable testID."""
+    return str(text or "").strip() == "gate-code-boxes"
+
+
+def is_runner_code_fixture(text, params):
+    """Exactly one runner-supplied $code_N fixture, with its mock-generated value still intact."""
+    found = PARAM.fullmatch(text or "")
+    if not found:
+        return False
+    name = found.group(1) or found.group(2)
+    fixtures = mock_account_params()
+    return (name.startswith("code_") and name in fixtures and str((params or {}).get(name)) == fixtures[name])
+
+
+def is_secret_entry(step, params=None, names=None, accounts="bypass"):
     """A step that would type or key into a password, PIN, passcode, secret, token or code box, or press a key of the
-    software keyboard. `names` maps a resolved id to the name and role its node has."""
+    software keyboard. `names` maps a resolved id to the name and role its node has. Mock mode has one exception: a
+    `type` step may put exactly one runner-supplied `$code_N` fixture into the sign-in gate's code box."""
     op = step.get("op", "")
     found = selectors(step, params)
     if op in PRESS_OPS | TYPING_OPS and any(item.startswith("system-keyboard") for item in found):
@@ -339,9 +360,15 @@ def is_secret_entry(step, params=None, names=None):
     if op not in TYPING_OPS:
         return False
     names = names or {}
-    return any(is_secret_text(item) or any(is_secret_text(described) for resolved, described in names.items()
-                                           if resolved and resolved in item)
-               for item in found)
+    mock_code = accounts == "mock" and op == "type" and is_runner_code_fixture(step.get("text"), params)
+    for item in found:
+        descriptions = [item] + [described for resolved, described in names.items() if resolved and resolved in item]
+        if not any(is_secret_text(described) for described in descriptions):
+            continue
+        if mock_code and any(is_sign_in_code_box(described) for described in descriptions):
+            continue
+        return True
+    return False
 
 
 def is_sign_in_step(step, params=None):
@@ -361,7 +388,7 @@ def is_sign_in_step(step, params=None):
     return False
 
 
-def step_problems(steps, params, file, entry, names=None):
+def step_problems(steps, params, file, entry, names=None, accounts="bypass"):
     """What a recipe's steps must not do, as sentences, with `params` bound."""
     problems = []
     for step in steps:
@@ -369,7 +396,7 @@ def step_problems(steps, params, file, entry, names=None):
         if is_send_step(step, params) and not entry.get("send"):
             problems.append(f"{file} presses {what!r}, a send step, but the suite does not mark the recipe "
                             "\"send\": true")
-        if is_secret_entry(step, params, names):
+        if is_secret_entry(step, params, names, accounts=accounts):
             problems.append(f"{file} types into or keys {what!r}: never a password, PIN, passcode, secret, token, "
                             "code box or the software keyboard")
         if is_sign_in_step(step, params) and not entry.get("sign_in"):
@@ -401,12 +428,6 @@ def account_state_paths(db):
     the fixed filenames the app otherwise uses in the database's folder."""
     db = Path(db)
     return (Path(f"{db}.buwiz-cloud-account.json"), Path(f"{db}.buwiz-pending-sign-in.json"))
-
-
-def default_account_state_paths(db):
-    """The fixed sign-in filenames the app would have used beside `db` without the per-run pin."""
-    parent = db.parent if str(db.parent) else Path(".")
-    return parent / "buwiz-cloud-account.json", parent / "buwiz-pending-sign-in.json"
 
 
 def pin_account_state(env, db):
@@ -496,7 +517,7 @@ def entry_files(entry):
     return names
 
 
-def check_suite(suite, extra_params=None):
+def check_suite(suite, extra_params=None, accounts="bypass"):
     """Every problem of `suite` that would stop it before a host sees it, as sentences (empty: it can run).
     `extra_params` are supplied by the runner itself (the mock sign-in fixtures), not by the suite."""
     problems = []
@@ -550,7 +571,8 @@ def check_suite(suite, extra_params=None):
                     for needed, dependent in needs_edges_cut(steps, ids, cut):
                         problems.append(f"{where}: {file}: ${param} resolves after {after!r}, cutting the needs edge "
                                         f"{needed} -> {dependent}")
-            problems += [f"{where}: {problem}" for problem in step_problems(steps, bound, file, entry)]
+            problems += [f"{where}: {problem}" for problem in step_problems(steps, bound, file, entry,
+                                                                            accounts=accounts)]
             if any(step.get("key_delay_ms") is not None for step in steps) and not entry.get("needs_cli"):
                 problems.append(f"{where}: {file} paces typing (key_delay_ms): mark it \"needs_cli\": \"0.4.1\" "
                                 "with a fallback")
@@ -653,13 +675,22 @@ def tree_nodes(snapshot):
             stack.extend(reversed(item))
 
 
-def assert_sign_in_gate(agent):
-    """Require the freshly launched mock-mode app to be on the account gate, proved through the window driver."""
-    if any(node.get("id") == SIGN_IN_GATE_NODE for node in tree_nodes(agent.snapshot())):
-        return
-    raise SuiteError("the app started past the sign-in gate: a bypass reached it; one can come from the "
-                     "repository .env, a wrapper that passes BIR_AUTH_BYPASS, Android dev.env, or the "
-                     "Simulator's SIMCTL_CHILD_* environment")
+def assert_sign_in_gate(agent, timeout_s=30, poll_s=0.5, sleep=time.sleep, now=time.monotonic):
+    """Wait, bounded, for the freshly launched mock-mode app's account gate. A node that can exist only past the gate
+    (`setup-root`, `home` or `sign-in`) refuses at once, before the timeout."""
+    deadline = now() + timeout_s
+    while True:
+        ids = {node.get("id") for node in tree_nodes(agent.snapshot())}
+        if SIGN_IN_GATE_NODE in ids:
+            return
+        past = next((node for node in PAST_SIGN_IN_GATE_NODES if node in ids), None)
+        if past:
+            raise SuiteError(f"the app started past the sign-in gate ({past} appeared before {SIGN_IN_GATE_NODE}): "
+                             "a bypass reached it; one can come from the repository .env, a wrapper that passes "
+                             "BIR_AUTH_BYPASS, Android dev.env, or the Simulator's SIMCTL_CHILD_* environment")
+        if now() >= deadline:
+            raise SuiteError(f"the sign-in gate did not appear: no {SIGN_IN_GATE_NODE} within {timeout_s:g}s")
+        sleep(poll_s)
 
 
 def for_host(value, context):
@@ -1002,7 +1033,7 @@ def run_entry(index, entry, suite, context, agent, log, out):
             return result
         params[param] = value
     # The suite was checked before the run; what a resolved id names is known only now.
-    problems = step_problems(steps, params, file, entry, names)
+    problems = step_problems(steps, params, file, entry, names, accounts=context.get("accounts", "bypass"))
     if problems:
         result.update(status="refused", error="; ".join(problems))
         log.line("recipe", entry["name"], f"refused: {result['error']}", 0)
@@ -1045,7 +1076,7 @@ def run_entry(index, entry, suite, context, agent, log, out):
                 log.line("recipe", entry["name"], f"setup at {after}: {result['error']}", result["ms"])
                 return result
             params[param] = value
-            problems = step_problems(steps, params, file, entry, names)
+            problems = step_problems(steps, params, file, entry, names, accounts=context.get("accounts", "bypass"))
             if problems:
                 if recorder:
                     result["video"] = recorder.stop()
@@ -1322,7 +1353,8 @@ def check(suite_name, cli, accounts="bypass"):
     """Every recipe of the suite checked without an app: the suite's own rules, then `gpui-agent recipe validate` for
     each file the installed client can read. Exit 0 when nothing is wrong."""
     suite = load_suite(suite_name)
-    problems = check_suite(suite, extra_params=mock_account_params() if accounts == "mock" else None)
+    problems = check_suite(suite, extra_params=mock_account_params() if accounts == "mock" else None,
+                           accounts=accounts)
     cli_version = installed_cli_version(cli)
     validated = 0
     if shutil.which(cli) or Path(cli).exists():
@@ -1416,7 +1448,7 @@ def main(argv=None):
 def run(args):
     suite = load_suite(args.suite)
     account_params = mock_account_params() if args.accounts == "mock" else {}
-    problems = check_suite(suite, extra_params=account_params)
+    problems = check_suite(suite, extra_params=account_params, accounts=args.accounts)
     if problems:
         raise SuiteError("the suite cannot run:\n  " + "\n  ".join(problems))
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1435,6 +1467,7 @@ def run(args):
     proc = None
     mock_proc = None
     mock_reverse = None
+    android_dev_env_state = {}
     results = []
     made_db = None
     account_state = ()
@@ -1454,9 +1487,12 @@ def run(args):
                 account_state = pin_account_state(env, db)
                 if not remove_files(account_state, log):
                     raise SuiteError("--accounts mock: stale sign-in state could not be removed")
-            if args.target == "android" and not args.keep_data:
-                dev_env = android_mock_dev_env(addr) if args.accounts == "mock" else None
-                fresh_android(env, log, dev_env=dev_env)
+            if args.target == "android":
+                if args.accounts != "mock":
+                    assert_android_dev_env_not_mock(env, log)
+                if not args.keep_data:
+                    dev_env = android_mock_dev_env(addr) if args.accounts == "mock" else None
+                    fresh_android(env, log, dev_env=dev_env, dev_env_state=android_dev_env_state)
             proc = launch(args.target, db, env, out, log, args.just)
         window = Agent(args.cli, addr, env, log, args.reply_timeout_ms)
         hello = wait_for(window, proc, args.launch_timeout if proc else 30, log, "window plane")
@@ -1468,15 +1504,20 @@ def run(args):
         form_factor = args.form_factor or ("phone" if hello.get("platform") == "mobile" else "desktop")
         header.update(platform=hello.get("platform"), os=hello.get("os"), features=features, form_factor=form_factor)
         data = Agent(args.cli, data_plane(addr), env, log, args.reply_timeout_ms)
-        header["data_plane"] = bool(wait_for(data, None, 60, log, "data plane"))
-        header["database"] = app_database(data, log) if header["data_plane"] else None
+        if args.accounts == "mock":
+            header["data_plane"] = False
+            header["database"] = None
+        else:
+            header["data_plane"] = bool(wait_for(data, None, 60, log, "data plane"))
+            header["database"] = app_database(data, log) if header["data_plane"] else None
         if args.no_launch and header["database"] != "test":
             raise SuiteError(f"the app on {addr} does not answer app.info with \"database\": \"test\" "
                              f"({header['database'] or 'no answer'}): drive only a test build on a scratch database")
         context = {"target": args.target, "form_factor": form_factor, "features": features,
                    "env": os.environ if args.no_launch else env, "launched": not args.no_launch,
-                   "database": header["database"], "params": account_params,
-                   "allow_send": args.allow_send, "cli_version": header["cli_version"],
+                   "database": header["database"], "params": account_params, "accounts": args.accounts,
+                   "data_plane": header["data_plane"], "allow_send": args.allow_send,
+                   "cli_version": header["cli_version"],
                    "recorder": (lambda folder: Recorder(args.target, folder, env, log)) if args.record else None}
         stopped = None
         for index, entry in enumerate(suite["recipes"], 1):
@@ -1486,6 +1527,14 @@ def run(args):
                 results.append({"name": entry["name"], "status": "not run", "ms": 0,
                                 "note": f"{stopped} failed and the suite needs it"})
                 continue
+            if args.accounts == "mock" and context.get("database") != "test" and (
+                    not entry.get("sign_in") or entry.get("plane") == "data"):
+                if not prove_test_database(data, context, log):
+                    raise SuiteError("the scratch database proof did not reach the unlocked data plane as "
+                                     f"\"database\": \"test\" ({context.get('database') or 'no answer'}); stopping "
+                                     "before a recipe that writes")
+                header["data_plane"] = context["data_plane"]
+                header["database"] = context["database"]
             agent = data if entry.get("plane") == "data" else window
             result = run_entry(index, entry, suite, context, agent, log, out)
             results.append(result)
@@ -1495,6 +1544,7 @@ def run(args):
         stop(proc, log)
         if proc is not None:
             close_device(args.target, addr, env, log)
+        restore_android_dev_env(android_dev_env_state, log)
         if mock_reverse:
             remove_android_mock_reverse(mock_reverse, log)
         stop_mock_account(mock_proc, log)
@@ -1503,11 +1553,21 @@ def run(args):
         write_report(out, header, results)
         if made_db:
             remove_scratch(made_db, log)
-        elif account_state:
-            if remove_files(account_state, log):
-                log.line("clean", account_state[0], "mock sign-in state removed", 0)
+        if account_state and remove_files(account_state, log):
+            log.line("clean", account_state[0], "mock sign-in state removed", 0)
     print(f"e2e {header['suite']} on {args.target}: {summary(results)}. Report: {out / 'report.md'}")
     return 0 if all(r["status"] in ("pass", "skipped") for r in results) else 1
+
+
+def prove_test_database(data, context, log, timeout_s=60):
+    """The scratch-database proof, taken when the data plane is expected to answer. True only for `database: test`."""
+    if context.get("database") == "test":
+        return True
+    ready = bool(wait_for(data, None, timeout_s, log, "data plane"))
+    kind = app_database(data, log) if ready else None
+    context["data_plane"] = ready
+    context["database"] = kind
+    return ready and kind == "test"
 
 
 def app_database(data, log):
@@ -1586,12 +1646,11 @@ def remove_files(paths, log):
 
 
 def remove_scratch(db, log):
-    """The run's scratch database, its SQLite side files, and the saved or pending sign-in files that can otherwise
-    start the next desktop run inside the gate; the evidence stays."""
-    paths = (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal"),
-             *account_state_paths(db), *default_account_state_paths(db))
+    """The run's scratch database and its SQLite side files only. Sign-in state is never part of scratch cleanup:
+    mock mode removes its own pinned files separately, and no mode removes a file in the app's shared device folder."""
+    paths = (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal"))
     if remove_files(paths, log):
-        log.line("clean", db, "scratch database removed; sign-in state removed", 0)
+        log.line("clean", db, "scratch database removed", 0)
 
 
 def android_mock_dev_env(addr):
@@ -1609,27 +1668,141 @@ def android_mock_dev_env(addr):
     )) + "\n"
 
 
-def write_android_dev_env(adb, serial, text, log):
-    """Overwrite the emulator's private dev.env with `text`. A not-yet-installed host has no stale file; an installed
-    host whose file cannot be overwritten makes the run refuse rather than trusting unknown contents."""
-    t0 = time.monotonic()
+def android_host_installed(adb, serial):
     listed = subprocess.run([adb, "-s", serial, "shell", "pm", "path", ANDROID_HOST], capture_output=True, text=True,
                             timeout=30)
-    installed = listed.returncode == 0 and listed.stdout.strip().startswith("package:")
-    if not installed:
-        log.line("fresh", f"{serial}:{ANDROID_DEV_ENV}", "host not installed; no stale dev.env", 0)
-        return
+    return listed.returncode == 0 and listed.stdout.strip().startswith("package:")
+
+
+def write_android_dev_env_raw(adb, serial, text):
     command = (f"run-as {ANDROID_HOST} sh -c 'umask 077 && mkdir -p {ANDROID_DEV_ENV_DIR} && "
                f"cat > {ANDROID_DEV_ENV}'")
-    done = subprocess.run([adb, "-s", serial, "shell", command], input=text, capture_output=True, text=True,
+    return subprocess.run([adb, "-s", serial, "shell", command], input=text, capture_output=True, text=True,
                           timeout=30)
+
+
+def capture_android_dev_env(adb, serial):
+    """The private dev.env before a mock run replaces it, without copying it anywhere else."""
+    state = {"adb": adb, "serial": serial, "installed": android_host_installed(adb, serial), "exists": False,
+             "text": None, "written": False}
+    if not state["installed"]:
+        return state
+    command = (f"run-as {ANDROID_HOST} sh -c 'if [ -f {ANDROID_DEV_ENV} ]; then cat {ANDROID_DEV_ENV}; "
+               "else exit 44; fi'")
+    done = subprocess.run([adb, "-s", serial, "shell", command], capture_output=True, text=True, timeout=30)
+    if done.returncode == 44:
+        return state
     if done.returncode:
+        raise SuiteError("--accounts mock on android: the private dev.env could not be read before pinning it: "
+                         f"{done.stderr.strip() or 'no error text'}")
+    state.update(exists=True, text=done.stdout)
+    return state
+
+
+def restore_android_dev_env(state, log):
+    """Put back the dev.env a mock run replaced (or remove the one it created); cleanup failures are logged, never
+    hidden, and do not mask the run's own error."""
+    if not state.get("written"):
+        return
+    state["written"] = False
+    adb, serial = state["adb"], state["serial"]
+    t0 = time.monotonic()
+    try:
+        if state.get("exists"):
+            done = write_android_dev_env_raw(adb, serial, state.get("text") or "")
+            action = "restored"
+        else:
+            command = f"run-as {ANDROID_HOST} rm -f {ANDROID_DEV_ENV}"
+            done = subprocess.run([adb, "-s", serial, "shell", command], capture_output=True, text=True, timeout=30)
+            action = "removed"
+    except (OSError, subprocess.SubprocessError) as error:
+        log.line("clean", f"{serial}:{ANDROID_DEV_ENV}", f"not restored: {error}", 0)
+        return
+    if done.returncode:
+        log.line("clean", f"{serial}:{ANDROID_DEV_ENV}", "not restored: "
+                 f"{(done.stderr or done.stdout).strip() or 'no error text'}", 0)
+    else:
+        log.line("clean", f"{serial}:{ANDROID_DEV_ENV}", f"mock dev.env {action}", (time.monotonic() - t0) * 1000)
+
+
+def write_android_dev_env(adb, serial, text, log, state=None):
+    """Overwrite the emulator's private dev.env with `text` after capturing what was there. A failed write restores
+    the capture at once; the same state lets the run's `finally` restore it after every outcome."""
+    t0 = time.monotonic()
+    captured = capture_android_dev_env(adb, serial)
+    if state is None:
+        state = captured
+    else:
+        state.clear()
+        state.update(captured)
+    if not state["installed"]:
+        log.line("fresh", f"{serial}:{ANDROID_DEV_ENV}", "host not installed; no stale dev.env", 0)
+        return state
+    state["written"] = True
+    try:
+        done = write_android_dev_env_raw(adb, serial, text)
+    except BaseException:
+        restore_android_dev_env(state, log)
+        raise
+    if done.returncode:
+        restore_android_dev_env(state, log)
         raise SuiteError("--accounts mock on android: the private dev.env could not be pinned: "
                          f"{(done.stderr or done.stdout).strip() or 'no error text'}")
     log.line("fresh", f"{serial}:{ANDROID_DEV_ENV}", "pinned", (time.monotonic() - t0) * 1000)
+    return state
 
 
-def fresh_android(env, log, dev_env=None):
+def parse_dev_env(text):
+    values = {}
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    return values
+
+
+def android_dev_env_mock_settings(text):
+    """The keys that make a private dev.env a stale mock-run file. Values are never repeated in errors."""
+    values = parse_dev_env(text)
+    settings = []
+    if "BIR_AUTH_BYPASS" in values and values["BIR_AUTH_BYPASS"] != "1":
+        settings.append("BIR_AUTH_BYPASS")
+    for name in ACCOUNT_VARS:
+        value = values.get(name, "")
+        if is_loopback_url(value) and value.rstrip("/").endswith(":3008"):
+            settings.append(name)
+    return settings
+
+
+def read_android_dev_env(adb, serial):
+    if not android_host_installed(adb, serial):
+        return None
+    command = (f"run-as {ANDROID_HOST} sh -c 'if [ -f {ANDROID_DEV_ENV} ]; then cat {ANDROID_DEV_ENV}; "
+               "else exit 44; fi'")
+    done = subprocess.run([adb, "-s", serial, "shell", command], capture_output=True, text=True, timeout=30)
+    if done.returncode == 44:
+        return None
+    if done.returncode:
+        raise SuiteError("android: the host app's private dev.env could not be read: "
+                         f"{done.stderr.strip() or 'no error text'}")
+    return done.stdout
+
+
+def assert_android_dev_env_not_mock(env, log):
+    """A bypass-mode Android run refuses a stale mock dev.env rather than starting at the gate against a dead mock."""
+    adb = android_adb(env)
+    if not adb:
+        raise SuiteError("no adb: set ANDROID_HOME")
+    serial = env.get("ANDROID_SERIAL") or android_serial(adb)
+    text = read_android_dev_env(adb, serial)
+    settings = android_dev_env_mock_settings(text)
+    if settings:
+        raise SuiteError("android: the host app's private dev.env carries mock settings ("
+                         + ", ".join(settings) + "); remove it or run --accounts mock")
+
+
+def fresh_android(env, log, dev_env=None, dev_env_state=None):
     """A fresh first run on the emulator: the development build's guarded test database is removed (never real data:
     the test-data folder exists only under EBIR_TEST_ENV). In mock mode its private dev.env is overwritten too."""
     adb = android_adb(env)
@@ -1645,7 +1818,7 @@ def fresh_android(env, log, dev_env=None):
     log.line("fresh", f"{serial}:{ANDROID_TEST_DB}", "removed" if done.returncode == 0 else
              f"not removed ({done.stderr.strip() or 'host not installed yet'})", (time.monotonic() - t0) * 1000)
     if dev_env is not None:
-        write_android_dev_env(adb, serial, dev_env, log)
+        write_android_dev_env(adb, serial, dev_env, log, state=dev_env_state)
 
 
 def git_head():
