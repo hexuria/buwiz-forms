@@ -258,8 +258,8 @@ export interface ScheduleProps {
   /** The row open in the drawer, or null. The page owns it; the control renders the drawer from it. */
   openRow: Accessor<number | null>;
   onOpenRow(row: number | null): void;
-  /** Clear every typed cell of the row (the session may ask first when the host would remove rows: Undo follows). */
-  onClearRow(row: number): void;
+  /** Remove the row at once; rows below move up intact and Undo restores it. */
+  onDeleteRow(row: number): void;
   /** The whole table takes no typing (read-only return). */
   locked: Accessor<boolean>;
 }

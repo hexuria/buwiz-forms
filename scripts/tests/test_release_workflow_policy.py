@@ -142,8 +142,9 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn('"$TAG_VERSION" != "$NSH_VERSION"', preflight)
         for job_name in ("build-windows", "build-linux"):
             self.assertIn("needs: preflight", self.job(job_name))
+        self.assertIn("needs: preflight", self.job("build-windows-store"))
         self.assertIn(
-            "needs: [preflight, build-windows, build-linux]",
+            "needs: [preflight, build-windows, build-windows-store, build-linux]",
             self.job("release"),
         )
         self.assertNotIn("build-macos:", self.workflow)
@@ -271,7 +272,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         windows = self.windows_job("installers")
         script = self.nsh_windows_package
         for secret in ("WINDOWS_CERTIFICATE_PFX", "WINDOWS_CERTIFICATE_PASSWORD"):
-            self.assertIn(f"inputs.release && secrets.{secret}", windows)
+            self.assertIn(f"inputs.release && !inputs.store && secrets.{secret}", windows)
         self.assertIn("$hasPfx -xor $hasPassword", script)
         self.assertIn("::warning title=Unsigned Windows artifacts::", script)
         self.assertIn("sign /fd SHA256 /td SHA256", script)
@@ -297,8 +298,68 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("needs: preflight", public_windows_job)
 
         public_release = self.job("release")
-        for artifact in ("*-Setup.exe", "*.msi", "*.msix", "*-windows-x86_64.zip", "SHA256SUMS-windows-*.txt"):
+        for artifact in ("*-Setup.exe", "*.msi", "*-windows-x86_64.zip", "SHA256SUMS-windows-x64.txt"):
             self.assertIn(f"artifacts/**/{artifact}", public_release)
+        # The Store's .msix is unsigned and cannot be sideloaded: never on the public release, nor its sums
+        # (windows_candidate_certification.py: public_release_allows_msix is False).
+        files = public_release.split("files: |", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
+        self.assertNotIn(".msix", files)
+        self.assertNotIn("SHA256SUMS-windows-*", files)
+        self.assertNotIn("windows-store", files)
+
+    def test_the_store_msix_gets_the_google_client_only_with_store_gmail(self) -> None:
+        store = self.job("build-windows-store")
+        self.assertIn("uses: ./.github/workflows/release-windows.yml", store)
+        self.assertIn("store: true", store)
+        self.assertIn("release: ${{ github.event_name == 'push' }}", store)
+        # Named secrets, never inherit: no signing certificate, and the client only behind the variable.
+        self.assertNotIn("secrets: inherit", store)
+        self.assertNotIn("WINDOWS_CERTIFICATE", store)
+        for secret in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
+            self.assertIn(f"{secret}: ${{{{ vars.STORE_GMAIL == '1' && secrets.{secret} || '' }}}}", store)
+        # The direct downloads keep what 0.2.x shipped.
+        self.assertIn("secrets: inherit", self.job("build-windows"))
+        self.assertNotIn("store:", self.job("build-windows"))
+
+        windows = self.windows_job("installers")
+        for secret in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
+            self.assertIn(
+                f"{secret}: ${{{{ inputs.release && (!inputs.store || vars.STORE_GMAIL == '1') && secrets.{secret} || '' }}}}",
+                windows,
+            )
+        for secret in ("WINDOWS_CERTIFICATE_PFX", "WINDOWS_CERTIFICATE_PASSWORD"):
+            self.assertIn(f"inputs.release && !inputs.store && secrets.{secret}", windows)
+        self.assertIn("-MsixOnly:$${{ inputs.store }} -NoMsix:$${{ inputs.release && !inputs.store }}", windows)
+
+        check = windows.split("- name: Check the Store package against STORE_GMAIL", maxsplit=1)[1]
+        check = check.split("- name:", maxsplit=1)[0]
+        self.assertIn("if: ${{ inputs.store }}", check)
+        # The same condition that gave the build the client decides which way the package is checked.
+        self.assertIn("GMAIL_BUILT_IN: ${{ inputs.release && vars.STORE_GMAIL == '1' }}", check)
+        self.assertIn("$expect = '--absent'", check)
+        self.assertIn("$expect = '--present'", check)
+        self.assertLess(check.index("audit_google_client.py --self-test"), check.index("audit_google_client.py $expect"))
+        self.assertLess(
+            windows.index("- name: Package and audit the NSH Windows installers"),
+            windows.index("- name: Check the Store package against STORE_GMAIL"),
+        )
+        store_upload = windows.split("- name: Upload the Store package", maxsplit=1)[1]
+        self.assertIn("if: ${{ inputs.store }}", store_upload)
+        self.assertIn("name: windows-store", store_upload)
+        self.assertIn("SHA256SUMS-windows-store-x64.txt", store_upload)
+        self.assertIn("SHA256SUMS-windows-store-x64.txt", self.nsh_windows_package)
+        control = windows.split("- name: Check the audit finds the client in the direct downloads", maxsplit=1)[1]
+        control = control.split("- name:", maxsplit=1)[0]
+        self.assertIn("if: ${{ inputs.release && !inputs.store }}", control)
+        self.assertIn("audit_google_client.py --present", control)
+        self.assertIn("*-windows-x86_64.zip", control)
+        has_client = "HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}"
+        for step in (control, check):
+            # Each audit's exit code stops the step where it runs; empty secrets are named, not a bare "not found".
+            audits = step.count("python scripts/audit_google_client.py")
+            self.assertEqual(step.count("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"), audits)
+            self.assertIn(has_client, step)
+            self.assertIn("::error title=Google OAuth client secrets are empty::", step)
 
     def test_msix_packaging_and_smoke_scripts_enforce_runtime_and_registration_policies(
         self,
@@ -383,14 +444,14 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("check_pe_stack_reserve.py", check)
 
     def test_setup_scripts_keep_the_gpui_agent_version_pinned(self) -> None:
-        self.assertIn('local manifest="$SCRIPT_DIR/../Cargo.toml"', self.linux_setup)
+        self.assertIn('prebuilt_pin GPUI_AGENT_CLI_VERSION', self.linux_setup)
         self.assertIn(
-            "gpui-agent version pin not found in repository-root Cargo.toml",
+            "GPUI_AGENT_CLI_VERSION not found",
             self.linux_setup,
         )
-        self.assertIn('cargo install --list 2>/dev/null', self.linux_setup)
+        self.assertIn('prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent', self.linux_setup)
         self.assertIn(
-            'cargo install gpui-agent-cli --version "$version"', self.linux_setup
+            'install_pinned_tool gpui-agent-cli "$version"', self.linux_setup
         )
         self.assertNotIn("gpui-agent?rev=", self.linux_setup)
         self.assertIn(
@@ -399,9 +460,10 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )
         self.assertNotIn("--locked gpui-agent-cli", self.linux_setup)
         self.assertNotIn("installing from main", self.linux_setup)
-        self.assertIn("'Cargo.toml'", self.windows_setup)
-        self.assertIn(
-            "install gpui-agent-cli --version $gpuiVersion", self.windows_setup
+        self.assertIn("Read-PrebuiltPin 'GPUI_AGENT_CLI_VERSION'", self.windows_setup)
+        self.assertRegex(
+            self.windows_setup,
+            r"Install-PinnedTool\s+'gpui-agent-cli'\s+\$gpuiVersion",
         )
         self.assertIn("3010", self.windows_setup)
 

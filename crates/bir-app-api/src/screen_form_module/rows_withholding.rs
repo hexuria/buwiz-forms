@@ -71,6 +71,10 @@ pub(super) enum Cell {
     Q2Gated,
     /// 1601FQ Schedule 1 row's ATC (`drpATCCode<i>`): its rate follows.
     FqSched1Atc(usize),
+    /// An editable 1601FQ Schedule 1 cell, shut until Item 13 is Yes.
+    FqSched1Input,
+    /// A computed 1601FQ Schedule 1 column, shut until Item 13 is Yes.
+    FqSched1Computed,
     /// 1601FQ item 25: open on an amended return only.
     FqTax25,
     /// 1601EQ items 4 and 11 (`set_any_tax_withheld`, `set_category`).
@@ -129,6 +133,26 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
             {
                 return Some(Cell::FqSched1Atc(row));
             }
+            for (stems, cell) in [
+                (
+                    &["drpTreatyCode", "txtAmtIncomePay", "txtRate"][..],
+                    Cell::FqSched1Input,
+                ),
+                (
+                    &["txtNatIncPayment", "txtReqWithheld"][..],
+                    Cell::FqSched1Computed,
+                ),
+            ] {
+                if stems.iter().any(|stem| {
+                    key.strip_prefix(stem)
+                        .and_then(|i| i.parse::<usize>().ok())
+                        .is_some_and(|i| {
+                            i < bir_core::forms::form_1601fq::FORM_1601FQ_SCHEDULE1_ROWS
+                        })
+                }) {
+                    return Some(cell);
+                }
+            }
             match key {
                 "frm1601FQ:txtTax25" => Some(Cell::FqTax25),
                 "frm1601FQ:CatAgent_P" => Some(Cell::FqCategory(Form1601FqCategory::Private)),
@@ -167,7 +191,12 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
 /// does not apply on the page). A 1602Q box Item 13 opens is written by the
 /// ordinary fill once it is open.
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
-    cell(kind, key).is_some_and(|cell| !matches!(cell, Cell::Q2Gated | Cell::FqTax25))
+    cell(kind, key).is_some_and(|cell| {
+        !matches!(
+            cell,
+            Cell::Q2Gated | Cell::FqTax25 | Cell::FqSched1Input | Cell::FqSched1Computed
+        )
+    })
 }
 
 /// An ATC is chosen before its row's tax base.
@@ -218,6 +247,31 @@ pub(super) fn fill(
                 Ok(())
             }
             None => ordinary(draft),
+        },
+        Cell::FqSched1Input => match typed::<Form1601FqDraft>(draft) {
+            Err(error) => Err(error),
+            Ok(form) if form.tax_relief.is_none() => {
+                let blank = bir_core::forms::agent::carry::is_blank_value(&text(value));
+                if blank {
+                    Ok(())
+                } else {
+                    Err(bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK.to_string())
+                }
+            }
+            Ok(_) => ordinary(draft),
+        },
+        // Nature of Income Payment and Required Withheld are answers the
+        // model computes. They never take an ordinary write; while Item 13
+        // is not Yes a non-blank attempt gets the gate's own refusal first.
+        Cell::FqSched1Computed => match typed::<Form1601FqDraft>(draft) {
+            Err(error) => Err(error),
+            Ok(form)
+                if form.tax_relief.is_none()
+                    && !bir_core::forms::agent::carry::is_blank_value(&text(value)) =>
+            {
+                Err(bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK.to_string())
+            }
+            Ok(_) => ordinary(draft),
         },
         _ => write(cell, draft, value),
     })
@@ -314,20 +368,23 @@ fn write(cell: Cell, draft: &mut Value, value: &Value) -> Result<(), String> {
             store(draft, &form)
         }
         Cell::FqSched1Atc(row) => {
-            let code = text(value);
-            let code = if code.is_empty() {
+            let typed_text = text(value);
+            let mut form: Form1601FqDraft = typed(draft)?;
+            if form.tax_relief.is_none() {
+                if bir_core::forms::agent::carry::is_blank_value(&typed_text) {
+                    return Ok(());
+                }
+                return Err(bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK.to_string());
+            }
+            let code = if typed_text.is_empty() {
                 "NA".to_string()
             } else {
-                code.to_uppercase()
+                typed_text.to_uppercase()
             };
             if !bir_core::forms::form_1601fq::form_1601fq_schedule_atc_is_option(&code) {
                 return Err(format!(
                     "`{code}` is not an ATC on the official 1601-FQ list."
                 ));
-            }
-            let mut form: Form1601FqDraft = typed(draft)?;
-            if form.tax_relief.is_none() {
-                return Err(ANSWER_13_FIRST.to_string());
             }
             if form.schedule1.get(row).is_none() {
                 return Err(format!("Schedule 1 has no row {} on this return.", row + 1));
@@ -353,7 +410,9 @@ fn write(cell: Cell, draft: &mut Value, value: &Value) -> Result<(), String> {
             form.set_schedule1_atc(row, &code);
             store(draft, &form)
         }
-        Cell::Q2Gated | Cell::FqTax25 => Ok(()),
+        Cell::Q2Gated | Cell::FqTax25 | Cell::FqSched1Input | Cell::FqSched1Computed => {
+            unreachable!("the gate cells are handled before the ordinary row write")
+        }
     }
 }
 
@@ -498,12 +557,7 @@ fn rows<'a>(draft: &'a Value, list: &str) -> Vec<&'a Value> {
 fn typed_schedule_1(draft: &Value) -> usize {
     rows(draft, "schedule1")
         .into_iter()
-        .filter(|row| {
-            row["treaty_code"] != "NA"
-                || row["atc_code"] != "NA"
-                || amount_of(row, "income_payment") != 0.0
-                || amount_of(row, "tax_rate") != 0.0
-        })
+        .filter(|row| bir_core::forms::agent::draft_locks::schedule1_1601fq::typed_row(row))
         .count()
 }
 
