@@ -1629,6 +1629,61 @@ fn write_bound_box(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
+    let employer_row = (kind.form_code() == "1701")
+        .then(|| {
+            if key.contains("chkPg2IShed1a_1") {
+                Some(0)
+            } else if key.contains("chkPg2IShed2a_2") {
+                Some(1)
+            } else {
+                None
+            }
+        })
+        .flatten();
+    let before_owner = employer_row.and_then(|index| {
+        draft
+            .pointer(&format!("/employers/{index}/owner"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    });
+    write_bound_box_here(kind, def, draft, key, value)?;
+    if let Some(index) = employer_row {
+        let after_owner = draft
+            .pointer(&format!("/employers/{index}/owner"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let switched = matches!(before_owner.as_deref(), Some("Taxpayer" | "Spouse"))
+            && matches!(after_owner.as_deref(), Some("Taxpayer" | "Spouse"))
+            && before_owner != after_owner;
+        if switched {
+            // emplyrDetails('TP'/'SPS') is a switch, never a move of the
+            // other column's details: the official handler blanks the losing
+            // name box and TP/SPdisableP5Sched1Fields clears the row's TIN,
+            // compensation income and tax withheld (BIR-Form1701.hta
+            // L11135-11177, L10595-10669). The app stores those boxes as one
+            // row, so the switch must clear that row instead of re-filing the
+            // old owner's employer under the new owner.
+            if let Some(row) = draft
+                .pointer_mut(&format!("/employers/{index}"))
+                .and_then(Value::as_object_mut)
+            {
+                row.insert("employer_name".to_string(), Value::String(String::new()));
+                row.insert("employer_tin".to_string(), Value::String(String::new()));
+                row.insert("compensation_income".to_string(), Value::Null);
+                row.insert("tax_withheld".to_string(), Value::Null);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_bound_box_here(
+    kind: AgentFormKind,
+    def: &AgentFormDef,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
     let bound = def.bindings.get(key).expect("a gate-passed key is bound");
     let text = value_text(value);
     // 0605's split dates write through the typed draft: the generic path

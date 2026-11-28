@@ -394,6 +394,85 @@ fn form_1701_employer_amounts_typed_before_the_owner_tick_survive() {
 }
 
 #[test]
+fn form_1701_employer_owner_switch_clears_the_row_and_says_so() {
+    setup();
+    let taxpayer_name = "frm1701:txtPg2IShed1a_1TPName";
+    let spouse_name = "frm1701:txtPg2IShed1a_1SName";
+    let taxpayer_tick = "frm1701:chkPg2IShed1a_1Taxpayer";
+    let spouse_tick = "frm1701:chkPg2IShed1a_1Spouse";
+
+    for (first_owner, first_tick, first_name, second_tick, other_name, notice_key, new_owner) in [
+        (
+            "Taxpayer",
+            taxpayer_tick,
+            taxpayer_name,
+            spouse_tick,
+            spouse_name,
+            taxpayer_name,
+            "spouse",
+        ),
+        (
+            "Spouse",
+            spouse_tick,
+            spouse_name,
+            taxpayer_tick,
+            taxpayer_name,
+            spouse_name,
+            "taxpayer",
+        ),
+    ] {
+        let opened = open("1701", 0);
+        let joint = fill(
+            "1701",
+            &opened["draft"],
+            json!({
+                "frm1701:rdoPg1I16CivilStatusM": "true",
+                "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+                "frm1701:rdoPg1I18FilingStatusJ": "true",
+                "frm1701:rdoPg1I7ATC_II013": "true",
+                "frm1701:rdoPg2I4ATC_II011": "true",
+            }),
+        );
+        let owned = fill("1701", &joint["draft"], json!({ first_tick: "true" }));
+        assert_eq!(owned["draft"]["employers"][0]["owner"], first_owner);
+        let mut with_details = fill(
+            "1701",
+            &owned["draft"],
+            json!({
+                first_name: "ACME",
+                "frm1701:txtPg2IShed1c_1CI": "1000",
+                "frm1701:txtPg2IShed1c_1TW": "100",
+            }),
+        );
+        with_details["draft"]["employers"][0]["employer_tin"] = json!("12345678900000");
+        let switched = fill(
+            "1701",
+            &with_details["draft"],
+            json!({ second_tick: "true" }),
+        );
+        let row = &switched["draft"]["employers"][0];
+        assert_ne!(row["owner"], first_owner);
+        assert_eq!(row["employer_name"], "");
+        assert_eq!(row["employer_tin"], "");
+        assert_eq!(row["compensation_income"], serde_json::Value::Null);
+        assert_eq!(row["tax_withheld"], serde_json::Value::Null);
+        let payload = payload_map("1701", &switched["draft"]);
+        assert_eq!(
+            payload.get(other_name).map(String::as_str).unwrap_or(""),
+            "",
+            "the old owner's employer must not file under the {new_owner}"
+        );
+        assert_eq!(
+            switched["relock_notes"][notice_key],
+            json!(format!(
+                "Employer row 1 was cleared when the row was marked for the {new_owner}."
+            )),
+            "the owner switch says once that the row was cleared"
+        );
+    }
+}
+
+#[test]
 fn form_1701_employer_row_notice_covers_content_without_a_name_and_names_the_owner() {
     setup();
     let opened = open("1701", 0);
