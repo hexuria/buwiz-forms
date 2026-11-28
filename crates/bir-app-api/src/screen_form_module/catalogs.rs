@@ -392,7 +392,8 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || rows_annual_corporate::host_writes(kind, key)
         || sales_2550m_row(kind, key).is_some()
         || rows_2550m::cell(kind, key).is_some()
-        || month_year_1601c_row(kind, key).is_some()
+        || month_year_1601c_row(kind, key)
+            .is_some_and(|row| row < form_1601c::PRINTED_SCHEDULE_1_ROWS)
         || rate_2200s_row(kind, key).is_some()
         || atc_1600wp_row(kind, key).is_some()
         || atc_1601eq_row(kind, key).is_some()
@@ -635,7 +636,7 @@ fn month_year_1601c_row(kind: AgentFormKind, key: &str) -> Option<usize> {
         .strip_prefix("frm1601c:sched1:txtMonthYear")?
         .parse()
         .ok()?;
-    (row < form_1601c::MAX_SCHEDULE_1_ROWS).then_some(row)
+    Some(row)
 }
 
 /// Previous Month/s (`MM/YYYY`, `maxlength="7"`). Like the row's other

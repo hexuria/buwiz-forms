@@ -547,7 +547,7 @@ fn pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once() {
         .into_iter()
         .find(|it| it["l"] == "Others (specify)")
         .expect("4) Others (specify)");
-    assert_eq!(others["rows"], 3);
+    assert_eq!(others["rows"], 12);
     assert_eq!(others["keys"][0][0], format!("{p}txtSched1_xa_others1_Atc"));
     assert!(captions[&format!("{p}txtSched1_xa_others1_Atc")].starts_with("4 Others (specify)"));
     // The rows' tick boxes are the page's row switch, not printed.
@@ -566,6 +566,47 @@ fn pr11_2200a_schedule_1_is_by_atc_with_every_fixed_row_once() {
             .unwrap()
             .iter()
             .any(|part| part["n"] == "Page 3")
+    );
+}
+
+/// 2200A's official runtime appends Others rows without a source cap. The page
+/// keeps twelve rows available through its next-empty-row flow, and row 4 saves
+/// and reopens.
+#[test]
+fn form_2200a_fourth_others_row_saves_and_reopens() {
+    setup();
+    let opened = open("2200A", 1);
+    let filled = fill(
+        "2200A",
+        &opened["draft"],
+        json!({
+            "frm2200Av2020:txtSched1_xa_others4_Atc": "997",
+            "frm2200Av2020:txtSched1_xa_others4_Desc": "ADDED PRODUCT",
+            "frm2200Av2020:txtSched1_xa_others4_Bracket": "PER LITER",
+            "frm2200Av2020:txtSched1_xa_others4_Rate": "10",
+            "frm2200Av2020:txtSched1_xa_others4_Taxable": "440.00",
+            "frm2200Av2020:txtSched1_xa_others4_Due": "44.00",
+        }),
+    );
+    assert_eq!(filled["rejected"], json!({}));
+    assert_eq!(filled["draft"]["others"][3]["atc_digits"], "997");
+    assert_eq!(
+        amount(&filled["values"], "frm2200Av2020:txtSched1_TotalDue"),
+        44.0
+    );
+
+    save("2200A", &filled["draft"]);
+    let reopened = open("2200A", 1);
+    assert_eq!(
+        reopened["values"]["frm2200Av2020:txtSched1_xa_others4_Desc"],
+        "ADDED PRODUCT"
+    );
+    assert_eq!(
+        amount(
+            &reopened["values"],
+            "frm2200Av2020:txtSched1_xa_others4_Due"
+        ),
+        44.0
     );
 }
 

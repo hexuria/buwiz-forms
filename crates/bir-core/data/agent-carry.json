@@ -254,7 +254,16 @@
       "frm1601c:txtTax36",
       "frm1601c:sched1:txtAdjustments0",
       "frm1601c:sched1:txtAdjustments1",
-      "frm1601c:sched1:txtAdjustments2"
+      "frm1601c:sched1:txtAdjustments2",
+      "frm1601c:sched1:txtAdjustments10",
+      "frm1601c:sched1:txtAdjustments11",
+      "frm1601c:sched1:txtAdjustments3",
+      "frm1601c:sched1:txtAdjustments4",
+      "frm1601c:sched1:txtAdjustments5",
+      "frm1601c:sched1:txtAdjustments6",
+      "frm1601c:sched1:txtAdjustments7",
+      "frm1601c:sched1:txtAdjustments8",
+      "frm1601c:sched1:txtAdjustments9"
     ],
     "page_writes": [],
     "period": [

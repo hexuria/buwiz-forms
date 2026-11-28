@@ -524,8 +524,10 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
 ];
 /// Number of fixed rows (60 on the official page).
 pub const FORM_2200A_FIXED_ROW_COUNT: usize = FORM_2200A_FIXED_ROWS.len();
-/// "Others (specify)" rows at the end of Schedule 1.
-pub const FORM_2200A_OTHER_ROWS: usize = 3;
+/// The printed "Others (specify)" rows at the end of Schedule 1. The official
+/// runtime appends further rows without a source cap (`sched1Fields`,
+/// BIR-Form2200Av2020.hta lines 7582-7589).
+pub const FORM_2200A_PRINTED_OTHER_ROWS: usize = 3;
 
 /// Items 10 and 11: region, province and city codes from the official
 /// dropdowns. Blank means the `(Select …)` placeholder, `00`.
@@ -656,7 +658,7 @@ pub struct Form2200ADraft {
     /// Fixed rows in [`FORM_2200A_FIXED_ROWS`] order; missing rows are zero.
     #[serde(default)]
     pub schedule: Vec<Form2200AAmounts>,
-    /// "Others (specify)" rows, at most three.
+    /// "Others (specify)" rows; the official runtime appends rows without a source cap.
     #[serde(default)]
     pub others: Vec<Form2200AOtherRow>,
     /// `txtSched1_TotalDue`.
@@ -960,9 +962,6 @@ impl Form2200ADraft {
 
     /// "Others" row `index`, growing the list to reach it.
     pub fn other_mut(&mut self, index: usize) -> Option<&mut Form2200AOtherRow> {
-        if index >= FORM_2200A_OTHER_ROWS {
-            return None;
-        }
         if self.others.len() <= index {
             self.others
                 .resize_with(index + 1, Form2200AOtherRow::default);
@@ -1036,6 +1035,12 @@ impl Form2200ADraft {
     /// Item 7 over both its lines.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
+        for row in FORM_2200A_PRINTED_OTHER_ROWS..self.others.len() {
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{}_Check", row + 1),
+                String::new(),
+            );
+        }
         let mut put = |key: &str, value: String| {
             if !value.trim().is_empty() {
                 fields.insert(format!("derived:{key}"), value);
@@ -1210,7 +1215,7 @@ impl Form2200ADraft {
                 official_amount(row.tax_due),
             );
         }
-        for index in 0..FORM_2200A_OTHER_ROWS {
+        for index in 0..self.others.len().max(FORM_2200A_PRINTED_OTHER_ROWS) {
             let row = self.other(index);
             let base = format!("txtSched1_xa_others{}", index + 1);
             put(&format!("{base}_Check"), flag(!row.is_blank()));
@@ -1238,9 +1243,41 @@ impl Form2200ADraft {
         fields
     }
 
+    /// The generated layout with each runtime-added Others row spliced after
+    /// the previous row's Tax Due, in the order `sched1Fields` generates its
+    /// controls (`BIR-Form2200Av2020.hta` lines 7582-7589).
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use super::official_inputs::{RowInsertion, extend_layout};
+        let base = crate::official_xml::layout(FORM_2200A_FORM_ID).map_err(|e| e.to_string())?;
+        const COLUMNS: [&str; 8] = [
+            "Check", "Atc", "Desc", "Bracket", "Rate", "Export", "Taxable", "Due",
+        ];
+        let key =
+            |column: &str, row: usize| format!("frm2200Av2020:txtSched1_xa_others{row}_{column}");
+        let insertions: Vec<RowInsertion> = ((FORM_2200A_PRINTED_OTHER_ROWS + 1)
+            ..=self.others.len())
+            .map(|row| RowInsertion {
+                after: key("Due", row - 1),
+                copies: COLUMNS
+                    .iter()
+                    .map(|column| (key(column, FORM_2200A_PRINTED_OTHER_ROWS), key(column, row)))
+                    .collect(),
+            })
+            .collect();
+        extend_layout(base, &insertions)
+    }
+
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
-        self.official_payload()
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 
     fn validate_on(&self, today: NaiveDate) -> Vec<(String, String)> {
@@ -1386,9 +1423,6 @@ impl Form2200ADraft {
         }
         if self.schedule.len() > FORM_2200A_FIXED_ROW_COUNT {
             err("schedule", "Schedule 1 has 60 fixed rows.");
-        }
-        if self.others.len() > FORM_2200A_OTHER_ROWS {
-            err("others", "Schedule 1 has 3 \"Others\" rows.");
         }
         for (index, row) in self.schedule.iter().enumerate() {
             if row
@@ -1763,6 +1797,38 @@ mod tests {
             "12345678800000-2200Av2020-03152025#sample.taxpayer@example.com#.xml"
         );
         assert!(draft.to_bir_xml_payload().is_ok());
+    }
+
+    #[test]
+    fn fourth_and_fifth_others_rows_are_written_and_totalled() {
+        let mut draft = sample();
+        for (index, atc, due) in [(3, "997", 44.0), (4, "998", 55.0)] {
+            let row = draft.other_mut(index).expect("dynamic Others row");
+            row.atc_digits = atc.to_string();
+            row.description = format!("Added product {atc}");
+            row.bracket = "Per liter".to_string();
+            row.rate = "10".to_string();
+            row.amounts.taxable = due * 10.0;
+            row.amounts.tax_due = due;
+        }
+        // Keep the sample's payment in step with the two added liabilities.
+        draft.tax_deposit += 99.0;
+        draft.recompute();
+
+        let fields = draft.to_bir_field_map();
+        assert_eq!(fields["frm2200Av2020:txtSched1_xa_others4_Check"], "true");
+        assert_eq!(fields["frm2200Av2020:txtSched1_xa_others4_Atc"], "997");
+        assert_eq!(
+            fields["frm2200Av2020:txtSched1_xa_others5_Desc"],
+            "Added product 998"
+        );
+        assert_eq!(fields["frm2200Av2020:txtSched1_xa_others5_Due"], "55.00");
+        assert_eq!(fields["frm2200Av2020:txtSched1_TotalDue"], "66,099.66");
+        let xml = draft
+            .to_bir_xml_payload()
+            .expect("dynamic Others rows validate");
+        assert!(xml.contains("frm2200Av2020:txtSched1_xa_others4_Atc"));
+        assert!(xml.contains("frm2200Av2020:txtSched1_xa_others5_Due"));
     }
 
     #[test]

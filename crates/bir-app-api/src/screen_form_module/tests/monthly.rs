@@ -601,7 +601,7 @@ fn form_1601c_schedule_i_is_its_own_part() {
     let at = |name: &str| items.iter().position(|n| n == name).unwrap();
     assert!(at("Part III · Details of Payment") < at("Part IV · Schedule"));
     let schedule = &schema_entry("1601C").unwrap()["parts"][at("Part IV · Schedule")]["items"];
-    assert_eq!(schedule[0]["rows"], 3);
+    assert_eq!(schedule[0]["rows"], 12);
     assert_eq!(schedule[0]["keys"][0][0], "frm1601c:sched1:txtMonthYear0");
     assert_eq!(schedule[1]["no"], "4");
     assert_eq!(schedule[1]["f"][0]["k"], "frm1601c:sched1:txtTotal1");

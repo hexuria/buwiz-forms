@@ -31,8 +31,10 @@ use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// The 1601-C January 2018 XML contract exposes exactly three Schedule I rows.
-pub const MAX_SCHEDULE_1_ROWS: usize = 3;
+/// The printed 1601-C sheet exposes three Schedule I rows. The official
+/// runtime appends further rows without a source cap (`addSchedule`,
+/// BIR-Form1601Cv2018.hta lines 3349-3385).
+pub const PRINTED_SCHEDULE_1_ROWS: usize = 3;
 
 /// Hash-locked source evidence for the exact January 2018 revision.
 pub const OFFICIAL_FORM_SHA256: &str =
@@ -392,8 +394,11 @@ impl Form1601CDraft {
         } else {
             String::new()
         };
+        for row in PRINTED_SCHEDULE_1_ROWS..self.schedule_1.len() {
+            fields.insert(format!("chkScheduleDelete{row}"), String::new());
+        }
         // Schedule I rows past the draft's print blank, not 0.00.
-        for row in self.schedule_1.len()..MAX_SCHEDULE_1_ROWS {
+        for row in self.schedule_1.len()..PRINTED_SCHEDULE_1_ROWS {
             for key in ["txtTaxPaid", "txtShouldTaxDue", "txtAdjustments"] {
                 fields.insert(format!("frm1601c:sched1:{key}{row}"), String::new());
             }
@@ -1202,15 +1207,6 @@ impl FormValidator for Form1601CDraft {
             ));
         }
 
-        if self.schedule_1.len() > MAX_SCHEDULE_1_ROWS {
-            errors.push((
-                "schedule_1".to_string(),
-                format!(
-                    "Schedule I supports at most {MAX_SCHEDULE_1_ROWS} rows in the verified 1601-C XML contract"
-                ),
-            ));
-        }
-
         for (index, row) in self.schedule_1.iter().enumerate() {
             // `1601c-validate-047`: the official validate inspects a Schedule I
             // date only when that field is nonblank and never requires row
@@ -1605,14 +1601,14 @@ mod tests {
     }
 
     #[test]
-    fn validation_rejects_rows_beyond_verified_schedule_capacity() {
+    fn validation_accepts_rows_beyond_the_printed_schedule_capacity() {
         let mut draft = Form1601CDraft::new_from_profile(&test_profile(), 2026, 6);
         draft.any_taxes_withheld = false;
         draft.schedule_1 = vec![schedule_row("05/2026", 1.0, 1.0); 4];
         draft.compute();
 
         assert!(
-            draft
+            !draft
                 .validate()
                 .iter()
                 .any(|(field, _)| field == "schedule_1")
