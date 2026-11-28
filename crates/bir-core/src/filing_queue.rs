@@ -155,7 +155,7 @@ pub fn claim_is_recoverable(
 /// Mandatory lab taxpayer for 1601-C tests.
 ///
 /// TIN `00000000000000`, Juan Dela Cruz, RDO 018, Olongapo, Software
-/// Development, ZIP 2200, `codeitlikemiley@gmail.com`, `09156837000`.
+/// Development, ZIP 2200, `codeitlikemiley@gmail.com`, `09170000000`.
 /// Never substitute a real taxpayer. Never invent tax amounts.
 #[cfg(test)]
 pub fn mandatory_lab_1601c_profile() -> TaxpayerProfile {
@@ -172,7 +172,7 @@ pub fn mandatory_lab_1601c_profile() -> TaxpayerProfile {
         "line_of_business": "Software Development",
         "registered_address": "Olongapo",
         "zip_code": "2200",
-        "phone": "09156837000",
+        "phone": "09170000000",
         "email": "codeitlikemiley@gmail.com",
         "default_form_type": "1601Cv2018",
         "taxpayer_type": "Individual"
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(draft.line_of_business, "Software Development");
         assert_eq!(draft.zip_code, "2200");
         assert_eq!(draft.email_address, "codeitlikemiley@gmail.com");
-        assert_eq!(draft.contact_number, "09156837000");
+        assert_eq!(draft.contact_number, "09170000000");
         assert_eq!(draft.month, 9);
         assert_eq!(draft.taxable_year, 2026);
         assert!(!draft.is_amended);

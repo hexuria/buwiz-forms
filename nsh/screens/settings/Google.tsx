@@ -1,12 +1,13 @@
 // Settings > Account > Google (old googleBlock): Gmail connect or reconnect, receipt tracking, Disconnect, and the line the last
 // job left. The writes and the "one inbox job at a time" state are the taxpayer screens' (screens/taxpayer/actions.ts), so the
 // Tax profile's confirmation inbox and this card never disagree. A build with no Google client id (the host's
-// google_available) offers no Connect and says to use an app password; a connected inbox can still be disconnected.
+// google_available) offers no Connect and says to use an app password; a connection made in an earlier build that had one can
+// no longer renew, so it says to disconnect, and Disconnect stays.
 import { View } from "nsh";
 import { app, store } from "../../shell";
 import { AppButton, Card, SettingRow, Switch, Text } from "../../ui";
 import { connectInbox, disconnectInbox, setTracking, shared } from "../taxpayer/actions";
-import { GOOGLE_UNAVAILABLE } from "../taxpayer/logic";
+import { GOOGLE_UNAVAILABLE, GOOGLE_UNAVAILABLE_CONNECTED } from "../taxpayer/logic";
 import { Labeled, NoteRow } from "./parts";
 
 export function GoogleBlock() {
@@ -44,7 +45,9 @@ export function GoogleBlock() {
                 title="Gmail"
                 hint={
                   connected()
-                    ? `Connected as ${who()}`
+                    ? available()
+                      ? `Connected as ${who()}`
+                      : GOOGLE_UNAVAILABLE_CONNECTED
                     : available()
                       ? `Not connected. Reads BIR confirmation mail for ${branch()?.name || "this profile"}.`
                       : GOOGLE_UNAVAILABLE
