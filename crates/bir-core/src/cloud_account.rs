@@ -859,10 +859,13 @@ pub fn stored_account_loads() -> u64 {
 pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
     #[cfg(any(test, feature = "test-support"))]
     STORED_ACCOUNT_LOADS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    if let Some(raw) = keyring_load()
-        && let Ok(stored) = StoredAccount::decode(&raw)
-    {
-        return Ok(Some(stored));
+    if let Some(raw) = keyring_load() {
+        if raw.trim() == SIGNED_OUT_SENTINEL.trim() {
+            return Ok(None);
+        }
+        if let Ok(stored) = StoredAccount::decode(&raw) {
+            return Ok(Some(stored));
+        }
     }
     let path = account_file_path();
     // #4: try_exists, not exists() — a stat ERROR (EACCES, EIO) is a read error, never
@@ -876,10 +879,10 @@ pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
     let raw = std::fs::read_to_string(&path).map_err(|error| {
         CloudError::Unexpected(format!("could not read the saved Buwiz account ({error})"))
     })?;
-    // #3: a whole-file EMPTY read is a definite nobody, not a decode error — it is exactly
-    // what the sign-out's empty overwrite writes when the file cannot be removed, and the
-    // app counts itself signed out then; a daemon reading it must exit, not refuse forever.
-    if raw.trim().is_empty() {
+    // A definite nobody is the file ABSENT (handled above) or the explicit sign-out
+    // sentinel. Anything else unreadable — zero bytes included — is a READ ERROR, never
+    // nobody: a torn read of the in-place fallback is exactly 0 bytes.
+    if raw.trim() == SIGNED_OUT_SENTINEL.trim() {
         return Ok(None);
     }
     StoredAccount::decode(&raw).map(Some)
@@ -907,7 +910,7 @@ pub fn load_stored_account_shared() -> Result<Option<StoredAccount>, CloudError>
         let extra = {
             use std::os::unix::fs::MetadataExt;
             // the inode alone does not turn over on a same-length rewrite in place; the ctime
-            // does — every write moves it — so the pair is the collision-proof stamp
+            // does — every write moves it — so inode + ctime is the cache key here (Windows uses mtime + length + created)
             format!("{}:{}:{}", meta.ino(), meta.ctime(), meta.ctime_nsec())
         };
         #[cfg(not(unix))]
@@ -960,6 +963,11 @@ pub(crate) fn clear_stored_account() {
     // N10: the atomic save's own temporary files hold the same refresh token while they
     // lie around — a write cut off mid-save leaves one — so sign-out removes them too.
     sweep_write_temps_scoped(&account_file_path(), true);
+    #[cfg(test)]
+    if FAIL_ACCOUNT_REMOVE_FOR_TEST.load(std::sync::atomic::Ordering::SeqCst) {
+        // the simulated failure: the remove does not happen, as the OS's would not
+        return;
+    }
     let _ = std::fs::remove_file(account_file_path());
 }
 
@@ -1026,7 +1034,24 @@ fn pid_alive(_pid: u32) -> bool {
 /// Remove the saved sign-in for a sign-out, and make sure it is gone: read back, removed once more, then
 /// overwritten with nothing where it still reads (an empty keychain entry or file is not a sign-in). An error
 /// means a sign-in still reads back on this device.
+/// The explicit "signed out" record a sign-out writes when the file cannot be removed (the
+/// ruling): a definite nobody that decodes as nobody, never as a torn read. Zero bytes is NOT
+/// a nobody — the in-place truncate-then-write fallback leaves exactly that mid-write on a
+/// torn read, and reading it as signed-out would exit the daemon on a same-owner refresh and
+/// sign the app's own user out for nothing (on Windows the fallback is common: a rename onto
+/// a file a scanner or the indexer holds open is ACCESS_DENIED).
+pub(crate) const SIGNED_OUT_SENTINEL: &str = "{\"signed_out\":true}\n";
+
+#[cfg(test)]
+pub(crate) static FAIL_ACCOUNT_REMOVE_FOR_TEST: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 pub(crate) fn forget_stored_account() -> Result<(), CloudError> {
+    #[cfg(test)]
+    let remove_fails = FAIL_ACCOUNT_REMOVE_FOR_TEST.load(std::sync::atomic::Ordering::SeqCst);
+    #[cfg(not(test))]
+    let remove_fails = false;
+    let _ = remove_fails;
     clear_stored_account();
     if !sign_in_reads_back() {
         return Ok(());
@@ -1036,10 +1061,10 @@ pub(crate) fn forget_stored_account() -> Result<(), CloudError> {
         return Ok(());
     }
     if keyring_load().is_some() {
-        let _ = keyring_save("");
+        let _ = keyring_save(SIGNED_OUT_SENTINEL);
     }
-    if account_file_path().exists() {
-        let _ = write_secret_file("");
+    if remove_fails || account_file_path().exists() {
+        let _ = write_secret_file(SIGNED_OUT_SENTINEL);
     }
     if sign_in_reads_back() {
         return Err(CloudError::Unexpected(
@@ -2265,6 +2290,73 @@ mod tests {
             assert!(reads > 100, "the reader really read: {reads}");
             assert_eq!(partial, 0, "partial reads seen: positive control failed");
         });
+    }
+
+    /// The ruling: zero bytes is a READ ERROR, never a nobody — the in-place
+    /// truncate-then-write fallback leaves exactly that on a torn read (common on Windows:
+    /// ACCESS_DENIED on the rename), and reading it as signed-out would exit the daemon on a
+    /// same-owner refresh. Positive control: the sentinel is nobody, a real account reads.
+    #[test]
+    fn zero_bytes_is_a_read_error_never_a_nobody() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                (ENV_ACCOUNT_FILE, Some(path.to_str().unwrap())),
+            ],
+            || {
+                std::fs::write(&path, "").unwrap();
+                assert!(
+                    load_stored_account().is_err(),
+                    "zero bytes is a read error, never nobody"
+                );
+                std::fs::write(&path, "not json").unwrap();
+                assert!(
+                    load_stored_account().is_err(),
+                    "the undecodable file is a read error too"
+                );
+                // positive controls: the sentinel is a definite nobody; a real account reads
+                std::fs::write(&path, SIGNED_OUT_SENTINEL).unwrap();
+                assert!(
+                    matches!(load_stored_account(), Ok(None)),
+                    "the sentinel is the definite nobody"
+                );
+                save_stored_account(&StoredAccount::from_secrets(&secrets())).unwrap();
+                assert!(load_stored_account().unwrap().is_some());
+            },
+        );
+    }
+
+    /// The ruling: a sign-out whose remove fails leaves the explicit sentinel — a definite
+    /// nobody that decodes as nobody — never zero bytes.
+    #[test]
+    fn a_sign_out_whose_remove_fails_leaves_the_sentinel() {
+        use std::sync::atomic::Ordering;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                (ENV_ACCOUNT_FILE, Some(path.to_str().unwrap())),
+            ],
+            || {
+                save_stored_account(&StoredAccount::from_secrets(&secrets())).unwrap();
+                FAIL_ACCOUNT_REMOVE_FOR_TEST.store(true, Ordering::SeqCst);
+                let forgotten = forget_stored_account();
+                FAIL_ACCOUNT_REMOVE_FOR_TEST.store(false, Ordering::SeqCst);
+                let _ = forgotten;
+                let left = std::fs::read_to_string(&path).unwrap();
+                assert_eq!(
+                    left, SIGNED_OUT_SENTINEL,
+                    "the remove failing leaves the sentinel, never zero bytes"
+                );
+                assert!(
+                    matches!(load_stored_account(), Ok(None)),
+                    "the sentinel reads as the definite nobody"
+                );
+            },
+        );
     }
 
     /// N5: the atomic write failing with anything but a permission refusal — a FULL DISK,

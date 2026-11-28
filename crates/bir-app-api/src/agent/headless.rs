@@ -1716,6 +1716,180 @@ mod tests {
             },
         );
     }
+
+    /// The ruling, test (a): a reader that sees ZERO BYTES — the torn read of the in-place
+    /// PermissionDenied fallback, common on Windows — gets a read error and the daemon keeps
+    /// running; it does not exit as if signed out. The empty file here is exactly what the
+    /// torn fallback write exposes mid-write.
+    #[test]
+    fn zero_bytes_is_a_read_error_and_the_daemon_keeps_running() {
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // zero bytes — the torn read of the in-place fallback. The trailing-newline cache
+            // miss of the chmod test is not needed: empty differs in length from any save.
+            std::fs::write(&account_path, "").unwrap();
+            assert!(
+                client.expect_ok(Op::Hello).is_err(),
+                "the batch over a torn read is refused, not answered"
+            );
+            // restore: the daemon is still running and answers again — it did NOT exit
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "positive control failed: the daemon must keep running after a torn read"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            let _ = client.expect_ok(Op::Shutdown);
+            wait_for_serve_exit(&outcome);
+        });
+    }
+
+    /// The ruling, test (c): an old-format EMPTY file left by an earlier build is a read
+    /// error, and the backstop — ten consecutive read-error batches — ends the daemon, so it
+    /// is not held refusing for ever.
+    #[test]
+    fn an_old_empty_file_is_a_read_error_and_the_backstop_ends_it() {
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // the old-format empty file: a read error now, every batch refused
+            std::fs::write(&account_path, "").unwrap();
+            for batch in 1..=10 {
+                assert!(
+                    client.expect_ok(Op::Hello).is_err(),
+                    "batch {batch} over the empty file is refused"
+                );
+            }
+            // the backstop ends the daemon — never a slept-for assumption
+            wait_for_serve_exit(&outcome);
+            let end = outcome.lock().unwrap();
+            assert!(
+                end.is_some(),
+                "the backstop ended the daemon after the consecutive read errors"
+            );
+        });
+    }
 }
 
 /// How long the serve loop sleeps between mailbox drains, given the time
