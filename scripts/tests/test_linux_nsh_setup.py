@@ -376,6 +376,7 @@ SYSTEM_IMAGE=image
 AVD=buwiz
 SUDO=""
 log() { :; }
+android_api() { echo 36; }
 unzip() { :; }
 apt-get() {
     echo "$*" > apt-called
