@@ -3052,13 +3052,6 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
-    // The upload writes a shut previous-payment box as zero through the
-    // model's map; the page draws the same zero with the gate's sentence.
-    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
-        && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
-    {
-        map.insert(spec.key.to_string(), "0.00".to_string());
-    }
     // PR 9's forms: what the draft keeps where the field map cuts it.
     rows_as_needed::values(kind, draft, &mut map);
     // A row family's row the upload leaves out still shows what the draft
@@ -5480,11 +5473,15 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
                 reapply_penalty_context(db, kind, &mut draft).map_err(HostError::new)
             })?;
         }
-        if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+        if bir_core::forms::agent::draft_locks::previous_payment::spec(kind).is_some() {
+            let closes_previous_payment =
+                bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
+                    &before, &draft,
+                );
             bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
                 kind,
                 &mut draft,
-                edits.contains_key(spec.no_key),
+                closes_previous_payment,
             );
         }
         agent::compute(kind, &mut draft).map_err(host_error)?;
@@ -5560,11 +5557,14 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
         let was = before[spec.path].as_f64().unwrap_or(0.0);
         let now = draft[spec.path].as_f64().unwrap_or(0.0);
-        // 2550M's own removal question and Undo toast already announce this
-        // exact clearing. Keep the gate marked as reported below, but do not
-        // put a second copy in the box note (and then a pending third one).
-        let removal_already_says_it =
-            kind.form_code() == "2550M" && removes.is_some() && edits.contains_key(spec.no_key);
+        // A removal question that already names this exact clearing is the
+        // one announcement. It is still marked as reported below, so no
+        // pending copy appears later; only the duplicate inline note is
+        // suppressed. Judge the state transition rather than one key shape.
+        let removal_already_says_it = removes.is_some()
+            && bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
+                &before, &draft,
+            );
         if was.abs() >= 0.005
             && now.abs() < 0.005
             && !removal_already_says_it
@@ -5592,8 +5592,9 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         removes.is_some() && edits.keys().any(|key| key.starts_with("frm2000:optParty_"));
     for clearance in bir_core::forms::agent::gated_rows::clearances(kind, &before, &draft) {
         // Item 10's removal question and its Undo toast already name this
-        // exact clearing (items 11 and 12). A third inline/pending copy of
-        // the same sentence would only repeat what the filer approved.
+        // exact clearing. The gate stays in inline_clearances below so the
+        // transactional save marks that one showing seen; only this duplicate
+        // inline note is suppressed.
         if other_party_removal_acknowledged && clearance.gate == "2000_other_party_name" {
             continue;
         }
@@ -5603,10 +5604,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             }
         }
     }
-    let mut inline_clearances = inline_clearances_between(kind, &before, &draft);
-    if other_party_removal_acknowledged {
-        inline_clearances.remove("2000_other_party_name");
-    }
+    let inline_clearances = inline_clearances_between(kind, &before, &draft);
     remember_inline_clearances(clearance_report_id, &inline_clearances);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
@@ -7001,7 +6999,10 @@ fn pending_notice_values(
         .collect())
 }
 
-fn pending_notices_before_save(db: &Database, draft: &Value) -> Option<BTreeMap<String, String>> {
+pub(crate) fn pending_notices_before_save(
+    db: &Database,
+    draft: &Value,
+) -> Option<BTreeMap<String, String>> {
     let Some(id) = draft["id"].as_i64() else {
         return Some(BTreeMap::new());
     };
@@ -7019,7 +7020,7 @@ fn pending_notices_before_save(db: &Database, draft: &Value) -> Option<BTreeMap<
 /// by the assistant or by another page remains pending. Deleting the pending
 /// row after the seen write is cleanup: if cleanup fails the seen key still
 /// keeps it off later openings.
-fn mark_inline_clearances_seen(
+pub(crate) fn mark_inline_clearances_seen(
     db: &Database,
     draft_id: i64,
     before: Option<BTreeMap<String, String>>,
@@ -12786,9 +12787,9 @@ mod tests {
         assert_eq!(no["draft"]["schedule1"], json!([]));
         assert_eq!(
             no["removes"]["message"],
-            "Changing item 13 to No removes the 1 Schedule 1 row you typed. Continue?"
+            "Warning: pressing OK will clear all values in Schedule 1."
         );
-        assert_eq!(no["removes"]["done"], "Removed 1 row");
+        assert_eq!(no["removes"]["done"], "Cleared all values in Schedule 1");
         // With nothing typed, No asks nothing.
         let untyped = fill(
             "1601FQ",
@@ -13243,7 +13244,7 @@ mod tests {
                 json!({"frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false"}),
                 &based["draft"]
             ),
-            "Changing item 4 to No removes the 1 Part II ATC row you typed. Continue?"
+            "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II."
         );
         assert_eq!(
             message(
@@ -13268,6 +13269,14 @@ mod tests {
                 &answered["draft"]
             ),
             Value::Null
+        );
+        assert_eq!(
+            message(
+                json!({"frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false"}),
+                &answered["draft"]
+            ),
+            Value::Null,
+            "Item 4 No asks only when Part II has rows"
         );
         let eq = open("1601EQ", 3);
         let eq = fill(
@@ -13311,7 +13320,71 @@ mod tests {
         );
         assert_eq!(
             batch["removes"]["message"],
-            "Changing item 4 to No removes the 1 Part II ATC row you typed. Continue?"
+            "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II."
+        );
+    }
+
+    #[test]
+    fn fq_item_4_no_asks_the_official_sentence_and_leaves_schedule_1() {
+        setup();
+        let answered = fill(
+            "1601FQ",
+            &open("1601FQ", 3)["draft"],
+            json!({"frm1601FQ:TaxWithheld_1": "true", "frm1601FQ:CatAgent_P": "true", "frm1601FQ:SpecialTax_1": "true"}),
+        );
+        let chosen = fill(
+            "1601FQ",
+            &answered["draft"],
+            json!({"frm1601FQ:txtAtcCode1": "catalog:0", "frm1601FQ:txtTaxBase1": "1000", "txtAmtIncomePay0": "42", "txtRate0": "10"}),
+        );
+        assert_eq!(chosen["rejected"], json!({}), "{chosen}");
+        let saved = save("1601FQ", &chosen["draft"]);
+        let id = stored_id(&saved);
+
+        // An imported/unanswered draft can hold rows its current answers did
+        // not type. Exercise that shape directly in the stored bytes.
+        let mut imported: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+        imported["any_tax_withheld"] = Value::Null;
+        raw_exec(
+            "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+            &[&serde_json::to_string(&imported).unwrap(), &id.to_string()],
+        );
+        let folder = tempfile::tempdir().unwrap();
+        let archive = folder.path().join("profile.zip");
+        with_database(|db| {
+            bir_core::export::export_profile_data(db, TIN, &archive, None)
+                .map_err(|error| host_error(error.to_string()))
+        })
+        .unwrap();
+        setup();
+        with_database(|db| {
+            bir_core::import::import_profile_data(db, &archive)
+                .map_err(|error| host_error(error.to_string()))
+        })
+        .unwrap();
+        let opened = open("1601FQ", 3);
+        assert_eq!(opened["draft"]["any_tax_withheld"], Value::Null);
+        assert_eq!(opened["draft"]["schedule"].as_array().unwrap().len(), 1);
+
+        let closed = fill(
+            "1601FQ",
+            &opened["draft"],
+            json!({"frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false"}),
+        );
+        assert_eq!(
+            closed["removes"]["message"],
+            "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II."
+        );
+        assert_eq!(closed["draft"]["schedule"], json!([]), "ATCs untick");
+        assert_eq!(
+            closed["draft"]["schedule1"][0]["income_payment"], 42.0,
+            "Schedule 1 is untouched"
+        );
+        save("1601FQ", &closed["draft"]);
+        assert_eq!(
+            open("1601FQ", 3)["notes"],
+            json!([]),
+            "the ask-first prompt is the one announcement"
         );
     }
 

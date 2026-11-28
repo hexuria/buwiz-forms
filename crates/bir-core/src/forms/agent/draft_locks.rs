@@ -1627,7 +1627,9 @@ pub mod previous_payment {
 
     /// The No radio's own onclick clearing. Compute alone must not do it:
     /// 0619E/F's load handlers disable the box without running that onclick,
-    /// so a dormant legacy amount survives opening there.
+    /// so a dormant legacy amount survives opening there. Any write path that
+    /// moves Amended from Yes to No is the radio's choice, including a group
+    /// key or an untick of the Yes member.
     pub fn clear_on_no_radio(kind: AgentFormKind, draft: &mut Value, no_chosen: bool) {
         if !no_chosen {
             return;
@@ -1640,6 +1642,11 @@ pub mod previous_payment {
         {
             object.insert(spec.path.to_string(), json!(0.0));
         }
+    }
+
+    /// Whether this write moved the return out of Amended Yes.
+    pub fn moved_amended_yes_to_no(before: &Value, after: &Value) -> bool {
+        before["is_amended"] == true && after["is_amended"] != true
     }
 
     pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
@@ -1770,8 +1777,6 @@ pub mod schedule1_1601fq {
     pub const LOCK: &str = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
     pub const CLEARED_NOTE: &str =
         "Schedule 1's rows were cleared: they apply only when item 13 is Yes.";
-    const ITEM4_CLEARED_NOTE: &str = "Schedule 1's rows were cleared: changing item 4 clears the entries in Part II and Schedule II; the first- and second-month remittances stay.";
-
     fn stem_keys(stems: &[&str]) -> Vec<String> {
         (0..ROWS)
             .flat_map(|row| stems.iter().map(move |stem| format!("{stem}{row}")))
@@ -1854,12 +1859,10 @@ pub mod schedule1_1601fq {
         pub event_text: String,
     }
 
-    /// Every typed Schedule 1 row a closing Item 13 gate or an Item 4 Yes→No
-    /// recompute cleared, keyed by stable id rather than transient vector index.
+    /// Every typed Schedule 1 row a closing Item 13 gate cleared, keyed by
+    /// stable id rather than transient vector index.
     pub fn row_clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<RowClearance> {
-        let item4_clearing =
-            before["any_tax_withheld"] == json!(true) && after["any_tax_withheld"] == json!(false);
-        if kind.form_code() != "1601FQ" || (!item4_clearing && lock_reason(after).is_none()) {
+        if kind.form_code() != "1601FQ" || lock_reason(after).is_none() {
             return Vec::new();
         }
         let empty_after = |id: &str| {
@@ -1884,14 +1887,7 @@ pub mod schedule1_1601fq {
                 }
                 let gate = format!("1601fq_schedule1:{id}");
                 let position = index + 1;
-                let (reason, event_text) = if item4_clearing {
-                    (
-                        "changing item 4 clears the entries in Part II and Schedule II; the first- and second-month remittances stay",
-                        ITEM4_CLEARED_NOTE,
-                    )
-                } else {
-                    ("it applies only when item 13 is Yes", CLEARED_NOTE)
-                };
+                let (reason, event_text) = ("it applies only when item 13 is Yes", CLEARED_NOTE);
                 let text = format!("Schedule 1 row {position} was cleared: {reason}.");
                 Some(RowClearance {
                     id,
@@ -2582,7 +2578,7 @@ mod tests {
     }
 
     #[test]
-    fn item_4_no_clearing_1601fq_schedule_rows_is_noticed() {
+    fn item_4_no_does_not_notice_a_schedule1_clearing() {
         use super::schedule1_1601fq as gate;
         let row = json!({
             "instance_id": "row-00000000000000000001",
@@ -2601,12 +2597,7 @@ mod tests {
             "tax_relief": "special_rate",
             "schedule1": [],
         });
-        let clearances = gate::clearances(kind("1601FQ"), &before, &after);
-        assert_eq!(clearances.len(), 1, "{clearances:?}");
-        assert_eq!(
-            clearances[0].1,
-            "Schedule 1 row 1 was cleared: changing item 4 clears the entries in Part II and Schedule II; the first- and second-month remittances stay."
-        );
+        assert_eq!(gate::clearances(kind("1601FQ"), &before, &after), vec![]);
     }
 
     #[test]

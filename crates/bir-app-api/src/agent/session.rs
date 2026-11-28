@@ -709,11 +709,15 @@ impl Session {
                 }
                 break;
             }
-            if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+            if bir_core::forms::agent::draft_locks::previous_payment::spec(kind).is_some() {
+                let closes_previous_payment =
+                    bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
+                        &before, &draft,
+                    );
                 bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
                     kind,
                     &mut draft,
-                    filled.iter().any(|key| key.as_str() == spec.no_key),
+                    closes_previous_payment,
                 );
             }
             agent::compute(kind, &mut draft)?;
@@ -722,11 +726,15 @@ impl Session {
                 .map(|(key, value, _)| (key, value))
                 .collect();
         }
-        if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+        if bir_core::forms::agent::draft_locks::previous_payment::spec(kind).is_some() {
+            let closes_previous_payment =
+                bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
+                    &before, &draft,
+                );
             bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
                 kind,
                 &mut draft,
-                filled.iter().any(|key| key.as_str() == spec.no_key),
+                closes_previous_payment,
             );
         }
         agent::compute(kind, &mut draft)?;
@@ -756,15 +764,27 @@ impl Session {
             let shown = crate::screen_form_module::inline_clearances_between(kind, &before, &draft);
             crate::screen_form_module::remember_inline_clearances(draft["id"].as_i64(), &shown);
         }
+        let clearances =
+            bir_core::forms::agent::draft_locks::pending_notices::clearance(kind, &before, &draft);
         if !filled.is_empty() || !forgot.is_empty() {
             if asks.is_none() {
-                agent::save_draft_with_clearance_context(
+                let before_notices =
+                    crate::screen_form_module::pending_notices_before_save(&db, &draft);
+                let reported: BTreeSet<String> =
+                    clearances.iter().map(|(gate, _)| gate.clone()).collect();
+                let id = agent::save_draft_with_clearance_context(
                     kind,
                     &db,
                     &mut draft,
                     before.clone(),
-                    BTreeSet::new(),
+                    reported.clone(),
                 )?;
+                crate::screen_form_module::mark_inline_clearances_seen(
+                    &db,
+                    id,
+                    before_notices,
+                    &reported,
+                );
             }
             for key in &filled {
                 if not_shown.iter().any(|hidden| hidden == key) {
@@ -812,6 +832,19 @@ impl Session {
             "filled": filled.clone(),
             "kept_user_boxes": kept,
         });
+        if !clearances.is_empty()
+            && let Value::Object(object) = &mut result
+        {
+            object.insert(
+                "clearances".into(),
+                json!(
+                    clearances
+                        .iter()
+                        .map(|(gate, text)| json!({"gate": gate, "text": text}))
+                        .collect::<Vec<_>>()
+                ),
+            );
+        }
         if !not_shown.is_empty()
             && let Value::Object(object) = &mut result
         {
@@ -925,6 +958,7 @@ impl Session {
             from_profile.draft.clone()
         };
         drop(db);
+        let before = draft.clone();
         if agent::identity(kind, &draft)?.status != FilingStatus::Draft {
             return Err(format!(
                 "form.check failed, nothing was written: Form {} for {year} period {period} is no longer a draft",
@@ -947,6 +981,17 @@ impl Session {
                     refused.insert(key.clone(), Value::String(why));
                 }
             }
+        }
+        if bir_core::forms::agent::draft_locks::previous_payment::spec(kind).is_some() {
+            let closes_previous_payment =
+                bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
+                    &before, &draft,
+                );
+            bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
+                kind,
+                &mut draft,
+                closes_previous_payment,
+            );
         }
         agent::compute(kind, &mut draft)?;
         let errors = agent::validate(kind, &mut draft)?;
@@ -4121,6 +4166,96 @@ mod tests {
     }
 
     #[test]
+    fn form_fill_1601fq_item4_no_asks_the_official_sentence_only_with_rows() {
+        use bir_core::forms::form_1601fq::{Form1601FqAtcRow, Form1601FqCategory, Form1601FqDraft};
+
+        fn fq_session(withheld: Option<bool>, with_part_ii_row: bool) -> Session {
+            let mut session = session();
+            save_scratch(&mut session);
+            {
+                let db = session.lock_db().unwrap();
+                let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+                let mut draft = Form1601FqDraft::new_from_profile(&profile, 2026, 1);
+                draft.category = Some(Form1601FqCategory::Private);
+                if let Some(withheld) = withheld {
+                    draft.set_any_tax_withheld(withheld);
+                }
+                if with_part_ii_row {
+                    draft.schedule.push(Form1601FqAtcRow {
+                        popup_index: 0,
+                        atc_code: "WI226".to_string(),
+                        tax_base: 1_000.0,
+                        tax_withheld: 0.0,
+                    });
+                }
+                draft.recompute();
+                db.save_queueable_draft(&draft).unwrap();
+            }
+            call(
+                &mut session,
+                "form.open",
+                json!({"code": "1601FQ", "year": 2026, "period": 1, "tin": TIN}),
+            )
+            .unwrap();
+            session
+        }
+
+        let mut rows_session = fq_session(Some(true), true);
+        let error = call(
+            &mut rows_session,
+            "form.fill",
+            json!({"fields": {"frm1601FQ:TaxWithheld": "2"}}),
+        )
+        .unwrap_err();
+        assert!(
+            error.contains(
+                "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II."
+            ),
+            "{error}"
+        );
+        {
+            let db = rows_session.lock_db().unwrap();
+            let stored: String = db
+                .conn_for_tests()
+                .query_row("SELECT data_json FROM form_drafts", [], |row| row.get(0))
+                .unwrap();
+            let stored: Value = serde_json::from_str(&stored).unwrap();
+            assert_eq!(stored["any_tax_withheld"], true, "Cancel means no write");
+            assert_eq!(stored["schedule"][0]["tax_base"], 1_000.0);
+        }
+
+        let mut empty_session = fq_session(Some(true), false);
+        let answer = call(
+            &mut empty_session,
+            "form.fill",
+            json!({"fields": {"frm1601FQ:TaxWithheld": "2"}}),
+        )
+        .unwrap();
+        assert!(
+            answer["asks"].is_null(),
+            "no Part II row: no ask, nothing cleared; {answer}"
+        );
+        assert_eq!(
+            empty_session.open.as_ref().unwrap().draft["any_tax_withheld"],
+            false
+        );
+
+        let mut imported_session = fq_session(None, true);
+        let error = call(
+            &mut imported_session,
+            "form.fill",
+            json!({"fields": {"frm1601FQ:TaxWithheld": "2"}}),
+        )
+        .unwrap_err();
+        assert!(
+            error.contains(
+                "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II."
+            ),
+            "imported unanswered -> No asks once: {error}"
+        );
+    }
+
+    #[test]
     fn form_open_records_a_dormant_1601fq_schedule1_clearing_by_stable_row() {
         use bir_core::forms::form_1601fq::{Form1601FqDraft, Form1601FqTaxRelief};
 
@@ -4342,7 +4477,108 @@ mod tests {
     }
 
     #[test]
-    fn form_fill_previous_payment_yes_to_no_records_the_pending_notice() {
+    fn form_fill_previous_payment_clears_for_every_yes_to_no_key_shape() {
+        for (code, group, group_no, yes_key, key, path) in [
+            (
+                "0619E",
+                "frm0619E:optAmend",
+                "N",
+                "frm0619E:optAmend:Y",
+                "frm0619E:txtTax15",
+                "item_15_amount_remitted_previously",
+            ),
+            (
+                "0619F",
+                "frm0619F:optAmend",
+                "N",
+                "frm0619F:optAmend:Y",
+                "frm0619F:txtTax16",
+                "item_16_remitted_previously",
+            ),
+            (
+                "2550M",
+                "frm2550m:OptAmendedYN",
+                "2",
+                "frm2550m:OptAmendedYN1",
+                "frm2550m:txtTax23D",
+                "vat_paid_previous",
+            ),
+        ] {
+            for (shape, close_key, close_value) in [
+                ("group", group.to_string(), json!(group_no)),
+                ("yes untick", yes_key.to_string(), json!("false")),
+                (
+                    "no tick",
+                    yes_key.replace(":Y", ":N").replace("YN1", "YN2"),
+                    json!("true"),
+                ),
+            ] {
+                let mut session = session();
+                session.commands = UiQueue::discarding();
+                save_scratch(&mut session);
+                call(
+                    &mut session,
+                    "form.open",
+                    json!({"code": code, "year": 2026, "period": 1, "tin": TIN}),
+                )
+                .unwrap_or_else(|error| panic!("{code} opens: {error}"));
+                let opened = call(
+                    &mut session,
+                    "form.fill",
+                    json!({"fields": {yes_key: "true", key: "42"}}),
+                )
+                .unwrap();
+                assert!(opened.get("refused").is_none(), "{code} open: {opened}");
+                let closed = call(
+                    &mut session,
+                    "form.fill",
+                    json!({"fields": {close_key: close_value}}),
+                )
+                .unwrap();
+                assert!(closed.get("refused").is_none(), "{code} {shape}: {closed}");
+                assert_eq!(
+                    session.open.as_ref().unwrap().draft[path]
+                        .as_f64()
+                        .unwrap_or(0.0),
+                    0.0,
+                    "{code} {shape} clears the previous payment"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn form_check_previous_payment_clearing_agrees_with_fill() {
+        let mut session = session();
+        session.commands = UiQueue::discarding();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "0619E", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm0619E:optAmend:Y": "true", "frm0619E:optWithheld:Y": "true", "frm0619E:txtTax14": "20", "frm0619E:txtTax15": "42"}}),
+        )
+        .unwrap();
+        assert!(opened.get("refused").is_none(), "{opened}");
+        let checked = call(
+            &mut session,
+            "form.check",
+            json!({"code": "0619E", "year": 2026, "period": 1, "stored": true, "fields": {"frm0619E:optAmend": "N"}}),
+        )
+        .unwrap();
+        assert_eq!(
+            checked["computed"]["frm0619E:txtTax16"], "20.00",
+            "check clears the credit as fill does: {checked}"
+        );
+    }
+
+    #[test]
+    fn form_fill_previous_payment_yes_to_no_says_the_clearing_once() {
         let mut session = session();
         open_1600pt(&mut session);
         let kind = AgentFormKind::Queueable(bir_core::forms::queueable::QueueableKind::Form1600PT);
@@ -4374,6 +4610,7 @@ mod tests {
                 .unwrap_or(0.0),
             0.0
         );
+        assert_eq!(closed["clearances"][0]["text"], spec.cleared, "{closed}");
         let db = session.lock_db().unwrap();
         let gate = format!(
             "{}_item{}",
@@ -4383,8 +4620,7 @@ mod tests {
         let pending = db
             .settings_with_prefix(&format!("notice_pending:{gate}:"))
             .unwrap();
-        assert_eq!(pending.len(), 1, "{pending:?}");
-        assert!(pending[0].1.contains(spec.cleared), "{pending:?}");
+        assert_eq!(pending.len(), 0, "already said at the change: {pending:?}");
     }
 
     #[test]

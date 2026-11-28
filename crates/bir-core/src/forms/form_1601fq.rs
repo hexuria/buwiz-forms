@@ -834,15 +834,12 @@ impl Form1601FqDraft {
     }
 
     /// Item 4. "No" clears the entries in Part II and Schedule II like
-    /// `cancelAllCompute`; the first- and second-month remittances stay.
+    /// `cancelAllCompute`; Schedule 1 and the monthly remittances stay.
     pub fn set_any_tax_withheld(&mut self, withheld: bool) {
         self.ensure_schedule1_row_ids();
         self.any_tax_withheld = Some(withheld);
         if !withheld {
             self.schedule.clear();
-            if self.tax_relief.is_some() {
-                self.schedule1 = vec![Form1601FqScheduleRow::default(); FORM_1601FQ_SCHEDULE1_ROWS];
-            }
         }
         self.recompute();
     }
@@ -1979,6 +1976,34 @@ mod tests {
             &|d| d.any_tax_withheld = Some(false),
             "Selecting an ATC is not necessary when item no. 4 is set to ' NO '",
         );
+    }
+
+    #[test]
+    fn item_4_no_clears_only_part_ii_and_keeps_schedule_1_and_remittances() {
+        let mut draft = sample();
+        draft.schedule1[0].income_payment = 42.0;
+        draft.schedule1[0].tax_rate = 10.0;
+        draft.tax_remitted_previous = 77.0;
+        draft.compromise = 33.0;
+        draft.recompute();
+        assert!(draft.taxes_withheld_treaty != 0.0, "item 21 is nonzero");
+        let schedule1 = draft.schedule1.clone();
+        let (item21, item25, surcharge, interest, compromise) = (
+            draft.taxes_withheld_treaty,
+            draft.tax_remitted_previous,
+            draft.surcharge,
+            draft.interest,
+            draft.compromise,
+        );
+        assert!(!draft.schedule.is_empty());
+        draft.set_any_tax_withheld(false);
+        assert_eq!(draft.schedule, vec![], "Part II ATC rows untick");
+        assert_eq!(draft.schedule1, schedule1, "Schedule 1 stays");
+        assert_eq!(draft.taxes_withheld_treaty, item21, "item 21 stays");
+        assert_eq!(draft.tax_remitted_previous, item25, "item 25 stays");
+        assert_eq!(draft.surcharge, surcharge, "item 28 stays");
+        assert_eq!(draft.interest, interest, "item 29 stays");
+        assert_eq!(draft.compromise, compromise, "item 30 stays");
     }
 
     #[test]

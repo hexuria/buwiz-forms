@@ -239,6 +239,30 @@ test("an answer that removes typed rows asks first; Continue removes them and Un
   asked.dispose();
 });
 
+test("1601FQ item 4 No uses the official warning; Cancel restores Yes and nothing clears", async () => {
+  createDemoTaxpayer();
+  const t: FormTarget = { tin: DEMO.tin, formCode: "1601FQ", year: 2025, period: 3, mode: "return" };
+  const s = await opened(t);
+  s.choose({ "frm1601FQ:TaxWithheld_1": "true", "frm1601FQ:CatAgent_P": "true" });
+  s.choose({ "frm1601FQ:txtAtcCode1": "catalog:0" });
+  s.edit("frm1601FQ:txtTaxBase1", "1000");
+  await s.idle();
+
+  s.choose({ "frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false" });
+  const overlay = s.overlay();
+  expect(overlay?.kind).toBe("removal");
+  expect(overlay?.kind === "removal" ? overlay.message : "").toBe(
+    "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II.",
+  );
+  expect(s.valueOf("frm1601FQ:TaxWithheld_1")).toBe("true");
+  s.cancelRemoval();
+  await s.idle();
+  expect(s.valueOf("frm1601FQ:TaxWithheld_1")).toBe("true");
+  expect(s.valueOf("frm1601FQ:txtAtcCode1")).toBe("catalog:0");
+  expect(s.shownOf("frm1601FQ:txtTaxBase1")).toBe("1,000.00");
+  s.dispose();
+});
+
 test("a Form library sample is not autosaved until its period is set; Save as return asks for the period", async () => {
   const s = await opened({ tin: DEMO.tin, formCode: "2551Q", year: 0, period: 0, mode: "sample" });
   expect(s.header().sample).toBe(true);

@@ -109,7 +109,7 @@ fn gate_flow(spec: &Spec) {
     } else {
         assert_eq!(
             no["relock_notes"][spec.key], spec.cleared,
-            "{code}: closing the gate says what was cleared inline"
+            "{code}: closing the gate says what was cleared inline, once"
         );
     }
     assert_eq!(
@@ -161,22 +161,31 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
         // BIR-Form0619E.hta and BIR-Form0619F.hta disable the box at load but
         // do not run the No radio's zeroing onclick for a stored file
         // (optAmend:N :330; load/enableAllControl :1309-1313/:2490-2494 and
-        // :1359-1362/:2565-2568). A legacy or hand-edited dormant amount
-        // therefore stays in the draft there; the other gated forms' load
-        // path clears it through their runtime handlers.
-        let official_load_keeps_it = matches!(code, "0619E" | "0619F");
+        // :1359-1362/:2565-2568). 2550M's init likewise only disables 23D
+        // (:2186); its Edit path clears it (:6937). A legacy or hand-edited
+        // dormant amount therefore stays in those drafts; the other gated
+        // forms' load path clears it through their runtime handlers.
+        let official_load_keeps_it = matches!(code, "0619E" | "0619F" | "2550M");
         assert_eq!(
             first["draft"][spec.path].as_f64().unwrap_or(0.0),
             if official_load_keeps_it { 42.0 } else { 0.0 },
             "{code}: legacy dormant amount on open"
         );
-        assert_eq!(first["values"][spec.key], "0.00");
         assert_eq!(first["locks"][spec.key], spec.lock);
         let kind = kind_of(code).unwrap();
+        let sent = agent::field_map(kind, &first["draft"]).unwrap()[spec.key].clone();
         assert_eq!(
-            agent::field_map(kind, &first["draft"]).unwrap()[spec.key],
-            "0.00",
-            "{code}: opened legacy draft's field map carries the shut box as zero"
+            first["values"][spec.key], sent,
+            "{code}: the page shows exactly what the upload sends"
+        );
+        assert_eq!(
+            sent,
+            if official_load_keeps_it {
+                "42.00"
+            } else {
+                "0.00"
+            },
+            "{code}: dormant legacy amount sent"
         );
         let gate = gate_key(spec);
         let notes = first["notes"].as_array().unwrap();
@@ -212,8 +221,17 @@ fn amended_return_previous_payment_yes_to_no_save_records_the_clearing() {
         let id = stored_id(&saved);
         let no = fill(code, &saved["draft"], json!({spec.no_key: "true"}));
         if code == "2550M" {
-            assert_eq!(no["relock_notes"][spec.key], spec.lock);
-            assert!(no["removes"]["message"].as_str().is_some());
+            assert_eq!(
+                no["relock_notes"][spec.key], spec.lock,
+                "2550M: the removal question is the one clearing announcement"
+            );
+            assert!(
+                no["removes"]["message"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("item 23D"),
+                "2550M: removal prompt names item 23D: {no}"
+            );
         } else {
             assert_eq!(no["relock_notes"][spec.key], spec.cleared);
         }
