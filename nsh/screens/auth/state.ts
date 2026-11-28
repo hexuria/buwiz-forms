@@ -227,7 +227,7 @@ function submitHelpdeskPin(): void {
       }
       batch(() => {
         error.set(null);
-        app.setSetup(null, "helpdesk-key");
+        app.setSetup("helpdesk", "helpdesk-key");
       });
       return;
     }
@@ -236,7 +236,7 @@ function submitHelpdeskPin(): void {
     batch(() => {
       setupKey.set(key);
       error.set(null);
-      app.setSetup(null, "helpdesk-key");
+      app.setSetup("helpdesk", "helpdesk-key");
     });
   } catch (e) {
     error.set(errorText(e));
@@ -246,17 +246,18 @@ function submitHelpdeskPin(): void {
 /**
  * Android's Back in first-run setup: the PIN page returns to the choice until its setup is written; the recovery-key page
  * returns to the PIN. Once the key exists there is no way back to the choice (the help desk is already written), so Back on
- * the PIN page then only keeps the key page's way forward from leaving the app.
+ * the PIN page then only keeps the key page's way forward from leaving the app. `"helpdesk"` is pending until the key is
+ * written down, which keeps the frame hidden behind these pages.
  */
 function back(): boolean {
   const step = app.setup().step;
   if (step === "helpdesk-pin") {
-    if (setupKey() !== null) return true;
+    if (app.setup().pending === "helpdesk") return true;
     cancelSetup();
     return true;
   }
   if (step === "helpdesk-key") {
-    app.setSetup(null, "helpdesk-pin");
+    app.setSetup("helpdesk", "helpdesk-pin");
     return true;
   }
   return false;

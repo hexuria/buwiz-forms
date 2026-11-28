@@ -1510,7 +1510,7 @@ export const app = {
   syncAgentAccess,
   /** Why the account gate cannot open, or null. */
   gateError: readOnly(gateError),
-  /** First-run setup's step ("choose" | "helpdesk-pin" | "helpdesk-key") and "solo" while Just me types its first taxpayer. */
+  /** First-run setup's step ("choose" | "helpdesk-pin" | "helpdesk-key"); pending is "solo" while Just me types its first taxpayer, "helpdesk" until the recovery key is written down. */
   setup: readOnly(setup),
   /** First-run setup is on for this run (the shipped app). */
   firstRun: readOnly(FIRST_RUN_GATE),
