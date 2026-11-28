@@ -23,7 +23,7 @@ The four conditions of the owner's exception to the bypass rule:
 
 ## The red evidence (before the fix)
 
-`before-type-fails.log`: on the pre-fix composition, the runner's exact
+`before-type-fails.txt`: on the pre-fix composition, the runner's exact
 step `type gate-code-boxes 246810` fails in the real window with
 "node 162 is not a text input" (hexuria/gpui-agent#135 — gpui-agent's
 `type` needs the node itself to be a text input; the testID sat on
