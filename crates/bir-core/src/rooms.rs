@@ -374,27 +374,6 @@ pub struct DeviceStore {
     pub(crate) conn: Connection,
 }
 
-/// Open a room's database file for the one-slot host (A3a). Refuses — an Err in every build —
-/// when the legacy claim's `start()` has not run for this device folder in
-/// this session (R1): the open runs migrations and a checkpoint, and those writes change bytes the move's
-/// hash check still needs as evidence.
-pub fn open_room_guarded(
-    layout: &Layout,
-    room: &RoomId,
-) -> Result<crate::db::Database, DeviceStoreError> {
-    let ran = crate::legacy_claim::claim_started_this_session(layout.device_dir());
-    // D1: a refusal is an Err, never a panic — no debug_assert here.
-    if !ran {
-        return Err(DeviceStoreError::Io(std::io::Error::other(
-            "the legacy claim's start() has not run for this device folder in this session;              a room's database is never opened before it (R1)",
-        )));
-    }
-    crate::db::Database::open(layout.room_database(room)).map_err(|error| match error {
-        crate::db::DbError::Sqlite(sqlite) => DeviceStoreError::Sqlite(sqlite),
-        other => DeviceStoreError::Io(std::io::Error::other(other.to_string())),
-    })
-}
-
 impl DeviceStore {
     /// Open the device store of `layout`, making it on a device with no rooms (a new install, or one from
     /// before rooms). A missing `device.db` while `rooms/` is on disk is [`DeviceStoreError::Lost`], never a

@@ -5,6 +5,21 @@ use std::panic::AssertUnwindSafe;
 use super::fixtures::*;
 use super::*;
 
+fn open_room_guarded(
+    layout: &crate::rooms::Layout,
+    room: &crate::rooms::RoomId,
+) -> Result<crate::db::Database, crate::rooms::DeviceStoreError> {
+    if !crate::legacy_claim::claim_started_this_session(layout.device_dir()) {
+        return Err(crate::rooms::DeviceStoreError::Io(std::io::Error::other(
+            "the legacy claim's start() has not run for this device folder in this session",
+        )));
+    }
+    crate::db::Database::open(layout.room_database(room)).map_err(|error| match error {
+        crate::db::DbError::Sqlite(sqlite) => crate::rooms::DeviceStoreError::Sqlite(sqlite),
+        other => crate::rooms::DeviceStoreError::Io(std::io::Error::other(other.to_string())),
+    })
+}
+
 /// The claim of `who` from start to end, for a file with no lock.
 fn claim_unlocked(install: &Install, who: &Claimant) -> Outcome {
     let claim = install.claim();
@@ -1891,15 +1906,14 @@ fn a_room_open_is_refused_before_start_and_the_claim_still_finishes() {
     let claim = install.claim();
     let room = room_of(&claim, &a);
     install.layout.create_room_dir(&room).unwrap();
-    let before = crate::rooms::open_room_guarded(&install.layout, &room);
+    let before = open_room_guarded(&install.layout, &room);
     assert!(
         before.is_err(),
         "the room opened before the claim's start() ran"
     );
     let outcome = claim_unlocked(&install, &a);
     assert_eq!(done_room(&outcome), room);
-    crate::rooms::open_room_guarded(&install.layout, &room)
-        .expect("the room opens once the claim ran");
+    open_room_guarded(&install.layout, &room).expect("the room opens once the claim ran");
 }
 
 // ------------------------------------------------------------------------- L1, the orchestrator's ruling
@@ -2008,8 +2022,7 @@ fn a_transient_room_check_does_not_open_the_room() {
         !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
         "a transient answer must not open the room"
     );
-    let refused =
-        std::panic::catch_unwind(|| crate::rooms::open_room_guarded(&install.layout, &room));
+    let refused = std::panic::catch_unwind(|| open_room_guarded(&install.layout, &room));
     match refused {
         Ok(result) => assert!(result.is_err(), "the room opened after a transient answer"),
         Err(_) => {} // the debug_assert fired: refused either way
@@ -2020,7 +2033,7 @@ fn a_transient_room_check_does_not_open_the_room() {
         matches!(finished, Start::Finished(Outcome::Done { .. })),
         "{finished:?}"
     );
-    crate::rooms::open_room_guarded(&install.layout, &room)
+    open_room_guarded(&install.layout, &room)
         .expect("the room opens once the claim has a definitive answer");
 }
 

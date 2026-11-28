@@ -468,7 +468,61 @@ fn abandon_deaf_listener(addr: SocketAddr, shutdown: &std::sync::atomic::AtomicB
     }
 }
 
+pub(crate) const ACCOUNT_CHANGED: &str = "the signed-in account changed; start bir serve again";
+
+type HeadlessRoomSlot = Arc<Mutex<Option<Arc<Mutex<Database>>>>>;
+
+fn stored_owner_and_server() -> Option<(bir_core::account_session::OwnerKey, String)> {
+    let stored = bir_core::cloud_account::load_stored_account()
+        .ok()
+        .flatten()?;
+    let owner = bir_core::account_session::OwnerKey::of(&stored)?;
+    Some((owner, stored.server_url))
+}
+
+/// The daemon's per-batch account check. The open room belongs to the stored sign-in captured
+/// when serve started; any owner or server change, including an empty store, ends that room's use.
+fn headless_account_error(
+    expected: &Option<(bir_core::account_session::OwnerKey, String)>,
+) -> Result<Option<bir_core::account_session::OwnerKey>, String> {
+    let current = stored_owner_and_server();
+    if current != *expected {
+        return Err(ACCOUNT_CHANGED.to_owned());
+    }
+    Ok(current.map(|(owner, _)| owner))
+}
+
+/// The daemon cron's room source: the same account check on every tick, with the handle held in
+/// a slot so a change can really close the room instead of leaving the cron's Arc behind.
+fn headless_room_source(
+    slot: HeadlessRoomSlot,
+    expected: Option<(bir_core::account_session::OwnerKey, String)>,
+) -> bir_core::background_cron::RoomSource {
+    Arc::new(move || {
+        let owner = match headless_account_error(&expected) {
+            Ok(owner) => owner,
+            Err(_) => {
+                *slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+                bir_core::account_session::cache_owner(None);
+                return None;
+            }
+        };
+        bir_core::account_session::cache_owner(owner.clone());
+        slot.lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+            .map(|db| bir_core::background_cron::RoomTick {
+                db,
+                key: bir_core::background_cron::fixed_room_key(),
+                owner,
+                epoch: bir_core::session_epoch::current(),
+            })
+    })
+}
+
 fn serve(wait: bool) -> Result<(), ExitCode> {
+    bir_core::account_session::fill_owner_cache();
+    let expected_account = stored_owner_and_server();
     let mut config = load_serve_config()?;
     // `--wait` exists to wait for the port (restart handoff), so it must not
     // fall back to an ephemeral port while the old server still holds it.
@@ -496,8 +550,9 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         };
 
         let db = Arc::new(Mutex::new(opened));
+        let room_slot: HeadlessRoomSlot = Arc::new(Mutex::new(Some(db.clone())));
         let mut session = Session::headless();
-        session.set_db(db.clone(), None); // serve never changes rooms in its process: no generation
+        session.set_db(db.clone(), None);
         let host = Arc::new(Mutex::new(session));
         let mailbox = AgentMailbox::new();
         let (addr, shutdown) = match spawn_mailbox_named(
@@ -536,19 +591,17 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             return Err(ExitCode::from(2));
         }
 
-        let cron_db = db.clone();
+        let cron_source = headless_room_source(room_slot.clone(), expected_account.clone());
         thread::spawn(move || {
             if let Ok(rt) = tokio::runtime::Runtime::new() {
                 rt.block_on(async move {
-                    bir_core::background_cron::start_cron_jobs(
-                        bir_core::background_cron::fixed_room_source(cron_db),
-                    )
-                    .await;
+                    bir_core::background_cron::start_cron_jobs(cron_source).await;
                 });
             } else {
                 eprintln!("Failed to initialize Tokio runtime for headless background tasks");
             }
         });
+        drop(db);
 
         if let Err(error) = headless_daemon::write_current_pid() {
             eprintln!("pid file: {error}");
@@ -614,7 +667,22 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         // run), and fall back to the idle interval once it goes quiet.
         let mut last_request = None::<std::time::Instant>;
         while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
-            for posted in mailbox.take() {
+            let batch = mailbox.take();
+            if !batch.is_empty()
+                && let Err(message) = headless_account_error(&expected_account)
+            {
+                host.lock().expect("host").rebuild();
+                *room_slot
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+                bir_core::account_session::cache_owner(None);
+                for posted in batch {
+                    let id = posted.request.id.clone();
+                    posted.reply(gpui_agent::Response::err(id, message.clone()));
+                }
+                continue;
+            }
+            for posted in batch {
                 last_request = Some(std::time::Instant::now());
                 let req = posted.request.clone();
                 let mut guard = host.lock().expect("host");
@@ -632,7 +700,11 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             }
             thread::sleep(drain_interval(last_request.map(|at| at.elapsed())));
         }
-        if let Ok(guard) = db.lock()
+        if let Some(db) = room_slot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+            && let Ok(guard) = db.lock()
             && let Err(error) = guard.checkpoint()
         {
             eprintln!("wal checkpoint on shutdown: {error}");
@@ -828,6 +900,148 @@ mod tests {
                 },
             );
         }
+    }
+
+    fn stored_for(server_url: &str, user_id: &str) -> bir_core::cloud_account::StoredAccount {
+        bir_core::cloud_account::StoredAccount {
+            server_url: server_url.to_owned(),
+            access_token: format!("access-{user_id}"),
+            refresh_token: format!("refresh-{user_id}"),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: user_id.to_owned(),
+            email: Some(format!("{user_id}@example.test")),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        }
+    }
+
+    fn reviewed_profile() -> bir_core::profile::TaxpayerProfile {
+        use bir_core::profile::{IncomeTaxElection, TaxElectionHistory};
+        let mut profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null,
+                "full_name": "Headless Queue Taxpayer",
+                "tin": {"segment1":"123","segment2":"456","segment3":"789","branch":"000"},
+                "rdo_code": "018",
+                "line_of_business": "Retail",
+                "registered_address": "Manila",
+                "zip_code": "1000",
+                "phone": "09123456789",
+                "email": "headless@example.test",
+                "default_form_type": "2551Qv2018",
+                "taxpayer_type": "Individual",
+                "business_start_date": "2010-01-01"
+            }))
+            .unwrap();
+        profile.tax_elections.push(TaxElectionHistory {
+            taxable_year: 2024,
+            election: IncomeTaxElection::GraduatedUnspecified,
+            elected_at: chrono::NaiveDateTime::default(),
+            source_form: "2551Qv2018".to_owned(),
+        });
+        profile.ensure_profile_version_ledger();
+        profile
+    }
+
+    /// F4 through the daemon's production room source and cron loop: A's queued return is sent
+    /// while A remains signed in (the positive control); when the disk says B, the same source
+    /// refuses, empties the room slot, and the owner lock can be taken again.
+    #[test]
+    fn headless_room_source_sends_for_a_then_refuses_b_and_closes_the_room() {
+        use bir_core::forms::{FilingStatus, Form2551QDraft, form_2551q::Item13Election};
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        temp_env::with_vars(
+            [
+                (
+                    bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                    Some(account_path.to_str().unwrap().to_owned()),
+                ),
+                ("BIR_SFTP_DRY_RUN", Some("1".to_owned())),
+                ("BIR_RELAY_URL", None),
+                ("BUWIZ_RELAY_SEND", None),
+            ],
+            || {
+                runtime.block_on(async {
+                    let stored_a = stored_for("http://localhost:3008", "user-a");
+                    bir_core::account_session::save_stored(&stored_a).unwrap();
+                    let owner_a = bir_core::account_session::OwnerKey::of(&stored_a).unwrap();
+                    let expected = Some((owner_a.clone(), stored_a.server_url.clone()));
+                    let (opened, _) = bir_core::db::open_serve_database_at(&db_path).unwrap();
+                    let db = std::sync::Arc::new(std::sync::Mutex::new(opened));
+                    let profile = reviewed_profile();
+                    let queued_tin;
+                    {
+                        let guard = db.lock().unwrap();
+                        guard.save_profile(profile.clone()).unwrap();
+                        let mut draft =
+                            Form2551QDraft::new_from_effective_profile(&profile, 2024, 1);
+                        queued_tin = draft.tin.clone();
+                        draft.item_13_election = Item13Election::Graduated;
+                        draft.transition_to_queued().unwrap();
+                        guard.save_queued_2551q_draft_and_election(&draft).unwrap();
+                    }
+                    let slot: super::HeadlessRoomSlot =
+                        std::sync::Arc::new(std::sync::Mutex::new(Some(db.clone())));
+                    let source = super::headless_room_source(slot.clone(), expected.clone());
+                    let stop = bir_core::background_cron::CronStop::new();
+                    let worker = tokio::spawn(bir_core::background_cron::run_cron_jobs(
+                        source.clone(),
+                        stop.clone(),
+                    ));
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                    loop {
+                        let status = db
+                            .lock()
+                            .unwrap()
+                            .get_2551q_draft(&queued_tin, 2024, 1)
+                            .unwrap()
+                            .unwrap()
+                            .status;
+                        if status == FilingStatus::Submitted {
+                            break;
+                        }
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "the headless positive control did not send: {status:?}"
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                    }
+                    assert_eq!(
+                        bir_core::account_session::stored_owner(),
+                        Some(owner_a.clone()),
+                        "the daemon source did not fill the owner cache for the account path"
+                    );
+
+                    let stored_b = stored_for("http://localhost:3008", "user-b");
+                    bir_core::account_session::save_stored(&stored_b).unwrap();
+                    assert_eq!(
+                        super::headless_account_error(&expected).unwrap_err(),
+                        super::ACCOUNT_CHANGED
+                    );
+                    assert!(
+                        source().is_none(),
+                        "the changed account still had a room tick"
+                    );
+                    assert!(
+                        slot.lock().unwrap().is_none(),
+                        "the room slot stayed open after the account changed"
+                    );
+                    stop.stop();
+                    worker.await.unwrap();
+                    drop(db);
+                    bir_core::db::open_serve_database_at(&db_path)
+                        .expect("the room's owner lock was still held after the close");
+                    bir_core::account_session::cache_owner(None);
+                });
+            },
+        );
     }
 
     /// Accounts-and-lock A1: until a room exists (no `rooms/` folder, every install before A3a), `serve` opens the
