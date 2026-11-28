@@ -143,10 +143,11 @@ class ArgsTests(unittest.TestCase):
 
     def test_the_recipe_passes_its_arguments_without_word_splitting_or_globbing(self):
         recipe = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        body = recipe[recipe.index("play-bundle *args:"):]
-        body = body[:body.index("\n\n")]
-        self.assertIn("read -ra ARGV <<< {{quote(args)}}", body)
-        self.assertNotIn("for arg in {{args}}", body)
+        start = recipe.index("[positional-arguments]\nplay-bundle *args:")
+        body = recipe[start:recipe.index("\n\n", start)]
+        self.assertIn('play_bundle_guard.py args -- "$@"', body)
+        self.assertNotIn("{{args}}", body)
+        self.assertNotIn("{{quote(args)}}", body)
 
 
 class DotenvReportTests(unittest.TestCase):

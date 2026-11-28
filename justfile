@@ -771,15 +771,16 @@ _package-mac-appstore args="": build-frozen-html-identity
 # upload key (`just play-sign`). nsh package always signs, with the debug key here; `android_bundle.py prepare` takes that
 # signature off with the updater's source (Google Play updates the app; the updater never starts on a phone).
 [unix]
+[positional-arguments]
 play-bundle *args:
     #!/usr/bin/env bash
     set -euo pipefail
     umask 022
     root="$(pwd)"
-    # A build number (1 to 2100000000), --allow-dotenv, or both: `just play-bundle 28 --allow-dotenv`. Read without
-    # word splitting or globbing, and checked by scripts/play_bundle_guard.py.
-    read -ra ARGV <<< {{quote(args)}}
-    PARSED="$({{PYTHON}} scripts/play_bundle_guard.py args -- ${ARGV[@]+"${ARGV[@]}"})"
+    # A build number (1 to 2100000000), --allow-dotenv, or both: `just play-bundle 28 --allow-dotenv`. Passed as the
+    # script's own arguments (positional-arguments), so no word splitting or globbing, and checked by
+    # scripts/play_bundle_guard.py.
+    PARSED="$({{PYTHON}} scripts/play_bundle_guard.py args -- "$@")"
     BUILD="${PARSED% *}"; [ "$BUILD" != - ] || BUILD=""
     DOTENV=(); [ "${PARSED##* }" != 1 ] || DOTENV=(--allow-dotenv)
     # `just` has loaded any .env into this recipe (`set dotenv-load`). A store build bakes nothing from it: the server
