@@ -1831,7 +1831,7 @@ pub mod schedule1_1601fq {
                 let position = index + 1;
                 let (reason, event_text) = if item4_clearing {
                     (
-                        "changing item 4 clears the entries in Part II and Schedule II",
+                        "changing item 4 clears the entries in Part II and Schedule II; the first- and second-month remittances stay",
                         ITEM4_CLEARED_NOTE,
                     )
                 } else {
@@ -2550,7 +2550,7 @@ mod tests {
         assert_eq!(clearances.len(), 1, "{clearances:?}");
         assert_eq!(
             clearances[0].1,
-            "Schedule 1 row 1 was cleared: changing item 4 clears the entries in Part II and Schedule II."
+            "Schedule 1 row 1 was cleared: changing item 4 clears the entries in Part II and Schedule II; the first- and second-month remittances stay."
         );
     }
 
