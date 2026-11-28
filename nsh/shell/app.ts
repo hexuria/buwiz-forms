@@ -1369,6 +1369,7 @@ function startParams(): Readonly<Record<string, string>> {
 type AccountOpenOutcome = "unlocked" | "waiting" | "stopped";
 let accountOpenTimer: ReturnType<typeof setInterval> | null = null;
 let accountOpenStepRunning = false;
+let initialAccountOpen = false;
 
 function stopAccountOpenPoll(): void {
   if (accountOpenTimer !== null) clearInterval(accountOpenTimer);
@@ -1395,7 +1396,9 @@ async function accountOpened(start?: string): Promise<void> {
   cloudLocked.set(false);
   if (!keptLoaded) {
     await loadKept(start);
-    if (start) runStartRoute(start);
+    // At the first synchronous boot unlock the route runs after booted, as before A3a: fixture effects
+    // that sign a session in when booted first fire must not erase it. A later commit is already after boot.
+    if (start && !initialAccountOpen) runStartRoute(start);
   } else {
     if (wasLocked) {
       sessionChanged();
@@ -1440,13 +1443,20 @@ export function boot(requested?: string, opts: { firstRun?: boolean; testEnviron
     const start = allowedStart(requested, opts.testEnvironment ?? doorStatus().testEnvironment);
     FIRST_RUN_GATE.set(opts.firstRun === true);
     bootStart = start;
-    const outcome = await watchAccountOpen();
+    initialAccountOpen = true;
+    let outcome: AccountOpenOutcome;
+    try {
+      outcome = await watchAccountOpen();
+    } finally {
+      initialAccountOpen = false;
+    }
     if (outcome !== "unlocked") {
       // Nothing that names a taxpayer is read until the device flow is approved; the theme follows the route or the system.
       themePref.set(themePreferenceFromStart(start) ?? "system");
       setColorScheme(themePref());
     }
     booted.set(true);
+    if (outcome === "unlocked" && start) runStartRoute(start);
   })();
   return bootPromise;
 }
