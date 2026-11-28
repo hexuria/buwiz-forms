@@ -1,6 +1,6 @@
 # Privacy Policy for eBIRForms
 
-**Last updated:** November 25, 2026
+**Last updated:** November 28, 2026
 
 This policy covers eBIRForms for macOS, Windows, Linux, iPhone, iPad and Android, version 1.0.0 and later, published by
 Goldcoders Corp. It says what the app stores, what it sends, and to whom.
@@ -81,13 +81,14 @@ It holds:
 - **Settings and locks:** if you set a PIN, a recovery key or an authenticator, the app stores what it needs to check
   them (a hash for the PIN and the recovery key).
 - **Inbox access, if you turn on receipt tracking:** the mailbox address and either an app password or the Google
-  sign-in tokens.
+  sign-in tokens (from version 0.2).
 - **Logs:** daily files kept for 7 days unless you change that. Passwords and tokens are removed from logs. TINs do
   appear in them.
 
 **The database is a standard SQLite file and the app does not encrypt it.** Anyone who can read your user account's
 files can read it, including a saved inbox password or Google token. Protect it the way you protect other private
-files: a password on your user account and disk encryption (FileVault, BitLocker or LUKS).
+files: a password on your user account and disk encryption (FileVault, BitLocker or LUKS). On iPhone, iPad and
+Android the database is left out of device backups; on a computer, your own backups include it.
 
 To remove everything the app has stored on a device, sign out first (that clears the sign-in and the device's key
 from the credential store), then delete the folder above.
@@ -144,16 +145,19 @@ by default) and anything done on a practice account: these send nothing to the B
 ## 4. Receipt tracking (optional)
 
 If you turn on receipt tracking for a taxpayer, the app reads that mailbox for the BIR's confirmation emails, so a
-return can move to Confirmed and Paid on its own. You choose one of two ways:
+return can move to Confirmed and Paid on its own. You connect the mailbox with an **app password** you enter (for
+Gmail, an app password from your Google account, which needs 2-Step Verification). An app password lets the app sign
+in to your whole mailbox, as a mail program does. The app opens only the inbox and reads only messages from
+`ebirforms-noreply@bir.gov.ph`, and does not change them. Outlook.com, Hotmail, Live and Microsoft 365 mailboxes
+cannot be used: Microsoft accepts only its own sign-in for this kind of access, not a password or an app password.
 
-- **Google sign-in.** You approve access in your browser. Google's permission for mail access over IMAP
-  (`https://mail.google.com/`) is broad: it allows reading the whole mailbox. The app uses it only to search for
-  messages from `ebirforms-noreply@bir.gov.ph`. It also reads the address of the account you connected.
-- **Another mailbox over IMAP,** with an app password you enter.
+Version 0.2 also offered **Google sign-in**. Version 1.0.0 does not: an inbox connected that way says so, and you can
+switch it to an app password or disconnect it. If Google sign-in returns in a later version, this policy will
+describe what it may access before that version is released.
 
 The mailbox is read from your device. Nothing from it is sent to Goldcoders. Disconnecting removes the saved password
-or tokens from your device; it does not change anything Google or your mail provider holds. Google handles the
-sign-in under its own terms and privacy policy.
+or tokens from your device; it does not change anything Google or your mail provider holds. Your mail provider
+handles your mailbox and its app passwords under its own terms and privacy policy.
 
 ## 5. Who else handles this data
 
@@ -165,6 +169,9 @@ We use these companies to run the service. Each receives only what its job needs
 | Neon | Our database (hosted in Singapore) | Everything listed in sections 1 and 3 as held by us |
 | Amazon Web Services | The servers that run our service (Singapore) | The same data while it is being processed, and server logs |
 | Resend | Sends the sign-in code | Your email address and the code. Resend keeps its own log of sent messages for its own retention period. |
+
+If you turn on receipt tracking, your device connects directly to your own mail provider; we do not use it, and it
+receives nothing from us.
 
 The BIR receives the return you send and its file name. We do not sell personal data, and we do not share it for
 advertising.
