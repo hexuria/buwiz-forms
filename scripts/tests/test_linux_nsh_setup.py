@@ -154,6 +154,20 @@ write_wrapper
             self.assertIn(f"tools={root}/store/tools", wrapper.read_text())
             self.assertFalse((root / "work/nsh2404.sh").exists())
 
+    def test_the_shared_wrapper_is_found_through_a_linked_home(self):
+        # setup resolves TOOLS (realpath -m) and `just play-bundle` resolves both sides the same way: a linked $HOME or
+        # a trailing slash still names the shared ~/BuwizNsh/nsh2404.sh.
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "real/BuwizNsh").mkdir(parents=True)
+            (Path(tmp) / "home").symlink_to(Path(tmp) / "real")
+            result = self.run_shell(function("wrapper_path") + r'''
+WORK="$PWD/home/BuwizNsh"
+TOOLS="$(realpath -m -- "$PWD/home/BuwizNsh/tools/")"
+wrapper_path
+''', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), f"{tmp}/home/BuwizNsh/nsh2404.sh")
+
     def test_the_sdk_platform_is_the_one_nsh_json_targets(self):
         for target, ok in (("36", True), ('"thirty-six"', False), (None, False)):
             with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:

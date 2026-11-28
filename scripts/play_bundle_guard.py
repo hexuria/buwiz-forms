@@ -224,7 +224,9 @@ def cargo_config_refusals(path: Path, text: str) -> list[str]:
             problems.append(f"{path}:{number}: {full} changes the release profile")
         elif full in ("build.rustc-wrapper", "build.rustc-workspace-wrapper") or (
                 full == "build" and "wrapper" in line):
-            problems.append(f"{path}:{number}: {full} sets a compiler wrapper, which can add any flag")
+            problems.append(f"{path}:{number}: {full} sets a compiler wrapper, which can add any flag: comment that line "
+                            "out for the store build and put it back after (an empty RUSTC_WRAPPER does not reach the "
+                            "Linux container, so the file is what counts)")
         elif (full == "build.rustflags" or (full.startswith("target.") and full.endswith(".rustflags"))
               or (full in ("build", "target") and "rustflags" in line)):
             problems.append(f"{path}:{number}: {full} sets rustflags")
