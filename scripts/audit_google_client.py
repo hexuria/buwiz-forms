@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Whether a Windows package holds Google's OAuth client, in any of its files.
+"""Whether a release package holds Google's OAuth client, in any of its files.
 
-The Microsoft Store package ships without Gmail Connect unless the repository variable STORE_GMAIL is exactly 1: Connect
-asks for Gmail's restricted scope, which needs Google's verification for a public app. bir-core compiles the client in at
+No release package, Store or direct download on any platform, ships Gmail Connect unless the repository variable
+STORE_GMAIL is exactly 1: Connect asks for Gmail's restricted scope, which needs Google's verification for a public app,
+and 1.0.0 ships none. bir-core compiles the client in at
 build time (option_env!("GOOGLE_CLIENT_ID") / "GOOGLE_CLIENT_SECRET"), so a build that had it left it in its bytes.
 
     audit_google_client.py --self-test        the detector finds a planted id and secret, bare, in an .msix member
                                               other than the exe, and in a nested archive; nothing in a clean package;
                                               and an archive it cannot read is refused
     audit_google_client.py --absent PACKAGE   exit 1 if any file of PACKAGE holds a client id or a client secret
-    audit_google_client.py --present PACKAGE  exit 1 unless its files hold both (the positive control: the direct
-                                              downloads have the client, so their package proves the bytes read are real)
+    audit_google_client.py --present PACKAGE  exit 1 unless its files hold both (a build made with STORE_GMAIL=1)
 
-PACKAGE is an .msix or a .zip (read member by member as the ZIP it is: members are deflated, so the archive's own bytes
+PACKAGE is an .msix, a .zip or a .tar.gz (read member by member as the ZIP it is: members are deflated, so the archive's own bytes
 hide the strings), a folder, or a single file. A member that is itself a ZIP or gzip is read too; one in another archive
 format (zstd, xz, 7z, cab) cannot be read, so the audit refuses it (exit 2) rather than pass it unread. Only the names
 of the files that hold a kind are printed, never what was found.

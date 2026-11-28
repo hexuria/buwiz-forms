@@ -69,11 +69,12 @@ Windows upload would then have to skip a number, and the downloads' updater woul
 
 1. `python3 scripts/set_release_version.py X.Y.Z`, fix the tests it lists, open a pull request, merge it.
 2. Tag `vX.Y.Z` on `main`. The release workflows build the downloads and, in a job of its own
-   (`build-windows-store`), the unsigned `.msix` for the Microsoft Store. That job has the Google OAuth client, and so
-   Gmail Connect, only when the repository variable `STORE_GMAIL` is `1`: Connect's restricted Gmail scope needs
-   Google's verification. Otherwise it checks that no file of the package holds a client id or secret
-   (`scripts/audit_google_client.py`). The direct downloads keep the client, and on every release the same audit must
-   find it in their updater ZIP (the positive control). The `.msix` is not on the public GitHub release: it is
+   (`build-windows-store`), the unsigned `.msix` for the Microsoft Store. No build, Store or direct download, has the
+   Google OAuth client (and so Gmail Connect) unless the repository variable `STORE_GMAIL` is `1`: 1.0.0 ships none,
+   and the client of 0.2.x is retired. Every platform's release job checks its packages against that switch with
+   `scripts/audit_google_client.py`: `--self-test` first (the detector finds planted ones), then `--absent` on the
+   Windows updater ZIP and `.msix`, the macOS archives and the Linux `.tar.gz` (`--present` when the switch is on).
+   Gmail sign-in returns in 1.0.x through native Google clients that hold no secret. The `.msix` is not on the public GitHub release: it is
    unsigned and cannot be sideloaded. It stays in the run's `windows-store` artifact. For 1.0.0 the release waits for
    the Store job, so a Store failure holds the direct downloads too. After 1.0.0 that may be loosened so a Store-only
    failure no longer holds them.

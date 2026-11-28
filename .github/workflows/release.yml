@@ -20,8 +20,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   APP_NAME: eBIRForms
-  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+  # bir-core compiles Google's OAuth client in (option_env!). No build carries it unless the repository variable
+  # STORE_GMAIL is exactly 1 (owner, 2026-11-28: 1.0.0 ships no Google client; the name predates it governing every
+  # build). The client of 0.2.x is leaked and retired; Gmail sign-in returns in 1.0.x with native clients that hold no
+  # secret, and this switch's secret-passing "on" branch is removed then.
+  GOOGLE_CLIENT_ID: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
+  GOOGLE_CLIENT_SECRET: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
 
 jobs:
   # The public release jobs may consume only this exact, tested tag commit.
@@ -136,10 +140,9 @@ jobs:
       release: ${{ github.event_name == 'push' }}
     secrets: inherit
 
-  # The Microsoft Store's .msix, built apart from the direct downloads above. It is given the Google OAuth client
-  # only when the repository variable STORE_GMAIL is 1: Gmail Connect asks for Gmail's restricted scope, which
-  # needs Google's verification for a public app. It is given no signing certificate: the Store signs it. Off,
-  # its job checks that the package holds no client id. Setup.exe, the .msi and the ZIP keep the client as 0.2.x did.
+  # The Microsoft Store's .msix, built apart from the direct downloads above. Like every build it is given the Google
+  # OAuth client only when the repository variable STORE_GMAIL is 1, and its job checks the package against that. It
+  # is given no signing certificate: the Store signs it.
   # Its `windows-store` artifact is what Partner Center takes; the public release below never lists the unsigned .msix
   # (it cannot be sideloaded) or its sums.
   build-windows-store:
@@ -160,7 +163,7 @@ jobs:
       tag: ${{ needs.preflight.outputs.version }}
     # A called workflow does not see this file's env, so the Google OAuth
     # client the shell compiles in (option_env! in bir-core) has to reach it
-    # as secrets, the same way build-windows gets them.
+    # as secrets; release-linux.yml passes them on only when STORE_GMAIL is 1.
     secrets: inherit
 
   # ── Create GitHub Release ───────────────────────────────────────────────

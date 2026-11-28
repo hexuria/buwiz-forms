@@ -24,7 +24,7 @@ there, but nobody has run it on that platform.
 | PIN or authenticator app lock | ✓ |  |
 | In-app notifications drawer and toasts | ✓ | The bell in the top bar (⌘⇧N); in-app toasts. |
 | Background refresh when the database changes | ✓ | The paced watch in `nsh/shell/app.ts` re-reads. |
-| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card; the host opens the browser. |
+| Gmail connect for BIR receipt tracking | ✓ | Settings → Account → Google, or the taxpayer inbox card, in a build given a Google client (none in 1.0.0: an app password instead); the host opens the browser. |
 | Keyboard shortcuts | ✓ | Cmd based; also Cmd+H, Cmd+M, Cmd+Ctrl+F. |
 | Packaging | ✓ | Signed and notarized `.app` and `.dmg`; Mac App Store package. |
 | Agent control (gpui-agent) | ✓ | Opt-in build feature. |
