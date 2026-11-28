@@ -312,10 +312,14 @@ export function Shell(props: ShellProps) {
   return (
     <View testID="shell" class="flex-1 bg-background">
       <If when={app.booted()}>
-        <If when={app.chromeVisible()} else={<LockedFrame />}>
-          <If when={isDevPage()} else={<Frame />}>
-            <DevPages />
+        <If when={app.view() === "lockdebug"} else={
+          <If when={app.chromeVisible()} else={<LockedFrame />}>
+            <If when={isDevPage()} else={<Frame />}>
+              <DevPages />
+            </If>
           </If>
+        }>
+          {() => <Guarded route={app.route()} />}
         </If>
       </If>
       {/* The kit's gallery brings a Toaster of its own: two would show every toast twice. */}

@@ -1,6 +1,7 @@
 """crew/bin/crew, the portable launch crew runner, against fixture repositories."""
 
 import configparser
+import hashlib
 import importlib.machinery
 import importlib.util
 import json
@@ -151,8 +152,8 @@ def add_linked_worktree(test, repo):
     return tree
 
 
-def write_run_fixture(test, engine="devin", model="role-model"):
-    repo = write_fixture_repo(test.temp.name, {"tools": role_file(engine=engine, model=model)})
+def write_run_fixture(test, engine="devin", model="role-model", role_name="tools"):
+    repo = write_fixture_repo(test.temp.name, {role_name: role_file(name=role_name, engine=engine, model=model)})
     init_git_repo(repo)
     commit_fixture_repo(repo)
     fake = write_fake_engine(test.temp.name)
@@ -211,6 +212,9 @@ with open(os.environ["FAKE_GH_DATA"], encoding="utf-8") as handle:
 argv = sys.argv[1:]
 if argv[:2] == ["pr", "view"]:
     print(json.dumps(data.get("view", {}).get(argv[2], {})))
+elif argv[:2] == ["pr", "list"]:
+    repo = argv[argv.index("--repo") + 1] if "--repo" in argv else ""
+    print(json.dumps(data.get("list", {}).get(repo, [])))
 elif argv[:2] == ["pr", "checks"]:
     rows = data.get("checks", {}).get(argv[2], [])
     print(json.dumps(rows))
@@ -336,7 +340,7 @@ class StatusTests(unittest.TestCase):
         os.utime(str(newer), (now, now))
         (role / "STATE.md").write_text("tools state first line\nrest\n", encoding="utf-8")
 
-        result = run_crew(self.repo, "status")
+        result = run_crew(self.repo, "status", env={"PATH": ""})
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("tools", result.stdout)
@@ -344,6 +348,46 @@ class StatusTests(unittest.TestCase):
         self.assertIn("results 2", result.stdout)
         self.assertIn("002-b.md", result.stdout)
         self.assertIn("tools state first line", result.stdout)
+
+    def test_status_lists_open_pull_requests_with_no_verdict_or_a_stale_verdict_head(self):
+        (self.repo / "crew" / "REPOS.md").write_text(
+            "| Repository | What it is |\n| --- | --- |\n"
+            "| hexuria/buwiz-forms | The app. |\n| hexuria/nsh | The runtime. |\n",
+            encoding="utf-8")
+        bin_dir = Path(self.temp.name) / "bin"
+        gh_data = write_fake_gh(bin_dir)
+        gh_data.write_text(json.dumps({
+            "list": {
+                "hexuria/buwiz-forms": [
+                    {"number": 7, "headRefOid": "head-seven"},
+                    {"number": 8, "headRefOid": "head-eight"},
+                ],
+                "hexuria/nsh": [
+                    {"number": 3, "headRefOid": "head-three"},
+                    {"number": 4, "headRefOid": "head-four"},
+                ],
+            }
+        }), encoding="utf-8")
+        outbox = self.repo / ".crew" / "state" / "roles" / "reviewer" / "outbox"
+        outbox.mkdir(parents=True, exist_ok=True)
+        (outbox / "hexuria-buwiz-forms-8.verdict").write_text(
+            "verdict: MERGE\nhead: head-eight\nengine: claude\nmodel: test\nnote: current\n",
+            encoding="utf-8")
+        (outbox / "hexuria-nsh-3.verdict").write_text(
+            "verdict: MERGE\nhead: old-head\nengine: claude\nmodel: test\nnote: stale\n",
+            encoding="utf-8")
+        (outbox / "hexuria-nsh-4.verdict").write_text(
+            "verdict: FIX FIRST\nhead: head-four\nengine: claude\nmodel: test\nnote: current\n",
+            encoding="utf-8")
+
+        result = run_crew(self.repo, "status",
+                          env={"PATH": str(bin_dir), "FAKE_GH_DATA": str(gh_data)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("needs a review: hexuria/buwiz-forms#7 head head-seven (no verdict)", result.stdout)
+        self.assertIn("needs a review: hexuria/nsh#3 head head-three (verdict head old-head)", result.stdout)
+        self.assertNotIn("hexuria/buwiz-forms#8", result.stdout)
+        self.assertNotIn("hexuria/nsh#4", result.stdout)
 
 
 class WatchTests(unittest.TestCase):
@@ -407,6 +451,21 @@ class WatchTests(unittest.TestCase):
         self.assertIn("pull request #7 head2 ci-ok fail", fourth.stdout)
         for result in (first, second, third, fourth):
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_queue_key_with_a_note_is_accepted_as_the_waiting_list(self):
+        gh_data = write_fake_gh(self.bin)
+        gh_data.write_text(json.dumps({
+            "view": {"7": {"headRefOid": "head1", "isDraft": False, "state": "OPEN"}},
+            "checks": {"7": [{"name": "ci-ok", "state": "SUCCESS", "bucket": "pass", "link": "https://example.invalid"}]},
+        }), encoding="utf-8")
+        (self.repo / ".crew" / "state" / "queue.json").write_text(
+            json.dumps({"queue": [7], "batch": None, "note": "waiting for the gate"}) + "\n",
+            encoding="utf-8")
+
+        result = self.watch({"FAKE_GH_DATA": str(gh_data)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("pull request #7 head1 ci-ok pass", result.stdout)
 
     def test_finished_worker_log_is_reported_once(self):
         outbox = self.repo / ".crew" / "state" / "roles" / "tools" / "outbox"
@@ -726,7 +785,7 @@ class StateTests(unittest.TestCase):
         self.assertTrue((role / "STATE.md").exists())
         self.assertTrue((role / "inbox").is_dir())
         self.assertTrue((role / "outbox").is_dir())
-        self.assertEqual((state / "queue.json").read_text(encoding="utf-8"), '{"waiting": [], "batch": null}\n')
+        self.assertEqual((state / "queue.json").read_text(encoding="utf-8"), '{"queue": [], "batch": null}\n')
         self.assertTrue((state / "LOG.md").exists())
         self.assertTrue((state / "HELD.md").exists())
         self.assertTrue((state / ".watch-seen").exists())
@@ -895,6 +954,106 @@ class StateTests(unittest.TestCase):
         self.assertIn("roles/tools/outbox/001-result.md:1:", result.stderr.replace("\\", "/"))
         self.assertIn("secret", result.stderr)
 
+    def test_state_push_appends_a_log_line_only_when_the_conductors_state_changed(self):
+        state = Path(self.temp.name) / "state-checkout"
+        remote = Path(self.temp.name) / "state-remote.git"
+        subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+        self.write_state_config(state, str(remote), "crew-state")
+        self.assertEqual(run_crew(self.repo, "state", "init").returncode, 0)
+        conductor_state = state / "roles" / "conductor" / "STATE.md"
+        conductor_state.parent.mkdir(parents=True, exist_ok=True)
+        conductor_state.write_text("first\n", encoding="utf-8")
+
+        first = run_crew(self.repo, "state", "push")
+
+        self.assertEqual(first.returncode, 0, first.stderr)
+        log = (state / "LOG.md").read_text(encoding="utf-8")
+        self.assertEqual(log.count("conductor: STATE.md changed (crew state push)"), 1, log)
+
+        unchanged = run_crew(self.repo, "state", "push")
+
+        self.assertEqual(unchanged.returncode, 0, unchanged.stderr)
+        log = (state / "LOG.md").read_text(encoding="utf-8")
+        self.assertEqual(log.count("conductor: STATE.md changed (crew state push)"), 1, log)
+        conductor_state.write_text("second\n", encoding="utf-8")
+
+        second = run_crew(self.repo, "state", "push")
+
+        self.assertEqual(second.returncode, 0, second.stderr)
+        log = (state / "LOG.md").read_text(encoding="utf-8")
+        self.assertEqual(log.count("conductor: STATE.md changed (crew state push)"), 2, log)
+        remote_log = subprocess.run(["git", "--git-dir", str(remote), "show", "crew-state:LOG.md"],
+                                    capture_output=True, text=True, check=True).stdout
+        self.assertIn("conductor: STATE.md changed (crew state push)", remote_log)
+
+    def visibility_gh_and_git_path(self, label, answer, push_remote):
+        bin_dir = Path(self.temp.name) / ("bin-" + label)
+        if answer is None:
+            source = "import sys\nsys.exit(1)\n"
+        else:
+            source = "print({0!r})\n".format(answer)
+        write_path_python(bin_dir, "gh", source)
+        real_git = shutil.which("git")
+        git_source = """
+import subprocess
+import sys
+argv = sys.argv[1:]
+if argv and argv[0] == 'push':
+    argv = [{1!r} if part == 'origin' else part for part in argv]
+result = subprocess.run([{0!r}] + argv)
+sys.exit(result.returncode)
+""".format(real_git, str(push_remote))
+        write_path_python(bin_dir, "git", git_source)
+        return str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+
+    def state_push_with_visibility(self, label, answer, actual_repo=None, configured_repo=None):
+        actual_repo = actual_repo or "crew-state"
+        configured_repo = configured_repo or actual_repo
+        state = Path(self.temp.name) / ("state-" + label)
+        remote = Path(self.temp.name) / ("remote-" + label + ".git")
+        subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+        state.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=str(state), check=True)
+        actual_url = "https://github.com/hexuria/{0}.git".format(actual_repo)
+        configured_url = "https://github.com/hexuria/{0}.git".format(configured_repo)
+        subprocess.run(["git", "remote", "add", "origin", actual_url], cwd=str(state), check=True)
+        self.write_state_config(state, configured_url, "crew-state")
+        result_file = state / "roles" / "tools" / "outbox" / "001-result.md"
+        result_file.parent.mkdir(parents=True, exist_ok=True)
+        result_file.write_text("token ghp_example\n", encoding="utf-8")
+        env = {"PATH": self.visibility_gh_and_git_path(label, answer, remote)}
+        return run_crew(self.repo, "state", "push", env=env)
+
+    def test_state_push_skips_the_privacy_check_only_for_a_private_github_state_remote(self):
+        private = self.state_push_with_visibility("private", "private", actual_repo="private-state")
+
+        self.assertEqual(private.returncode, 0, private.stderr)
+        self.assertIn("state remote is private: public-safety check skipped", private.stdout)
+
+        for label, answer in (("public", "public"), ("unknown", None)):
+            with self.subTest(answer=answer):
+                result = self.state_push_with_visibility(label, answer, actual_repo=label + "-state")
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("secret", result.stderr)
+                self.assertNotIn("public-safety check skipped", result.stdout)
+
+    def test_state_push_lint_runs_when_the_state_push_url_is_public_and_state_remote_is_private(self):
+        result = self.state_push_with_visibility(
+            "mismatch-public-private", "private", actual_repo="public-state", configured_repo="private-state")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("secret", result.stderr)
+        self.assertNotIn("public-safety check skipped", result.stdout)
+
+    def test_state_push_lint_runs_on_any_push_url_and_state_remote_mismatch(self):
+        result = self.state_push_with_visibility(
+            "mismatch-private-public", "private", actual_repo="private-state", configured_repo="public-state")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("secret", result.stderr)
+        self.assertNotIn("public-safety check skipped", result.stdout)
+
 
 class DoctorTests(unittest.TestCase):
     def setUp(self):
@@ -984,6 +1143,58 @@ print('gh version 2.0.0')
                  "branch protection or the sandbox")
         self.assertIn(truth, " ".join(result.stdout.split()))
 
+    def test_doctor_reports_local_instruction_files_with_their_sha256(self):
+        write_versioned_cli(self.bin, "claude", "1.0")
+        contents = {
+            "AGENTS.local.md": b"agent local instructions\n",
+            "CLAUDE.local.md": b"claude local instructions\n",
+        }
+        for name, data in contents.items():
+            (self.repo / name).write_bytes(data)
+
+        result = self.doctor()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name, data in contents.items():
+            self.assertIn(name, result.stdout)
+            self.assertIn(hashlib.sha256(data).hexdigest(), result.stdout)
+
+    def linked_tree(self):
+        init_git_repo(self.repo)
+        commit_fixture_repo(self.repo)
+        return add_linked_worktree(self, self.repo)
+
+    def test_doctor_prints_the_worktree_settings_file_it_used(self):
+        write_versioned_cli(self.bin, "claude", "1.0")
+        tree = self.linked_tree()
+        (self.repo / "crew.local.ini").write_text("[crew]\nengine = claude\n", encoding="utf-8")
+        (tree / "crew.local.ini").write_text("[crew]\nengine = claude\n", encoding="utf-8")
+
+        result = run_crew(tree, "doctor", env={"PATH": str(self.bin)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("crew.local.ini: {0}".format(crew_path(tree / "crew.local.ini")), result.stdout)
+
+    def test_doctor_prints_the_main_worktree_settings_file_it_used(self):
+        write_versioned_cli(self.bin, "claude", "1.0")
+        tree = self.linked_tree()
+        (self.repo / "crew.local.ini").write_text("[crew]\nengine = claude\n", encoding="utf-8")
+
+        result = run_crew(tree, "doctor", env={"PATH": str(self.bin)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("crew.local.ini: {0}".format(crew_path(self.repo / "crew.local.ini")), result.stdout)
+
+    def test_doctor_prints_where_it_looked_when_no_settings_file_is_found(self):
+        write_versioned_cli(self.bin, "claude", "1.0")
+        tree = self.linked_tree()
+
+        result = run_crew(tree, "doctor", env={"PATH": str(self.bin)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("crew.local.ini: none found, looked in: {0}, {1}".format(
+            crew_path(tree / "crew.local.ini"), crew_path(self.repo / "crew.local.ini")), result.stdout)
+
 
 class RunTests(unittest.TestCase):
     def setUp(self):
@@ -1033,6 +1244,26 @@ class RunTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("same repository", result.stderr)
         self.assertFalse(record_path.exists())
+
+    def test_run_refuses_local_instruction_files_before_starting_the_engine(self):
+        repo, task, record_path, _config = write_run_fixture(self, engine="devin", model="role-model")
+        tree_path = add_linked_worktree(self, repo)
+
+        for relative in ("AGENTS.local.md", "CLAUDE.local.md", "nested/AGENTS.local.md"):
+            with self.subTest(relative=relative):
+                local_file = tree_path / relative
+                local_file.parent.mkdir(parents=True, exist_ok=True)
+                local_file.write_text("unreviewed instructions\n", encoding="utf-8")
+                if record_path.exists():
+                    record_path.unlink()
+
+                result = run_crew(repo, "run", "tools", str(task), "--worktree", str(tree_path),
+                                  env={"FAKE_ENGINE_RECORD": str(record_path)})
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(relative, result.stderr.replace("\\", "/"))
+                self.assertFalse(record_path.exists())
+                local_file.unlink()
 
     def test_devin_run_logs_exit_passes_model_worktree_and_removes_temp_files(self):
         repo, task, record_path, _config = write_run_fixture(self, engine="devin", model="role-model")
@@ -1084,6 +1315,8 @@ class RunTests(unittest.TestCase):
             "Write({0})".format(admin), "Write({0}/**)".format(admin),
             "Write({0})".format(common), "Write({0}/**)".format(common),
             "Write({0}/crew/bin)".format(tree), "Write({0}/crew/bin/**)".format(tree),
+            "Write({0}/AGENTS.local.md)".format(tree), "Write({0}/CLAUDE.local.md)".format(tree),
+            "Write({0}/**/AGENTS.local.md)".format(tree), "Write({0}/**/CLAUDE.local.md)".format(tree),
         )
         for denied in path_denies + (
                 "old", "Exec(git push)", "Exec(gh pr merge)", "Exec(gh pr close)",
@@ -1159,6 +1392,14 @@ class RunTests(unittest.TestCase):
         for form in path_forms(tree_path):
             self.assertIn("Edit({0}/crew/bin/**)".format(form), disallowed)
             self.assertIn("Write({0}/crew/bin/**)".format(form), disallowed)
+            for name in ("AGENTS.local.md", "CLAUDE.local.md"):
+                self.assertIn("Edit({0}/{1})".format(form, name), disallowed)
+                self.assertIn("Write({0}/{1})".format(form, name), disallowed)
+                self.assertIn("Edit({0}/**/{1})".format(form, name), disallowed)
+                self.assertIn("Write({0}/**/{1})".format(form, name), disallowed)
+        for name in ("AGENTS.local.md", "CLAUDE.local.md"):
+            self.assertIn("Edit(**/{0})".format(name), disallowed)
+            self.assertIn("Write(**/{0})".format(name), disallowed)
         for base in (admin, common):
             self.assertIn("Edit({0})".format(base), disallowed)
             alternate = ("/" + base) if base.startswith("/") else ("//" + base)
@@ -1316,6 +1557,305 @@ class RunTests(unittest.TestCase):
         self.assertNotEqual(process.returncode, 0)
         self.assertFalse(Path(record["config_path"]).exists())
         self.assertFalse(Path(record["prompt_file"]).exists())
+
+
+class CrewApiCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = write_fixture_repo(self.temp.name, {"tools": role_file()})
+        self.bin = Path(self.temp.name) / "bin"
+
+    def fake_gh(self):
+        record = Path(self.temp.name) / "gh-record.jsonl"
+        source = r'''
+import json
+import os
+import sys
+with open(os.environ["GH_RECORD"], "a", encoding="utf-8") as handle:
+    handle.write(json.dumps(sys.argv[1:]) + "\n")
+print('{"ok": true}')
+'''
+        write_path_python(self.bin, "gh", source)
+        env = {"PATH": str(self.bin) + os.pathsep + os.environ.get("PATH", ""),
+               "GH_RECORD": str(record)}
+        return record, env
+
+    def gh_calls(self, record):
+        if not record.exists():
+            return []
+        return [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
+
+    def test_api_get_runs_gh_with_a_fixed_get_method(self):
+        record, env = self.fake_gh()
+
+        result = run_crew(self.repo, "api", "GET", "repos/octo/forms", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.gh_calls(record), [["api", "--method", "GET", "repos/octo/forms"]])
+        self.assertIn('{"ok": true}', result.stdout)
+
+    def test_api_refuses_every_method_but_uppercase_get(self):
+        record, env = self.fake_gh()
+        for method in ("POST", "post", "get", "PUT", "DELETE"):
+            with self.subTest(method=method):
+                if record.exists():
+                    record.unlink()
+
+                result = run_crew(self.repo, "api", method, "repos/octo/forms", env=env)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.gh_calls(record), [])
+
+    def test_api_refuses_graphql_even_as_a_get(self):
+        record, env = self.fake_gh()
+        for path in ("graphql", "/graphql", "GRAPHQL", "%67raphql", "repos/../graphql", "%2fgraphql"):
+            with self.subTest(path=path):
+                if record.exists():
+                    record.unlink()
+
+                result = run_crew(self.repo, "api", "GET", path, env=env)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.gh_calls(record), [])
+
+    def test_api_refuses_fields_other_methods_input_and_extra_arguments(self):
+        record, env = self.fake_gh()
+        cases = (
+            ("GET", "repos/octo/forms/issues", "--field", "title=x"),
+            ("GET", "repos/octo/forms/issues", "-F", "title=x"),
+            ("GET", "repos/octo/forms/issues", "--raw-field", "title=x"),
+            ("GET", "repos/octo/forms/issues", "--input", "body.json"),
+            ("GET", "repos/octo/forms/issues", "-X", "POST"),
+            ("GET", "repos/octo/forms/issues", "--method", "POST"),
+            ("GET", "--method", "POST", "repos/octo/forms/issues"),
+            ("GET", "graphql", "--field", "query=mutation{mergePullRequest}"),
+        )
+        for words in cases:
+            with self.subTest(words=words):
+                if record.exists():
+                    record.unlink()
+
+                result = run_crew(self.repo, "api", *words, env=env)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.gh_calls(record), [])
+
+
+class CrewGitCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = write_fixture_repo(self.temp.name, {"tools": role_file()})
+        self.bin = Path(self.temp.name) / "bin"
+
+    def fake_git(self):
+        record = Path(self.temp.name) / "git-record.jsonl"
+        source = r'''
+import json
+import os
+import sys
+with open(os.environ["GIT_RECORD"], "a", encoding="utf-8") as handle:
+    handle.write(json.dumps(sys.argv[1:]) + "\n")
+'''
+        write_path_python(self.bin, "git", source)
+        env = {"PATH": str(self.bin) + os.pathsep + os.environ.get("PATH", ""),
+               "GIT_RECORD": str(record)}
+        return record, env
+
+    def git_calls(self, record):
+        if not record.exists():
+            return []
+        return [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
+
+    def test_log_show_and_diff_are_wrapped_with_safe_diff_flags(self):
+        record, env = self.fake_git()
+        for verb in ("log", "show", "diff"):
+            with self.subTest(verb=verb):
+                if record.exists():
+                    record.unlink()
+
+                result = run_crew(self.repo, "git", verb, "-1", env=env)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.git_calls(record), [[verb, "--no-textconv", "--no-ext-diff", "-1"]])
+
+    def test_c_is_passed_to_git_before_the_read_verb(self):
+        record, env = self.fake_git()
+        state = Path(self.temp.name) / "state checkout"
+
+        result = run_crew(self.repo, "git", "-C", str(state), "status", "--short", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git_calls(record), [["-C", str(state), "status", "--short"]])
+
+    def test_dangerous_write_and_diff_arguments_are_refused_before_git_runs(self):
+        record, env = self.fake_git()
+        cases = (
+            ("log", "--output=patch.out"),
+            ("log", "--output", "patch.out"),
+            ("diff", "--out", "patch.out"),
+            ("show", "-o", "patch.out"),
+            ("merge-tree", "--write-tree", "HEAD", "other"),
+            ("merge-tree", "--w", "HEAD", "other"),
+            ("merge-tree", "--write", "HEAD", "other"),
+            ("log", "--ext-diff"),
+            ("show", "--textconv"),
+        )
+        for words in cases:
+            with self.subTest(words=words):
+                if record.exists():
+                    record.unlink()
+
+                result = run_crew(self.repo, "git", *words, env=env)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.git_calls(record), [])
+
+    def test_write_verbs_are_refused_before_git_runs(self):
+        record, env = self.fake_git()
+        for verb in ("push", "config", "commit", "fetch"):
+            with self.subTest(verb=verb):
+                result = run_crew(self.repo, "git", verb, env=env)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.git_calls(record), [])
+
+    def test_the_wrapped_diff_verbs_are_valid_for_real_git(self):
+        init_git_repo(self.repo)
+        commit_fixture_repo(self.repo)
+
+        log = run_crew(self.repo, "git", "log", "-1", "--format=%H")
+        self.assertEqual(log.returncode, 0, log.stderr)
+        self.assertRegex(log.stdout.strip(), r"^[0-9a-f]{40}$")
+        show = run_crew(self.repo, "git", "show", "--no-patch", "--format=%H", "HEAD")
+        self.assertEqual(show.returncode, 0, show.stderr)
+        self.assertRegex(show.stdout.strip(), r"^[0-9a-f]{40}$")
+        diff = run_crew(self.repo, "git", "diff", "--quiet")
+        self.assertEqual(diff.returncode, 0, diff.stderr)
+
+
+class ReadOnlyConductorProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+
+    def fixture(self, engine):
+        return write_run_fixture(self, engine=engine, model="role-model", role_name="conductor")
+
+    def assert_devin_read_only_profile(self, permissions, tree_path, repo):
+        tree = permission_path(tree_path)
+        state = permission_path(repo / ".crew" / "state")
+        outbox = permission_path(repo / ".crew" / "state" / "roles" / "conductor" / "outbox")
+        for python in ("python3", "python"):
+            for suffix in ("doctor", "status", "state path", "lint", "sync --check"):
+                self.assertIn("Exec({0} crew/bin/crew {1})".format(python, suffix), permissions["allow"])
+            self.assertIn("Exec({0} crew/bin/crew api GET)".format(python), permissions["allow"])
+            for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+                self.assertIn("Exec({0} crew/bin/crew git {1})".format(python, verb), permissions["allow"])
+                self.assertIn("Exec({0} crew/bin/crew git -C {1} {2})".format(python, tree, verb),
+                              permissions["allow"])
+                self.assertIn("Exec({0} crew/bin/crew git -C {1} {2})".format(python, state, verb),
+                              permissions["allow"])
+        for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+            self.assertNotIn("Exec(git {0})".format(verb), permissions["allow"])
+        for entry in ("Exec(gh pr list)", "Exec(gh pr view)", "Exec(gh pr checks)", "Exec(gh pr diff)",
+                      "Exec(gh run list)", "Exec(gh run view)", "Exec(gh release view)",
+                      "Exec(gh issue view)"):
+            self.assertIn(entry, permissions["allow"])
+        self.assertIn("Write({0})".format(outbox), permissions["allow"])
+        self.assertNotIn("Write({0})".format(tree), permissions["allow"])
+        for absent in ("Exec(gh pr merge)", "Exec(gh pr create)", "Exec(gh issue create)",
+                       "Exec(gh api)", "Exec(git push)", "Exec(sort)", "Exec(uniq)", "Exec(printf)"):
+            self.assertNotIn(absent, permissions["allow"])
+        for denied in ("Exec(gh pr merge)", "Exec(git push)", "Exec(gh api)"):
+            self.assertIn(denied, permissions["deny"])
+
+    def test_devin_run_conductor_uses_the_read_only_profile(self):
+        repo, task, record_path, _config = self.fixture("devin")
+        tree_path = add_linked_worktree(self, repo)
+
+        result = run_crew(repo, "run", "conductor", str(task), "--worktree", str(tree_path),
+                          env={"FAKE_ENGINE_RECORD": str(record_path)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        self.assert_devin_read_only_profile(record["config"]["permissions"], tree_path, repo)
+        argv = record["argv"]
+        if "--permission-mode" in argv:
+            self.assertNotEqual(argv[argv.index("--permission-mode") + 1], "accept-edits")
+
+    def test_claude_run_conductor_uses_the_read_only_profile(self):
+        repo, task, record_path, _config = self.fixture("claude")
+        tree_path = add_linked_worktree(self, repo)
+
+        result = run_crew(repo, "run", "conductor", str(task), "--worktree", str(tree_path),
+                          env={"FAKE_ENGINE_RECORD": str(record_path)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        argv = record["argv"]
+        tools = argv[argv.index("--allowedTools") + 1]
+        disallowed = argv[argv.index("--disallowedTools") + 1]
+        tree = permission_path(tree_path)
+        state = permission_path(repo / ".crew" / "state")
+        outbox_path = repo / ".crew" / "state" / "roles" / "conductor" / "outbox"
+        outbox = permission_path(outbox_path)
+        alternate_outbox = ("/" + outbox) if outbox.startswith("/") else ("//" + outbox)
+        for python in ("python3", "python"):
+            for suffix in ("doctor", "status", "state path", "lint", "sync --check"):
+                self.assertIn("Bash({0} crew/bin/crew {1})".format(python, suffix), tools)
+            self.assertIn("Bash({0} crew/bin/crew api GET:*)".format(python), tools)
+            for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+                self.assertIn("Bash({0} crew/bin/crew git {1}:*)".format(python, verb), tools)
+                self.assertIn("Bash({0} crew/bin/crew git -C {1} {2}:*)".format(python, tree, verb), tools)
+                self.assertIn("Bash({0} crew/bin/crew git -C {1} {2}:*)".format(python, state, verb), tools)
+        for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+            self.assertNotIn("Bash(git {0}:*)".format(verb), tools)
+        for entry in ("Bash(gh pr list:*)", "Bash(gh pr view:*)", "Bash(gh pr checks:*)",
+                      "Bash(gh pr diff:*)", "Bash(gh run list:*)", "Bash(gh run view:*)",
+                      "Bash(gh release view:*)", "Bash(gh issue view:*)"):
+            self.assertIn(entry, tools)
+        for form in (outbox, alternate_outbox):
+            self.assertIn("Edit({0}/**)".format(form), tools)
+            self.assertIn("Write({0}/**)".format(form), tools)
+        self.assertNotIn("Edit({0}/**)".format(tree), tools)
+        self.assertNotIn("Write({0}/**)".format(tree), tools)
+        for absent in ("Bash(gh pr merge:*)", "Bash(gh pr create:*)", "Bash(gh issue create:*)",
+                       "Bash(gh api -X:*)", "Bash(git push:*)", "Bash(sort:*)", "Bash(uniq:*)", "Bash(printf:*)"):
+            self.assertNotIn(absent, tools)
+        for denied in ("Bash(gh pr merge:*)", "Bash(git push:*)", "Bash(gh api:*)"):
+            self.assertIn(denied, disallowed)
+        if "--permission-mode" in argv:
+            self.assertNotEqual(argv[argv.index("--permission-mode") + 1], "acceptEdits")
+
+    def test_devin_start_read_only_uses_the_read_only_profile(self):
+        repo, _task, record_path, _config = self.fixture("devin")
+
+        result = run_crew(repo, "start", "--read-only", "--engine", "devin",
+                          env={"FAKE_ENGINE_RECORD": str(record_path)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        self.assertIsNotNone(record["config_path"])
+        self.assert_devin_read_only_profile(record["config"]["permissions"], repo, repo)
+        self.assertFalse(Path(record["config_path"]).exists())
+        argv = record["argv"]
+        if "--permission-mode" in argv:
+            self.assertNotEqual(argv[argv.index("--permission-mode") + 1], "accept-edits")
+
+    def test_claude_start_print_read_only_carries_the_permission_lists(self):
+        repo, _task, _record_path, _config = self.fixture("claude")
+
+        result = run_crew(repo, "start", "--read-only", "--engine", "claude", "--print")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--allowedTools", result.stdout)
+        self.assertIn("--disallowedTools", result.stdout)
+        self.assertIn("Bash(python3 crew/bin/crew api GET:*)", result.stdout)
+        self.assertIn("Bash(gh api:*)", result.stdout)
+        self.assertIn("Bash(gh pr merge:*)", result.stdout)
+        self.assertNotIn("acceptEdits", result.stdout)
 
 
 class RemovedMergeCommandTests(unittest.TestCase):
@@ -1603,6 +2143,7 @@ class StartTests(unittest.TestCase):
         self.assertEqual(os.path.normcase(crew_path(program)), os.path.normcase(crew_path(shim)))
         self.assertIn("Re-instate from files: follow crew/playbooks/restart.md.", result.stdout)
         self.assertIn("Role body line.", result.stdout)
+        self.assertIn("--setting-sources=", result.stdout)
 
     def test_start_print_devin_prints_the_resolved_prompt_file_command(self):
         shim = write_versioned_cli(Path(self.temp.name) / "bin", "devin", "3000.0")
@@ -1618,6 +2159,34 @@ class StartTests(unittest.TestCase):
         self.assertTrue(prompt_path.exists())
         self.assertIn("Re-instate from files: follow crew/playbooks/restart.md.",
                       prompt_path.read_text(encoding="utf-8"))
+
+    def test_start_refuses_local_instruction_files_without_the_explicit_flag(self):
+        bin_dir = Path(self.temp.name) / "bin"
+        write_versioned_cli(bin_dir, "claude", "1.0")
+        for relative in ("AGENTS.local.md", "CLAUDE.local.md", "nested/CLAUDE.local.md", "agents.local.md"):
+            with self.subTest(relative=relative):
+                local_file = self.repo / relative
+                local_file.parent.mkdir(parents=True, exist_ok=True)
+                local_file.write_text("unreviewed instructions\n", encoding="utf-8")
+
+                result = run_crew(self.repo, "start", "--role", "tools", "--engine", "claude", "--print",
+                                  env={"PATH": str(bin_dir)})
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(relative, result.stderr.replace("\\", "/"))
+                local_file.unlink()
+
+    def test_start_allow_local_instructions_flag_is_explicit_and_still_excludes_settings_sources(self):
+        bin_dir = Path(self.temp.name) / "bin"
+        write_versioned_cli(bin_dir, "claude", "1.0")
+        (self.repo / "CLAUDE.local.md").write_text("the person's own notes\n", encoding="utf-8")
+
+        result = run_crew(self.repo, "start", "--role", "tools", "--engine", "claude", "--print",
+                          "--allow-local-instructions", env={"PATH": str(bin_dir)})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--allow-local-instructions", run_crew(self.repo, "start", "--help").stdout)
+        self.assertIn("--setting-sources=", result.stdout)
 
 
 class CrewPushTests(unittest.TestCase):
@@ -1913,6 +2482,30 @@ class RepoPlumbingTests(unittest.TestCase):
             if "=" in line and not line.lstrip().startswith("#"):
                 previous = text.splitlines()[text.splitlines().index(line) - 1]
                 self.assertTrue(previous.lstrip().startswith("#"), line)
+
+    def test_crew_readme_and_playbooks_document_the_restart_drill_contract(self):
+        readme = (ROOT / "crew" / "README.md").read_text(encoding="utf-8")
+        restart = (ROOT / "crew" / "playbooks" / "restart.md").read_text(encoding="utf-8")
+        state = (ROOT / "crew" / "playbooks" / "state.md").read_text(encoding="utf-8")
+
+        self.assertIn("this worktree first, then the MAIN worktree", readme)
+        self.assertIn("at the state folder's ROOT", restart)
+        self.assertIn("read_messages advances its last-seen mark", restart)
+        self.assertIn('the conducting role is "conductor"', restart)
+        self.assertIn('a session may be NAMED differently (for example "orchestrator")', restart)
+        self.assertIn('{"queue": [], "batch": null}', state)
+        self.assertIn("crew state push` appends one line", state)
+        self.assertIn("roles/reviewer/outbox/<owner>-<repo>-<n>.verdict", state)
+        self.assertIn("verdict: MERGE", state)
+        self.assertIn("head: <full sha read>", state)
+        self.assertIn("machine ticket copied into a state file is one pipe-separated row", state)
+        self.assertIn("python3 crew/bin/crew api GET repos/<owner>/<repo>/branches/<branch>", restart)
+        self.assertIn("`crew api GET` is the only GitHub API route", restart)
+        self.assertIn("python3 crew/bin/crew git -C <state> log", restart)
+        self.assertNotIn("gh api repos/", restart)
+        self.assertIn("remote get-url --push origin", state)
+        self.assertIn("--setting-sources=", readme)
+        self.assertIn("sha256", readme)
 
     def test_real_tree_lint_and_sync_check_pass(self):
         for args in (("lint",), ("sync", "--check")):

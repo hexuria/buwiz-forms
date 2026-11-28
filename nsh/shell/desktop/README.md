@@ -18,7 +18,7 @@ Rust half: `src/desktop.rs` (the hooks' mailbox, the one-copy guard, the hotkey 
 | `native.ts` | The only import of `Desktop` from `ebirforms/native`. |
 
 ## The app menu design (feat/app-menu)
-- File > New Tax Profile… (no shortcut; Ctrl/Cmd+N stays New Return…), a last Profiles menu (switcher, current checked, New Tax Profile…; "No taxpayers yet" when empty), and an eBIRForms menu first on Windows and Linux too (its items carry no shortcuts: File/Edit keep them). New Tax Profile… is disabled where the profile panel offers no New taxpayer; other taxpayers are disabled for a non-admin.
+- File > New tax profile… (no shortcut; Ctrl/Cmd+N stays New Return…), a last Profiles menu (switcher, current checked, New tax profile…; "No taxpayers yet" when empty), and an eBIRForms menu first on Windows and Linux too (its items carry no shortcuts: File/Edit keep them). New tax profile… follows the profile panel: always there for the owner and the help desk admin, only the first one for a client; other taxpayers are disabled for a non-admin.
 - Where the menu shows is `shell/chrome_layout.ts` (pure, tested): macOS the system bar, KDE the panel while NSH reports the menu in Plasma's Global Menu (nsh/desktop `Menu.inGlobalMenu()`, from NSH's `global_menu.rs`; two rows again when the widget goes), Windows and other Linux desktops a 32-point menu row above the toolbar (`shell/MenuRow.tsx`), ☰ in the narrow header under 600.
 
 ## Behaviour (and where it differs from the old app)

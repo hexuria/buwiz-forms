@@ -68,9 +68,32 @@ Windows upload would then have to skip a number, and the downloads' updater woul
 ## Order of work for a release
 
 1. `python3 scripts/set_release_version.py X.Y.Z`, fix the tests it lists, open a pull request, merge it.
-2. Tag `vX.Y.Z` on `main`. The release workflows build the downloads, including the unsigned `.msix` for the
-   Microsoft Store.
+2. Tag `vX.Y.Z` on `main`. The release workflows build the downloads and, in a job of its own
+   (`build-windows-store`), the unsigned `.msix` for the Microsoft Store. No build, Store or direct download, has the
+   Google OAuth client (and so Gmail Connect) unless the repository variable `STORE_GMAIL` is `1`: 1.0.0 ships none.
+   Every platform's release job checks its packages against that switch with
+   `scripts/audit_google_client.py`: `--self-test` first (the detector finds planted ones), then `--absent` on the
+   Windows updater ZIP and `.msix`, the macOS archives and the Linux `.tar.gz` (`--present` when the switch is on).
+   Gmail sign-in returns in 1.0.x through native Google clients that hold no secret. The `.msix` is not on the public GitHub release: it is
+   unsigned and cannot be sideloaded. It stays in the run's `windows-store` artifact. For 1.0.0 the release waits for
+   the Store job, so a Store failure holds the direct downloads too. After 1.0.0 that may be loosened so a Store-only
+   failure no longer holds them.
 3. `just app` builds the Mac App Store package and `just ios-appstore` the iPhone and iPad one, each with the next
    build number; `just testflight-upload` and `just ios-appstore-upload` send them.
-4. Upload the `.msix` in Partner Center.
+4. Upload the `.msix` from the tag run's `windows-store` artifact in Partner Center. Check it against
+   `SHA256SUMS-windows-store-x64.txt` in the same artifact.
 5. Press Submit in each store.
+
+### Reading the first release run without a Google client (1.0.0)
+
+The first tag run after the switch-off (#511) is read against this list before anything is uploaded:
+
+1. Every audit log says `self-test passed`, then for every package both `no client id in any file` and
+   `no client secret in any file`. That covers the Windows updater ZIP and `.msix`, every macOS `.tar.gz` and every
+   Linux `.tar.gz`. Any `refused` is a stop.
+2. The build steps' env shows `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` **empty**, not `***` (`***` means a value
+   reached the build). Look at the Windows "Build the NSH Windows app" step and the macOS job's env in particular.
+3. No `Google OAuth client secrets are empty` error anywhere.
+4. The macOS check names every `.tar.gz` that is uploaded.
+5. Afterwards, download the **published** Linux `.tar.gz` and Windows ZIP and run
+   `python3 scripts/audit_google_client.py --absent <file>` on each locally.

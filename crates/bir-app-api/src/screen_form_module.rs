@@ -3851,6 +3851,9 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     if let Some(note) = rows_annual_corporate::live_lock_note(reason) {
         return note;
     }
+    if let Some(note) = bir_core::forms::agent::gated_rows::lock_note(code, key, reason) {
+        return note;
+    }
     match lock_note(reason) {
         NOTE_NOT_YET if assigned_to_open(code, key) => NOTE_ASSIGNED,
         note => note,
@@ -5512,6 +5515,14 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             }
         }
     }
+    for clearance in bir_core::forms::agent::gated_rows::clearances(kind, &before, &draft) {
+        inline_clearances.insert(clearance.gate.clone());
+        for key in clearance.keys {
+            if relocks.contains_key(key) {
+                relock_notes.insert(key.to_string(), json!(clearance.text.clone()));
+            }
+        }
+    }
     remember_inline_clearances(clearance_report_id, &inline_clearances);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
@@ -5575,6 +5586,7 @@ pub(crate) fn page_gate_refusal(
     }
     if value.is_null()
         || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || value.as_f64() == Some(0.0)
         || is_unticked(value)
     {
         return None;
@@ -5583,6 +5595,9 @@ pub(crate) fn page_gate_refusal(
         && key == bir_core::forms::agent::draft_locks::item16_2551q::KEY
         && let Some(reason) = bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
     {
+        return Some(reason.to_string());
+    }
+    if let Some(reason) = bir_core::forms::agent::gated_rows::lock_reason(kind, draft, key) {
         return Some(reason.to_string());
     }
     if kind.form_code() == "1606"
@@ -5776,6 +5791,29 @@ fn apply_screen_edits_here(
             )
         });
     }
+    // When a batch touches a recompute-gated box, judge its controlling
+    // choices first rather than trusting the key order a page replay sent.
+    // Other writes keep their relative order: a gated entry can itself be
+    // the condition that opens a later ordinary box (1701MS item 20 follows
+    // the Schedule B1 amount), so moving every gated box to the end would
+    // invert that dependency. A closing choice still makes the gated write
+    // refuse, so no dormant value can slip through an atomic batch.
+    let recompute_gated: std::collections::BTreeSet<&str> =
+        bir_core::forms::agent::gated_rows::keys(kind)
+            .into_iter()
+            .collect();
+    if planned
+        .iter()
+        .any(|(key, _)| recompute_gated.contains(key.as_str()))
+    {
+        let def = kind.definition();
+        planned.sort_by_key(|(key, _)| {
+            usize::from(!matches!(
+                def.bindings.get(key).map(|bound| &bound.binding),
+                Some(bir_core::forms::agent::Binding::Choice { .. })
+            ))
+        });
+    }
     // The draft paths this batch's picks write — a member's pick, a group
     // box's option, a filer-type step. The value a choice box was sent, as
     // its binding spells it ("true"/"false"/an option value).
@@ -5920,6 +5958,21 @@ fn apply_screen_edits_here(
             && let Some(reason) = set_refusal(def, &key)
         {
             rejected.insert(key.clone(), Value::String(reason));
+            continue;
+        }
+        // A schedule/specification box whose own recompute clears its probe
+        // is shut with the official condition, judged after this batch's
+        // earlier answers. Blank writes stay clears.
+        if let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && value.as_f64() != Some(0.0)
+            && !is_unticked(value)
+            && let Some(reason) = bir_core::forms::agent::gated_rows::lock_reason(kind, draft, &key)
+        {
+            rejected.insert(key.clone(), json!(reason));
             continue;
         }
         // 1701Q's spouse part while it is closed says what opens it, its
@@ -7419,6 +7472,7 @@ fn screen_form_amend(
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
         let filed =
             load_draft(db, kind, &profile, year, period, false, exact).map_err(host_error)?;
+        let filed_id = filed["id"].clone();
         let status = agent::identity(kind, &filed).map_err(host_error)?.status;
         let updated_at = filed["updated_at"]
             .as_str()
@@ -7443,14 +7497,7 @@ fn screen_form_amend(
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
         let carried = carry_forward::open_fields(db, kind, &tin, &amended);
-        Ok((
-            amended,
-            from_profile,
-            status,
-            updated_at,
-            filed["id"].clone(),
-            carried,
-        ))
+        Ok((amended, from_profile, status, updated_at, filed_id, carried))
     })?;
     Ok(async move {
         let mut opened = on_large_stack(move || {
@@ -8248,6 +8295,8 @@ mod tests {
     mod dst_pt_vat;
     // PR 5: 1701Q and 1702Q against their printed sheets.
     mod income_q;
+    // 1602Q Item 20: the official form leaves it enabled in every amended state.
+    mod item20_1602q;
     // PR 6: 1604C, 1604F and 1604E against their printed sheets.
     mod annual_1604;
     // PR 8: 1702RT, 1702MX, 1702EX and 1707A against their printed sheets.
@@ -8291,6 +8340,9 @@ mod tests {
     // Every form's RDO box offers the RDO catalog, never 1601C's leftover
     // "000" option script; "000" is no RDO.
     mod rdo_lists;
+    // Gated schedule/specification boxes across the annual, creditable and
+    // percentage returns.
+    mod gated_rows;
     // Inline clearings shown by a fill are acknowledged by its save.
     mod inline_clearances;
 
@@ -17810,10 +17862,22 @@ mod tests {
                 }
             }
         }
+        let recompute_gated: std::collections::BTreeSet<&str> = AgentFormKind::from_code(code)
+            .map(|kind| bir_core::forms::agent::gated_rows::keys(kind))
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
         for (key, t, draws) in boxes {
             let Some(why) = locked(&key) else {
                 continue;
             };
+            // This pull request's recompute gates intentionally shut a blank
+            // box with the official opening condition; their own tests cover
+            // refusal, clearing and the note. They are not the legacy silent
+            // blanks this regression list pins.
+            if recompute_gated.contains(key.as_str()) {
+                continue;
+            }
             if t == "hidden" || reason(&key, draws) {
                 continue;
             }
@@ -18461,9 +18525,9 @@ mod tests {
     /// for 1701MS (PR 7): item 16B's From and To are bound now and refused
     /// with the spouse gate's words until the return is joint.
     const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
-        "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
-        "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
-        "1707 frm1707:txtPg2P4Sch1I8DateCollection: cleared to \"\"",
+        "1701MS frm1701MS:txtTaxpayerNo16a1: Item 12 column A is Exempt or Special/Preferential Rate.",
+        "1701MS frm1701MS:txtTaxpayerNo16a: Item 12 column A is Exempt or Special/Preferential Rate.",
+        "1707 frm1707:txtPg2P4Sch1I8DateCollection: Item 9 transaction is Installment Sale.",
         // PR 8: 1707A's printed row 4 says the form computes it (from the
         // continuation rows), with what it waits for.
         "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: computed by BIR's own formulas",

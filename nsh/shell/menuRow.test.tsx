@@ -17,32 +17,32 @@ test("Windows and Linux wide: the menu row above the toolbar, titles in order, W
   }
 });
 
-test("File > New Tax Profile… opens the new taxpayer page (no taxpayer yet: anyone may add the first)", async () => {
+test("File > New tax profile… opens the new taxpayer page (no taxpayer yet: anyone may add the first)", async () => {
   const app = await open(ENTRY, { width: 1440, height: 900, platform: "linux", ...asking({ demo: false }) });
   await app.waitFor("id:menu-File");
   await app.press("id:menu-File");
   await app.waitUntil(() => app.menu() !== null);
   const items = app.menu() ?? [];
-  expect(items.map((e) => e.label).slice(0, 2)).toEqual(["New Tax Profile…", "New Return…"]);
+  expect(items.map((e) => e.label).slice(0, 2)).toEqual(["New tax profile…", "New Return…"]);
   expect(items[1]?.disabled).toBe(true); // New Return… needs a taxpayer
-  await app.chooseMenuItem("New Tax Profile…");
+  await app.chooseMenuItem("New tax profile…");
   await app.waitFor("id:new-tp");
 });
 
-test("a title opens its menu; Profiles switches the taxpayer; New Tax Profile… follows the panel's rule", async () => {
+test("a title opens its menu; Profiles switches the taxpayer; New tax profile… follows the panel's rule", async () => {
   const app = await open(ENTRY, { width: 1440, height: 900, platform: "windows", ...asking({ second: true }) });
   await app.waitFor("id:menu-File");
   await app.press("id:menu-File");
   await app.waitUntil(() => app.menu() !== null);
-  // Just me with taxpayers: the profile panel offers no New taxpayer, so the menu's is disabled.
-  expect((app.menu() ?? []).find((e) => e.label === "New Tax Profile…")?.disabled).toBe(true);
+  // Just me with taxpayers: the owner always starts a new tax profile, so the menu's stays enabled.
+  expect((app.menu() ?? []).find((e) => e.label === "New tax profile…")?.disabled).toBe(false);
   await app.closeMenu();
 
   await app.press("id:menu-Profiles");
   await app.waitUntil(() => app.menu() !== null);
   const items = app.menu() ?? [];
   expect(items.find((e) => e.label === "Juana Santos")?.checked).toBe(true);
-  const other = items.find((e) => e.label !== "Juana Santos" && e.label !== "New Tax Profile…");
+  const other = items.find((e) => e.label !== "Juana Santos" && e.label !== "New tax profile…");
   if (!other) throw new Error("no second taxpayer in Profiles");
   expect(other.checked).toBe(false);
   await app.chooseMenuItem(other.label);
@@ -74,7 +74,7 @@ test("F10 puts the keyboard on the row, Right moves along it, Down opens the men
   await app.keyboard.press("right");
   await app.keyboard.press("down");
   await app.waitUntil(() => app.menu() !== null);
-  expect((app.menu() ?? [])[0]?.label).toBe("New Tax Profile…"); // File, the second title
+  expect((app.menu() ?? [])[0]?.label).toBe("New tax profile…"); // File, the second title
   await app.closeMenu();
   await app.keyboard.press("escape");
 });
