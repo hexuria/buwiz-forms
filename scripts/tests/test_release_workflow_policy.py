@@ -307,20 +307,10 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("SHA256SUMS-windows-*", files)
         self.assertNotIn("windows-store", files)
 
-    def test_no_build_gets_the_google_client_without_store_gmail(self) -> None:
-        # 1.0.0 ships no Google client in any build (owner, 2026-11-28): every place a build is given the client
-        # gates it on the one switch, and every platform's packages are audited against it after the detector's
-        # positive control.
-        gated = "{secret}: ${{{{ vars.STORE_GMAIL == '1' && secrets.{secret} || '' }}}}"
-        for name, text in (
-            ("release.yml", self.workflow),
-            ("release-linux.yml", self.linux_release_workflow),
-            ("release-macos.yml", self.macos_workflow),
-        ):
-            for secret in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
-                with self.subTest(workflow=name, secret=secret):
-                    self.assertNotIn(f"{secret}: ${{{{ secrets.{secret} }}}}", text)
-                    self.assertIn(gated.format(secret=secret), text)
+    def test_every_platform_audits_its_packages_against_store_gmail(self) -> None:
+        # Every platform's packages are audited against STORE_GMAIL after the detector's positive control. That no
+        # build gets the client without the switch is test_store_gmail.py's
+        # test_no_release_build_gets_the_google_client_without_the_switch, the one place that rule is stated.
         for name, text, step in (
             ("release-linux.yml", self.linux_release_workflow, "- name: Check the Linux packages against STORE_GMAIL"),
             ("release-macos.yml", self.macos_workflow, "- name: Check the macOS archives against STORE_GMAIL"),
@@ -349,18 +339,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         # Named secrets, never inherit: no signing certificate, and the client only behind the variable.
         self.assertNotIn("secrets: inherit", store)
         self.assertNotIn("WINDOWS_CERTIFICATE", store)
-        for secret in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
-            self.assertIn(f"{secret}: ${{{{ vars.STORE_GMAIL == '1' && secrets.{secret} || '' }}}}", store)
         # The direct downloads take their secrets whole; their build gates the client on the same switch.
         self.assertIn("secrets: inherit", self.job("build-windows"))
         self.assertNotIn("store:", self.job("build-windows"))
 
         windows = self.windows_job("installers")
-        for secret in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
-            self.assertIn(
-                f"{secret}: ${{{{ inputs.release && vars.STORE_GMAIL == '1' && secrets.{secret} || '' }}}}",
-                windows,
-            )
         for secret in ("WINDOWS_CERTIFICATE_PFX", "WINDOWS_CERTIFICATE_PASSWORD"):
             self.assertIn(f"inputs.release && !inputs.store && secrets.{secret}", windows)
         self.assertIn("-MsixOnly:$${{ inputs.store }} -NoMsix:$${{ inputs.release && !inputs.store }}", windows)
