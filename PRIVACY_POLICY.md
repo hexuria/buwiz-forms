@@ -144,12 +144,13 @@ by default) and anything done on a practice account: these send nothing to the B
 ## 4. Receipt tracking (optional)
 
 If you turn on receipt tracking for a taxpayer, the app reads that mailbox for the BIR's confirmation emails, so a
-return can move to Confirmed and Paid on its own. You choose one of two ways:
+return can move to Confirmed and Paid on its own. You connect the mailbox with an **app password** you enter (for
+Gmail, an app password from your Google account, which needs 2-Step Verification). The app reads the mailbox over IMAP
+and searches only for messages from `ebirforms-noreply@bir.gov.ph`.
 
-- **Google sign-in.** You approve access in your browser. Google's permission for mail access over IMAP
-  (`https://mail.google.com/`) is broad: it allows reading the whole mailbox. The app uses it only to search for
-  messages from `ebirforms-noreply@bir.gov.ph`. It also reads the address of the account you connected.
-- **Another mailbox over IMAP,** with an app password you enter.
+Version 0.2 also offered **Google sign-in**. This version does not: an inbox connected that way says so, and you can
+switch it to an app password or disconnect it. If Google sign-in returns in a later version, this policy will
+describe what it may access before that version is released.
 
 The mailbox is read from your device. Nothing from it is sent to Goldcoders. Disconnecting removes the saved password
 or tokens from your device; it does not change anything Google or your mail provider holds. Google handles the
