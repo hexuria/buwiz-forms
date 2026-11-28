@@ -151,11 +151,38 @@ class LocalPathPatternTests(unittest.TestCase):
                 self.assertTrue(has_absolute_local_path(message))
         for message in (
             "See file:///Users/runner/work/repo/README.md",
+            "See file:///Volumes/…",
             "See https://example.com/Users/alice/profile",
             "See https://example.com/home/alice",
         ):
             with self.subTest(message=message):
                 self.assertFalse(has_absolute_local_path(message))
+
+    def test_file_url_scheme_is_case_insensitive_and_file_must_start_a_word(self):
+        for message in (
+            "See FILE:///Users/alice/notes/plan.md",
+            "See FiLe://LOCALHOST/home/alice/notes/plan.md",
+        ):
+            with self.subTest(message=message):
+                self.assertTrue(has_absolute_local_path(message))
+        for message in (
+            "See https://x.com/profile://localhost/home/alice",
+            "See xfile:///Users/alice",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(has_absolute_local_path(message))
+
+    def test_mounted_and_extended_home_paths_are_refused(self):
+        messages = [
+            "built in /c/Users/alice/x",
+            "built in /mnt/c/Users/alice/x",
+            "built in /cygdrive/c/Users/alice",
+            "built in /var/home/alice",
+            r"built in \\?\C:\Users\alice\x",
+        ]
+        for message in messages:
+            with self.subTest(message=message):
+                self.assertTrue(has_absolute_local_path(message))
 
     def test_home_path_segments_inside_relative_repository_paths_pass(self):
         messages = [
@@ -191,9 +218,18 @@ class LocalPathPatternTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertTrue(has_absolute_local_path(message))
 
+    def test_windows_short_names_of_allowed_ci_users_pass(self):
+        for message in (
+            r"built in C:\Users\RUNNER~1\AppData\Local\Temp",
+            r"built in c:\users\runner~2\AppData\Local\Temp",
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(has_absolute_local_path(message))
+        self.assertTrue(has_absolute_local_path(r"built in C:\Users\ALICE~1\AppData\Local\Temp"))
+
 
 class CommitRangeTests(unittest.TestCase):
-    def test_a_bad_commit_fails_with_its_id_and_never_echoes_the_path(self):
+    def test_a_bad_commit_fails_with_its_id_the_offending_line_and_bypass_note(self):
         with tempfile.TemporaryDirectory() as directory:
             repo, hooks = make_git_repo(Path(directory))
             base = commit(repo, hooks, "clean base")
@@ -211,7 +247,10 @@ class CommitRangeTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn(bad, result.stderr)
-            self.assertNotIn(bad_path, result.stderr)
+            self.assertIn(f"offending line: built in {bad_path}", result.stderr)
+            self.assertIn("reword", result.stderr.lower())
+            self.assertIn("--no-verify skips the local hook", result.stderr)
+            self.assertIn("pull-request check still applies", result.stderr)
             self.assertNotIn(clean, result.stderr)
 
     def make_signed_commit(self, repo: Path, hooks: Path, message: str) -> str:
@@ -250,7 +289,8 @@ class CommitRangeTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn(signed, result.stderr)
-            self.assertNotIn(bad_path, result.stderr)
+            self.assertIn(f"offending line: built in {bad_path}", result.stderr)
+            self.assertIn("--no-verify skips the local hook", result.stderr)
 
     def test_merged_origin_main_commits_are_not_scanned_again(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -288,6 +328,102 @@ class CommitRangeTests(unittest.TestCase):
             self.assertNotIn(public_bad_path, range_result.stderr)
             self.assertNotIn(public_bad_path, push_result.stderr)
 
+    def test_pre_push_falls_back_when_the_remote_tip_object_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            empty_hooks = root / "empty-hooks"
+            empty_hooks.mkdir()
+            remote = root / "remote.git"
+            one = root / "one"
+            two = root / "two"
+
+            def run_git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    ["git", "-c", f"core.hooksPath={empty_hooks}", "-C", str(cwd), *args],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+
+            subprocess.run(["git", "init", "-q", "--bare", str(remote)], capture_output=True, text=True, check=True)
+            subprocess.run(
+                ["git", "--git-dir", str(remote), "symbolic-ref", "HEAD", "refs/heads/main"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-c", f"core.hooksPath={empty_hooks}", "clone", "--no-local", str(remote), str(one)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            run_git(one, "symbolic-ref", "HEAD", "refs/heads/main")
+            run_git(one, "config", "user.name", "Test User")
+            run_git(one, "config", "user.email", "test@example.com")
+            (one / "base.txt").write_text("base\n", encoding="utf-8")
+            run_git(one, "add", "base.txt")
+            run_git(one, "commit", "-q", "-m", "clean base")
+            run_git(one, "push", "-q", "-u", "origin", "main")
+
+            subprocess.run(
+                ["git", "-c", f"core.hooksPath={empty_hooks}", "clone", "--no-local", str(remote), str(two)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            run_git(two, "config", "user.name", "Test User")
+            run_git(two, "config", "user.email", "test@example.com")
+            run_git(two, "checkout", "-q", "-b", "topic")
+            (two / "remote.txt").write_text("remote\n", encoding="utf-8")
+            run_git(two, "add", "remote.txt")
+            run_git(two, "commit", "-q", "-m", "remote edit made elsewhere")
+            remote_tip = run_git(two, "rev-parse", "HEAD").stdout.strip()
+            run_git(two, "push", "-q", "origin", "HEAD:refs/heads/topic")
+
+            run_git(one, "checkout", "-q", "-b", "topic")
+            (one / "local.txt").write_text("local\n", encoding="utf-8")
+            run_git(one, "add", "local.txt")
+            run_git(one, "commit", "-q", "-m", "clean local work")
+            clean_tip = run_git(one, "rev-parse", "HEAD").stdout.strip()
+            missing = subprocess.run(
+                ["git", "-C", str(one), "cat-file", "-e", remote_tip],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(missing.returncode, 0, "the test requires the remote tip to be unfetched")
+
+            clean_input = f"refs/heads/topic {clean_tip} refs/heads/topic {remote_tip}\n"
+            clean_result = subprocess.run(
+                [sys.executable, str(SCRIPT), "pre-push"],
+                cwd=one,
+                input=clean_input,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(clean_result.returncode, 0, clean_result.stderr)
+            self.assertNotIn("bad object", clean_result.stderr)
+
+            bad_path = "/Users/alice/project"
+            run_git(one, "commit", "-q", "--allow-empty", "-m", f"built in {bad_path}")
+            bad_tip = run_git(one, "rev-parse", "HEAD").stdout.strip()
+            bad_input = f"refs/heads/topic {bad_tip} refs/heads/topic {remote_tip}\n"
+            bad_result = subprocess.run(
+                [sys.executable, str(SCRIPT), "pre-push"],
+                cwd=one,
+                input=bad_input,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(bad_result.returncode, 1, bad_result.stderr)
+            self.assertIn(bad_tip, bad_result.stderr)
+            self.assertIn(f"offending line: built in {bad_path}", bad_result.stderr)
+            self.assertIn("--no-verify skips the local hook", bad_result.stderr)
+            self.assertNotIn("bad object", bad_result.stderr)
+
 
 class HookTests(unittest.TestCase):
     def run_hook(
@@ -314,15 +450,77 @@ class HookTests(unittest.TestCase):
                 check=False,
             )
 
-    def test_commit_msg_hook_refuses_the_positive_control_with_one_line(self):
+    def make_verbose_commit_repo(self, root: Path, comment_char: str | None = None) -> tuple[Path, Path]:
+        repo, empty_hooks = make_git_repo(root)
+        (repo / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts" / "commit_message_paths.py", repo / "scripts")
+        git(repo, empty_hooks, "config", "core.hooksPath", str(ROOT / ".githooks"))
+        git(repo, empty_hooks, "config", "commit.cleanup", "scissors")
+        git(repo, empty_hooks, "config", "commit.gpgsign", "false")
+        if comment_char is not None:
+            git(repo, empty_hooks, "config", "core.commentChar", comment_char)
+        editor = root / "editor"
+        write_executable(
+            editor,
+            "#!/bin/sh\n"
+            "tmp=\"$1.tmp\"\n"
+            "{ printf 'subject\\n\\n'; cat \"$1\"; } >\"$tmp\" && mv \"$tmp\" \"$1\"\n",
+        )
+        return repo, editor
+
+    def run_real_verbose_commit(self, repo: Path, editor: Path) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env["GIT_EDITOR"] = str(editor)
+        return subprocess.run(
+            ["git", "-C", str(repo), "commit", "-v", "-q"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def stage_six_files_with_a_local_path_in_the_diff(self, repo: Path) -> None:
+        for index in range(6):
+            text = "/Users/alice/project\n" if index == 0 else f"clean {index}\n"
+            (repo / f"file-{index}.txt").write_text(text, encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "."], capture_output=True, text=True, check=True)
+
+    def test_real_git_commit_verbose_scissors_with_six_files_ignores_status_and_diff(self):
+        if shutil.which("sh") is None:
+            self.skipTest("sh is not on PATH")
+        with tempfile.TemporaryDirectory() as directory:
+            repo, editor = self.make_verbose_commit_repo(Path(directory))
+            self.stage_six_files_with_a_local_path_in_the_diff(repo)
+
+            result = self.run_real_verbose_commit(repo, editor)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("absolute local path", result.stderr)
+
+    def test_real_git_commit_verbose_scissors_reads_core_commentchar(self):
+        if shutil.which("sh") is None:
+            self.skipTest("sh is not on PATH")
+        with tempfile.TemporaryDirectory() as directory:
+            repo, editor = self.make_verbose_commit_repo(Path(directory), comment_char=";")
+            self.stage_six_files_with_a_local_path_in_the_diff(repo)
+
+            result = self.run_real_verbose_commit(repo, editor)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("absolute local path", result.stderr)
+
+    def test_commit_msg_hook_refusal_prints_the_offending_line_and_bypass_note(self):
         bad_path = "/Users/alice/project"
         result = self.run_hook("commit-msg", f"built in {bad_path}\n")
 
         self.assertEqual(result.returncode, 1)
         lines = result.stderr.strip().splitlines()
-        self.assertEqual(len(lines), 1, result.stderr)
+        self.assertEqual(len(lines), 3, result.stderr)
         self.assertIn("absolute local path", lines[0])
-        self.assertNotIn(bad_path, result.stderr)
+        self.assertEqual(lines[1], f"offending line: built in {bad_path}")
+        self.assertIn("reword", lines[2].lower())
+        self.assertIn("--no-verify skips the local hook", lines[2])
+        self.assertIn("pull-request check still applies", lines[2])
 
     def test_commit_msg_hook_accepts_placeholders(self):
         result = self.run_hook("commit-msg", "use /Users/<name>/project, $HOME/project or ~/project\n")
@@ -363,22 +561,23 @@ class HookTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("absolute local path", result.stderr)
-            self.assertNotIn(bad_path, result.stderr)
+            self.assertIn(f"offending line: # a comment naming {bad_path}", result.stderr)
+            self.assertIn("--no-verify skips the local hook", result.stderr)
 
-    def test_commit_msg_hook_checks_text_after_a_scissors_line_git_may_keep(self):
-        scissors = "# ------------------------ >8 ------------------------"
+    def test_commit_msg_hook_checks_text_after_a_lookalike_scissors_line_git_may_keep(self):
+        lookalike = "# ----------------------- >8 ------------------------"
         result = self.run_hook(
             "commit-msg",
-            f"clean subject\n{scissors}\nordinary text naming /Users/alice/project\n",
+            f"clean subject\n{lookalike}\nordinary text naming /Users/alice/project\n",
         )
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("absolute local path", result.stderr)
 
-    def test_commit_msg_hook_checks_a_pasted_diff_after_a_scissors_line(self):
-        scissors = "# ------------------------ >8 ------------------------"
+    def test_commit_msg_hook_checks_a_pasted_diff_after_a_lookalike_scissors_line(self):
+        lookalike = "# ------------------------ >7 ------------------------"
         result = self.run_hook(
             "commit-msg",
-            f"clean subject\n{scissors}\ndiff --git a/x b/x\n+/Users/alice/project\n",
+            f"clean subject\n{lookalike}\ndiff --git a/x b/x\n+/Users/alice/project\n",
         )
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("absolute local path", result.stderr)
@@ -402,6 +601,47 @@ class HookTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("absolute local path", result.stderr)
+
+    def test_message_file_outside_a_repository_accepts_any_punctuation_comment_char(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            message = root / "message"
+            scissors = "; ------------------------ >8 ------------------------"
+            message.write_text(
+                f"clean subject\n{scissors}\ndiff --git a/x b/x\n+/Users/alice/project\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "message-file", str(message)],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_message_file_inside_a_repository_uses_only_the_configured_comment_char(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo, _ = make_git_repo(Path(directory))
+            message = repo / "message"
+            scissors = "; ------------------------ >8 ------------------------"
+            message.write_text(
+                f"clean subject\n{scissors}\nordinary text naming /Users/alice/project\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "message-file", str(message)],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("absolute local path", result.stderr)
 
     def test_commit_msg_hook_uses_python_before_a_broken_python3(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -515,7 +755,8 @@ class HookTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn(bad, result.stderr)
-            self.assertNotIn(bad_path, result.stderr)
+            self.assertIn(f"offending line: built in {bad_path}", result.stderr)
+            self.assertIn("--no-verify skips the local hook", result.stderr)
 
 
 class InstallerTests(unittest.TestCase):
@@ -773,7 +1014,8 @@ class InstallerTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("absolute local path", result.stderr)
-            self.assertNotIn(bad_path, result.stderr)
+            self.assertIn(f"offending line: built in {bad_path}", result.stderr)
+            self.assertIn("--no-verify skips the local hook", result.stderr)
 
     def test_the_installed_pre_push_chain_scans_and_preserves_the_local_hooks_input(self):
         sh = shutil.which("sh")
