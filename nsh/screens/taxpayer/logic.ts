@@ -373,6 +373,10 @@ export function checkText(r: {
 /** The tracking line at the foot of the inbox section. */
 /** A build with no Google client id offers the app password only, and says so in one line. */
 export const GOOGLE_UNAVAILABLE = "Google sign-in is not available in this version. Use an app password.";
+/** The same build with a Google connection made in an earlier build that had one: it can no longer renew, so it says to
+ * disconnect (the Disconnect button stays). The host answers verify and the poll with these words too
+ * (crates/bir-core/src/email/auth_oauth.rs GOOGLE_NOT_IN_THIS_VERSION). */
+export const GOOGLE_UNAVAILABLE_CONNECTED = "Google sign-in is not available in this version. Disconnect and use an app password.";
 
 export function trackingLine(s: Pick<InboxState, "tracking_enabled" | "still_pending" | "past_window" | "window_days">): string {
   if (!s.tracking_enabled) return "○ Verify your connection to activate email tracking.";

@@ -202,6 +202,26 @@ unused:
 test:
     cargo test --locked --workspace
 
+# Ask for the test suites on the pull request itself: remove the ci:suite* label if present, then add it again.
+# No system: Linux and Windows. Prints the pull request's checks page.
+# Ask GitHub for the test suites on a pull request: `just ci-suite <pr> [linux|windows|macos|all]`
+[unix]
+ci-suite number system="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    number="{{number}}"
+    case "{{system}}" in
+        "") suffix="" ;;
+        linux|windows|macos|all) suffix="-{{system}}" ;;
+        *) echo "ci-suite: system is linux, windows, macos or all (none: Linux and Windows)" >&2; exit 1 ;;
+    esac
+    [[ "$number" =~ ^[0-9]+$ ]] || { echo "ci-suite: not a pull request number: $number" >&2; exit 1; }
+    label="ci:suite$suffix"
+    gh label create "$label" --repo hexuria/buwiz-forms --force
+    gh pr edit "$number" --repo hexuria/buwiz-forms --remove-label "$label" >/dev/null 2>&1 || true
+    gh pr edit "$number" --repo hexuria/buwiz-forms --add-label "$label"
+    echo "https://github.com/hexuria/buwiz-forms/pull/$number/checks"
+
 # Pull requests run only the quick checks; the test suites run on a push to test/** (docs/CI.md). Pushes HEAD to
 # test/<system>/<branch>, so the results show on the pull request of that commit; a newer push replaces the older run.
 # No system: Linux and Windows. Remote: $CI_TEST_REMOTE, else origin (it must be allowed to push workflow files).
@@ -574,15 +594,24 @@ app *args="":
 
 testflight *args="": (app args) testflight-upload
 
-testflight-agent *args="": (testflight "--agent" args)
+# An agent build carries the driver's socket and com.apple.security.network.server: internal TestFlight only, never review.
+# It is the one upload that may carry the agent (testflight-upload refuses one otherwise, scripts/agent_upload_guard.py),
+# and its provenance file (beside the .pkg) says agent=1: that build number must never be the one chosen for review.
+testflight-agent *args="":
+    just app --agent {{args}}
+    just testflight-upload yes
 
-testflight-upload:
+# `allow_agent` is passed only by testflight-agent ("yes"); an agent build is refused otherwise. ALLOW_AGENT_UPLOAD from the
+# shell or .env is dropped: a permission in the environment would switch the guard off for every upload.
+testflight-upload allow_agent="":
     #!/usr/bin/env bash
     set -euo pipefail
+    unset ALLOW_AGENT_UPLOAD
     if [ "{{os()}}" != "macos" ]; then
         echo "⚠️ TestFlight uploads are only supported on macOS." >&2; exit 1
     fi
     set -a && source .env && set +a
+    unset ALLOW_AGENT_UPLOAD
     for var in APP_STORE_KEY_ID APP_STORE_ISSUER_ID APP_STORE_P8_PATH; do
         if [ -z "${!var:-}" ]; then echo "❌ $var is not set in .env" >&2; exit 1; fi
     done
@@ -603,6 +632,11 @@ testflight-upload:
         echo "❌ $PKG_PATH is unsigned. Set INSTALLER_IDENTITY in .env and rebuild with: just app" >&2; exit 1
     fi
     BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "{{RELEASE_DIR}}/mas/{{APP_NAME}}.app/Contents/Info.plist" 2>/dev/null || echo '?')"
+    # The .pkg itself is read (its .app's Info.plist mark, its executable, its signed entitlements) and its provenance: an
+    # agent build is refused unless testflight-agent passed allow_agent (scripts/agent_upload_guard.py).
+    allow_flag=""
+    [ "{{allow_agent}}" = "yes" ] && allow_flag="--allow-agent"
+    {{PYTHON}} scripts/agent_upload_guard.py check mac "$PKG_PATH" --provenance "${PKG_PATH%.pkg}.provenance.txt" $allow_flag
     # iTMSTransporter only reads the key from a fixed set of private_keys
     # directories; stage it in a throwaway one instead of touching $HOME.
     KEY_DIR="$(mktemp -d)"
@@ -620,6 +654,10 @@ _package-mac-appstore args="": build-frozen-html-identity
     set -euo pipefail
     root="$(pwd)"
     CERT="${CODESIGN_IDENTITY:--}"
+    # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
+    # An assignment, not eval "$(...)": a failing script then stops the build (set -e) instead of evaluating nothing.
+    drop="$({{PYTHON}} scripts/store_gmail.py env)"
+    eval "$drop"
     # nsh package has no flag for a feature of the app crate: nsh/mas/cargo-with-mas.sh, set as $CARGO, adds `mas_build`
     # (and `agent` for --agent) to the build of the generated macOS host.
     export NSH_MAS_AGENT=0
@@ -697,17 +735,24 @@ _package-mac-appstore args="": build-frozen-html-identity
     if [ "$NSH_MAS_AGENT" != "1" ]; then
         /usr/libexec/PlistBuddy -c "Delete :NSScreenCaptureUsageDescription" "$PLIST" 2>/dev/null || true
     fi
+    # An agent build says so in its Info.plist and its provenance: testflight-upload refuses it unless testflight-agent passed
+    # allow_agent, so a build with the driver's socket is never uploaded, and so never sent to review, by accident.
+    if [ "$NSH_MAS_AGENT" = "1" ]; then
+        /usr/libexec/PlistBuddy -c "Add :NSHAgentBuild bool true" "$PLIST"
+    fi
     if [ "${DEV_MODE:-}" = "true" ] || [ "${DEVELOPER_MODE:-}" = "true" ]; then
         echo "Injecting DEVELOPER_MODE into Info.plist..."
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$PLIST" || true
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment:DEVELOPER_MODE string true" "$PLIST" || true
     fi
-    ENTITLEMENTS="$root/entitlements.plist"
+    # The store's entitlements: network.server only with Gmail Connect or the agent (scripts/store_gmail.py entitlements).
+    ENTITLEMENTS="$OUT/store.entitlements"
+    agent_flag=""
+    [ "$NSH_MAS_AGENT" = "1" ] && agent_flag="--agent"
+    {{PYTHON}} scripts/store_gmail.py entitlements "$root/entitlements.plist" "$ENTITLEMENTS" $agent_flag
     if [ "$CERT" = "-" ]; then
         # An ad hoc signature cannot carry the store's application and team identifiers (macOS refuses to launch an app
         # that claims them without a matching profile), so the local build keeps only the sandbox and its permissions.
-        ENTITLEMENTS="$OUT/sandbox.entitlements"
-        cp "$root/entitlements.plist" "$ENTITLEMENTS"
         /usr/libexec/PlistBuddy -c "Delete :com.apple.application-identifier" "$ENTITLEMENTS"
         /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.team-identifier" "$ENTITLEMENTS"
         echo "⚠️  No CODESIGN_IDENTITY: ad hoc signed with the sandbox entitlements, no provisioning profile (local testing only)."
@@ -716,6 +761,7 @@ _package-mac-appstore args="": build-frozen-html-identity
         cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
     fi
     {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
+    {{PYTHON}} scripts/store_gmail.py check "$APP"
     xattr -cr "$APP"
     # App Store Connect refuses a package whose files only their owner can read, which is what a umask of 077 builds.
     chmod -R u+rwX,go+rX "$APP"
@@ -734,7 +780,9 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "✅ Unsigned PKG created: $PKG_PATH"
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
-    echo "$PROVENANCE, build {{BUILD_NUMBER}}" > "${PKG_PATH%.pkg}.provenance.txt"
+    agent_note=""
+    [ "$NSH_MAS_AGENT" = "1" ] && agent_note=" (agent build: internal TestFlight only, never for review)"
+    echo "$PROVENANCE, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT$agent_note" > "${PKG_PATH%.pkg}.provenance.txt"
     echo "   $PROVENANCE"
 
 # Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
@@ -862,6 +910,8 @@ _play-jdk:
 ios-appstore: build-frozen-html-identity
     #!/usr/bin/env bash
     set -euo pipefail
+    # The store build uses nsh's own cargo: an inherited CARGO (a wrapper that adds the `agent` feature) is dropped.
+    unset CARGO
     # App Store Connect refuses a package whose files only their owner can read (a umask of 077 builds that).
     umask 022
     root="$(pwd)"
@@ -875,6 +925,10 @@ ios-appstore: build-frozen-html-identity
         echo "❌ $PROFILE expired $EXPIRES." >&2; exit 1
     fi
     set -a && source .env && set +a
+    # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
+    # An assignment, not eval "$(...)": a failing script then stops the build (set -e) instead of evaluating nothing.
+    drop="$({{PYTHON}} scripts/store_gmail.py env)"
+    eval "$drop"
     BUILD="$(uv run scripts/bump_build.py --print-next)"
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid App Store build number: $BUILD" >&2; exit 1 ;; esac
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
@@ -926,6 +980,9 @@ ios-appstore: build-frozen-html-identity
         echo "❌ $APP/Info.plist has NSScreenCaptureUsageDescription." >&2; exit 1
     fi
     {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
+    {{PYTHON}} scripts/store_gmail.py check "$APP"
+    # iOS has no agent build for the store: refuse one that carries the driver anyway (scripts/agent_upload_guard.py).
+    {{PYTHON}} scripts/agent_upload_guard.py check ios "$APP"
     xattr -cr "$APP"
     chmod -R u+rwX,go+rX "$APP"
     codesign --force --sign "$CERT" --preserve-metadata=entitlements,requirements,flags "$APP"
@@ -947,6 +1004,7 @@ ios-appstore-upload:
     set -a && source .env && set +a
     IPA="{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
     [ -f "$IPA" ] || { echo "❌ No $IPA: run just ios-appstore first." >&2; exit 1; }
+    {{PYTHON}} scripts/agent_upload_guard.py check ios "$IPA" --provenance "${IPA%.ipa}.provenance.txt"
     "${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin/nsh" publish ios "$IPA" --app-id 6767850225 \
         --issuer-id "$APP_STORE_ISSUER_ID" --key-id "$APP_STORE_KEY_ID" --private-key "$APP_STORE_P8_PATH"
 
@@ -978,6 +1036,16 @@ nsh-build *args="":
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
     cd nsh
     exec nsh build {{args}}
+
+# NSH release proof: the lock-pages debug route's Rust entry is absent from the release host artifact cargo itself reports.
+# Too expensive for the PR quick lane: it is a release build, not a type check.
+[unix]
+nsh-release-no-lockdebug:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    bash nsh/scripts/test-release-no-lockdebug.sh
 
 # Windows: the same command in PowerShell.
 [windows]

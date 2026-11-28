@@ -8,7 +8,7 @@ use crate::lock_timing;
 use crate::profile::{EmailAuthMethod, TaxpayerProfile, inbox_emails_match};
 use crate::receipt::parse_bir_receipt_email;
 
-use super::auth_oauth::GoogleOAuthAuth;
+use super::auth_oauth::{GOOGLE_NOT_IN_THIS_VERSION, GoogleOAuthAuth, google_sign_in_available};
 use super::auth_password::AppPasswordAuth;
 use super::inbox::{plan_email_poll_for_address, resolve_inbox_fetch_profile};
 
@@ -434,7 +434,8 @@ fn poll_inbox(
     let (profile, still_pending, since) = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
-            Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
+            // Still pending: a lock failure says nothing about the inbox, so the job keeps its place.
+            Err(e) => return (false, true, Some(format!("DB lock failed: {}", e))),
         };
         // Waiting goes by each return's own state and send time, never the calendar year.
         let now = chrono::Utc::now();
@@ -448,6 +449,12 @@ fn poll_inbox(
     };
 
     if let Some(mut profile) = profile {
+        // A Google grant in a build that cannot renew it: said once (one alert, one banner), and the poll stops rather
+        // than failing the same way every interval. Only a grant that is really stored: after Disconnect the method
+        // may still read GoogleOAuth with no grant, and that is not a connection to warn about.
+        if google_grant_unusable(&profile, google_sign_in_available()) {
+            return google_unavailable_poll(&db, &profile);
+        }
         // Sibling Submitted drafts (Jane) must still be polled even when the
         // grant lives on Juan and Juan's tracking toggle is off.
         profile.email_tracking_enabled = true;
@@ -515,6 +522,49 @@ fn poll_inbox(
 }
 
 const POLL_FAILURE_TITLE: &str = "Email confirmation checking has stopped";
+
+/// A stored Google grant this build cannot renew (`available`: whether Google's sign-in is in the build).
+fn google_grant_unusable(profile: &TaxpayerProfile, available: bool) -> bool {
+    profile.email_auth_method == EmailAuthMethod::GoogleOAuth
+        && profile.has_usable_oauth_refresh()
+        && !available
+}
+
+/// The poll of an inbox connected to Google in a build that cannot renew the grant: one alert (with nothing to click:
+/// Reconnect cannot work here), its banner only the first time, and nothing left pending, so the job ends instead of
+/// failing every interval. Returns what `fetch_and_process_emails_for_address_until` returns.
+fn google_unavailable_poll(
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    profile: &TaxpayerProfile,
+) -> (bool, bool, Option<String>) {
+    let recorded = lock_timing::lock(db)
+        .ok()
+        .and_then(|db_guard| record_google_unavailable(&db_guard, profile));
+    if let Some(outcome) = recorded {
+        crate::notification::notify_alert_if_newly_active(
+            outcome,
+            POLL_FAILURE_TITLE,
+            GOOGLE_NOT_IN_THIS_VERSION,
+        );
+    }
+    (false, false, Some(GOOGLE_NOT_IN_THIS_VERSION.to_string()))
+}
+
+/// The alert [`google_unavailable_poll`] records: the same kind and title as a failed poll, in plain words.
+fn record_google_unavailable(
+    db: &Database,
+    profile: &TaxpayerProfile,
+) -> Option<crate::db::AlertRecordOutcome> {
+    db.record_alert(
+        Some(&profile.tin.full()),
+        crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+        crate::db::AlertSeverity::Error,
+        POLL_FAILURE_TITLE,
+        GOOGLE_NOT_IN_THIS_VERSION,
+        crate::db::AlertAction::None,
+    )
+    .ok()
+}
 
 /// Record that polling `profile`'s confirmation inbox failed. Returns what
 /// the record did; the caller decides on the banner once it has let go of
@@ -687,6 +737,56 @@ mod tests {
         assert_eq!(alerts[0].title, POLL_FAILURE_TITLE);
         assert_eq!(alerts[0].detail, "invalid_grant");
         assert_eq!(alerts[0].occurrences, 2);
+    }
+
+    /// #504 review: only a stored grant is "a Google grant this build cannot renew". After Disconnect the method can
+    /// still read GoogleOAuth with no grant; that profile gets no "disconnect" alert, and a build with Google gets none.
+    #[test]
+    fn only_a_stored_grant_is_unusable_without_google() {
+        let mut profile = juana();
+        profile.email_auth_method = EmailAuthMethod::GoogleOAuth;
+        assert!(
+            !google_grant_unusable(&profile, false),
+            "disconnected: no grant"
+        );
+        profile.oauth_refresh_token = Some("refresh".to_string());
+        assert!(google_grant_unusable(&profile, false));
+        assert!(
+            !google_grant_unusable(&profile, true),
+            "a build with Google renews it"
+        );
+        profile.email_auth_method = EmailAuthMethod::AppPassword;
+        assert!(
+            !google_grant_unusable(&profile, false),
+            "an app password is not a grant"
+        );
+    }
+
+    /// A Google grant in a build without Google: one alert in plain words with nothing to click, recorded again only as
+    /// a repeat (no second banner), and the poll reports nothing pending, so its job ends.
+    #[test]
+    fn a_google_grant_without_google_is_said_once_and_the_poll_ends() {
+        let db = Database::open_ephemeral().unwrap();
+        let profile = juana();
+        assert_eq!(
+            record_google_unavailable(&db, &profile),
+            Some(AlertRecordOutcome::Created)
+        );
+        assert_eq!(
+            record_google_unavailable(&db, &profile),
+            Some(AlertRecordOutcome::StillActive)
+        );
+        let alerts = db.list_active_alerts(Some(&profile.tin.full())).unwrap();
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].detail, GOOGLE_NOT_IN_THIS_VERSION);
+        assert!(!alerts[0].detail.contains("GOOGLE_CLIENT_ID"));
+
+        let shared =
+            std::sync::Arc::new(std::sync::Mutex::new(Database::open_ephemeral().unwrap()));
+        let (ok, still_pending, message) = google_unavailable_poll(&shared, &profile);
+        assert!(!ok);
+        assert!(!still_pending);
+        assert_eq!(message.as_deref(), Some(GOOGLE_NOT_IN_THIS_VERSION));
     }
 
     /// The IMAP connection waits at most 30 seconds on a read or a write (a loopback listener stands in for the server;

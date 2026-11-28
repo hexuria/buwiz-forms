@@ -16,7 +16,8 @@ pub(crate) mod oauth_server;
 pub const BIR_EMAIL_WINDOW_DAYS: i64 = 30;
 
 pub use auth_oauth::{
-    GoogleOAuthAuth, get_oauth_email, google_sign_in_available, start_oauth_flow,
+    GOOGLE_NOT_IN_THIS_VERSION, GoogleOAuthAuth, get_oauth_email, google_sign_in_available,
+    start_oauth_flow,
 };
 pub use auth_password::AppPasswordAuth;
 pub use fetcher::{

@@ -88,6 +88,22 @@ class RecipeReadingTests(unittest.TestCase):
         self.assertEqual(E2E.placeholders(ROOT / "agent-recipes" / "e2e" / "money-boxes-paced.json"),
                          {"prior", "amount", "amount_shown"})
 
+    def test_a_step_node_reference_is_no_param_and_keeps_its_step_in_the_same_slice(self):
+        # gpui-agent 0.5.0: `$<step>.node` names the node a scroll_until step matched; the runner neither asks for
+        # it as a param nor cuts a recipe between the step and its user.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "find.json"
+            path.write_text(json.dumps({"name": "find", "params": ["row"], "steps": [
+                {"id": "find", "op": "scroll_until", "target": "list", "pattern": "$row", "dy": 200},
+                {"id": "hold", "op": "long_press", "target": "${find}.node"},
+                {"id": "press", "op": "click", "target": "$find.node"},
+            ]}), encoding="utf-8")
+            self.assertEqual(E2E.placeholders(path), {"row"})
+            self.assertEqual(E2E.recipe_step_params(path), [{"row"}, set(), set()])
+            steps, ids = E2E.recipe_steps(path), E2E.step_ids(path)
+            self.assertEqual(E2E.needs_edges_cut(steps, ids, 1), [("find", "hold"), ("find", "press")])
+            self.assertEqual(E2E.needs_edges_cut(steps, ids, 2), [("find", "press")])
+
     def test_bind_keeps_a_doubled_dollar_literal(self):
         self.assertEqual(E2E.bind("$table-add", {"table": "fp-table-x"}), "fp-table-x-add")
         self.assertEqual(E2E.bind("${a}b $$5 $missing", {"a": "A"}), "Ab $5 $missing")

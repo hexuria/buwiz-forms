@@ -11,7 +11,7 @@ import { shortDate } from "../../lib/dates";
 import { app, store } from "../../shell";
 import { AppButton, Field, FieldCell, FieldGrid, Segmented, Switch, Text, TextField, TOUCH } from "../../ui";
 import { checkInboxNow, connectInbox, disconnectInbox, setTracking, shared, verifyInbox } from "./actions";
-import { GOOGLE_UNAVAILABLE, trackingLine } from "./logic";
+import { GOOGLE_UNAVAILABLE, GOOGLE_UNAVAILABLE_CONNECTED, trackingLine } from "./logic";
 import type { PageState } from "./page";
 
 export function InboxBody(props: { s: PageState }) {
@@ -152,7 +152,7 @@ export function InboxBody(props: { s: PageState }) {
       </If>
       <If when={!TOUCH && st() && !st()?.google_available}>
         <Text testID="tp-inbox-google-unavailable" variant="meta" tone="fg3" class="mt-2">
-          {GOOGLE_UNAVAILABLE}
+          {st()?.oauth_connected ? GOOGLE_UNAVAILABLE_CONNECTED : GOOGLE_UNAVAILABLE}
         </Text>
       </If>
       <Text testID="tp-inbox-status" variant="meta" tone={st()?.tracking_enabled ? "success" : "fg3"} class="mt-2">

@@ -2000,12 +2000,16 @@ export class FormSession {
     const always = (r as { notes_always?: string[] }).notes_always;
     if (Array.isArray(always)) s.notesAlways = new Set(always);
     for (const [k, lock] of Object.entries(r.relocks || {})) {
+      const note = r.relock_notes?.[k];
       if (lock == null) {
         delete s.locks[k];
-        delete s.lockNotes[k];
+        // An owner switch can clear a schedule row while its one shared box
+        // stays open for the new owner. That clearing is still reported on
+        // the open box; an ordinary open box has no note and drops it here.
+        if (note) s.lockNotes[k] = note;
+        else delete s.lockNotes[k];
       } else {
         s.locks[k] = lock;
-        const note = r.relock_notes?.[k];
         if (note) s.lockNotes[k] = note;
       }
     }
@@ -2798,7 +2802,11 @@ export class FormSession {
       (it.keys || []).forEach((row) =>
         row.forEach((k, c) => {
           const col = (it.cols || [])[c];
-          if (!col || col.t === "hidden" || !shut(k, col.c) || waits(k)) return;
+          if (!col || col.t === "hidden" || waits(k)) return;
+          if (!shut(k, col.c)) {
+            if (s.lockNotes[k]) note(k);
+            return;
+          }
           if (always(k) || (col.t === "radio" || col.t === "chk" ? !ticked(s.values[k]) : blankText(k, col.t))) note(k);
         }),
       );
@@ -4187,6 +4195,11 @@ export class FormSession {
   queuedShown(): boolean {
     const h = this.header();
     return h.status === "Queued" && !h.loading && !h.error && !h.sample && !h.editable;
+  }
+
+  /** The send state this Queued page is drawn from, for comparison with the frame's freshly read rows. */
+  queuedSend(): SendState | null {
+    return this.st.send;
   }
 
   /** Whether id (a row of the frame's returns lists, bir.list_returns) is this page's return: both name the same stored draft. */

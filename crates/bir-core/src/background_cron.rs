@@ -2464,6 +2464,53 @@ pub fn schedule_email_poll(
     }
 }
 
+/// Queue the confirmation poll again for every return on `inbox` that still waits for the BIR's email. Polls are
+/// scheduled only when a send finishes, so once the inbox's way in changes (an app password saved, tracking switched
+/// on, a connection verified) nothing else would bring back a poll that ended, for example the one a Google grant this
+/// build cannot renew archived. [`schedule_email_poll`] keeps one job per return and skips an inbox whose tracking is
+/// off. Returns how many returns were looked at.
+/// Reconnect: a new Google grant for `inbox` is saved for the profiles on it, and the returns still waiting for the
+/// BIR's email are polled again through it (as after Verify).
+pub fn persist_google_grant_and_resume_polls(
+    db_guard: &Database,
+    inbox: &str,
+    access_token: &str,
+    refresh_token: &str,
+    source_tin: Option<&str>,
+) -> Result<crate::db::InboxOAuthPersistResult, crate::db::DbError> {
+    let saved =
+        db_guard.persist_google_oauth_for_inbox(inbox, access_token, refresh_token, source_tin)?;
+    reschedule_email_polls_for_inbox(db_guard, inbox);
+    Ok(saved)
+}
+
+pub fn reschedule_email_polls_for_inbox(db_guard: &Database, inbox: &str) -> usize {
+    let mut seen = 0;
+    let profiles = db_guard.list_profiles().unwrap_or_default();
+    for profile in profiles
+        .iter()
+        .filter(|profile| crate::profile::inbox_emails_match(profile.inbox_email(), inbox))
+    {
+        let tin = profile.tin.full();
+        for draft in db_guard
+            .returns_awaiting_bir_email(&tin)
+            .unwrap_or_default()
+        {
+            seen += 1;
+            schedule_email_poll(
+                profile,
+                form_code_from_form_type(&draft.form_code),
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                draft.quarter,
+                db_guard,
+            );
+        }
+    }
+    seen
+}
+
 /// The words kept on a return whose send ended with an unknown outcome, before the transport's own reason.
 pub const OUTCOME_UNKNOWN: &str = "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.";
 
@@ -2929,6 +2976,11 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
                         warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
                         success = false;
                         job.output_log = Some(log);
+                        // A failure that leaves nothing pending (a Google grant this build cannot renew, an address
+                        // with no profile) ends the job rather than failing the same way every interval.
+                        if !still_pending {
+                            job.status = "Archived".to_string();
+                        }
                     }
                 } else {
                     // Unreachable in the App Store build (such jobs are
@@ -4738,7 +4790,64 @@ mod tests {
     }
 
     fn json_retry_past() -> serde_json::Value {
-        serde_json::Value::String((Utc::now() - chrono::Duration::minutes(1)).to_rfc3339())
+        serde_json::Value::String("1999-01-01T00:00:00Z".to_string())
+    }
+
+    /// A return queued while the worker was away has not missed a retry: it has never been tried. Its first
+    /// send is due as soon as a worker can make it.
+    #[tokio::test]
+    async fn process_queued_1601c_first_send_after_restart_is_not_deferred() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let mut value: serde_json::Value =
+            serde_json::from_str(&stored_json(&db, "1601C", &queued.tin)).unwrap();
+        value["next_retry_at"] =
+            serde_json::Value::String((Utc::now() - chrono::Duration::minutes(6)).to_rfc3339());
+        db.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE form_code = '1601C' AND tin = ?2",
+                rusqlite::params![value.to_string(), queued.tin],
+            )
+            .unwrap();
+        let transport = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+        assert_eq!(transport.calls().len(), 1, "the first send is not a retry");
+    }
+
+    /// A retry missed while the worker was away is due the moment the worker wakes: it is sent in that
+    /// same pass. The page never names its past stored time; `sendWords` says the try is happening now.
+    #[tokio::test]
+    async fn process_queued_1601c_missed_retry_is_sent_in_the_same_pass() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let mut value: serde_json::Value =
+            serde_json::from_str(&stored_json(&db, "1601C", &queued.tin)).unwrap();
+        value["next_retry_at"] = json_retry_past();
+        value["submission_attempts"] = serde_json::json!(1);
+        db.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE form_code = '1601C' AND tin = ?2",
+                rusqlite::params![value.to_string(), queued.tin],
+            )
+            .unwrap();
+        let transport = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &transport).await;
+        assert_eq!(
+            transport.calls().len(),
+            1,
+            "a missed retry is sent in the pass that finds it"
+        );
+        let sent = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(sent.status, FilingStatus::Submitted);
     }
 
     fn stored_queued_1601c(
@@ -4853,6 +4962,40 @@ mod tests {
         assert!(!stored_json(&db, "1601C", &queued.tin).contains("submitted_via_relay"));
     }
 
+    /// 2551Q uses the same queue clock as 1601C: a retry missed while the worker was away is due now.
+    #[tokio::test]
+    async fn process_queued_2551q_missed_retry_is_sent_in_the_same_pass() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let mut value: serde_json::Value =
+            serde_json::from_str(&stored_json(&db, "2551Q", &queued.tin)).unwrap();
+        value["next_retry_at"] = json_retry_past();
+        value["submission_attempts"] = serde_json::json!(1);
+        db.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE form_code = '2551Q' AND tin = ?2",
+                rusqlite::params![value.to_string(), queued.tin],
+            )
+            .unwrap();
+        let transport = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &transport)
+            .await;
+        assert_eq!(
+            transport.calls().len(),
+            1,
+            "a missed 2551Q retry is sent in the pass that finds it"
+        );
+        let sent = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(sent.status, FilingStatus::Submitted);
+    }
+
     #[tokio::test]
     async fn process_queued_2551q_relay_unavailable_releases_the_claim_and_retries() {
         let db = test_db();
@@ -4908,6 +5051,42 @@ mod tests {
                 .as_deref()
                 .is_some_and(|e| e.contains("refused"))
         );
+    }
+
+    /// The generic queueable processor uses the same queue clock: a missed retry is not deferred.
+    #[tokio::test]
+    async fn generic_worker_missed_retry_is_sent_in_the_same_pass() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let mut value: serde_json::Value =
+            serde_json::from_str(&stored_json(&db, TestForm::CODE, queued.tin())).unwrap();
+        value["next_retry_at"] = json_retry_past();
+        value["submission_attempts"] = serde_json::json!(1);
+        db.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE form_code = ?2 AND tin = ?3",
+                rusqlite::params![value.to_string(), TestForm::CODE, queued.tin()],
+            )
+            .unwrap();
+        let transport = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+        assert_eq!(
+            transport.calls().len(),
+            1,
+            "a missed generic retry is sent in the pass that finds it"
+        );
+        let sent = stored_test_form(&db, &queued);
+        assert_eq!(sent.lifecycle.status, FilingStatus::Submitted);
     }
 
     #[tokio::test]
@@ -5768,7 +5947,7 @@ mod tests {
 
         let expected_retry_at = failed.next_retry_at.clone();
         let mut retryable = failed.clone();
-        retryable.next_retry_at = Some("1999-01-01T00:00:00Z".to_string());
+        retryable.next_retry_at = Some((Utc::now() - chrono::Duration::minutes(1)).to_rfc3339());
         assert!(
             db.lock()
                 .expect("the cron database should not be poisoned")
@@ -5972,6 +6151,179 @@ mod tests {
                 .iter()
                 .all(|job| !is_email_poll_job(job)),
             "dry-run source must skip IMAP"
+        );
+    }
+
+    /// `draft` sent for real by the worker's own path (queued, claimed, Submitted now): only a Draft may use the generic
+    /// save, so a sent return is made the way the worker makes one.
+    fn sent_lab_1601c(db: &Database, draft: Form1601CDraft) {
+        sent_lab_1601c_via(db, draft, false);
+    }
+
+    /// As `sent_lab_1601c`; `mock_relay` marks the send as one to the local mock relay, as the worker does.
+    fn sent_lab_1601c_via(db: &Database, mut draft: Form1601CDraft, mock_relay: bool) {
+        draft.transition_to_queued().expect("the lab return queues");
+        db.save_queued_1601c_draft(&draft)
+            .expect("the queued return is saved");
+        let claim = db
+            .claim_queued_1601c_submission(
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                &draft.queued_submission_fingerprint,
+                &draft.next_retry_at,
+                0,
+            )
+            .expect("the queued return is claimed");
+        let crate::db::Claim1601CSubmissionResult::Claimed {
+            draft: mut claimed,
+            token,
+        } = claim
+        else {
+            panic!("expected a claim");
+        };
+        claimed.transition_to_submitted(draft.default_submission_filename(), false);
+        claimed.submitted_via_relay = mock_relay;
+        db.finish_claimed_1601c_submission(&claimed, &token)
+            .expect("the send is finished");
+    }
+
+    /// #504 W1: a return still waiting for the BIR's email gets its poll back when the inbox's way in changes (here
+    /// after the poll a Google grant this build cannot renew had archived); a return never sent gets none, the inbox is
+    /// matched whatever its case, and a second call keeps one job per return.
+    #[test]
+    fn a_waiting_return_is_polled_again_when_the_inbox_changes() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
+        let draft_only = crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10);
+        db.save_1601c_draft(&draft_only)
+            .expect("the draft is saved");
+        let polls = |db: &Database| -> Vec<Job> {
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .into_iter()
+                .filter(|job| is_email_poll_job(job) && job.status != "Archived")
+                .collect()
+        };
+        assert!(polls(&db).is_empty(), "no poll before the inbox changes");
+
+        assert_eq!(
+            reschedule_email_polls_for_inbox(&db, "Filer@Example.com"),
+            1
+        );
+        let queued = polls(&db);
+        assert_eq!(queued.len(), 1, "one poll, for the sent return only");
+        assert_eq!(queued[0].status, "Queued");
+        assert!(
+            queued[0].name.contains("1601C Sep 2026"),
+            "{}",
+            queued[0].name
+        );
+        assert_eq!(
+            queued[0].command.as_deref(),
+            Some("bir_poll_email filer@example.com")
+        );
+
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        assert_eq!(polls(&db).len(), 1, "still one job per return");
+    }
+
+    /// #504 review: Reconnect brings back the poll a Google grant this build could not renew had archived.
+    #[test]
+    fn reconnect_brings_back_an_archived_poll() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        let tin = profile.tin.full();
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        let mut job = db
+            .list_jobs()
+            .expect("the jobs are listed")
+            .into_iter()
+            .find(is_email_poll_job)
+            .expect("the waiting return has a poll");
+        job.status = "Archived".to_string();
+        db.save_job(job).expect("the poll is archived");
+        let live = |db: &Database| {
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .into_iter()
+                .filter(|job| is_email_poll_job(job) && job.status == "Queued")
+                .count()
+        };
+        assert_eq!(live(&db), 0);
+
+        persist_google_grant_and_resume_polls(
+            &db,
+            "filer@example.com",
+            "access-new",
+            "refresh-new",
+            Some(&tin),
+        )
+        .expect("the grant is saved");
+        assert_eq!(live(&db), 1, "the waiting return is polled again");
+    }
+
+    /// #504 review: a send to the local mock relay never had a poll (the worker skips it), so a change of the inbox's
+    /// way in queues none for it either; a real send beside it still gets its poll.
+    #[test]
+    fn a_mock_relay_send_gets_no_poll_back() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c_via(&db, crate::filing_queue::mandatory_lab_1601c_draft(), true);
+        let tin = crate::filing_queue::mandatory_lab_1601c_draft().tin;
+        assert!(
+            db.returns_awaiting_bir_email(&tin)
+                .expect("the waiting returns are listed")
+                .is_empty(),
+            "a mock relay send is not waiting for the BIR's email"
+        );
+        sent_lab_1601c(
+            &db,
+            crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10),
+        );
+        assert_eq!(
+            db.returns_awaiting_bir_email(&tin)
+                .expect("the waiting returns are listed")
+                .len(),
+            1,
+            "the real send is"
+        );
+    }
+
+    /// With tracking off the inbox is not watched, so nothing is queued however it changes.
+    #[test]
+    fn an_inbox_with_tracking_off_gets_no_poll_back() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = false;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
+
+        assert_eq!(
+            reschedule_email_polls_for_inbox(&db, "filer@example.com"),
+            1
+        );
+        assert!(
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .iter()
+                .all(|job| !is_email_poll_job(job))
         );
     }
 
