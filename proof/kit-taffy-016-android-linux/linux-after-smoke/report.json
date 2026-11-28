@@ -1,0 +1,128 @@
+{
+ "suite": "smoke",
+ "target": "linux",
+ "started": "20261128-151635",
+ "out": "~/ktour/evidence/linux-after-smoke",
+ "cli_version": "0.5.0",
+ "app_commit": "8f825621",
+ "platform": "desktop",
+ "os": "linux",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 562,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 9418,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-linux.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6298,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 2014,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1757,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 13612,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-phone.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 30,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 7144,
+   "note": "precondition: Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "step": "s5",
+   "error": "occluded_by: 507",
+   "error_code": "host_error",
+   "line": "click tp-branch-business_start_date",
+   "screenshot": "~/ktour/evidence/linux-after-smoke/09-queue/failure.png",
+   "tree": "~/ktour/evidence/linux-after-smoke/09-queue/failure-tree.json"
+  },
+  {
+   "name": "birth-date",
+   "status": "known gap",
+   "ms": 324,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "step": "s1",
+   "error": "occluded_by: 399",
+   "error_code": "host_error",
+   "line": null,
+   "known_gap": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)",
+   "screenshot": "~/ktour/evidence/linux-after-smoke/10-birth-date/failure.png",
+   "tree": "~/ktour/evidence/linux-after-smoke/10-birth-date/failure-tree.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 327,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "step": "s1",
+   "error": "occluded_by: 399",
+   "error_code": "host_error",
+   "line": "click nb-avatar",
+   "known_gap": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
+   "screenshot": "~/ktour/evidence/linux-after-smoke/11-sign-out/failure.png",
+   "tree": "~/ktour/evidence/linux-after-smoke/11-sign-out/failure-tree.json"
+  }
+ ]
+}

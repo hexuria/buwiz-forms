@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-form-top",
+  "fingerprint": "fnv1a64:d064ce40e6e4524e",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 240,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-after-2625/09-form-top/001-s1.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/android-after-2625/09-form-top/001-s1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 240
+}

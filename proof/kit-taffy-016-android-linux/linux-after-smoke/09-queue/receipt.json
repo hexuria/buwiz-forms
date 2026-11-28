@@ -1,0 +1,50 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "queue",
+  "fingerprint": "fnv1a64:3eeddb2e328de57f",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2776
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 45,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-after-smoke/09-queue/002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3970
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s5",
+      "ok": false,
+      "error": "occluded_by: 507",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 317
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/linux-after-smoke/09-queue/002-s2.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 7135
+}

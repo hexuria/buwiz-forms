@@ -1,0 +1,152 @@
+{
+ "suite": "tour",
+ "target": "android",
+ "started": "20261128-145825",
+ "out": "~/ktour/evidence/android-after-2625",
+ "cli_version": "0.5.0",
+ "app_commit": "8f825621",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1358,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "setup-cards",
+   "status": "pass",
+   "ms": 274,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-setup-cards.json"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 9850,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 9006,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json"
+  },
+  {
+   "name": "shell",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "home",
+   "status": "pass",
+   "ms": 625,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-home.json"
+  },
+  {
+   "name": "navigation",
+   "status": "pass",
+   "ms": 2722,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "new-return",
+   "status": "pass",
+   "ms": 3427,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-new-return.json"
+  },
+  {
+   "name": "form-top",
+   "status": "pass",
+   "ms": 254,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-form-top.json"
+  },
+  {
+   "name": "form-middle",
+   "status": "pass",
+   "ms": 2344,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-form-middle.json"
+  },
+  {
+   "name": "form-end",
+   "status": "pass",
+   "ms": 18099,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-form-end.json"
+  },
+  {
+   "name": "schedule-rows",
+   "status": "pass",
+   "ms": 27265,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-schedule-rows.json"
+  },
+  {
+   "name": "sheet-pick",
+   "status": "fail",
+   "ms": 3299,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-sheet-pick.json",
+   "step": "s5",
+   "error": "`node 7438` is offscreen (it has no native view); on screen: [\"Form 2551Q\", \"ET\", \"BIR Form 2551Q\", \"Revision 2018\", \"Quarterly Percentage Tax Return\", \"Quarterly\", \"2 pages\", \"85 fields\", \"Print preview\", \"Check\", \"Queue\", \"\u2713 Saved\", \"Set the tax profile's business start date to determine whether Item 13 applies to this quarter.\", \"Set business start date\", \"Record the tax profile's annual income-tax election for 2026 before filing this later-quarter return.\", \"Set annual income-tax election\", \"1\", \"For the *\", \"Calendar\", \"Fiscal\", \"2\", \"Year Ended (MM/YYYY) *\", \"2026\", \"3\", \"Quarter *\", \"1st\", \"2nd\", \"3rd\", \"4th\", \"The quarter is set when the return is saved. To file another quarter, start a new return.\", \"4\", \"Amended Return?\", \"Yes\", \"No\", \"5\", \"Number of Sheet/s\", \"Return details\", \"5 items\", \"Part I \u00b7 Background Information\", \"8 items\", \"Part II \u00b7 Total Tax Payable\", \"13 items\", \"Part III \u00b7 Details of Payment\", \"4 items\", \"Schedule 1 \u2013 Computation of Tax, Items 1 to 6\", \"3 rows\", \"1\", \"PT010 \u00b7 3.0\", \"2\", \"1,000.00\", \"3\", \"2,000.00\", \"Add row\", \"Row 1\", \"Alphanumeric Tax Code (ATC)\", \"PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)\", \"Alphanumeric Tax Code (ATC), row 1\", \"Clear the choice\", \"PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)\", \"PT040 \u2014 DOMESTIC CARRIERS AND KEEPERS OF GARAGES (SEC. 117) (3.0%)\", \"PT041 \u2014 INTERNATIONAL CARRIERS (SEC. 118) (3.0%)\", \"PT060 \u2014 FRANCHISES ON GAS AND WATER UTILITIES (SEC. 119) (2.0%)\", \"PT070 \u2014 FRANCHISES ON RADIO/TV BROADCASTING COMPANIES WHOSE ANNUAL GROSS RECEIPTS DO NOT EXCEED P10M (SEC. 119) (3.0%)\", \"PT090 \u2014 OVERSEAS DISPATCH, MESSAGE OR CONVERSATION ORIGINATING FROM THE PHILIPPINES (SEC. 120) (10.0%)\", \"PT101 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS MORE THAN FIVE (5) YEARS (1.0%)\", \"PT102 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - DIVIDENDS AND EQUITY SHARES AND NET INCOME OF SUBSIDIARIES (0.0%)\", \"PT103 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - ROYALTIES, RENTALS OF PROPERTY, REAL OR PERSONAL, PROFITS FROM EXCHANGE AND ALL OTHER GROSS INCOME (7.0%)\", \"PT104 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - NET TRADING GAINS WITHIN THE TAXABLE YEAR ON FOREIGN CURRENCY, DEBT SECURITIES, DERIVATIVES, AND OTHER FINANCIAL INSTRUMENTS (7.0%)\", \"PT105 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS FIVE (5) YEARS OR LESS (5.0%)\", \"PT113 \u2014 TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS FIVE (5) YEARS OR LESS (5.0%)\", \"PT114 \u2014 TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS MORE THAN FIVE (5) YEARS (1.0%)\", \"PT115 \u2014 TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - FROM ALL OTHER ITEMS TREATED AS GROSS INCOME UNDER THE CODE (5.0%)\", \"PT120 \u2014 LIFE INSURANCE PREMIUMS (SEC. 123) (2.0%)\", \"PT130 \u2014 AGENTS OF FOREIGN INSURANCE COMPANIES (SEC.124) - INSURANCE AGENTS (4.0%)\", \"PT132 \u2014 AGENTS OF FOREIGN INSURANCE COMPANIES (SEC.124) - OWNERS OF PROPERTY OBTAINING DIRECTLY WITH FOREIGN INSURANCE COMPANIES (5.0%)\", \"PT140 \u2014 COCKPITS (SEC. 125) (18.0%)\", \"PT150 \u2014 TAX ON AMUSEMENT PLACES, SUCH AS CABARETS, NIGHT AND DAY CLUBS, VIDEOKE BARS, KARAOKE BARS, KARAOKE TELEVISION, KARAOKE BOXES, MUSIC LOUNGES AND OTHER SIMILAR ESTABLISHMENTS (SEC. 125) (18.0%)\", \"PT160 \u2014 BOXING EXHIBITION (SEC. 125) (10.0%)\", \"PT170 \u2014 PROFESSIONAL BASKETBALL GAMES (SEC. 125) (15.0%)\", \"PT180 \u2014 JAI-ALAI AND RACE TRACKS (SEC. 125) (30.0%)\", \"PT010 \u2014 PERSON EXEMPT FRO\u2026\", \u2026 (300 more characters, 23 more texts)]",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "~/ktour/evidence/android-after-2625/13-sheet-pick/failure.png",
+   "tree": "~/ktour/evidence/android-after-2625/13-sheet-pick/failure-tree.json"
+  },
+  {
+   "name": "sheet-calendar",
+   "status": "fail",
+   "ms": 12038,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-sheet-calendar.json",
+   "step": "s3",
+   "error": "`node 6558` is offscreen (it has no native view); on screen: [\"Form 2551Q\", \"ET\", \"BIR Form 2551Q\", \"Revision 2018\", \"Quarterly Percentage Tax Return\", \"Quarterly\", \"2 pages\", \"85 fields\", \"Print preview\", \"Check\", \"Queue\", \"\u2713 Saved\", \"Set the tax profile's business start date to determine whether Item 13 applies to this quarter.\", \"Set business start date\", \"Record the tax profile's annual income-tax election for 2026 before filing this later-quarter return.\", \"Set annual income-tax election\", \"1\", \"For the *\", \"Calendar\", \"Fiscal\", \"2\", \"Year Ended (MM/YYYY) *\", \"2026\", \"3\", \"Quarter *\", \"1st\", \"2nd\", \"3rd\", \"4th\", \"The quarter is set when the return is saved. To file another quarter, start a new return.\", \"4\", \"Amended Return?\", \"Yes\", \"No\", \"5\", \"Number of Sheet/s\", \"Return details\", \"5 items\", \"Part I \u00b7 Background Information\", \"8 items\", \"Part II \u00b7 Total Tax Payable\", \"13 items\", \"Part III \u00b7 Details of Payment\", \"4 items\", \"Schedule 1 \u2013 Computation of Tax, Items 1 to 6\", \"3 rows\", \"1\", \"PT010 \u00b7 3.0\", \"2\", \"1,000.00\", \"3\", \"2,000.00\", \"Add row\", \"Row 1\", \"Alphanumeric Tax Code (ATC)\", \"PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)\", \"Alphanumeric Tax Code (ATC), row 1\", \"Clear the choice\", \"PT010 \u2014 PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)\", \"PT040 \u2014 DOMESTIC CARRIERS AND KEEPERS OF GARAGES (SEC. 117) (3.0%)\", \"PT041 \u2014 INTERNATIONAL CARRIERS (SEC. 118) (3.0%)\", \"PT060 \u2014 FRANCHISES ON GAS AND WATER UTILITIES (SEC. 119) (2.0%)\", \"PT070 \u2014 FRANCHISES ON RADIO/TV BROADCASTING COMPANIES WHOSE ANNUAL GROSS RECEIPTS DO NOT EXCEED P10M (SEC. 119) (3.0%)\", \"PT090 \u2014 OVERSEAS DISPATCH, MESSAGE OR CONVERSATION ORIGINATING FROM THE PHILIPPINES (SEC. 120) (10.0%)\", \"PT101 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS MORE THAN FIVE (5) YEARS (1.0%)\", \"PT102 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - DIVIDENDS AND EQUITY SHARES AND NET INCOME OF SUBSIDIARIES (0.0%)\", \"PT103 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - ROYALTIES, RENTALS OF PROPERTY, REAL OR PERSONAL, PROFITS FROM EXCHANGE AND ALL OTHER GROSS INCOME (7.0%)\", \"PT104 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - NET TRADING GAINS WITHIN THE TAXABLE YEAR ON FOREIGN CURRENCY, DEBT SECURITIES, DERIVATIVES, AND OTHER FINANCIAL INSTRUMENTS (7.0%)\", \"PT105 \u2014 TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS FIVE (5) YEARS OR LESS (5.0%)\", \"PT113 \u2014 TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS FIVE (5) YEARS OR LESS (5.0%)\", \"PT114 \u2014 TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS MORE THAN FIVE (5) YEARS (1.0%)\", \"PT115 \u2014 TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - FROM ALL OTHER ITEMS TREATED AS GROSS INCOME UNDER THE CODE (5.0%)\", \"PT120 \u2014 LIFE INSURANCE PREMIUMS (SEC. 123) (2.0%)\", \"PT130 \u2014 AGENTS OF FOREIGN INSURANCE COMPANIES (SEC.124) - INSURANCE AGENTS (4.0%)\", \"PT132 \u2014 AGENTS OF FOREIGN INSURANCE COMPANIES (SEC.124) - OWNERS OF PROPERTY OBTAINING DIRECTLY WITH FOREIGN INSURANCE COMPANIES (5.0%)\", \"PT140 \u2014 COCKPITS (SEC. 125) (18.0%)\", \"PT150 \u2014 TAX ON AMUSEMENT PLACES, SUCH AS CABARETS, NIGHT AND DAY CLUBS, VIDEOKE BARS, KARAOKE BARS, KARAOKE TELEVISION, KARAOKE BOXES, MUSIC LOUNGES AND OTHER SIMILAR ESTABLISHMENTS (SEC. 125) (18.0%)\", \"PT160 \u2014 BOXING EXHIBITION (SEC. 125) (10.0%)\", \"PT170 \u2014 PROFESSIONAL BASKETBALL GAMES (SEC. 125) (15.0%)\", \"PT180 \u2014 JAI-ALAI AND RACE TRACKS (SEC. 125) (30.0%)\", \"PT010 \u2014 PERSON EXEMPT FRO\u2026\", \u2026 (300 more characters, 23 more texts)]",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "~/ktour/evidence/android-after-2625/14-sheet-calendar/failure.png",
+   "tree": "~/ktour/evidence/android-after-2625/14-sheet-calendar/failure-tree.json"
+  },
+  {
+   "name": "print",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  }
+ ]
+}

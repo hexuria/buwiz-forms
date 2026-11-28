@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-tour-sheet-calendar",
+  "fingerprint": "fnv1a64:f730345e35ec3769",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 5272
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 5254
+    },
+    {
+      "id": "s3",
+      "ok": false,
+      "error": "`node 6558` is offscreen (it has no native view); on screen: [\"Form 2551Q\", \"ET\", \"BIR Form 2551Q\", \"Revision 2018\", \"Quarterly Percentage Tax Return\", \"Quarterly\", \"2 pages\", \"85 fields\", \"Print preview\", \"Check\", \"Queue\", \"✓ Saved\", \"Set the tax profile's business start date to determine whether Item 13 applies to this quarter.\", \"Set business start date\", \"Record the tax profile's annual income-tax election for 2026 before filing this later-quarter return.\", \"Set annual income-tax election\", \"1\", \"For the *\", \"Calendar\", \"Fiscal\", \"2\", \"Year Ended (MM/YYYY) *\", \"2026\", \"3\", \"Quarter *\", \"1st\", \"2nd\", \"3rd\", \"4th\", \"The quarter is set when the return is saved. To file another quarter, start a new return.\", \"4\", \"Amended Return?\", \"Yes\", \"No\", \"5\", \"Number of Sheet/s\", \"Return details\", \"5 items\", \"Part I · Background Information\", \"8 items\", \"Part II · Total Tax Payable\", \"13 items\", \"Part III · Details of Payment\", \"4 items\", \"Schedule 1 – Computation of Tax, Items 1 to 6\", \"3 rows\", \"1\", \"PT010 · 3.0\", \"2\", \"1,000.00\", \"3\", \"2,000.00\", \"Add row\", \"Row 1\", \"Alphanumeric Tax Code (ATC)\", \"PT010 — PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)\", \"Alphanumeric Tax Code (ATC), row 1\", \"Clear the choice\", \"PT010 — PERSON EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116) (3.0%)\", \"PT040 — DOMESTIC CARRIERS AND KEEPERS OF GARAGES (SEC. 117) (3.0%)\", \"PT041 — INTERNATIONAL CARRIERS (SEC. 118) (3.0%)\", \"PT060 — FRANCHISES ON GAS AND WATER UTILITIES (SEC. 119) (2.0%)\", \"PT070 — FRANCHISES ON RADIO/TV BROADCASTING COMPANIES WHOSE ANNUAL GROSS RECEIPTS DO NOT EXCEED P10M (SEC. 119) (3.0%)\", \"PT090 — OVERSEAS DISPATCH, MESSAGE OR CONVERSATION ORIGINATING FROM THE PHILIPPINES (SEC. 120) (10.0%)\", \"PT101 — TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS MORE THAN FIVE (5) YEARS (1.0%)\", \"PT102 — TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - DIVIDENDS AND EQUITY SHARES AND NET INCOME OF SUBSIDIARIES (0.0%)\", \"PT103 — TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - ROYALTIES, RENTALS OF PROPERTY, REAL OR PERSONAL, PROFITS FROM EXCHANGE AND ALL OTHER GROSS INCOME (7.0%)\", \"PT104 — TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - NET TRADING GAINS WITHIN THE TAXABLE YEAR ON FOREIGN CURRENCY, DEBT SECURITIES, DERIVATIVES, AND OTHER FINANCIAL INSTRUMENTS (7.0%)\", \"PT105 — TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI-BANKING FUNCTIONS (SEC. 121) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS FIVE (5) YEARS OR LESS (5.0%)\", \"PT113 — TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS FIVE (5) YEARS OR LESS (5.0%)\", \"PT114 — TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES - MATURITY PERIOD IS MORE THAN FIVE (5) YEARS (1.0%)\", \"PT115 — TAX ON OTHER NON-BANK FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (SEC. 122) - FROM ALL OTHER ITEMS TREATED AS GROSS INCOME UNDER THE CODE (5.0%)\", \"PT120 — LIFE INSURANCE PREMIUMS (SEC. 123) (2.0%)\", \"PT130 — AGENTS OF FOREIGN INSURANCE COMPANIES (SEC.124) - INSURANCE AGENTS (4.0%)\", \"PT132 — AGENTS OF FOREIGN INSURANCE COMPANIES (SEC.124) - OWNERS OF PROPERTY OBTAINING DIRECTLY WITH FOREIGN INSURANCE COMPANIES (5.0%)\", \"PT140 — COCKPITS (SEC. 125) (18.0%)\", \"PT150 — TAX ON AMUSEMENT PLACES, SUCH AS CABARETS, NIGHT AND DAY CLUBS, VIDEOKE BARS, KARAOKE BARS, KARAOKE TELEVISION, KARAOKE BOXES, MUSIC LOUNGES AND OTHER SIMILAR ESTABLISHMENTS (SEC. 125) (18.0%)\", \"PT160 — BOXING EXHIBITION (SEC. 125) (10.0%)\", \"PT170 — PROFESSIONAL BASKETBALL GAMES (SEC. 125) (15.0%)\", \"PT180 — JAI-ALAI AND RACE TRACKS (SEC. 125) (30.0%)\", \"PT010 — PERSON EXEMPT FRO…\", … (300 more characters, 23 more texts)]",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 1498
+    }
+  ],
+  "elapsed_ms": 12024
+}

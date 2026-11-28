@@ -1,0 +1,68 @@
+{
+ "rows": [
+  {
+   "pair": "01-setup-start/001-s1.png",
+   "same_size": true,
+   "identical": true,
+   "diff_pixels": 0
+  },
+  {
+   "pair": "03-sign-up/012-s12.png",
+   "same_size": true,
+   "identical": true,
+   "diff_pixels": 0
+  },
+  {
+   "pair": "03-sign-up/017-s17.png",
+   "same_size": true,
+   "identical": true,
+   "diff_pixels": 0
+  },
+  {
+   "pair": "03-sign-up/018-s18.png",
+   "same_size": true,
+   "identical": false,
+   "diff_pixels": 30261,
+   "bbox": [
+    11,
+    695,
+    409,
+    773
+   ],
+   "diff_fraction": 0.086391
+  },
+  {
+   "pair": "03-sign-up/019-s19.png",
+   "same_size": true,
+   "identical": false,
+   "diff_pixels": 26502,
+   "bbox": [
+    16,
+    695,
+    404,
+    765
+   ],
+   "diff_fraction": 0.075659
+  },
+  {
+   "pair": "04-tax-year/016-s16.png",
+   "same_size": true,
+   "identical": true,
+   "diff_pixels": 0
+  },
+  {
+   "pair": "05-shell/failure.png",
+   "same_size": true,
+   "identical": true,
+   "diff_pixels": 0
+  },
+  {
+   "pair": "08-new-return/failure.png",
+   "same_size": true,
+   "identical": true,
+   "diff_pixels": 0
+  }
+ ],
+ "only_before": [],
+ "only_after": []
+}

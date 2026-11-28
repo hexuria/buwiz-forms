@@ -1,0 +1,123 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-tour-schedule-rows",
+  "fingerprint": "fnv1a64:d99af506aac081ec",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 6199
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 6154
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1032
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1981
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2016
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 280
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 974
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 242
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 467
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4192
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1035
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 1229
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 865
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 201
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 431
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4173
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 908
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 857,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-before-2625/12-schedule-rows/018-s18.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/android-before-2625/12-schedule-rows/018-s18.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 33244
+}

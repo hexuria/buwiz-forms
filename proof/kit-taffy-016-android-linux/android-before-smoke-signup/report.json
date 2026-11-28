@@ -1,0 +1,55 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261128-152009",
+ "out": "~/ktour/evidence/android-before-smoke-signup",
+ "cli_version": "0.5.0",
+ "app_commit": "b983b2a4",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1067,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "fail",
+   "ms": 9256,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.wants",
+   "step": "s13",
+   "error": "occluded_by: software keyboard (a press on `node 894` at (51.42857, 838.2857) lands on a key; hide the keyboard or scroll the target above it first)",
+   "error_code": "host_error",
+   "line": "click tab-home",
+   "screenshot": "~/ktour/evidence/android-before-smoke-signup/02-sign-up/failure.png",
+   "tree": "~/ktour/evidence/android-before-smoke-signup/02-sign-up/failure-tree.json"
+  }
+ ]
+}

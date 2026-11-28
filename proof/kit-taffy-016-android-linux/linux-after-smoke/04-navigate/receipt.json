@@ -1,0 +1,88 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "navigate-phone",
+  "fingerprint": "fnv1a64:de9795407adcf288",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 421
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 29,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-after-smoke/04-navigate/002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 559
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 31,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-after-smoke/04-navigate/004-s4.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 448
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 45,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-after-smoke/04-navigate/006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 438
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 32,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-after-smoke/04-navigate/008-s8.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/linux-after-smoke/04-navigate/002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/linux-after-smoke/04-navigate/004-s4.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/linux-after-smoke/04-navigate/006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/linux-after-smoke/04-navigate/008-s8.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 2007
+}

@@ -1,0 +1,115 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tax-year-android",
+  "fingerprint": "fnv1a64:11adb861f1b1bc91",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 806
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 517
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 462
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1201
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 407
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 419
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 854
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 537
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 377
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 648
+    },
+    {
+      "id": "kbd",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 357
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 210
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1565
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 907
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 147,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-before-275/04-tax-year/017-s16.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/android-before-275/04-tax-year/017-s16.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9471
+}

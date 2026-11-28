@@ -1,0 +1,139 @@
+{
+ "suite": "tour",
+ "target": "linux",
+ "started": "20261128-144801",
+ "out": "~/ktour/evidence/linux-before",
+ "cli_version": "0.5.0",
+ "app_commit": "b983b2a4",
+ "platform": "desktop",
+ "os": "linux",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 543,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "setup-cards",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 9419,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-linux.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6288,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+  },
+  {
+   "name": "shell",
+   "status": "fail",
+   "ms": 113,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-shell.json",
+   "step": "s1",
+   "error": "target_gone: nav-home",
+   "error_code": "target_gone",
+   "line": null,
+   "screenshot": "~/ktour/evidence/linux-before/05-shell/failure.png",
+   "tree": "~/ktour/evidence/linux-before/05-shell/failure-tree.json"
+  },
+  {
+   "name": "home",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "navigation",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "new-return",
+   "status": "fail",
+   "ms": 115,
+   "note": null,
+   "file": "agent-recipes/e2e/tour-newreturn.json",
+   "step": "s1",
+   "error": "target_gone: sb-new",
+   "error_code": "target_gone",
+   "line": null,
+   "screenshot": "~/ktour/evidence/linux-before/08-new-return/failure.png",
+   "tree": "~/ktour/evidence/linux-before/08-new-return/failure-tree.json"
+  },
+  {
+   "name": "form-top",
+   "status": "not run",
+   "ms": 0,
+   "note": "new-return failed and the suite needs it"
+  },
+  {
+   "name": "form-middle",
+   "status": "not run",
+   "ms": 0,
+   "note": "new-return failed and the suite needs it"
+  },
+  {
+   "name": "form-end",
+   "status": "not run",
+   "ms": 0,
+   "note": "new-return failed and the suite needs it"
+  },
+  {
+   "name": "schedule-rows",
+   "status": "not run",
+   "ms": 0,
+   "note": "new-return failed and the suite needs it"
+  },
+  {
+   "name": "sheet-pick",
+   "status": "not run",
+   "ms": 0,
+   "note": "new-return failed and the suite needs it"
+  },
+  {
+   "name": "sheet-calendar",
+   "status": "not run",
+   "ms": 0,
+   "note": "new-return failed and the suite needs it"
+  },
+  {
+   "name": "print",
+   "status": "not run",
+   "ms": 0,
+   "note": "new-return failed and the suite needs it"
+  }
+ ]
+}

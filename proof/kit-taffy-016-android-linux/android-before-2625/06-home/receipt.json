@@ -1,0 +1,31 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-home",
+  "fingerprint": "fnv1a64:cf45a4a1515f4b9d",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 429
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 535,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-before-2625/06-home/002-s2.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/android-before-2625/06-home/002-s2.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 965
+}

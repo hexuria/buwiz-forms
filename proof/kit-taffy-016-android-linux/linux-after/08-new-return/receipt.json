@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "tour-newreturn",
+  "fingerprint": "fnv1a64:2a651527f32e9b29",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "target_gone: sb-new",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 102
+    }
+  ],
+  "elapsed_ms": 102
+}

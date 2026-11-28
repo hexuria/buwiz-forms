@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "tour-shell",
+  "fingerprint": "fnv1a64:7a5f236546c89448",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "target_gone: nav-home",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 102
+    }
+  ],
+  "elapsed_ms": 102
+}

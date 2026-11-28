@@ -1,0 +1,112 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "sign-up-android",
+  "fingerprint": "fnv1a64:8ae99a651ec773b4",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 708
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 34
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 977
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1079
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1428
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1205
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1054
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 400
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1900,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-after-2625/03-sign-up/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 19
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 539
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 104
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 291,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-after-2625/03-sign-up/015-s15.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/android-after-2625/03-sign-up/011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/android-after-2625/03-sign-up/015-s15.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9801
+}

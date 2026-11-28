@@ -1,0 +1,152 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "sign-up-linux",
+  "fingerprint": "fnv1a64:a1f6a5547d2ecd47",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 416
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 9
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 369
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 971
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 378
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 686
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 662
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 671
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 389
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 7
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1317,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-before/03-sign-up/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1095
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 463
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 9
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1315,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-before/03-sign-up/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 556,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-before/03-sign-up/018-s18.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 34,
+      "screenshot": {
+        "path": "~/ktour/evidence/linux-before/03-sign-up/019-s19.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/linux-before/03-sign-up/012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/linux-before/03-sign-up/017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/linux-before/03-sign-up/018-s18.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/linux-before/03-sign-up/019-s19.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9390
+}

@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-setup-cards",
+  "fingerprint": "fnv1a64:08e7c46c3ef25cb6",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 244,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-after-275/02-setup-cards/001-s1.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/android-after-275/02-setup-cards/001-s1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 244
+}

@@ -1,0 +1,56 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-new-return",
+  "fingerprint": "fnv1a64:04e9074e13c88186",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 869
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 249,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-after-2625/08-new-return/002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 735
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 692
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 830,
+      "screenshot": {
+        "path": "~/ktour/evidence/android-after-2625/08-new-return/005-s5.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "~/ktour/evidence/android-after-2625/08-new-return/002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "~/ktour/evidence/android-after-2625/08-new-return/005-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 3377
+}
