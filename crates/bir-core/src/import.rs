@@ -2,7 +2,6 @@ use crate::db::{Database, DbError, Submission};
 use crate::integration::providers::ProviderConfig;
 use crate::private_temp::{PrivateTempDir, unique_name};
 use crate::profile::{ProfileCredentials, TaxpayerProfile};
-use rusqlite::OptionalExtension;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
@@ -104,7 +103,7 @@ fn import_may_replace(
             crate::db::taxpayers::parse_stored_timestamp(existing),
             crate::db::taxpayers::parse_stored_timestamp(incoming),
         ) {
-            (Some(existing), Some(incoming)) => incoming >= existing,
+            (Some(existing), Some(incoming)) => incoming > existing,
             // An unreadable timestamp cannot show the file is newer.
             _ => false,
         },
@@ -117,7 +116,82 @@ fn import_may_replace(
     }
 }
 
-pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbError> {
+/// What an import did, counted in rows and records: `restored` written
+/// (inserted or replaced), `kept_newer` left as they are because this
+/// device's version is the newer or further-along one, `unmatched` the file
+/// could not be matched or read.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ImportCounts {
+    pub restored: u32,
+    pub kept_newer: u32,
+    pub unmatched: u32,
+}
+
+/// The lifecycle rewrite the app's own revert performs
+/// (`SubmissionLifecycle::revert_to_draft`), at the JSON level because an
+/// import is form-generic: the stored status goes back to Draft and the
+/// send's claim, retry and filing fields are cleared, so the return can be
+/// edited, queued and cancelled again.
+fn revert_json_to_draft(data_json: &str) -> String {
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(data_json) else {
+        return data_json.to_string();
+    };
+    let Some(object) = value.as_object_mut() else {
+        return data_json.to_string();
+    };
+    object.insert("status".to_string(), serde_json::json!("Draft"));
+    object.insert("profile_baseline".to_string(), serde_json::json!({}));
+    for key in [
+        "submitted_at",
+        "relay_receipt",
+        "confirmed_at",
+        "receipt_id",
+        "submission_filename",
+        "submitted_payload",
+        "queued_submission_fingerprint",
+        "queue_authorization",
+        "submission_claim_token",
+        "submission_claimed_at",
+        "submission_error",
+        "next_retry_at",
+    ] {
+        object.insert(key.to_string(), serde_json::Value::Null);
+    }
+    object.insert("submitted_dry_run".to_string(), serde_json::json!(false));
+    object.insert("submitted_via_relay".to_string(), serde_json::json!(false));
+    object.insert("submission_attempts".to_string(), serde_json::json!(0));
+    serde_json::to_string(&value).unwrap_or_else(|_| data_json.to_string())
+}
+
+/// The same-rank comparison on its own, for a pairing where status rank
+/// must not decide (an amendment begun here against the file's original).
+fn import_timestamp_allows_draft(
+    existing_updated_at: Option<&str>,
+    incoming_updated_at: Option<&str>,
+) -> bool {
+    match (existing_updated_at, incoming_updated_at) {
+        (Some(existing), Some(incoming)) => match (
+            crate::db::taxpayers::parse_stored_timestamp(existing),
+            crate::db::taxpayers::parse_stored_timestamp(incoming),
+        ) {
+            (Some(existing), Some(incoming)) => incoming > existing,
+            _ => false,
+        },
+        (Some(_), None) => false,
+        (None, _) => true,
+    }
+}
+
+/// Whether the stored row is an amendment of the return — a later filing
+/// generation than the original the file may carry.
+fn json_is_amended(data_json: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(data_json)
+        .ok()
+        .and_then(|value| value.get("is_amended").and_then(|v| v.as_bool()))
+        .unwrap_or(false)
+}
+
+pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCounts, DbError> {
     let file = fs::File::open(import_file)?;
     let mut archive = ZipArchive::new(file).map_err(|e| DbError::Other(e.to_string()))?;
 
@@ -146,6 +220,7 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
     // (see its nested-transaction note); COMMIT lands all of it, ROLLBACK
     // none of it.
     db.conn.execute_batch("BEGIN IMMEDIATE")?;
+    let mut counts = ImportCounts::default();
     let result = (|| -> Result<(), DbError> {
         for base_dir in base_dirs {
             // Helper to read file from archive
@@ -263,6 +338,9 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                                     submitted_at_key
                                 ],
                             )?;
+                            counts.restored += 1;
+                        } else {
+                            counts.kept_newer += 1;
                         }
                     } else {
                         db.conn.execute(
@@ -273,6 +351,7 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                             json_data, sub.submitted_at, sub.filename, sub.updated_at
                         ],
                     )?;
+                        counts.restored += 1;
                     }
                 }
             }
@@ -288,50 +367,106 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                         draft.get("status").and_then(|v| v.as_str()),
                         draft.get("data_json").and_then(|v| v.as_str()),
                     ) {
-                        let quarter = draft.get("quarter").and_then(|v| v.as_i64());
+                        // Quarter 0 is no quarter: it matches and is stored
+                        // as NULL, never as a second row beside the NULL one.
+                        let quarter = draft
+                            .get("quarter")
+                            .and_then(|v| v.as_i64())
+                            .filter(|quarter| *quarter != 0);
                         let incoming_updated_at = draft.get("updated_at").and_then(|v| v.as_str());
                         // An import is never a send: the file's Queued comes
-                        // in as a Draft.
+                        // in as a Draft, and its data is put back the way the
+                        // app's own revert puts a send back — the lifecycle
+                        // rewrite of `revert_to_draft` — so the return can be
+                        // edited, queued and cancelled again, and no carried
+                        // claim makes later imports skip it.
+                        let was_queued = status.eq_ignore_ascii_case("queued");
                         let status = import_safe_status(status);
-                        // The conflict target's NULL quarters never conflict,
-                        // so the row is matched by its period — a NULL quarter
-                        // included — and updated in place by id: never a
-                        // second row for the same return.
-                        let existing = db
-                            .conn
-                            .query_row(
-                                "SELECT id, status, updated_at, data_json
-                                 FROM form_drafts
-                                 WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
-                                   AND COALESCE(quarter, -1) = COALESCE(?4, -1)
-                                 ORDER BY id",
-                                rusqlite::params![tin, form_code, taxable_year, quarter],
-                                |row| {
-                                    Ok((
-                                        row.get::<_, i64>(0)?,
-                                        row.get::<_, String>(1)?,
-                                        row.get::<_, Option<String>>(2)?,
-                                        row.get::<_, String>(3)?,
-                                    ))
-                                },
-                            )
-                            .optional()?;
+                        let data_json = if was_queued {
+                            revert_json_to_draft(data_json)
+                        } else {
+                            data_json.to_string()
+                        };
+                        let data_json = data_json.as_str();
+                        // Open-ended returns store quarter NULL and tell one
+                        // period from the next by period_key, so the match is
+                        // the form, the year and the period key — a NULL
+                        // quarter normalized — never the quarter alone.
+                        let period_key = draft.get("period_key").and_then(|v| v.as_str());
+                        // The file's period key scopes the match; a legacy row
+                        // without one can mean any period of the year, so the
+                        // candidates are all of them and a plurality is never
+                        // guessed.
+                        let key_clause = if period_key.is_some() {
+                            "AND COALESCE(period_key, '') = COALESCE(?5, '')"
+                        } else {
+                            ""
+                        };
+                        let mut statement = db.conn.prepare(&format!(
+                            "SELECT id, status, updated_at, data_json FROM form_drafts
+                             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
+                               AND COALESCE(NULLIF(quarter, 0), -1) = COALESCE(NULLIF(?4, 0), -1)
+                               {key_clause}
+                             ORDER BY id",
+                        ))?;
+                        let read_row = |row: &rusqlite::Row<'_>| {
+                            Ok((
+                                row.get::<_, i64>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, Option<String>>(2)?,
+                                row.get::<_, String>(3)?,
+                            ))
+                        };
+                        let candidates: Vec<(i64, String, Option<String>, String)> =
+                            if period_key.is_some() {
+                                statement
+                                    .query_map(
+                                        rusqlite::params![
+                                            tin,
+                                            form_code,
+                                            taxable_year,
+                                            quarter,
+                                            period_key
+                                        ],
+                                        read_row,
+                                    )?
+                                    .collect::<Result<Vec<_>, _>>()?
+                            } else {
+                                statement
+                                    .query_map(
+                                        rusqlite::params![tin, form_code, taxable_year, quarter],
+                                        read_row,
+                                    )?
+                                    .collect::<Result<Vec<_>, _>>()?
+                            };
+                        // An old archive carries no period_key. Over one
+                        // candidate it is the match; over more than one —
+                        // the open-ended periods of one year — guessing wrong
+                        // loses a return, so nothing is inserted or replaced
+                        // and the row counts as unmatched.
+                        if period_key.is_none() && candidates.len() > 1 {
+                            counts.unmatched += 1;
+                            continue;
+                        }
+                        let existing = candidates.into_iter().next();
                         match existing {
                             None => {
                                 db.conn.execute(
                                     "INSERT INTO form_drafts
-                                        (tin, form_code, taxable_year, quarter, status, data_json, updated_at)
-                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, datetime('now')))",
+                                        (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, COALESCE(?8, datetime('now')))",
                                     rusqlite::params![
                                         tin,
                                         form_code,
                                         taxable_year,
                                         quarter,
+                                        period_key,
                                         status,
                                         data_json,
                                         incoming_updated_at
                                     ],
                                 )?;
+                                counts.restored += 1;
                             }
                             Some((id, existing_status, existing_updated_at, existing_data)) => {
                                 // A row in the middle of being sent — its
@@ -345,14 +480,28 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                                     || stored
                                         .get("submission_claimed_at")
                                         .is_some_and(|v| !v.is_null());
-                                if !mid_send
-                                    && import_may_replace(
-                                        &existing_status,
-                                        existing_updated_at.as_deref(),
-                                        &status,
-                                        incoming_updated_at,
-                                    )
-                                {
+                                // Across an amendment rank does not beat time:
+                                // the file's Submitted original never replaces
+                                // a newer in-place amendment of the same
+                                // return, whatever its status. Only the same
+                                // filing generation compares by rank.
+                                let cross_amendment =
+                                    json_is_amended(&existing_data) && !json_is_amended(data_json);
+                                let may = !mid_send
+                                    && if cross_amendment {
+                                        import_timestamp_allows_draft(
+                                            existing_updated_at.as_deref(),
+                                            incoming_updated_at,
+                                        )
+                                    } else {
+                                        import_may_replace(
+                                            &existing_status,
+                                            existing_updated_at.as_deref(),
+                                            &status,
+                                            incoming_updated_at,
+                                        )
+                                    };
+                                if may {
                                     db.conn.execute(
                                         "UPDATE form_drafts
                                          SET status = ?1, data_json = ?2,
@@ -365,9 +514,14 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                                             id
                                         ],
                                     )?;
+                                    counts.restored += 1;
+                                } else {
+                                    counts.kept_newer += 1;
                                 }
                             }
                         }
+                    } else {
+                        counts.unmatched += 1;
                     }
                 }
             }
@@ -531,7 +685,7 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
     match result {
         Ok(()) => {
             db.conn.execute_batch("COMMIT")?;
-            Ok(())
+            Ok(counts)
         }
         Err(error) => {
             let _ = db.conn.execute_batch("ROLLBACK");

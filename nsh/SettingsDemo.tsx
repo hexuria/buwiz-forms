@@ -188,6 +188,7 @@ function fakeImport(kind: NonNullable<Params["import"]>): void {
   swap("import_archive", () => async () => {
     note("import_archive");
     if (kind === "fail") throw new Error("The backup's database could not be restored. The current database was left as it is.");
+    if (kind === "profile") return { kind, restored: 2, kept_newer: 1, unmatched: 1 };
     return { kind };
   });
 }

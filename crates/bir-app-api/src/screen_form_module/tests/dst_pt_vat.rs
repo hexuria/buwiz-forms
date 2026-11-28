@@ -2172,22 +2172,28 @@ fn v2018_2551q_an_imported_legacy_dormant_item16_is_cleared_on_open_and_said() {
     );
     assert_eq!(open("2551Q", 1)["notes"], json!([]));
 
-    // Importing the dormant archive again over the row whose clearing note was
-    // already seen is a new clearing, not a repeat of the old event: it is
-    // pending again under a fresh seen key.
+    // Importing the dormant archive again over the row the open rewrote is
+    // not a new clearing: the opened row is newer than the file's copy, so it
+    // stays — the import never overwrites a newer row, whatever the clock.
     with_database(|db| {
         bir_core::import::import_profile_data(db, &archive)
             .map_err(|error| host_error(error.to_string()))
     })
     .unwrap();
     let second = open("2551Q", 1);
-    let second_note = second["notes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|note| note["text"] == item16::CLEARED_AMENDED_NOTE)
-        .unwrap_or_else(|| panic!("{}", second["notes"]));
-    assert_ne!(second_note["key"], first_key);
+    assert_eq!(
+        second["draft"]["tax_paid_previous"], 0.0,
+        "the opened, newer row stays cleared"
+    );
+    assert!(
+        !second["notes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|note| note["text"] == item16::CLEARED_AMENDED_NOTE),
+        "no clearing fires twice: {}",
+        second["notes"]
+    );
 }
 
 #[test]

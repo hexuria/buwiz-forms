@@ -1020,6 +1020,11 @@ pub(crate) fn parse_stored_timestamp(ts: &str) -> Option<chrono::NaiveDateTime> 
             return Some(parsed);
         }
     }
+    // RFC 3339 with a zone — `Z` or an offset like `+08:00` — compares by its
+    // UTC instant.
+    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(trimmed) {
+        return Some(parsed.naive_utc());
+    }
     if let Ok(date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
         return date.and_hms_opt(0, 0, 0);
     }
@@ -1039,7 +1044,7 @@ pub(crate) fn import_timestamp_allows(existing: Option<&str>, incoming: Option<&
                 parse_stored_timestamp(existing),
                 parse_stored_timestamp(incoming),
             ) {
-                (Some(existing), Some(incoming)) => incoming >= existing,
+                (Some(existing), Some(incoming)) => incoming > existing,
                 _ => false,
             }
         }
@@ -1065,7 +1070,22 @@ pub(crate) fn write_year_facts_if_newer(
     if !import_timestamp_allows(existing.as_deref(), incoming_updated_at) {
         return Ok(false);
     }
-    write_year_facts(conn, tin, year, facts)?;
+    // The record keeps the file's time, so a later import from another
+    // device compares against when the facts were really written, not when
+    // they were imported.
+    conn.execute(
+        "INSERT INTO year_facts (tin, taxable_year, facts_json, updated_at)
+         VALUES (?1, ?2, ?3, COALESCE(?4, datetime('now')))
+         ON CONFLICT(tin, taxable_year)
+         DO UPDATE SET facts_json = excluded.facts_json,
+                       updated_at = COALESCE(?4, datetime('now'))",
+        params![
+            tin,
+            i64::from(year),
+            serde_json::to_string(facts)?,
+            incoming_updated_at
+        ],
+    )?;
     Ok(true)
 }
 
@@ -1111,6 +1131,15 @@ pub(crate) fn restore_yearly_forms(
             || !super::forms_set::query_per_year_forms(conn, tin, year)?.is_empty())
     {
         replace_yearly_forms(conn, tin, year, &codes)?;
+        // The list keeps the file's time, so a later import from another
+        // device compares against when the list was really written.
+        if let Some(incoming) = incoming_updated_at {
+            conn.execute(
+                "UPDATE per_year_forms SET updated_at = ?3
+                 WHERE tin = ?1 AND taxable_year = ?2",
+                params![tin, i64::from(year), incoming],
+            )?;
+        }
     }
     record_tax_year(conn, tin, year)
 }
