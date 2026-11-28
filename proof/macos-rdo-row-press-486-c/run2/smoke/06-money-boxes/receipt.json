@@ -1,0 +1,157 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-money-boxes-paced",
+  "fingerprint": "fnv1a64:490a16285f830b69",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1041,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1008
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 452
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 223
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 967
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4037
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 371,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/007-s7.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 405
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4657
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 396,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/010-s10.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 410
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 404,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 380
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 380,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/014-s14.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12a",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 351
+    },
+    {
+      "id": "s12b",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 748
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1128,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/017-s15.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/007-s7.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/010-s10.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/014-s14.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-162117/06-money-boxes/017-s15.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 17367
+}
