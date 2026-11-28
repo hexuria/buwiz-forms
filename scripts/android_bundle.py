@@ -25,6 +25,32 @@ MANIFEST = "base/manifest/AndroidManifest.xml"
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 UPDATER_ASSET = "base/assets/nsh/assets/nsh-updater.json"
 PHONE_ABIS = {"arm64-v8a", "armeabi-v7a"}
+# The permissions the store listing and its Data safety answers are written for. A bundle that asks for another (a
+# camera or microphone switched on in nsh.json, USE_BIOMETRIC once fingerprint unlock is in) needs both brought up to
+# date first, and then this list.
+STORE_PERMISSIONS = {"android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS"}
+# What the app's library must say about itself, read from its bytes: the only check a build setting cannot fool. A
+# release build resolves the production addresses (bir_core::cloud_account, PRODUCTION_SERVER_URL and
+# PRODUCTION_ACCOUNT_URL). A debug build, or one built with debug assertions, resolves the development server and
+# carries the standard library's precondition checks; a library that honours the development list carries
+# nsh/src/dev_env.rs's SENTINEL_TEXT, which nothing else names (a release built with BUWIZ_ANDROID_DEV=1 has the
+# production addresses and no development server, so only that tells it apart). Every marker must be absent from a
+# real release library: the Linux verification build's is the control (docs/platforms/android.md).
+DEV_LIST_SENTINEL = b"nsh-dev-env:development-list-compiled-in"
+RELEASE_MARKERS = (b"https://api.buwiz.com", b"https://account.buwiz.com")
+DEBUG_MARKERS = (
+    b"http://localhost:3008",            # bir_core::cloud_account::DEV_SERVER_URL, chosen at compile time
+    DEV_LIST_SENTINEL,                   # the development list compiled in (nsh/src/dev_env.rs)
+    b"unsafe precondition(s) violated",  # the standard library's checks under debug assertions
+)
+# The release profile makes libnsh.so about 88 MB on arm64-v8a and 76 MB on armeabi-v7a (2026-11-28); Cargo's defaults,
+# when the profile does not reach the build, about 123 MB and 99 MB. Raise a ceiling when the app grows, with a build
+# that shows the profile did reach it.
+LIBRARY_CEILING = {"arm64-v8a": 100_000_000, "armeabi-v7a": 88_000_000}
+LIBRARY = "libnsh.so"
+# A Google OAuth client id (GOOGLE_CLIENT_ID, compiled in by option_env! for Gmail Connect) ends so; no source names it.
+# Store builds ship without Gmail Connect unless the owner turns it on (STORE_GMAIL=1, `check --gmail`).
+GOOGLE_CLIENT_MARKER = b".apps.googleusercontent.com"
 
 
 class BundleError(Exception):
@@ -129,7 +155,7 @@ def read_manifest(data: bytes) -> Element:
 # ---- the two commands
 
 
-def check(bundle: Path, package: str, version_code: int, target_sdk: int) -> list[str]:
+def check(bundle: Path, package: str, version_code: int, target_sdk: int, gmail: bool = False) -> list[str]:
     """What is wrong with `bundle` for a Google Play upload (empty: nothing)."""
     with zipfile.ZipFile(bundle) as zf:
         names = zf.namelist()
@@ -157,6 +183,10 @@ def check(bundle: Path, package: str, version_code: int, target_sdk: int) -> lis
             problems.append("no dataExtractionRules: Android 12 and later would still move the app's data to a new device")
         if app.get("debuggable") not in (None, "false"):
             problems.append("the app is debuggable")
+    asked = {element.get("name") for tag in ("uses-permission", "uses-permission-sdk-23") for element in manifest.find(tag)}
+    if not asked <= STORE_PERMISSIONS:
+        problems.append(f"permissions {sorted(p or '?' for p in asked - STORE_PERMISSIONS)} are not among the ones the "
+                        "store listing declares (STORE_PERMISSIONS)")
     abis = {name.split("/")[2] for name in names if name.startswith("base/lib/") and name.count("/") >= 3}
     if not abis:
         problems.append("no native code under base/lib/")
@@ -164,6 +194,35 @@ def check(bundle: Path, package: str, version_code: int, target_sdk: int) -> lis
         problems.append(f"native code for {sorted(abis - PHONE_ABIS)}: a store bundle has phone ABIs only")
     if UPDATER_ASSET in names:
         problems.append(f"{UPDATER_ASSET} is still in the bundle: run `prepare`")
+    with zipfile.ZipFile(bundle) as zf:
+        for abi in sorted(abis & PHONE_ABIS):
+            name = f"base/lib/{abi}/{LIBRARY}"
+            if name not in names:
+                problems.append(f"no {name}")
+                continue
+            problems += library_problems(abi, zf.getinfo(name).file_size, zf.read(name), gmail)
+    return problems
+
+
+def library_problems(abi: str, size: int, data: bytes, gmail: bool = False) -> list[str]:
+    """What the app's library for `abi` says it is not: a release build with the production addresses, and a Google
+    client compiled in exactly when `gmail` says so."""
+    problems = []
+    if gmail and GOOGLE_CLIENT_MARKER not in data:
+        problems.append(f"{abi} {LIBRARY} has no Google client id: Gmail Connect was asked for (STORE_GMAIL=1)")
+    if not gmail and GOOGLE_CLIENT_MARKER in data:
+        problems.append(f"{abi} {LIBRARY} has a Google client id compiled in: store builds ship without Gmail Connect "
+                        "unless STORE_GMAIL=1")
+    for marker in RELEASE_MARKERS:
+        if marker not in data:
+            problems.append(f"{abi} {LIBRARY} lacks {marker.decode()}: not a release build's addresses")
+    for marker in DEBUG_MARKERS:
+        if marker in data:
+            problems.append(f"{abi} {LIBRARY} contains {marker.decode()!r}: a debug or development build")
+    ceiling = LIBRARY_CEILING.get(abi)
+    if ceiling is not None and size > ceiling:
+        problems.append(f"{abi} {LIBRARY} is {size:,} bytes, over {ceiling:,}: the release profile did not reach the "
+                        "build")
     return problems
 
 
@@ -190,16 +249,29 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--package", required=True)
     c.add_argument("--version-code", type=int, required=True)
     c.add_argument("--target-sdk", type=int, required=True)
+    c.add_argument("--gmail", action="store_true", help="the bundle must carry the Google client (STORE_GMAIL=1)")
+    lib = sub.add_parser("library", help="check one app library file (a positive control: a debug build's must fail)")
+    lib.add_argument("abi")
+    lib.add_argument("file", type=Path)
+    lib.add_argument("--gmail", action="store_true")
     p = sub.add_parser("prepare")
     p.add_argument("bundle", type=Path)
     p.add_argument("out", type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command == "library":
+            data = args.file.read_bytes()
+            problems = library_problems(args.abi, len(data), data, args.gmail)
+            for problem in problems:
+                print(f"android_bundle: {problem}", file=sys.stderr)
+            if not problems:
+                print(f"android_bundle: {args.file} is a release build ({args.abi}, {len(data):,} bytes)")
+            return 1 if problems else 0
         if args.command == "prepare":
             dropped = prepare(args.bundle, args.out)
             print(f"android_bundle: {args.out} (left out {dropped} entries: the signature and the updater's source)")
             return 0
-        problems = check(args.bundle, args.package, args.version_code, args.target_sdk)
+        problems = check(args.bundle, args.package, args.version_code, args.target_sdk, args.gmail)
     except (BundleError, zipfile.BadZipFile, OSError) as error:
         print(f"android_bundle: {error}", file=sys.stderr)
         return 1
@@ -207,7 +279,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"android_bundle: {problem}", file=sys.stderr)
     if problems:
         return 1
-    print(f"android_bundle: {args.bundle} is {args.package}, versionCode {args.version_code}, target API {args.target_sdk}, backup off")
+    print(f"android_bundle: {args.bundle} is {args.package}, versionCode {args.version_code}, target API {args.target_sdk}, "
+          f"backup off, release library, Gmail Connect {'on' if args.gmail else 'off'}")
     return 0
 
 
