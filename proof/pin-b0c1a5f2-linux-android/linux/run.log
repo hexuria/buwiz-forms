@@ -1,0 +1,18 @@
+2026-11-28T04:27:33.143Z	launch	nsh-run-agent linux $HOME/BuwizNsh/agents/e2e-linux-20261128-042733.db	started	0ms
+2026-11-28T04:31:45.499Z	wait	window plane	ready	252355ms
+2026-11-28T04:31:45.517Z	wait	data plane	ready	18ms
+2026-11-28T04:31:45.550Z	app.info	database	test	32ms
+2026-11-28T04:31:46.681Z	recipe	setup-start	pass	1131ms
+2026-11-28T04:31:46.699Z	resolve	$tin_field	n5	17ms
+2026-11-28T04:31:58.926Z	recipe	sign-up	pass	12245ms
+2026-11-28T04:32:05.241Z	recipe	tax-year	pass	6315ms
+2026-11-28T04:32:07.243Z	recipe	navigate	pass	2002ms
+2026-11-28T04:32:08.994Z	recipe	open-2551q	pass	1751ms
+2026-11-28T04:32:22.615Z	recipe	money-boxes	pass	13621ms
+2026-11-28T04:32:22.616Z	recipe	sheet-press	skipped: no desktop variant	0ms
+2026-11-28T04:32:22.646Z	resolve	$table	no node matches {"id_regex": "^(fp-table-.+)-add$", "group": 1}	30ms
+2026-11-28T04:32:22.646Z	recipe	queue	refused: presses a send control: run with --allow-send	0ms
+2026-11-28T04:32:28.835Z	recipe	birth-date	pass	6188ms
+2026-11-28T04:32:40.697Z	recipe	sign-out	known gap at s4: wait_until timed out: node `locked-screen` not found	11796ms
+2026-11-28T04:32:40.811Z	stop	app	stopped	113ms
+2026-11-28T04:32:40.812Z	clean	$HOME/BuwizNsh/agents/e2e-linux-20261128-042733.db	scratch database removed	0ms

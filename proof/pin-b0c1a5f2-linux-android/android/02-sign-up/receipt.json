@@ -1,0 +1,57 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "sign-up-android",
+  "fingerprint": "fnv1a64:a4dc4be7d40d4653",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 859
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 39
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 639
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 23
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2115
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2182
+    },
+    {
+      "id": "s8",
+      "ok": false,
+      "error": "occluded_by: software keyboard (a press on `node 300` at (205.90475, 742.2857) lands on a key; hide the keyboard or scroll the target above it first)",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 1055
+    }
+  ],
+  "elapsed_ms": 6950
+}

@@ -1,0 +1,15 @@
+build: app b3bddd4d (with uncommitted changes), nsh 8c78cfd6 beside it, tool nsh 0.6.1 (8c78cfd), cargo 1.99.0 (5f94df478 2026-08-27) ($HOME/.rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo), folder $HOME/BuwizNsh/target-nsh
+nsh android dev runtime: 8c78cfd, classes.dex sha256 a53652883f334dbb2844bd2844fa5246097d2f49acddf068341c43702c46943c
+nsh android release runtime: 8c78cfd, classes.dex sha256 a53652883f334dbb2844bd2844fa5246097d2f49acddf068341c43702c46943c
+nsh-run-agent: device emulator-5554, window plane on 127.0.0.1:17421, data plane on 127.0.0.1:17422; run: "$HOME/Android/Sdk/platform-tools/adb" -s emulator-5554 forward tcp:17421 tcp:17421 && "$HOME/Android/Sdk/platform-tools/adb" -s emulator-5554 forward tcp:17422 tcp:17422
+✓ built the Rust crate nsh-app-ebirforms (2m 34s)
+✓ built App.tsx (1.5 MB js, 5.5 MB bytecode, 245ms)
+✓ built libnsh.so of nsh-app-ebirforms for x86_64 (1m 35s)
+✓ built libnsh.so of nsh-app-ebirforms for armeabi-v7a (1m 36s)
+✓ built libnsh.so of nsh-app-ebirforms for arm64-v8a (1m 30s)
+✓ built the Android development host (13.4s)
+✓ installed the Android development host on emulator-5554 (8.2s)
+• Android Emulator (sdk_gphone64_x86_64) connected, build 1
+• Android Emulator (sdk_gphone64_x86_64) disconnected
+• Android Emulator (sdk_gphone64_x86_64) connected, build 1
+error: interrupted by SIGINT
