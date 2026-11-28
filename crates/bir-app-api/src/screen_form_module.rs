@@ -16987,7 +16987,19 @@ mod tests {
             )
             .unwrap_or_else(|error| panic!("{code} previews as a sample: {error}"));
             let path = path["path"].as_str().expect("a preview path");
-            assert!(std::path::Path::new(path).exists(), "{code}: {path}");
+            assert!(
+                !std::path::Path::new(path).exists(),
+                "{code}: the filled preview is deleted once read: {path}"
+            );
+            assert_eq!(
+                std::path::Path::new(path).parent(),
+                Some(
+                    bir_core::platform::data_dir()
+                        .join(bir_core::rooms::PREVIEWS_DIR)
+                        .as_path()
+                ),
+                "{code}: the preview is in the app's previews folder: {path}"
+            );
             assert_eq!(
                 stored(),
                 before,

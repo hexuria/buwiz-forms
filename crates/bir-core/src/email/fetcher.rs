@@ -250,7 +250,7 @@ fn fetch_with_auth(
 
                 match parse_bir_receipt_email(&text_content, safe_html) {
                     Ok(receipt) => {
-                        let mut pending_notice: Option<(String, String)> = None;
+                        let mut pending_notice = false;
                         if let Ok(db_guard) = lock_timing::lock(&db)
                             && let Ok((submission_receipt, _is_new)) = db_guard
                                 .save_submission_receipt_with_email_date(
@@ -271,7 +271,9 @@ fn fetch_with_auth(
                                 Err(error) => {
                                     tracing::warn!(
                                         "Receipt {} was saved but could not confirm a submission: {}",
-                                        submission_receipt.filename,
+                                        crate::logging::submission_filename_for_log(
+                                            &submission_receipt.filename
+                                        ),
                                         error
                                     );
                                     false
@@ -312,18 +314,19 @@ fn fetch_with_auth(
                                         .map(|profile| profile.full_name.clone())
                                         .unwrap_or_else(|| tin.clone());
                                     let bir_filename = format!("{tin}-{form_type}-{period}.xml");
-                                    let (title, body) = crate::background_cron::confirmation_notice(
-                                        &taxpayer_name,
-                                        &crate::naming::Tin::dashed_display(&tin),
-                                        &form_code,
-                                        &period_label,
-                                        &bir_filename,
-                                        &crate::background_cron::display_received_at(
-                                            &submission_receipt.received_date,
-                                            &submission_receipt.received_time,
-                                        ),
-                                        profile.inbox_email(),
-                                    );
+                                    let (title, body) =
+                                        crate::background_cron::confirmation_alert_text(
+                                            &taxpayer_name,
+                                            &crate::naming::Tin::dashed_display(&tin),
+                                            &form_code,
+                                            &period_label,
+                                            &bir_filename,
+                                            &crate::background_cron::display_received_at(
+                                                &submission_receipt.received_date,
+                                                &submission_receipt.received_time,
+                                            ),
+                                            profile.inbox_email(),
+                                        );
                                     crate::background_cron::record_confirmation_alert(
                                         &db_guard,
                                         &tin,
@@ -334,22 +337,27 @@ fn fetch_with_auth(
                                         &taxpayer_name,
                                     );
                                     // Sent after the lock below: the banner spawns a process.
-                                    pending_notice = Some((title, body));
+                                    pending_notice = true;
                                 }
                             }
                             processed.push(submission_receipt);
                         }
-                        if let Some((title, body)) = pending_notice {
-                            crate::notification::send_notification(&title, &body);
+                        if pending_notice {
+                            crate::notification::notify(
+                                crate::notification::NotificationKind::ConfirmationArrived,
+                            );
                         }
                     }
                     Err(e) => {
                         // If it's truly an email from BIR but we failed to parse it, log it.
                         if text_content.contains("This confirms receipt of your submission") {
+                            let (body_len, body_sha256) =
+                                receipt_body_log_fingerprint(&text_content);
                             tracing::error!(
-                                "Failed to parse BIR receipt email. Error: {:?}\nRaw Body snippet: {:.200}",
-                                e,
-                                text_content
+                                body_len,
+                                body_sha256 = %body_sha256,
+                                "Failed to parse BIR receipt email. Error: {:?}",
+                                e
                             );
                         }
                     }
@@ -445,11 +453,7 @@ pub fn fetch_and_process_emails_for_address_until(
                 // After the guard above is dropped: the banner can spawn a
                 // process, and the UI thread waits on this lock.
                 if let Some(outcome) = recorded {
-                    crate::notification::notify_alert_if_newly_active(
-                        outcome,
-                        POLL_FAILURE_TITLE,
-                        &err_msg,
-                    );
+                    crate::notification::notify_alert_if_newly_active(outcome);
                 }
                 (false, still_pending, Some(err_msg))
             }
@@ -464,6 +468,13 @@ pub fn fetch_and_process_emails_for_address_until(
             )),
         )
     }
+}
+
+/// What a parse failure may say about a BIR email body without quoting any of
+/// it: its byte length and SHA-256, so two reports can be compared.
+fn receipt_body_log_fingerprint(body: &str) -> (usize, String) {
+    use sha2::{Digest, Sha256};
+    (body.len(), hex::encode(Sha256::digest(body.as_bytes())))
 }
 
 const POLL_FAILURE_TITLE: &str = "Email confirmation checking has stopped";
@@ -486,11 +497,7 @@ fn google_unavailable_poll(
         .ok()
         .and_then(|db_guard| record_google_unavailable(&db_guard, profile));
     if let Some(outcome) = recorded {
-        crate::notification::notify_alert_if_newly_active(
-            outcome,
-            POLL_FAILURE_TITLE,
-            GOOGLE_NOT_IN_THIS_VERSION,
-        );
+        crate::notification::notify_alert_if_newly_active(outcome);
     }
     (false, false, Some(GOOGLE_NOT_IN_THIS_VERSION.to_string()))
 }
@@ -572,6 +579,17 @@ mod tests {
         assert_eq!(alerts[0].title, POLL_FAILURE_TITLE);
         assert_eq!(alerts[0].detail, "invalid_grant");
         assert_eq!(alerts[0].occurrences, 2);
+    }
+
+    #[test]
+    fn a_receipt_body_log_fingerprint_is_length_and_hash_only() {
+        let body = "This confirms receipt of your submission for TIN 00012345300000, taxpayer Juana Santos";
+        let (len, hash) = receipt_body_log_fingerprint(body);
+        assert_eq!(len, body.len());
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "{hash}");
+        assert!(!hash.contains("00012345300000"));
+        assert!(!hash.contains("Juana"));
     }
 
     /// #504 review: only a stored grant is "a Google grant this build cannot renew". After Disconnect the method can
