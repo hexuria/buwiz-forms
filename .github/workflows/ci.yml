@@ -582,6 +582,9 @@ jobs:
       pull-requests: read
     outputs:
       lane: ${{ steps.decide.outputs.lane }}
+      docs_only: ${{ steps.decide.outputs.docs_only }}
+      legacy_in_changes: ${{ steps.decide.outputs.legacy_in_changes }}
+      legacy_guard: ${{ steps.decide.outputs.legacy_guard }}
       check: ${{ steps.decide.outputs.check }}
       check_matrix: ${{ steps.decide.outputs.check_matrix }}
       nsh_check: ${{ steps.decide.outputs.nsh_check }}
@@ -617,6 +620,16 @@ jobs:
         IN_SCREENS: ${{ inputs.screens }}
         IN_SHARD: ${{ inputs.shard }}
       run: python3 -I scripts/ci_plan.py
+
+    # A docs-only quick run needs no second runner for the legacy scans: this
+    # job already has the checkout and Python. Any other plan keeps the
+    # separate legacy-guard job below.
+    - name: Check for retired crate references
+      if: steps.decide.outputs.legacy_in_changes == 'true'
+      run: python3 -I scripts/check_no_legacy_desktop.py
+    - name: Check for retired shell references
+      if: steps.decide.outputs.legacy_in_changes == 'true'
+      run: python3 -I scripts/check_no_bir_shell.py
 
   # The Python script tests on their own, for changes `check` does not run for
   # (packaging, setup scripts, release workflows, the tests themselves). When
@@ -774,12 +787,14 @@ jobs:
   # legacy app/ tree were retired, and nothing may bring their names or
   # paths back (not even docs).
   # It needs only the planner, never one of the checks: a docs-only PR must
-  # still fail if it brings an old name back. A test/** push skips it: the pull
-  # request's run checked the same commit. A run the planner empties (a closed
-  # or draft pull request, or a non-suite label) skips it too.
+  # still fail if it brings an old name back. For exactly that plan the scans
+  # run inside `changes` instead, so this job plans nothing and `ci-ok` is the
+  # only runner after the planner. A test/** push skips it: the pull request's
+  # run checked the same commit. A run the planner empties (a closed or draft
+  # pull request, or a non-suite label) skips it too.
   legacy-guard:
     needs: changes
-    if: ${{ !startsWith(github.ref, 'refs/heads/test/') && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
+    if: ${{ !startsWith(github.ref, 'refs/heads/test/') && needs.changes.outputs.legacy_guard == 'true' && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -877,7 +892,7 @@ jobs:
         V2: ${{ needs.validation-rules-v2.result }}
         WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
         LEGACY_GUARD: ${{ needs.legacy-guard.result }}
-        WANT_LEGACY_GUARD: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
+        WANT_LEGACY_GUARD: ${{ needs.changes.outputs.legacy_guard }}
       run: |
         set -euo pipefail
         echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
@@ -928,7 +943,7 @@ jobs:
         V2: ${{ needs.validation-rules-v2.result }}
         WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
         LEGACY_GUARD: ${{ needs.legacy-guard.result }}
-        WANT_LEGACY_GUARD: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
+        WANT_LEGACY_GUARD: ${{ needs.changes.outputs.legacy_guard }}
       run: |
         set -euo pipefail
         echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
