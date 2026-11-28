@@ -2,7 +2,7 @@
 // wide), Popover, Menu with MenuItem and MenuSeparator, toasts (toast, undoToast and the Toaster that shows them),
 // SidePanel, Disclosure and DisclosureGroup. Each is nsh/base's own overlay (focus, Escape, dismissal, roles), styled.
 import type { JSX, ViewRef } from "nsh";
-import { cleanup, keyboardFrame, Overlay, safeArea, Scroll, signal, View, windowSize } from "nsh";
+import { cleanup, keyboardFrame, Overlay, platform, safeArea, Scroll, signal, View, windowSize } from "nsh";
 import {
   Button, Collapsible, Dialog as BaseDialog, Menu as BaseMenu, MenuItem as BaseMenuItem, MenuSeparator as BaseMenuSeparator,
   Popover as BasePopover, Sheet as BaseSheet, Toast, type ToastEntry, ToastManager, ToastStack, Tooltip as BaseTooltip,
@@ -113,9 +113,23 @@ export function sheetSides(): { marginLeft: number; marginRight: number } {
   return { marginLeft: side, marginRight: side };
 }
 
+/**
+ * sheetMaxHeight's arithmetic as a pure function, so the test can give it the real numbers the emulator reports (the
+ * headless harness never raises a software keyboard). `keyboardHeight` is the keyboard inset as the surface reports it.
+ * On Android that inset is the whole distance from the screen's bottom to the keyboard's top — the keyboard covers the
+ * navigation bar, so the inset already includes it (the platform's ModalHost subtracts the same whole inset). Taking the
+ * bottom safe area off it again here leaves the cap one navigation-bar taller than the room above the keyboard, and a
+ * tall sheet rises under the status bar with 3-button navigation (#410's review, N57-2): 24 points too tall on the
+ * emulator, exactly the overlap the proof pictures show. Elsewhere the keyboard sits above the bottom safe area and
+ * only the height over it counts.
+ */
+export function sheetCap(windowHeight: number, safeTop: number, safeBottom: number, keyboardHeight: number, android: boolean): number {
+  const keyboard = android ? Math.max(0, keyboardHeight) : Math.max(0, keyboardHeight - safeBottom);
+  return Math.max(160, windowHeight - safeTop - keyboard - 24);
+}
+
 export function sheetMaxHeight(): number {
-  const keyboard = Math.max(0, keyboardFrame().height - safeArea().bottom);
-  return Math.max(160, windowSize().height - safeArea().top - keyboard - 24);
+  return sheetCap(windowSize().height, safeArea().top, safeArea().bottom, keyboardFrame().height, platform.os === "android");
 }
 
 /** The tallest our bottom sheet's panel is: 90% of the window, and never past sheetMaxHeight. Sheet's popupStyle. */
