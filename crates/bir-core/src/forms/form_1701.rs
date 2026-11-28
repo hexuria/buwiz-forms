@@ -1,7 +1,7 @@
 //! BIR Form 1701, January 2018 (ENCS).
 //!
 //! The semantic model is limited to the four-page official return and the
-//! exact reviewed editable saves in `~/Downloads/forms`: the plain
+//! exact reviewed editable saves in `/Users/uriah/Downloads/forms`: the plain
 //! save has 837 fields and its encrypted companion has one additional second
 //! address-line field. The separate Part X/attachment worksheets are retained
 //! losslessly when an exact save is imported, but are not interpreted as tax
