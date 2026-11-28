@@ -184,9 +184,22 @@ def recipe_steps(path):
     return steps
 
 
-def placeholders_in_text(text):
-    """The $params in `text` (`$$` is a literal dollar)."""
-    return {a or b for a, b in PARAM.findall(text.replace("$$", ""))}
+def without_step_node_refs(text, ids):
+    """`text` without gpui-agent 0.5.0's `$<step>.node` / `${<step>}.node` references to the recipe's own steps (the
+    node a scroll_until step matched): they are no params, and gpui-agent binds them itself."""
+    for step_id in ids:
+        text = text.replace(f"${step_id}.node", "").replace(f"${{{step_id}}}.node", "")
+    return text
+
+
+def step_node_refs(text, ids):
+    """The recipe's own step ids `text` refers to as `$<step>.node`."""
+    return {step_id for step_id in ids if f"${step_id}.node" in text or f"${{{step_id}}}.node" in text}
+
+
+def placeholders_in_text(text, ids=()):
+    """The $params in `text` (`$$` is a literal dollar; `$<step>.node` of a step in `ids` is no param)."""
+    return {a or b for a, b in PARAM.findall(without_step_node_refs(text.replace("$$", ""), ids))}
 
 
 def placeholders(path):
@@ -194,7 +207,7 @@ def placeholders(path):
     text = Path(path).read_text(encoding="utf-8")
     if not str(path).endswith(".json"):
         text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-    return placeholders_in_text(text)
+    return placeholders_in_text(text, step_ids(path))
 
 
 def is_json_recipe(path):
@@ -204,12 +217,13 @@ def is_json_recipe(path):
 
 def recipe_step_params(path):
     """The $params each step uses, in step order. For `.wants` the whole source line counts, typed text included."""
+    ids = step_ids(path)
     if is_json_recipe(path):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return [placeholders_in_text(json.dumps(step)) for step in data.get("steps") or []]
+        return [placeholders_in_text(json.dumps(step), ids) for step in data.get("steps") or []]
     lines = [line for line in Path(path).read_text(encoding="utf-8").splitlines()
              if line.strip() and not line.lstrip().startswith("#")]
-    return [placeholders_in_text(line) for line in lines]
+    return [placeholders_in_text(line, ids) for line in lines]
 
 
 def step_ids(path):
@@ -221,13 +235,15 @@ def step_ids(path):
 
 
 def needs_edges_cut(steps, ids, cut):
-    """The `(needed, dependent)` JSON step edges a cut after position `cut` would separate."""
+    """The `(needed, dependent)` JSON step edges a cut after position `cut` would separate: `needs`, and a
+    `$<step>.node` reference, which depends on that step as gpui-agent reads it."""
     positions = {step_id: position for position, step_id in enumerate(ids, 1)}
     edges = []
     for position, step in enumerate(steps, 1):
         needs = step.get("needs") or []
         if isinstance(needs, str):
             needs = [needs]
+        needs = list(needs) + sorted(step_node_refs(json.dumps(step), ids) - {str(need) for need in needs})
         for need in needs:
             need_position = positions.get(str(need))
             if need_position is not None and (need_position <= cut) != (position <= cut):
@@ -677,7 +693,7 @@ def write_recipe_slices(path, points, folder):
             if isinstance(part.get("params"), list):
                 used = set()
                 for step in part_steps:
-                    used |= placeholders_in_text(json.dumps(step))
+                    used |= placeholders_in_text(json.dumps(step), ids)
                 part["params"] = [name for name in part["params"] if name in used]
             part_path.write_text(json.dumps(part, indent=1) + "\n", encoding="utf-8")
             local_ids = original_ids

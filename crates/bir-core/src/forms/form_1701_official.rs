@@ -347,10 +347,60 @@ impl Form1701Draft {
             self.spouse.foreign_tax_number.clear();
         }
 
-        // Employer rows (Schedule 1): amounts held at centavos.
+        if !PARTIES.iter().any(|party| {
+            matches!(
+                regime(self.party_atc_official(*party)),
+                Some(Regime::EightPercent { .. })
+            )
+        }) {
+            self.computations.schedule_3_descriptions.remove(&27);
+        }
+
+        // Employer rows (Schedule 1): amounts held at centavos. A name typed
+        // while its owner is not compensation income is dormant output, so the
+        // model clears it with the row rather than filing text the page hides.
+        let taxpayer_name_allowed = self.employer_row_allowed(Form1701Party::Taxpayer);
+        let spouse_name_allowed = self.employer_row_allowed(Form1701Party::Spouse);
+        let taxpayer_atc_answered = self.atc.is_some();
+        let spouse_atc_answered = self.spouse.atc.is_some();
+        let spouse_column_active = self.spouse_column_active();
         for row in &mut self.employers {
-            row.compensation_income = Some(cents(amt(row.compensation_income)));
-            row.tax_withheld = Some(cents(amt(row.tax_withheld)));
+            if row.compensation_income.is_some() {
+                row.compensation_income = Some(cents(amt(row.compensation_income)));
+            }
+            if row.tax_withheld.is_some() {
+                row.tax_withheld = Some(cents(amt(row.tax_withheld)));
+            }
+            // TP/SPdisableP5Sched1Fields clear the row only from the
+            // disable transition of a marked owner. CI and TW are open before
+            // that owner tick, and an unanswered ATC is not a disable:
+            // amounts typed first stay visible until validation asks for
+            // the owner or the ATC. An affirmative non-compensation ATC (or,
+            // for a spouse row, losing the joint column) is the transition
+            // whose handler clears the whole row.
+            let disable_clear = match row.owner {
+                None => false,
+                Some(Form1701Party::Taxpayer) => taxpayer_atc_answered && !taxpayer_name_allowed,
+                Some(Form1701Party::Spouse) => {
+                    if spouse_column_active {
+                        spouse_atc_answered && !spouse_name_allowed
+                    } else {
+                        true
+                    }
+                }
+            };
+            let row_has_content = row.owner.is_some()
+                || !row.employer_name.is_empty()
+                || !row.employer_tin.is_empty()
+                || row.compensation_income.is_some_and(|amount| amount != 0.0)
+                || row.tax_withheld.is_some_and(|amount| amount != 0.0);
+            if disable_clear && row_has_content {
+                row.owner = None;
+                row.employer_name.clear();
+                row.employer_tin.clear();
+                row.compensation_income = None;
+                row.tax_withheld = None;
+            }
         }
 
         for party in PARTIES {
@@ -2281,6 +2331,37 @@ pub(crate) mod tests {
         let back = serde_json::to_value(&d).unwrap();
         assert_eq!(back["status"], "Draft");
         assert!(back.get("lifecycle").is_none());
+    }
+
+    #[test]
+    fn employer_amounts_before_the_owner_tick_survive_and_still_ask_for_it() {
+        let mut d = sample();
+        d.atc = None;
+        d.employers[0].owner = None;
+        d.recompute();
+        let row = &d.employers[0];
+        assert_eq!(row.owner, None);
+        assert_eq!(row.compensation_income, Some(480_000.01));
+        assert_eq!(row.tax_withheld, Some(25_000.0));
+        let messages = messages(&d);
+        assert!(
+            messages.iter().any(|message| message
+                == "Mark whether Schedule 1 row is for the taxpayer or the spouse."),
+            "owner-required validation stays live: {messages:?}"
+        );
+    }
+
+    #[test]
+    fn a_closed_employer_row_clears_the_whole_row() {
+        let mut d = sample();
+        d.atc = Some(Form1701Atc::Ii012);
+        d.recompute();
+        let row = &d.employers[0];
+        assert_eq!(row.owner, None);
+        assert!(row.employer_name.is_empty());
+        assert!(row.employer_tin.is_empty());
+        assert_eq!(row.compensation_income, None);
+        assert_eq!(row.tax_withheld, None);
     }
 
     #[test]

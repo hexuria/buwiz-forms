@@ -52,6 +52,21 @@ CHECK_OS = {
     "windows": {"os": "windows-latest", "target": "x86_64-pc-windows-msvc"},
 }
 
+# Docs a Python script or script test reads are inputs to those tests, not plain docs. One list owns the rule;
+# scripts/tests/test_ci_plan.py scans the scripts and fails when one reads a docs path missing here. A trailing
+# slash is a prefix: check_fix_order_goal.py reads the local findings files under docs/form-findings/.
+SCRIPT_INPUT_DOCS = (
+    "docs/platforms/devin-blueprint.yml",
+    "docs/CI.md",
+    "docs/platforms/devin-environment.md",
+    "docs/form-findings/",
+)
+
+
+def script_input_doc(path: str) -> bool:
+    return any(path == item or (item.endswith("/") and path.startswith(item)) for item in SCRIPT_INPUT_DOCS)
+
+
 # Read by people only. assets/brand and assets/badges feed local recipes (`just icons`, `just badges`), not a build;
 # assets/readme holds the pictures README.md shows and nothing builds from it (a README picture change used to run
 # every quick check as app code, #494). Markdown in nsh/ is not bundled or type checked. Markdown under rules/ or scripts/ and crate README files are NOT
@@ -102,6 +117,8 @@ class PlanError(ValueError):
 
 
 def classify(path: str) -> str:
+    if script_input_doc(path):
+        return "scripts"
     if DOCS.match(path):
         return "docs"
     if WINDOWS_PKG.match(path):
@@ -121,7 +138,7 @@ def what_changed(changed: list[str] | None) -> dict[str, bool]:
     """What the change can affect. None (unknown range) and an empty list mean everything."""
     if not changed:
         return dict(app=True, windows_pkg=True, other=True, nsh=True, nsh_check=True, nsh_agent_check=True,
-                    nsh_beyond_tests=True, core_inputs=True, validation_paths=False, known=False)
+                    nsh_beyond_tests=True, core_inputs=True, validation_paths=False, known=False, docs_only=False)
     classes = [classify(path) for path in changed]
     nsh_paths = [path for path in changed if NSH_INPUTS.match(path) and not DOCS.match(path)]
     return dict(
@@ -136,6 +153,7 @@ def what_changed(changed: list[str] | None) -> dict[str, bool]:
         core_inputs=any(not path.startswith("nsh/") for path in nsh_paths),
         validation_paths=any(VALIDATION.match(path) for path in changed),
         known=True,
+        docs_only=all(class_name == "docs" for class_name in classes),
     )
 
 
@@ -259,15 +277,18 @@ def decide(
     plan = dict(lane=lane, chosen_systems=[], check_systems=[], check_tests=False, nsh_check=False,
                 nsh_agent_check=False, scripts=False, installer=False, validation_systems=[], nsh_systems=[],
                 screens=False, build=False, nsh_rust=False, core_plain=False, shards=[0], shard_count=1,
-                screens_filter="")
+                screens_filter="", docs_only=False, legacy_in_changes=False, legacy_guard=False)
 
     if lane in ("quick", "suite"):
         seen = what_changed(changed)
+        plan["docs_only"] = seen["docs_only"]
         plan_quick_checks(plan, event=event, branch=branch, labels=labels, seen=seen, reasons=reasons)
 
     if lane == "tests":
         chosen = branch_systems(ref)
-        plan_test_suites(plan, chosen=chosen, seen=what_changed(changed), reasons=reasons, source="the branch name")
+        seen = what_changed(changed)
+        plan["docs_only"] = seen["docs_only"]
+        plan_test_suites(plan, chosen=chosen, seen=seen, reasons=reasons, source="the branch name")
     elif lane == "suite":
         chosen = list(suite_systems)
         plan_test_suites(plan, chosen=chosen, seen=seen, reasons=reasons, source="the label")
@@ -304,6 +325,9 @@ def decide(
                     nsh_systems=list(SYSTEMS), shards=[0])
         reasons.append("nightly run: everything on all three systems")
 
+    plan["legacy_in_changes"] = lane in ("quick", "suite") and plan["docs_only"]
+    plan["legacy_guard"] = (not ref.startswith("refs/heads/test/") and lane in ("quick", "suite", "manual", "nightly")
+                            and not plan["legacy_in_changes"])
     if not plan["screens"]:
         # Without screen tests only the lead shard has work.
         plan["shards"], plan["shard_count"] = [0], 1
@@ -326,6 +350,9 @@ def outputs(plan: dict) -> dict[str, str]:
     return {
         "lane": plan["lane"],
         "chosen_systems": ",".join(plan["chosen_systems"]),
+        "docs_only": flag(plan["docs_only"]),
+        "legacy_in_changes": flag(plan["legacy_in_changes"]),
+        "legacy_guard": flag(plan["legacy_guard"]),
         "check": flag(bool(check)),
         "check_matrix": json.dumps({"include": check}, separators=(",", ":")),
         "nsh_check": flag(plan["nsh_check"]),
@@ -363,7 +390,10 @@ def changed_files(env: dict[str, str]) -> list[str] | None:
         span = f"{before}..{after}"
     else:
         return None
-    result = subprocess.run(["git", "diff", "--name-only", span], capture_output=True, text=True, check=False)
+    # --no-renames: with rename detection git prints only a moved file's NEW path, so a script moved into docs/
+    # would read as one docs file while a code input is deleted. Both paths must be classified.
+    result = subprocess.run(["git", "diff", "--name-only", "--no-renames", span], capture_output=True, text=True,
+                            check=False)
     if result.returncode != 0:
         return None
     return [line for line in result.stdout.splitlines() if line]

@@ -19,6 +19,7 @@
 
 pub mod carry;
 pub mod draft_locks;
+pub mod gated_rows;
 pub mod probe;
 pub mod recipe;
 
@@ -1657,6 +1658,58 @@ pub fn fill_host_owned(
 }
 
 fn write_bound_box(
+    kind: AgentFormKind,
+    def: &AgentFormDef,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    let employer_row = (kind.form_code() == "1701")
+        .then(|| {
+            if key.contains("chkPg2IShed1a_1") {
+                Some(0)
+            } else if key.contains("chkPg2IShed2a_2") {
+                Some(1)
+            } else {
+                None
+            }
+        })
+        .flatten();
+    let before_owner = employer_row.and_then(|index| {
+        draft
+            .pointer(&format!("/employers/{index}/owner"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    });
+    write_bound_box_here(kind, def, draft, key, value)?;
+    if let Some(index) = employer_row {
+        let after_owner = draft
+            .pointer(&format!("/employers/{index}/owner"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let switched = matches!(before_owner.as_deref(), Some("Taxpayer" | "Spouse"))
+            && matches!(after_owner.as_deref(), Some("Taxpayer" | "Spouse"))
+            && before_owner != after_owner;
+        if switched {
+            // The owner radios' only onclick is emplyrDetails(row, 'TP'/'SPS')
+            // (BIR-Form1701v2018.hta :1347/:1358/:1396/:1407 -> :11135-11177):
+            // that runtime handler blanks the losing NAME box, enables the
+            // TIN boxes without clearing them, and leaves the row's own CI/TW
+            // amounts untouched. TPName and SName bind the same stored name,
+            // so clearing that one draft field is exactly the losing name box;
+            // the TIN, compensation income and tax withheld stay with the row.
+            if let Some(row) = draft
+                .pointer_mut(&format!("/employers/{index}"))
+                .and_then(Value::as_object_mut)
+            {
+                row.insert("employer_name".to_string(), Value::String(String::new()));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_bound_box_here(
     kind: AgentFormKind,
     def: &AgentFormDef,
     draft: &mut Value,
