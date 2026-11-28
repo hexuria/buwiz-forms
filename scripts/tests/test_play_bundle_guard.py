@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import play_bundle_guard as guard  # noqa: E402
 
 # `just play-bundle` is a [unix] recipe (the [windows] one only refuses), so the guard reads POSIX paths and runs
-# under bash on a Mac or Linux; a Windows runner's drive letters and short names are not its input.
+# under bash on a Mac or Linux; a Windows runner's drive letters and short names are not its input. Only the tests
+# that build paths skip there; the argument and variable checks run everywhere.
 UNIX_ONLY = unittest.skipIf(sys.platform == "win32", "play-bundle runs only on a Mac or Linux")
 
 PROFILE = {
@@ -95,7 +96,6 @@ class WrapperTests(unittest.TestCase):
             self.assertIn("setup-linux-nsh.sh", refusal or "")
 
 
-@UNIX_ONLY
 class ContainerEnvTests(unittest.TestCase):
     def test_the_release_profile_inside_the_container_passes(self):
         self.assertEqual(guard.container_env_refusals(dump({**PROFILE, "PATH": "/bin"}), PROFILE), [])
@@ -123,7 +123,6 @@ class ContainerEnvTests(unittest.TestCase):
         self.assertEqual(guard.container_env_refusals(dump({**PROFILE, "BUWIZ_SERVER_URL": ""}), PROFILE), [])
 
 
-@UNIX_ONLY
 class ArgsTests(unittest.TestCase):
     def test_a_number_and_the_flag_in_any_order(self):
         self.assertEqual(guard.parse_args([]), (None, False))
@@ -158,7 +157,6 @@ class ArgsTests(unittest.TestCase):
         self.assertNotIn("{{quote(args)}}", body)
 
 
-@UNIX_ONLY
 class DotenvReportTests(unittest.TestCase):
     def test_names_only_and_the_google_client_only_with_store_gmail(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -175,7 +173,6 @@ class DotenvReportTests(unittest.TestCase):
             self.assertNotIn("value-of-the-secret", report)
 
 
-@UNIX_ONLY
 class MoreContainerEnvTests(unittest.TestCase):
     def test_another_release_profile_setting_or_rustflags_is_refused(self):
         for key, value in (("CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS", "true"),
@@ -250,7 +247,6 @@ class CargoConfigTests(unittest.TestCase):
             self.assertIn("home/config:2: [env] BUWIZ_ACCOUNT_URL", err.getvalue())
 
 
-@UNIX_ONLY
 class CompileTimeNamesTests(unittest.TestCase):
     def test_the_list_holds_every_variable_the_sources_bake_in(self):
         root = Path(__file__).resolve().parents[2]
