@@ -518,12 +518,12 @@ fn stored_owner_and_server() -> Result<Option<(bir_core::account_session::OwnerK
     Ok(Some((owner, stored.server_url)))
 }
 
-/// The daemon's per-batch account check. The open room belongs to the stored sign-in captured
-/// when serve started; any owner or server change, including an empty store, ends that room's use.
 /// How the per-request account check failed (N7): a definite change — a different owner, or
 /// definitely nobody — ends the daemon; a read ERROR refuses only that batch: the file is
 /// mid-write or briefly unreadable, and the app treats a read error as "nothing closes", so
 /// the daemon keeps running and exits only on a definite different owner or a definite nobody.
+/// The open room belongs to the stored sign-in captured when serve started; any owner or
+/// server change, including an empty store, ends that room's use.
 pub(crate) enum AccountRefusal {
     Changed,
     ReadError(String),
@@ -602,6 +602,59 @@ fn headless_room_source(
 ///   lock is released and the room can be opened again;
 /// - the pid file, the discovery record and the port belong to the serve loop's guards and
 ///   listener: setting `shutdown` ends the loop and they drop with it, and the process exits.
+/// How one batch ended (the check runs before EACH request — #1, the unit-testable heart of
+/// N2: the check is a parameter, so the test flips it between request 1 and request 2 of one
+/// batch and watches the rest be refused).
+pub(crate) enum BatchVerdict {
+    Answered,
+    RefusedFatal,
+    RefusedReadError,
+    Quit,
+}
+
+pub(crate) fn process_batch(
+    batch: Vec<gpui_agent::mailbox::MailboxRequest>,
+    host: &Arc<Mutex<Session>>,
+    account_close: &Arc<std::sync::atomic::AtomicBool>,
+    check: &dyn Fn() -> Result<Option<bir_core::account_session::OwnerKey>, AccountRefusal>,
+) -> BatchVerdict {
+    let mut posts = batch.into_iter();
+    while let Some(posted) = posts.next() {
+        let refusal = if account_close.load(std::sync::atomic::Ordering::SeqCst) {
+            Some(AccountRefusal::Changed)
+        } else {
+            check().err()
+        };
+        if let Some(refusal) = refusal {
+            let fatal = matches!(refusal, AccountRefusal::Changed);
+            let message = refusal.to_string();
+            // the client that triggered the refusal still gets its clear error first,
+            // and every later request of this batch is refused the same way
+            let id = posted.request.id.clone();
+            posted.reply(gpui_agent::Response::err(id, message.clone()));
+            for rest in posts.by_ref() {
+                let id = rest.request.id.clone();
+                rest.reply(gpui_agent::Response::err(id, message.clone()));
+            }
+            return if fatal {
+                BatchVerdict::RefusedFatal
+            } else {
+                BatchVerdict::RefusedReadError
+            };
+        }
+        let req = posted.request.clone();
+        let mut guard = host.lock().expect("host");
+        let resp = request_log::handle_request_logged(&mut *guard, req, None, None);
+        let stop = guard.should_quit();
+        drop(guard);
+        posted.reply(resp);
+        if stop {
+            return BatchVerdict::Quit;
+        }
+    }
+    BatchVerdict::Answered
+}
+
 fn close_for_account_change(
     host: &Arc<Mutex<Session>>,
     room_slot: &HeadlessRoomSlot,
@@ -795,6 +848,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
 
         // Poll fast while a client is sending steps back to back (a recipe
         // run), and fall back to the idle interval once it goes quiet.
+        let mut read_error_streak = 0u32;
         let mut last_request = None::<std::time::Instant>;
         while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
             // THE RULING: the first refusal from the worker's tick — or right here below —
@@ -805,45 +859,33 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                 return Err(ExitCode::from(3));
             }
             let batch = mailbox.take();
-            // N2: the check runs before EACH request, never once per batch — a mid-batch
-            // save or tick must not leave the rest of the batch answered from the old
-            // account's room, writes included.
-            let mut posts = batch.into_iter().peekable();
-            while let Some(posted) = posts.next() {
-                let refusal = if account_close.load(std::sync::atomic::Ordering::SeqCst) {
-                    Some(AccountRefusal::Changed)
-                } else {
-                    headless_account_error(&expected_account).err()
-                };
-                if let Some(refusal) = refusal {
-                    let fatal = matches!(refusal, AccountRefusal::Changed);
-                    let message = refusal.to_string();
-                    // the client that triggered the refusal still gets its clear error first,
-                    // and every later request of this batch is refused the same way
-                    let id = posted.request.id.clone();
-                    posted.reply(gpui_agent::Response::err(id, message.clone()));
-                    for rest in posts.by_ref() {
-                        let id = rest.request.id.clone();
-                        rest.reply(gpui_agent::Response::err(id, message.clone()));
-                    }
-                    if fatal {
+            if !batch.is_empty() {
+                let check = || headless_account_error(&expected_account);
+                match process_batch(batch, &host, &account_close, &check) {
+                    BatchVerdict::Answered => {}
+                    BatchVerdict::RefusedFatal => {
                         close_for_account_change(&host, &room_slot, &shutdown);
                         // N13: an account-change exit is a failure, never a clean zero.
                         return Err(ExitCode::from(3));
                     }
-                    // N7: a read error refuses only this batch; the daemon keeps running.
-                    break;
+                    BatchVerdict::RefusedReadError => {
+                        // N7: a read error refuses only this batch; the daemon keeps running —
+                        // but a read error that never clears is nobody's sign-in in effect:
+                        // the backstop exits after N consecutive refused batches.
+                        read_error_streak += 1;
+                        if read_error_streak >= 10 {
+                            eprintln!(
+                                "the saved sign-in cannot be read for {} batches in a row; bir serve stops",
+                                read_error_streak
+                            );
+                            close_for_account_change(&host, &room_slot, &shutdown);
+                            return Err(ExitCode::from(3));
+                        }
+                    }
+                    BatchVerdict::Quit => break,
                 }
-                last_request = Some(std::time::Instant::now());
-                let req = posted.request.clone();
-                let mut guard = host.lock().expect("host");
-                let resp = request_log::handle_request_logged(&mut *guard, req, None, None);
-                let stop = guard.should_quit();
-                drop(guard);
-                posted.reply(resp);
-                if stop {
-                    shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
-                    break;
+                if read_error_streak > 0 && headless_account_error(&expected_account).is_ok() {
+                    read_error_streak = 0;
                 }
             }
             if host.lock().expect("host").should_quit() {
@@ -1476,129 +1518,57 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
     }
-    /// N2: the check runs before EACH request. One batch of many requests — rpc_pipeline
-    /// posts them as one mailbox batch — with the sign-in changing as the batch is worked
-    /// through. The invariant the once-per-batch check violated: after the first refusal, NO
-    /// later request of that batch is answered Ok — before, the rest of the batch was still
-    /// answered from the old account's room, writes included. Either refusal order is the
-    /// ruling working (as in the proof above): the monotone answer shape, or the tick's close
-    /// landing first and the pipeline dying with the connection.
+    /// N2, the proof that discriminates: ONE batch — the mailbox's own posts — worked through
+    /// by the production loop body, with the account check FLIPPING between request 1 and
+    /// request 2. Request 1 is answered; request 2 and every later request are refused with
+    /// the clear error and the verdict is the fatal close. With the check at batch level the
+    /// whole batch is answered — the test fails. (The pipeline-shaped proof could never batch:
+    /// the driver answers one request per connection, so the second loop iteration never ran.)
     #[test]
     fn a_batch_is_checked_before_each_request() {
-        use gpui_agent::Op;
-        let dir = tempfile::tempdir().unwrap();
-        let account_path = dir.path().join("account.json");
-        let db_path = dir.path().join("bir_data.db");
-        let account_a = stored_for("http://localhost:3008", "user-a");
-        let account_b = stored_for("http://localhost:3008", "user-b");
-        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let serve_addr = holder.local_addr().unwrap().to_string();
-        let env: Vec<(&str, Option<String>)> = vec![
-            (
-                bir_core::cloud_account::ENV_ACCOUNT_FILE,
-                Some(account_path.to_str().unwrap().to_owned()),
-            ),
-            ("EBIR_TEST_ENV", Some("1".into())),
-            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
-            (
-                "BIR_DATABASE_PATH",
-                Some(db_path.to_str().unwrap().to_owned()),
-            ),
-            ("GPUI_AGENT", Some("1".into())),
-            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
-            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
-            (
-                "BIR_HEADLESS_LOG",
-                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
-            ),
-            (
-                "BIR_HEADLESS_PID",
-                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
-            ),
-            (
-                "GPUI_AGENT_RUNTIME_DIR",
-                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
-            ),
-        ];
-        temp_env::with_vars(env, || {
-            drop(holder);
-            let _guards = ProofGuards::arm();
-            bir_core::account_session::save_stored(&account_a).unwrap();
-            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
-            let outcome_in_thread = outcome.clone();
-            let (tx, rx) = std::sync::mpsc::channel();
-            std::thread::spawn(move || {
-                tx.send(()).unwrap();
-                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
-            });
-            rx.recv().unwrap();
-            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
-                .with_timeout(std::time::Duration::from_secs(3))
-                .with_token("proof-token".to_owned());
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-            loop {
-                if client.expect_ok(Op::Hello).is_ok() {
-                    break;
-                }
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "the daemon never answered"
-                );
-                std::thread::sleep(std::time::Duration::from_millis(150));
+        use gpui_agent::{Op, protocol::Request};
+        use std::sync::{Arc, Mutex};
+        let mailbox = gpui_agent::AgentMailbox::new();
+        let rx1 = mailbox.push(Request::new("r1", Op::Hello));
+        let rx2 = mailbox.push(Request::new("r2", Op::Hello));
+        let rx3 = mailbox.push(Request::new("r3", Op::Hello));
+        let batch = mailbox.take();
+        assert_eq!(
+            batch.len(),
+            3,
+            "positive control: one batch of three requests"
+        );
+        let host = Arc::new(Mutex::new(crate::agent::session::Session::new(
+            crate::agent::session::UiQueue::discarding(),
+        )));
+        let close = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // the check flips after the first call: request 1 passes, request 2 is the change
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let check = || {
+            if calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                Ok(None)
+            } else {
+                Err(super::AccountRefusal::Changed)
             }
-            let hellos: Vec<Op> = (0..120).map(|_| Op::Hello).collect();
-            let refs: Vec<&Op> = hellos.iter().collect();
-            // no sleep: the write must land while the batch is worked through, never after it
-            let write = std::thread::spawn(move || {
-                bir_core::account_session::save_stored(&account_b).unwrap();
-            });
-            match client.rpc_pipeline(&refs) {
-                Ok(responses) => {
-                    assert_eq!(
-                        responses.len(),
-                        120,
-                        "every request of the batch is answered"
-                    );
-                    let mut seen_refusal = false;
-                    let mut ok_after_refusal = 0usize;
-                    let mut refusals = 0usize;
-                    for response in &responses {
-                        if response.ok {
-                            if seen_refusal {
-                                ok_after_refusal += 1;
-                            }
-                        } else {
-                            seen_refusal = true;
-                            refusals += 1;
-                            assert!(
-                                response
-                                    .error
-                                    .clone()
-                                    .unwrap_or_default()
-                                    .contains("the signed-in account changed"),
-                                "the refusal is the clear error: {response:?}"
-                            );
-                        }
-                    }
-                    assert_eq!(
-                        ok_after_refusal, 0,
-                        "N2: after the first refusal no request of the batch is answered Ok \
-                         (the per-batch check answered the rest from the old room)"
-                    );
-                    assert!(refusals > 0, "the change is seen inside the batch");
-                }
-                Err(error) => {
-                    assert!(
-                        error.to_string().contains("no reply")
-                            || error.to_string().contains("connect")
-                            || error.to_string().contains("closed"),
-                        "the close's own disconnect, got: {error}"
-                    );
-                }
-            }
-            write.join().unwrap();
-            wait_for_serve_exit(&outcome);
-        });
+        };
+        let verdict = super::process_batch(batch, &host, &close, &check);
+        assert!(
+            matches!(verdict, super::BatchVerdict::RefusedFatal),
+            "the batch ends in the fatal close"
+        );
+        assert!(rx1.recv().unwrap().ok, "request 1 is answered");
+        let err2 = rx2.recv().unwrap();
+        assert!(!err2.ok, "request 2 is refused");
+        assert!(
+            err2.error
+                .unwrap_or_default()
+                .contains("the signed-in account changed"),
+            "the refusal is the clear error"
+        );
+        assert!(
+            !rx3.recv().unwrap().ok,
+            "request 3 — the rest of the batch — is refused"
+        );
     }
 
     /// N7: a read ERROR of the sign-in file is not an account change. The batch is refused
@@ -1610,6 +1580,10 @@ mod tests {
     fn a_read_error_refuses_the_batch_but_the_daemon_keeps_running() {
         use gpui_agent::Op;
         use std::os::unix::fs::PermissionsExt;
+        if unsafe { libc::geteuid() } == 0 {
+            eprintln!("skipped as root: chmod 000 is ignored for root");
+            return;
+        }
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("account.json");
         let db_path = dir.path().join("bir_data.db");
@@ -1701,8 +1675,8 @@ mod tests {
                 std::thread::sleep(std::time::Duration::from_millis(150));
             }
             let _ = client.expect_ok(Op::Shutdown);
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            drop(outcome);
+            // the shutdown is real: the serve thread ends, never a slept-for assumption
+            wait_for_serve_exit(&outcome);
         });
     }
 

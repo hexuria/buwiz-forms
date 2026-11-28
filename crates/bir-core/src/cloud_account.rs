@@ -865,12 +865,23 @@ pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
         return Ok(Some(stored));
     }
     let path = account_file_path();
-    if !path.exists() {
+    // #4: try_exists, not exists() — a stat ERROR (EACCES, EIO) is a read error, never
+    // "nobody"; exists() would read it as nobody and the daemon would exit for an error.
+    let exists = path.try_exists().map_err(|error| {
+        CloudError::Unexpected(format!("could not read the saved Buwiz account ({error})"))
+    })?;
+    if !exists {
         return Ok(None);
     }
     let raw = std::fs::read_to_string(&path).map_err(|error| {
         CloudError::Unexpected(format!("could not read the saved Buwiz account ({error})"))
     })?;
+    // #3: a whole-file EMPTY read is a definite nobody, not a decode error — it is exactly
+    // what the sign-out's empty overwrite writes when the file cannot be removed, and the
+    // app counts itself signed out then; a daemon reading it must exit, not refuse forever.
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
     StoredAccount::decode(&raw).map(Some)
 }
 
@@ -895,7 +906,9 @@ pub fn load_stored_account_shared() -> Result<Option<StoredAccount>, CloudError>
         #[cfg(unix)]
         let extra = {
             use std::os::unix::fs::MetadataExt;
-            meta.ino().to_string()
+            // the inode alone does not turn over on a same-length rewrite in place; the ctime
+            // does — every write moves it — so the pair is the collision-proof stamp
+            format!("{}:{}:{}", meta.ino(), meta.ctime(), meta.ctime_nsec())
         };
         #[cfg(not(unix))]
         let extra = meta
@@ -946,13 +959,23 @@ pub(crate) fn clear_stored_account() {
     keyring_delete();
     // N10: the atomic save's own temporary files hold the same refresh token while they
     // lie around — a write cut off mid-save leaves one — so sign-out removes them too.
-    sweep_write_temps(&account_file_path());
+    sweep_write_temps_scoped(&account_file_path(), true);
     let _ = std::fs::remove_file(account_file_path());
 }
 
 /// The save's sibling temporary files (`<file>.write-*`), swept at the start of every save
 /// (a crashed earlier write leaves one behind) and on sign-out (N10).
 fn sweep_write_temps(path: &std::path::Path) {
+    sweep_write_temps_scoped(path, false);
+}
+
+/// #6: the lock is in-process only, so an unscoped sweep would delete ANOTHER process's
+/// in-flight temp (the app's, while the daemon saves) — on Unix the app's rename then gets
+/// ENOENT and the save fails with the old token kept; on a desktop without a keyring the
+/// rotated refresh token is lost. A save sweeps only this process's own temps, temps whose
+/// pid is dead, and temps an hour old; sign-out sweeps all, as nothing of the account may
+/// stay.
+fn sweep_write_temps_scoped(path: &std::path::Path, all: bool) {
     let Some(folder) = path.parent() else {
         return;
     };
@@ -960,17 +983,44 @@ fn sweep_write_temps(path: &std::path::Path) {
         return;
     };
     let prefix = format!("{name}.write-");
+    let own = std::process::id().to_string();
     if let Ok(entries) = std::fs::read_dir(folder) {
         for entry in entries.flatten() {
-            if entry
-                .file_name()
-                .to_str()
-                .is_some_and(|file| file.starts_with(&prefix))
-            {
+            let Some(file) = entry.file_name().to_str().map(|f| f.to_owned()) else {
+                continue;
+            };
+            let Some(pid) = file.strip_prefix(&prefix) else {
+                continue;
+            };
+            let take = all
+                || pid == own
+                || pid.parse::<u32>().is_ok_and(|pid| !pid_alive(pid))
+                || entry
+                    .metadata()
+                    .and_then(|meta| meta.modified())
+                    .ok()
+                    .and_then(|at| at.elapsed().ok())
+                    .is_some_and(|age| age.as_secs() > 3600);
+            if take {
                 let _ = std::fs::remove_file(entry.path());
             }
         }
     }
+}
+
+#[cfg(unix)]
+fn pid_alive(pid: u32) -> bool {
+    // kill(pid, 0): the process exists — EPERM means alive but not ours
+    unsafe {
+        libc::kill(pid as i32, 0) == 0
+            || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+}
+
+#[cfg(not(unix))]
+fn pid_alive(_pid: u32) -> bool {
+    // no portable liveness probe here: a foreign temp is kept unless it is old — safe side
+    true
 }
 
 /// Remove the saved sign-in for a sign-out, and make sure it is gone: read back, removed once more, then
@@ -2189,7 +2239,8 @@ mod tests {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
             while std::time::Instant::now() < deadline {
                 reads += 1;
-                // N4: a missing file is a failure too, never a skip — with the
+                // N4: discriminates on Windows only; the remove was cfg(windows).
+                // A missing file is a failure too, never a skip — with the
                 // remove-then-rename save this read found no file at all, and a daemon
                 // reading in that window saw nobody signed in and exited on a same-owner
                 // refresh.
@@ -2229,8 +2280,11 @@ mod tests {
             save_stored_account(&stored).unwrap();
             let before = std::fs::read(&path).unwrap();
             assert!(!before.is_empty(), "positive control: the sign-in exists");
+            let mut other = stored.clone();
+            other.access_token = "access-other".into();
+            other.refresh_token = "refresh-other".into();
             FAIL_ATOMIC_FOR_TEST.store(true, std::sync::atomic::Ordering::SeqCst);
-            let result = save_stored_account(&stored);
+            let result = save_stored_account(&other);
             FAIL_ATOMIC_FOR_TEST.store(false, std::sync::atomic::Ordering::SeqCst);
             assert!(result.is_err(), "the full disk is reported");
             let after = std::fs::read(&path).unwrap();
@@ -2239,6 +2293,16 @@ mod tests {
                 "the live file is UNTOUCHED — the base behavior truncated it and then failed"
             );
         });
+    }
+
+    #[cfg(unix)]
+    fn parent_pid_alive() -> u32 {
+        std::os::unix::process::parent_id()
+    }
+
+    #[cfg(not(unix))]
+    fn parent_pid_alive() -> u32 {
+        1
     }
 
     /// N10: sign-out removes the atomic save's temporary files with the sign-in — they hold
@@ -2266,6 +2330,18 @@ mod tests {
                 save_stored_account(&stored).unwrap();
                 assert!(!leftover.exists(), "a save sweeps the write temp first");
                 assert!(path.is_file(), "positive control: the save itself landed");
+                // #6: a live foreign process's in-flight temp survives a save — the sweep is
+                // pid-scoped. The parent pid is alive and never the pid the save stamps.
+                let foreign = dir
+                    .path()
+                    .join(format!("account.json.write-{}", parent_pid_alive()));
+                std::fs::write(&foreign, b"refresh-secret").unwrap();
+                save_stored_account(&stored).unwrap();
+                assert!(
+                    foreign.exists(),
+                    "a live foreign temp survives a save: the sweep is pid-scoped"
+                );
+                let _ = std::fs::remove_file(&foreign);
             },
         );
     }
