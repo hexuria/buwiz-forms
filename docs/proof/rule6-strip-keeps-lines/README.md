@@ -24,12 +24,12 @@ never extended into the strip.
   page 2, the strip under item 9 (`p2c179`, band narrowed for the
   amount cells of the same row) is blank white to the right of the band;
   the amount-column dividers stop at its top.
-* `after-1701ms-item9-strip.png` — this branch: the dividers continue
+* `after-1701ms-item9-strip.png` — the fixed print: the dividers continue
   through the strip, the comb rows above and below keep their own ticks.
-  (The strip itself is now the full-row-width grey band of the cell-first
+  The strip itself is the full-row-width grey band of the cell-first
   composition — the amount columns on its added lines greyed — and a comb
   tick that would end inside the strip is clipped at the strip's top; both
-  are the composition's own rules, not the divider repair this page proves.)
+  are the composition's own rules, not the divider repair this page proves.
 
 Renders through the app's own print path
 (`staticize(prepare_html_for(slug, filled_document(..), true))`), same
