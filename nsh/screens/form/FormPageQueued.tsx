@@ -6,6 +6,8 @@
 //   fx-send   the worker sends the return: the host's open and the lists both say Submitted (sent Apr 10, 2025)
 //   fx-dry    the worker's next send is a dry run: the host's open answers `submitted_dry_run` (press it before fx-send)
 //   fx-list   the lists say Submitted while the host's open still says Queued (a page the lists keep disagreeing with)
+//   fx-retry  the worker moves the next try two hours ahead and the lists are read again, as after a try that backed off
+//   fx-sending  the worker picks the return up: host and lists say sending
 //   fx-hide   the page goes away (the route changed)
 //   fx-hold   the host's next open waits (a slow read: the real one takes a few tenths of a second) until fx-release answers it
 // host.params { send, nextTry, refuse }: the host's open answers `send` as the stage `send` names (send_state.rs; a "refused" return
@@ -96,7 +98,7 @@ function Fixture() {
   fake.list_returns = (which: "filed" | "saved" | "all") => {
     if (which !== "filed") return which === "saved" ? [] : real.list(which);
     setTimeout(() => reads.update((n) => n + 1), 0);
-    return [{ ...stored, status: listed }];
+    return [{ ...stored, status: listed, send }];
   };
   // What the store held before the swap (the frame's module-level reads) is the real, empty list.
   store.forgetWhere(/^returns:/);
@@ -132,8 +134,26 @@ function Fixture() {
             listed = "Submitted";
           }}
         />
+        <AppButton
+          testID="fx-sending"
+          size="sm"
+          label="Sending"
+          onPress={() => {
+            if (send) send = { ...send, stage: "sending", line: LINES.sending, next_try_at: null };
+            store.forgetWhere(POLL_KEYS);
+          }}
+        />
         <AppButton testID="fx-dry" size="sm" label="Dry" onPress={() => void (dryRun = true)} />
         <AppButton testID="fx-list" size="sm" label="List" onPress={() => void (listed = "Submitted")} />
+        <AppButton
+          testID="fx-retry"
+          size="sm"
+          label="Retry"
+          onPress={() => {
+            if (send) send = { ...send, next_try_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() };
+            store.forgetWhere(POLL_KEYS);
+          }}
+        />
         <AppButton testID="fx-hide" size="sm" label="Hide" onPress={() => shown.set(false)} />
         <AppButton testID="fx-hold" size="sm" label="Hold" onPress={() => void (holding = true)} />
         <AppButton testID="fx-release" size="sm" label="Release" onPress={() => answer?.()} />
