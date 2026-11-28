@@ -26,13 +26,8 @@
   {
    "id": "s4",
    "op": "wait_until",
-   "target": "tp-branch-business_start_date",
+   "target": "tp-branch-business_start_date-sheet-input",
    "timeout_ms": 8000
-  },
-  {
-   "id": "s5",
-   "op": "click",
-   "target": "tp-branch-business_start_date"
   },
   {
    "id": "s5a",
