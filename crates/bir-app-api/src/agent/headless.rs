@@ -87,13 +87,13 @@ pub fn run() -> ExitCode {
     });
     // Test-only hook, armed only under EBIR_TEST_ENV: the detached-daemon logging proof needs a real panic
     // carrying a TIN inside the real child after it is serving, and nothing in production sets this variable.
-    if std::env::var_os("EBIR_TEST_ENV").is_some() {
-        if let Ok(message) = std::env::var("BIR_TEST_PANIC_ON_START") {
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(2));
-                panic!("{message}");
-            });
-        }
+    if std::env::var_os("EBIR_TEST_ENV").is_some()
+        && let Ok(message) = std::env::var("BIR_TEST_PANIC_ON_START")
+    {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            panic!("{message}");
+        });
     }
     bir_core::notification::enable_desktop_delivery();
     dotenvy::dotenv().ok();
