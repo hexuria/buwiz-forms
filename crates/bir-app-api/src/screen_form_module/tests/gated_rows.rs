@@ -1,6 +1,6 @@
-//! Gated schedule/specification boxes: shut while their own recompute would
-//! clear a valid entry, opened by the controlling answer, and cleared with
-//! one notice when that answer closes the gate.
+//! Gated schedule/specification boxes: shut by their official condition,
+//! opened by the controlling answer, and either cleared with one notice when
+//! the official handler clears them or kept silently when it only disables.
 
 use super::*;
 
@@ -73,6 +73,341 @@ fn gated_row_lock_notes_are_looked_up_by_form_and_key() {
         None,
         "another layer's coincidentally shared reason must not borrow this gate's note"
     );
+}
+
+#[test]
+fn kept_gates_refuse_assistant_writes_while_shut() {
+    setup();
+    for (code, key) in [
+        ("2000", "frm2000:txtTax15A"),
+        ("1702MX", "frm1702MX:txtPg2Sc3It27A"),
+        ("1701MS", "frm1701MS:txtTaxPaidPreviouslyFiledNo6a"),
+        ("1701MS", "frm1701MS:txtTaxPaidPreviouslyFiledNo6b"),
+        ("1701A", "frm1701A:txt61B"),
+    ] {
+        let opened = open(code, 0);
+        let kind = kind_of(code).unwrap();
+        let mut draft = opened["draft"].clone();
+        let refusal = agent::fill(kind, &mut draft, key, &json!("100"), None)
+            .expect_err("the assistant cannot write a shut kept box");
+        let lower = refusal.to_lowercase();
+        assert!(
+            lower.contains("amended") || lower.contains("short-period"),
+            "{code} {key} refusal: {refusal}"
+        );
+    }
+}
+
+#[test]
+fn kept_gates_refuse_page_writes_while_shut() {
+    setup();
+    for (code, key) in [
+        ("2000", "frm2000:txtTax15A"),
+        ("1702MX", "frm1702MX:txtPg2Sc3It27A"),
+        ("1701MS", "frm1701MS:txtTaxPaidPreviouslyFiledNo6a"),
+    ] {
+        let opened = open(code, 0);
+        let refused = fill(code, &opened["draft"], json!({ key: "100" }));
+        assert!(
+            refused["rejected"].get(key).is_some(),
+            "{code} {key} refuses a new amount while shut: {:?}",
+            refused["rejected"]
+        );
+    }
+
+    // Column B cases need the spouse column itself open; the credit gate
+    // stays shut because the return is original and full-year.
+    let ms = open("1701MS", 0);
+    let ms_joint = fill(
+        "1701MS",
+        &ms["draft"],
+        json!({
+            "frm1701MS:civilStatus": "Married",
+            "frm1701MS:txtIfMarriedJointlyNo5": "true",
+        }),
+    );
+    let key = "frm1701MS:txtTaxPaidPreviouslyFiledNo6b";
+    let refused = fill("1701MS", &ms_joint["draft"], json!({ key: "100" }));
+    assert!(
+        refused["rejected"].get(key).is_some(),
+        "1701MS column B refuses a new amount while shut: {:?}",
+        refused["rejected"]
+    );
+
+    let annual = open("1701A", 0);
+    let annual_joint = fill(
+        "1701A",
+        &annual["draft"],
+        json!({
+            "frm1701A:optCivilStatus_2": "true",
+            "frm1701A:optSpouseIncome_1": "true",
+            "frm1701A:optFilingStatus_1": "true",
+        }),
+    );
+    let key = "frm1701A:txt61B";
+    let refused = fill("1701A", &annual_joint["draft"], json!({ key: "100" }));
+    assert!(
+        refused["rejected"].get(key).is_some(),
+        "1701A 61B refuses a new amount while shut: {:?}",
+        refused["rejected"]
+    );
+}
+
+#[test]
+fn a_item61b_opens_on_an_amended_return_even_without_joint_filing() {
+    setup();
+    let kind = kind_of("1701A").unwrap();
+    let fresh = open("1701A", 0);
+    let mut draft = fresh["draft"].clone();
+    agent::fill(
+        kind,
+        &mut draft,
+        "frm1701A:optAmendedReturn_1",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    agent::fill(kind, &mut draft, "frm1701A:txt61B", &json!("666"), None)
+        .expect("enableAllControl opens 61B on Amended Yes even when joint filing is off");
+    assert_eq!(draft["spouse_column"]["previously_filed"], 666.0);
+}
+
+#[test]
+fn ms_item_6_transition_zeroing_is_host_wide() {
+    setup();
+    let kind = kind_of("1701MS").unwrap();
+    let fresh = open("1701MS", 0);
+
+    let mut amended = fresh["draft"].clone();
+    amended["civil_status"] = json!("married");
+    amended["filing"] = json!("jointly");
+    agent::fill(
+        kind,
+        &mut amended,
+        "frm1701MS:txtAmendedYesNo2",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut amended,
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6a",
+        &json!("444"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut amended,
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6b",
+        &json!("555"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut amended,
+        "frm1701MS:txtAmendedNoNo2",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(amended["taxpayer"]["previously_filed"], 0.0);
+    assert_eq!(amended["spouse"]["previously_filed"], 0.0);
+
+    // The Yes radio's sibling `false` write is not the Amended-No click.
+    let mut sibling = fresh["draft"].clone();
+    agent::fill(
+        kind,
+        &mut sibling,
+        "frm1701MS:txtAmendedYesNo2",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut sibling,
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6a",
+        &json!("444"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut sibling,
+        "frm1701MS:txtAmendedYesNo2",
+        &json!("false"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(sibling["taxpayer"]["previously_filed"], 0.0);
+
+    // The Item 11/12/17 handlers reset Part II through Part VI in the official
+    // runtime; Item 6 is in that reset list independently of Amended.
+    let mut source_reset = fresh["draft"].clone();
+    agent::fill(
+        kind,
+        &mut source_reset,
+        "frm1701MS:txtAmendedYesNo2",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut source_reset,
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6a",
+        &json!("444"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut source_reset,
+        "frm1701MS:txtTaxpayerNo11a",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(source_reset["taxpayer"]["previously_filed"], 0.0);
+    agent::fill(
+        kind,
+        &mut source_reset,
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6a",
+        &json!("444"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut source_reset,
+        "frm1701MS:txtTaxpayerNo17b",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        source_reset["taxpayer"]["previously_filed"], 0.0,
+        "the Item 17 handler uses the same official reset"
+    );
+
+    let mut spouse_reset = fresh["draft"].clone();
+    spouse_reset["civil_status"] = json!("married");
+    spouse_reset["filing"] = json!("jointly");
+    agent::fill(
+        kind,
+        &mut spouse_reset,
+        "frm1701MS:txtAmendedYesNo2",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut spouse_reset,
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6b",
+        &json!("555"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut spouse_reset,
+        "frm1701MS:txtTaxpayerNo12b1",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(spouse_reset["spouse"]["previously_filed"], 0.0);
+    agent::fill(
+        kind,
+        &mut spouse_reset,
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6b",
+        &json!("555"),
+        None,
+    )
+    .unwrap();
+    agent::fill(
+        kind,
+        &mut spouse_reset,
+        "frm1701MS:txtSpouseNo17b",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        spouse_reset["spouse"]["previously_filed"], 0.0,
+        "the spouse Item 17 handler uses the same official reset"
+    );
+
+    // Group-choice writes are the member radio clicks in the official page.
+    let mut group_reset = fresh["draft"].clone();
+    group_reset["civil_status"] = json!("married");
+    group_reset["filing"] = json!("jointly");
+    agent::fill(
+        kind,
+        &mut group_reset,
+        "frm1701MS:txtAmendedYesNo2",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    for (key, value, path) in [
+        (
+            "frm1701MS:txtTaxpayerNo17",
+            "a",
+            "/taxpayer/previously_filed",
+        ),
+        (
+            "frm1701MS:txtTaxpayerNo12",
+            "c",
+            "/taxpayer/previously_filed",
+        ),
+        (
+            "frm1701MS:txtTaxpayerNo12",
+            "b1",
+            "/spouse/previously_filed",
+        ),
+        (
+            "frm1701MS:txtTaxpayerNo11",
+            "a1",
+            "/spouse/previously_filed",
+        ),
+        ("frm1701MS:txtSpouseNo17", "b", "/spouse/previously_filed"),
+    ] {
+        let amount_key = if path.contains("taxpayer") {
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6a"
+        } else {
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6b"
+        };
+        agent::fill(kind, &mut group_reset, amount_key, &json!("444"), None).unwrap();
+        agent::fill(kind, &mut group_reset, key, &json!(value), None).unwrap();
+        assert_eq!(
+            group_reset.pointer(path).cloned().unwrap_or(Value::Null),
+            json!(0.0),
+            "{key}={value} uses the official member-radio reset"
+        );
+    }
+
+    // marriedJointly itself ends in validateAmendedReturn. A filing-status
+    // write on an unamended return therefore zeroes both columns too.
+    let mut filing_reset = fresh["draft"].clone();
+    filing_reset["civil_status"] = json!("married");
+    filing_reset["filing"] = json!("jointly");
+    filing_reset["taxpayer"]["previously_filed"] = json!(444.0);
+    filing_reset["spouse"]["previously_filed"] = json!(555.0);
+    agent::fill(
+        kind,
+        &mut filing_reset,
+        "frm1701MS:txtIfMarriedSeparatelyNo5",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(filing_reset["taxpayer"]["previously_filed"], 0.0);
+    assert_eq!(filing_reset["spouse"]["previously_filed"], 0.0);
 }
 
 #[test]
@@ -1202,12 +1537,15 @@ fn form_1702mx_item27_and_schedule9_are_gated() {
     );
     assert_eq!(
         unamended["draft"]["schedule_3"]["items_20_to_33"][7]["exempt"]["amount"],
-        0
+        100
     );
     assert_eq!(
         unamended["relock_notes"][item27],
-        json!("Schedule 3 item 27 was cleared: this is not an amended return.")
+        json!("Schedule 3 item 27 is for an amended return."),
+        "a kept value gets the lock note, never a clearing announcement"
     );
+    assert_eq!(payload_map("1702MX", &unamended["draft"])[item27], "100");
+    assert_eq!(printed_map("1702MX", &unamended["draft"])[item27], "100");
 
     // Item 5's MCIT box is derived: the four-year incorporation rule is
     // what opens Schedule 9.
