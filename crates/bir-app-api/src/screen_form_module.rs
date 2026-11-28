@@ -5865,12 +5865,23 @@ fn apply_screen_edits_here(
     {
         let def = kind.definition();
         planned.sort_by_key(|(key, step)| {
+            let sent_date = matches!(
+                step,
+                ChoiceStep::Fill(value)
+                    if value.as_str().is_some_and(|text| {
+                        let parts: Vec<&str> = text.split('/').collect();
+                        parts.len() == 3
+                            && parts[..2].iter().all(|part| part.len() == 2)
+                            && parts[2].len() == 4
+                            && parts.iter().all(|part| part.bytes().all(|b| b.is_ascii_digit()))
+                    })
+            );
             let opening_answer = matches!(
                 def.bindings.get(key).map(|bound| &bound.binding),
                 Some(bir_core::forms::agent::Binding::Choice { .. })
                     | Some(bir_core::forms::agent::Binding::Text { date: Some(_), .. })
-            ) || matches!(step, ChoiceStep::Set(_) | ChoiceStep::Untick)
-                || key == "frm1702RT:txtPg1Pt1I10";
+            ) || (!recompute_gated.contains(key.as_str())
+                && (matches!(step, ChoiceStep::Set(_) | ChoiceStep::Untick) || sent_date));
             usize::from(!opening_answer)
         });
     }
