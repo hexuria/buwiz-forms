@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -17,7 +18,7 @@ import tempfile
 import textwrap
 import types
 import unittest
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -72,7 +73,7 @@ class WindowsPortabilityTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(env.get(name), value)
 
-
+    @unittest.skipUnless(os.name == "nt", "Path.home reads USERPROFILE only on Windows")
     def test_a_homeless_environment_with_userprofile_still_runs_the_database_path_body(self):
         windowsish = {"USERPROFILE": "C:\\Users\\runner", "HOMEDRIVE": "C:", "HOMEPATH": "\\Users\\runner",
                       "SYSTEMROOT": "C:\\Windows", "TEMP": "C:\\Temp", "TMP": "C:\\Temp", "PATH": os.defpath}
@@ -1094,6 +1095,9 @@ class AccountsMockTests(unittest.TestCase):
             device = Path(env["BIR_DEVICE_DIR"])
             marker = {"device_dir": str(device.resolve()), "rooms": True, "pid": os.getpid(), "seam": 1}
             (device / E2E.DEVICE_MARKER_NAME).write_text(json.dumps(marker), encoding="utf-8")
+            room = device / "rooms" / "room"
+            room.mkdir(parents=True, exist_ok=True)
+            (room / "bir_data.db").write_text("db", encoding="utf-8")
             return AliveProcess()
 
         patches = [mock.patch.object(E2E, "check_suite", return_value=[]),
@@ -1145,6 +1149,9 @@ class AccountsMockTests(unittest.TestCase):
                 device = Path(env["BIR_DEVICE_DIR"])
                 marker = {"device_dir": str(device.resolve()), "rooms": True, "pid": os.getpid(), "seam": 1}
                 (device / E2E.DEVICE_MARKER_NAME).write_text(json.dumps(marker), encoding="utf-8")
+                room = device / "rooms" / "room"
+                room.mkdir(parents=True, exist_ok=True)
+                (room / "bir_data.db").write_text("db", encoding="utf-8")
                 return AliveProcess()
 
             os.environ["BIR_DATABASE_PATH"] = str(folder / "repository-dotenv-leak.db")
@@ -1171,6 +1178,89 @@ class AccountsMockTests(unittest.TestCase):
                          "the positional database must be the runner's own, never a .env value")
             self.assertEqual(db, device / "bir_data.db")
             self.assertFalse(device.exists(), "the per-run device folder goes with the run")
+
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
+    def test_the_marker_wait_starts_after_the_windows_hello(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            write(folder, "x.wants", "click x\n")
+            suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [{"name": "x", "file": "x.wants"}]}))
+            args = E2E.parse_args(["macos", str(suite), "--accounts", "mock", "--out", str(folder / "out")])
+            events = []
+
+            class AliveProcess:
+                def poll(self):
+                    return None
+
+            class FakeAgent:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def hello(self):
+                    return {"ready": True, "platform": "desktop", "features": []}
+
+                def snapshot(self):
+                    return {"tree": {"nodes": [{"id": "gate-root", "role": "group"}]}}
+
+            real_database = E2E.default_database
+
+            def database(target, stamp, accounts="bypass"):
+                return real_database(target, stamp, accounts=accounts, home=folder / "home", unique="test")
+
+            def wait_for(agent, proc, timeout, log, what):
+                events.append(what)
+                if what == "window plane":
+                    return agent.hello()
+                return None
+
+            def marker(*args, **kwargs):
+                events.append("device-marker")
+                if "window plane" not in events:
+                    raise AssertionError("the device-marker wait started before the window plane hello")
+                self.assertEqual(kwargs.get("timeout_s"), 10)
+                return {}
+
+            with mock.patch.object(E2E, "check_suite", return_value=[]), \
+                    mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "default_database", side_effect=database), \
+                    mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "launch", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "wait_for", side_effect=wait_for), \
+                    mock.patch.object(E2E, "wait_for_device_marker", side_effect=marker), \
+                    mock.patch.object(E2E, "Agent", FakeAgent), \
+                    mock.patch.object(E2E, "installed_cli_version", return_value="test"), \
+                    mock.patch.object(E2E, "git_head", return_value="test"), \
+                    mock.patch.object(E2E, "mock_layout_is_proven", return_value=True), \
+                    mock.patch.object(E2E, "run_entry", return_value={"name": "x", "status": "pass", "ms": 0}), \
+                    mock.patch.object(E2E, "stop"), mock.patch.object(E2E, "stop_mock_account"):
+                self.assertEqual(E2E.run(args), 0)
+            self.assertLess(events.index("window plane"), events.index("device-marker"))
+
+    @mock.patch.dict(os.environ, clean_env(), clear=True)
+    def test_a_refused_preexisting_mock_folder_is_not_removed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            write(folder, "x.wants", "click x\n")
+            suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [{"name": "x", "file": "x.wants"}]}))
+            args = E2E.parse_args(["macos", str(suite), "--accounts", "mock", "--out", str(folder / "out")])
+            device = folder / "home" / "BuwizNsh" / "agents" / "e2e-macos-test"
+            device.mkdir(parents=True)
+            sentinel = device / "keep"
+            sentinel.write_text("not this run's folder", encoding="utf-8")
+
+            def database(target, stamp, accounts="bypass"):
+                return device / "bir_data.db", device
+
+            with mock.patch.object(E2E, "check_suite", return_value=[]), \
+                    mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "default_database", side_effect=database), \
+                    mock.patch.object(E2E, "start_mock_account") as start_mock:
+                with self.assertRaises(E2E.SuiteError) as raised:
+                    E2E.run(args)
+            self.assertIn("already exists", str(raised.exception))
+            start_mock.assert_not_called()
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "not this run's folder")
+            self.assertTrue(device.exists())
 
     @mock.patch.dict(os.environ, clean_env(), clear=True)
     def test_the_rooms_database_proof_waits_for_sign_in_and_precedes_the_first_write_recipe(self):
@@ -1498,10 +1588,36 @@ class AccountsMockTests(unittest.TestCase):
             self.assertIn("default data folder", E2E.mock_layout_problem({"device_dir": str(default),
                                                                           "rooms_mode": True}, folder, default) or "")
             self.assertIn("database_path", E2E.mock_layout_problem(good, folder, default, need_database=True) or "")
-            inside = {**good, "database_path": str(folder / "rooms" / "a" / "bir_data.db")}
+            room = folder / "rooms" / "a"
+            room.mkdir(parents=True)
+            (room / "bir_data.db").write_text("db", encoding="utf-8")
+            inside = {**good, "database_path": str(room / "bir_data.db")}
             self.assertIsNone(E2E.mock_layout_problem(inside, folder, default, need_database=True))
             outside = {**good, "database_path": str(folder.parent / "bir_data.db")}
             self.assertIn("database", E2E.mock_layout_problem(outside, folder, default, need_database=True) or "")
+
+    def test_the_database_proof_refuses_a_single_room_database(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder).resolve()
+            good = {"device_dir": str(folder), "rooms_mode": True}
+            for relative in ("bir_data.db", "rooms/bir_data.db", "rooms/room/other.db",
+                             "rooms/room/nested/bir_data.db"):
+                with self.subTest(relative=relative):
+                    path = folder.joinpath(*relative.split("/"))
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("db", encoding="utf-8")
+                    problem = E2E.mock_layout_problem({**good, "database_path": str(path)}, folder,
+                                                      need_database=True)
+                    self.assertIsNotNone(problem, relative)
+                    self.assertIn("single-room", problem)
+            missing = folder / "rooms" / "room" / "bir_data.db"
+            missing.parent.mkdir(parents=True, exist_ok=True)
+            problem = E2E.mock_layout_problem({**good, "database_path": str(missing)}, folder, need_database=True)
+            self.assertIsNotNone(problem)
+            self.assertIn("does not exist", problem)
+            missing.write_text("db", encoding="utf-8")
+            self.assertIsNone(E2E.mock_layout_problem({**good, "database_path": str(missing)}, folder,
+                                                      need_database=True))
 
     def test_a_suite_plant_entry_is_mock_only_and_names_the_legacy_fixture_generator(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -1616,6 +1732,62 @@ class RoomsMarkerProofTests(unittest.TestCase):
             self.assertEqual(found["device_dir"], str(folder))
             self.assertTrue(any("device marker" in line for line in log.lines), log.lines)
 
+    def test_a_partial_launch_marker_is_retried_until_complete(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder).resolve()
+            self.write_marker(folder, "")
+            proc = mock.Mock()
+            proc.poll.return_value = None
+            clock = [0.0]
+            writes = []
+
+            def sleep(seconds):
+                clock[0] += seconds
+                if not writes:
+                    self.write_marker(folder, self.marker(folder))
+                writes.append(seconds)
+
+            found = E2E.wait_for_device_marker(folder, proc, folder / "app.log", E2E.RunLog(None, echo=False),
+                                               timeout_s=1, poll_s=0.25, sleep=sleep, now=lambda: clock[0])
+            self.assertEqual(found["device_dir"], str(folder))
+            self.assertTrue(writes)
+
+    def test_a_locked_launch_marker_is_retried_until_it_can_be_read(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder).resolve()
+            marker = self.write_marker(folder, self.marker(folder))
+            proc = mock.Mock()
+            proc.poll.return_value = None
+            real_read_text = Path.read_text
+            locked = []
+
+            def read_text(path, *args, **kwargs):
+                if path == marker and len(locked) < 2:
+                    locked.append(path)
+                    raise PermissionError("being replaced")
+                return real_read_text(path, *args, **kwargs)
+
+            clock = [0.0]
+
+            def sleep(seconds):
+                clock[0] += seconds
+
+            with mock.patch.object(Path, "read_text", read_text):
+                found = E2E.wait_for_device_marker(folder, proc, folder / "app.log", E2E.RunLog(None, echo=False),
+                                                   timeout_s=1, poll_s=0.25, sleep=sleep, now=lambda: clock[0])
+            self.assertEqual(found["device_dir"], str(folder))
+            self.assertEqual(len(locked), 2)
+
+    def test_windows_extended_prefixes_are_normalised_before_comparison(self):
+        for raw, plain in ((r"\\?\C:\Runs\one", r"C:\Runs\one"),
+                           (r"\\?\UNC\server\share\one", r"\\server\share\one"),
+                           (r"C:\Runs\one", r"C:\Runs\one")):
+            with self.subTest(raw=raw):
+                self.assertEqual(E2E.mock_layout_path(PureWindowsPath(raw)), PureWindowsPath(plain))
+        folder = PureWindowsPath(r"C:\Runs\one")
+        marker = {"device_dir": r"\\?\C:\Runs\one", "rooms": True, "pid": 4321, "seam": 1}
+        self.assertIsNone(E2E.device_marker_problem(marker, folder))
+
     def test_a_missing_launch_marker_is_the_exact_pre_seam_refusal(self):
         with tempfile.TemporaryDirectory() as folder:
             proc = mock.Mock()
@@ -1651,10 +1823,15 @@ class RoomsMarkerProofTests(unittest.TestCase):
                     marker = self.write_marker(folder, data)
                     proc = mock.Mock()
                     proc.poll.return_value = None
+                    clock = [0.0]
+
+                    def sleep(seconds):
+                        clock[0] += seconds
+
                     with self.assertRaises(E2E.SuiteError) as raised:
                         E2E.wait_for_device_marker(folder, proc, folder / "app.log", E2E.RunLog(None, echo=False),
-                                                   timeout_s=1, poll_s=0.1, sleep=lambda seconds: None,
-                                                   now=lambda: 0.0)
+                                                   timeout_s=1, poll_s=0.1, sleep=sleep,
+                                                   now=lambda: clock[0])
                     self.assertIn(expected, str(raised.exception))
                     marker.unlink()
 
@@ -1674,6 +1851,10 @@ class RoomsMarkerProofTests(unittest.TestCase):
 
     def test_the_post_sign_in_database_proof_retries_until_the_room_is_open(self):
         folder = Path(tempfile.gettempdir()).resolve() / "e2e-proof-room"
+        room = folder / "rooms" / "room"
+        room.mkdir(parents=True, exist_ok=True)
+        self.addCleanup(shutil.rmtree, folder, True)
+        (room / "bir_data.db").write_text("db", encoding="utf-8")
         answers = [
             {"device_dir": str(folder), "rooms_mode": True},
             {"device_dir": str(folder), "rooms_mode": True,
@@ -1720,6 +1901,25 @@ class SignInBoundaryParserTests(unittest.TestCase):
             for line in probes:
                 with self.subTest(line=line):
                     self.assertIn("sign_in recipes may use only", self.problems_for(folder, line))
+
+    def test_a_control_character_cannot_split_a_sign_in_step_differently(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for control in ("\x1c", "\x1d", "\x1e", "\x85"):
+                line = f"assert gate-root --name x{control}#y --id home"
+                with self.subTest(control=repr(control)):
+                    problems = self.problems_for(folder, line)
+                    self.assertIn("control character", problems)
+                    steps = E2E.recipe_steps(Path(folder) / "case.wants")
+                    self.assertEqual(steps[0].get("target"), "home")
+            self.assertEqual("", self.problems_for(folder, "click\tgate-continue"))
+
+    def test_json_sign_in_steps_refuse_control_characters_except_tab(self):
+        step = {"op": "assert", "target": "gate-root\x1c"}
+        self.assertEqual(E2E.sign_in_recipe_problem(step), "a control character")
+        step = {"op": "type", "target": "gate-email", "text": "a@example.com\x85"}
+        self.assertEqual(E2E.sign_in_recipe_problem(step), "a control character")
+        step = {"op": "type", "target": "gate-email", "text": "a@example.com\t"}
+        self.assertIsNone(E2E.sign_in_recipe_problem(step))
 
     def test_setup_containers_are_observation_only_and_pointer_modifiers_are_refused(self):
         containers = ("setup-root", "setup-card", "setup-pin-card", "setup-key-card", "setup-taxpayer")

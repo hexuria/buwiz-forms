@@ -65,17 +65,29 @@ change.
 
 The rooms-mode proof replaces the old scratch-database proof in mock mode. Before launch the per-run folder must be
 fresh: an existing folder, with or without a marker, is refused. A seam app atomically writes
-`<device_dir>/.ebirforms-test-device.json` as the first thing it does, before the account gate locks even the info
-planes: `{"device_dir": "<canonical absolute path>", "rooms": true, "pid": <pid>, "seam": 1}`. The runner polls it
-about every 250 ms for up to 30 seconds and refuses unless it parses as JSON, says `seam: 1` and `rooms: true`, its
-canonical `device_dir` is exactly the per-run folder, and `pid` is a positive integer. The pid is not required to be
-the launcher's pid (the launcher is a shell or PowerShell wrapper); on POSIX a dead pid is only logged. A launcher
-that exits early is reported from the app's own launcher output, not as a marker timeout. No marker in the bound is
-exactly: `this app build has no BIR_DEVICE_DIR seam: mock sign-in runs need an app with it (see docs/proof/E2E.md)`.
+`<device_dir>/.ebirforms-test-device.json` (a temporary file in the same folder, then a rename) as the first thing it
+does, before the account gate locks even the info planes, and the marker must exist by the time the window's control
+plane answers `hello`: `{"device_dir": "<plain absolute path>", "rooms": true, "pid": <pid>, "seam": 1}`. The path is
+never Windows' extended `\\?\` or `\\?\UNC\` spelling, although the runner normalises those spellings before its own
+comparisons. Because the build inside the launcher can take most of `--launch-timeout`, the runner waits for that
+`hello` first and only then polls the marker about every 250 ms for up to 10 seconds. A partial marker, unreadable
+JSON, or a transient operating-system read error is retried until that deadline and the last error is named; a marker
+whose complete JSON says the wrong thing is refused at once. The marker must say `seam: 1` and `rooms: true`, its
+canonical `device_dir` must be exactly the per-run folder, and `pid` must be a positive integer. The pid is not
+required to be the launcher's pid (the launcher is a shell or PowerShell wrapper); on POSIX a dead pid is only
+logged. A launcher that exits early is reported from the app's own launcher output, not as a marker timeout. No
+marker in the bound is exactly: `this app build has no BIR_DEVICE_DIR seam: mock sign-in runs need an app with it
+(see docs/proof/E2E.md)`.
+
+With `BIR_DEVICE_DIR` set, single-room mode is off: `BIR_DATABASE_PATH` and `set_database_path_override` are ignored
+for room choice, and the device and data directories are the named device folder. The runner still passes the
+contained fallback `BIR_DATABASE_PATH` so a pre-seam app stays inside the per-run folder and fails the marker proof.
 After the sign-in recipes and before the first recipe that can write, the runner retries `app.info` for up to 30
-seconds and refuses unless it reports rooms mode in the per-run folder and the open database's `database_path`
-inside it. Mock mode therefore needs an app built with the `BIR_DEVICE_DIR` seam; plain bypass mode is unchanged
-(single-room, `BIR_DATABASE_PATH`, `"database": "test"`).
+seconds and refuses unless it reports rooms mode in the per-run folder and an existing open database whose
+`database_path` is exactly `<device_dir>/rooms/<one non-empty room id>/bir_data.db` by path components. Any other
+shape, including the fallback `<device_dir>/bir_data.db`, is refused as single-room. Mock mode therefore needs an app
+built with the `BIR_DEVICE_DIR` seam; plain bypass mode is unchanged (single-room, `BIR_DATABASE_PATH`,
+`"database": "test"`).
 
 The account gate locks the data plane as well as the window: even `hello` is refused there. Recipes marked
 `"sign_in": true` are the boundary that may run first (they write account sign-in state, not the filing database).
@@ -148,11 +160,11 @@ adb -s <serial> reverse --remove tcp:3008
      device folder there and `BIR_DATABASE_PATH` inside it.
    - On Android, the emulator's guarded test database is removed first, so the run starts at first-run setup.
    - The token is `GPUI_AGENT_TOKEN` if set, else one made for the run. It is never printed, and the run log masks it.
-3. In mock mode, first waits for the launch marker that proves the rooms-mode seam, as above. Then waits for the
-   window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`). A plain run also proves the data plane on
-   the next port now; a mock run proves the open room database from `app.info` before the first recipe that can
-   write, as above. The first build can take a long time:
-   `--launch-timeout` is an hour by default.
+3. Waits for the window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`); the first build can take a
+   long time and `--launch-timeout` is an hour by default. In mock mode the seam marker is expected by that `hello`,
+   so the runner then gives it only the short bounded retry described above. A plain run also proves the data plane
+   on the next port now; a mock run proves the open room database from `app.info` before the first recipe that can
+   write, as above.
 4. Runs each recipe with `gpui-agent recipe run`, in the variant for what the host reports:
    - **Variant.** `phone` when `hello.platform` is mobile (iPhone, iPad and Android tablets use the phone layout),
      otherwise `desktop`. A variant named after the target (`windows`, `linux`, `android`, ...) wins on that target

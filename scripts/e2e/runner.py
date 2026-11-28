@@ -49,7 +49,8 @@ import socket
 import subprocess
 import sys
 import time
-from pathlib import Path
+import unicodedata
+from pathlib import Path, PureWindowsPath
 
 ROOT = Path(__file__).resolve().parents[2]
 RECIPES = ROOT / "agent-recipes"
@@ -94,7 +95,8 @@ SIGN_IN_SETUP_IDS = SIGN_IN_SETUP_CONTAINERS + SIGN_IN_SETUP_ACTING_IDS
 # needs and screenshot, and gpui-agent-cli 0.4.1 adds key_delay_ms. line/words and the parser-ambiguity metadata are
 # this runner's own `.wants` reading.
 TYPE_STEP_FIELDS = {"op", "target", "text", "delivery", "expect_fingerprint", "id", "needs", "screenshot",
-                    "key_delay_ms", "line", "words", "tokens", "has_backslash", "has_non_ascii_whitespace"}
+                    "key_delay_ms", "line", "words", "tokens", "has_backslash", "has_non_ascii_whitespace",
+                    "has_control_character"}
 # The Buwiz account gate's own root testID (nsh/screens/auth/Gate.tsx). A mock-mode run must start there.
 SIGN_IN_GATE_NODE = "gate-root"
 # Nodes that prove a mock run reached a screen beyond that gate before the gate itself appeared.
@@ -103,7 +105,7 @@ PAST_SIGN_IN_GATE_NODES = ("setup-root", "home", "sign-in")
 TYPING_OPS = {"type", "set_value", "paste", "key"}
 # Step fields that are what is typed or expected, not what is acted on.
 VALUE_FIELDS = {"text", "value", "id", "needs", "screenshot", "key_delay_ms", "timeout_ms", "op", "line", "words",
-              "tokens", "has_backslash", "has_non_ascii_whitespace"}
+              "tokens", "has_backslash", "has_non_ascii_whitespace", "has_control_character"}
 # The variables that point the app at a real SFTP server or relay: never in a run's environment. The app stays in dry
 # run under the runner anyway (its own guard), but the live host and its password must not reach the process.
 LIVE_SEND_VARS = ("BIR_SFTP_LIVE", "BIR_SFTP_HOST", "BIR_SFTP_PORT", "BIR_SFTP_USERNAME", "BIR_SFTP_PASSWORD",
@@ -233,6 +235,29 @@ def wait_until_target_tokens(tokens):
     return assert_target_tokens(rest) if timeout else None
 
 
+def recipe_text_lines(text):
+    """The lines of a `.wants` recipe exactly as gpui-agent-recipe reads them: split at LF only, with one CR stripped
+    from a CRLF ending. Python's splitlines also splits at control characters Rust does not treat as line endings."""
+    return [line[:-1] if line.endswith("\r") else line for line in text.split("\n")]
+
+
+def has_control_character(text):
+    """A Unicode control character other than the tab gpui-agent's own whitespace parser accepts."""
+    return any(ch != "\t" and unicodedata.category(ch) == "Cc" for ch in text)
+
+
+def json_has_control_character(value):
+    """True when any string inside a JSON-shaped value holds a control character other than tab."""
+    if isinstance(value, str):
+        return has_control_character(value)
+    if isinstance(value, dict):
+        return any(json_has_control_character(key) or json_has_control_character(item)
+                   for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(json_has_control_character(item) for item in value)
+    return False
+
+
 def recipe_steps(path):
     """The steps of a recipe file as dicts with at least `op` (and `target` where the op has one); `.wants` lines are
     read the way gpui-agent reads them (one op per line, `#` comments, quotes keep spaces)."""
@@ -247,7 +272,7 @@ def recipe_steps(path):
             raise SuiteError(f"{path}: no steps")
         return [dict(step) for step in steps]
     steps = []
-    for number, line in enumerate(text.splitlines(), 1):
+    for number, line in enumerate(recipe_text_lines(text), 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         try:
@@ -258,6 +283,8 @@ def recipe_steps(path):
         step = {"op": op, "line": number, "tokens": tokens[1:],
                 "has_backslash": "\\" in line,
                 "has_non_ascii_whitespace": any(ord(ch) > 127 and ch.isspace() for ch in line)}
+        if has_control_character(line):
+            step["has_control_character"] = True
         rest = []
         # Every word after the op, flag values included, but the text a typing op types.
         typed_index = None
@@ -314,7 +341,7 @@ def placeholders(path):
     """The $params a recipe file uses (comments excluded)."""
     text = Path(path).read_text(encoding="utf-8")
     if not str(path).endswith(".json"):
-        text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        text = "\n".join(line for line in recipe_text_lines(text) if not line.lstrip().startswith("#"))
     return placeholders_in_text(text, step_ids(path))
 
 
@@ -329,7 +356,7 @@ def recipe_step_params(path):
     if is_json_recipe(path):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return [placeholders_in_text(json.dumps(step), ids) for step in data.get("steps") or []]
-    lines = [line for line in Path(path).read_text(encoding="utf-8").splitlines()
+    lines = [line for line in recipe_text_lines(Path(path).read_text(encoding="utf-8"))
              if line.strip() and not line.lstrip().startswith("#")]
     return [placeholders_in_text(line, ids) for line in lines]
 
@@ -502,6 +529,8 @@ def sign_in_recipe_problem(step, params=None):
     op = step.get("op", "")
     if op not in SIGN_IN_RECIPE_OPS:
         return f"op {op!r}"
+    if step.get("has_control_character") or json_has_control_character(step):
+        return "a control character"
     if step.get("has_backslash"):
         return "a backslash"
     if step.get("has_non_ascii_whitespace"):
@@ -659,8 +688,8 @@ def launch_env(environ, token, addr, accounts="bypass", device_dir=None, databas
                 raise SuiteError(f"--accounts mock needs an absolute BIR_DEVICE_DIR, not {device_dir}")
             if database is None or not database.is_absolute():
                 raise SuiteError("--accounts mock needs an absolute BIR_DATABASE_PATH inside BIR_DEVICE_DIR")
-            device = device.resolve(strict=False)
-            database = database.resolve(strict=False)
+            device = mock_layout_path(device)
+            database = mock_layout_path(database)
             if database == device or not canonical_within(database, device):
                 raise SuiteError(f"--accounts mock database {database} is not inside device folder {device}")
             env["BIR_DEVICE_DIR"] = str(device)
@@ -968,7 +997,7 @@ def wants_line_of(path, step_id):
     match = re.fullmatch(r"s(\d+)", str(step_id or ""))
     if not match or str(path).endswith(".json"):
         return None
-    lines = [line for line in Path(path).read_text(encoding="utf-8").splitlines()
+    lines = [line for line in recipe_text_lines(Path(path).read_text(encoding="utf-8"))
              if line.strip() and not line.lstrip().startswith("#")]
     index = int(match.group(1)) - 1
     return lines[index].strip() if 0 <= index < len(lines) else None
@@ -999,7 +1028,7 @@ def write_recipe_slices(path, points, folder):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         source = data["steps"]
     else:
-        source = [line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines()
+        source = [line.strip() for line in recipe_text_lines(Path(path).read_text(encoding="utf-8"))
                   if line.strip() and not line.lstrip().startswith("#")]
     parts = []
     start = 0
@@ -1720,7 +1749,7 @@ def run(args):
     android_dev_env_state = {}
     results = []
     made_db = None
-    mock_db_folder = mock_device_dir
+    mock_db_folder = None
     account_state = ()
     try:
         if not args.no_launch and (port_answers(addr) or port_answers(data_plane(addr))):
@@ -1728,6 +1757,7 @@ def run(args):
                              "--no-launch to drive it")
         if args.accounts == "mock":
             prepare_mock_device_dir(mock_device_dir)
+            mock_db_folder = mock_device_dir
             mock_proc = start_mock_account(args.just, env, out, log, args.launch_timeout)
             if args.target == "android":
                 mock_reverse = android_mock_reverse(env, log)
@@ -1753,13 +1783,12 @@ def run(args):
                     dev_env = android_mock_dev_env(addr, mock_device_dir) if args.accounts == "mock" else None
                     fresh_android(env, log, dev_env=dev_env, dev_env_state=android_dev_env_state)
             proc = launch(args.target, db, env, out, log, args.just)
-            if args.accounts == "mock":
-                wait_for_device_marker(mock_device_dir, proc, out / "app.log", log)
         window = Agent(args.cli, addr, env, log, args.reply_timeout_ms)
         hello = wait_for(window, proc, args.launch_timeout if proc else 30, log, "window plane")
         if not hello:
             raise SuiteError(f"the window's control plane on {addr} never answered (see {out / 'app.log'})")
         if args.accounts == "mock":
+            wait_for_device_marker(mock_device_dir, proc, out / "app.log", log, timeout_s=10)
             assert_sign_in_gate(window)
         features = list(hello.get("features") or [])
         form_factor = args.form_factor or ("phone" if hello.get("platform") == "mobile" else "desktop")
@@ -1824,11 +1853,29 @@ def run(args):
     return 0 if all(r["status"] in ("pass", "skipped") for r in results) else 1
 
 
+def mock_layout_path(path):
+    """`path` in the one form mock-layout comparisons use. Windows' extended-length prefixes are spelling, not
+    location: `\\\\?\\C:\\x` is `C:\\x`, and `\\\\?\\UNC\\server\\share` is `\\\\server\\share`. Concrete host paths
+    are then canonicalised; a pure Windows path is only normalised, for the portability tests."""
+    text = str(path)
+    windows_spelling = text.startswith("\\\\") or bool(re.match(r"[A-Za-z]:[\\/]", text))
+    if isinstance(path, PureWindowsPath) or os.name == "nt" or windows_spelling:
+        if text.startswith("\\\\?\\UNC\\"):
+            text = "\\\\" + text[len("\\\\?\\UNC\\"):]
+        elif text.startswith("\\\\?\\"):
+            text = text[len("\\\\?\\"):]
+    if isinstance(path, PureWindowsPath) and not isinstance(path, Path):
+        return type(path)(text)
+    if os.name != "nt" and windows_spelling:
+        return PureWindowsPath(text)
+    return Path(text).expanduser().resolve(strict=False)
+
+
 def canonical_within(path, folder):
     """True when `path` canonicalises to `folder` itself or a child of it."""
     try:
-        path = Path(path).expanduser().resolve(strict=False)
-        folder = Path(folder).expanduser().resolve(strict=False)
+        path = mock_layout_path(path)
+        folder = mock_layout_path(folder)
     except (OSError, RuntimeError):
         return False
     return path == folder or path.is_relative_to(folder)
@@ -1854,6 +1901,28 @@ def platform_default_data_dir(target, env=None, home=None):
     return None
 
 
+def rooms_database_problem(database_path, device):
+    """Why `database_path` is not exactly `<device>/rooms/<one room id>/bir_data.db` as path components, or None."""
+    try:
+        database = mock_layout_path(database_path)
+    except (OSError, RuntimeError) as error:
+        return (f"the open database {database_path!r} cannot be canonicalised ({error}); anything else is "
+                "single-room, not rooms mode")
+    try:
+        relative = database.relative_to(device)
+    except ValueError:
+        shape = False
+    else:
+        parts = relative.parts
+        shape = len(parts) == 3 and parts[0] == "rooms" and bool(parts[1]) and parts[2] == "bir_data.db"
+    if not shape:
+        return (f"the open database {database} is not <device_dir>/rooms/<room id>/bir_data.db; that is "
+                "single-room, not rooms mode")
+    if not database.is_file():
+        return f"the rooms-mode database {database} does not exist"
+    return None
+
+
 def mock_layout_problem(info, folder, default_dir=None, need_database=False):
     """Why an app.info answer is not the rooms-mode scratch layout this run launched, or None."""
     if not isinstance(info, dict):
@@ -1869,16 +1938,23 @@ def mock_layout_problem(info, folder, default_dir=None, need_database=False):
         missing.append("database_path")
     if missing:
         return "the info answer is missing " + ", ".join(missing)
-    folder = Path(folder).expanduser().resolve(strict=False)
-    device = Path(device_dir).expanduser().resolve(strict=False)
+    try:
+        folder = mock_layout_path(folder)
+        device = mock_layout_path(device_dir)
+    except (OSError, RuntimeError) as error:
+        return f"the rooms-mode device folder cannot be canonicalised: {error}"
     if default_dir is not None:
-        default = Path(default_dir).expanduser().resolve(strict=False)
+        default = mock_layout_path(default_dir)
         if device == default:
             return f"device_dir {device} is the platform's default data folder"
     if not canonical_within(device, folder):
         return f"device_dir {device} is outside the per-run folder {folder}"
-    if need_database and not canonical_within(database_path, folder):
-        return f"the open database {database_path} is outside the per-run folder {folder}"
+    if need_database:
+        if not canonical_within(database_path, folder):
+            return f"the open database {database_path} is outside the per-run folder {folder}"
+        problem = rooms_database_problem(database_path, device)
+        if problem:
+            return problem
     return None
 
 
@@ -1901,7 +1977,7 @@ def prepare_mock_device_dir(folder):
 
 def device_marker_problem(data, folder):
     """Why a launch marker is not the exact per-run rooms-mode device this runner launched, or None."""
-    folder = Path(folder).expanduser().resolve(strict=False)
+    folder = mock_layout_path(folder)
     if not isinstance(data, dict):
         return "the device marker is not a JSON object"
     if data.get("seam") != 1:
@@ -1912,7 +1988,7 @@ def device_marker_problem(data, folder):
     if not isinstance(device, str) or not device:
         return "the device marker has no device_dir"
     try:
-        canonical = Path(device).expanduser().resolve(strict=False)
+        canonical = mock_layout_path(device)
     except (OSError, RuntimeError):
         return f"the device marker's device_dir {device!r} cannot be canonicalised"
     if canonical != folder:
@@ -1949,30 +2025,34 @@ def note_marker_pid(data, log):
         log.line("device-marker", pid, f"marker pid not alive at proof time: {error}", 0)
 
 
-def wait_for_device_marker(folder, proc, log_path, log, timeout_s=30, poll_s=0.25, sleep=time.sleep,
+def wait_for_device_marker(folder, proc, log_path, log, timeout_s=10, poll_s=0.25, sleep=time.sleep,
                            now=time.monotonic):
     """The launch-time proof of the BIR_DEVICE_DIR seam: the app atomically writes DEVICE_MARKER_NAME before the
-    account gate, so this works while every info plane is still locked. No marker in the bound means a pre-seam app;
-    launcher output, not a marker timeout, explains an early launcher exit."""
-    folder = Path(folder).expanduser().resolve(strict=False)
+    account gate, so this works while every info plane is still locked. A partial or briefly locked marker is retried
+    until the bound; no marker then means a pre-seam app, and launcher output explains an early launcher exit."""
+    folder = mock_layout_path(folder)
     marker = folder / DEVICE_MARKER_NAME
     deadline = now() + timeout_s
+    last_error = None
     while True:
         if marker.exists():
             try:
                 data = json.loads(marker.read_text(encoding="utf-8"))
-            except ValueError as error:
-                raise SuiteError(f"the device marker is not JSON: {error}") from None
-            problem = device_marker_problem(data, folder)
-            if problem:
-                raise SuiteError(problem)
-            note_marker_pid(data, log)
-            log.line("device-marker", marker, "rooms-mode device marker proved", 0)
-            return data
+            except (ValueError, OSError) as error:
+                last_error = error
+            else:
+                problem = device_marker_problem(data, folder)
+                if problem:
+                    raise SuiteError(problem)
+                note_marker_pid(data, log)
+                log.line("device-marker", marker, "rooms-mode device marker proved", 0)
+                return data
         if proc is not None and proc.poll() is not None:
             raise SuiteError(f"the app ended before writing its device marker (exit {proc.returncode}): "
                              f"{launcher_output_error(log_path)}")
         if now() >= deadline:
+            if last_error is not None:
+                raise SuiteError(f"the device marker could not be read as JSON before the deadline: {last_error}")
             raise SuiteError(NO_DEVICE_SEAM_REFUSAL)
         sleep(poll_s)
 
