@@ -2971,8 +2971,8 @@ mod tests {
             return;
         }
         let html = sheet_doc(&["Juana Santos", "000-123-453-00000"]);
-        let pdf = platform_pdf("2551Q", &html, folder.path().join("print")).expect("the PDF");
         let folder = tempfile::tempdir().expect("temp");
+        let pdf = platform_pdf("2551Q", &html, folder.path().join("print")).expect("the PDF");
         let path = folder.path().join("preview.pdf");
         std::fs::write(&path, &pdf).expect("write");
         let probe = probe_pdf(&path).expect("probe");
