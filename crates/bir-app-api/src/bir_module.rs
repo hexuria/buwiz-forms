@@ -2850,7 +2850,7 @@ pub(crate) fn preview_document(
 
 #[cfg(test)]
 thread_local! {
-    static PRINT_PREVIEW_CAPTURES: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
+    static PRINT_PREVIEW_CAPTURES: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 #[cfg(test)]
