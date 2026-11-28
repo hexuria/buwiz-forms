@@ -5511,6 +5511,11 @@ struct Rule6Insertion {
     input_classes: String,
     greys: Vec<(f64, f64)>,
     frame_pt: f64,
+    /// The lowest bottom (pt, before shifting) of the value cells in the
+    /// specify row the strip spans: where a thick closing rule has them
+    /// ending below the cut, the band's text starts under them so it never
+    /// covers an amount cell.
+    row_cells_bottom: f64,
 }
 
 /// RULES.md rule 6: when a named inline "(specify)" field in
@@ -5879,6 +5884,7 @@ fn apply_rule6_specify_bands(
             // the words; the dividers run over the grey.
             let (mut row_x0, mut row_x1) = (r6.x0, x1);
             let mut greys: Vec<(f64, f64)> = Vec::new();
+            let mut row_cells_bottom = f64::NEG_INFINITY;
             if let Some((cl, ct, cw)) = cell_div_geometry(&page_html, &r6.cell_id) {
                 let same_row = |tt: f64| (tt - ct).abs() < 4.0;
                 row_x0 = value_cells
@@ -5900,11 +5906,19 @@ fn apply_rule6_specify_bands(
                     .collect();
                 spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
                 greys = spans;
+                row_cells_bottom = value_cells
+                    .iter()
+                    .filter(|(_, _, tt, _, _)| same_row(*tt))
+                    .map(|(_, _, tt, _, h)| tt + h)
+                    .fold(f64::NEG_INFINITY, f64::max);
             }
             let text_right = greys.first().map(|(l, _)| l - 4.0).unwrap_or(row_x1);
             let room = shrunk_room(((text_right - row_x0) - 6.0).max(20.0));
-            let cell_room =
-                cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
+            // The cell's own line is shrunk text like any other: it sets
+            // within its input's room less the 1 pt every shrunk value keeps
+            // to spare (2550Q p2c246 measured 255.66 in a 255.67 box).
+            let cell_room = cell_div_width(&page_html, &r6.cell_id)
+                .map(|w| shrunk_room(input_room(w, &inp_tag)));
             let lines_cap = rule6_band_lines_cap(line_budget, pitch_pt);
             let cap = lines_cap.min(RULE6_MAX_BAND_LINES);
             let composed =
@@ -5954,6 +5968,7 @@ fn apply_rule6_specify_bands(
                 input_classes,
                 greys,
                 frame_pt,
+                row_cells_bottom,
             });
         }
 
@@ -6602,13 +6617,19 @@ fn shift_page_and_insert_rule6(
                 if line_idx + 1 == band_lines.len() { warn_attr.as_str() } else { "" }
             ));
         }
+        // The text starts under the row's amount cells where they end inside
+        // a thick closing rule (1701MS item 9: the cells end 0.25 pt below
+        // the strip's top); never lower than such a rule is thick. No drawn
+        // line moves — only the text box shifts.
+        let lift = ins.row_cells_bottom - (ins.cut_y + 0.5);
+        let pad = if lift > 0.0 && lift <= 2.0 { lift } else { 0.0 };
         out.push_str(&format!(
             "<div class=\"c f\" data-rule6-band=\"true\" data-rule6-of=\"{}\" style=\"left:{:.2}pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt\">{}</div>",
             ins.cell_id,
             ins.x0 + 1.5,
-            y + 0.5,
+            y + 0.5 + pad,
             (ins.x1 - ins.x0 - 1.5).max(10.0),
-            h,
+            (h - pad).max(8.0),
             inputs_html
         ));
         prior_dh += ins.dh;
@@ -7962,10 +7983,9 @@ pub fn printed_cell(document: &str, cell: &str) -> (String, Option<f64>) {
         }
     }
     let boxes = printed_text(document, cell);
-    if !boxes.trim().is_empty() {
-        return (boxes, None);
-    }
-    (String::new(), None)
+    // Blank-padded combs (an empty TIN prints as spaces) keep their spaces:
+    // the boxes are the printed text even when they trim to nothing.
+    (boxes, None)
 }
 
 /// Email inputs (`txtEmail`, `txtI11Email`, `txtPg1Pt1I12Email`, ...) are
@@ -11699,6 +11719,10 @@ mod tests {
                 ("200", every(&words_of(200))),
                 ("90", every(&words_of(90))),
                 ("sweep", sweep),
+                // One unbroken word hard-splits to the line's very edge: the
+                // case a word-wrapped fill never reaches (2550Q p2c246's cell
+                // line measured 255.66 in a 255.67 box only under this fill).
+                ("longword", every(&"A".repeat(200))),
             ] {
                 let document = filled_document(&slug, &fields).unwrap();
                 for (cell, (text, size)) in printed_cells(&document) {
@@ -12193,9 +12217,6 @@ mod tests {
             // cells (the greyed amount columns) but never a value cell of
             // another row. Companions are the cells sharing the row's
             // vertical span with the band's own cell.
-            let own = divs.iter().find(|d| {
-                d.band_of.is_none() && d.id.as_deref() == Some(of) && d.page == band.page
-            });
             for cell in divs.iter().filter(|d| d.value_cell && d.page == band.page) {
                 if cell.id.as_deref() == Some(of) {
                     continue;
@@ -12205,15 +12226,15 @@ mod tests {
                 let y =
                     (band.top + band.height).min(cell.top + cell.height) - band.top.max(cell.top);
                 if x > 0.05 && y > 0.05 {
-                    let same_row = own.is_some_and(|o| {
-                        (cell.top + cell.height).min(o.top + o.height) - cell.top.max(o.top) > 1.0
-                    });
-                    if !same_row {
-                        wrong.push(format!(
-                            "{of}: band covers value cell {} by {x:.2} pt sideways, {y:.2} pt down",
-                            cell.id.as_deref().unwrap_or("?")
-                        ));
-                    }
+                    // Companion cells of the band's own row may share the
+                    // strip's width sideways, but never its height: the band
+                    // starts below the row, so any vertical overlap covers
+                    // the cell's printed digits (1701MS item 9: the amount
+                    // cells end 0.25 pt into the closing rule the band abuts).
+                    wrong.push(format!(
+                        "{of}: band covers value cell {} by {x:.2} pt sideways, {y:.2} pt down",
+                        cell.id.as_deref().unwrap_or("?")
+                    ));
                 }
             }
         }
@@ -16417,81 +16438,151 @@ mod donor_estate_print_tests {
         assert_eq!(super::printed_cell(doc, "c1").0, *text);
     }
 
+    /// 1701MS item 9, the owner's no-sliver rule: row 9's comb ticks print
+    /// whole above the strip and nothing of the row leaks below it. Ticks are
+    /// counted on page 2 only — page 1 carries its own uprights at the same
+    /// heights and would poison a document-wide count.
+    #[test]
+    fn rule6_strip_leaves_no_tick_sliver_of_its_row() {
+        let slug = "1701ms-2024";
+        let cells = writer_cells(slug).unwrap();
+        let mut fields: BTreeMap<String, String> = BTreeMap::new();
+        for key in cells.joins.keys() {
+            if key.contains("description") || key.contains("specify") {
+                fields.insert(key.clone(), "SPECIMEN LONG SPECIFY TEXT WITH MANY WORDS FOR OVERFLOW WRAPPING EXERCISE AND EVEN MORE WORDS TO WRAP OVER SEVERAL CONTINUATION LINES".to_string());
+            } else {
+                fields.insert(key.clone(), "1000".to_string());
+            }
+        }
+        let doc = filled_document(slug, &fields).unwrap();
+        let marker = "data-rule6-of=\"p2c179\"";
+        let at = doc.find(marker).expect("item 9's band prints") + marker.len();
+        let start = doc[..at].rfind("<div ").unwrap();
+        let end = at + doc[at..].find('>').unwrap() + 1;
+        let tag = &doc[start..end];
+        let band_top = super::style_pt_prop(tag, "top").unwrap();
+        let band_h = super::style_pt_prop(tag, "height").unwrap();
+        let page_at = doc.find("id=\"page-2\"").expect("page 2");
+        let page = &doc[page_at..];
+        // thin uprights 3..7 pt tall in the amount columns right of x 330
+        let ticks_in = |y0: f64, y1: f64| -> usize {
+            let mut n = 0;
+            let mut cursor = 0usize;
+            while let Some(rel) = page[cursor..].find("<rect ") {
+                let rs = cursor + rel;
+                let Some(e) = page[rs..].find('>') else {
+                    break;
+                };
+                let rtag = &page[rs..rs + e + 1];
+                let num = |a: &str| attr(rtag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    if x > 330.0 && w <= 1.6 && (3.0..=7.0).contains(&h) && y >= y0 && y < y1 {
+                        n += 1;
+                    }
+                }
+                cursor = rs + e + 1;
+            }
+            n
+        };
+        assert!(
+            ticks_in(band_top - 8.0, band_top) >= 8,
+            "row 9's ticks stay whole above the strip (top {band_top:.2})"
+        );
+        assert_eq!(
+            ticks_in(band_top, band_top + band_h),
+            0,
+            "no tick of the row prints inside the strip {band_top:.2}..{:.2}",
+            band_top + band_h
+        );
+    }
+
     #[test]
     fn rule6_cell_and_band_reconstruct_the_whole_value() {
         // lifted from #510's a_rule6_value_fills_its_own_cell_before_the_band,
         // adapted: the cell's first part plus every continuation input of the
         // band, joined in document order, reconstructs the whole value — or
         // the band ends on the whole-word ellipsis. A dropped final line fails.
-        let mut fields = rule6_proof_fill("1701-2018");
-        // a fill that wraps over the cell plus two or three band lines but
-        // fits whole under the cap: the equality branch, not the ellipsis
-        // escape, is what proves reconstruction.
+        // Two compositions: 1701 item 9 (page 4) and 1601C item 20 (page 1)
+        // — the second is #510's field-first case, field + band = whole.
         let words =
             "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA";
-        let full = format!("{words} {words} UNIT 1203 TWELFTH");
-        fields.insert("frm1701:txtPg4IPart7_9Specify".to_string(), full.clone());
-        let doc = filled_document("1701-2018", &fields).unwrap();
-        let decode = |s: &str| {
-            s.replace("&#10;", "\n")
-                .replace("&quot;", "\"")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .replace("&amp;", "&")
-        };
-        let inp_at = doc.find("id=\"p4c213-i\"").expect("the cell input prints");
-        let inp_end = inp_at + doc[inp_at..].find('>').unwrap();
-        let cell_text = decode(attr(&doc[inp_at..=inp_end], "value").unwrap_or(""));
-        assert!(
-            !cell_text.trim().is_empty(),
-            "the cell keeps its first part"
-        );
-        let mut lines: Vec<String> = Vec::new();
-        let mut cursor = 0usize;
-        while let Some(rel) = doc[cursor..].find("data-overflow-of=\"p4c213\"") {
-            let at = cursor + rel;
-            let start = doc[..at].rfind("<input").unwrap_or(0);
-            let end = at + doc[at..].find('>').unwrap_or(0);
-            lines.push(decode(attr(&doc[start..=end], "value").unwrap_or("")));
-            cursor = end + 1;
-        }
-        assert!(
-            lines.len() >= 2,
-            "fixture: the band holds at least two continuation lines"
-        );
-        let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
-        let mut joined = cell_text.clone();
-        for line in &lines {
-            joined.push(' ');
-            joined.push_str(line);
-        }
-        let joined = norm(&joined);
-        let whole = norm(&full);
-        // as strict as #510's own: the fill fits under the cap, so the
-        // ellipsis escape hatch never fires — cell + band reconstruct the
-        // whole value exactly, the cell's first part is the whole value's
-        // beginning, and no line repeats text another line already printed.
-        assert!(
-            !lines.iter().any(|l| l.trim_end().ends_with('\u{2026}')),
-            "a fill that fits under the cap never ends on the ellipsis"
-        );
-        assert!(
-            whole.starts_with(cell_text.trim()),
-            "the cell keeps the value's own beginning"
-        );
-        for (i, line) in lines.iter().enumerate() {
-            if line.is_empty() {
-                continue;
+        for (slug, key, cell_id) in [
+            ("1701-2018", "frm1701:txtPg4IPart7_9Specify", "p4c213"),
+            ("1601c-2018", "frm1601c:txt20Other", "p1c223"),
+        ] {
+            let mut fields: BTreeMap<String, String> = BTreeMap::new();
+            // a fill that wraps over the cell plus two or three band lines but
+            // fits whole under the cap: the equality branch, not the ellipsis
+            // escape, is what proves reconstruction.
+            let full = format!("{words} {words} UNIT 1203 TWELFTH");
+            fields.insert(key.to_string(), full.clone());
+            let doc = filled_document(slug, &fields).unwrap();
+            let decode = |s: &str| {
+                s.replace("&#10;", "\n")
+                    .replace("&quot;", "\"")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&amp;", "&")
+            };
+            let inp_at = doc
+                .find(&format!("id=\"{cell_id}-i\""))
+                .expect("the cell input prints");
+            let inp_end = inp_at + doc[inp_at..].find('>').unwrap();
+            let cell_text = decode(attr(&doc[inp_at..=inp_end], "value").unwrap_or(""));
+            assert!(
+                !cell_text.trim().is_empty(),
+                "the cell keeps its first part"
+            );
+            let mut lines: Vec<String> = Vec::new();
+            let mut cursor = 0usize;
+            let overflow_needle = format!("data-overflow-of=\"{cell_id}\"");
+            while let Some(rel) = doc[cursor..].find(&overflow_needle) {
+                let at = cursor + rel;
+                let start = doc[..at].rfind("<input").unwrap_or(0);
+                let end = at + doc[at..].find('>').unwrap_or(0);
+                lines.push(decode(attr(&doc[start..=end], "value").unwrap_or("")));
+                cursor = end + 1;
             }
             assert!(
-                !lines[..i].iter().any(|earlier| earlier == line),
-                "no repeated continuation line"
+                lines.len() >= 2,
+                "fixture: the band holds at least two continuation lines"
             );
-        }
-        assert_eq!(
+            let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+            let mut joined = cell_text.clone();
+            for line in &lines {
+                joined.push(' ');
+                joined.push_str(line);
+            }
+            let joined = norm(&joined);
+            let whole = norm(&full);
+            // as strict as #510's own: the fill fits under the cap, so the
+            // ellipsis escape hatch never fires — cell + band reconstruct the
+            // whole value exactly, the cell's first part is the whole value's
+            // beginning, and no line repeats text another line already printed.
+            assert!(
+                !lines.iter().any(|l| l.trim_end().ends_with('\u{2026}')),
+                "a fill that fits under the cap never ends on the ellipsis"
+            );
+            assert!(
+                whole.starts_with(cell_text.trim()),
+                "the cell keeps the value's own beginning"
+            );
+            for (i, line) in lines.iter().enumerate() {
+                if line.is_empty() {
+                    continue;
+                }
+                assert!(
+                    !lines[..i].iter().any(|earlier| earlier == line),
+                    "no repeated continuation line"
+                );
+            }
+            assert_eq!(
             joined, whole,
-            "cell + band must reconstruct the whole value exactly:\njoined: {joined}\nwhole: {whole}"
+            "{slug} {cell_id}: cell + band must reconstruct the whole value exactly:\njoined: {joined}\nwhole: {whole}"
         );
+        }
     }
 
     /// The plain-rectangle case: an amount too long for its comb prints as
