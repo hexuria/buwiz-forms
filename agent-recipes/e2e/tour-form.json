@@ -1,0 +1,225 @@
+{
+ "v": 1,
+ "name": "tour-form",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "size-1280x800",
+   "op": "viewport",
+   "width": 1280,
+   "height": 800
+  },
+  {
+   "id": "form-top",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "form-top-side-scroll",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dx": 500,
+   "dy": 0
+  },
+  {
+   "id": "form-top-side",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "form-nav",
+   "op": "wait_until",
+   "target": "fp-nav-list",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "form-sections-toggle",
+   "op": "click",
+   "target": "fp-sections-toggle"
+  },
+  {
+   "id": "form-sections",
+   "op": "wait_until",
+   "target": "fp-sections-list",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "form-sections-close",
+   "op": "click",
+   "target": "fp-sections-toggle"
+  },
+  {
+   "id": "form-middle-scroll",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dx": 0,
+   "dy": 1600
+  },
+  {
+   "id": "form-middle-pinned",
+   "op": "wait_until",
+   "target": "form-scroll",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "schedule-part",
+   "op": "click",
+   "target": "fp-nav-4"
+  },
+  {
+   "id": "schedule-table-start",
+   "op": "wait_until",
+   "target": "fp-table-drpATC1-add",
+   "timeout_ms": 15000,
+   "screenshot": true
+  },
+  {
+   "id": "schedule-row1-open",
+   "op": "click",
+   "target": "fp-row-drpATC1-0"
+  },
+  {
+   "id": "schedule-row1-fill",
+   "op": "set_value",
+   "target": "fp-txtATCAmt1",
+   "value": "1000"
+  },
+  {
+   "id": "schedule-row1-done",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "schedule-add2",
+   "op": "click",
+   "target": "fp-table-drpATC1-add"
+  },
+  {
+   "id": "schedule-row2-fill",
+   "op": "set_value",
+   "target": "fp-txtATCAmt2",
+   "value": "2000"
+  },
+  {
+   "id": "schedule-row2-done",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "schedule-add3",
+   "op": "click",
+   "target": "fp-table-drpATC1-add"
+  },
+  {
+   "id": "schedule-row3-fill",
+   "op": "set_value",
+   "target": "fp-txtATCAmt3",
+   "value": "3000"
+  },
+  {
+   "id": "schedule-row3-done",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "schedule-three-rows",
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-2",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "form-end-scroll",
+   "op": "scroll_until",
+   "target": "form-scroll",
+   "dx": 0,
+   "dy": 1000,
+   "until": "fp-pager-clearance",
+   "max_steps": 30
+  },
+  {
+   "id": "form-end",
+   "op": "wait_until",
+   "target": "fp-pager-clearance",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "form-end-side-scroll",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dx": 500,
+   "dy": 0
+  },
+  {
+   "id": "form-end-side",
+   "op": "wait_until",
+   "target": "fp-pager-clearance",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "print-open-scroll",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dx": 0,
+   "dy": -10000
+  },
+  {
+   "id": "print-open",
+   "op": "click",
+   "target": "fp-print"
+  },
+  {
+   "id": "print-top",
+   "op": "wait_until",
+   "target": "print-sheet",
+   "timeout_ms": 15000,
+   "screenshot": true
+  },
+  {
+   "id": "print-end-scroll",
+   "op": "scroll_until",
+   "target": "print-sheet",
+   "dx": 0,
+   "dy": 1000,
+   "until": "print-sheet",
+   "max_steps": 3
+  },
+  {
+   "id": "print-bottom-scroll",
+   "op": "scroll",
+   "target": "print-sheet",
+   "dx": 0,
+   "dy": 10000
+  },
+  {
+   "id": "print-end",
+   "op": "wait_until",
+   "target": "print-sheet",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "print-end-side-scroll",
+   "op": "scroll",
+   "target": "print-sheet",
+   "dx": 500,
+   "dy": 0
+  },
+  {
+   "id": "print-end-side",
+   "op": "wait_until",
+   "target": "print-sheet",
+   "timeout_ms": 5000,
+   "screenshot": true
+  }
+ ]
+}

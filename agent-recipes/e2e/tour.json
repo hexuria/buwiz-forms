@@ -1,0 +1,63 @@
+{
+ "v": 1,
+ "description": "Windows layout tour for the Taffy BEFORE/AFTER comparison. Recipes reuse first-run sign-up and the proven Windows 2551Q opener, then capture named screens through gpui-agent only.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "birth": "01/15/1990",
+  "prior": "500.25",
+  "amount": "1234.56",
+  "amount_shown": "1,234.56",
+  "tin_root": "123456788",
+  "year": "2026",
+  "bstart": "01/01/2020"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "tax-year",
+   "file": "tax-year.wants",
+   "required": true
+  },
+  {
+   "name": "tour-shell",
+   "windows": "tour-shell.json",
+   "file": "tour-shell.json",
+   "required": true
+  },
+  {
+   "name": "open-2551q",
+   "windows": "open-2551q-windows.wants",
+   "desktop": "open-2551q.wants",
+   "required": true
+  },
+  {
+   "name": "tour-form",
+   "windows": "tour-form.json",
+   "file": "tour-form.json",
+   "required": true
+  }
+ ]
+}

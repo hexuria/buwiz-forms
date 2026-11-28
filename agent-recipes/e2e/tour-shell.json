@@ -1,0 +1,190 @@
+{
+ "v": 1,
+ "name": "tour-shell",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "size-1280x800",
+   "op": "viewport",
+   "width": 1280,
+   "height": 800
+  },
+  {
+   "id": "home",
+   "op": "wait_until",
+   "target": "home-tile-drafts",
+   "timeout_ms": 15000,
+   "screenshot": true
+  },
+  {
+   "id": "home-side-scroll",
+   "op": "scroll",
+   "target": "main-scroll",
+   "dx": 500,
+   "dy": 0
+  },
+  {
+   "id": "home-side",
+   "op": "wait_until",
+   "target": "home-tile-drafts",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "sidebar-open",
+   "op": "wait_until",
+   "target": "sidebar",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "new-open",
+   "op": "click",
+   "target": "sb-new"
+  },
+  {
+   "id": "new-return",
+   "op": "wait_until",
+   "target": "new-return",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "new-cancel",
+   "op": "click",
+   "target": "new-return-cancel"
+  },
+  {
+   "id": "library-go",
+   "op": "click",
+   "target": "nav-library"
+  },
+  {
+   "id": "library-grid",
+   "op": "wait_until",
+   "target": "library-grid",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "library-side-scroll",
+   "op": "scroll",
+   "target": "main-scroll",
+   "dx": 500,
+   "dy": 0
+  },
+  {
+   "id": "library-side",
+   "op": "wait_until",
+   "target": "library-grid",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "palette-open",
+   "op": "click",
+   "target": "sb-search"
+  },
+  {
+   "id": "palette",
+   "op": "wait_until",
+   "target": "palette-input",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "palette-close",
+   "op": "key",
+   "target": "palette-input",
+   "key": "escape"
+  },
+  {
+   "id": "calendar-go",
+   "op": "click",
+   "target": "nav-calendar"
+  },
+  {
+   "id": "calendar-grid",
+   "op": "wait_until",
+   "target": "calendar-grid",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "calendar-picker-open",
+   "op": "click",
+   "target": "calendar-taxpayers-trigger"
+  },
+  {
+   "id": "calendar-picker",
+   "op": "wait_until",
+   "target": "calendar-taxpayers-search",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "calendar-picker-close",
+   "op": "key",
+   "target": "calendar-taxpayers-search",
+   "key": "escape"
+  },
+  {
+   "id": "account-open",
+   "op": "click",
+   "target": "account-row"
+  },
+  {
+   "id": "settings-open",
+   "op": "click",
+   "target": "menu-account"
+  },
+  {
+   "id": "settings-top",
+   "op": "wait_until",
+   "target": "settings-nav-general",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "settings-end-scroll",
+   "op": "scroll_until",
+   "target": "settings-scroll",
+   "dx": 0,
+   "dy": 900,
+   "until": "settings-version",
+   "max_steps": 20
+  },
+  {
+   "id": "settings-end",
+   "op": "wait_until",
+   "target": "settings-version",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "settings-end-side-scroll",
+   "op": "scroll",
+   "target": "settings-scroll",
+   "dx": 500,
+   "dy": 0
+  },
+  {
+   "id": "settings-end-side",
+   "op": "wait_until",
+   "target": "settings-version",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "home-return",
+   "op": "click",
+   "target": "nav-home"
+  },
+  {
+   "id": "home-final",
+   "op": "wait_until",
+   "target": "home-tile-drafts",
+   "timeout_ms": 5000
+  }
+ ]
+}
