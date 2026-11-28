@@ -2493,7 +2493,7 @@ pub fn reschedule_email_polls_for_inbox(db_guard: &Database, inbox: &str) -> usi
     {
         let tin = profile.tin.full();
         for draft in db_guard
-            .returns_awaiting_bir_email(&tin)
+            .returns_awaiting_bir_email(&tin, chrono::Utc::now())
             .unwrap_or_default()
         {
             seen += 1;
@@ -6286,7 +6286,7 @@ mod tests {
         sent_lab_1601c_via(&db, crate::filing_queue::mandatory_lab_1601c_draft(), true);
         let tin = crate::filing_queue::mandatory_lab_1601c_draft().tin;
         assert!(
-            db.returns_awaiting_bir_email(&tin)
+            db.returns_awaiting_bir_email(&tin, chrono::Utc::now())
                 .expect("the waiting returns are listed")
                 .is_empty(),
             "a mock relay send is not waiting for the BIR's email"
@@ -6296,7 +6296,7 @@ mod tests {
             crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10),
         );
         assert_eq!(
-            db.returns_awaiting_bir_email(&tin)
+            db.returns_awaiting_bir_email(&tin, chrono::Utc::now())
                 .expect("the waiting returns are listed")
                 .len(),
             1,
