@@ -144,6 +144,8 @@ let keptLoaded = false;
 /** The dev start route's steps for the sign-in and setup screens (screens/auth registers them). */
 let accessSteps: ((key: string, value: string) => void) | null = null;
 let databasePath = "";
+/** Set by finishUnlock: the next account-open poll is a sign-in while a room may already be open, so it is always a new session. */
+let accountChangePending = false;
 let shellChromeSent: boolean | null = null;
 let bootPromise: Promise<void> | null = null;
 
@@ -161,6 +163,8 @@ function readOnly<T>(s: Signal<T>): Accessor<T> {
  */
 export function storageKey(key: string, database: string): string | null {
   if (key === KEYS.prefs) return key;
+  // A room-scoped key names the room database's exact path. A room removed or forgotten by the host can never be
+  // opened at that path again, so its keys are unreachable: no later databasePath can name them and nothing reads them.
   return database ? `${key}@${database}` : null;
 }
 
@@ -460,6 +464,18 @@ function sessionChanged(): void {
       store.logScreen("warn", `resetting a screen for the next session: ${errorText(error)}`);
     }
   }
+}
+
+/** The frame a newly opened account room starts with: Home, no hidden pages or layers, every screen's own state new. */
+function resetRoomScreens(): void {
+  batch(() => {
+    history.set([]);
+    forward.set([]);
+    route.set({ view: "home", params: {}, seq: ++seq });
+    panel.set(null);
+    overlay.set(null);
+  });
+  sessionChanged();
 }
 
 // The frame's own state of the same kind: the palette's search and the New return dialog's picks.
@@ -1393,6 +1409,8 @@ async function accountOpened(start?: string): Promise<void> {
   stopAccountOpenPoll();
   gateError.set(null);
   const wasLocked = cloudLocked();
+  const accountChanged = accountChangePending;
+  accountChangePending = false;
   cloudLocked.set(false);
   if (!keptLoaded) {
     await loadKept(start);
@@ -1400,8 +1418,9 @@ async function accountOpened(start?: string): Promise<void> {
     // that sign a session in when booted first fire must not erase it. A later commit is already after boot.
     if (start && !initialAccountOpen) runStartRoute(start);
   } else {
-    if (wasLocked) {
-      sessionChanged();
+    if (wasLocked || accountChanged) {
+      if (accountChanged) resetRoomScreens();
+      else sessionChanged();
       // I4 (§A.6): loadKept runs again for every room. It re-reads databasePath after the room opened,
       // so Recent, the selection and read notifications are read and written under the new room's path.
       await loadKept();
@@ -1476,6 +1495,7 @@ async function finishUnlock(): Promise<boolean> {
     return false;
   }
   gateError.set(null);
+  accountChangePending = true;
   await watchAccountOpen();
   return true;
 }
@@ -1507,10 +1527,11 @@ function lockCloud(): void {
   });
   store.cancelRereads();
   dismissToast();
-  // I4: the room is closed, so the kept values have no database path — storageKey answers null while
-  // it is empty, and nothing is read or written between rooms.
+  // I4/A4: the room is closed, so the kept values have no database path — storageKey answers null while
+  // it is empty, and nothing is read or written between rooms. keptLoaded makes the next room load its own.
   databasePath = "";
-  sessionChanged();
+  keptLoaded = false;
+  resetRoomScreens();
 }
 
 // ---------------------------------------------------------------- the public handle

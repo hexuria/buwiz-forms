@@ -53,6 +53,8 @@ interface Params extends EmailParams {
   drop?: boolean;
   signOut?: boolean;
   signOutError?: string;
+  /** true: the fake sign-in knows juana@example.com and pedro@example.com as two rooms; system_info names the current room's database. */
+  rooms?: boolean;
   unlocked?: boolean;
   claim?: "opening" | "moving";
   signInClaim?: "opening" | "moving";
@@ -75,6 +77,8 @@ const pendingReads = signal(0);
 const migrationReads = signal(0);
 /** The help desk's recovery key, as setup_helpdesk answered it (the readout shows it). */
 let recoveryKey = "";
+/** The rooms fixture's test seam: which email the next session-open is for. */
+let roomEmailForTest: ((email: string) => void) | null = null;
 
 async function seed(p: Params): Promise<void> {
   if (p.demo) createDemoTaxpayer();
@@ -151,6 +155,19 @@ function fakeAccount(p: Params): void {
     };
   }
   if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
+  if (p.gate && p.rooms) {
+    let email = "juana@example.com";
+    roomEmailForTest = (next) => {
+      email = next;
+    };
+    const start = h.cloud_account_email_start as (email: string) => Promise<unknown>;
+    h.cloud_account_email_start = async (next: string) => {
+      email = next.trim().toLowerCase();
+      return start(next);
+    };
+    const realInfo = bir.system_info;
+    h.system_info = () => ({ ...realInfo(), database_path: `test-room-${email === "pedro@example.com" ? "b" : "a"}.db` });
+  }
   if (p.gate && (p.signOut || p.signOutError)) {
     // Signed out at once, no network: the gate's answer is closed again. A refusal keeps it.
     h.cloud_account_sign_out = async () => {
@@ -274,6 +291,17 @@ function Demo() {
                 await bir.cloud_account_sign_out();
                 app.lockCloud();
               })();
+            }}
+          />
+        </If>
+        <If when={p.rooms === true}>
+          <AppButton
+            testID="demo-switch-account"
+            label="Test: switch account"
+            size="sm"
+            onPress={() => {
+              roomEmailForTest?.("pedro@example.com");
+              void app.finishUnlock();
             }}
           />
         </If>

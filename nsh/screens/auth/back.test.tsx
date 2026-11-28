@@ -1,7 +1,7 @@
 // Android's back button on the pages before the app (`app.back()` presses it: the app's listeners hear it first). On the email
 // and code pages it steps back a page, as the back control does (Gate.tsx). On the first page, the PIN sign-in and the
 // first-run steps nothing of the app's hidden history is walked: the press is left to the system, which leaves the app
-// (Shell.tsx answers false while the frame is hidden). Proved by what shows after signing in again: the page the person was on.
+// (Shell.tsx answers false while the frame is hidden). A cloud sign-out starts the next room on Home; a taxpayer lock still returns to the page the person was on.
 import { type App, expect, open, test } from "nsh/test";
 
 const ENTRY = "../../AuthDemo.tsx";
@@ -36,7 +36,7 @@ test("android: Back on the code page goes to the email page (the address kept), 
   await app.waitFor("id:gate-start");
 }, 60_000);
 
-test("android: Back on the first page after a sign-out walks nothing of the hidden app: signed in again, the same page shows", async () => {
+test("android: Back on the first page after a sign-out walks nothing of the hidden app: signed in again, Home shows", async () => {
   const app = await open(ENTRY, { ...ANDROID, host: { params: { gate: true, demo: true, mode: "solo", firstRun: false, signOut: true, readout: true } } });
   await signInByEmail(app);
   await app.press("id:tab-calendar");
@@ -47,9 +47,9 @@ test("android: Back on the first page after a sign-out walks nothing of the hidd
   await app.wait(200);
   expect(app.shows("id:gate-start")).toBe(true);
   await signInByEmail(app);
-  // The calendar, where the person was: the hidden history did not go back to Home.
-  await app.waitFor("id:calendar-narrow");
-  expect(app.shows("id:home")).toBe(false);
+  // A4: closing the cloud room resets the hidden history and route; the next room starts on Home.
+  await app.waitFor("id:home");
+  expect(app.shows("id:calendar-narrow")).toBe(false);
 }, 90_000);
 
 test("android: Back on the PIN sign-in walks nothing of the hidden app: signed in again, the same page shows", async () => {
