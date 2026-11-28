@@ -1,10 +1,10 @@
 {
  "suite": "smoke",
  "target": "ios",
- "started": "20261127-162115",
- "out": "/Users/devin/repos/e2e-recipes-refresh/ios-run-final",
+ "started": "20261127-195004",
+ "out": "/Users/devin/repos/e2e-recipes-refresh/ios-final507",
  "cli_version": "0.4.1",
- "app_commit": "73302a0c",
+ "app_commit": "d0025c42",
  "platform": "mobile",
  "os": "ios",
  "features": [
@@ -27,97 +27,86 @@
  "database": "test",
  "recipes": [
   {
-   "name": "sign-up-seed",
-   "status": "pass",
-   "ms": 211,
-   "note": null,
-   "file": "agent-recipes/e2e/seed-tax-profile.json"
-  },
-  {
    "name": "setup-start",
    "status": "pass",
-   "ms": 154,
+   "ms": 1650,
    "note": null,
-   "file": "agent-recipes/e2e/setup-start-seeded.wants"
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/01-setup-start/recording.mp4"
   },
   {
    "name": "sign-up",
-   "status": "skipped",
-   "ms": 0,
-   "note": "no phone variant",
-   "file": null
+   "status": "fail",
+   "ms": 17670,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json",
+   "video": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/02-sign-up/recording.mp4",
+   "step": "s9a",
+   "error": "wait_until timed out: node `new-tp-zip_code-search` not found",
+   "error_code": "timeout",
+   "line": null,
+   "screenshot": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/02-sign-up/failure.png",
+   "tree": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/02-sign-up/failure-tree.json"
   },
   {
    "name": "tax-year",
-   "status": "pass",
-   "ms": 12724,
-   "note": null,
-   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "navigate",
-   "status": "pass",
-   "ms": 2843,
-   "note": null,
-   "file": "agent-recipes/e2e/navigate-phone.wants"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "open-2551q",
-   "status": "pass",
-   "ms": 3334,
-   "note": null,
-   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "money-boxes",
-   "status": "pass",
-   "ms": 13251,
-   "note": null,
-   "file": "agent-recipes/e2e/money-boxes-paced-phone.json"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "sheet-press",
-   "status": "skipped",
+   "status": "not run",
    "ms": 0,
-   "note": "no phone variant",
-   "file": null
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "delete-row",
-   "status": "setup",
-   "ms": 54,
-   "note": null,
-   "file": "agent-recipes/e2e/delete-row.wants",
-   "step": null,
-   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "queue",
-   "status": "pass",
-   "ms": 21442,
-   "note": null,
-   "file": "agent-recipes/e2e/queue-phone.json"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "queue-send",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "birth-date",
-   "status": "pass",
-   "ms": 8452,
-   "note": null,
-   "file": "agent-recipes/e2e/birth-date-phone.json"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   },
   {
    "name": "sign-out",
-   "status": "known gap",
-   "ms": 12380,
-   "note": null,
-   "file": "agent-recipes/e2e/sign-out-phone.wants",
-   "step": "s4",
-   "error": "wait_until timed out: node `locked-screen` not found",
-   "error_code": "timeout",
-   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
-   "known_gap": "issue #450: BIR_AUTH_BYPASS=1 leaves no lock screen after Log out",
-   "screenshot": "/Users/devin/repos/e2e-recipes-refresh/ios-run-final/12-sign-out/failure.png",
-   "tree": "/Users/devin/repos/e2e-recipes-refresh/ios-run-final/12-sign-out/failure-tree.json"
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
   }
  ]
 }
