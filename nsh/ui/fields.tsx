@@ -203,6 +203,8 @@ interface MaskedProps {
   /** The text a box the filer edited settles on when left (the amount rounded to centavos); unset: the shown one. */
   settle?: (text: string) => string;
   keyboardType: KeyboardType;
+  /** The integer part is the entry: a focus whose caret the platform drops at the very end of a decimal amount moves it before the point. */
+  integerCaret?: boolean;
   /** No live formatting: focused text is left exactly as the box holds it. */
   noLiveFormat?: boolean;
   /** Whether focused text reads as a value; when false nothing is reported and the error state shows. */
@@ -281,6 +283,7 @@ function MaskedField(props: MaskedProps) {
   let selected: TextSelection | undefined;
   let editFrom: TextSelection | undefined;
   let editTyped = false;
+  let editKey: string | undefined;
   // The text changed at the filer's hands during this focus (even back to what it was).
   let typedThisFocus = false;
   // The text the box last reported while it has the keys. Keys that come faster than the answers (a burst, an agent's
@@ -351,6 +354,7 @@ function MaskedField(props: MaskedProps) {
   });
   const change = (raw: string) => {
     armWindowsReselect = false;
+    const firstEditThisFocus = !typedThisFocus;
     typedThisFocus = true;
     const prev = untracked(text);
     if (outsideAfterEmpty) outsideAfterEmpty = false;
@@ -360,10 +364,24 @@ function MaskedField(props: MaskedProps) {
     editTyped = false;
     if (props.noLiveFormat) {
       // Focused text is authoritative: strict reading decides the report; no mask rewrite or refusal answer is computed for it.
-      boxText = raw;
-      text.set(raw);
-      if (props.commaStates) commaState = nextCommaState(commaState, prev, raw);
-      const reading = raw;
+      let reading = raw;
+      let integerCaret: number | undefined;
+      if (props.integerCaret && firstEditThisFocus && typed && editKey && editKey >= "0" && editKey <= "9") {
+        // A focus whose caret the platform drops at the very end of a decimal amount puts the first digit in its centavos.
+        // The integer is the entry: when the edit came back as that digit appended at the end, put it before the point.
+        // A platform that already honored the focus caret returns the digit there instead, so this does not run twice.
+        const point = prev.lastIndexOf(".");
+        const end = prev.length;
+        if (point > 0 && end - point === 3 && (from === undefined || (from.start === end && from.end === end)) && raw === prev + editKey) {
+          reading = prev.slice(0, point) + editKey + prev.slice(point);
+          integerCaret = point + 1;
+        }
+      }
+      editKey = undefined;
+      boxText = reading;
+      text.set(reading);
+      if (integerCaret !== undefined) writeCaret(integerCaret);
+      if (props.commaStates) commaState = nextCommaState(commaState, prev, reading);
       const valid = commaValid(reading, false);
       if (!valid) {
         invalidActive = true;
@@ -539,6 +557,7 @@ function MaskedField(props: MaskedProps) {
         keySeen = true;
         editFrom = selected;
         editTyped = [...e.key].length === 1;
+        editKey = e.key;
         props.field.onKeyPress?.(e);
       }}
       onFocus={() => {
@@ -549,6 +568,7 @@ function MaskedField(props: MaskedProps) {
           return;
         }
         focused.set(true);
+        selected = undefined;
         keySeen = false;
         boxText = undefined;
         edited = false;
@@ -573,6 +593,21 @@ function MaskedField(props: MaskedProps) {
         }
         programmaticFocus = false;
         programmaticFocusToken++;
+        if (props.integerCaret) {
+          // After the platform's own selection report: a caret dropped at the very end of a decimal amount sits in its
+          // centavos, and digits typed there are not the entry. The integer is; the caret belongs before the point. A caret
+          // the filer placed anywhere else (a click) is their choice, and one inside a key already typed is too late to move.
+          const token = programmaticFocusToken;
+          setTimeout(() => {
+            if (token !== programmaticFocusToken || !untracked(focused) || keySeen) return;
+            const held = untracked(text);
+            const point = held.lastIndexOf(".");
+            const end = held.length;
+            if (point > 0 && end - point === 3 && selected && selected.start === end && selected.end === end) {
+              writeCaret(point);
+            }
+          }, 0);
+        }
         props.field.onFocus?.();
       }}
       onBlur={() => {
@@ -619,6 +654,8 @@ export interface MoneyInputProps extends MaskedFieldProps {
   onChange: (plain: string) => void;
   /** Whole pesos: leaving the box shows "1,234" rather than "1,234.00". */
   whole?: boolean;
+  /** The integer part is the entry: a first digit after focus that the platform appended past the decimal point is put before it. */
+  integerCaret?: boolean;
   /** What precedes the digits; "" for a bare number (an excise volume in metric tons, a count of shares). Default ₱. */
   prefix?: string;
   /** A minus may be typed or pasted; unset, a pasted negative is refused and a typed minus does nothing (a negative value that is there stays negative). */
@@ -647,6 +684,7 @@ export function MoneyInput(props: MoneyInputProps) {
       same={sameAmount}
       keyboardType="decimal-pad"
       noLiveFormat
+      integerCaret={props.integerCaret}
       commaStates
       commaNegative={props.negative}
     />
