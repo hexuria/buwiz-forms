@@ -27,13 +27,14 @@ A plain run keeps the old development bypass: the account gate is open and no ac
 recipes that must prove sign-in and per-account behavior in the real app. It starts `just mock-account --auto-approve`
 (the same loopback in-memory server the Android development scripts use, pinned to `127.0.0.1:3008`), stops it at the
 end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and sets `BIR_AUTH_BYPASS`
-to the empty string: the gate reads only the exact value `1`, and the app's dotenv does not replace a variable that is
-already set. The saved and pending sign-in files are pinned beside the run's own database, removed before launch and
-afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. A default mock run puts its
-database in its own `~/BuwizNsh/agents/e2e-<target>-<time>-<id>/` folder and removes that folder afterwards, so its
-device database, install id and device key are that run's alone and go with it. A plain run keeps one scratch database
-file directly in `~/BuwizNsh/agents/`; it still shares the device store and identity there, and this change leaves it
-alone. Only the mock run's pinned sign-in files are removed: scratch cleanup never touches a sign-in file in the app's
+to `0`: the gate opens only for the exact value `1`, the app's dotenv does not replace a variable that is already set,
+and PowerShell does not treat `0` as an unset variable the way it treats an empty one. The run names no database at
+all: it sets `BIR_DEVICE_DIR` to its own `~/BuwizNsh/agents/e2e-<target>-<time>-<id>/` folder and removes any inherited
+`BIR_DATABASE_PATH`, so the app runs in rooms mode (`device.db`, `rooms/<id>/bir_data.db`, and the sign-in files inside
+that folder). The saved and pending sign-in files are pinned inside the same per-run folder, removed before launch, and
+go with that folder afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. A plain run
+keeps one scratch database file directly in `~/BuwizNsh/agents/`; it still shares the device store and identity there,
+and this change leaves it alone. Only the mock run's pinned sign-in files are removed: scratch cleanup never touches a sign-in file in the app's
 shared device folder, and a plain bypass-mode run touches no shared sign-in file there. After launch the runner waits a bounded time for the app's real sign-in-gate
 node (`gate-root`) before the first recipe; `setup-root`, `home` or `sign-in` appearing first proves the run is already
 past the gate and refuses at once.
@@ -60,16 +61,26 @@ the runner's own `needs`, `screenshot`, `line` and `words` metadata, and gpui-ag
 `expect_fingerprint`): any extra digit-carrying field is read as the secret it could carry. Whether a typed digit then lands in the real page is the sign-in page fix of #608, not part of this runner
 change.
 
-The account gate locks the data plane as well as the window: even `hello` is refused there. A mock run therefore does
-not ask that plane for the scratch-database proof before sign-in. Recipes marked `"sign_in": true` are the boundary
-that may run first (they write account sign-in state, not the filing database). Such a recipe is allow-listed: only
-`click`, `press`, `type`, `key`, `assert`, `wait_until` or `scroll`, and only on `gate-*`, `sign-in-*` or `setup-*`
-nodes; a parameter is checked again after `resolve` binds its real node id. The rule is allow-list based because the
-runner's op names and the app's stable id prefixes are not recipe-chosen: a recipe can choose `fp-queue`, but cannot
-make that filing node begin with the allowed prefixes. Before the first later recipe — and
-before any data-plane recipe — the runner waits for the data plane and requires `app.info` to answer `"database":
-"test"`. If it does not, that recipe is never run. In a plain run the proof still happens before the first recipe, as
-before.
+The rooms-mode proof replaces the old scratch-database proof in mock mode. Immediately after launch the runner reads
+`app.info` and refuses unless it carries the test-environment seam fields: `rooms_mode: true`, a `device_dir` whose
+canonical path is inside (or is) the per-run folder, and a `device_dir` that is not the platform's default
+`dev.goldcoders.bir` data folder. An answer without those fields is an app built before the `BIR_DEVICE_DIR` seam and
+is refused with the missing field named. After the sign-in recipes and before the first recipe that can write, the
+runner reads `app.info` again and refuses unless the open database's `database_path` is also inside the per-run folder.
+Mock mode therefore needs an app built with the `BIR_DEVICE_DIR` seam; plain bypass mode is unchanged (single-room,
+`BIR_DATABASE_PATH`, `"database": "test"`).
+
+The account gate locks the data plane as well as the window: even `hello` is refused there. Recipes marked
+`"sign_in": true` are the boundary that may run first (they write account sign-in state, not the filing database).
+Such a recipe is allow-listed: only `click`, `press`, `type`, `key`, `assert`, `wait_until` or `scroll`, and only on
+`gate-*`, `sign-in-*`, or these non-writing first-run setup ids from `nsh/screens/auth/Setup.tsx`: `setup-root`,
+`setup-card`, `setup-helpdesk`, `setup-pin-card`, `setup-admin-pin`, `setup-back`, `setup-key-card`, `setup-key` and
+`setup-taxpayer`. `setup-solo`, `setup-pin-submit` and `setup-key-done` finish admin set-up and write the filing
+database, so they may not run before the rooms-mode database proof; Settings' `setup-change-*` ids are outside the
+first-run page and are refused too. A parameter is checked again after `resolve` binds its real node id. The rule is
+allow-list based because the runner's op names and the app's stable ids are not recipe-chosen: a recipe can choose
+`fp-queue`, but cannot make that filing node one of the allowed ids. In a plain run the `"database": "test"` proof
+still happens before the first recipe, as before.
 
 ## The rule
 
@@ -87,18 +98,22 @@ before.
 **Cancellation model.** The runner owns only the processes it started: the mock-account server, the app launcher, and
 any emulator reverse it added. Ctrl+C, SIGTERM and SIGHUP (where the platform has them) are one boundary at the
 runner: `finally` stops the app process group and the mock in reverse ownership order, closes the device-side app
-and forwards, restores or removes a mock-written Android `dev.env`, redacts and writes the evidence, then removes
-the scratch database and the mock-run's pinned sign-in files. Verification boundary: `scripts/tests/test_e2e.py`
+and forwards, restores or removes a mock-written Android `dev.env`, redacts and writes the evidence, and only then
+removes the mock run's per-run folder (or the plain run's scratch database). A second Ctrl+C can interrupt that
+`finally`: what remains is the per-run folder (with any room database, device database and pinned sign-in files), and
+possibly the mock or app processes the first interrupt had not yet stopped. Verification boundary: `scripts/tests/test_e2e.py`
 proves the SIGTERM/SIGHUP conversion and handler restoration in Python and the cleanup seams with fakes; it does not
 prove OS signal delivery or process-group behavior inside every platform terminal, only the runner's ownership and
 ordering once the signal or interrupt reaches Python.
 
-On Windows a CI cancel can kill the runner before Python gets that boundary. Three things can then be left behind: the
-mock-account process, the emulator's mock `dev.env`, and the adb reverse. Recover with these commands after confirming
-the run is dead:
+On Windows a CI cancel can kill the runner before Python gets that boundary, and because Windows does not keep a
+killable tree for grandchildren after their launcher exits, the app or mock can survive even when the launcher did not.
+Four things can then be left behind: the mock-account process, the app, the emulator's mock `dev.env`, and the adb
+reverse; the per-run folder can remain too. Recover with these commands after confirming the run is dead and using the
+process id from the run's own window or process list (never an image-name kill, which could hit another mock):
 
 ```powershell
-taskkill /F /IM mock_account.exe
+taskkill /PID <pid> /T /F
 adb -s <serial> shell run-as com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/dev.env
 adb -s <serial> reverse --remove tcp:3008
 ```
@@ -106,13 +121,15 @@ adb -s <serial> reverse --remove tcp:3008
 1. Checks the suite (below), and refuses to start if anything already listens on the agent's ports.
 2. Starts the app with `just nsh-run-agent <target> <db>`. That is a debug build in dry-run mode
    (`EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1`, never `BIR_SFTP_LIVE`); a plain run adds
-   `BIR_AUTH_BYPASS=1`, while `--accounts mock` leaves it out.
-   - The database is new, under `~/BuwizNsh/agents/`; in mock mode it and the device store are a per-run folder.
+   `BIR_AUTH_BYPASS=1`, while `--accounts mock` sets it to `0`.
+   - A plain run's database is new, under `~/BuwizNsh/agents/`; mock mode names no database and instead gives the app
+     its per-run rooms-mode device folder there.
    - On Android, the emulator's guarded test database is removed first, so the run starts at first-run setup.
    - The token is `GPUI_AGENT_TOKEN` if set, else one made for the run. It is never printed, and the run log masks it.
 3. Waits for the window's control plane (`GPUI_AGENT_ADDR`, default `127.0.0.1:17421`). A plain run also proves the
-   data plane on the next port now; a mock run defers that locked plane's scratch-database proof as above. The first
-   build can take a long time: `--launch-timeout` is an hour by default.
+   data plane on the next port now; a mock run proves the rooms-mode device folder from `app.info`, then proves the
+   open room database before the first recipe that can write, as above. The first build can take a long time:
+   `--launch-timeout` is an hour by default.
 4. Runs each recipe with `gpui-agent recipe run`, in the variant for what the host reports:
    - **Variant.** `phone` when `hello.platform` is mobile (iPhone, iPad and Android tablets use the phone layout),
      otherwise `desktop`. A variant named after the target (`windows`, `linux`, `android`, ...) wins on that target
@@ -149,8 +166,8 @@ The checks read every word of a step (flag values included) and every string of 
 - **Send steps.** A recipe that presses Queue, Send, Submit or File (or invokes a send) must be marked `"send": true`
   in its suite, or the suite does not run. It runs only with `--allow-send`, in the dry-run test environment
   (`EBIR_TEST_ENV=1`, `BIR_SFTP_DRY_RUN=1`, no `BIR_SFTP_LIVE`: the launch environment, or the runner's own with
-  `--no-launch`), and only when the app's data plane answers `app.info` with `"database": "test"`. Otherwise it is
-  `refused`.
+  `--no-launch`), and only after the scratch proof for its mode: `"database": "test"` in a plain run, or the open
+  room database inside the per-run folder in a mock run. Otherwise it is `refused`.
 - **`--no-launch`** drives an app that is already running only when it answers `app.info` with `"database":
   "test"`; otherwise nothing runs.
 - **Secret boxes.** No step types, sets, pastes or keys into a box that says password, PIN, passcode, secret,
@@ -167,9 +184,9 @@ The checks read every word of a step (flag values included) and every string of 
 - **The token** stays in the environment of the processes that need it, and is masked in `run.log`, the receipts,
   the failure trees and `app.log`.
 - **Afterwards** the app is stopped, on the Simulator or emulator too (and the emulator's forwarded ports removed);
-  the scratch database is deleted, a mock run's pinned sign-in files are deleted, and a mock-written Android
-  `dev.env` is restored or removed. Shared default-location sign-in files are never deleted. The evidence folder
-  stays.
+  then the plain run's scratch database is deleted or the mock run's whole per-run rooms folder is deleted, and a
+  mock-written Android `dev.env` is restored or removed. Shared default-location sign-in files are never deleted. The
+  evidence folder stays.
 
 ## Per machine type
 

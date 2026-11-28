@@ -20,7 +20,7 @@ Gate before you report: `just nsh-check && just nsh-build && just nsh-test`, all
   it, never patch NSH to fit the app.
 - Dev env for run/shots/tests: `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1`;
   real data only from a copy: `cp ~/BuwizNsh/data/bir_data.db ~/BuwizNsh/agents/<track>.db`. Recipes refuse the owner's data folders.
-  One exception: the e2e runner's `--accounts mock` mode may set `BIR_AUTH_BYPASS` empty instead of `1` only because it pins sign-in to a loopback mock account server; the other three safety variables are unchanged.
+  One exception: the e2e runner's `--accounts mock` mode may set `BIR_AUTH_BYPASS` to `0` instead of `1` only because it pins sign-in to a loopback mock account server; the other three safety variables are unchanged.
 - Raw form: `export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"; cd nsh; nsh test`.
 - Cold times on this machine: CLI install 10m16s; first `nsh check` 90s; first headless runner 57s; first macOS host 63s.
   Warm: check 1-3s, test 18s, a shots run about 1 min (each real window ~3.5s).
