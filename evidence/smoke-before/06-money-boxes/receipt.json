@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-money-boxes-paced-phone",
+  "fingerprint": "fnv1a64:de6545f9e752f8dc",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "occluded_by: 5170",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 973,
+      "screenshot": {
+        "path": "/Users/devin/taffyjob/out/smoke-before/06-money-boxes/001-s1.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/taffyjob/out/smoke-before/06-money-boxes/001-s1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 973
+}

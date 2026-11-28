@@ -1,0 +1,125 @@
+{
+ "suite": "smoke",
+ "target": "ios",
+ "started": "20261128-044451",
+ "out": "/Users/devin/taffyjob/out/smoke-before",
+ "cli_version": "0.5.0",
+ "app_commit": "b983b2a4",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 943,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 22031,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 7200,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 2677,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 2716,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "known gap",
+   "ms": 987,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced-phone.json",
+   "step": "s1",
+   "error": "occluded_by: 5170",
+   "error_code": "host_error",
+   "line": null,
+   "known_gap": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have",
+   "screenshot": "/Users/devin/taffyjob/out/smoke-before/06-money-boxes/failure.png",
+   "tree": "/Users/devin/taffyjob/out/smoke-before/06-money-boxes/failure-tree.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 25,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "refused",
+   "ms": 0,
+   "note": "presses a send control: run with --allow-send",
+   "file": null
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 9167,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 12430,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
+   "screenshot": "/Users/devin/taffyjob/out/smoke-before/11-sign-out/failure.png",
+   "tree": "/Users/devin/taffyjob/out/smoke-before/11-sign-out/failure-tree.json"
+  }
+ ]
+}

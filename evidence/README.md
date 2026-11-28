@@ -54,4 +54,14 @@ spots — are all in identical pairs on both devices. See `compare.md` for the t
   differing pair, a side-by-side PNG (before | after).
 - `smoke-after/`, `smoke-before/`: the `just e2e ios smoke` cross-check (see the session report).
 
+## The smoke cross-check
+
+`just e2e ios smoke` (no `--allow-send`, the safety variables untouched) on the iPhone:
+**identical at BEFORE and at AFTER** — 6 pass, 2 known gap, 1 refused, 1 setup, 1 skipped,
+row for row. money-boxes: known gap 3 (injected paced digits permute on iOS, documented in the
+suite). queue: refused at s0 — "presses a send control: run with --allow-send", the guard working
+as ordered. delete-row: setup-only row ($table resolve finds no add button after money-boxes).
+sign-out: known gap 1 (documented). sheet-press: skipped, no desktop variant. Nothing in the
+smoke suite differs between the two kit pins. Evidence in `smoke-before/` and `smoke-after/`.
+
 Runs used the dry-run test environment with a scratch database; nothing was sent.
