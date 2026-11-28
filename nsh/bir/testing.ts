@@ -122,10 +122,10 @@ export function installFakeTins(
     readout(`account_tins(${maxAge})`);
     if (opts.delayMs) await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
     reads += 1;
+    const k = flipped && opts.flipToAfterActivate ? opts.flipToAfterActivate : kind;
     if ((!flipped && kind === "error") || (opts.errorAfter !== undefined && reads > opts.errorAfter)) throw new Error("Sign in to Buwiz to see your TINs.");
     // An incomplete list still carries the rows it has: completeness is its own fact, and the gate must read it.
     if (k === "incomplete") return { rows: [{ ...base, state: "not_activated", message: null }], complete: false, stale: false, fetched_at: now };
-    const k = flipped && opts.flipToAfterActivate ? opts.flipToAfterActivate : kind;
     return { rows: rows(), complete: true, stale: k === "stale", fetched_at: now };
   };
   bir.activate_tin = async (tinFull: string) => {

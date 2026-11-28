@@ -4074,7 +4074,10 @@ export class FormSession {
     if (this.queueGateBusySig() || this.disposed) return;
     this.queueGateBusySig.set(true);
     const pressed = this.st.target;
-    const targetKey = (t: typeof pressed) => `${t.tin}|${t.formCode}|${t.year}|${t.period}|${t.mode}|${t.key ?? ""}|${t.snapshotId ?? ""}`;
+    // Which return it is: the mode names draft versus filed original versus amendment, and each mode's own identity
+    // — the snapshot of a filed original, the key of an amendment. A plain return's storage key is NOT in it: a
+    // reopen of the same draft is the same return, key or none, filled in or not yet.
+    const targetKey = (t: typeof pressed) => `${t.tin}|${t.formCode}|${t.year}|${t.period}|${t.mode ?? "return"}|${t.mode === "amend" ? (t.key ?? "") : ""}|${t.mode === "filed_original" ? (t.snapshotId ?? "") : ""}`;
     const pressedKey = targetKey(pressed);
     const [tinRoot, branch] = tinKeyParts(pressed.tin);
     void (async () => {

@@ -47,6 +47,10 @@ interface Params {
   swapFiledOriginalAfterMs?: number;
   /** Reopen the same return the moment the first account_tins(0) read starts (a guaranteed overlap, not a guessed one). */
   reopenOnTinsRead?: boolean;
+  /** Open the filed original of the same form/period/tin the moment the first account_tins(0) read starts. */
+  swapFiledOriginalOnTinsRead?: boolean;
+  /** Open the OTHER return (1601C) the moment the first account_tins(0) read starts. */
+  swapTargetOnTinsRead?: boolean;
   /** The refusal activate_tin throws. */
   activate?: FakeActivateKind;
   /** Year facts set for the demo taxpayer before the page opens (e.g. the EOPT tier a queue needs answered). */
@@ -119,14 +123,20 @@ function Fixture() {
                 void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1, mode: "filed_original", snapshotId: 1 } as never);
               }, p.swapFiledOriginalAfterMs);
             }
-            if (p.reopenOnTinsRead) {
+            if (p.reopenOnTinsRead || p.swapFiledOriginalOnTinsRead || p.swapTargetOnTinsRead) {
               let done = false;
               const timer = setInterval(() => {
                 if (done) { clearInterval(timer); return; }
                 if (tinsCalls().some((line) => line.startsWith("account_tins(0)"))) {
                   done = true;
                   clearInterval(timer);
-                  void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1 } as never, true);
+                  if (p.swapFiledOriginalOnTinsRead) {
+                    void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1, mode: "filed_original", snapshotId: 1 } as never);
+                  } else if (p.swapTargetOnTinsRead) {
+                    void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: 2 } as never).then((err) => tinsCalls.set([...tinsCalls(), err ? `swap-target-error ${err}` : "swap-target-opened"]));
+                  } else {
+                    void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1 } as never, true);
+                  }
                 }
               }, 100);
             }

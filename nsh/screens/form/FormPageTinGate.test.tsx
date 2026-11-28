@@ -21,6 +21,16 @@ interface App {
 }
 
 
+/** Presses Queue past the page's own stops until the first account_tins(0) read starts. */
+async function pressToRead(app: App): Promise<void> {
+  for (let i = 0; i < 12; i++) {
+    if (tinsCalls(app).some((c) => c === "account_tins(0)")) return;
+    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
+    else await app.press("id:fp-queue");
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
 /** Waits until Queue's next transition shows (the sheet, the page's own Continue, or the host queue call), then
  * answers which; a beat at a time, never a blind fixed sleep. */
 async function nextQueueStep(app: App): Promise<"sheet" | "continue" | "queued" | "none"> {
@@ -169,7 +179,14 @@ test("desktop: after the account owner changes a failing read clears the old lis
 test("desktop: a switch to the filed original during the account read queues nothing", async () => {
   // "View the filed original" opens the SAME form, period and TIN in another mode. What the read answered was the
   // draft's activation, not the filed original's: nothing queues, nothing blocks.
-  const app = await pageAndQueue("activated", { tinsDelayMs: 1200, swapFiledOriginalAfterMs: 500 });
+  const app = await pageAndQueue("activated", { tinsDelayMs: 1200, swapFiledOriginalOnTinsRead: true });
+  // Press through the page's own stops until the account read starts; the swap fires the moment it does.
+  for (let i = 0; i < 10; i++) {
+    if (tinsCalls(app).some((c) => c === "account_tins(0)")) break;
+    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
+    else await app.press("id:fp-queue");
+    await new Promise((r) => setTimeout(r, 200));
+  }
   await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
   await new Promise((r) => setTimeout(r, 3000));
   expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
@@ -179,10 +196,12 @@ test("desktop: a switch to the filed original during the account read queues not
 test("desktop: a switch to another return during the account read queues nothing", async () => {
   // The press checks the pressed target's TIN; while the slow read is on the wire the page opens another return.
   // What the read answered was for a target the page no longer shows: nothing is queued, nothing is blocked.
-  const app = await pageAndQueue("not_activated", { tinsDelayMs: 1200, swapTargetAfterMs: 500 });
+  const app = await pageAndQueue("not_activated", { tinsDelayMs: 1200, swapTargetOnTinsRead: true });
   // The overlap is real only when both halves are observed: the account read started, and the page switched.
+  await pressToRead(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
-  await app.waitFor("text:BIR Form 1601C", { timeout: 10000 });
+  // The switch completing is observed in the readout: the other period of the same form is open now.
+  await app.waitUntil(() => tinsCalls(app).some((c) => c === "swap-target-opened" || c.startsWith("swap-target-error")), { timeout: 10000 });
   await new Promise((r) => setTimeout(r, 2500));
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
   expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
@@ -202,10 +221,6 @@ test("desktop: a reopen of the same return during the account read still queues"
   // A reopen builds a NEW target object for the same return: the press must not be dropped for that — what the read
   // answered is still this return's TIN.
   const app = await pageAndQueue("activated", { tinsDelayMs: 1000, reopenOnTinsRead: true });
-  for (let i = 0; i < 10; i++) {
-    const step = await nextQueueStep(app);
-    if (step === "queued") break;
-    if (step === "continue") await app.press("id:queue-continue");
-  }
+  await pressToRead(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 12000 });
 }, 40_000);
