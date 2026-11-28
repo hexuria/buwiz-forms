@@ -225,6 +225,15 @@ pub(crate) fn build_continuation_pages(
     })
 }
 
+type DatePartIds = (String, Option<String>, Option<String>, Option<String>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DatePart {
+    Month,
+    Day,
+    Year,
+}
+
 /// How one cell in a band's template row maps to an `OverflowSchedule` column.
 #[derive(Debug, Clone)]
 enum CellJoinKind {
@@ -240,6 +249,13 @@ enum CellJoinKind {
     Peso {
         col_idx: usize,
         orig_writer_key: String,
+    },
+    /// One part of a writer date split across the sheet's MM, DD and YYYY
+    /// combs (`writer-cells.json`'s `date_joins`).
+    Date {
+        col_idx: usize,
+        orig_writer_key: String,
+        part: DatePart,
     },
     /// Print-only sequence/ordinal cell (e.g. `1600WP`'s `derived:sched_seq*`),
     /// filled with the continuing row number (`7`, `8`, `9`, …) through the
@@ -411,6 +427,57 @@ fn match_schedule_to_bands(
         }
     }
 
+    if let Some(arr) = wc.get("date_joins").and_then(Value::as_array) {
+        for item in arr {
+            let Some(printed) = item.get("printed").and_then(Value::as_str) else {
+                continue;
+            };
+            let orig_writer_key = item
+                .get("writer_key")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let Some((sched_name, row_num, col_heading)) =
+                continuation::parse_schedule_row_and_column_pub(printed)
+            else {
+                continue;
+            };
+            if !sched_name.eq_ignore_ascii_case(&sched.heading) {
+                continue;
+            }
+            let Some(col_idx) = sched.columns.iter().position(|c| {
+                c.heading.eq_ignore_ascii_case(&col_heading)
+                    || c.heading
+                        .to_ascii_lowercase()
+                        .starts_with(&col_heading.to_ascii_lowercase())
+                    || col_heading
+                        .to_ascii_lowercase()
+                        .starts_with(&c.heading.to_ascii_lowercase())
+            }) else {
+                continue;
+            };
+            for (field, part) in [
+                ("mm_html_id", DatePart::Month),
+                ("dd_html_id", DatePart::Day),
+                ("yyyy_html_id", DatePart::Year),
+            ] {
+                if let Some(hid) = item.get(field).and_then(Value::as_str) {
+                    html_to_col.insert(
+                        hid.to_string(),
+                        CellJoinKind::Date {
+                            col_idx,
+                            orig_writer_key: orig_writer_key.clone(),
+                            part,
+                        },
+                    );
+                    if row_num == 1 {
+                        col_row1_ids[col_idx].push(hid.to_string());
+                    }
+                }
+            }
+        }
+    }
+
     if html_to_col.is_empty() {
         return None;
     }
@@ -430,7 +497,8 @@ fn match_schedule_to_bands(
                 match kind {
                     CellJoinKind::Text { col_idx, .. }
                     | CellJoinKind::Money { col_idx, .. }
-                    | CellJoinKind::Peso { col_idx, .. } => {
+                    | CellJoinKind::Peso { col_idx, .. }
+                    | CellJoinKind::Date { col_idx, .. } => {
                         has_data_col = true;
                         covered_cols.insert(*col_idx);
                         row1_ids.extend(col_row1_ids[*col_idx].iter().cloned());
@@ -965,6 +1033,7 @@ fn build_single_band_continuation_page(
     let mut extra_joins: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut extra_money_joins: Vec<(String, String, Option<String>)> = Vec::new();
     let mut extra_peso_joins: Vec<(String, String)> = Vec::new();
+    let mut extra_date_joins: Vec<(String, String, Option<String>, String)> = Vec::new();
     let mut caption_aliases: BTreeMap<String, String> = BTreeMap::new();
 
     // --- 1. Clone Page Header (y <= header_bottom_y) ---
@@ -1185,9 +1254,10 @@ fn build_single_band_continuation_page(
                 body_texts.push_str(&replace_inner_text(&shifted, &ord_label));
             }
 
-            // Collect peso/cents synthetic ids per money column in this row
+            // Collect peso/cents and date-part synthetic ids per column in this row.
             let mut row_money_peso: BTreeMap<usize, (String, String)> = BTreeMap::new();
             let mut row_money_cents: BTreeMap<usize, String> = BTreeMap::new();
+            let mut row_date_parts: BTreeMap<usize, DatePartIds> = BTreeMap::new();
 
             for cell in &trow.cells {
                 let Some(src_cell) = page.cells.get(&cell.id) else {
@@ -1205,6 +1275,11 @@ fn build_single_band_continuation_page(
                         | CellJoinKind::Money {
                             col_idx,
                             is_peso: true,
+                            ..
+                        }
+                        | CellJoinKind::Date {
+                            col_idx,
+                            part: DatePart::Month,
                             ..
                         },
                     ) => row.keys.get(*col_idx),
@@ -1271,6 +1346,20 @@ fn build_single_band_continuation_page(
                                 extra_peso_joins.push((syn_key, syn_id));
                             }
                         }
+                        CellJoinKind::Date {
+                            col_idx,
+                            orig_writer_key,
+                            part,
+                        } => {
+                            let parts = row_date_parts
+                                .entry(*col_idx)
+                                .or_insert_with(|| (orig_writer_key.clone(), None, None, None));
+                            match part {
+                                DatePart::Month => parts.1 = Some(syn_id.clone()),
+                                DatePart::Day => parts.2 = Some(syn_id.clone()),
+                                DatePart::Year => parts.3 = Some(syn_id.clone()),
+                            }
+                        }
                         CellJoinKind::Ordinal { orig_writer_key } => {
                             let syn_key = format!("{orig_writer_key}__cont_{syn_id}");
                             syn_fields.insert(syn_key.clone(), row.row_number.to_string());
@@ -1278,6 +1367,19 @@ fn build_single_band_continuation_page(
                         }
                     }
                 }
+            }
+
+            for (col_idx, (orig_writer_key, mm_id, dd_id, yyyy_id)) in row_date_parts {
+                let val = row.values.get(col_idx).cloned().unwrap_or_default();
+                if val.is_empty() {
+                    continue;
+                }
+                let (Some(mm_id), Some(yyyy_id)) = (mm_id, yyyy_id) else {
+                    continue;
+                };
+                let syn_key = format!("{orig_writer_key}__cont_{mm_id}");
+                syn_fields.insert(syn_key.clone(), val);
+                extra_date_joins.push((syn_key, mm_id, dd_id, yyyy_id));
             }
 
             for (col_idx, (peso_id, orig_writer_key)) in row_money_peso {
@@ -1400,6 +1502,7 @@ fn build_single_band_continuation_page(
         &extra_joins,
         &extra_money_joins,
         &extra_peso_joins,
+        &extra_date_joins,
         &caption_aliases,
     )
 }

@@ -7,7 +7,7 @@
 //! registry and the dedicated immutable 1601C queue path.
 
 use super::FormValidator;
-use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, MAX_SCHEDULE_1_ROWS};
+use super::form_1601c::{Form1601CDraft, Form1601CSchedule1Row, PRINTED_SCHEDULE_1_ROWS};
 use std::collections::BTreeMap;
 
 /// The official form id of this rule package and layout.
@@ -227,8 +227,10 @@ impl Form1601CDraft {
             self.taxpayer_name.to_uppercase(),
         );
 
-        // Schedule I — the verified 1601-C payload exposes three rows.
-        for i in 0..MAX_SCHEDULE_1_ROWS {
+        // Schedule I — rows 0-2 are the printed rows; the official runtime adds
+        // further rows without a source cap (`addSchedule`, BIR-Form1601Cv2018.hta
+        // lines 3349-3385), so every draft row is written.
+        for i in 0..self.schedule_1.len().max(PRINTED_SCHEDULE_1_ROWS) {
             let row = self.schedule_1.get(i);
             insert(&mut fields, &format!("chkScheduleDelete{}", i), "false");
             insert(
@@ -286,18 +288,68 @@ impl Form1601CDraft {
         fields
     }
 
+    /// The generated layout with each runtime-added Schedule I row spliced in
+    /// where `addSchedule` places its controls (`BIR-Form1601Cv2018.hta`
+    /// lines 3369-3382): writable cells after the previous row's Tax Paid,
+    /// computed cells after the previous row's Adjustments.
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use super::official_inputs::{RowInsertion, extend_layout};
+        let base = crate::official_xml::layout(FORM_1601C_FORM_ID).map_err(|e| e.to_string())?;
+        let mut insertions = Vec::new();
+        let writable = [
+            ("chkScheduleDelete{}", false),
+            ("frm1601c:sched1:txtMonthYear{}", true),
+            ("frm1601c:sched1:txtDatePaid{}", true),
+            ("frm1601c:sched1:txtBankCode{}", true),
+            ("frm1601c:sched1:txtNumber{}", true),
+            ("frm1601c:sched1:txtTaxPaid{}", true),
+        ];
+        let computed = [
+            "frm1601c:sched1:txtShouldTaxDue{}",
+            "frm1601c:sched1:txtAdjustments{}",
+        ];
+        let source = PRINTED_SCHEDULE_1_ROWS - 1;
+        for row in PRINTED_SCHEDULE_1_ROWS..self.schedule_1.len() {
+            insertions.push(RowInsertion {
+                after: format!("frm1601c:sched1:txtTaxPaid{}", row - 1),
+                copies: writable
+                    .iter()
+                    .map(|(template, _)| {
+                        (
+                            template.replace("{}", &source.to_string()),
+                            template.replace("{}", &row.to_string()),
+                        )
+                    })
+                    .collect(),
+            });
+            insertions.push(RowInsertion {
+                after: format!("frm1601c:sched1:txtAdjustments{}", row - 1),
+                copies: computed
+                    .iter()
+                    .map(|template| {
+                        (
+                            template.replace("{}", &source.to_string()),
+                            template.replace("{}", &row.to_string()),
+                        )
+                    })
+                    .collect(),
+            });
+        }
+        extend_layout(base, &insertions)
+    }
+
     /// The official submit plaintext for this draft, byte for byte as the
     /// official `saveXMLsubmit()` writes it (see [`crate::official_xml`]).
     pub fn to_bir_xml_payload(&self) -> String {
-        let layout = crate::official_xml::layout(FORM_1601C_FORM_ID)
+        let layout = self
+            .official_layout()
             .expect("the 1601C official layout is packaged");
-        crate::official_xml::write(layout, &self.to_bir_field_map())
+        crate::official_xml::write(&layout, &self.to_bir_field_map())
             .expect("the 1601C field map holds only official controls")
     }
 
-    /// Generate XML only when the draft satisfies the verified model and
-    /// three-row Schedule I capacity. Submission remains separately governed
-    /// by the form capability registry.
+    /// Generate XML only when the draft satisfies the verified model.
+    /// Submission remains separately governed by the form capability registry.
     pub fn try_to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         let errors = self.validate();
         if errors.is_empty() {
@@ -361,7 +413,16 @@ impl Form1601CDraft {
 
         let mut schedule_1 = Vec::new();
         let mut source_adjustments = Vec::new();
-        for index in 0..MAX_SCHEDULE_1_ROWS {
+        let last_schedule_row = fields
+            .keys()
+            .filter_map(|key| {
+                key.strip_prefix("frm1601c:sched1:txtMonthYear")?
+                    .parse::<usize>()
+                    .ok()
+            })
+            .max()
+            .unwrap_or(PRINTED_SCHEDULE_1_ROWS - 1);
+        for index in 0..=last_schedule_row.max(PRINTED_SCHEDULE_1_ROWS - 1) {
             let previous_month = field(fields, &format!("frm1601c:sched1:txtMonthYear{index}"));
             let date_paid = field(fields, &format!("frm1601c:sched1:txtDatePaid{index}"));
             let bank = field(fields, &format!("frm1601c:sched1:txtBankCode{index}"));
@@ -871,7 +932,9 @@ mod tests {
         draft.auto_compute_penalties = false;
         draft.tax_14_total_compensation = 100_000.0;
         draft.tax_25_total_taxes_withheld = 1_000.0;
-        draft.schedule_1 = (0..MAX_SCHEDULE_1_ROWS).map(valid_schedule_row).collect();
+        draft.schedule_1 = (0..PRINTED_SCHEDULE_1_ROWS)
+            .map(valid_schedule_row)
+            .collect();
         draft.compute();
 
         let xml = draft
@@ -917,18 +980,25 @@ mod tests {
     }
 
     #[test]
-    fn checked_xml_generation_rejects_schedule_overflow_instead_of_truncating() {
+    fn a_fourth_schedule_row_round_trips_through_xml() {
         let profile = test_profile();
         let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 4);
         draft.any_taxes_withheld = false;
         draft.auto_compute_penalties = false;
-        draft.schedule_1 = (0..=MAX_SCHEDULE_1_ROWS).map(valid_schedule_row).collect();
+        draft.schedule_1 = (0..=PRINTED_SCHEDULE_1_ROWS)
+            .map(valid_schedule_row)
+            .collect();
         draft.compute();
 
-        let errors = draft
+        let xml = draft
             .try_to_bir_xml_payload()
-            .expect_err("a fourth XML row must be rejected");
-        assert!(errors.iter().any(|(field, _)| field == "schedule_1"));
+            .expect("the official runtime's fourth row is part of the XML contract");
+        assert!(xml.contains("frm1601c:sched1:txtMonthYear3"));
+        assert!(xml.contains("frm1601c:sched1:txtAdjustments3"));
+        let parsed = Form1601CDraft::from_bir_xml_payload(&xml)
+            .expect("the app's own reader keeps the fourth row");
+        assert_eq!(parsed.schedule_1, draft.schedule_1);
+        assert_eq!(parsed.tax_26_adjustment, draft.tax_26_adjustment);
     }
 
     #[test]

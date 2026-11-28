@@ -5290,6 +5290,7 @@ fn validate_writer_cells(html: &str, slug: &str, cells: &WriterCells) -> Result<
 /// path (`line_group_plan`, `fill_by_name_set`, `fill_money_joins`,
 /// `fill_peso_joins`, `fill_date_joins`, `split_single_character_cells`,
 /// `fill_xbox_joins`) used for official pages.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn fill_continuation_fragment(
     html: &str,
     fields: &BTreeMap<String, String>,
@@ -5297,6 +5298,7 @@ pub(crate) fn fill_continuation_fragment(
     extra_joins: &BTreeMap<String, Vec<String>>,
     extra_money_joins: &[(String, String, Option<String>)],
     extra_peso_joins: &[(String, String)],
+    extra_date_joins: &[(String, String, Option<String>, String)],
     caption_aliases: &BTreeMap<String, String>,
 ) -> Result<String, String> {
     let mut cells = writer_cells(slug)?;
@@ -5326,6 +5328,14 @@ pub(crate) fn fill_continuation_fragment(
             writer_key: k.clone(),
             html_ids: vec![html_id.clone()],
             negative_style,
+        });
+    }
+    for (key, mm, dd, yyyy) in extra_date_joins {
+        cells.date_joins.push(DateJoin {
+            writer_key: key.clone(),
+            mm_html_id: mm.clone(),
+            dd_html_id: dd.clone(),
+            yyyy_html_id: yyyy.clone(),
         });
     }
     let donor_fields = with_donor_estate_values(slug, fields);
@@ -13702,6 +13712,7 @@ mod donor_estate_print_tests {
             &fields,
             "1701-2018",
             &extra_joins,
+            &[],
             &[],
             &[],
             &BTreeMap::new(),

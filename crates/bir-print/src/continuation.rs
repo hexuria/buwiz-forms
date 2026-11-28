@@ -350,10 +350,18 @@ pub fn detect_overflow(
     // popup naming scheme from the printed rows (1700, 1701A, 1702EX, 1702MX,
     // 1702RT, 1707, 1707A).
     for popup_sched in detect_popup_overflow(slug, fields, &unprinted) {
-        if !schedules
-            .iter()
-            .any(|s| s.heading.eq_ignore_ascii_case(&popup_sched.heading))
+        if let Some(existing) = schedules
+            .iter_mut()
+            .find(|s| s.heading.eq_ignore_ascii_case(&popup_sched.heading))
         {
+            // 1601C writer-cell discovery misses the columns whose cells use
+            // specialized split-date joins, so its explicit runtime-row shape is
+            // fuller. Other registry entries keep their long-standing discovered
+            // shapes; replacing those changes established continuation formatting.
+            if popup_sched.columns.len() > existing.columns.len() && slug == "1601c-2018" {
+                *existing = popup_sched;
+            }
+        } else {
             schedules.push(popup_sched);
         }
     }
@@ -1393,8 +1401,8 @@ struct PopupScheduleDef {
 }
 
 /// Complete registry of forms in `crates/bir-core/src/forms/` whose overflow
-/// ("Add more..." / popup / modal) rows are emitted under keys distinct from
-/// the printed row stems (`extend_layout` and friends):
+/// ("Add more..." / popup / modal / runtime-added) rows need an explicit
+/// continuation shape because writer-cells.json cannot discover it:
 /// - `1700-2018` (`form_1700.rs`): Schedule 1 (`4_{n}` employer & comp keys)
 /// - `1701a-2018` (`form_1701a.rs`): Part IV-A (`txtmodalPartIVA*_{n}C1..3`) &
 ///   Part IV-B (`txtmodalPartIVB*_{n}C1..3`)
@@ -1405,6 +1413,98 @@ struct PopupScheduleDef {
 ///   Schedule 3 (`txtPg2Pt4S3_{k}Col1..2`)
 /// - `1707a-2021` (`form_1707a.rs`): Schedule 1 (`txtS1C*_{k}`) & Schedule 2 (`txtS2C*_{k}`)
 const POPUP_SCHEDULES: &[PopupScheduleDef] = &[
+    // 1601C Schedule I: the printed sheet has rows 0-2; the official
+    // `addSchedule` runtime handler appends rows under the same zero-based stems.
+    PopupScheduleDef {
+        slug: "1601c-2018",
+        heading: "Schedule I",
+        printed_capacity: 3,
+        row_num_base: 1,
+        has_total: true,
+        columns: &[
+            PopupColDef {
+                key_template: "frm1601c:sched1:txtMonthYear{n}",
+                heading: "1 Previous Month/s",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1601c:sched1:txtDatePaid{n}",
+                heading: "2 Date Paid",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1601c:sched1:txtBankCode{n}",
+                heading: "3 Drawee Bank/Bank Code/Agency",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1601c:sched1:txtNumber{n}",
+                heading: "4 Number",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm1601c:sched1:txtTaxPaid{n}",
+                heading: "5 Tax Paid",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1601c:sched1:txtShouldTaxDue{n}",
+                heading: "6 Should be Tax Due for the Month",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm1601c:sched1:txtAdjustments{n}",
+                heading: "7 Adjustments",
+                is_amount: true,
+            },
+        ],
+    },
+    // 2200A Schedule 1 Others: the printed sheet has rows 1-3; `sched1Fields`
+    // generates runtime rows from suffix 4 upward.
+    PopupScheduleDef {
+        slug: "2200a-2020",
+        heading: "Schedule 1 Others",
+        printed_capacity: 3,
+        row_num_base: 0,
+        has_total: true,
+        columns: &[
+            PopupColDef {
+                key_template: "frm2200Av2020:txtSched1_xa_others{n}_Atc",
+                heading: "ATC",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm2200Av2020:txtSched1_xa_others{n}_Desc",
+                heading: "Description",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm2200Av2020:txtSched1_xa_others{n}_Bracket",
+                heading: "Tax Bracket/Unit of Measure",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm2200Av2020:txtSched1_xa_others{n}_Rate",
+                heading: "Applicable Tax Rate",
+                is_amount: false,
+            },
+            PopupColDef {
+                key_template: "frm2200Av2020:txtSched1_xa_others{n}_Export",
+                heading: "Export/Exempt",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm2200Av2020:txtSched1_xa_others{n}_Taxable",
+                heading: "Taxable",
+                is_amount: true,
+            },
+            PopupColDef {
+                key_template: "frm2200Av2020:txtSched1_xa_others{n}_Due",
+                heading: "Tax Due",
+                is_amount: true,
+            },
+        ],
+    },
     // 1707
     PopupScheduleDef {
         slug: "1707-2021",
@@ -1902,6 +2002,19 @@ fn match_template_index(key: &str, template: &str) -> Option<usize> {
         return None;
     }
     rest.parse::<usize>().ok()
+}
+
+/// Whether the explicit runtime-row continuation registry prints this writer key.
+/// These keys have no box on the fixed official sheet precisely because they are
+/// runtime-added rows; their printed home is the continuation sheet.
+pub fn continuation_covers_key(slug: &str, key: &str) -> bool {
+    POPUP_SCHEDULES.iter().any(|def| {
+        def.slug == slug
+            && def.columns.iter().any(|col| {
+                match_template_index(key, col.key_template)
+                    .is_some_and(|n| def.row_num_base + n > def.printed_capacity)
+            })
+    })
 }
 
 fn detect_popup_overflow(
@@ -2688,6 +2801,202 @@ mod tests {
     }
 
     #[test]
+    fn continuation_coverage_starts_after_the_printed_rows() {
+        assert!(!continuation_covers_key(
+            "1601c-2018",
+            "frm1601c:sched1:txtMonthYear0"
+        ));
+        assert!(!continuation_covers_key(
+            "2200a-2020",
+            "frm2200Av2020:txtSched1_xa_others3_Atc"
+        ));
+        assert!(continuation_covers_key(
+            "1601c-2018",
+            "frm1601c:sched1:txtMonthYear3"
+        ));
+        assert!(continuation_covers_key(
+            "2200a-2020",
+            "frm2200Av2020:txtSched1_xa_others4_Atc"
+        ));
+    }
+
+    #[test]
+    fn detects_1601c_schedule_i_fourth_row_overflow() {
+        let mut fields = BTreeMap::new();
+        for i in 0..4 {
+            fields.insert(
+                format!("frm1601c:sched1:txtMonthYear{i}"),
+                format!("0{}/2026", i + 1),
+            );
+            fields.insert(
+                format!("frm1601c:sched1:txtDatePaid{i}"),
+                format!("0{}/10/2026", i + 1),
+            );
+            fields.insert(
+                format!("frm1601c:sched1:txtBankCode{i}"),
+                format!("AAB-{i}"),
+            );
+            fields.insert(format!("frm1601c:sched1:txtNumber{i}"), format!("REF-{i}"));
+            fields.insert(
+                format!("frm1601c:sched1:txtTaxPaid{i}"),
+                "100.00".to_string(),
+            );
+            fields.insert(
+                format!("frm1601c:sched1:txtShouldTaxDue{i}"),
+                "125.00".to_string(),
+            );
+            fields.insert(
+                format!("frm1601c:sched1:txtAdjustments{i}"),
+                "25.00".to_string(),
+            );
+        }
+        let report = detect_overflow("1601c-2018", &fields).unwrap();
+        let sched = report
+            .schedules
+            .iter()
+            .find(|s| s.heading == "Schedule I")
+            .expect("Schedule I overflow");
+        assert_eq!(sched.printed_capacity, 3);
+        assert_eq!(sched.rows.len(), 1);
+        assert_eq!(sched.rows[0].row_number, 4);
+        assert_eq!(sched.rows[0].values[0], "04/2026");
+    }
+
+    #[test]
+    fn detects_2200a_others_rows_four_and_five_overflow() {
+        let mut fields = BTreeMap::new();
+        for n in 1..=5 {
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{n}_Atc"),
+                format!("99{n}"),
+            );
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{n}_Desc"),
+                format!("Added product {n}"),
+            );
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{n}_Bracket"),
+                "Per liter".to_string(),
+            );
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{n}_Rate"),
+                "10".to_string(),
+            );
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{n}_Export"),
+                "0.00".to_string(),
+            );
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{n}_Taxable"),
+                "100.00".to_string(),
+            );
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{n}_Due"),
+                "10.00".to_string(),
+            );
+        }
+        let report = detect_overflow("2200a-2020", &fields).unwrap();
+        let sched = report
+            .schedules
+            .iter()
+            .find(|s| s.heading == "Schedule 1 Others")
+            .expect("2200A Others overflow");
+        assert_eq!(sched.printed_capacity, 3);
+        assert_eq!(sched.rows.len(), 2);
+        assert_eq!(sched.rows[0].row_number, 4);
+        assert_eq!(sched.rows[1].row_number, 5);
+        assert_eq!(sched.rows[0].values[1], "Added product 4");
+        assert_eq!(
+            report.warning_lines(),
+            vec!["Schedule 1 Others: 2 rows are on an additional sheet"]
+        );
+    }
+
+    #[test]
+    fn printed_document_carries_1601c_fourth_schedule_row() {
+        use bir_core::forms::form_1601c::{Form1601CDraft, Form1601CSchedule1Row};
+        use bir_core::profile::TaxpayerProfile;
+        let profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "ACME CORP.",
+            "tin": bir_core::Tin::parse_digits("00012345300000").unwrap(),
+            "rdo_code": "039",
+            "line_of_business": "TRADING",
+            "registered_address": "123 AYALA AVE",
+            "zip_code": "1226",
+            "phone": "0281234567",
+            "email": "tax@acme.ph",
+            "default_form_type": "1601C"
+        }))
+        .unwrap();
+        let mut draft = Form1601CDraft::new_from_profile(&profile, 2026, 8);
+        draft.schedule_1 = (0..4)
+            .map(|i| Form1601CSchedule1Row {
+                previous_month: format!("0{}/2026", i + 1),
+                date_paid: format!("0{}/10/2026", i + 1),
+                drawee_bank_code_or_agency: format!("BANK-{i}"),
+                payment_number: format!("REF-{i}"),
+                tax_paid: 100.0,
+                should_be_tax_due: 125.0,
+                adjustment: 25.0,
+            })
+            .collect();
+        draft.compute();
+
+        let document = crate::frozen_html::filled_document_with_report(
+            "1601c-2018",
+            &draft.to_print_field_map(),
+            None,
+        )
+        .expect("1601C print");
+        assert!(
+            document.html.contains("BANK-3"),
+            "fourth row missing from print"
+        );
+        assert!(document.html.contains(r#"data-writer-value="04/2026""#));
+    }
+
+    #[test]
+    fn printed_document_carries_2200a_fourth_others_row() {
+        use bir_core::forms::form_2200a::Form2200ADraft;
+        use bir_core::profile::TaxpayerProfile;
+        let profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "ACME CORP.",
+            "tin": bir_core::Tin::parse_digits("00012345300000").unwrap(),
+            "rdo_code": "039",
+            "line_of_business": "TRADING",
+            "registered_address": "123 AYALA AVE",
+            "zip_code": "1226",
+            "phone": "0281234567",
+            "email": "tax@acme.ph",
+            "default_form_type": "2200A"
+        }))
+        .unwrap();
+        let mut draft = Form2200ADraft::new_from_profile(&profile, 2025, 3);
+        let row = draft.other_mut(3).expect("fourth Others row");
+        row.atc_digits = "997".to_string();
+        row.description = "ADDED PRODUCT FOUR".to_string();
+        row.bracket = "PER LITER".to_string();
+        row.rate = "10".to_string();
+        row.amounts.taxable = 440.0;
+        row.amounts.tax_due = 44.0;
+        draft.recompute();
+
+        let document = crate::frozen_html::filled_document_with_report(
+            "2200a-2020",
+            &draft.to_print_field_map(),
+            None,
+        )
+        .expect("2200A print");
+        assert!(
+            document.html.contains("ADDED PRODUCT FOUR"),
+            "fourth Others row missing from print"
+        );
+        assert!(document.html.contains("997"));
+    }
+
+    #[test]
     fn no_overflow_produces_empty_report_and_no_continuation_html() {
         let mut fields = BTreeMap::new();
         for i in 0..5 {
@@ -3389,7 +3698,10 @@ mod tests {
                             continue;
                         }
                         let key = format!("{}{}", col.stem, raw_idx);
-                        let is_date = col.heading.to_ascii_lowercase().contains("date");
+                        let is_date = {
+                            let h = col.heading.to_ascii_lowercase();
+                            h.contains("date") || h.contains("month")
+                        };
                         let val = if col.is_amount {
                             format!("{}.00", 10_000 + si * 1000 + row_num * 17 + ci)
                         } else if is_date {
@@ -3419,7 +3731,10 @@ mod tests {
                     let row_num = def.row_num_base + n;
                     for (ci, col) in def.columns.iter().enumerate() {
                         let key = col.key_template.replace("{n}", &n.to_string());
-                        let is_date = col.heading.to_ascii_lowercase().contains("date");
+                        let is_date = {
+                            let h = col.heading.to_ascii_lowercase();
+                            h.contains("date") || h.contains("month")
+                        };
                         let val = if col.is_amount {
                             format!("{}.00", 50_000 + pi * 1000 + n * 19 + ci)
                         } else if is_date {
@@ -3453,7 +3768,10 @@ mod tests {
             // Group missing values per (schedule, row) so the failure list is readable.
             let mut missing_per_sched: BTreeMap<String, Vec<String>> = BTreeMap::new();
             for (sched, row_num, col_heading, val, is_amount) in &expected {
-                if !corpus_contains_value(&corpus, &corpus_no_commas, val, *is_amount) {
+                let writer_value = format!(r#"data-writer-value="{val}""#);
+                if !corpus_contains_value(&corpus, &corpus_no_commas, val, *is_amount)
+                    && !doc.html.contains(&writer_value)
+                {
                     missing_per_sched
                         .entry(sched.clone())
                         .or_default()
