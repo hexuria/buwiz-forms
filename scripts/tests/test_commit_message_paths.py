@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import io
 import os
 import re
 import shlex
@@ -9,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -18,12 +21,14 @@ INSTALLER = ROOT / "scripts" / "install_git_hooks.py"
 
 sys.path.insert(0, str(ROOT))
 from scripts.commit_message_paths import has_absolute_local_path  # noqa: E402
+import scripts.install_git_hooks as install_git_hooks  # noqa: E402
 from scripts.install_git_hooks import install_hook  # noqa: E402
 
 
-def git(repo: Path, hooks: Path, *args: str) -> subprocess.CompletedProcess:
+def git(repo: Path, hooks: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "-c", f"core.hooksPath={hooks}", "-C", str(repo), *args],
+        input=input_text,
         capture_output=True,
         text=True,
         check=True,
@@ -80,6 +85,8 @@ class LocalPathPatternTests(unittest.TestCase):
             "built in /Users/alice",
             "built in /home/buz/project",
             "built in /home/buz",
+            "built in '/home/buz/project'",
+            'built in "/Users/alice/project"',
             r"built in C:\Users\Carol\project",
             r"built in c:\users\carol",
             "built in /Volumes/example/project",
@@ -94,6 +101,8 @@ class LocalPathPatternTests(unittest.TestCase):
             "built in /Users/alice.",
             "built in (/Users/alice)",
             "built in `/Users/alice`",
+            "-/home/buz",
+            r"-C:\Users\carol",
             r"built in C:\Users\carol and then stopped",
             r"built in C:\Users\runneradmin and C:\Users\carol",
         ]
@@ -131,6 +140,40 @@ class LocalPathPatternTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertFalse(has_absolute_local_path(message))
 
+    def test_home_path_segments_inside_relative_repository_paths_pass(self):
+        messages = [
+            "Update nsh/screens/home/Home.tsx to clarify filing status",
+            "Update nsh/screens/users/home/Home.tsx",
+            "use src/home/ubuntu/project",
+            "use src/Volumes/project",
+            "use ~/Volumes/project",
+        ]
+        for message in messages:
+            with self.subTest(message=message):
+                self.assertFalse(has_absolute_local_path(message))
+
+    def test_allowed_home_names_keep_sentence_punctuation(self):
+        messages = [
+            "Validated on /home/ubuntu. The build passed.",
+            "Validated on /Users/runner. The build passed.",
+            r"Validated on C:\Users\runneradmin. The build passed.",
+        ]
+        for message in messages:
+            with self.subTest(message=message):
+                self.assertFalse(has_absolute_local_path(message))
+
+    def test_windows_profile_paths_with_spaces_are_refused(self):
+        messages = [
+            r"built in C:\Users\Carol Smith\project",
+            r"built in c:\users\carol smith",
+            r"built in 'C:\Users\Carol Smith\project'",
+            r"built in 'C:\Users\runneradmin Smith'",
+            r"built in C:\Users\runneradmin Smith\project",
+        ]
+        for message in messages:
+            with self.subTest(message=message):
+                self.assertTrue(has_absolute_local_path(message))
+
 
 class CommitRangeTests(unittest.TestCase):
     def test_a_bad_commit_fails_with_its_id_and_never_echoes_the_path(self):
@@ -154,6 +197,79 @@ class CommitRangeTests(unittest.TestCase):
             self.assertNotIn(bad_path, result.stderr)
             self.assertNotIn(clean, result.stderr)
 
+    def make_signed_commit(self, repo: Path, hooks: Path, message: str) -> str:
+        unsigned = commit(repo, hooks, message)
+        raw = git(repo, hooks, "cat-file", "commit", unsigned).stdout
+        headers, body = raw.split("\n\n", 1)
+        signature = (
+            "gpgsig -----BEGIN PGP SIGNATURE-----\n"
+            " \n"
+            " fake-signature\n"
+            " -----END PGP SIGNATURE-----"
+        )
+        signed_object = headers + "\n" + signature + "\n\n" + body
+        signed = git(repo, hooks, "hash-object", "-t", "commit", "-w", "--stdin", input_text=signed_object).stdout.strip()
+        git(repo, hooks, "update-ref", "refs/heads/topic", signed)
+        return signed
+
+    def test_a_signed_commit_is_scanned_when_git_shows_signatures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo, hooks = make_git_repo(Path(directory))
+            base = commit(repo, hooks, "clean base")
+            bad_path = "/Users/alice/project"
+            signed = self.make_signed_commit(repo, hooks, f"built in {bad_path}")
+            git(repo, hooks, "config", "log.showSignature", "true")
+            raw_log = git(repo, hooks, "log", "-1", "--format=%H%x00%B%x00", signed).stdout
+            if raw_log.split("\0")[0].strip() == signed:
+                self.skipTest("git did not emit signature verification output")
+
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "range", base, signed],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn(signed, result.stderr)
+            self.assertNotIn(bad_path, result.stderr)
+
+    def test_merged_origin_main_commits_are_not_scanned_again(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo, hooks = make_git_repo(Path(directory))
+            base = commit(repo, hooks, "clean base")
+            git(repo, hooks, "branch", "main", base)
+            old_topic_tip = commit(repo, hooks, "topic work")
+            git(repo, hooks, "checkout", "-q", "main")
+            public_bad_path = "/Users/alice/project"
+            public_main_tip = commit(repo, hooks, f"published in {public_bad_path}")
+            git(repo, hooks, "update-ref", "refs/remotes/origin/main", public_main_tip)
+            git(repo, hooks, "checkout", "-q", "topic")
+            git(repo, hooks, "merge", "--no-edit", "main")
+            head = git(repo, hooks, "rev-parse", "HEAD").stdout.strip()
+
+            range_result = subprocess.run(
+                [sys.executable, str(SCRIPT), "range", old_topic_tip, head],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            push_input = f"refs/heads/topic {head} refs/heads/topic {old_topic_tip}\n"
+            push_result = subprocess.run(
+                [sys.executable, str(SCRIPT), "pre-push"],
+                cwd=repo,
+                input=push_input,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(range_result.returncode, 0, range_result.stderr)
+            self.assertEqual(push_result.returncode, 0, push_result.stderr)
+            self.assertNotIn(public_bad_path, range_result.stderr)
+            self.assertNotIn(public_bad_path, push_result.stderr)
 
 
 class HookTests(unittest.TestCase):
@@ -195,16 +311,71 @@ class HookTests(unittest.TestCase):
         result = self.run_hook("commit-msg", "use /Users/<name>/project, $HOME/project or ~/project\n")
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_commit_msg_hook_ignores_comments_and_the_verbose_diff(self):
+    def test_commit_msg_hook_checks_comment_lines_git_may_keep(self):
+        result = self.run_hook("commit-msg", "clean subject\n# a comment naming /Users/alice/project\n")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("absolute local path", result.stderr)
+
+    def test_git_commit_m_refuses_a_comment_line_default_cleanup_keeps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, _ = make_git_repo(root)
+            (repo / "scripts").mkdir()
+            shutil.copy(ROOT / "scripts" / "commit_message_paths.py", repo / "scripts")
+            bad_path = "/Users/alice/project"
+
+            result = subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    f"core.hooksPath={ROOT / '.githooks'}",
+                    "-C",
+                    str(repo),
+                    "commit",
+                    "-q",
+                    "--allow-empty",
+                    "-m",
+                    "clean subject",
+                    "-m",
+                    f"# a comment naming {bad_path}",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("absolute local path", result.stderr)
+            self.assertNotIn(bad_path, result.stderr)
+
+    def test_commit_msg_hook_checks_text_after_a_scissors_line_git_may_keep(self):
         scissors = "# ------------------------ >8 ------------------------"
-        messages = [
-            "clean subject\n# a comment naming /Users/alice/project\n",
+        result = self.run_hook(
+            "commit-msg",
+            f"clean subject\n{scissors}\nordinary text naming /Users/alice/project\n",
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("absolute local path", result.stderr)
+
+    def test_commit_msg_hook_checks_a_pasted_diff_after_a_scissors_line(self):
+        scissors = "# ------------------------ >8 ------------------------"
+        result = self.run_hook(
+            "commit-msg",
             f"clean subject\n{scissors}\ndiff --git a/x b/x\n+/Users/alice/project\n",
-        ]
-        for message in messages:
-            with self.subTest(message=message):
-                result = self.run_hook("commit-msg", message)
-                self.assertEqual(result.returncode, 0, result.stderr)
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("absolute local path", result.stderr)
+
+    def test_commit_msg_hook_ignores_the_generated_verbose_diff(self):
+        scissors = "# ------------------------ >8 ------------------------"
+        result = self.run_hook(
+            "commit-msg",
+            f"clean subject\n{scissors}\n"
+            "# Do not modify or remove the line above.\n"
+            "# Everything below it will be ignored.\n"
+            "diff --git a/x b/x\n+/Users/alice/project\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_commit_msg_hook_still_refuses_a_bad_path_before_the_verbose_diff(self):
         scissors = "# ------------------------ >8 ------------------------"
@@ -258,16 +429,25 @@ class HookTests(unittest.TestCase):
                 'if [ "$1" = "-c" ]; then case "$2" in *version_info*) exit 1 ;; *) exit 0 ;; esac; fi\n'
                 'echo "SyntaxError: invalid syntax" >&2\nexit 1\n',
             )
-            python_stub(stubs, "python3", working=True)
+            python_stub(stubs, "py", working=False)
+            marker = Path(directory) / "python3-ran"
+            write_executable(
+                stubs / "python3",
+                "#!/bin/sh\n"
+                f"printf python3 >>{shlex.quote(str(marker))}\n"
+                f"exec {shlex.quote(sys.executable)} \"$@\"\n",
+            )
             env = path_with_stubs(stubs)
 
             clean = self.run_hook("commit-msg", "a plain message\n", env=env)
             refused = self.run_hook("commit-msg", "built in /Users/alice/project\n", env=env)
+            python3_ran = marker.exists()
 
         self.assertEqual(clean.returncode, 0, clean.stderr)
         self.assertNotIn("SyntaxError", clean.stderr)
         self.assertEqual(refused.returncode, 1, refused.stderr)
         self.assertIn("absolute local path", refused.stderr)
+        self.assertTrue(python3_ran)
 
     def test_hooks_without_a_working_python_print_one_line_and_pass(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -479,12 +659,25 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             repo, _ = self.make_real_checkout(root)
-            global_hooks = root / "global-hooks"
+            global_hooks = root / "global-hooks" if os.name == "nt" else root / "global\\hooks"
             global_hooks.mkdir()
             sentinel = b"#!/bin/sh\nexit 0\n"
             (global_hooks / "commit-msg").write_bytes(sentinel)
             global_config = root / "global-config"
-            global_config.write_text(f"[core]\n\thooksPath = {global_hooks}\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "config", "-f", str(global_config), "core.hooksPath", str(global_hooks)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            configured = subprocess.run(
+                ["git", "config", "-f", str(global_config), "--get", "core.hooksPath"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(configured.returncode, 0, configured.stderr)
+            self.assertEqual(configured.stdout.strip(), str(global_hooks))
             before = self.worktree_files(repo)
 
             result = self.run_installer(repo, global_config)
@@ -518,22 +711,23 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             repo, _ = self.make_real_checkout(root)
-            global_config = root / "empty-global-config"
-            global_config.write_text("", encoding="utf-8")
-            stubs = root / "bin"
-            stubs.mkdir()
-            write_executable(
-                stubs / "git",
-                "#!/bin/sh\n"
-                "echo \"fatal: detected dubious ownership in repository at '<repo>'\" >&2\n"
-                "exit 128\n",
-            )
 
-            result = self.run_installer(repo, global_config, env_override={"PATH": str(stubs)})
+            def failing_git(args, **_kwargs):
+                return subprocess.CompletedProcess(
+                    args,
+                    128,
+                    stdout="",
+                    stderr="fatal: detected dubious ownership in repository at '<repo>'",
+                )
 
-            self.assertEqual(result.returncode, 0, result.stderr)
-            lines = result.stdout.strip().splitlines()
-            self.assertEqual(len(lines), 1, result.stdout)
+            output = io.StringIO()
+            with mock.patch.object(install_git_hooks.subprocess, "run", side_effect=failing_git):
+                with redirect_stdout(output):
+                    status = install_git_hooks.main([str(repo)])
+
+            self.assertEqual(status, 0)
+            lines = output.getvalue().strip().splitlines()
+            self.assertEqual(len(lines), 1, output.getvalue())
             self.assertIn("dubious ownership", lines[0])
             self.assertIn("not installing", lines[0])
             self.assertFalse((repo / ".git" / "hooks" / "commit-msg").exists())
@@ -597,6 +791,14 @@ class InstallerTests(unittest.TestCase):
 
 
 class RepositoryPolicyTests(unittest.TestCase):
+    def test_the_hooks_accept_python_37_which_the_scanner_supports(self):
+        for name in ("commit-msg", "pre-push"):
+            hook = (ROOT / ".githooks" / name).read_text(encoding="utf-8")
+            with self.subTest(hook=name):
+                self.assertIn("sys.version_info < (3, 7)", hook)
+                self.assertNotIn("sys.version_info < (3, 8)", hook)
+        ast.parse(SCRIPT.read_text(encoding="utf-8"), feature_version=(3, 7))
+
     def test_the_quick_lane_scans_pull_request_commit_messages_before_planning(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         match = re.search(r"(?ms)^  changes:\n(.*?)(?=^  [a-z][a-z0-9-]*:\n|\Z)", workflow)

@@ -12,9 +12,11 @@ from typing import Callable, Iterable
 REASON = "commit message carries an absolute local path; use $HOME, ~, or /Users/<name> instead"
 ZERO_SHA = "0" * 40
 
-POSIX_HOME_PATTERN = re.compile(r"(?P<root>/Users/|/home/)(?P<name>[A-Za-z0-9._-]+)(?![A-Za-z0-9._-])")
-WINDOWS_HOME_PATTERN = re.compile(r"\bC:\\Users\\(?P<name>[A-Za-z0-9._-]+)(?![A-Za-z0-9._-])", re.IGNORECASE)
-VOLUME_PATTERN = re.compile(r"/Volumes/")
+POSIX_HOME_PATTERN = re.compile(r"(?<![A-Za-z0-9._~/])(?P<root>/Users/|/home/)(?P<name>[A-Za-z0-9._-]+)(?![A-Za-z0-9._-])")
+WINDOWS_HOME_START_PATTERN = re.compile(r"(?<![A-Za-z0-9_\\/])C:\\Users\\", re.IGNORECASE)
+WINDOWS_SPACED_NAME_PATTERN = re.compile(r"(?P<name>[A-Za-z0-9._-]+(?: [A-Za-z0-9._-]+)+)(?=\\|[\"'])")
+WINDOWS_NAME_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
+VOLUME_PATTERN = re.compile(r"(?<![A-Za-z0-9._~/])/Volumes/")
 ALLOWED_POSIX_HOME_NAMES = {
     "/Users/": {"runner", "devin", "you"},
     "/home/": {"runner", "ubuntu"},
@@ -24,14 +26,36 @@ ALLOWED_WINDOWS_HOME_NAMES = {"runneradmin"}
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
+def home_name_for_compare(raw: str, message: str, end: int) -> str:
+    if end < len(message) and message[end] in "/\\":
+        return raw
+    return raw.rstrip(".")
+
+
+def windows_home_name(message: str, start: int) -> tuple[str, int]:
+    rest = message[start:]
+    spaced = WINDOWS_SPACED_NAME_PATTERN.match(rest)
+    if spaced:
+        return spaced.group("name"), start + spaced.end("name")
+    token = WINDOWS_NAME_TOKEN_PATTERN.match(rest)
+    if token:
+        return token.group(0), start + token.end()
+    return "", start
+
+
 def has_absolute_local_path(message: str) -> bool:
     if VOLUME_PATTERN.search(message):
         return True
     for match in POSIX_HOME_PATTERN.finditer(message):
-        if match.group("name") not in ALLOWED_POSIX_HOME_NAMES[match.group("root")]:
+        name = home_name_for_compare(match.group("name"), message, match.end("name"))
+        if name not in ALLOWED_POSIX_HOME_NAMES[match.group("root")]:
             return True
-    for match in WINDOWS_HOME_PATTERN.finditer(message):
-        if match.group("name").lower() not in ALLOWED_WINDOWS_HOME_NAMES:
+    for match in WINDOWS_HOME_START_PATTERN.finditer(message):
+        raw_name, end = windows_home_name(message, match.end())
+        if not raw_name:
+            continue
+        name = home_name_for_compare(raw_name, message, end)
+        if name.lower() not in ALLOWED_WINDOWS_HOME_NAMES:
             return True
     return False
 
@@ -62,12 +86,13 @@ def git_commit_messages(args: list[str], cwd: Path | None, runner: Runner) -> li
     return parse_log_output(result.stdout)
 
 
-def log_messages(span: str, cwd: Path | None = None, runner: Runner = subprocess.run) -> list[tuple[str, str]]:
-    return git_commit_messages(["log", "--format=%H%x00%B%x00", span], cwd, runner)
+def log_messages_not_in(head: str, exclusions: Iterable[str], cwd: Path | None, runner: Runner) -> list[tuple[str, str]]:
+    revisions = [head, *(f"^{exclusion}" for exclusion in exclusions)]
+    return git_commit_messages(["log", "--no-show-signature", "--format=%H%x00%B%x00", *revisions], cwd, runner)
 
 
 def commit_message(commit: str, cwd: Path | None = None, runner: Runner = subprocess.run) -> list[tuple[str, str]]:
-    return git_commit_messages(["show", "-s", "--format=%H%x00%B%x00", commit], cwd, runner)
+    return git_commit_messages(["show", "-s", "--no-show-signature", "--format=%H%x00%B%x00", commit], cwd, runner)
 
 
 def scan_messages(commits: Iterable[tuple[str, str]]) -> list[str]:
@@ -75,7 +100,8 @@ def scan_messages(commits: Iterable[tuple[str, str]]) -> list[str]:
 
 
 def scan_range(base: str, head: str, cwd: Path | None = None, runner: Runner = subprocess.run) -> list[str]:
-    return scan_messages(log_messages(f"{base}..{head}", cwd, runner))
+    exclusions = [base, *published_main_refs(cwd, runner)]
+    return scan_messages(log_messages_not_in(head, exclusions, cwd, runner))
 
 
 def merge_base(head: str, cwd: Path | None, runner: Runner = subprocess.run) -> str | None:
@@ -94,9 +120,21 @@ def merge_base(head: str, cwd: Path | None, runner: Runner = subprocess.run) -> 
     return None
 
 
+def published_main_refs(cwd: Path | None, runner: Runner) -> list[str]:
+    result = runner(
+        ["git", "rev-parse", "--verify", "--quiet", "origin/main"],
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    return ["origin/main"] if result.returncode == 0 else []
+
+
 def scan_pre_push(lines: Iterable[str], cwd: Path | None = None, runner: Runner = subprocess.run) -> list[str]:
     bad: list[str] = []
-    seen: set[str] = set()
+    seen = set()
+    published = published_main_refs(cwd, runner)
     for line in lines:
         parts = line.split()
         if len(parts) < 4:
@@ -104,20 +142,19 @@ def scan_pre_push(lines: Iterable[str], cwd: Path | None = None, runner: Runner 
         _local_ref, local_sha, _remote_ref, remote_sha = parts[:4]
         if not re.fullmatch(r"[0-9a-fA-F]{40}", local_sha) or local_sha == ZERO_SHA:
             continue
+        exclusions = list(published)
         if re.fullmatch(r"[0-9a-fA-F]{40}", remote_sha) and remote_sha != ZERO_SHA:
-            key = f"range:{remote_sha}..{local_sha}"
+            exclusions.insert(0, remote_sha)
+        else:
+            base = merge_base(local_sha, cwd, runner)
+            if base:
+                exclusions.insert(0, base)
+        if exclusions:
+            key = (local_sha, tuple(exclusions))
             if key in seen:
                 continue
             seen.add(key)
-            bad.extend(scan_range(remote_sha, local_sha, cwd, runner))
-            continue
-        base = merge_base(local_sha, cwd, runner)
-        if base:
-            key = f"range:{base}..{local_sha}"
-            if key in seen:
-                continue
-            seen.add(key)
-            bad.extend(scan_range(base, local_sha, cwd, runner))
+            bad.extend(scan_messages(log_messages_not_in(local_sha, exclusions, cwd, runner)))
         elif local_sha not in seen:
             seen.add(local_sha)
             bad.extend(scan_messages(commit_message(local_sha, cwd, runner)))
@@ -129,14 +166,29 @@ def report_bad_commits(bad: Iterable[str]) -> None:
         print(f"commit {sha}: commit message carries an absolute local path", file=sys.stderr)
 
 
+def is_verbose_diff_scissors(lines: list[str], index: int) -> bool:
+    scissors = "# ------------------------ >8 ------------------------"
+    if not lines[index].startswith(scissors):
+        return False
+    saw_instruction_comment = False
+    for line in lines[index + 1:index + 8]:
+        if line.startswith(("diff --git ", "diff --cc ", "diff --combined ")):
+            return saw_instruction_comment
+        if line.startswith("#"):
+            saw_instruction_comment = True
+            continue
+        if not line.strip():
+            continue
+        return False
+    return False
+
+
 def committed_message_text(message: str) -> str:
     lines = []
-    scissors = "# ------------------------ >8 ------------------------"
-    for line in message.splitlines(keepends=True):
-        if line.startswith(scissors):
+    message_lines = message.splitlines(keepends=True)
+    for index, line in enumerate(message_lines):
+        if is_verbose_diff_scissors(message_lines, index):
             break
-        if line.startswith("#"):
-            continue
         lines.append(line)
     return "".join(lines)
 
