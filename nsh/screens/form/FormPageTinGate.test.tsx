@@ -14,6 +14,7 @@ warmForms();
 interface App {
   texts: () => string[];
   shows: (sel: string) => boolean;
+  enabled: (sel: string) => boolean;
   press: (sel: string) => Promise<void>;
   waitFor: (sel: string, opts?: object) => Promise<void>;
   waitUntil: (fn: () => boolean, opts?: object) => Promise<void>;
