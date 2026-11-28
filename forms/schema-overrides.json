@@ -4610,7 +4610,7 @@
       },
       "rows": [
         0,
-        11
+        12
       ],
       "cols": [
         "1 Previous Month/s (MM/YYYY)",
@@ -4621,7 +4621,7 @@
         "6 Should be Tax Due for the Month",
         "7 Adjustments (6 less 5)"
       ],
-      "evidence": "N04: official ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I 'Previous Months (attach additional sheet/s, if necessary)' with columns 1 Previous Month/s (MM/YYYY) ... 7 Adjustments (6 less 5); ids frm1601c:sched1:<stem>0..2 are the rows printed 1-3; the official addSchedule handler appends further rows without a source cap (BIR-Form1601Cv2018.hta lines 3349-3385), so the page keeps rows 1-12 visible through its next-empty-row flow. The previous per-box labels ('Schedule I row 1, ...') became these column captions; txtMonthYear<i> is written by the host (catalogs.rs month_year_1601c_row)."
+      "evidence": "N04: official ebirforms-mirror/forms/BIR-Form1601Cv2018.hta Schedule I 'Previous Months (attach additional sheet/s, if necessary)' with columns 1 Previous Month/s (MM/YYYY) ... 7 Adjustments (6 less 5); ids frm1601c:sched1:<stem>0..2 are the rows printed 1-3; the official addSchedule handler appends further rows without a source cap (BIR-Form1601Cv2018.hta lines 3349-3385); this version accepts 12 rows, with row 13 visible only so a write there is refused with the cap sentence. The previous per-box labels ('Schedule I row 1, ...') became these column captions; txtMonthYear<i> is written by the host (catalogs.rs month_year_1601c_row)."
     },
     "chkScheduleDelete{N>=0}": {
       "kind": "hidden",

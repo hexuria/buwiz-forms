@@ -1516,6 +1516,112 @@ pub fn write_period_box(
     )
 }
 
+pub use super::{DYNAMIC_SCHEDULE_ROW_LIMIT, DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE};
+
+fn dynamic_write_has_value(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::String(text) => !text.trim().is_empty(),
+        Value::Bool(on) => *on,
+        Value::Number(_) | Value::Array(_) | Value::Object(_) => true,
+    }
+}
+
+fn digits_suffix(text: &str) -> Option<usize> {
+    (!text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| text.parse().ok())?
+}
+
+fn schedule_1601c_row(key: &str) -> Option<usize> {
+    for stem in [
+        "frm1601c:sched1:txtMonthYear",
+        "frm1601c:sched1:txtDatePaid",
+        "frm1601c:sched1:txtBankCode",
+        "frm1601c:sched1:txtNumber",
+        "frm1601c:sched1:txtTaxPaid",
+        "frm1601c:sched1:txtShouldTaxDue",
+        "frm1601c:sched1:txtAdjustments",
+    ] {
+        if let Some(suffix) = key.strip_prefix(stem) {
+            return digits_suffix(suffix);
+        }
+    }
+    None
+}
+
+fn others_2200a_row(key: &str) -> Option<usize> {
+    let rest = key.strip_prefix("frm2200Av2020:txtSched1_xa_others")?;
+    let (digits, column) = rest.split_once('_')?;
+    if !matches!(
+        column,
+        "Check" | "Atc" | "Desc" | "Bracket" | "Rate" | "Export" | "Taxable" | "Due"
+    ) {
+        return None;
+    }
+    digits_suffix(digits)
+}
+
+fn incomplete_2200a_row(row: &super::form_2200a::Form2200AOtherRow, n: usize) -> Option<String> {
+    let atc = row.atc_digits.trim();
+    if atc.is_empty() {
+        Some(format!("ATC is required in row #{n}"))
+    } else if atc.len() != 3 || !atc.bytes().all(|byte| byte.is_ascii_digit()) {
+        Some(format!("Please supply valid ATC Code for row #{n}"))
+    } else if row.description.trim().is_empty() {
+        Some(format!("Description is required in row #{n}"))
+    } else if row.bracket.trim().is_empty() {
+        Some(format!(
+            "Tax Bracket/Unit of Measure is required in row #{n}"
+        ))
+    } else if row.rate.trim().is_empty() {
+        Some(format!("Applicable Tax Rate is required in row #{n}"))
+    } else {
+        None
+    }
+}
+
+/// The page/assistant write refusal of the two runtime-row schedules. It is
+/// evaluated before box binding so row 13, deliberately absent from the
+/// writable bindings, still receives the cap sentence. 2200A follows the
+/// official `isValidDataOnSched1` (`BIR-Form2200Av2020.hta` lines 7426-7462):
+/// a new row may not start while an earlier row is incomplete. 1601C's
+/// inventoried `addSchedule` evidence has no completeness guard
+/// (`official-hta-runtime#addSchedule:L3349-L3385`), so only its cap applies.
+pub fn dynamic_schedule_write_refusal(
+    kind: AgentFormKind,
+    draft: &Value,
+    key: &str,
+    value: &Value,
+) -> Option<String> {
+    if !dynamic_write_has_value(value) {
+        return None;
+    }
+    if kind == AgentFormKind::Form1601C
+        && let Some(row) = schedule_1601c_row(key)
+    {
+        return (row >= DYNAMIC_SCHEDULE_ROW_LIMIT)
+            .then(|| DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE.to_string());
+    }
+    if kind.form_code() != "2200A" {
+        return None;
+    }
+    let row = others_2200a_row(key)?;
+    if row > DYNAMIC_SCHEDULE_ROW_LIMIT {
+        return Some(DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE.to_string());
+    }
+    if row <= 1 {
+        return None;
+    }
+    let typed: super::form_2200a::Form2200ADraft = serde_json::from_value(draft.clone()).ok()?;
+    for n in 1..row {
+        let earlier = typed.others.get(n - 1).cloned().unwrap_or_default();
+        if let Some(error) = incomplete_2200a_row(&earlier, n) {
+            return Some(error);
+        }
+    }
+    None
+}
+
 fn fill_box(
     kind: AgentFormKind,
     draft: &mut Value,
@@ -1527,6 +1633,9 @@ fn fill_box(
 ) -> Result<(), String> {
     prepare_for_writes(kind, draft)?;
     let def = kind.definition();
+    if let Some(error) = dynamic_schedule_write_refusal(kind, draft, key, value) {
+        return Err(error);
+    }
     let verdict = gate(def, key, from_profile);
     // The assistant (as_host = false) is refused what the page's
     // draft-dependent layer locks on the draft as it stands. A page writer

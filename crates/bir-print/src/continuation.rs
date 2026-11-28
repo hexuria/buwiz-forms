@@ -1993,10 +1993,10 @@ fn match_template_index(key: &str, template: &str) -> Option<usize> {
 pub fn continuation_covers_key(slug: &str, key: &str) -> bool {
     POPUP_SCHEDULES.iter().any(|def| {
         def.slug == slug
-            && def
-                .columns
-                .iter()
-                .any(|col| match_template_index(key, col.key_template).is_some())
+            && def.columns.iter().any(|col| {
+                match_template_index(key, col.key_template)
+                    .is_some_and(|n| def.row_num_base + n > def.printed_capacity)
+            })
     })
 }
 
@@ -2781,6 +2781,26 @@ mod tests {
             report.warning_lines(),
             vec!["Schedule 1.1: 4 rows are on an additional sheet"]
         );
+    }
+
+    #[test]
+    fn continuation_coverage_starts_after_the_printed_rows() {
+        assert!(!continuation_covers_key(
+            "1601c-2018",
+            "frm1601c:sched1:txtMonthYear0"
+        ));
+        assert!(!continuation_covers_key(
+            "2200a-2020",
+            "frm2200Av2020:txtSched1_xa_others3_Atc"
+        ));
+        assert!(continuation_covers_key(
+            "1601c-2018",
+            "frm1601c:sched1:txtMonthYear3"
+        ));
+        assert!(continuation_covers_key(
+            "2200a-2020",
+            "frm2200Av2020:txtSched1_xa_others4_Atc"
+        ));
     }
 
     #[test]

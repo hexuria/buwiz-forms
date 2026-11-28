@@ -116,6 +116,9 @@ pub(super) fn fill(
     value: &Value,
     lift: Lift,
 ) -> Result<(), String> {
+    if let Some(error) = agent::dynamic_schedule_write_refusal(kind, draft, key, value) {
+        return Err(error);
+    }
     if inactive_schedule(kind, key, draft) {
         return Err(
             "Item 11 (Kind of Transaction) uses another Part V schedule; choose it there first."
@@ -643,6 +646,9 @@ fn month_year_1601c_row(kind: AgentFormKind, key: &str) -> Option<usize> {
 /// boxes it starts the row (and any before it); validation checks the
 /// month the way `validateMonthYear` does.
 fn fill_1601c_month_year(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+    if row >= agent::DYNAMIC_SCHEDULE_ROW_LIMIT {
+        return Err(agent::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE.to_string());
+    }
     let text = value.as_str().unwrap_or_default().trim().to_string();
     if text.chars().count() > 7 {
         return Err("Enter the month as MM/YYYY.".to_string());

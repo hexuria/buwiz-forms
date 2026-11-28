@@ -33,7 +33,7 @@ use sha2::{Digest, Sha256};
 
 /// The printed 1601-C sheet exposes three Schedule I rows. The official
 /// runtime appends further rows without a source cap (`addSchedule`,
-/// BIR-Form1601Cv2018.hta lines 3349-3385).
+/// BIR-Form1601Cv2018.hta lines 3349-3385); this version accepts up to 12.
 pub const PRINTED_SCHEDULE_1_ROWS: usize = 3;
 
 /// Hash-locked source evidence for the exact January 2018 revision.
@@ -1027,6 +1027,12 @@ impl Form1601CDraft {
 impl FormValidator for Form1601CDraft {
     fn validate(&self) -> Vec<(String, String)> {
         let mut errors = Vec::new();
+        if self.schedule_1.len() > super::DYNAMIC_SCHEDULE_ROW_LIMIT {
+            errors.push((
+                "schedule_1".to_string(),
+                crate::forms::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE.to_string(),
+            ));
+        }
 
         let today = chrono::Local::now().date_naive();
         let current_year = today.year();
@@ -1613,6 +1619,11 @@ mod tests {
                 .iter()
                 .any(|(field, _)| field == "schedule_1")
         );
+
+        draft.schedule_1 = vec![schedule_row("05/2026", 1.0, 1.0); 13];
+        assert!(draft.validate().iter().any(|(field, message)| {
+            field == "schedule_1" && message == crate::forms::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE
+        }));
     }
 
     #[test]
@@ -2177,6 +2188,22 @@ mod tests {
         assert_eq!(imported.tax_35_total_penalties, 0.0);
         assert_eq!(imported.penalty.penalty_overrides.surcharge, Some(0.0));
         assert_eq!(imported.to_bir_field_map(), fields);
+    }
+
+    #[test]
+    fn queue_with_four_schedule_rows_writes_their_dynamic_layout() {
+        let mut draft = crate::filing_queue::mandatory_lab_1601c_draft();
+        draft.schedule_1 = vec![schedule_row("05/2026", 1.0, 1.0); 4];
+        draft.compute();
+
+        draft
+            .transition_to_queued()
+            .expect("four Schedule I rows queue in the test sandbox");
+        let payload = draft
+            .submitted_payload
+            .as_deref()
+            .expect("queue freezes the exact payload");
+        assert!(payload.contains("frm1601c:sched1:txtMonthYear3"));
     }
 
     #[test]

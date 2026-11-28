@@ -11,8 +11,8 @@
 //! sits in the page as `<td id="…_ATR" value="…">`, which the official
 //! engine (mshta, IE7 document mode) exposes as `td.value`. Three "Others"
 //! rows take filer-typed ATC digits, description, bracket, rate and tax due.
-//! The page can append more "Others" rows, but those are not part of the
-//! official submit layout, so the model stops at three.
+//! The official runtime appends further "Others" rows without a source cap;
+//! this version accepts up to 12 rows and extends the submit layout for them.
 //!
 //! Profile values (name, address) are submitted as loaded; nothing on the
 //! submit path uppercases them.
@@ -1285,6 +1285,9 @@ impl Form2200ADraft {
         let mut err = |field: &str, message: &str| {
             errors.push((field.to_string(), message.to_string()));
         };
+        if self.others.len() > super::DYNAMIC_SCHEDULE_ROW_LIMIT {
+            err("others", crate::forms::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE);
+        }
 
         // validateForm, in order.
         let year = i32::from(self.year);
@@ -1646,6 +1649,22 @@ impl QueueableForm for Form2200ADraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+
+    fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        Form2200ADraft::official_layout(self)
+    }
+
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
+    }
 }
 
 #[cfg(test)]
@@ -1952,6 +1971,17 @@ mod tests {
     }
 
     #[test]
+    fn validation_rejects_a_thirteenth_others_row() {
+        let mut draft = sample();
+        draft.others = vec![Form2200AOtherRow::default(); 13];
+        assert!(
+            messages(&draft)
+                .iter()
+                .any(|message| { message == crate::forms::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE })
+        );
+    }
+
+    #[test]
     fn queue_and_revalidate_through_the_generic_path() {
         let mut draft = sample();
         draft
@@ -1961,6 +1991,33 @@ mod tests {
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn queue_with_four_others_rows_uses_their_dynamic_layout() {
+        let mut draft = sample();
+        for index in 0..4 {
+            let row = draft.other_mut(index).expect("Others row");
+            row.atc_digits = format!("99{index}");
+            row.description = format!("Added product {index}");
+            row.bracket = "Per liter".to_string();
+            row.rate = "10".to_string();
+            row.amounts.taxable = 100.0;
+            row.amounts.tax_due = 10.0;
+        }
+        draft.tax_deposit += 40.0;
+        draft.recompute();
+
+        draft
+            .queue(crate::filing_queue::QueueAuthSource::Gui)
+            .expect("four Others rows queue in the test sandbox");
+        let payload = draft
+            .lifecycle
+            .submitted_payload
+            .as_deref()
+            .expect("queue freezes the exact payload");
+        assert!(payload.contains("frm2200Av2020:txtSched1_xa_others4_Atc"));
+        assert!(draft.revalidate_queued_before_submission().is_ok());
     }
 
     /// P5-1: the earlier float-tolerance check refused two-decimal

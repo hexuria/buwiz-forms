@@ -570,9 +570,10 @@ fn build_form(form: &mut Value, fixes: Option<&Value>) {
     extend_dynamic_schedule_rows(form, code);
 }
 
-/// 2200A's official runtime appends Others rows without a source cap. The
-/// extracted schema knows only the three printed rows; keep twelve rows on the
-/// page, whose next-empty-row flow is the filer's add-row control.
+/// 2200A's official runtime appends Others rows without a source cap. This
+/// version accepts twelve rows. The extracted schema knows only the three
+/// printed rows; row 13 stays visible only so a write there is refused with
+/// the cap sentence instead of silently doing nothing.
 fn extend_dynamic_schedule_rows(form: &mut Value, code: &str) {
     if code != "2200A" {
         return;
@@ -594,7 +595,7 @@ fn extend_dynamic_schedule_rows(form: &mut Value, code: &str) {
             .map(str::to_string)
             .collect();
         let keys = item["keys"].as_array_mut().unwrap();
-        for row in 4..=12 {
+        for row in 4..=13 {
             keys.push(Value::Array(
                 first
                     .iter()
@@ -602,7 +603,7 @@ fn extend_dynamic_schedule_rows(form: &mut Value, code: &str) {
                     .collect(),
             ));
         }
-        item["rows"] = Value::from(12);
+        item["rows"] = Value::from(13);
     }
 }
 
@@ -11116,9 +11117,8 @@ mod tests {
         assert_eq!(codes(&refused["draft"]), ["VB010", "VS010"]);
     }
 
-    /// N04: 1601C Schedule I shows the three printed rows plus the runtime rows
-    /// the official form adds, and Previous Month/s (which the probe left
-    /// unbound) saves.
+    /// N04: 1601C Schedule I shows the three printed rows plus this version's
+    /// runtime rows through 12; row 13 remains only to carry the cap refusal.
     #[test]
     fn rows_1601c_schedule_i_table_saves() {
         setup();
@@ -11133,7 +11133,7 @@ mod tests {
             .iter()
             .find(|it| it["keys"][0][0] == "frm1601c:sched1:txtMonthYear0")
             .expect("Schedule I table");
-        assert_eq!(table["rows"], 12);
+        assert_eq!(table["rows"], 13);
         assert_eq!(table["cols"][0]["l"], "1 Previous Month/s (MM/YYYY)");
         assert_eq!(table["cols"][4]["t"], "money");
         assert!(table["cols"][6].get("c").is_some());
@@ -11209,6 +11209,25 @@ mod tests {
             "07/2026"
         );
 
+        let capped = fill(
+            "1601C",
+            &fourth["draft"],
+            json!({"frm1601c:sched1:txtMonthYear12": "09/2026"}),
+        );
+        assert_eq!(
+            capped["rejected"]["frm1601c:sched1:txtMonthYear12"],
+            "This schedule takes up to 12 rows in this version."
+        );
+        let huge = fill(
+            "1601C",
+            &fourth["draft"],
+            json!({"frm1601c:sched1:txtMonthYear999999999": "09/2026"}),
+        );
+        assert_eq!(
+            huge["rejected"]["frm1601c:sched1:txtMonthYear999999999"],
+            "This schedule takes up to 12 rows in this version."
+        );
+
         save("1601C", &fourth["draft"]);
         let reopened = open("1601C", 7);
         assert_eq!(
@@ -11255,7 +11274,7 @@ mod tests {
 
         let kind = AgentFormKind::from_code("2200A").unwrap();
         let mut draft = open("2200A", 1)["draft"].clone();
-        for row in 4..=5 {
+        for row in 1..=5 {
             for (column, value) in [
                 ("Atc", "997"),
                 ("Desc", "ASSISTANT PRODUCT"),
@@ -11281,6 +11300,27 @@ mod tests {
             "ASSISTANT PRODUCT"
         );
         assert_eq!(map["frm2200Av2020:txtSched1_xa_others5_Due"], "44.00");
+
+        let mut sparse = open("2200A", 1)["draft"].clone();
+        let error = agent::fill(
+            kind,
+            &mut sparse,
+            "frm2200Av2020:txtSched1_xa_others4_Atc",
+            &json!("997"),
+            None,
+        )
+        .expect_err("a new Others row needs the earlier rows complete");
+        assert_eq!(error, "ATC is required in row #1");
+
+        let error = agent::fill(
+            kind,
+            &mut sparse,
+            "frm2200Av2020:txtSched1_xa_others13_Atc",
+            &json!("997"),
+            None,
+        )
+        .expect_err("row thirteen is past this version's cap");
+        assert_eq!(error, "This schedule takes up to 12 rows in this version.");
     }
 
     /// N04: 2200P rows added past the 27 official ones save. The page
