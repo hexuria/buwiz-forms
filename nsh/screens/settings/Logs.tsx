@@ -24,7 +24,7 @@ export function LogsSection() {
       <If when={log().error}>
         <Text testID="logs-error" variant="meta" tone="danger">{log().error ?? ""}</Text>
       </If>
-      <View testID="log-box" class="w-full gap-0.5 rounded-(--radius-card) border border-border bg-background p-3">
+      <View testID="log-box" selectable class="w-full gap-0.5 rounded-(--radius-card) border border-border bg-background p-3">
         <If
           when={view().shown.length}
           else={
@@ -35,7 +35,7 @@ export function LogsSection() {
         >
           <Each of={view().shown} key={(l) => l.index}>
             {(l) => (
-              <Text testID={`log-line-${l().index}`} variant="cap" tone={levelTone(l().level)} class="font-mono font-normal leading-4">
+              <Text testID={`log-line-${l().index}`} variant="cap" tone={levelTone(l().level)} class="font-mono font-normal leading-4 select-text">
                 {l().line || " "}
               </Text>
             )}
