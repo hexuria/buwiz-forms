@@ -20436,7 +20436,9 @@ mod tests {
                 // computed current-year row (40).
                 ("1701", 130),
                 ("1701A", 17),
-                ("1701MS", 52),
+                // Plus 1 fewer at this head: Part V Item 6 column A is a
+                // true lock while shut, not merely a faded probe-cleared box.
+                ("1701MS", 51),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,
                 // Schedule 2's specification and item 18's two boxes.
                 ("1706", 8),
