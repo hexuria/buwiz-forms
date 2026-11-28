@@ -43,7 +43,17 @@ thread_local! {
 /// does not start the submission worker, except to finish a launch that found
 /// the database held ([`open_database_at_launch`]) once the gate is open.
 /// Cloud-account settings use this while the filing UI is still locked.
-fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+pub(crate) fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError>
+{
+    open_database_slot_for(&crate::session::snapshot())
+}
+
+/// P3: the one-snapshot open. The caller's OWN session snapshot decides the room — a verb that
+/// already snapshotted the machine passes it in, so an Opening→Open racing the read can never
+/// pair the old owner and epoch with the new room.
+pub(crate) fn open_database_slot_for(
+    session: &crate::session::Snap,
+) -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
     // A test's ephemeral injection, or this thread's already-open single-room handle, first: rooms
     // mode never populates the thread-local slot, so a filled one is never a room's stale twin.
     if let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) {
@@ -59,7 +69,8 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
     }
     // A3a (§A.4): the open room is the slot, read from the machine. The handle is never replaced
     // inside an old Arc; a new room is a new Arc with a new generation, and the reader follows it.
-    if let Some((handle, generation, _, _)) = crate::session::snapshot().room {
+    if let Some((handle, generation, _, _)) = &session.room {
+        let (handle, generation) = (handle.clone(), *generation);
         if READER_GENERATION.with(std::cell::Cell::get) != generation {
             // F15: a poisoned room mutex must not keep the old reader — recover the guard and
             // reinstall; the database behind a poisoned lock is still the room's one connection.
@@ -337,6 +348,48 @@ pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     bir_core::log_files::spawn_retention();
 }
 
+#[cfg(test)]
+static ROOM_SOURCE_AFTER_SNAPSHOT: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<u64, Box<dyn FnOnce() + Send>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// The submission worker's rooms-mode source. Every tick's room Arc, owner and epoch are read
+/// from ONE machine snapshot; nothing is re-read from the newer session afterwards.
+fn session_room_source() -> bir_core::background_cron::RoomSource {
+    std::sync::Arc::new(|| {
+        let snap = crate::session::snapshot();
+        #[cfg(test)]
+        ROOM_SOURCE_AFTER_SNAPSHOT
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&snap.epoch)
+            .map(|hook| hook());
+        if !matches!(
+            snap.phase_kind,
+            crate::session::PhaseKind::Open | crate::session::PhaseKind::Legacy
+        ) {
+            return None;
+        }
+        let owner = snap.owner.map(|owner| bir_core::account_session::OwnerKey {
+            origin: owner.origin,
+            user_id: owner.user_id,
+        });
+        let epoch = snap.epoch;
+        snap.room.map(|(handle, _generation, room_id, _path)| {
+            let key = match room_id {
+                Some(room) => format!("room:{}", room.as_str()),
+                None => "legacy".to_owned(),
+            };
+            bir_core::background_cron::RoomTick {
+                db: handle,
+                key,
+                owner,
+                epoch,
+            }
+        })
+    })
+}
+
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — on a Tokio runtime of its
 /// own, owned by this engine. Nothing happens while a worker runs already
@@ -398,24 +451,7 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
         if bir_core::db::single_room_database().is_some() {
             bir_core::background_cron::fixed_room_source(db)
         } else {
-            std::sync::Arc::new(|| {
-                // §5.3: the tick's room comes from one snapshot of the machine — no Open or
-                // Legacy phase, no tick. (The owner and epoch join the tick in commit 4.)
-                let snap = crate::session::snapshot();
-                if !matches!(
-                    snap.phase_kind,
-                    crate::session::PhaseKind::Open | crate::session::PhaseKind::Legacy
-                ) {
-                    return None;
-                }
-                snap.room.map(|(handle, _generation, room_id, _path)| {
-                    let key = match room_id {
-                        Some(room) => format!("room:{}", room.as_str()),
-                        None => "legacy".to_owned(),
-                    };
-                    (handle, key)
-                })
-            })
+            session_room_source()
         };
     let cron = bir_core::background_cron::run_cron_jobs(source, stop.clone());
     runtime.spawn(async move {
@@ -843,6 +879,12 @@ pub(crate) fn with_reader<R>(
             f(&guard)
         }
     }
+}
+
+#[cfg(test)]
+pub(crate) fn thread_database_slot_for_tests() -> Option<std::sync::Arc<std::sync::Mutex<Database>>>
+{
+    DATABASE.with(|slot| slot.borrow().clone())
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
@@ -3160,6 +3202,10 @@ thread_local! {
     /// copy, with the database lock held: a test's writer tries to commit there.
     static AFTER_RESTORE_CHECKPOINT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
+    /// Runs once on the restoring thread after the first active-jobs check and before the room
+    /// lock: a test registers a send in exactly the race window R1 closes.
+    static AFTER_ACTIVE_JOBS_CHECK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// §A.3.8: the newest 3 import safety copies per room are kept; the older ones go. The copies are
@@ -3219,6 +3265,17 @@ impl Drop for UnpauseOnDrop {
     }
 }
 
+/// Whether the open room has a send in flight, by the worker's room-scoped active-job keys.
+fn open_room_busy(open_prefix: &str) -> bool {
+    bir_core::background_cron::get_active_jobs()
+        .lock()
+        .map(|jobs| {
+            jobs.iter()
+                .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
+        })
+        .unwrap_or(false)
+}
+
 /// Steps 2 and 3 of [`restore_database_archive`] for a database already
 /// staged and checked. The staged file is removed on every path out.
 fn restore_staged_database(
@@ -3234,14 +3291,7 @@ fn restore_staged_database(
     // Narrowed to the open room's jobs once keys carry the room (F6): another account's send in
     // flight writes into its own room's file, never into the one this import replaces.
     let open_prefix = crate::open_room::job_key_prefix();
-    let room_busy = bir_core::background_cron::get_active_jobs()
-        .lock()
-        .map(|jobs| {
-            jobs.iter()
-                .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
-        })
-        .unwrap_or(false);
-    if room_busy {
+    if open_room_busy(&open_prefix) {
         return Err(HostError::new(
             "A return is being sent. Try the import again when it has finished.",
         ));
@@ -3256,6 +3306,8 @@ fn restore_staged_database(
     })
     .ok()
     .flatten();
+    #[cfg(test)]
+    AFTER_ACTIVE_JOBS_CHECK.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
     if db_path.exists()
         && let Some(parent) = db_path.parent()
     {
@@ -3270,18 +3322,11 @@ fn restore_staged_database(
         // and the connection let go is the one it was copied from.
         let mut db = bir_core::lock_timing::lock(&handle)
             .map_err(|_| HostError::new("database lock poisoned"))?;
-        // I5: the authoritative busy check is under the same lock the worker inserts its keys
-        // with — no send can slip its key in between this check and the swap.
-        let still_busy = bir_core::background_cron::get_active_jobs()
-            .lock()
-            .map(|jobs| {
-                jobs.iter()
-                    .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
-            })
-            .unwrap_or(false);
-        if still_busy {
+        // R1: re-check under the room lock. A send that registered after the first check cannot
+        // pass this one and then write into the file being swapped out.
+        if open_room_busy(&open_prefix) {
             return Err(HostError::new(
-                "eBIRForms is sending this return now. Wait until it finishes.",
+                "A return is being sent. Try the import again when it has finished.",
             ));
         }
         // Flush the WAL first: a raw copy of bir_data.db alone can miss
@@ -3338,8 +3383,8 @@ fn restore_staged_database(
         Ok(()) => {
             // F1: in rooms mode nothing may serve the ephemeral placeholder past the install —
             // the room reopens on the restored file at once, a new Arc and a new generation,
-            // reinstalled into the machine. (§5.8's full boundary — the importing flag, the
-            // epoch CAS, the room-lock re-check — is commit 4's; the reinstall is its step 4.)
+            // reinstalled into the machine. §5.8's wider boundary — the importing flag, the
+            // epoch CAS and the room-lock re-check — remains the send worker's concern.
             let snap = crate::session::snapshot();
             if let Some((_, _, _room_id, room_path)) = snap.room {
                 let path = if matches!(snap.phase_kind, crate::session::PhaseKind::Legacy) {
@@ -3986,6 +4031,43 @@ mod tests {
     use gpui_shell::HostArguments;
 
     const TIN: &str = "12345678800000";
+
+    /// AL1/e: the production rooms-mode RoomSource carries the owner and epoch of the same
+    /// snapshot as the room Arc. A session change immediately after that snapshot changes nothing
+    /// in the tick; if owner or epoch were read again afterwards this test turns red.
+    #[test]
+    fn room_source_carries_one_snapshots_owner_and_epoch() {
+        let _turn = crate::session::test_turn();
+        crate::session::reset_for_tests();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        crate::session::open_legacy_in_place_for_test(
+            &layout,
+            "user-a".into(),
+            "example.test".into(),
+        )
+        .unwrap();
+        let before = crate::session::snapshot();
+        let source = session_room_source();
+        ROOM_SOURCE_AFTER_SNAPSHOT.lock().unwrap().insert(
+            before.epoch,
+            Box::new(|| {
+                crate::session::reset_for_tests();
+            }),
+        );
+        let tick = source().expect("the snapshot's open room makes a tick");
+        assert_eq!(tick.epoch, before.epoch, "the epoch was read again");
+        assert_eq!(
+            tick.owner.map(|owner| owner.user_id).as_deref(),
+            Some("user-a"),
+            "the owner was read again"
+        );
+        assert_eq!(tick.key, "legacy");
+        crate::session::reset_for_tests();
+        bir_core::platform::set_device_dir_override(None);
+    }
 
     #[test]
     fn locked_state_refuses_data_verbs() {
@@ -6556,6 +6638,53 @@ mod tests {
         run_in_scratch_process(
             "a_database_archive_that_fails_its_checks_changes_nothing",
             &ScratchDir::new("unfit"),
+        );
+    }
+
+    /// R1: a send whose job key lands after the first active-jobs check is still seen before the
+    /// swap. The first import is refused; with the send finished the same archive imports — the
+    /// positive control that the refusal really is the registered send.
+    #[test]
+    fn r1_a_send_registering_before_the_import_swap_is_seen() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = good_database_archive(&scratch);
+            let key = bir_core::background_cron::room_job_key(
+                &crate::open_room::job_key_prefix(),
+                "job:import-race",
+            );
+            {
+                let key = key.clone();
+                AFTER_ACTIVE_JOBS_CHECK.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        bir_core::background_cron::get_active_jobs()
+                            .lock()
+                            .unwrap()
+                            .insert(key);
+                    }));
+                });
+            }
+            match restore_database_archive(&archive, 31) {
+                Ok(_) => panic!("the import swapped under a send that registered after the check"),
+                Err(error) => assert!(
+                    error.message().contains("A return is being sent"),
+                    "{}",
+                    error.message()
+                ),
+            }
+            bir_core::background_cron::get_active_jobs()
+                .lock()
+                .unwrap()
+                .remove(&key);
+            assert_eq!(profile_names(), ["Kept Trading Corp"]);
+            restore_database_archive(&archive, 32).expect("the positive control imports");
+            assert_eq!(profile_names(), ["Restored Holdings Inc"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "r1_a_send_registering_before_the_import_swap_is_seen",
+            &ScratchDir::new("import-race"),
         );
     }
 

@@ -564,6 +564,9 @@ impl Form1706Draft {
         if !self.is_amended {
             self.tax_paid_previous = 0.0;
         }
+        if self.property_class != Some(Form1706PropertyClass::Others) {
+            self.property_class_other.clear();
+        }
         if self.seller_type == Some(Form1706SellerType::Corporation) {
             self.principal_residence = None;
             self.new_residence_within_18_months = None;
@@ -725,11 +728,29 @@ impl Form1706Draft {
             }
             .to_string(),
         );
+        let sched1_class = match self.property_class {
+            Some(Form1706PropertyClass::Residential) => "RR".to_string(),
+            Some(Form1706PropertyClass::Commercial) => "CR".to_string(),
+            Some(Form1706PropertyClass::CondominiumResidential) => "RC".to_string(),
+            Some(Form1706PropertyClass::CondominiumCommercial) => "CC".to_string(),
+            Some(Form1706PropertyClass::Agricultural) => "A".to_string(),
+            Some(Form1706PropertyClass::Industrial) => "I".to_string(),
+            Some(Form1706PropertyClass::Others) => self.property_class_other.trim().to_uppercase(),
+            None => String::new(),
+        };
         for (row, kind, (a, b)) in [(1, "LOT", land), (2, "IMPROVEMENT", improvement)] {
             let shown = a.is_some() || b.is_some();
             put(
                 &format!("sched1_kind{row}"),
                 if shown { kind } else { "" }.to_string(),
+            );
+            put(
+                &format!("sched1_class{row}"),
+                if shown {
+                    sched1_class.clone()
+                } else {
+                    String::new()
+                },
             );
             put(&format!("sched1_fmv{row}"), higher(a, b));
         }
@@ -743,6 +764,20 @@ impl Form1706Draft {
                     self.gross_selling_price
                 },
             ),
+        );
+        // Official upload XML keeps two decimals (`12.00`), matching eBIRForms,
+        // while print displays the installment count as a plain number (`12`).
+        fields.insert(
+            "frm1706:txtTotalN".to_string(),
+            super::print_map::format_count(self.installment.number_of_installments),
+        );
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1706:txtDateMonth",
+                "frm1706:txtDateDay",
+                "frm1706:txtDateYear",
+            ],
         );
         fields
     }
@@ -1688,8 +1723,56 @@ mod tests {
             .queue(crate::filing_queue::QueueAuthSource::Gui)
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
+        draft.property_class_other = "LEGACY DETAIL".to_string();
+        assert!(
+            draft.revalidate_queued_before_submission().is_ok(),
+            "queue revalidation recomputes legacy gated detail before validating"
+        );
+        assert!(draft.property_class_other.is_empty());
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn print_map_formats_installment_count_without_money_decimals_while_upload_matches_official() {
+        let mut draft = sample();
+        draft.installment.number_of_installments = Some(12.0);
+        let upload = draft.to_bir_field_map();
+        let print = draft.to_print_field_map();
+        assert_eq!(upload["frm1706:txtTotalN"], "12.00");
+        assert_eq!(print["frm1706:txtTotalN"], "12");
+    }
+
+    #[test]
+    fn print_map_derives_schedule_1_classification_codes_from_property_class() {
+        let mut draft = sample();
+        draft.fmv_land_tax_declaration = Some(1_000_000.0);
+        draft.fmv_improvements_tax_declaration = None;
+        draft.fmv_improvements_bir = None;
+        for (class, code) in [
+            (Form1706PropertyClass::Residential, "RR"),
+            (Form1706PropertyClass::Commercial, "CR"),
+            (Form1706PropertyClass::CondominiumResidential, "RC"),
+            (Form1706PropertyClass::CondominiumCommercial, "CC"),
+            (Form1706PropertyClass::Agricultural, "A"),
+            (Form1706PropertyClass::Industrial, "I"),
+        ] {
+            draft.property_class = Some(class);
+            let p = draft.to_print_field_map();
+            assert_eq!(p["derived:sched1_class1"], code);
+            assert_eq!(p["derived:sched1_class2"], "");
+            assert!(
+                !draft
+                    .to_bir_field_map()
+                    .contains_key("derived:sched1_class1")
+            );
+        }
+        draft.property_class = Some(Form1706PropertyClass::Others);
+        draft.property_class_other = " ps ".into();
+        draft.fmv_improvements_bir = Some(500_000.0);
+        let p = draft.to_print_field_map();
+        assert_eq!(p["derived:sched1_class1"], "PS");
+        assert_eq!(p["derived:sched1_class2"], "PS");
     }
 }

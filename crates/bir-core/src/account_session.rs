@@ -24,9 +24,7 @@ static SESSION_ENDED: OnceLock<fn(OwnerKey, u64, String)> = OnceLock::new();
 
 /// The send's context (revision 5's BUG 3): who the send is for, the session epoch it was
 /// spawned in, and — recorded at the token fetch — the credential its access token came from.
-/// A late 401 ends exactly that: never the owner, epoch or credential of NOW. This is the slot
-/// SEND_OWNER's spawn wiring fills from commit 4; the sends of today are scoped by the tests
-/// and the hosts that already know their owner.
+/// A late 401 ends exactly that: never the owner, epoch or credential of NOW. The cron, the account verbs and the tests scope it; with none, token work is signed out.
 pub struct SendContext {
     /// The owner the task was spawned for.
     pub owner: OwnerKey,
@@ -370,7 +368,26 @@ pub fn access_token_with_credential(
     force: bool,
     for_owner: &OwnerKey,
 ) -> Result<(String, String), TokenError> {
-    access_token_rejecting(http, now_unix, force, for_owner, None)
+    access_token_with_credential_at_epoch(
+        http,
+        now_unix,
+        force,
+        for_owner,
+        crate::session_epoch::current(),
+    )
+}
+
+/// [`access_token_with_credential`] for the epoch the caller was spawned in. The epoch travels
+/// with the ask onto the blocking thread: re-reading `current()` there would compare a new
+/// session with itself after a same-owner re-sign-in in the gap.
+pub fn access_token_with_credential_at_epoch(
+    http: &mut dyn Http,
+    now_unix: i64,
+    force: bool,
+    for_owner: &OwnerKey,
+    epoch: u64,
+) -> Result<(String, String), TokenError> {
+    access_token_rejecting_at_epoch(http, now_unix, force, for_owner, epoch, None)
 }
 
 /// [`access_token_with_credential`] naming the access token whose rejection drove this ask
@@ -382,9 +399,27 @@ pub fn access_token_rejecting(
     for_owner: &OwnerKey,
     rejected_access: Option<&str>,
 ) -> Result<(String, String), TokenError> {
+    access_token_rejecting_at_epoch(
+        http,
+        now_unix,
+        force,
+        for_owner,
+        crate::session_epoch::current(),
+        rejected_access,
+    )
+}
+
+/// [`access_token_rejecting`] for the epoch the caller was spawned in.
+pub fn access_token_rejecting_at_epoch(
+    http: &mut dyn Http,
+    now_unix: i64,
+    force: bool,
+    for_owner: &OwnerKey,
+    epoch: u64,
+    rejected_access: Option<&str>,
+) -> Result<(String, String), TokenError> {
     #[cfg(any(test, feature = "test-support"))]
     note_token_fetch(for_owner);
-    let epoch = crate::session_epoch::current();
     access_token_in(
         &SavedAccount,
         http,
@@ -529,34 +564,39 @@ impl bir_submit::TokenSource for AccountTokens {
         Box<dyn std::future::Future<Output = Result<String, bir_submit::ClientError>> + Send + '_>,
     > {
         // The account file sits next to the database, whose in-process name is per thread: the blocking
-        // thread runs under the name of the thread that asked.
-        // §5.4 (SEND_OWNER, landed): the owner the token is for is the SEND'S owner, read from the
-        // send's task-local BEFORE the hop — never the stored owner of "now", which a sign-in of
-        // another account may already have replaced. Outside a send the stored owner of the
-        // moment is the asker's, as before.
+        // thread runs under the name of the thread that asked. The owner and epoch the token is for
+        // are the send's captured context, never whoever is stored when the fetch happens: a send of
+        // a session that ended answers SignedOut before any token work for the newer sign-in.
         let database = crate::db::capture_database_path_override();
         let device = crate::platform::capture_device_dir_override();
         let context = SEND_CONTEXT.try_with(|context| context.clone()).ok();
-        let owner = context
-            .as_ref()
-            .map(|context| context.owner.clone())
-            .or_else(stored_owner);
-        let Some(for_owner) = owner else {
+        let Some(context) = context else {
             return Box::pin(async move { Err(bir_submit::ClientError::SignedOut) });
         };
-        // The send's context, if this fetch is a send's: the credential it produced the token
-        // from is recorded HERE, in the task's own async frame — the task-local does not reach
-        // the blocking thread, and the record must be the send's, not "now".
+        if context.epoch != crate::session_epoch::current() {
+            return Box::pin(async move { Err(bir_submit::ClientError::SignedOut) });
+        }
+        let for_owner = context.owner.clone();
+        let context_epoch = context.epoch;
+        #[cfg(test)]
+        BEFORE_ACCOUNT_BLOCKING_WORK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+            .map(|hook| hook());
         Box::pin(async move {
             let answer = tokio::task::spawn_blocking(move || {
+                #[cfg(test)]
+                ACCOUNT_BLOCKING_ENTRANCES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 device.run(|| {
                     database.run(|| {
                         let mut http = cloud_account::BlockingHttp::new();
-                        access_token_with_credential(
+                        access_token_with_credential_at_epoch(
                             &mut http,
                             cloud_account::unix_now(),
                             force_refresh,
                             &for_owner,
+                            context_epoch,
                         )
                     })
                 })
@@ -565,15 +605,13 @@ impl bir_submit::TokenSource for AccountTokens {
             .map_err(|error| bir_submit::ClientError::Other(error.to_string()))?;
             answer
                 .map(|(token, credential)| {
-                    if let Some(context) = &context {
-                        context.record_credential(credential);
-                    }
+                    context.record_credential(credential);
                     token
                 })
                 .map_err(|error| match error {
                     TokenError::SignedOut => bir_submit::ClientError::SignedOut,
                     TokenError::Offline(reason) => bir_submit::ClientError::Network(reason),
-                    TokenError::Other(message) => bir_submit::ClientError::Other(message),
+                    TokenError::Other(message) => bir_submit::ClientError::Account(message),
                 })
         })
     }
@@ -583,6 +621,26 @@ impl bir_submit::TokenSource for AccountTokens {
         // one person never share a read across accounts.
         let stored = cloud_account::load_stored_account().ok().flatten()?;
         Some(stored.user_id)
+    }
+
+    fn device_key_is_current(&self) -> bool {
+        SEND_CONTEXT
+            .try_with(|context| context.epoch == crate::session_epoch::current())
+            .unwrap_or(true)
+    }
+
+    fn forget_device_key_if_current(&self, forget: &dyn Fn()) -> bool {
+        // C5: the check AND the forget inside DEVICE_KEY — the epoch is re-checked with the
+        // lock held, so a key the newer session registered while this call waited is never
+        // deleted by the old session's forget.
+        crate::relay::with_device_key_lock(|| {
+            if self.device_key_is_current() {
+                forget();
+                true
+            } else {
+                false
+            }
+        })
     }
 
     fn session_ended(&self) {
@@ -634,6 +692,31 @@ impl AccountStore for SavedAccount {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The same race point for a production-wiring test, where the account load runs on a blocking
+/// thread rather than the test's own thread.
+#[cfg(test)]
+static BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK_GLOBAL: Mutex<Option<Box<dyn FnOnce() + Send>>> =
+    Mutex::new(None);
+
+/// The production wiring's race point between AccountTokens' cheap epoch check and the blocking
+/// account work it starts.
+#[cfg(test)]
+static BEFORE_ACCOUNT_BLOCKING_WORK: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
+#[cfg(test)]
+static ACCOUNT_BLOCKING_ENTRANCES: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(test)]
+fn account_blocking_entrances() -> u64 {
+    ACCOUNT_BLOCKING_ENTRANCES.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// [`access_token`] against `store` — the D2 restructure (§4): the lock is held only for the
 /// file reads and writes, NEVER across the network refresh, and never while waiting on another
 /// refresh's flight ((b): a waiter holds no account_session, SESSION or DEVICE_KEY lock, and the
@@ -667,6 +750,21 @@ fn access_token_in(
         // never leave it.
         let mut stored = {
             let _one = lock();
+            #[cfg(test)]
+            {
+                BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK
+                    .with(|hook| hook.borrow_mut().take().map(|hook| hook()));
+                BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK_GLOBAL
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .take()
+                    .map(|hook| hook());
+            }
+            // AL4: the epoch is re-read under the account lock, after the first cheap check.
+            // A same-owner re-sign-in in that gap must not hand the new epoch's token to the old send.
+            if crate::session_epoch::current() != epoch {
+                return Err(TokenError::SignedOut);
+            }
             match store.load() {
                 Ok(Some(stored)) => stored,
                 Ok(None) => return Err(TokenError::SignedOut),
@@ -1079,7 +1177,7 @@ mod tests {
             now,
             force,
             &test_owner(),
-            1,
+            crate::session_epoch::current(),
             &|_, _, _| {
                 hook_runs.fetch_add(1, Ordering::SeqCst);
             },
@@ -1112,6 +1210,7 @@ mod tests {
 
     #[test]
     fn a_rotation_in_the_network_window_is_never_clobbered() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(0, 0));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1126,7 +1225,7 @@ mod tests {
             1_000,
             true,
             &test_owner(),
-            1,
+            crate::session_epoch::current(),
             &|_, _, _| {
                 hook.fetch_add(1, Ordering::SeqCst);
             },
@@ -1145,6 +1244,7 @@ mod tests {
 
     #[test]
     fn not_signed_in_is_signed_out_with_no_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::default();
         let server = FakeServer::new(&[]);
@@ -1157,6 +1257,7 @@ mod tests {
 
     #[test]
     fn a_fresh_token_is_returned_without_a_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(2_000, 500));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1169,6 +1270,7 @@ mod tests {
 
     #[test]
     fn an_expired_token_refreshes_and_saves_the_rotated_pair() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         // Valid for only 20 s more: inside the 30 s margin.
         let store = MemoryStore::with(account(1_020, 500));
@@ -1191,6 +1293,7 @@ mod tests {
 
     #[test]
     fn force_refreshes_a_token_that_is_still_valid() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(5_000, 500));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1203,6 +1306,7 @@ mod tests {
 
     #[test]
     fn force_right_after_a_refresh_makes_no_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(1_900, 995));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1215,6 +1319,7 @@ mod tests {
 
     #[test]
     fn a_rejected_refresh_with_the_same_saved_token_ends_the_sign_in() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(0, 0));
         // The server no longer knows refresh-0.
@@ -1234,6 +1339,7 @@ mod tests {
 
     #[test]
     fn a_rejected_refresh_after_another_process_rotated_uses_the_new_record() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         /// Before the token request, another process rotates the saved token.
         struct RotatedMeanwhile {
@@ -1285,6 +1391,7 @@ mod tests {
 
     #[test]
     fn a_network_failure_is_offline_and_changes_nothing() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let before = account(0, 400);
         let store = MemoryStore::with(before.clone());
@@ -1305,6 +1412,7 @@ mod tests {
 
     #[test]
     fn two_threads_asking_at_once_make_one_refresh_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = Arc::new(MemoryStore::with(account(0, 0)));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1334,6 +1442,7 @@ mod tests {
     /// bounded join is the failure margin).
     #[test]
     fn flights_are_keyed_by_the_credential() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         struct BarrierHttp(Arc<Barrier>);
         impl Http for BarrierHttp {
@@ -1373,7 +1482,7 @@ mod tests {
                     1_000,
                     false,
                     &owner,
-                    1,
+                    crate::session_epoch::current(),
                     &move |_, _, _| {
                         hook2.fetch_add(1, Ordering::SeqCst);
                     },
@@ -1404,6 +1513,7 @@ mod tests {
     /// It leads its own, and its network call arrives while T1's is still parked.
     #[test]
     fn a_rotation_starts_a_newer_credential_its_own_flight() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         // The leader's http parks inside the network call until released.
         struct ParkedHttp {
@@ -1478,6 +1588,7 @@ mod tests {
     /// the flight had — the leader runs the hook, the waiters only answer SignedOut.
     #[test]
     fn one_rejection_ends_the_session_exactly_once() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = Arc::new(MemoryStore::with(account(0, 0)));
         // The server holds NO live token: the refresh is rejected.
@@ -1501,7 +1612,7 @@ mod tests {
                         1_000,
                         false,
                         &test_owner(),
-                        1,
+                        crate::session_epoch::current(),
                         &move |_, _, _| {
                             hook_count.fetch_add(1, Ordering::SeqCst);
                             hook_store.clear();
@@ -1525,6 +1636,7 @@ mod tests {
     /// (c): a network error is every waiter's own answer, and signs nobody out.
     #[test]
     fn a_network_error_is_every_waiters_answer_and_signs_nobody_out() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = Arc::new(MemoryStore::with(account(0, 0)));
         let hook = Arc::new(AtomicUsize::new(0));
@@ -1560,6 +1672,7 @@ mod tests {
     /// flight, then panics; the guard's Drop publishes the failure.
     #[test]
     fn a_panicking_leader_wakes_its_waiters_with_an_error() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         struct PanicHttp {
             inside: std::sync::mpsc::Sender<()>,
@@ -1625,6 +1738,7 @@ mod tests {
 
     #[test]
     fn a_token_asked_for_another_owner_is_signed_out_and_requests_nothing() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         // I5 in the token layer: the stored sign-in is user-1's; a send of user-2's gets
         // SignedOut for that owner, no request, no clear, no hook.
@@ -1641,7 +1755,7 @@ mod tests {
             1_000,
             false,
             &other,
-            1,
+            crate::session_epoch::current(),
             &|_, _, _| {
                 hook.fetch_add(1, Ordering::SeqCst);
             },
@@ -1656,7 +1770,231 @@ mod tests {
         );
     }
 
+    /// AL4: the cheap epoch check and the account load are not atomic. A same-owner re-sign-in
+    /// in that gap is caught by the epoch re-read under the account lock, so the old send never
+    /// receives the new session's token. The positive control without the race answers the token.
     #[test]
+    fn a_same_owner_re_sign_in_before_the_account_load_is_signed_out() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let _turn = turn();
+        let store = Arc::new(MemoryStore::with(account(2_000, 500)));
+        let epoch = crate::session_epoch::current();
+        let resign = store.clone();
+        BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(move || {
+                let mut newer = account(2_000, 500);
+                newer.access_token = "access-new-epoch".into();
+                newer.refresh_token = "refresh-new-epoch".into();
+                resign.save(&newer).unwrap();
+                crate::session_epoch::set(epoch + 1);
+            }));
+        });
+        let server = FakeServer::new(&[]);
+        let answer = access_token_in(
+            store.as_ref(),
+            &mut FakeHttp(server.clone()),
+            1_000,
+            false,
+            &test_owner(),
+            epoch,
+            &|_, _, _| {},
+            None,
+        );
+        assert_eq!(answer.map(|pair| pair.0), Err(TokenError::SignedOut));
+        assert_eq!(server.requests(), 0, "the stale send refreshed or fetched");
+
+        // Positive control: with no same-owner re-sign-in in the gap, the detector can return a token.
+        crate::session_epoch::set(epoch);
+        let store = MemoryStore::with(account(2_000, 500));
+        let answer = access_token_in(
+            &store,
+            &mut FakeHttp(server),
+            1_000,
+            false,
+            &test_owner(),
+            epoch,
+            &|_, _, _| {},
+            None,
+        );
+        assert_eq!(answer.map(|pair| pair.0).as_deref(), Ok("access-0"));
+    }
+
+    /// F1 through the production wiring: AccountTokens carries the SEND_CONTEXT epoch onto its
+    /// blocking thread. A same-owner re-sign-in in the load gap moves the process epoch, and the
+    /// old context must answer SignedOut rather than the new session's token. The positive control
+    /// then shows the real token path answers when the epoch still matches.
+    /// C5, the discriminating proof: the epoch is re-checked INSIDE the device-key lock. The
+    /// test holds the lock, starts the forget on another thread (which blocks on the lock),
+    /// moves the epoch, then releases: the forget must NOT run. With the bare pair — the check
+    /// outside the lock — the worker's check passes before it ever blocks, the epoch move
+    /// lands too late, and the forget runs: the test fails.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_forget_rechecks_the_epoch_inside_the_device_key_lock() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let _turn = turn();
+        let owner = test_owner();
+        let epoch = crate::session_epoch::current() + 5;
+        crate::session_epoch::set(epoch);
+        use bir_submit::TokenSource;
+        let started = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // hold the device-key lock first: the worker's forget must queue behind it
+        let worker = {
+            let started = started.clone();
+            let ran = ran.clone();
+            let owner = owner.clone();
+            std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    SEND_CONTEXT
+                        .scope(SendContext::new(owner, epoch), async {
+                            started.wait();
+                            AccountTokens.forget_device_key_if_current(&|| {
+                                ran.store(true, std::sync::atomic::Ordering::SeqCst);
+                            });
+                        })
+                        .await;
+                });
+            })
+        };
+        crate::relay::with_device_key_lock(|| {
+            started.wait();
+            // the worker is inside its call now, blocked on this lock. The epoch moves — the
+            // newer session's sign-in — before the lock is released.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            crate::session_epoch::set(epoch + 1);
+        });
+        worker.join().unwrap();
+        assert!(
+            !ran.load(std::sync::atomic::Ordering::SeqCst),
+            "the epoch moved while the forget waited on the lock: it must not run"
+        );
+        // positive control: with the epoch unmoved the same call forgets
+        crate::session_epoch::set(epoch);
+        let control_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let control = control_ran.clone();
+        SEND_CONTEXT
+            .scope(SendContext::new(owner, epoch), async {
+                AccountTokens.forget_device_key_if_current(&move || {
+                    control.store(true, std::sync::atomic::Ordering::SeqCst);
+                });
+            })
+            .await;
+        assert!(
+            control_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "positive control: an unmoved epoch forgets"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn account_tokens_carries_the_context_epoch_onto_the_blocking_thread() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let _turn = turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let mut stored = account(0, 0);
+                stored.access_expires_at_unix = crate::cloud_account::unix_now() + 3600;
+                save_stored(&stored).unwrap();
+                let owner = OwnerKey::of(&stored).unwrap();
+                let epoch = crate::session_epoch::current() + 7;
+                crate::session_epoch::set(epoch);
+                BEFORE_ACCOUNT_BLOCKING_WORK
+                    .lock()
+                    .unwrap()
+                    .replace(Box::new(move || {
+                        // Between the cheap pre-check and the blocking closure: only the fixed
+                        // epoch's re-read under the account lock can catch this same-owner bump.
+                        crate::session_epoch::set(epoch + 1);
+                    }));
+                let context = SendContext::new(owner.clone(), epoch);
+                use bir_submit::TokenSource;
+                let answer = SEND_CONTEXT
+                    .scope(context.clone(), async {
+                        AccountTokens.access_token(false).await
+                    })
+                    .await;
+                assert!(
+                    matches!(answer, Err(bir_submit::ClientError::SignedOut)),
+                    "the old epoch received the new session's token: {answer:?}"
+                );
+                assert!(
+                    context.credential().is_none(),
+                    "the refused fetch recorded a credential"
+                );
+
+                // Positive control: the same production wiring answers the valid token when the
+                // context epoch is the live epoch.
+                crate::session_epoch::set(epoch + 1);
+                let context = SendContext::new(owner, epoch + 1);
+                let answer = SEND_CONTEXT
+                    .scope(context, async { AccountTokens.access_token(false).await })
+                    .await;
+                assert_eq!(answer.unwrap(), "access-0");
+            },
+        )
+        .await;
+    }
+
+    /// The cheap AccountTokens epoch pre-check itself: a context already stale before the ask
+    /// never starts blocking account work. The fresh control enters it.
+    #[tokio::test(flavor = "current_thread")]
+    async fn account_tokens_stale_context_never_starts_account_work() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let _turn = turn();
+        let owner = test_owner();
+        let epoch = crate::session_epoch::current() + 3;
+        crate::session_epoch::set(epoch + 1);
+        let before = account_blocking_entrances();
+        use bir_submit::TokenSource;
+        let answer = SEND_CONTEXT
+            .scope(SendContext::new(owner.clone(), epoch), async {
+                AccountTokens.access_token(false).await
+            })
+            .await;
+        assert!(matches!(answer, Err(bir_submit::ClientError::SignedOut)));
+        assert_eq!(account_blocking_entrances(), before);
+
+        crate::session_epoch::set(epoch + 2);
+        let _answer = SEND_CONTEXT
+            .scope(SendContext::new(owner, epoch + 2), async {
+                AccountTokens.access_token(false).await
+            })
+            .await;
+        assert_eq!(account_blocking_entrances(), before + 1);
+    }
+
+    /// The real AccountTokens implementation, not a fake: device-key deletion belongs only to
+    /// the send context's epoch.
+    #[tokio::test(flavor = "current_thread")]
+    async fn account_tokens_device_key_is_current_only_in_the_context_epoch() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let owner = test_owner();
+        let epoch = crate::session_epoch::current() + 5;
+        crate::session_epoch::set(epoch);
+        use bir_submit::TokenSource;
+        SEND_CONTEXT
+            .scope(SendContext::new(owner.clone(), epoch), async {
+                assert!(AccountTokens.device_key_is_current());
+            })
+            .await;
+        crate::session_epoch::set(epoch + 1);
+        SEND_CONTEXT
+            .scope(SendContext::new(owner, epoch), async {
+                assert!(
+                    !AccountTokens.device_key_is_current(),
+                    "a stale send context still owns the device key"
+                );
+            })
+            .await;
+    }
 
     /// §5.4 across the switch: a send scoped to owner A asks for its token after the stored
     /// sign-in became B — the answer is SignedOut for A, never B's token. Positive control:
@@ -1711,6 +2049,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn end_session_for_only_runs_the_hook() {
         let _turn = turn();
         // §4: bir-core no longer clears anything itself — the hook (the machine's server_ended)

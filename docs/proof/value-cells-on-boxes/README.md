@@ -11,8 +11,29 @@ sheets do:
   cells between the groups likewise), and each slot draws its tick as a
   gradient at its right. The SVG layer still holds the PDF's original row,
   4 to 15 pt away. What prints, and what the filer sees, is the box the cell
-  draws, with the digits inside it. The test now counts those boxes and
-  ticks as drawing.
+  draws, with the digits inside it. Such a self-boxed cell is its own box
+  for its sides and slot ticks, but its top and bottom must lie on a
+  printed horizontal that its row spans: the self-drawn boxes on that line
+  (the groups and the dash cells between them) tile it end to end, each box
+  meeting the next and the first and last meeting the line's ends, all
+  within ±2 pt. Its edges vouch for no other cell. All 20 self-boxed value
+  cells (0605 p1c23-29, 1600WP p1c10-16 and p1c68-74, 2550M p1c9-13 and
+  p1c127, 2553 p1c18-24) sit on their printed row and span it: on each of
+  the five rows the boxes meet with no gap (0.00 pt) and the ends lie 0.00
+  to 0.52 pt from the line's ends. Moving one 4 pt off the row fails
+  (`a_self_boxed_cell_off_the_printed_row_fails`), and so does shrinking
+  one to half its width inside the row
+  (`a_self_boxed_cell_shrunk_inside_its_row_fails`), which only lying within
+  the line let pass.
+- Under each TIN row the sheet prints one white box across the whole row;
+  the PDF's own group dividers inside it are white-on-white knockout edges.
+  Measured against those, the groups' sides are up to 10 pt off (0605 p1c29
+  left 5.27, 2550M p1c11 left 5.42, 2553 p1c22 left 5.23; 0605 p1c25 up to
+  10.96, 2550M p1c9 and p1c13 up to 9.98, 2553 p1c20 and p1c24 up to 9.75,
+  1600WP's groups 2.04 to 6.49), but nothing of
+  them prints: the self-drawn boxes cover the printed box exactly
+  (`0605-tin-row-*.png`, `2550m-tin-row-*.png`, `2553-tin-row-*.png`:
+  `drawn` as printed, `under` with the self-drawn boxes hidden).
 - A value cell is a cell something prints into, whatever its
   `data-cell-kind` (`field`, `mixed` caption-and-boxes, even `label`): a cell
   a writer key is joined to (`bir_print::frozen_html::joined_cell_ids`, which

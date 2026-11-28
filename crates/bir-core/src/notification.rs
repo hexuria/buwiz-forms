@@ -10,7 +10,18 @@
 /// fallback for a bare binary (`cargo run`, a loose `bir-headless`): the
 /// notification center aborts the process when there is no bundle, and the
 /// App Sandbox blocks `osascript`, which only matters for bundled builds.
+/// F9's test seam: every title asked of the banner, delivery or not — the epoch gate's test
+/// proves a notice of the old session never reaches even this point.
+#[cfg(test)]
+pub(crate) static POSTED_TITLES: std::sync::LazyLock<std::sync::Mutex<Vec<String>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
 pub fn send_notification(title: &str, body: &str) {
+    #[cfg(test)]
+    POSTED_TITLES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(title.to_owned());
     if !delivery_enabled() {
         tracing::debug!(
             title,
@@ -348,11 +359,10 @@ mod tests {
 
     /// I1 through the seam: a banner of the open room posts, a closed room's is suppressed,
     /// and with no machine registered everything posts (the single-room processes).
-    static GATE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     #[test]
     fn the_open_room_gate_decides_what_posts() {
-        let _serial = GATE_TEST_LOCK.lock().unwrap();
+        let _queue_turn = crate::background_cron::queue_transport_test_turn_blocking();
+        let _epoch_turn = crate::session_epoch::test_turn();
         // No machine registered: the single-room behavior.
         set_open_room_check(None);
         assert!(may_post("any-room"));
@@ -368,7 +378,8 @@ mod tests {
     /// The withdrawal runs the platform path and the seam's hook together.
     #[test]
     fn withdraw_delivered_runs_the_hook() {
-        let _serial = GATE_TEST_LOCK.lock().unwrap();
+        let _queue_turn = crate::background_cron::queue_transport_test_turn_blocking();
+        let _epoch_turn = crate::session_epoch::test_turn();
         static HIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         HIT.store(false, Ordering::SeqCst);
         *WITHDRAW_TEST_HOOK.write().unwrap() = Some(Box::new(|| {

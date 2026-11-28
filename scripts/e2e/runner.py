@@ -184,13 +184,71 @@ def recipe_steps(path):
     return steps
 
 
+def without_step_node_refs(text, ids):
+    """`text` without gpui-agent 0.5.0's `$<step>.node` / `${<step>}.node` references to the recipe's own steps (the
+    node a scroll_until step matched): they are no params, and gpui-agent binds them itself."""
+    for step_id in ids:
+        text = text.replace(f"${step_id}.node", "").replace(f"${{{step_id}}}.node", "")
+    return text
+
+
+def step_node_refs(text, ids):
+    """The recipe's own step ids `text` refers to as `$<step>.node`."""
+    return {step_id for step_id in ids if f"${step_id}.node" in text or f"${{{step_id}}}.node" in text}
+
+
+def placeholders_in_text(text, ids=()):
+    """The $params in `text` (`$$` is a literal dollar; `$<step>.node` of a step in `ids` is no param)."""
+    return {a or b for a, b in PARAM.findall(without_step_node_refs(text.replace("$$", ""), ids))}
+
+
 def placeholders(path):
     """The $params a recipe file uses (comments excluded)."""
     text = Path(path).read_text(encoding="utf-8")
     if not str(path).endswith(".json"):
         text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-    text = text.replace("$$", "")
-    return {a or b for a, b in PARAM.findall(text)}
+    return placeholders_in_text(text, step_ids(path))
+
+
+def is_json_recipe(path):
+    text = Path(path).read_text(encoding="utf-8")
+    return str(path).endswith(".json") or text.lstrip().startswith("{")
+
+
+def recipe_step_params(path):
+    """The $params each step uses, in step order. For `.wants` the whole source line counts, typed text included."""
+    ids = step_ids(path)
+    if is_json_recipe(path):
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        return [placeholders_in_text(json.dumps(step), ids) for step in data.get("steps") or []]
+    lines = [line for line in Path(path).read_text(encoding="utf-8").splitlines()
+             if line.strip() and not line.lstrip().startswith("#")]
+    return [placeholders_in_text(line, ids) for line in lines]
+
+
+def step_ids(path):
+    """The ids gpui-agent reports for a recipe's steps: JSON steps carry their own; `.wants` steps are s1, s2, ..."""
+    steps = recipe_steps(path)
+    if is_json_recipe(path):
+        return [str(step.get("id") or f"s{index}") for index, step in enumerate(steps, 1)]
+    return [f"s{index}" for index, _ in enumerate(steps, 1)]
+
+
+def needs_edges_cut(steps, ids, cut):
+    """The `(needed, dependent)` JSON step edges a cut after position `cut` would separate: `needs`, and a
+    `$<step>.node` reference, which depends on that step as gpui-agent reads it."""
+    positions = {step_id: position for position, step_id in enumerate(ids, 1)}
+    edges = []
+    for position, step in enumerate(steps, 1):
+        needs = step.get("needs") or []
+        if isinstance(needs, str):
+            needs = [needs]
+        needs = list(needs) + sorted(step_node_refs(json.dumps(step), ids) - {str(need) for need in needs})
+        for need in needs:
+            need_position = positions.get(str(need))
+            if need_position is not None and (need_position <= cut) != (position <= cut):
+                edges.append((str(need), ids[position - 1]))
+    return edges
 
 
 def bind(text, params):
@@ -401,6 +459,25 @@ def check_suite(suite):
             for step in steps:
                 if step.get("key_delay_ms") is not None and step.get("op") != "type":
                     problems.append(f"{where}: {file}: key_delay_ms on {step.get('op')} (only type is paced)")
+            ids = step_ids(path)
+            used_by_step = recipe_step_params(path)
+            for param, spec in (entry.get("resolve") or {}).items():
+                after = spec.get("after") if isinstance(spec, dict) else None
+                if after is None:
+                    continue
+                if after not in ids:
+                    problems.append(f"{where}: {file}: ${param} resolves after {after!r}, which is not a step id")
+                    continue
+                cut = ids.index(after) + 1
+                for index in range(cut):
+                    if param in used_by_step[index]:
+                        problems.append(f"{where}: {file} uses ${param} at {ids[index]}, at or before its resolve's "
+                                        f"after step {after}")
+                        break
+                if is_json_recipe(path):
+                    for needed, dependent in needs_edges_cut(steps, ids, cut):
+                        problems.append(f"{where}: {file}: ${param} resolves after {after!r}, cutting the needs edge "
+                                        f"{needed} -> {dependent}")
             problems += [f"{where}: {problem}" for problem in step_problems(steps, bound, file, entry)]
             if any(step.get("key_delay_ms") is not None for step in steps) and not entry.get("needs_cli"):
                 problems.append(f"{where}: {file} paces typing (key_delay_ms): mark it \"needs_cli\": \"0.4.1\" "
@@ -575,6 +652,190 @@ def wants_line_of(path, step_id):
     return lines[index].strip() if 0 <= index < len(lines) else None
 
 
+def resolve_param(param, spec, agent, log):
+    """Resolve one suite parameter from a fresh snapshot, logging exactly what happened."""
+    t0 = time.monotonic()
+    node = None
+    try:
+        value, node = resolve_node(spec, agent.snapshot())
+    except SuiteError as error:
+        value, why = None, str(error)
+    else:
+        why = "no node matches " + json.dumps(spec)
+    log.line("resolve", f"${param}", value or why, (time.monotonic() - t0) * 1000)
+    return value, node, why
+
+
+def write_recipe_slices(path, points, folder):
+    """Write the slices of `path` cut after the given step positions into `folder`, with id maps back to the original."""
+    ids = step_ids(path)
+    endpoints = sorted(set(points))
+    if not endpoints or endpoints[-1] < len(ids):
+        endpoints.append(len(ids))
+    json_recipe = is_json_recipe(path)
+    if json_recipe:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        source = data["steps"]
+    else:
+        source = [line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines()
+                  if line.strip() and not line.lstrip().startswith("#")]
+    parts = []
+    start = 0
+    for number, end in enumerate(endpoints, 1):
+        if end <= start:
+            continue
+        part_path = Path(folder) / f"slice-{number}{'.json' if json_recipe else '.wants'}"
+        original_ids = ids[start:end]
+        if json_recipe:
+            part_steps = source[start:end]
+            part = dict(data)
+            part["steps"] = part_steps
+            if isinstance(part.get("params"), list):
+                used = set()
+                for step in part_steps:
+                    used |= placeholders_in_text(json.dumps(step), ids)
+                part["params"] = [name for name in part["params"] if name in used]
+            part_path.write_text(json.dumps(part, indent=1) + "\n", encoding="utf-8")
+            local_ids = original_ids
+        else:
+            part_path.write_text("\n".join(source[start:end]) + "\n", encoding="utf-8")
+            local_ids = [f"s{index}" for index in range(1, end - start + 1)]
+        parts.append({"path": part_path, "start": start, "end": end, "number": number,
+                      "ids": original_ids, "id_map": dict(zip(local_ids, original_ids))})
+        start = end
+    return parts
+
+
+def run_recipe_file(agent, path, params, entry, folder, log, receipt_name="receipt.json", screenshot_dir=None):
+    """Run one recipe file through gpui-agent and return its process result, parsed receipt and receipt path."""
+    used = placeholders(path)
+    receipt_path = Path(folder) / receipt_name
+    args = ["recipe", "--schema", SCHEMA, "run", path]
+    for key in sorted(used):
+        args += ["--set", f"{key}={params[key]}"]
+    args += ["--receipt-out", receipt_path, "--screenshot-dir", screenshot_dir or folder, "--screenshot-flagged"]
+    if entry.get("yes"):
+        args.append("--yes")
+    code, stdout, stderr = agent.run(*args, timeout=entry.get("timeout_s", 900))
+    redact_file(receipt_path, log)
+    return code, stdout, stderr, first_json(stdout), receipt_path
+
+
+def write_merged_receipt(path, parts, runs, folder):
+    """One receipt for a split recipe, with every `.wants` step id mapped back to its original sN."""
+    merged = {}
+    fingerprints = []
+    elapsed_ms = 0
+    for run in runs:
+        receipt = run["receipt"]
+        if isinstance(receipt, dict):
+            for key, value in receipt.items():
+                if key not in ("steps", "ok", "recipe"):
+                    merged[key] = value
+            if receipt.get("fingerprint") is not None:
+                fingerprints.append(receipt["fingerprint"])
+            try:
+                elapsed_ms += int(receipt.get("elapsed_ms") or 0)
+            except (TypeError, ValueError):
+                pass
+    steps = []
+    for run in runs:
+        receipt = run["receipt"]
+        if not isinstance(receipt, dict):
+            continue
+        for step in receipt.get("steps") or []:
+            item = dict(step)
+            item["id"] = run["part"]["id_map"].get(item.get("id"), item.get("id"))
+            steps.append(item)
+    merged.update(v=1, recipe=Path(path).name, steps=steps, fingerprints=fingerprints, elapsed_ms=elapsed_ms,
+                  split=True,
+                  ok=len(runs) == len(parts) and all(
+                      run["code"] == 0 and isinstance(run["receipt"], dict) and run["receipt"].get("ok")
+                      for run in runs))
+    receipt_path = Path(folder) / "receipt.json"
+    receipt_path.write_text(json.dumps(merged, indent=1), encoding="utf-8")
+    return merged, receipt_path
+
+
+def map_slice_stderr(path, part, stderr):
+    """Map a dead slice's stderr back to the original recipe: `(text, original step id or None)`.
+
+    gpui-agent reports `.wants` parse errors by line. A written slice has exactly one step on each non-comment line,
+    so that local line number is the local step number; `part["id_map"]` takes either form back to the original id.
+    """
+    text = stderr or ""
+    if not text:
+        return text, None
+    candidates = []
+    for match in re.finditer(r"step\s+`([^`]+)`", text):
+        candidates.append((match.start(), match.group(1), None))
+    for match in re.finditer(r"\bstep\s+([A-Za-z0-9][\w:.-]*)\b", text):
+        candidates.append((match.start(), match.group(1), None))
+    if not str(part["path"]).endswith(".json"):
+        for match in re.finditer(r"\bline\s+(\d+)\b", text):
+            candidates.append((match.start(), f"s{int(match.group(1))}", match.group(1)))
+    local = line = original_step = None
+    for _, candidate, candidate_line in sorted(candidates, key=lambda item: item[0]):
+        if candidate in part["id_map"]:
+            local, line = candidate, candidate_line
+            original_step = part["id_map"][candidate]
+            break
+    original_path = Path(path)
+    text = text.replace(str(part["path"]), str(original_path))
+    if part["path"].name != original_path.name:
+        text = text.replace(part["path"].name, original_path.name)
+    if original_step:
+        if line is not None:
+            text = re.sub(rf"\bline\s+{re.escape(line)}\b", f"step {original_step}", text)
+        else:
+            text = re.sub(rf"step\s+`{re.escape(local)}`", f"step {original_step}", text)
+            text = re.sub(rf"\bstep\s+{re.escape(local)}\b", f"step {original_step}", text)
+    return text, original_step
+
+
+def capture_failure_evidence(result, folder, agent, log):
+    """The failure screenshot and tree the report links to, when the host can give them."""
+    shot = Path(folder) / "failure.png"
+    for extra in (["--inline"], []):
+        shot_code, _, shot_err = agent.run("screenshot", "--out", shot, *extra, timeout=60)
+        if shot_code == 0 and shot.exists():
+            result["screenshot"] = str(shot)
+            break
+    else:
+        result["screenshot_error"] = log.redact(shot_err.strip())[-200:]
+    try:
+        (Path(folder) / "failure-tree.json").write_text(log.redact(json.dumps(agent.snapshot(), indent=1)),
+                                                        encoding="utf-8")
+        result["tree"] = str(Path(folder) / "failure-tree.json")
+    except SuiteError:
+        pass
+
+
+def finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, started, context, agent, log, folder,
+                  step_hint=None):
+    """Fill `result` from a recipe's terminal receipt, exactly as an unsplit run reports it."""
+    result["ms"] = round((time.monotonic() - started) * 1000)
+    if code == 0 and isinstance(receipt, dict) and receipt.get("ok"):
+        result["status"] = "pass"
+        log.line("recipe", entry["name"], "pass" + (f" ({note})" if note else ""), result["ms"])
+        return result
+    step, error, error_code = failing_step(receipt)
+    if step is None:
+        step = step_hint
+    if not error:
+        error = log.redact(stderr.strip() or stdout.strip() or f"exit {code}")[-500:]
+    result.update(step=step, error=log.redact(error), error_code=error_code, line=wants_line_of(path, step))
+    gap = for_host(entry.get("known_gap"), context)
+    result["status"] = "known gap" if gap else "fail"
+    if gap:
+        result["known_gap"] = gap
+    if entry.get("precondition"):
+        result["note"] = "; ".join(filter(None, [note, f"precondition: {entry['precondition']}"]))
+    capture_failure_evidence(result, folder, agent, log)
+    log.line("recipe", entry["name"], f"{result['status']} at {step}: {error}", result["ms"])
+    return result
+
+
 # --- One recipe -----------------------------------------------------------------------------------------------------
 
 def plan_entry(entry, suite, context):
@@ -632,72 +893,91 @@ def run_entry(index, entry, suite, context, agent, log, out):
     folder.mkdir(parents=True, exist_ok=True)
     params = {**(suite.get("params") or {}), **(entry.get("set") or {})}
     names = {}
+    steps = recipe_steps(path)
+    ids = step_ids(path)
+    early = []
+    late = {}
     for param, spec in (entry.get("resolve") or {}).items():
-        t0 = time.monotonic()
-        node = None
-        try:
-            value, node = resolve_node(spec, agent.snapshot())
-        except SuiteError as error:
-            value, why = None, str(error)
-        else:
-            why = "no node matches " + json.dumps(spec)
+        after = spec.get("after") if isinstance(spec, dict) else None
+        if after is None:
+            early.append((param, spec))
+            continue
+        if after not in ids:
+            raise SuiteError(f"{path}: ${param} resolves after {after!r}, which is not a step id")
+        late.setdefault(ids.index(after) + 1, []).append((param, spec, after))
+    for param, spec in early:
+        value, node, why = resolve_param(param, spec, agent, log)
         if node:
             names[value] = f"{node.get('id', '')} {node.get('name', '')} {node.get('role', '')}"
-        log.line("resolve", f"${param}", value or why, (time.monotonic() - t0) * 1000)
         if not value:
             result.update(status="setup", step=None, error=f"${param}: {why}")
             result["ms"] = round((time.monotonic() - started) * 1000)
             return result
         params[param] = value
     # The suite was checked before the run; what a resolved id names is known only now.
-    problems = step_problems(recipe_steps(path), params, file, entry, names)
+    problems = step_problems(steps, params, file, entry, names)
     if problems:
         result.update(status="refused", error="; ".join(problems))
         log.line("recipe", entry["name"], f"refused: {result['error']}", 0)
         return result
-    used = placeholders(path)
-    args = ["recipe", "--schema", SCHEMA, "run", path]
-    for key in sorted(used):
-        args += ["--set", f"{key}={params[key]}"]
-    args += ["--receipt-out", folder / "receipt.json", "--screenshot-dir", folder, "--screenshot-flagged"]
-    if entry.get("yes"):
-        args.append("--yes")
     recorder = context["recorder"](folder) if context.get("recorder") else None
-    code, stdout, stderr = agent.run(*args, timeout=entry.get("timeout_s", 900))
+    if not late:
+        code, stdout, stderr, receipt, _ = run_recipe_file(agent, path, params, entry, folder, log)
+        if recorder:
+            result["video"] = recorder.stop()
+        return finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, started, context, agent, log,
+                             folder)
+
+    parts = write_recipe_slices(path, sorted(late), folder)
+    runs = []
+    terminal = None
+    for part in parts:
+        number = part["number"]
+        code, stdout, stderr, receipt, receipt_path = run_recipe_file(
+            agent, part["path"], params, entry, folder, log, receipt_name=f"slice-{number}-receipt.json",
+            screenshot_dir=folder / f"slice-{number}-shots")
+        run = {"part": part, "code": code, "stdout": stdout, "stderr": stderr, "receipt": receipt,
+               "receipt_path": receipt_path}
+        runs.append(run)
+        if not (code == 0 and isinstance(receipt, dict) and receipt.get("ok")):
+            terminal = run
+            break
+        for param, spec, after in late.get(part["end"], []):
+            value, node, why = resolve_param(param, spec, agent, log)
+            if node:
+                names[value] = f"{node.get('id', '')} {node.get('name', '')} {node.get('role', '')}"
+            if not value:
+                if recorder:
+                    result["video"] = recorder.stop()
+                merged, merged_path = write_merged_receipt(path, parts, runs, folder)
+                redact_file(merged_path, log)
+                result.update(status="setup", step=after, error=f"${param}: after {after}: {why}",
+                              line=wants_line_of(path, after))
+                result["ms"] = round((time.monotonic() - started) * 1000)
+                capture_failure_evidence(result, folder, agent, log)
+                log.line("recipe", entry["name"], f"setup at {after}: {result['error']}", result["ms"])
+                return result
+            params[param] = value
+            problems = step_problems(steps, params, file, entry, names)
+            if problems:
+                if recorder:
+                    result["video"] = recorder.stop()
+                result.update(status="refused", error="; ".join(problems))
+                result["ms"] = round((time.monotonic() - started) * 1000)
+                log.line("recipe", entry["name"], f"refused: {result['error']}", 0)
+                return result
+    if terminal is None:
+        terminal = runs[-1]
+    step_hint = None
+    if terminal["receipt"] is None:
+        mapped_stderr, step_hint = map_slice_stderr(path, terminal["part"], terminal["stderr"])
+        terminal = {**terminal, "stderr": mapped_stderr}
     if recorder:
         result["video"] = recorder.stop()
-    redact_file(folder / "receipt.json", log)
-    receipt = first_json(stdout)
-    result["ms"] = round((time.monotonic() - started) * 1000)
-    if code == 0 and isinstance(receipt, dict) and receipt.get("ok"):
-        result["status"] = "pass"
-        log.line("recipe", entry["name"], "pass" + (f" ({note})" if note else ""), result["ms"])
-        return result
-    step, error, error_code = failing_step(receipt)
-    if not error:
-        error = log.redact(stderr.strip() or stdout.strip() or f"exit {code}")[-500:]
-    result.update(step=step, error=log.redact(error), error_code=error_code, line=wants_line_of(path, step))
-    gap = for_host(entry.get("known_gap"), context)
-    result["status"] = "known gap" if gap else "fail"
-    if gap:
-        result["known_gap"] = gap
-    if entry.get("precondition"):
-        result["note"] = "; ".join(filter(None, [note, f"precondition: {entry['precondition']}"]))
-    shot = folder / "failure.png"
-    for extra in (["--inline"], []):
-        shot_code, _, shot_err = agent.run("screenshot", "--out", shot, *extra, timeout=60)
-        if shot_code == 0 and shot.exists():
-            result["screenshot"] = str(shot)
-            break
-    else:
-        result["screenshot_error"] = log.redact(shot_err.strip())[-200:]
-    try:
-        (folder / "failure-tree.json").write_text(log.redact(json.dumps(agent.snapshot(), indent=1)), encoding="utf-8")
-        result["tree"] = str(folder / "failure-tree.json")
-    except SuiteError:
-        pass
-    log.line("recipe", entry["name"], f"{result['status']} at {step}: {error}", result["ms"])
-    return result
+    merged, merged_path = write_merged_receipt(path, parts, runs, folder)
+    redact_file(merged_path, log)
+    return finish_recipe(result, entry, path, terminal["code"], terminal["stdout"], terminal["stderr"], merged, note,
+                         started, context, agent, log, folder, step_hint=step_hint)
 
 
 # --- The app ------------------------------------------------------------------------------------------------------

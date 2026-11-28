@@ -98,6 +98,24 @@ pub trait TokenSource: Send + Sync {
     fn login(&self) -> Option<String>;
     /// The server ended the sign-in (`403 device_revoked`): the host signs the user out.
     fn session_ended(&self);
+    /// Whether device-key deletion still belongs to the session that made this call. Hosts with
+    /// per-session sends override it; the default keeps single-session clients unchanged.
+    fn device_key_is_current(&self) -> bool {
+        true
+    }
+    /// The check and the forget as ONE step (C5): `forget` runs only when the deletion still
+    /// belongs to the session that asked — in hosts with per-session sends inside the device-key
+    /// lock with the epoch re-checked there, so a key registered after the epoch moved is never
+    /// taken by the old session's forget. Returns whether the forget ran. The default is the
+    /// bare pair, correct for single-session clients: no second session can register meanwhile.
+    fn forget_device_key_if_current(&self, forget: &dyn Fn()) -> bool {
+        if self.device_key_is_current() {
+            forget();
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -184,6 +202,10 @@ pub enum ClientError {
     /// never see it. Not a try, never tried again by itself.
     #[error("Sign out and sign in again on this device.")]
     InstallInUse,
+    /// The account credential or its store failed. This is account evidence,
+    /// never evidence about the submission being settled.
+    #[error("{0}")]
+    Account(String),
     #[error("{0}")]
     Other(String),
     /// The server says this was not a try and nothing reached the BIR: a
@@ -321,9 +343,12 @@ pub enum Settled {
     Sent(Box<Sent>),
     /// It ended without a receipt, as the send itself would have said.
     Failed(SendError),
-    /// The server could not be asked (offline, an error, signed out, another
-    /// server) or the submission is not final yet: ask again later.
+    /// The server could not be asked (offline, an error, another server) or
+    /// the submission is not final yet: ask again later.
     NotYet,
+    /// The token owner signed out or another owner is signed in: keep the
+    /// waiting record; it is never evidence that the send is gone.
+    SignedOut,
     /// The server does not know the submission (404).
     Gone,
 }
@@ -575,6 +600,28 @@ impl Submitter {
         device_key_or_create(self.store.as_ref())
     }
 
+    /// C5: the check-then-delete as one step through the token source — in production the
+    /// forget runs inside the device-key lock with the epoch re-checked there, so a send of a
+    /// session that ended mid-call never deletes the newer session's key.
+    fn forget_device_if_current(&self) -> Result<(), ClientError> {
+        let error = std::sync::Mutex::new(None);
+        self.tokens.forget_device_key_if_current(&|| {
+            if let Err(forget_error) = self.forget_device() {
+                *error
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(forget_error);
+            }
+        });
+        if let Some(forget_error) = error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+        {
+            return Err(forget_error);
+        }
+        Ok(())
+    }
+
     /// Forgets this device's key and id, and the TIN list: a new sign-in
     /// registers a new key. The host calls it on sign-in and sign-out.
     pub fn forget_device(&self) -> Result<(), ClientError> {
@@ -701,11 +748,11 @@ impl Submitter {
                 Err(ClientError::Server {
                     status: 401, code, ..
                 }) if code == "unknown_device" && !registered_again => {
-                    self.forget_device()?;
+                    self.forget_device_if_current()?;
                     registered_again = true;
                 }
                 Err(ClientError::Server { code, .. }) if code == "device_revoked" => {
-                    self.forget_device()?;
+                    self.forget_device_if_current()?;
                     self.tokens.session_ended();
                     return Err(ClientError::DeviceRevoked);
                 }
@@ -1128,6 +1175,19 @@ impl Submitter {
         {
             Ok(view) => view,
             Err(ClientError::Server { status: 404, .. }) => return Settled::Gone,
+            Err(ClientError::SignedOut) => return Settled::SignedOut,
+            // A token-store failure or a second `invalid_token` is account evidence, never
+            // evidence that the submission is gone: the queue keeps the noted send. Other local
+            // read failures (an unreadable answer, a failed task join) say nothing about either.
+            Err(ClientError::Account(_)) => return Settled::SignedOut,
+            Err(ClientError::Other(_)) => return Settled::NotYet,
+            Err(ClientError::Server {
+                status: 401,
+                ref code,
+                ..
+            }) if code == "invalid_token" => {
+                return Settled::SignedOut;
+            }
             Err(_) => return Settled::NotYet,
         };
         let Some(status) = view["status"]
@@ -1911,6 +1971,32 @@ mod tests {
         assert_eq!(client.login(), None, "the host signed out");
     }
 
+    /// F8: an ended send's `device_revoked` must not delete the newer session's key. The client
+    /// asks its token source whether the device epoch is still current before forgetting anything.
+    #[tokio::test]
+    async fn a_revoked_device_of_an_old_epoch_is_not_forgotten() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                403,
+                &json!({"error": {"code": "device_revoked", "message": "revoked"}}),
+            )
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.device_key().unwrap();
+        tokens.make_device_epoch_stale();
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ClientError::DeviceRevoked), "{error:?}");
+        assert!(
+            client.store.get(DEVICE_KEY).unwrap().is_some(),
+            "the newer session's device key was deleted"
+        );
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d"));
+    }
+
     /// `401 unknown_device` (the device is another sign-in's): the device
     /// is forgotten, a new key registered once and the call made once more.
     #[tokio::test]
@@ -2079,6 +2165,34 @@ mod tests {
     }
 
     /// The device key is gone while still signed in: the server does not
+    /// F8: an ended send's `unknown_device` must not delete the newer session's key either.
+    #[tokio::test]
+    async fn an_unknown_device_of_an_old_epoch_is_not_forgotten() {
+        use crate::testkit::{Answer, serve, submitter_tokens};
+        let (url, _) = serve(|_| {
+            Answer::json(
+                401,
+                &json!({"error": {"code": "unknown_device", "message": "who?"}}),
+            )
+        });
+        let (client, tokens) = submitter_tokens(&url, true, Vec::new());
+        client.device_key().unwrap();
+        tokens.make_device_epoch_stale();
+        let error = client
+            .signed("POST", "/api/tickets", &json!({}))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, ClientError::Server { status: 401, code, .. } if code == "unknown_device"),
+            "{error:?}"
+        );
+        assert!(
+            client.store.get(DEVICE_KEY).unwrap().is_some(),
+            "the newer session's device key was deleted"
+        );
+        assert_eq!(client.store.get(DEVICE_ID).unwrap().as_deref(), Some("d"));
+    }
+
     /// know the new key (`401 unknown_device`), the one registration again is
     /// refused (`409`): one plain sentence, held, never a loop.
     #[tokio::test]
@@ -3214,6 +3328,7 @@ mod tests {
             Settled::Failed(SendError::Counted { .. }) => "counted",
             Settled::Failed(SendError::MaybeSent(_)) => "maybe sent",
             Settled::NotYet => "not yet",
+            Settled::SignedOut => "signed out",
             Settled::Gone => "gone",
         }
     }
@@ -3341,6 +3456,15 @@ mod tests {
         assert_eq!(settle_word(not_found, true).await, "gone");
         let broken = Answer::json(500, &json!({"error": {"code": "internal", "message": "x"}}));
         assert_eq!(settle_word(broken, true).await, "not yet");
+        let invalid = Answer::json(
+            401,
+            &json!({"error": {"code": "invalid_token", "message": "expired"}}),
+        );
+        assert_eq!(
+            settle_word(invalid, true).await,
+            "signed out",
+            "a second invalid_token keeps the noted send"
+        );
         let held = Answer::json(
             503,
             &json!({"error": {"code": "restarting", "message": "x"}}),
@@ -3358,12 +3482,12 @@ mod tests {
             Settled::NotYet
         ));
 
-        // Signed out: no request at all.
+        // Signed out: no request at all, and never evidence that the send is gone.
         let (url, seen) = serve(|_| Answer::json(200, &json!({"status": "failed"})));
         let client = submitter(&url, false, Vec::new());
         assert!(matches!(
             client.settle(&pending(&client, false)).await,
-            Settled::NotYet
+            Settled::SignedOut
         ));
         assert!(seen.lock().unwrap().is_empty());
 
@@ -3376,6 +3500,82 @@ mod tests {
         };
         assert!(matches!(client.settle(&elsewhere).await, Settled::NotYet));
         assert!(seen.lock().unwrap().is_empty());
+    }
+
+    /// Other local read failures — a captive portal answering invalid JSON, or token work that
+    /// cannot be joined — say nothing about the account or the submission, so the queue asks again.
+    #[tokio::test]
+    async fn settle_retries_local_failures_that_are_not_account_evidence() {
+        let unreadable = Answer {
+            status: 200,
+            headers: Vec::new(),
+            body: "<html>captive portal</html>".into(),
+        };
+        assert_eq!(settle_word(unreadable, true).await, "not yet");
+
+        struct JoinFailure;
+        impl TokenSource for JoinFailure {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
+            > {
+                Box::pin(async { Err(ClientError::Other("join failed".into())) })
+            }
+            fn login(&self) -> Option<String> {
+                Some("user".into())
+            }
+            fn session_ended(&self) {}
+        }
+        let client = Submitter::new(
+            SubmitConfig::new("http://127.0.0.1:9").unwrap(),
+            Box::new(crate::secrets::MemoryStore::default()),
+            std::sync::Arc::new(JoinFailure),
+        );
+        let pending = PendingSend {
+            server: client.config().server_url.clone(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: xml_hash(),
+            opening: true,
+            noted_at: Utc::now(),
+        };
+        assert!(matches!(client.settle(&pending).await, Settled::NotYet));
+    }
+
+    /// F3: a token-store failure is account evidence, never evidence that a noted send is gone.
+    #[tokio::test]
+    async fn settle_keeps_a_send_when_the_token_store_fails() {
+        struct BrokenTokens;
+        impl TokenSource for BrokenTokens {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
+            > {
+                Box::pin(async { Err(ClientError::Account("the account store failed".into())) })
+            }
+            fn login(&self) -> Option<String> {
+                Some("user".into())
+            }
+            fn session_ended(&self) {}
+        }
+        let client = Submitter::new(
+            SubmitConfig::new("http://127.0.0.1:9").unwrap(),
+            Box::new(crate::secrets::MemoryStore::default()),
+            std::sync::Arc::new(BrokenTokens),
+        );
+        let pending = PendingSend {
+            server: client.config().server_url.clone(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: xml_hash(),
+            opening: true,
+            noted_at: Utc::now(),
+        };
+        assert!(matches!(client.settle(&pending).await, Settled::SignedOut));
     }
 
     #[test]

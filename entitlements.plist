@@ -9,7 +9,8 @@
     <!-- Network access (IMAP, SFTP, HTTP) -->
     <key>com.apple.security.network.client</key>
     <true/>
-    <!-- Localhost listener used for Google OAuth desktop callbacks -->
+    <!-- Localhost listener for Google's OAuth redirect (Gmail Connect, crates/bir-core/src/email/oauth_server.rs) and the
+         agent's socket: `just app` leaves it out unless STORE_GMAIL=1 or an agent build (scripts/store_gmail.py entitlements). -->
     <key>com.apple.security.network.server</key>
     <true/>
 

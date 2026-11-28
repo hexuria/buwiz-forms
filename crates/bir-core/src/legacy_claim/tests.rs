@@ -5,6 +5,20 @@ use std::panic::AssertUnwindSafe;
 use super::fixtures::*;
 use super::*;
 
+fn open_room_guarded(
+    layout: &crate::rooms::Layout,
+    room: &crate::rooms::RoomId,
+) -> Result<crate::db::Database, crate::rooms::DeviceStoreError> {
+    // The production rule (G1), both halves — the started half and the move-evidence half —
+    // never a copy of it here: a copy drifts, and the drift is invisible exactly where it matters.
+    crate::legacy_claim::room_open_allowed(layout, room)
+        .map_err(|why| crate::rooms::DeviceStoreError::Io(std::io::Error::other(why)))?;
+    crate::db::Database::open(layout.room_database(room)).map_err(|error| match error {
+        crate::db::DbError::Sqlite(sqlite) => crate::rooms::DeviceStoreError::Sqlite(sqlite),
+        other => crate::rooms::DeviceStoreError::Io(std::io::Error::other(other.to_string())),
+    })
+}
+
 /// The claim of `who` from start to end, for a file with no lock.
 fn claim_unlocked(install: &Install, who: &Claimant) -> Outcome {
     let claim = install.claim();
@@ -371,9 +385,16 @@ fn what_the_offer_carries() {
     let room = Database::open(room_dir.path().join("bir_data.db")).unwrap();
     // Through the offer's own code path (a client PIN is not an admin lock, so no unlock comes first).
     let lock = crate::db::hold_owner_lock(&install.legacy()).unwrap();
+    let claim_room = super::ClaimRoom {
+        room_id: crate::rooms::room_id_for("https://buwiz.example.test", "user-a"),
+        origin: "https://buwiz.example.test".into(),
+        user_id: "user-a".into(),
+        email: Some("user-a@example.test".into()),
+    };
     let added = files::add_offered(
-        &install.layout,
+        &install.claim(),
         &room,
+        &claim_room,
         crate::safe_fs::file_id(&install.legacy()).ok(),
     )
     .unwrap();
@@ -1748,6 +1769,42 @@ fn a_reused_inode_never_finishes_on_the_accounts_own_room() {
     assert_eq!(record.failure, None);
 }
 
+/// N1/N4: a foreign claimant's transient error in the link window is still definitive for the
+/// account asking now, and the error it can carry leaks nothing about the other account's copy.
+#[test]
+fn a_foreign_transient_in_the_link_window_is_definitive_and_neutral() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterLink);
+    // B's sign-in is another process after the cut: the process-local definitive set starts empty.
+    clear_started_for_test(install.layout.device_dir());
+    std::fs::write(install.legacy().with_extension("db-wal"), b"wal").unwrap();
+    let claim = install.claim();
+    let b = account("b");
+    assert!(
+        !claim_started_this_session(install.layout.device_dir()),
+        "the folder began this test already definitive"
+    );
+    match claim.start(&b) {
+        Start::Failed(Failure::Transient(transient)) => {
+            assert!(
+                !transient.copy_saved,
+                "B was told a copy of A's data was saved"
+            );
+            assert_eq!(
+                transient.detail, "the account could not be opened just now",
+                "the non-claimant detail is not neutral"
+            );
+        }
+        other => panic!("not transient: {other:?}"),
+    }
+    assert!(
+        claim_started_this_session(install.layout.device_dir()),
+        "A's unfinished move kept the folder non-definitive for B"
+    );
+}
+
 /// PLAN §A.8 reviewer pass, M1: a read error in the Copied window (an EIO, a sharing violation) is transient,
 /// never a permanent close: the record stays at Copied, and a later run with the error gone finishes the move.
 #[test]
@@ -1891,15 +1948,14 @@ fn a_room_open_is_refused_before_start_and_the_claim_still_finishes() {
     let claim = install.claim();
     let room = room_of(&claim, &a);
     install.layout.create_room_dir(&room).unwrap();
-    let before = crate::rooms::open_room_guarded(&install.layout, &room);
+    let before = open_room_guarded(&install.layout, &room);
     assert!(
         before.is_err(),
         "the room opened before the claim's start() ran"
     );
     let outcome = claim_unlocked(&install, &a);
     assert_eq!(done_room(&outcome), room);
-    crate::rooms::open_room_guarded(&install.layout, &room)
-        .expect("the room opens once the claim ran");
+    open_room_guarded(&install.layout, &room).expect("the room opens once the claim ran");
 }
 
 // ------------------------------------------------------------------------- L1, the orchestrator's ruling
@@ -1981,6 +2037,29 @@ fn a_second_use_within_one_live_claim_is_refused() {
     drop(ready);
 }
 
+/// #7: the guard these tests open rooms through IS the production rule — the evidence half too,
+/// not the started half alone. A definitive start already ran in this session; a move then cut at
+/// Copied (the record naming the room, the hash evidence still at stake) refuses the open.
+#[test]
+fn the_test_guard_is_the_production_room_open_rule() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let outcome = claim_unlocked(&install, &a);
+    let room = done_room(&outcome);
+    // The started half is satisfied for this session now. Wound the record back to Copied — a
+    // kill mid-move — so only the evidence half can refuse the open.
+    let claim = install.claim();
+    let mut wounded = claim.record().unwrap().expect("the claim's record");
+    wounded.step = Step::Copied;
+    claim.write_record(&wounded).unwrap();
+    let refused = open_room_guarded(&install.layout, &room);
+    assert!(
+        refused.is_err(),
+        "the production guard refuses a room whose move evidence is still at stake"
+    );
+}
+
 // ------------------------------------------------------------------------- R1, the reviewer's holes
 
 /// R1(a): a start() that answers a transient failure never opens the room of the record. In M1's
@@ -2008,11 +2087,10 @@ fn a_transient_room_check_does_not_open_the_room() {
         !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
         "a transient answer must not open the room"
     );
-    let refused =
-        std::panic::catch_unwind(|| crate::rooms::open_room_guarded(&install.layout, &room));
+    let refused = std::panic::catch_unwind(|| open_room_guarded(&install.layout, &room));
     match refused {
         Ok(result) => assert!(result.is_err(), "the room opened after a transient answer"),
-        Err(_) => {} // the debug_assert fired: refused either way
+        Err(_) => {} // a panic is a refusal too, either way the room did not open
     }
     // The error gone, the claim finishes — and now the room opens.
     let finished = claim.start(&a);
@@ -2020,7 +2098,7 @@ fn a_transient_room_check_does_not_open_the_room() {
         matches!(finished, Start::Finished(Outcome::Done { .. })),
         "{finished:?}"
     );
-    crate::rooms::open_room_guarded(&install.layout, &room)
+    open_room_guarded(&install.layout, &room)
         .expect("the room opens once the claim has a definitive answer");
 }
 
@@ -2122,4 +2200,61 @@ fn a_transient_finish_after_the_move_does_not_fill_the_started_set() {
         !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
         "a transient finish after the move must not fill the set"
     );
+}
+
+/// N11: transient details are the page's words, never the OS-user paths inside the underlying
+/// store/file errors. The raw error assertions are the positive control that the detector has a
+/// path to hide where one exists.
+#[test]
+fn transient_details_never_carry_os_paths() {
+    let path = std::path::PathBuf::from("/Users/os-user/private/device.db");
+    let raw = path.to_string_lossy().to_string();
+    for error in [
+        crate::rooms::DeviceStoreError::Lost(path.clone()),
+        crate::rooms::DeviceStoreError::Unreadable {
+            path: path.clone(),
+            reason: "not sqlite".into(),
+        },
+        crate::rooms::DeviceStoreError::Newer {
+            path: path.clone(),
+            version: 99,
+        },
+    ] {
+        assert!(
+            error.to_string().contains(&raw),
+            "positive control: the raw error has no path"
+        );
+        let transient = store_transient(error, false);
+        assert!(!transient.detail.contains(&raw), "{}", transient.detail);
+        assert!(transient.detail.contains("device store"));
+    }
+
+    let io = std::io::Error::other(format!("cannot open {raw}"));
+    assert!(
+        io.to_string().contains(&raw),
+        "positive control: the raw I/O error has no path"
+    );
+    let failure = io_failure(io);
+    let Failure::Transient(transient) = failure else {
+        panic!("not transient")
+    };
+    assert!(!transient.detail.contains(&raw), "{}", transient.detail);
+
+    let io = std::io::Error::other(format!("cannot open {raw}"));
+    let step = db_failure(MovedNotOpenedReason::Open, crate::db::DbError::Io(io));
+    let StepFailure::Passing(_, detail) = step else {
+        panic!("not passing")
+    };
+    assert!(!detail.contains(&raw), "{detail}");
+
+    let raw_error = crate::db::DbError::NotPlainSqlite(path.clone());
+    assert!(
+        raw_error.to_string().contains(&raw),
+        "positive control: the raw database error has no path"
+    );
+    let step = db_failure(MovedNotOpenedReason::Open, raw_error);
+    let StepFailure::Moved(_, detail) = step else {
+        panic!("not moved-not-opened")
+    };
+    assert!(!detail.contains(&raw), "{detail}");
 }

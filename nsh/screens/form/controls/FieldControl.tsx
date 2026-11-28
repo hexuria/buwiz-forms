@@ -12,6 +12,7 @@ import {
 } from "../../../ui";
 import { SearchPick } from "./Pick";
 import { cx, isOn, listedOptions, mdy, readBoxPad, readText, SEARCH_FROM, selectModel, tinKind, tinSegment } from "./model";
+import { probing, registerMeasure } from "../layoutProbe";
 import { type FieldInput, read } from "./types";
 
 const OFF_OPACITY = 0.45;
@@ -289,6 +290,7 @@ function TypedBox(props: { p: FieldInput }) {
         onChange={(plain) => p.onEdit(plain)}
         onFocus={() => p.onFocus()}
         onBlur={() => p.onBlur()}
+        amountStored={p.amountStored}
         onLeftUnreadable={(typed, kept) => p.onLeftUnreadable?.(typed, kept)}
         onCommaRead={(typed, shown) => p.onCommaRead?.(typed, shown)}
         hint={p.box.note?.() || undefined}
@@ -300,7 +302,11 @@ function TypedBox(props: { p: FieldInput }) {
         prefix={kind() === "num" ? "" : undefined}
         negative
         placeholder={p.placeholder}
-        inputRef={(ref) => giveFocus(p, ref)}
+        trailing={p.trailing}
+        inputRef={(ref) => {
+          giveFocus(p, ref);
+          if (probing() && ref?.measure) registerMeasure(`input:${p.testID}`, () => ref.measure());
+        }}
       />
     </If>
   );

@@ -534,7 +534,8 @@ pub(super) fn q3_note_seen_key(id: i64) -> String {
 
 /// The prefix of every one-time note's seen key: the only settings keys
 /// `screen_form_notes_seen` writes.
-pub(super) const NOTE_SEEN_PREFIX: &str = "notice_seen:";
+pub(super) const NOTE_SEEN_PREFIX: &str =
+    bir_core::forms::agent::draft_locks::pending_notices::SEEN_PREFIX;
 
 /// The one-time notes `draft` offers on opening, `{key, text}`:
 /// [`Q3_DEADLINE_NOTE`] for a filed third-quarter 1701Q charged under
@@ -550,22 +551,48 @@ pub(super) fn once_notes(
     db: &bir_core::db::Database,
     kind: AgentFormKind,
     draft: &Value,
+    item16_precleared_on_open: bool,
 ) -> Vec<Value> {
     let Some(id) = draft["id"].as_i64() else {
         return Vec::new();
     };
-    if !q3_charged_under_october(kind, draft) {
-        return Vec::new();
+    let mut wanted = Vec::new();
+    if q3_charged_under_october(kind, draft) {
+        wanted.push((q3_note_seen_key(id), Q3_DEADLINE_NOTE.to_string()));
     }
-    let key = q3_note_seen_key(id);
-    match db.get_setting(&key) {
-        Ok(None) => vec![json!({"key": key, "text": Q3_DEADLINE_NOTE})],
-        Ok(Some(_)) => Vec::new(),
-        Err(error) => {
-            tracing::warn!("1701Q: reading {key} failed: {error}");
-            Vec::new()
+    let pending = bir_core::forms::agent::draft_locks::pending_notices::for_draft(db, id);
+    let item16_pending = pending.iter().any(|notice| notice.gate == "2551q_item16");
+    // A 2551Q draft saved before Item 16's gate may still hold a nonzero
+    // amount although the gate is closed. The pending notice is the normal
+    // path. This fallback can only cover a still-nonzero pre-pending row;
+    // it cannot recover a value an older build already zeroed silently.
+    // `item16_precleared_on_open` is decided from the stored bytes before a
+    // profile follow and quiet save can clear it.
+    if kind == AgentFormKind::Form2551Q
+        && !item16_pending
+        && (item16_precleared_on_open
+            || draft["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005)
+        && let Some(text) = bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(draft)
+    {
+        wanted.push((
+            format!("{NOTE_SEEN_PREFIX}2551q_item16_cleared:{id}"),
+            text.to_string(),
+        ));
+    }
+    for notice in pending {
+        wanted.push((notice.seen_key, notice.text));
+    }
+    let mut notes = Vec::new();
+    for (key, text) in wanted {
+        match db.get_setting(&key) {
+            Ok(None) => notes.push(json!({"key": key, "text": text})),
+            Ok(Some(_)) => {}
+            Err(error) => {
+                tracing::warn!("{}: reading {key} failed: {error}", kind.form_code());
+            }
         }
     }
+    notes
 }
 
 /// 1702Q's `resultOtherSpecify`: BIR's internal total of the Schedule 4

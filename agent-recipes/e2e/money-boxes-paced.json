@@ -33,48 +33,46 @@
   },
   {
    "id": "s5",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:txt16"
+  },
+  {
+   "id": "s6",
    "op": "type",
    "target": "fp-frm2551Qv2018:txt16",
    "text": "$prior",
    "key_delay_ms": 80
   },
   {
-   "id": "s6",
+   "id": "s7",
    "op": "assert",
    "target": "fp-frm2551Qv2018:txt16",
    "value": "$prior",
    "screenshot": true
   },
   {
-   "id": "s7",
+   "id": "s8",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:txt15"
+  },
+  {
+   "id": "s9",
    "op": "type",
    "target": "fp-frm2551Qv2018:txt15",
    "text": "$amount",
    "key_delay_ms": 80
   },
   {
-   "id": "s8",
+   "id": "s10",
    "op": "assert",
    "target": "fp-frm2551Qv2018:txt15",
    "value": "$amount",
    "screenshot": true
   },
   {
-   "id": "s9",
-   "op": "click",
-   "target": "fp-frm2551Qv2018:txt16"
-  },
-  {
-   "id": "s10",
-   "op": "assert",
-   "target": "fp-frm2551Qv2018:txt15",
-   "value": "$amount_shown",
-   "screenshot": true
-  },
-  {
    "id": "s11",
    "op": "click",
-   "target": "fp-frm2551Qv2018:txt15"
+   "target": "fp-frm2551Qv2018:txt16"
   },
   {
    "id": "s12",
@@ -85,6 +83,30 @@
   },
   {
    "id": "s13",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:txt15"
+  },
+  {
+   "id": "s14",
+   "op": "assert",
+   "target": "fp-frm2551Qv2018:txt15",
+   "value": "$amount_shown",
+   "screenshot": true
+  },
+  {
+   "id": "s12a",
+   "op": "set_value",
+   "target": "fp-frm2551Qv2018:txt15",
+   "value": "0"
+  },
+  {
+   "id": "s12b",
+   "op": "set_value",
+   "target": "fp-frm2551Qv2018:txt16",
+   "value": "0"
+  },
+  {
+   "id": "s15",
    "op": "click",
    "target": "fp-frm2551Qv2018:amendedRtn_2",
    "screenshot": true

@@ -49,10 +49,21 @@ test("moved, not opened: support and sign out, phone", async () => {
   await app.waitFor("id:migration-moved-sign-out");
 });
 
+test("device store: plain support page without a path, phone", async () => {
+  const app = await open(DEMO, { host: { params: { page: "device-store" } } });
+  await app.waitFor("id:migration-device-store");
+  expect(app.texts()).toContain("This device's account store cannot be read.");
+  expect(app.texts()).toContain("Your tax profiles are still on this device, unchanged. Write to support@buwiz.com.");
+  expect(app.texts()).not.toContain("/Users/");
+  await app.waitFor("id:migration-device-store-try-again");
+});
+
 test("the offer: both answers, desktop", async () => {
   const app = await open(DEMO, { width: 1440, height: 900, platform: "macos", host: { params: { page: "offered" } } });
   await app.waitFor("id:migration-offer");
   expect(app.texts()).toContain("Tax profiles from an older version of eBIRForms were found on this device.");
-  await app.waitFor("id:migration-offer-add");
+  expect(app.texts()).toContain("Choose No only if this isn't yours. The older data stays untouched and won't be offered to this account again; there is no undo.");
+  expect(app.shows("id:migration-offer-add")).toBe(false);
+  await app.waitFor("id:migration-offer-no");
   await app.waitFor("id:migration-offer-not-now");
 });

@@ -190,6 +190,8 @@ export interface FieldControlProps {
   blurRef?(blur: (() => void) | null): void;
   /** Register how an amount box leaves at once, in this turn, without writing to its native box (quit and the page going leave it first); null when the box goes away. */
   leaveRef?(leave: (() => void) | null): void;
+  /** Whether a zero amount in this box is stored content (a schedule row that exists), rather than a host zero shown for a row nothing stores yet. */
+  amountStored?(): boolean;
   /** An amount box was left with text that is not an amount (`typed`) and shows `kept`, the return's amount, again. The session says so under it. */
   onLeftUnreadable?(typed: string, kept: string): void;
   /** An amount box was left with one comma read as its decimal point (`typed` "1500,50", `shown` "1,500.50"). The session says so under it. */
@@ -256,8 +258,8 @@ export interface ScheduleProps {
   /** The row open in the drawer, or null. The page owns it; the control renders the drawer from it. */
   openRow: Accessor<number | null>;
   onOpenRow(row: number | null): void;
-  /** Clear every typed cell of the row (the session may ask first when the host would remove rows: Undo follows). */
-  onClearRow(row: number): void;
+  /** Remove the row at once; rows below move up intact and Undo restores it. */
+  onDeleteRow(row: number): void;
   /** The whole table takes no typing (read-only return). */
   locked: Accessor<boolean>;
 }

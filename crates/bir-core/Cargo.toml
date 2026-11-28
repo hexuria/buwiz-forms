@@ -168,5 +168,9 @@ insta = "1"
 tempfile = "3"
 temp-env = { version = "0.3", features = ["async_closure"] }
 tokio = { workspace = true, features = ["test-util"] }
+# The rendered print parity test (tests/sample_payloads/rendered_print_parity.rs)
+# prints each official sample on its frozen sheet. A dev-dependency only: the
+# library never depends on bir-print.
+bir-print = { path = "../bir-print", default-features = false }
 # The isolation guard reads every Cargo.toml (already in Cargo.lock; parse only, nothing new to fetch).
 toml_edit = { version = "0.25", default-features = false, features = ["parse"] }

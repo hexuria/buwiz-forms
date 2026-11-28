@@ -178,6 +178,8 @@ export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyb
   writeProbe?: (write: "text" | "caret", start?: number, end?: number) => void;
   /** Money text was left unreadable: what was typed, and the amount text the box kept ("" when it was left blank). */
   onLeftUnreadable?: (typed: string, kept: string) => void;
+  /** Whether a zero fallback amount was already stored content (a schedule row that exists), rather than only the host's zero answer to this invalid edit's rollback. */
+  amountStored?: () => boolean;
   /** Money text was left with one comma the filer typed, read as its decimal point ("1500,50" as 1,500.50): what was typed, and what the box shows. */
   onCommaRead?: (typed: string, shown: string) => void;
   /** Money text the filer typed during this focus came to the amount the box showed, and a value set from outside meanwhile won on leaving: what was typed, and what the box shows now. */
@@ -414,9 +416,11 @@ function MaskedField(props: MaskedProps) {
         if (!validBlur) {
           // The return keeps the fallback amount. A newer outside value held during this focus is that fallback.
           const fallback = outsideValue ?? focusValue;
-          // What the box shows again: "" when the fallback is blank (a nullable schedule cell that held no amount), unless the host
-          // answered the box's own empty report with its zero (a started row's cell): then it holds that zero.
-          const kept = props.shown(fallback === "" && isZeroAmount(props.value ?? "") ? (props.value ?? "") : fallback, false);
+          // What the box shows again is the fallback the box began from (or a newer outside value). A zero fallback is not proof of
+          // stored content in a schedule row: adding the row can make the host answer zero before any cell stores. When the caller
+          // says the row is not stored, the truthful fallback is blank.
+          const zeroNeverStored = isZeroAmount(fallback) && props.field.amountStored && !props.field.amountStored();
+          const kept = props.shown(zeroNeverStored ? "" : fallback, false);
           if (write) writeText(displayShown(kept));
           const hint = held.includes(",") ? " Use a point for centavos, and commas only between thousands." : "";
           if (props.field.onLeftUnreadable) props.field.onLeftUnreadable(held, kept);

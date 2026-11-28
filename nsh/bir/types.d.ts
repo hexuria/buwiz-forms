@@ -701,6 +701,8 @@ export interface ScreenFormSamplePeriod {
 }
 export interface ScreenFormPenalties {
     keys: string[];
+    /** Each box whose component the filer typed: the others show the computed amounts and carry the computed mark. */
+    typed?: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
     /** The amounts are kept as entered before penalties were computed (1701Q, 1701): "Use the computed amounts" works once Edit opens them. */
@@ -721,6 +723,8 @@ export interface ScreenFormFilled {
     blank?: string[] | null;
     /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
     removes?: { message: string; done: string; rows: number } | null;
+    /** Delete row removed a backing row object. False means the drawer held only tentative input and there is no draft row to Undo. */
+    row_removed?: boolean;
     /** Locks this fill opened or shut (a folded item, a box an answer shuts): the reason, or null to open the box; `relock_notes` holds each one's note. */
     relocks?: Record<string, string | null>;
     relock_notes?: Record<string, string | null>;
@@ -771,6 +775,8 @@ export function screen_form_filed_original(form_code: string, snapshot_id: numbe
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. `forget`: choice boxes whose answer is dropped before the edits apply, so the form asks again (the agent's fill left them unanswered). */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[], forget?: string[]): ScreenFormFilled;
+/** Remove one schedule row from the draft and compact the backing row list. `row_keys` are the visible keys of the row the page deletes. This is the row operation itself, not a side-effect clear: it never raises `removes`; the page offers Undo from the draft it already holds. */
+export function screen_form_remove_row(form_code: string, draft: object, row_keys: string[]): ScreenFormFilled;
 /** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; then only the boxes they fill move, and one the filer typed or picked on this return keeps its value. Nothing is saved; save the draft. `asks`: the cards still asked. */
 export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object, facts?: ScreenFormFact[]): ScreenFormFilled & { asks: ScreenFormAsk[] };
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
@@ -981,15 +987,15 @@ export function lock_now(): boolean;
 
 /** The migration state the sign-in flow shows a page for after session_opened. */
 export function migration_state(): {
-    kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
+    kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered" | "device_store";
     copy_saved: boolean;
     detail: string;
 };
 /** The transient page's Try again: the claim and the room open run again for the saved sign-in. */
 export function migration_try_again(): void;
-/** The offer page's answer: `add` runs the whole-profile export of the found file and imports it into
- *  the room, then the file is renamed aside; `false` leaves it for the next launch. */
-export function migration_offer_answer(add: boolean): void;
+/** The offer page's answer: `no` marks the file not this account's; `not_now` leaves it for the
+ *  next launch. `add` is refused in this version. */
+export function migration_offer_answer(answer: string): void;
 /** How many returns of the open room are Queued or sending now — the sign-out confirm's count, no names. */
 export function returns_waiting_count(): number;
 /** The pre-rooms safety copy of the open room's claim, for Settings › Import / Export: kept-until

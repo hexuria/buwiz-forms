@@ -1651,19 +1651,99 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(test)]
+static AFTER_ACCOUNT_WORK: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<u64, Box<dyn FnOnce() + Send>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+// Fixed-token account tests have no real sign-in; the process-wide session machine belongs to
+// other tests running beside them. Real AccountTokens wiring tests leave this unset.
+#[cfg(test)]
+thread_local! {
+    static IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+thread_local! {
+    static ROOM_SNAPSHOT_TEST_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The account verb's one session snapshot and the room that snapshot opened. A test's
+/// thread-local ephemeral slot wins; otherwise this reads the snapshot's own Arc, never a room
+/// re-opened after the snapshot.
+fn account_room_snapshot() -> Result<
+    (
+        crate::session::Snap,
+        std::sync::Arc<std::sync::Mutex<Database>>,
+    ),
+    HostError,
+> {
+    crate::account_gate::ensure_unlocked()?;
+    let snap = crate::session::snapshot();
+    #[cfg(test)]
+    {
+        // A test's thread-local ephemeral database wins over the process-wide session room. The
+        // session machine is shared global test state; without this priority a parallel session
+        // test can make a profile verb read that room instead of this test's own database.
+        if let Some(handle) = crate::bir_module::thread_database_slot_for_tests() {
+            return Ok((snap, handle));
+        }
+    }
+    #[cfg(test)]
+    ROOM_SNAPSHOT_TEST_HOOK.with(|slot| {
+        slot.borrow_mut().take().map(|hook| hook());
+    });
+    crate::bir_module::open_database_slot_for(&snap).map(|handle| (snap, handle))
+}
+
 /// Run the client's `work` on a thread and a runtime of its own, as the
-/// account verbs do, and answer it to the page.
+/// account verbs do, and answer it to the page. `snap` is the verb start's one snapshot: its
+/// owner and epoch scope the real AccountTokens, and an answer landing after a session change is
+/// refused rather than applied.
 fn on_account_thread<T: Send + 'static>(
     name: &str,
+    snap: crate::session::Snap,
     work: impl std::future::Future<Output = T> + Send + 'static,
     answer: impl FnOnce(T) -> HostResult + Send + 'static,
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
+    let epoch = snap.epoch;
+    #[cfg(test)]
+    let ignore_session_epoch = IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST.with(|flag| flag.get());
+    let context = snap.owner.map(|owner| {
+        bir_core::account_session::SendContext::new(
+            bir_core::account_session::OwnerKey {
+                origin: owner.origin,
+                user_id: owner.user_id,
+            },
+            epoch,
+        )
+    });
     crate::cloud_account::spawn_account(name, move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|error| HostError::new(error.to_string()))?;
-        answer(runtime.block_on(work))
+        let outcome = if let Some(context) = context {
+            runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(context, work))
+        } else {
+            runtime.block_on(work)
+        };
+        #[cfg(test)]
+        AFTER_ACCOUNT_WORK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&epoch)
+            .map(|hook| hook());
+        #[cfg(test)]
+        let session_changed = !ignore_session_epoch && crate::session::snapshot().epoch != epoch;
+        #[cfg(not(test))]
+        let session_changed = crate::session::snapshot().epoch != epoch;
+        if session_changed {
+            return Err(HostError::new("The signed-in account changed; try again."));
+        }
+        answer(outcome)
     })
 }
 
@@ -1749,10 +1829,16 @@ fn account_tins(
     arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     let max_age = arguments.integer(0)?;
-    let local = with_reader(local_branches)?;
+    let (snap, room) = account_room_snapshot()?;
+    let local = {
+        let room = bir_core::lock_timing::lock(&room)
+            .map_err(|_| HostError::new("database lock poisoned"))?;
+        local_branches(&room)?
+    };
     let submitter = account_submitter()?;
     on_account_thread(
         "buwiz-account-tins",
+        snap,
         async move { submitter.account_tins(max_age).await },
         move |read| {
             let list = read.map_err(|error| HostError::new(error.to_string()))?;
@@ -1773,7 +1859,10 @@ fn activate_tin(
     let key = TinKey::parse(&tin)
         .filter(|_| tin.chars().filter(char::is_ascii_digit).count() == 14)
         .ok_or_else(|| HostError::new("Give the tax profile's TIN with its branch: 14 digits."))?;
-    let (kind, registered_name) = with_reader(|db| {
+    let (snap, room) = account_room_snapshot()?;
+    let (kind, registered_name) = {
+        let db = bir_core::lock_timing::lock(&room)
+            .map_err(|_| HostError::new("database lock poisoned"))?;
         let taxpayer = db
             .get_taxpayer(key.root())
             .map_err(host_error)?
@@ -1790,11 +1879,12 @@ fn activate_tin(
         } else {
             TinKind::NonIndividual
         };
-        Ok((kind, taxpayer.name))
-    })?;
+        (kind, taxpayer.name)
+    };
     let submitter = account_submitter()?;
     on_account_thread(
         "buwiz-account-activate-tin",
+        snap,
         async move {
             submitter
                 .add_account_tin(kind, &key, &registered_name, None)
@@ -3407,9 +3497,11 @@ mod tests {
         impl Drop for Uninstall {
             fn drop(&mut self) {
                 TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
+                IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST.with(|flag| flag.set(false));
             }
         }
         let _uninstall = Uninstall;
+        IGNORE_SESSION_EPOCH_FOR_FIXED_TOKEN_TEST.with(|flag| flag.set(true));
         body(&mock);
     }
 
@@ -3433,11 +3525,94 @@ mod tests {
         );
     }
 
+    /// AL2's real-entry regression test: the verb's own context reaches the process-wide
+    /// AccountTokens. The client is the test client's only injection; its token source is the
+    /// real one, not FixedToken.
+    #[test]
+    fn account_tins_through_real_account_tokens_uses_the_verb_context() {
+        use bir_core::mock_account::{MockAccount, MockOptions, TinState};
+        let _turn = crate::session::test_turn();
+        setup();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mock = runtime
+            .block_on(MockAccount::start_with(
+                "127.0.0.1:0".parse().unwrap(),
+                MockOptions::default(),
+            ))
+            .unwrap();
+        let email = "filer@example.test";
+        mock.add_tin(email, "123-456-788-00000", TinState::Approved);
+        let access = mock.app_token(email);
+        let stored = bir_core::cloud_account::StoredAccount {
+            server_url: mock.url(),
+            access_token: access,
+            refresh_token: "refresh-not-needed-while-access-is-valid".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-filer".into(),
+            email: Some(email.into()),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        bir_core::account_session::save_stored(&stored).unwrap();
+        let owner = crate::session::Owner::of_stored(&stored).unwrap();
+        crate::session::CLAIM_SPAWN_SUPPRESSED.store(true, std::sync::atomic::Ordering::SeqCst);
+        crate::session::begin_open(owner, 1, crate::session::OpenWhy::SignIn);
+        let submitter = Submitter::new(
+            bir_core::bir_submit::SubmitConfig::new(&mock.url()).unwrap(),
+            Box::new(bir_core::bir_submit::secrets::MemoryStore::default()),
+            std::sync::Arc::new(bir_core::account_session::AccountTokens),
+        );
+        TEST_ACCOUNT_SUBMITTER
+            .with(|slot| *slot.borrow_mut() = Some(std::sync::Arc::new(submitter)));
+        let result = call_verb("account_tins", vec![json!(0)]);
+        let list = result
+            .unwrap_or_else(|error| panic!("the real AccountTokens verb call failed: {error}"));
+        assert_eq!(list["complete"], true);
+        assert!(
+            list["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| { row["tin_root"] == "123456788" && row["state"] == "activated" }),
+            "the account row did not list: {list}"
+        );
+
+        // F5's positive control through the same real AccountTokens wiring: activate_tin posts
+        // the snapshot room's profile and answers its row while the session is unchanged.
+        add_branch("00001");
+        let row = call_verb("activate_tin", vec![json!("12345678800001")])
+            .unwrap_or_else(|error| panic!("the real AccountTokens activate call failed: {error}"));
+        assert_eq!(row["tin_root"], ROOT);
+        assert!(mock.tax_profile_posts() >= 1, "activate_tin never posted");
+
+        // A session change after the client call drops the answer instead of applying it. The
+        // write itself was still made under the verb snapshot's owner and epoch; nothing of the
+        // newer session supplies either the profile data or the token.
+        add_branch("00002");
+        AFTER_ACCOUNT_WORK.lock().unwrap().insert(
+            crate::session::snapshot().epoch,
+            Box::new(|| {
+                crate::session::reset_for_tests();
+            }),
+        );
+        let answer = call_verb("activate_tin", vec![json!("12345678800002")]);
+        TEST_ACCOUNT_SUBMITTER.with(|slot| slot.borrow_mut().take());
+        crate::session::reset_for_tests();
+        bir_core::account_session::clear_stored();
+        assert_eq!(
+            answer,
+            Err("The signed-in account changed; try again.".to_owned()),
+            "an answer from before the session change was applied"
+        );
+    }
+
     /// One row per TIN and branch on the account, reduced to what screens
     /// show, then a `not_activated` row for each branch on this device the
     /// account lacks.
     #[test]
     fn account_tins_lists_the_account_and_marks_local_profiles_not_activated() {
+        let _turn = crate::session::test_turn();
         use bir_core::mock_account::TinState;
         setup();
         add_branch("00001");
@@ -3526,12 +3701,83 @@ mod tests {
         assert_eq!(rows[1]["fetched_at"], 7);
     }
 
+    /// The production room branch of the account verbs: with no thread-local test database, the
+    /// verb reads the session machine's open room rather than answering that no room is open.
+    #[test]
+    fn activate_tin_reads_the_session_room_without_a_thread_slot() {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                bir_core::platform::set_device_dir_override(None);
+                crate::session::reset_for_tests();
+            }
+        }
+        let _turn = crate::session::test_turn();
+        let _reset = Reset;
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        let (room, _generation) = crate::session::open_legacy_in_place_for_test(
+            &layout,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        assert!(
+            crate::bir_module::thread_database_slot_for_tests().is_none(),
+            "this test must exercise the session room, not a thread-local test database"
+        );
+        ok(
+            create_taxpayer,
+            vec![
+                json!({"tin_root": "123-456-788", "name": "Example Trading Corp", "taxpayer_type": "Corporation", "head_office": {}}),
+            ],
+        );
+        ok(
+            create_branch,
+            vec![
+                json!(ROOT),
+                json!({"branch_code": "00001", "name": "Example Store", "fields": {"zip_code": "1700"}}),
+            ],
+        );
+        {
+            let db = bir_core::lock_timing::lock(&room).unwrap();
+            assert!(
+                db.get_profile("12345678800001").unwrap().is_some(),
+                "the setup did not land in the session room"
+            );
+        }
+        let replacement_folder = tempfile::tempdir().unwrap();
+        let replacement_path = replacement_folder.path().join("replacement.db");
+        struct HookReset;
+        impl Drop for HookReset {
+            fn drop(&mut self) {
+                ROOM_SNAPSHOT_TEST_HOOK.with(|slot| slot.borrow_mut().take());
+            }
+        }
+        let _hook_reset = HookReset;
+        ROOM_SNAPSHOT_TEST_HOOK.with(|slot| {
+            slot.borrow_mut().replace(Box::new(move || {
+                let replacement = std::sync::Arc::new(std::sync::Mutex::new(
+                    Database::open(&replacement_path).unwrap(),
+                ));
+                crate::session::swap_room_for_test(replacement, replacement_path, 99);
+            }));
+        });
+        against_the_account(|mock| {
+            let row = call_verb("activate_tin", vec![json!("12345678800001")]).unwrap();
+            assert_eq!(row["state"], "fix");
+            assert_eq!(mock.tax_profile_posts(), 1);
+        });
+    }
+
     /// "Activate this TIN to send" posts the profile's kind and registered
     /// name for its 14-digit TIN, and the row comes back to fix; pressed
     /// again, the account's answer is the app's sentence and the list then
     /// shows the row.
     #[test]
     fn activate_tin_posts_the_profiles_kind_and_name() {
+        let _turn = crate::session::test_turn();
         setup();
         add_branch("00001");
         add_juana();
@@ -3921,6 +4167,7 @@ mod tests {
     /// account: only "Activate this TIN to send" posts.
     #[test]
     fn profile_creation_never_posts() {
+        let _turn = crate::session::test_turn();
         against_the_account(|mock| {
             setup();
             add_branch("00001");
@@ -3947,6 +4194,157 @@ mod tests {
 
     fn list_taxpayers_fn(_: &HostArguments) -> HostResult {
         list_taxpayers()
+    }
+
+    /// The production room branch of the account verbs' snapshot: with a real room in the
+    /// machine snapshot, the room Arc the verb uses is that room, never a test database slot.
+    #[test]
+    fn account_room_snapshot_uses_the_open_room_handle() {
+        let _turn = crate::open_room::room_test_turn();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        let (handle, _generation) = crate::session::open_legacy_in_place_for_test(
+            &layout,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        let (snap, got) = account_room_snapshot().expect("the open room did not snapshot");
+        assert!(
+            snap.room.is_some(),
+            "the test did not drive the production branch"
+        );
+        assert!(
+            std::sync::Arc::ptr_eq(&got, &handle),
+            "the verb would use a different database from the open room"
+        );
+        crate::session::close(crate::session::Reason::SignOut);
+        bir_core::platform::set_device_dir_override(None);
+    }
+
+    /// The verb itself drives the production room branch: with a real room open, the local
+    /// branches it compares the account rows against come from that room's database.
+    #[test]
+    fn account_tins_through_the_production_room_branch() {
+        let _turn = crate::open_room::room_test_turn();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        let (_handle, _generation) = crate::session::open_legacy_in_place_for_test(
+            &layout,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        ok(
+            create_taxpayer,
+            vec![json!({
+                "tin_root": "123-456-788",
+                "name": "Example Trading Corp",
+                "taxpayer_type": "Corporation",
+                "head_office": {}
+            })],
+        );
+        add_branch("00001");
+        against_the_account(|mock| {
+            use bir_core::mock_account::TinState;
+            mock.add_tin(
+                "filer@example.test",
+                "123-456-788-00000",
+                TinState::Approved,
+            );
+            let list = call_verb("account_tins", vec![json!(0)])
+                .expect("the production room account verb failed");
+            let rows = list["rows"].as_array().unwrap();
+            assert!(
+                rows.iter().any(|row| {
+                    row["tin_root"] == ROOT
+                        && row["branch"] == "00000"
+                        && row["state"] == "activated"
+                }),
+                "the account row did not list: {list}"
+            );
+            assert!(
+                rows.iter().any(|row| {
+                    row["tin_root"] == ROOT
+                        && row["branch"] == "00001"
+                        && row["state"] == "not_activated"
+                }),
+                "the room branch row did not list: {list}"
+            );
+        });
+        crate::session::close(crate::session::Reason::SignOut);
+        bir_core::platform::set_device_dir_override(None);
+    }
+
+    /// Row 8, made non-vacuous: the room changes BETWEEN the verb's snapshot and the read. The
+    /// read must use the verb's OWN snapshot — the room it captured — never the machine's room
+    /// of now: a re-read would pair the old owner and epoch with the NEW room. Positive control:
+    /// a same-room read still answers the room.
+    #[test]
+    fn the_one_snapshot_open_reads_the_verbs_own_room_after_a_switch() {
+        let _turn = crate::open_room::room_test_turn();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        // two layouts: one path one handle — the same file would be the same Arc and no
+        // room change at all
+        let layout_a = bir_core::rooms::Layout::at(folder.path().join("a"));
+        let layout_b = bir_core::rooms::Layout::at(folder.path().join("b"));
+        std::fs::create_dir_all(layout_a.device_dir()).unwrap();
+        std::fs::create_dir_all(layout_b.device_dir()).unwrap();
+        let (room_a, _generation_a) = crate::session::open_legacy_in_place_for_test(
+            &layout_a,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        let verbs_snap = crate::session::snapshot();
+        assert!(
+            std::sync::Arc::ptr_eq(&verbs_snap.room.as_ref().unwrap().0, &room_a),
+            "the test did not capture the first room"
+        );
+        // the switch: the machine moves to another owner's room before the read
+        let (room_b, _generation_b) = crate::session::open_legacy_in_place_for_test(
+            &layout_b,
+            "user-b".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        assert!(
+            !std::sync::Arc::ptr_eq(&room_a, &room_b),
+            "the test did not drive a room change"
+        );
+        let read = crate::bir_module::open_database_slot_for(&verbs_snap)
+            .expect("the verb's snapshot did not open");
+        assert!(
+            std::sync::Arc::ptr_eq(&read, &room_a),
+            "the read must use the verb's own snapshot — a re-read pairs the old epoch with the new room"
+        );
+        assert!(
+            !std::sync::Arc::ptr_eq(&read, &room_b),
+            "the read followed the machine's room of now"
+        );
+        crate::session::close(crate::session::Reason::SignOut);
+        bir_core::platform::set_device_dir_override(None);
+    }
+
+    /// Single-room and bypass runs have no room Arc. The account verbs use the same database
+    /// slot as the other host verbs instead of failing with "no room is open".
+    #[test]
+    fn account_room_snapshot_uses_the_database_slot_without_a_room() {
+        let _turn = crate::session::test_turn();
+        crate::session::reset_for_tests();
+        use_ephemeral_database();
+        let handle = crate::bir_module::open_database_slot().unwrap();
+        let (snap, got) = account_room_snapshot().expect("single-room database was not usable");
+        assert!(
+            snap.room.is_none(),
+            "the test did not drive the no-room path"
+        );
+        assert!(std::sync::Arc::ptr_eq(&got, &handle));
     }
 
     /// Both verbs need the filing data open (signed in), and then ask

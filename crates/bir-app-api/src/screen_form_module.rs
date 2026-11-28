@@ -23,6 +23,7 @@
 //! runs compute, validation and the field map off the main thread without
 //! touching the database (it is thread-local and not `Send`).
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
@@ -220,6 +221,8 @@ export interface ScreenFormSamplePeriod {
 }
 export interface ScreenFormPenalties {
     keys: string[];
+    /** Each box whose component the filer typed: the others show the computed amounts and carry the computed mark. */
+    typed?: string[];
     /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
     edited: boolean;
     /** The amounts are kept as entered before penalties were computed (1701Q, 1701): "Use the computed amounts" works once Edit opens them. */
@@ -240,6 +243,8 @@ export interface ScreenFormFilled {
     blank?: string[] | null;
     /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
     removes?: { message: string; done: string; rows: number } | null;
+    /** Delete row removed a backing row object. False means the drawer held only tentative input and there is no draft row to Undo. */
+    row_removed?: boolean;
     /** Locks this fill opened or shut (a folded item, a box an answer shuts): the reason, or null to open the box; `relock_notes` holds each one's note. */
     relocks?: Record<string, string | null>;
     relock_notes?: Record<string, string | null>;
@@ -290,6 +295,8 @@ export function screen_form_filed_original(form_code: string, snapshot_id: numbe
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. `forget`: choice boxes whose answer is dropped before the edits apply, so the form asks again (the agent's fill left them unanswered). */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[], forget?: string[]): ScreenFormFilled;
+/** Remove one schedule row from the draft and compact the backing row list. `row_keys` are the visible keys of the row the page deletes. This is the row operation itself, not a side-effect clear: it never raises `removes`; the page offers Undo from the draft it already holds. */
+export function screen_form_remove_row(form_code: string, draft: object, row_keys: string[]): ScreenFormFilled;
 /** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; then only the boxes they fill move, and one the filer typed or picked on this return keeps its value. Nothing is saved; save the draft. `asks`: the cards still asked. */
 export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object, facts?: ScreenFormFact[]): ScreenFormFilled & { asks: ScreenFormAsk[] };
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
@@ -327,6 +334,7 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("screen_form_amend", screen_form_amend)
         .async_function("screen_form_filed_original", screen_form_filed_original)
         .function("screen_form_fill", screen_form_fill)
+        .function("screen_form_remove_row", screen_form_remove_row)
         .function("screen_form_use_profile", screen_form_use_profile)
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
@@ -369,7 +377,29 @@ fn screen_form_notes_seen(arguments: &HostArguments) -> HostResult {
                 .insert_setting_if_absent(&key, "1")
                 .map_err(|error| host_error(error.to_string()))?
             {
-                recorded.push(key);
+                recorded.push(key.clone());
+            }
+            if let Some((pending, event)) =
+                bir_core::forms::agent::draft_locks::pending_notices::pending_event_for_seen(&key)
+            {
+                let current_event = match db.get_setting(&pending) {
+                    Ok(Some(stored)) => serde_json::from_str::<Value>(&stored)
+                        .ok()
+                        .and_then(|stored| stored["event"].as_str().map(str::to_string)),
+                    Ok(None) => None,
+                    Err(error) => {
+                        tracing::warn!("reading pending gate notice {pending} failed: {error}");
+                        None
+                    }
+                };
+                // A seen key names one clearing event. If an import has already
+                // replaced the pending row with a newer event, the old seen key
+                // must not delete that newer notice.
+                if current_event.as_deref() == Some(event.as_str())
+                    && let Err(error) = db.delete_setting(&pending)
+                {
+                    tracing::warn!("removing pending gate notice {pending} failed: {error}");
+                }
             }
         }
         Ok(recorded)
@@ -2492,6 +2522,29 @@ fn mark_trigger_date(kind: AgentFormKind, draft: &mut Value, key: &str) {
     write_typed_state(kind, draft, &counted);
 }
 
+/// The one save an open performs when stored bytes still hold a dormant
+/// gated value. It is deliberately the ordinary guarded save path: a stored
+/// filed/queued return is refused, and trigger-date forms keep their typed
+/// date state through `settle_trigger_flag` before `save_draft` recomputes
+/// and records the clearing atomically.
+fn save_open_gate_migration(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &mut Value,
+) -> Result<(), String> {
+    refuse_replacing_a_stored_return(db, kind, draft)
+        .and_then(|()| settle_trigger_flag(db, kind, draft))
+        .and_then(|()| {
+            let incoming = draft["id"]
+                .as_i64()
+                .and_then(|id| db.draft_summary_and_json(id).ok().flatten())
+                .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
+                .unwrap_or_else(|| draft.clone());
+            agent::save_draft_with_clearance_context(kind, db, draft, incoming, BTreeSet::new())
+                .map(|_| ())
+        })
+}
+
 /// Before any write of a client's draft (save, queue, cancel, a followed
 /// save): `trigger_date_model`, `trigger_parts_typed` and
 /// `trigger_date_entered` are what the host knows, never what the client
@@ -2999,6 +3052,13 @@ fn errors_json(kind: AgentFormKind, errors: &[(String, String)]) -> Value {
 /// page shows (`txtEmail#occurrence-1`) with its official key's value.
 fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     let mut map = agent::field_map(kind, draft)?;
+    // The upload writes a shut previous-payment box as zero through the
+    // model's map; the page draws the same zero with the gate's sentence.
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        map.insert(spec.key.to_string(), "0.00".to_string());
+    }
     // PR 9's forms: what the draft keeps where the field map cuts it.
     rows_as_needed::values(kind, draft, &mut map);
     // A row family's row the upload leaves out still shows what the draft
@@ -3337,6 +3397,47 @@ fn put_sample_mark(draft: &mut Value, mark: Option<&SampleMark>) {
     }
 }
 
+// The gate keys whose clearing notes a page fill applied inline, kept on
+// the host by draft id rather than in the draft. Validation rewrites the
+// draft through its typed model, so a report inside the draft can be lost
+// before the autosave. Host calls for one page run on its engine's thread;
+// keeping the map thread-local also keeps independent editing sessions and
+// test databases apart. A fresh open replaces the page's editing session
+// and clears any report its closed predecessor never saved.
+thread_local! {
+    static INLINE_CLEARANCE_REPORTS: RefCell<BTreeMap<i64, BTreeSet<String>>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
+
+fn remember_inline_clearances(id: Option<i64>, gates: &BTreeSet<String>) {
+    if gates.is_empty() {
+        return;
+    }
+    let Some(id) = id else {
+        return;
+    };
+    INLINE_CLEARANCE_REPORTS.with(|reports| {
+        reports
+            .borrow_mut()
+            .entry(id)
+            .or_default()
+            .extend(gates.iter().cloned());
+    });
+}
+
+fn reported_inline_clearances(id: Option<i64>) -> BTreeSet<String> {
+    let Some(id) = id else {
+        return BTreeSet::new();
+    };
+    INLINE_CLEARANCE_REPORTS
+        .with(|reports| reports.borrow().get(&id).cloned())
+        .unwrap_or_default()
+}
+
+fn clear_inline_clearances(draft_id: i64) {
+    INLINE_CLEARANCE_REPORTS.with(|reports| reports.borrow_mut().remove(&draft_id));
+}
+
 /// Queue and print take a return, never a Form library sample: the page
 /// saves a sample first (`screen_form_save`), which makes it a return.
 fn refuse_sample(draft: &mut Value, doing: &str) -> Result<(), HostError> {
@@ -3400,6 +3501,61 @@ fn open_screen_form(
                 .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
             let mut draft =
                 load_draft(db, kind, &profile, year, period, sample, exact).map_err(host_error)?;
+            if let Some(id) = draft["id"].as_i64() {
+                clear_inline_clearances(id);
+            }
+            // The stored bytes decide whether opening must migrate a dormant
+            // gated value. Compute a copy rather than trusting the loaded
+            // draft: profile refresh or model migration may already have
+            // changed the in-memory copy before this check.
+            let stored_on_open = if sample {
+                None
+            } else {
+                match draft["id"]
+                    .as_i64()
+                    .map(|id| db.draft_summary_and_json(id))
+                    .transpose()
+                {
+                    Ok(stored) => stored
+                        .flatten()
+                        .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok()),
+                    Err(error) => {
+                        tracing::warn!(
+                            "{code}: reading the stored draft for gate migration failed: {error}"
+                        );
+                        None
+                    }
+                }
+            };
+            let clearance_on_open = stored_on_open.as_ref().is_some_and(|stored| {
+                let mut computed = stored.clone();
+                agent::compute(kind, &mut computed).is_ok()
+                    && !bir_core::forms::agent::draft_locks::pending_notices::clearance(
+                        kind, stored, &computed,
+                    )
+                    .is_empty()
+            });
+            // The migration is a normal guarded draft save before any profile
+            // follow can hide the transition: recompute clears the dormant
+            // value and `save_draft` records its pending notice atomically.
+            // A failed save never stops the return opening.
+            if clearance_on_open {
+                let mut migration = draft.clone();
+                match save_open_gate_migration(db, kind, &mut migration) {
+                    Ok(_) => draft = migration,
+                    Err(error) => {
+                        tracing::warn!("{code}: clearing a dormant gated value failed: {error}")
+                    }
+                }
+            }
+            // Compatibility for 2551Q once-notes while any pre-pending row is
+            // still nonzero; the pending notice is the normal path.
+            let item16_precleared_on_open = kind == AgentFormKind::Form2551Q
+                && stored_on_open.as_ref().is_some_and(|stored| {
+                    stored["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005
+                        && bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(stored)
+                            .is_some()
+                });
             let mut from_profile = if sample {
                 draft.clone()
             } else {
@@ -3507,7 +3663,7 @@ fn open_screen_form(
             let notes = if sample {
                 Vec::new()
             } else {
-                rows_income_q::once_notes(db, kind, &draft)
+                rows_income_q::once_notes(db, kind, &draft, item16_precleared_on_open)
             };
             // The 1604E rows the filer marked checked (D5).
             let checked = rows_1604::checked_rows(db, kind, &draft);
@@ -3683,12 +3839,19 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     if rows_withholding::preprinted(code, key) {
         return rows_withholding::PREPRINTED;
     }
+    // 1601FQ's Schedule 1 gate explains why even its computed column is shut.
+    if reason == bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK {
+        return bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK;
+    }
     // A column or box the schema marks computed (the overrides carry each
     // marking's evidence) never "can't be filled yet": it is the form's own.
     if schema_computed(code, key) {
         return NOTE_COMPUTED;
     }
     if let Some(note) = rows_annual_corporate::live_lock_note(reason) {
+        return note;
+    }
+    if let Some(note) = bir_core::forms::agent::gated_rows::lock_note(code, key, reason) {
         return note;
     }
     match lock_note(reason) {
@@ -3718,12 +3881,34 @@ fn lock_note(reason: &str) -> &'static str {
     if let Some((_, _, note)) = KEPT_NOTES.iter().find(|(_, kept, _)| *kept == reason) {
         return note;
     }
+    // 1606's installment gate's lock is short; its note says what the filer
+    // is to do.
+    if reason == bir_core::forms::agent::draft_locks::installment_1606::LOCK {
+        return bir_core::forms::agent::draft_locks::installment_1606::LOCK_NOTE;
+    }
+    // 1601FQ's Schedule 1 gate uses the official page's words as its lock.
+    if reason == bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK {
+        return bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK;
+    }
     // 2551Q's 8% penalty reasons are already the filer's words.
     if reason == penalties::KEPT_ON_EIGHT_PERCENT {
         return penalties::KEPT_ON_EIGHT_PERCENT;
     }
     if reason == penalties::EIGHT_PERCENT {
         return penalties::EIGHT_PERCENT;
+    }
+    // 2551Q Item 16's gate reasons are already the filer's words.
+    if reason == bir_core::forms::agent::draft_locks::item16_2551q::AMENDED_LOCK {
+        return bir_core::forms::agent::draft_locks::item16_2551q::AMENDED_LOCK;
+    }
+    if reason == bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK {
+        return bir_core::forms::agent::draft_locks::item16_2551q::EIGHT_PERCENT_LOCK;
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::SPECS
+        .iter()
+        .find(|spec| spec.lock == reason)
+    {
+        return spec.lock;
     }
     if reason.starts_with("computed") {
         NOTE_COMPUTED
@@ -3765,6 +3950,18 @@ fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
         .flat_map(|group| group.keys)
         .collect();
     keys.extend(rows_annual_corporate::notes_always(kind, draft));
+    // 2551Q Item 16 is zero even while shut, so the blank-only note rule
+    // would never say why. Its gate's sentence is drawn whenever it is shut.
+    if kind == AgentFormKind::Form2551Q
+        && bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft).is_some()
+    {
+        keys.push(bir_core::forms::agent::draft_locks::item16_2551q::KEY.to_string());
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        keys.push(spec.key.to_string());
+    }
     keys
 }
 
@@ -4855,11 +5052,322 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
     })))
 }
 
+/// Draft row-list path and row index one bound cell writes, when its binding
+/// names a concrete row (`/schedule/0/amount`). Custom row editors often have
+/// no binding; their rows are located by the probe below.
+fn row_location_from_binding(kind: AgentFormKind, key: &str) -> Option<(String, usize)> {
+    let def = kind.definition();
+    let bound = def.bindings.get(key)?;
+    let paths: Vec<&str> = match &bound.binding {
+        Binding::Text { path, .. } | Binding::Amount { path, .. } | Binding::Whole { path, .. } => {
+            vec![path.as_str()]
+        }
+        Binding::Choice { options } => options
+            .iter()
+            .flat_map(|option| option.set.keys().map(String::as_str))
+            .collect(),
+    };
+    for path in paths {
+        let segments: Vec<&str> = path.split('/').skip(1).collect();
+        for at in 0..segments.len() {
+            let Ok(index) = segments[at].parse::<usize>() else {
+                continue;
+            };
+            let list = if at == 0 {
+                "/".to_string()
+            } else {
+                format!("/{}", segments[..at].join("/"))
+            };
+            if def.rows.contains_key(&list) {
+                return Some((list, index));
+            }
+        }
+    }
+    None
+}
+
+/// Number of scalar leaves that differ, used only to locate the row a probe
+/// write touched. Array length differences count heavily because compaction
+/// makes every shifted row differ even when one cell caused it.
+fn json_change_score(before: &Value, after: &Value) -> usize {
+    if before == after {
+        return 0;
+    }
+    if let (Value::Number(a), Value::Number(b)) = (before, after)
+        && a.as_f64() == b.as_f64()
+    {
+        return 0;
+    }
+    match (before, after) {
+        (Value::Object(a), Value::Object(b)) => {
+            let keys: BTreeSet<&str> = a
+                .keys()
+                .map(String::as_str)
+                .chain(b.keys().map(String::as_str))
+                .collect();
+            keys.into_iter()
+                .map(|key| match (a.get(key), b.get(key)) {
+                    (Some(x), Some(y)) => json_change_score(x, y),
+                    _ => 1,
+                })
+                .sum()
+        }
+        (Value::Array(a), Value::Array(b)) => {
+            let shared = a.len().min(b.len());
+            let changed: usize = (0..shared)
+                .map(|index| json_change_score(&a[index], &b[index]))
+                .sum();
+            changed + a.len().abs_diff(b.len()) * 20
+        }
+        _ => 1,
+    }
+}
+
+/// Locate the backing row a probe blank write changed. The row with the most
+/// changed leaves is the target; ties take the earlier row, which is also the
+/// compaction point when every shifted row below it differs. The score only
+/// chooses between unrelated row lists.
+fn locate_row_mutation(
+    kind: AgentFormKind,
+    before: &Value,
+    probe: &Value,
+) -> Option<(String, usize)> {
+    let mut best: Option<(usize, String, usize)> = None;
+    for path in kind.definition().rows.keys() {
+        let Some(a) = before.pointer(path).and_then(Value::as_array) else {
+            continue;
+        };
+        let Some(b) = probe.pointer(path).and_then(Value::as_array) else {
+            continue;
+        };
+        if a == b {
+            continue;
+        }
+        let shared = a.len().min(b.len());
+        let mut changed: Option<(usize, usize)> = None;
+        for index in 0..shared {
+            let score = json_change_score(&a[index], &b[index]);
+            if score == 0 {
+                continue;
+            }
+            let replace = match changed {
+                None => true,
+                Some((best_index, best_score)) => {
+                    score > best_score || (score == best_score && index < best_index)
+                }
+            };
+            if replace {
+                changed = Some((index, score));
+            }
+        }
+        let (index, score) = changed.unwrap_or((shared, 0));
+        let score = score + usize::from(a.len() != b.len()) * 1000;
+        if score == 0 {
+            continue;
+        }
+        let replace = match best.as_ref() {
+            None => true,
+            Some((best_score, _, best_index)) => {
+                score > *best_score || (score == *best_score && index < *best_index)
+            }
+        };
+        if replace {
+            best = Some((score, path.clone(), index));
+        }
+    }
+    best.map(|(_, path, index)| (path, index))
+}
+
+/// Remove `index` from the draft row list `path` (a JSON pointer to an array),
+/// and any raw editor buffers keyed by that row's stable instance id.
+fn remove_draft_row(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    path: &str,
+    index: usize,
+) -> Result<(), String> {
+    let instance_id = draft
+        .pointer(path)
+        .and_then(Value::as_array)
+        .and_then(|rows| rows.get(index))
+        .and_then(|row| row["instance_id"].as_str().map(str::to_string));
+    let rows = draft
+        .pointer_mut(path)
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| format!("draft has no removable rows at `{path}`"))?;
+    if index >= rows.len() {
+        return Err(format!("row {} of `{path}` is not in the draft", index + 1));
+    }
+    rows.remove(index);
+    if kind == AgentFormKind::Queueable(QueueableKind::Form2550Q)
+        && let Some(instance_id) = instance_id
+    {
+        let family = match path {
+            "/schedule_1" => Some(bir_core::forms::form_2550q::Form2550QRowFamily::Schedule1),
+            "/schedule_3" => Some(bir_core::forms::form_2550q::Form2550QRowFamily::Schedule3),
+            "/schedule_4" => Some(bir_core::forms::form_2550q::Form2550QRowFamily::Schedule4),
+            "/item_19_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item19Additional)
+            }
+            "/item_42_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item42Additional)
+            }
+            "/item_47_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item47Additional)
+            }
+            "/item_56_additional_rows" => {
+                Some(bir_core::forms::form_2550q::Form2550QRowFamily::Item56Additional)
+            }
+            _ => None,
+        };
+        if let Some(family) = family {
+            let mut raw: bir_core::forms::form_2550q::Form2550QRawEditorState =
+                if draft.get("raw_editor_state").is_none_or(Value::is_null) {
+                    Default::default()
+                } else {
+                    serde_json::from_value(draft["raw_editor_state"].clone())
+                        .map_err(|error| error.to_string())?
+                };
+            let instance = bir_core::forms::form_2550q::StableInstanceId::parse(instance_id)
+                .map_err(|error| error.to_string())?;
+            raw.remove_repeated_row(family, &instance);
+            draft["raw_editor_state"] =
+                serde_json::to_value(raw).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn with_row_removed(result: HostResult, removed: bool) -> HostResult {
+    result.map(|mut value| {
+        if let HostValue::Object(entries) = &mut value {
+            for (key, entry) in entries.iter_mut() {
+                if key == "removes" {
+                    *entry = HostValue::Null;
+                }
+            }
+            entries.push(("row_removed".to_string(), HostValue::Bool(removed)));
+        }
+        value
+    })
+}
+
+/// The page's Delete row operation. The host locates the backing row once —
+/// by applying blank writes to a throwaway probe through the same row editors
+/// the page uses, with a concrete binding as the fallback for a row whose
+/// visible cells are already blank — then removes that row object from the
+/// original draft. Hidden and computed fields travel with the object because
+/// no per-cell write is committed.
+fn screen_form_remove_row(arguments: &HostArguments) -> HostResult {
+    let kind = kind_of(arguments.string(0)?)?;
+    let draft = draft_argument(arguments, 1)?;
+    if agent::identity(kind, &draft).map_err(host_error)?.status != FilingStatus::Draft {
+        return Err(host_error("Only a draft's rows can be deleted."));
+    }
+    let row_keys: Vec<String> = arguments
+        .value(2)?
+        .as_array()
+        .ok_or_else(|| host_error("row_keys must be an array of keys"))?
+        .iter()
+        .filter_map(|key| key.as_str().map(str::to_string))
+        .collect();
+    if row_keys.is_empty() {
+        return Err(host_error("row_keys must name the row's cells"));
+    }
+
+    // Prepare the base before probing: `apply_screen_edits` does the same
+    // migration, and comparing a prepared probe with an unprepared base can
+    // make the wrong row win the change-score tie (2551Q then deletes row 0).
+    let mut base = draft.clone();
+    agent::prepare_for_writes(kind, &mut base).map_err(host_error)?;
+    // A row with a live-locked cell is not removable: deleting it would
+    // bypass the same lock that refuses a write to that cell.
+    for key in &row_keys {
+        if let Some(reason) = agent::draft_locks::draft_lock(kind, &base, key, None) {
+            return Err(host_error(reason));
+        }
+    }
+    // Probe first: a custom row editor owns the visible slot -> backing row mapping, and a
+    // static binding can describe the paper slot rather than that mapping. Binding paths are
+    // the fallback for a row whose visible cells are already blank but whose hidden values exist.
+    let mut location = None;
+    let mut probe = base.clone();
+    let unlocked = BTreeSet::new();
+    for key in &row_keys {
+        let before_step = probe.clone();
+        let mut single = Map::new();
+        single.insert(key.clone(), Value::String(String::new()));
+        let _ = apply_screen_edits(kind, &mut probe, &single, true, &unlocked)?;
+        if let Some(found) = locate_row_mutation(kind, &before_step, &probe) {
+            location = Some(found);
+            break;
+        }
+    }
+    if location.is_none() {
+        location = row_keys
+            .iter()
+            .find_map(|key| row_location_from_binding(kind, key));
+    }
+    let Some((path, index)) = location else {
+        // A row can be only tentative input: the page opened its drawer and the host refused
+        // every cell, so no backing object exists to remove. Clearing those visible cells is
+        // safe here because there is no row below them that could be shifted under the writes.
+        let mut blanks = Map::new();
+        for key in &row_keys {
+            blanks.insert(key.clone(), Value::String(String::new()));
+        }
+        let clear_arguments = HostArguments::new(vec![
+            arguments.value(0)?.clone(),
+            arguments.value(1)?.clone(),
+            json(Value::Object(blanks)),
+        ]);
+        return with_row_removed(screen_form_fill(&clear_arguments), false);
+    };
+    let backing_exists = base
+        .pointer(&path)
+        .and_then(Value::as_array)
+        .is_some_and(|rows| index < rows.len());
+    if !backing_exists {
+        // The binding names the paper slot, but nothing was ever stored there:
+        // the drawer is holding only refused/tentative input. Clear that input;
+        // with no backing row there is also no row below that could shift.
+        let mut blanks = Map::new();
+        for key in &row_keys {
+            blanks.insert(key.clone(), Value::String(String::new()));
+        }
+        let clear_arguments = HostArguments::new(vec![
+            arguments.value(0)?.clone(),
+            arguments.value(1)?.clone(),
+            json(Value::Object(blanks)),
+        ]);
+        return with_row_removed(screen_form_fill(&clear_arguments), false);
+    }
+    let mut removed = base.clone();
+    remove_draft_row(kind, &mut removed, &path, index).map_err(host_error)?;
+    agent::identity(kind, &removed).map_err(|error| {
+        host_error(format!(
+            "Removing row {} of `{path}` does not fit this form's draft: {error}",
+            index + 1
+        ))
+    })?;
+
+    let fill_arguments = HostArguments::new(vec![
+        arguments.value(0)?.clone(),
+        json(removed),
+        HostValue::Object(Vec::new()),
+    ]);
+    with_row_removed(screen_form_fill(&fill_arguments), true)
+}
+
 fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
     let amendment = take_amendment_mark(&mut draft);
+    let clearance_report_id = draft["id"]
+        .as_i64()
+        .or_else(|| amendment.as_ref().and_then(|mark| mark["id"].as_i64()));
+    let mut inline_clearances = BTreeSet::new();
     let edits = arguments
         .value(2)?
         .as_object()
@@ -4926,7 +5434,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     // PR 11: an excise return's penalties kept as entered, then computed),
     // each with its note; `null` opens the box. bir-core's, as the open's.
     let relocks = agent::live_locks(kind, &draft);
-    let relock_notes: Map<String, Value> = relocks
+    let mut relock_notes: Map<String, Value> = relocks
         .iter()
         .map(|(key, lock)| {
             let note = lock.as_str().map_or(Value::Null, |reason| {
@@ -4935,6 +5443,87 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             (key.clone(), note)
         })
         .collect();
+    // 2551Q Item 16's closing gate clears a typed amount in the model. The
+    // one fill where an amount disappears says so once in the box's note;
+    // a shut box that held nothing keeps the gate's own reason.
+    if kind == AgentFormKind::Form2551Q {
+        let item16 = bir_core::forms::agent::draft_locks::item16_2551q::KEY;
+        let was = before["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        let now = draft["tax_paid_previous"].as_f64().unwrap_or(0.0);
+        if was.abs() >= 0.005
+            && now.abs() < 0.005
+            && let Some(note) =
+                bir_core::forms::agent::draft_locks::item16_2551q::cleared_note(&draft)
+        {
+            relock_notes.insert(item16.to_string(), json!(note));
+            inline_clearances.insert("2551q_item16".to_string());
+        }
+    }
+    // When 1606's installment gate closes with installment-only values
+    // typed, this one fill says that they were cleared. Item 21 is not in
+    // the check: it is Item 28A's gross selling price, not a separate
+    // installment amount.
+    if kind.form_code() == "1606" {
+        let cleared = bir_core::forms::agent::draft_locks::installment_1606::AMOUNT_FIELDS
+            .iter()
+            .any(|field| {
+                before[field].as_f64().unwrap_or(0.0).abs() >= 0.005
+                    && draft[field].as_f64().unwrap_or(0.0).abs() < 0.005
+            });
+        if cleared
+            && bir_core::forms::agent::draft_locks::installment_1606::lock_reason(&draft).is_some()
+        {
+            inline_clearances.insert("1606_installment".to_string());
+            for key in bir_core::forms::agent::draft_locks::installment_1606::KEYS {
+                relock_notes.insert(
+                    key.to_string(),
+                    json!(bir_core::forms::agent::draft_locks::installment_1606::CLEARED_NOTE),
+                );
+            }
+        }
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
+        let was = before[spec.path].as_f64().unwrap_or(0.0);
+        let now = draft[spec.path].as_f64().unwrap_or(0.0);
+        if was.abs() >= 0.005
+            && now.abs() < 0.005
+            && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, &draft)
+                .is_some()
+        {
+            relock_notes.insert(spec.key.to_string(), json!(spec.cleared));
+            inline_clearances
+                .insert(bir_core::forms::agent::draft_locks::previous_payment::gate_key(spec));
+        }
+    }
+    if kind.form_code() == "1601FQ" {
+        use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+        let clearances = gate::row_clearances(kind, &before, &draft);
+        // The page shows this clearing inline, so its one pending notice (the
+        // event's gate, as `clearance_event` keys it) is reported as shown.
+        let event = gate::clearance_event(&clearances);
+        if let Some((event_gate, _)) = event.as_ref() {
+            inline_clearances.insert(event_gate.clone());
+        }
+        let event_text = event.map(|(_, text)| text);
+        for clearance in clearances {
+            if let (Some(row), Some(text)) =
+                (gate::row_index(&before, &clearance.id), event_text.as_ref())
+            {
+                for key in gate::keys_for_row(row) {
+                    relock_notes.insert(key, json!(text.clone()));
+                }
+            }
+        }
+    }
+    for clearance in bir_core::forms::agent::gated_rows::clearances(kind, &before, &draft) {
+        inline_clearances.insert(clearance.gate.clone());
+        for key in clearance.keys {
+            if relocks.contains_key(key) {
+                relock_notes.insert(key.to_string(), json!(clearance.text.clone()));
+            }
+        }
+    }
+    remember_inline_clearances(clearance_report_id, &inline_clearances);
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -4977,7 +5566,8 @@ pub(crate) fn removes(
 
 /// The reviewed reason a person sees on the form page when `key` is gated
 /// shut on `draft` (corpus `enabled_when` conditions and host module gates).
-/// Blank and untick writes are clears and are never refused by a gate.
+/// Blank and untick writes are clears and are never refused by a gate,
+/// except shut Item 21 of a 1606 (it writes Item 28A through their shared amount).
 #[cfg(feature = "agent")]
 pub(crate) fn page_gate_refusal(
     kind: AgentFormKind,
@@ -4985,13 +5575,53 @@ pub(crate) fn page_gate_refusal(
     key: &str,
     value: &Value,
 ) -> Option<String> {
+    let code = kind.form_code();
+    // Item 21 is a copy of Item 28A's gross selling price: even a blank
+    // write into the shut copy would clear the real 28A amount.
+    if kind.form_code() == "1606"
+        && key == "frm1606:txtSelling"
+        && let Some(reason) =
+            bir_core::forms::agent::draft_locks::installment_1606::lock_reason(draft)
+    {
+        return Some(reason.to_string());
+    }
     if value.is_null()
         || value.as_str().is_some_and(agent::carry::is_blank_value)
+        || value.as_f64() == Some(0.0)
         || is_unticked(value)
     {
         return None;
     }
-    let code = kind.form_code();
+    if kind == AgentFormKind::Form2551Q
+        && key == bir_core::forms::agent::draft_locks::item16_2551q::KEY
+        && let Some(reason) = bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
+    {
+        return Some(reason.to_string());
+    }
+    if let Some(reason) = bir_core::forms::agent::gated_rows::lock_reason(kind, draft, key) {
+        return Some(reason.to_string());
+    }
+    if kind.form_code() == "1606"
+        && bir_core::forms::agent::draft_locks::installment_1606::KEYS.contains(&key)
+        && let Some(reason) =
+            bir_core::forms::agent::draft_locks::installment_1606::lock_reason(draft)
+    {
+        return Some(reason.to_string());
+    }
+    if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        && key == spec.key
+        && !bir_core::forms::agent::draft_locks::previous_payment::zero_write(value)
+        && let Some(reason) =
+            bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft)
+    {
+        return Some(reason.to_string());
+    }
+    if kind.form_code() == "1601FQ"
+        && bir_core::forms::agent::draft_locks::schedule1_1601fq::is_key(key)
+        && bir_core::forms::agent::draft_locks::schedule1_1601fq::lock_reason(draft).is_some()
+    {
+        return Some(bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK.to_string());
+    }
     if let Some(why) = rows_income_q::closed_refusal(kind, draft, key, value)
         .map(str::to_string)
         .or_else(|| rows_annual_individual::closed_refusal(kind, draft, key, value))
@@ -5146,7 +5776,45 @@ fn apply_screen_edits_here(
     // 0605's split-date groups this batch touches (B1); judged and written
     // below, before the per-key loop.
     let split_groups = rows_as_needed::split_date_groups(kind, &shown, &edits);
-    let planned = plan_choice_edits(kind, draft, &shown, edits);
+    let mut planned = plan_choice_edits(kind, draft, &shown, edits);
+    // 2551Q Item 16's gate is decided by Amended Return and Item 13. Judge
+    // those controlling answers first when they are anywhere in the batch,
+    // so `{txt16: "42", amendedRtn_1: "true"}` opens the box before the 42
+    // is judged; the controls keep their own relative order.
+    if kind == AgentFormKind::Form2551Q {
+        planned.sort_by_key(|(key, _)| {
+            !matches!(
+                key.as_str(),
+                "frm2551Qv2018:amendedRtn_1"
+                    | "frm2551Qv2018:amendedRtn_2"
+                    | "frm2551Qv2018:taxRate1"
+                    | "frm2551Qv2018:taxRate2"
+            )
+        });
+    }
+    // When a batch touches a recompute-gated box, judge its controlling
+    // choices first rather than trusting the key order a page replay sent.
+    // Other writes keep their relative order: a gated entry can itself be
+    // the condition that opens a later ordinary box (1701MS item 20 follows
+    // the Schedule B1 amount), so moving every gated box to the end would
+    // invert that dependency. A closing choice still makes the gated write
+    // refuse, so no dormant value can slip through an atomic batch.
+    let recompute_gated: std::collections::BTreeSet<&str> =
+        bir_core::forms::agent::gated_rows::keys(kind)
+            .into_iter()
+            .collect();
+    if planned
+        .iter()
+        .any(|(key, _)| recompute_gated.contains(key.as_str()))
+    {
+        let def = kind.definition();
+        planned.sort_by_key(|(key, _)| {
+            usize::from(!matches!(
+                def.bindings.get(key).map(|bound| &bound.binding),
+                Some(bir_core::forms::agent::Binding::Choice { .. })
+            ))
+        });
+    }
     // The draft paths this batch's picks write — a member's pick, a group
     // box's option, a filer-type step. The value a choice box was sent, as
     // its binding spells it ("true"/"false"/an option value).
@@ -5249,6 +5917,24 @@ fn apply_screen_edits_here(
             rejected.insert(key.clone(), json!("this return is no longer a draft"));
             continue;
         }
+        // 1606 Items 21 to 26 are shut unless Item 20 is an installment
+        // sale. Item 21 copies Item 28A's gross selling price, so even a
+        // blank write into the shut copy is refused; blanks to the other
+        // installment-only boxes remain clears.
+        if kind.form_code() == "1606"
+            && bir_core::forms::agent::draft_locks::installment_1606::KEYS.contains(&key.as_str())
+            && let Some(value) = sent.get(&key)
+            && (key == "frm1606:txtSelling"
+                || (!value.is_null()
+                    && value
+                        .as_str()
+                        .is_none_or(|text| !agent::carry::is_blank_value(text))))
+            && let Some(reason) =
+                bir_core::forms::agent::draft_locks::installment_1606::lock_reason(draft)
+        {
+            rejected.insert(key.clone(), json!(reason));
+            continue;
+        }
         // 2551Q's Item 13 on a later quarter whose filed Q1 is in this app
         // is that Q1's answer (`draft_locks::item_13`).
         if let Some(lock) = agent::draft_locks::item_13::lock(kind, draft, &key) {
@@ -5273,6 +5959,21 @@ fn apply_screen_edits_here(
             && let Some(reason) = set_refusal(def, &key)
         {
             rejected.insert(key.clone(), Value::String(reason));
+            continue;
+        }
+        // A schedule/specification box whose own recompute clears its probe
+        // is shut with the official condition, judged after this batch's
+        // earlier answers. Blank writes stay clears.
+        if let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && value.as_f64() != Some(0.0)
+            && !is_unticked(value)
+            && let Some(reason) = bir_core::forms::agent::gated_rows::lock_reason(kind, draft, &key)
+        {
+            rejected.insert(key.clone(), json!(reason));
             continue;
         }
         // 1701Q's spouse part while it is closed says what opens it, its
@@ -5319,6 +6020,42 @@ fn apply_screen_edits_here(
             && shown.get(&key).and_then(Value::as_str) == Some("true")
             && !holds_tick(def, draft, &key)
         {
+            continue;
+        }
+        // 2551Q Item 16 is shut unless Amended Return is Yes without the 8%
+        // option. A blank is a clear and is never refused; zero is already
+        // what the shut box holds, so it is a no-op rather than a refusal.
+        if kind == AgentFormKind::Form2551Q
+            && key == bir_core::forms::agent::draft_locks::item16_2551q::KEY
+            && let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && value
+                .as_str()
+                .and_then(agent::parse_amount)
+                .is_none_or(|amount| amount.abs() >= 0.005)
+            && let Some(reason) =
+                bir_core::forms::agent::draft_locks::item16_2551q::lock_reason(draft)
+        {
+            rejected.insert(key.clone(), json!(reason));
+            continue;
+        }
+        // A previous-payment box is shut unless Amended Return is Yes; zero
+        // is its already-empty state and passes as a no-op.
+        if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+            && key == spec.key
+            && let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
+            && !bir_core::forms::agent::draft_locks::previous_payment::zero_write(value)
+            && let Some(reason) =
+                bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, draft)
+        {
+            rejected.insert(key.clone(), json!(reason));
             continue;
         }
         // B16: a non-blank write to a box the corpus condition keeps shut is
@@ -6153,6 +6890,88 @@ fn screen_form_validate(
     })
 }
 
+fn pending_notice_values(
+    db: &Database,
+    draft_id: i64,
+) -> Result<BTreeMap<String, String>, bir_core::db::DbError> {
+    Ok(db
+        .settings_with_prefix("notice_pending:")?
+        .into_iter()
+        .filter(|(key, _)| {
+            bir_core::forms::agent::draft_locks::pending_notices::parse_pending_key(key)
+                .is_some_and(|(_, id)| id == draft_id)
+        })
+        .collect())
+}
+
+fn pending_notices_before_save(db: &Database, draft: &Value) -> Option<BTreeMap<String, String>> {
+    let Some(id) = draft["id"].as_i64() else {
+        return Some(BTreeMap::new());
+    };
+    match pending_notice_values(db, id) {
+        Ok(values) => Some(values),
+        Err(error) => {
+            tracing::warn!("reading gate notices before the page save failed: {error}");
+            None
+        }
+    }
+}
+
+/// The page already showed a clearing inline in the fill whose save created
+/// it. Record exactly those new clearing events seen; a pending notice left
+/// by the assistant or by another page remains pending. Deleting the pending
+/// row after the seen write is cleanup: if cleanup fails the seen key still
+/// keeps it off later openings.
+fn mark_inline_clearances_seen(
+    db: &Database,
+    draft_id: i64,
+    before: Option<BTreeMap<String, String>>,
+    reported: &BTreeSet<String>,
+) {
+    let Some(before) = before else {
+        return;
+    };
+    let after = match pending_notice_values(db, draft_id) {
+        Ok(after) => after,
+        Err(error) => {
+            tracing::warn!("reading gate notices after the page save failed: {error}");
+            return;
+        }
+    };
+    for (key, value) in after {
+        if before.get(&key) == Some(&value) {
+            continue;
+        }
+        let Some((gate, id)) =
+            bir_core::forms::agent::draft_locks::pending_notices::parse_pending_key(&key)
+        else {
+            continue;
+        };
+        if !reported.contains(&gate) {
+            continue;
+        }
+        let event = serde_json::from_str::<Value>(&value)
+            .ok()
+            .and_then(|value| value["event"].as_str().map(str::to_string));
+        let Some(event) = event else {
+            tracing::warn!("{key}: pending gate notice has no event");
+            continue;
+        };
+        let seen =
+            bir_core::forms::agent::draft_locks::pending_notices::seen_key_for(&gate, id, &event);
+        match db.insert_setting_if_absent(&seen, "1") {
+            Ok(_) => {
+                if let Err(error) = db.delete_setting(&key) {
+                    tracing::warn!(
+                        "removing the page-shown pending gate notice {key} failed: {error}"
+                    );
+                }
+            }
+            Err(error) => tracing::warn!("marking inline gate notice {key} seen failed: {error}"),
+        }
+    }
+}
+
 fn screen_form_save(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let mut draft = draft_argument(arguments, 1)?;
@@ -6165,6 +6984,10 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
         Some(_) => return Err(host_error("expected must be a draft or null")),
     };
     let amendment = take_amendment_mark(&mut draft);
+    let clearance_report_id = draft["id"]
+        .as_i64()
+        .or_else(|| amendment.as_ref().and_then(|mark| mark["id"].as_i64()));
+    let inline_clearances = reported_inline_clearances(clearance_report_id);
     let id = with_database(|db| {
         if amendment.is_none()
             && let Some(expected) = expected.as_ref()
@@ -6198,13 +7021,34 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
             Some(mark) => {
                 settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
                 reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
-                save_amendment(db, kind, &mut draft, mark).map_err(host_error)
+                let before_notices = pending_notices_before_save(db, &draft);
+                let saved = save_amendment(db, kind, &mut draft, mark, inline_clearances.clone())
+                    .map_err(host_error);
+                if let Ok(id) = saved {
+                    mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
+                    clear_inline_clearances(id);
+                }
+                saved
             }
             None => {
                 settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
                 reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
                 refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
-                agent::save_draft(kind, db, &mut draft).map_err(host_error)
+                let before_notices = pending_notices_before_save(db, &draft);
+                let incoming = draft.clone();
+                let saved = agent::save_draft_with_clearance_context(
+                    kind,
+                    db,
+                    &mut draft,
+                    incoming,
+                    inline_clearances.clone(),
+                )
+                .map_err(host_error);
+                if let Ok(id) = saved {
+                    mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
+                    clear_inline_clearances(id);
+                }
+                saved
             }
         }
     })?;
@@ -6533,6 +7377,7 @@ fn save_amendment(
     kind: AgentFormKind,
     draft: &mut Value,
     mark: &Value,
+    reported: BTreeSet<String>,
 ) -> Result<i64, String> {
     use bir_core::db::AmendmentBase;
     let base = AmendmentBase {
@@ -6542,28 +7387,44 @@ fn save_amendment(
             .ok_or("this amendment does not say which filed return it amends; amend it again")?,
         updated_at: mark["updated_at"].as_str().unwrap_or("").to_string(),
     };
+    let incoming = mark["id"]
+        .as_i64()
+        .and_then(|id| db.draft_summary_and_json(id).ok().flatten())
+        .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
+        .unwrap_or_else(|| draft.clone());
     agent::compute(kind, draft)?;
+    let after = draft.clone();
+    let writer = move || {
+        bir_core::forms::agent::pending_settings_writer(
+            kind,
+            incoming.clone(),
+            after.clone(),
+            reported.clone(),
+        )
+    };
     let error = |error: bir_core::db::DbError| error.to_string();
     let draft_ref = &*draft;
     let id = match kind {
         AgentFormKind::Form1601C => out_of_line(|| {
-            db.save_1601c_amendment(
+            db.save_1601c_amendment_with_settings(
                 &serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?,
                 &base,
+                writer(),
             )
             .map_err(error)
         })?,
         AgentFormKind::Form2551Q => out_of_line(|| {
-            db.save_2551q_amendment(
+            db.save_2551q_amendment_with_settings(
                 &serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?,
                 &base,
+                writer(),
             )
             .map_err(error)
         })?,
         AgentFormKind::Queueable(queueable) => {
             bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let typed: F = serde_json::from_value(draft_ref.clone()).map_err(|e| e.to_string())?;
-            db.save_queueable_amendment(&typed, &base).map_err(error)
+            db.save_queueable_amendment_with_settings(&typed, &base, writer()).map_err(error)
         })?)
         }
     };
@@ -6605,13 +7466,14 @@ fn screen_form_amend(
         u16::try_from(arguments.integer(2)?).map_err(|_| host_error("year is out of range"))?;
     let period = page_period(code, arguments.integer(3)?).map_err(host_error)?;
     let exact = arguments.get(4).and_then(|key| to_json(key).as_i64());
-    let (amended, from_profile, status, updated_at, carried) = with_database(|db| {
+    let (amended, from_profile, status, updated_at, filed_id, carried) = with_database(|db| {
         let profile = db
             .get_profile_for_year(&tin, year)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
         let filed =
             load_draft(db, kind, &profile, year, period, false, exact).map_err(host_error)?;
+        let filed_id = filed["id"].clone();
         let status = agent::identity(kind, &filed).map_err(host_error)?.status;
         let updated_at = filed["updated_at"]
             .as_str()
@@ -6619,6 +7481,14 @@ fn screen_form_amend(
             .unwrap_or("")
             .to_string();
         let mut amended = agent::amended_copy(kind, &filed).map_err(host_error)?;
+        // A dormant amount on the filed original stays shut there; it does
+        // not revive when the amendment answers Amended Yes. The amendment's
+        // save announces this clearing through the pending gate notice.
+        bir_core::forms::agent::draft_locks::previous_payment::clear_dormant_amendment_copy(
+            kind,
+            &filed,
+            &mut amended,
+        );
         // An amendment corrects its filed return: it is no carry.
         carry_forward::forget(&mut amended);
         // The amendment carries its filed return's typed parts, as opening
@@ -6628,7 +7498,7 @@ fn screen_form_amend(
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
         let carried = carry_forward::open_fields(db, kind, &tin, &amended);
-        Ok((amended, from_profile, status, updated_at, carried))
+        Ok((amended, from_profile, status, updated_at, filed_id, carried))
     })?;
     Ok(async move {
         let mut opened = on_large_stack(move || {
@@ -6646,7 +7516,11 @@ fn screen_form_amend(
         .map_err(host_error)?;
         put_amendment_mark(
             &mut opened["draft"],
-            Some(json!({ "status": status_name(&status), "updated_at": updated_at })),
+            Some(json!({
+                "status": status_name(&status),
+                "updated_at": updated_at,
+                "id": filed_id,
+            })),
         );
         opened["amends"] = json!(status_name(&status));
         for (field, value) in carried {
@@ -6740,7 +7614,13 @@ pub(crate) fn print_map(
     fn typed<F: serde::de::DeserializeOwned>(draft: &Value) -> Result<F, HostError> {
         serde_json::from_value(draft.clone()).map_err(|error| host_error(error.to_string()))
     }
-    match kind {
+    let res: Result<
+        (
+            BTreeMap<String, String>,
+            Option<bir_print::frozen_html::ReceiptPage>,
+        ),
+        HostError,
+    > = match kind {
         AgentFormKind::Form1601C => out_of_line(|| {
             let d: bir_core::forms::Form1601CDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email_address);
@@ -6762,7 +7642,17 @@ pub(crate) fn print_map(
                 Ok((d.print_field_map(), page))
             }))
         }
+    };
+    let (mut fields, page) = res?;
+    if let Some(slug) = crate::bir_module::print_slug_for(kind.form_code()) {
+        let printed_keys = bir_print::frozen_html::printed_writer_keys(slug);
+        bir_core::official_xml::apply_print_zero_defaults(
+            kind.form_code(),
+            &printed_keys,
+            &mut fields,
+        );
     }
+    Ok((fields, page))
 }
 
 /// Print preview of the draft the page holds (save it first). Works from the
@@ -7279,7 +8169,22 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
-        agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
+        let before_notices = pending_notices_before_save(db, &draft);
+        let inline_clearances = reported_inline_clearances(draft["id"].as_i64());
+        let incoming = draft.clone();
+        let saved = agent::save_draft_with_clearance_context(
+            kind,
+            db,
+            &mut draft,
+            incoming,
+            inline_clearances.clone(),
+        )
+        .map_err(host_error);
+        if let Ok(id) = saved {
+            mark_inline_clearances_seen(db, id, before_notices, &inline_clearances);
+            clear_inline_clearances(id);
+        }
+        saved?;
         Ok(notes)
     })?;
     agent::compute(kind, &mut draft).map_err(host_error)?;
@@ -7391,6 +8296,8 @@ mod tests {
     mod dst_pt_vat;
     // PR 5: 1701Q and 1702Q against their printed sheets.
     mod income_q;
+    // 1602Q Item 20: the official form leaves it enabled in every amended state.
+    mod item20_1602q;
     // PR 6: 1604C, 1604F and 1604E against their printed sheets.
     mod annual_1604;
     // PR 8: 1702RT, 1702MX, 1702EX and 1707A against their printed sheets.
@@ -7407,6 +8314,8 @@ mod tests {
     // sweep and its recorder, then the rule's own tests.
     mod radio_untick;
     mod radio_untick_rule;
+    // The amended-return previous-payment gates.
+    mod previous_payment;
     // PR 15: the shared effective-lock table pinned core-side (P4-19).
     mod agent_locks;
     // The carry rule's page-side inputs, pinned core-side.
@@ -7432,6 +8341,11 @@ mod tests {
     // Every form's RDO box offers the RDO catalog, never 1601C's leftover
     // "000" option script; "000" is no RDO.
     mod rdo_lists;
+    // Gated schedule/specification boxes across the annual, creditable and
+    // percentage returns.
+    mod gated_rows;
+    // Inline clearings shown by a fill are acknowledged by its save.
+    mod inline_clearances;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -7572,6 +8486,40 @@ mod tests {
             ymd(2026, 9, 18),
             "all three, one session later"
         );
+    }
+
+    /// D4's generic open migration uses the same guarded save as the page:
+    /// on a trigger-date form the host's typed-date state is settled before
+    /// the recompute saves the cleared row.
+    #[test]
+    fn an_open_gate_migration_settles_a_trigger_date_before_saving() {
+        setup_taxpayer_filing(&["1606"]);
+        let draft = type_parts("1606", &open("1606", 1)["draft"], &SALE);
+        let mut migration = draft.clone();
+        migration
+            .as_object_mut()
+            .unwrap()
+            .remove("trigger_parts_typed");
+        migration
+            .as_object_mut()
+            .unwrap()
+            .remove("trigger_date_entered");
+        with_database(|db| {
+            save_open_gate_migration(
+                db,
+                AgentFormKind::Queueable(QueueableKind::Form1606),
+                &mut migration,
+            )
+            .map_err(host_error)
+        })
+        .unwrap();
+        assert_eq!(
+            migration["trigger_parts_typed"],
+            json!(["transaction_day", "transaction_month", "transaction_year"])
+        );
+        assert_eq!(migration["trigger_date_entered"], true);
+        let id = migration["id"].as_i64().unwrap();
+        assert_eq!(stored_trigger(id), ymd(2026, 9, 18));
     }
 
     /// Round 5: a client-sent `trigger_parts_typed` is ignored: the host
@@ -8003,6 +8951,18 @@ mod tests {
             vec![code.into(), json(draft.clone()), json(edits)],
         )
         .unwrap_or_else(|error| panic!("{code} fills: {error}"))
+    }
+
+    fn remove_row(code: &str, draft: &Value, row_keys: &[&str]) -> Value {
+        call(
+            "screen_form_remove_row",
+            vec![
+                code.into(),
+                json(draft.clone()),
+                HostValue::Array(row_keys.iter().map(|key| (*key).into()).collect()),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("{code} removes a row: {error}"))
     }
 
     fn save(code: &str, draft: &Value) -> Value {
@@ -9322,6 +10282,353 @@ mod tests {
             save(code, &filled["draft"]);
             assert_eq!(open(code, 1)["values"][key], chosen, "{code}");
         }
+    }
+
+    /// A row containing a live-locked cell cannot be deleted: deletion would
+    /// bypass the lock a write to that cell would refuse. 1702EX Schedule 2
+    /// rows 2-3 are such rows (the attached schedule owns them).
+    #[test]
+    fn delete_row_refuses_a_live_locked_cell() {
+        setup();
+        let opened = open("1702EX", 0);
+        let keys = [
+            "frm1702EX:txtPg3Pt6S2I2Description",
+            "frm1702EX:txtPg3Pt6S2I2LegalBasis",
+            "frm1702EX:txtPg3Pt6S2I2Amount",
+        ];
+        let error = call(
+            "screen_form_remove_row",
+            vec![
+                "1702EX".into(),
+                json(opened["draft"].clone()),
+                HostValue::Array(keys.iter().map(|key| (*key).into()).collect()),
+            ],
+        )
+        .expect_err("a locked row refuses deletion");
+        assert!(
+            error
+                .to_string()
+                .contains("BIR's program keeps this row shut"),
+            "{error}"
+        );
+    }
+
+    /// Deleting a later 2551Q row must not collapse to row zero: the probe is
+    /// compared against the same prepared base `apply_screen_edits` writes.
+    #[test]
+    fn delete_row_2551q_later_row_keeps_row_zero() {
+        setup();
+        let opened = open("2551Q", 3);
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({
+                "drpATC1": "1",
+                "txtATCAmt1": "1000",
+                "drpATC2": "2",
+                "txtATCAmt2": "2000",
+                "drpATC3": "3",
+                "txtATCAmt3": "3000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}), "{filled}");
+        let first = filled["draft"]["schedule_1"][0].clone();
+        let third = filled["draft"]["schedule_1"][2].clone();
+        // A legacy stored draft is not prepared until the first write. Its
+        // unknown row fields drop out when the write preparation serializes the
+        // current model; if the probe's first blank is already blank in the
+        // target row, that normalization alone ties every row and an
+        // unprepared comparison picks row zero.
+        let mut stale = filled["draft"].clone();
+        stale["auto_compute_penalties"] = json!(false);
+        for row in stale["schedule_1"].as_array_mut().unwrap() {
+            row["legacy_row_payload"] = json!("dropped by the current model");
+        }
+        stale["schedule_1"][1]["atc"] = json!("");
+        stale["schedule_1"][1]["atc_description"] = json!("");
+        stale["schedule_1"][1]["tax_rate"] = json!(0.0);
+        let removed = remove_row(
+            "2551Q",
+            &stale,
+            &["txtATCRate2", "drpATC2", "txtATCAmt2", "txtATCDue2"],
+        );
+        let rows = removed["draft"]["schedule_1"].as_array().unwrap();
+        assert_eq!(rows.len(), 2, "{removed}");
+        assert_eq!(rows[0], first);
+        assert_eq!(rows[1], third);
+    }
+
+    /// A 2550Q imported through BIR's field map carries raw editor buffers by
+    /// stable row id. Deleting a schedule row must forget that row's buffers
+    /// too, or validation reports orphan raw bindings and blocks the draft.
+    #[test]
+    fn delete_row_2550q_imported_xml_forgets_the_rows_raw_state() {
+        setup();
+        let opened = open("2550Q", 2);
+        let filled = fill(
+            "2550Q",
+            &opened["draft"],
+            json!({
+                "txtDateCovered30": "04/01/2026",
+                "txtDateCovered3To0": "06/30/2026",
+                "txtNameWithHoldingAgent30": "Agent One",
+                "txtIncomePayment30": "1000",
+                "txtDateCovered31": "04/01/2026",
+                "txtDateCovered3To1": "06/30/2026",
+                "txtNameWithHoldingAgent31": "Agent Two",
+                "txtIncomePayment31": "2000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}), "{filled}");
+        let source: bir_core::forms::form_2550q::Form2550QDraft =
+            serde_json::from_value(filled["draft"].clone()).unwrap();
+        let mut fields = source.to_bir_field_map();
+        for key in [
+            "frm2550qv2024:taxPayerClassification1",
+            "frm2550qv2024:taxPayerClassification2",
+            "frm2550qv2024:taxPayerClassification4",
+        ] {
+            fields.insert(key.to_string(), "false".to_string());
+        }
+        fields.insert(
+            "frm2550qv2024:taxPayerClassification3".to_string(),
+            "true".to_string(),
+        );
+        let imported = bir_core::forms::form_2550q::Form2550QDraft::from_bir_field_map(&fields)
+            .expect("the row-filled field map imports as XML state");
+        let imported_json = serde_json::to_value(&imported).unwrap();
+        let first_id = imported_json["schedule_3"][0]["instance_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let second_id = imported_json["schedule_3"][1]["instance_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let removed = remove_row(
+            "2550Q",
+            &imported_json,
+            &[
+                "txtDateCovered30",
+                "txtDateCovered3To0",
+                "txtNameWithHoldingAgent30",
+                "txtIncomePayment30",
+                "txtTotalTaxWithHeld30",
+            ],
+        );
+        let rows = removed["draft"]["schedule_3"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{removed}");
+        assert_eq!(rows[0]["instance_id"], second_id);
+        let raw = serde_json::to_string(&removed["draft"]["raw_editor_state"]).unwrap();
+        assert!(!raw.contains(&first_id), "{raw}");
+        assert!(raw.contains(&second_id), "{raw}");
+    }
+
+    /// Delete row removes the backing object itself in a non-compacting
+    /// schedule: the former next row moves up whole, with no hollow slot.
+    #[test]
+    fn delete_row_2551q_removes_the_row_and_moves_the_next_up() {
+        setup();
+        let opened = open("2551Q", 3);
+        let options = opened["options"]["drpATC1"].as_array().unwrap();
+        let first = options.iter().find(|o| o["value"] == "1").unwrap()["value"].clone();
+        let second = options.iter().find(|o| o["value"] == "2").unwrap()["value"].clone();
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({
+                "drpATC1": first,
+                "txtATCAmt1": "1000",
+                "drpATC2": second,
+                "txtATCAmt2": "2000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        assert_eq!(filled["draft"]["schedule_1"].as_array().unwrap().len(), 2);
+        let former_second = filled["draft"]["schedule_1"][1].clone();
+        let removed = remove_row(
+            "2551Q",
+            &filled["draft"],
+            &["drpATC1", "txtATCAmt1", "txtATCRate1", "txtATCDue1"],
+        );
+        let rows = removed["draft"]["schedule_1"].as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0], former_second);
+        assert!(removed["removes"].is_null());
+
+        // The serializer inputs and the print map have the survivor in slot 1; no row data survives in slot 2.
+        let typed: bir_core::forms::form_2551q::Form2551QDraft =
+            serde_json::from_value(removed["draft"].clone()).unwrap();
+        let payload = typed.to_bir_field_map();
+        assert_eq!(payload["txtATCAmt1"], "2,000.00");
+        // 2551Q's official upload is fixed-width and always writes six control
+        // slots. The zero at slot 2 is that control placeholder, not a draft
+        // row: no removed or surviving row data is left there.
+        assert_eq!(payload["txtATCAmt2"], "0.00");
+        let print = typed.to_print_field_map();
+        assert_eq!(print["txtATCAmt1"], "2,000.00");
+        assert_eq!(print["txtATCAmt2"], "");
+    }
+
+    /// The same removal shrinks the backing list for the last row and for
+    /// the only row; validation, not a hollow zero row, is what says an empty
+    /// 2551Q schedule cannot be filed.
+    #[test]
+    fn delete_row_2551q_last_and_only_rows_shrink_the_schedule() {
+        setup();
+        let opened = open("2551Q", 4);
+        let options = opened["options"]["drpATC1"].as_array().unwrap();
+        let first = options.iter().find(|o| o["value"] == "1").unwrap()["value"].clone();
+        let second = options.iter().find(|o| o["value"] == "2").unwrap()["value"].clone();
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({
+                "drpATC1": first,
+                "txtATCAmt1": "1000",
+                "drpATC2": second,
+                "txtATCAmt2": "2000",
+            }),
+        );
+        let first_row = filled["draft"]["schedule_1"][0].clone();
+        let last_keys = ["drpATC2", "txtATCAmt2", "txtATCRate2", "txtATCDue2"];
+        let removed_last = remove_row("2551Q", &filled["draft"], &last_keys);
+        let rows = removed_last["draft"]["schedule_1"].as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0], first_row);
+        let only_keys = ["drpATC1", "txtATCAmt1", "txtATCRate1", "txtATCDue1"];
+        let removed_only = remove_row("2551Q", &removed_last["draft"], &only_keys);
+        assert_eq!(removed_only["draft"]["schedule_1"], json!([]));
+        assert!(removed_only["removes"].is_null());
+    }
+
+    /// Delete row in compacting 1601EQ must not let the old batch's shifted
+    /// blank writes erase the survivor's base or withheld amount.
+    #[test]
+    fn delete_row_1601eq_compacts_without_losing_the_survivor() {
+        setup();
+        let opened = open("1601EQ", 3);
+        let filled = fill(
+            "1601EQ",
+            &opened["draft"],
+            json!({
+                "frm1601EQ:optWithheld:Y": "true",
+                "frm1601EQ:optCategory:P": "true",
+                "frm1601EQ:txtAtcCd1": "WI010",
+                "frm1601EQ:txtTaxBase1": "1000",
+                "frm1601EQ:txtAtcCd2": "WI020",
+                "frm1601EQ:txtTaxBase2": "2000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let before = filled["draft"]["schedule"].as_array().unwrap().clone();
+        assert_eq!(before.len(), 2, "{filled}");
+        let survivor = before[1].clone();
+        let removed = remove_row(
+            "1601EQ",
+            &filled["draft"],
+            &[
+                "frm1601EQ:txtAtcCd1",
+                "frm1601EQ:txtTaxBase1",
+                "frm1601EQ:txtTaxRate1",
+                "frm1601EQ:txtTaxbeWithHeld1",
+            ],
+        );
+        let rows = removed["draft"]["schedule"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{removed}");
+        assert_eq!(rows[0], survivor);
+        assert!(removed["removes"].is_null());
+    }
+
+    /// A compacting schedule's length-only shrink still names the deleted
+    /// last row, not the survivor above it.
+    #[test]
+    fn delete_row_1601eq_last_row_shrinks_without_touching_the_first() {
+        setup();
+        let opened = open("1601EQ", 3);
+        let filled = fill(
+            "1601EQ",
+            &opened["draft"],
+            json!({
+                "frm1601EQ:optWithheld:Y": "true",
+                "frm1601EQ:optCategory:P": "true",
+                "frm1601EQ:txtAtcCd1": "WI010",
+                "frm1601EQ:txtTaxBase1": "1000",
+                "frm1601EQ:txtAtcCd2": "WI020",
+                "frm1601EQ:txtTaxBase2": "2000",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}));
+        let first = filled["draft"]["schedule"][0].clone();
+        let removed = remove_row(
+            "1601EQ",
+            &filled["draft"],
+            &[
+                "frm1601EQ:txtAtcCd2",
+                "frm1601EQ:txtTaxBase2",
+                "frm1601EQ:txtTaxRate2",
+                "frm1601EQ:txtTaxbeWithHeld2",
+            ],
+        );
+        let rows = removed["draft"]["schedule"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{removed}");
+        assert_eq!(rows[0], first);
+        assert!(removed["removes"].is_null());
+    }
+
+    /// 2550Q's computed and hidden schedule values belong to the row object:
+    /// deleting the row above moves them up with their own row.
+    #[test]
+    fn delete_row_2550q_moves_computed_values_with_their_row() {
+        setup();
+        let opened = open("2550Q", 2);
+        let filled = fill(
+            "2550Q",
+            &opened["draft"],
+            json!({
+                "txtDatePurchase10": "04/01/2019",
+                "txtSourceCode10": "D",
+                "txtDescription10": "Machine One",
+                "txtAmountPurchase10": "1200000",
+                "txtInputTax10": "120000",
+                "txtEstimatedLife10": "60",
+                "txtRecognizedLife10": "60",
+                "txtDatePurchase11": "04/02/2019",
+                "txtSourceCode11": "I",
+                "txtDescription11": "Machine Two",
+                "txtAmountPurchase11": "2400000",
+                "txtInputTax11": "240000",
+                "txtEstimatedLife11": "120",
+                "txtRecognizedLife11": "120",
+            }),
+        );
+        assert_eq!(filled["rejected"], json!({}), "{filled}");
+        let before = filled["draft"]["schedule_1"].as_array().unwrap().clone();
+        assert_eq!(before.len(), 2, "{filled}");
+        let survivor = before[1].clone();
+        assert!(
+            survivor["allowable_input_tax_for_period"].as_f64().unwrap() > 0.0,
+            "{survivor}"
+        );
+        let removed = remove_row(
+            "2550Q",
+            &filled["draft"],
+            &[
+                "txtDatePurchase10",
+                "txtSourceCode10",
+                "txtDescription10",
+                "txtAmountPurchase10",
+                "txtInputTax10",
+                "txtEstimatedLife10",
+                "txtRecognizedLife10",
+                "txtAllowedInputTax10",
+                "txtBalanceInputTax10",
+            ],
+        );
+        let rows = removed["draft"]["schedule_1"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{removed}");
+        assert_eq!(rows[0], survivor);
+        assert!(removed["removes"].is_null());
     }
 
     #[test]
@@ -11640,7 +12947,7 @@ mod tests {
         let early = fill("1601FQ", &opened["draft"], json!({"drpATCCode0": "WI330"}));
         assert_eq!(
             early["rejected"]["drpATCCode0"],
-            rows_withholding::ANSWER_13_FIRST
+            bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK
         );
         let wrong = fill("1601FQ", &yes["draft"], json!({"drpATCCode0": "ZZ999"}));
         assert!(wrong["rejected"].get("drpATCCode0").is_some());
@@ -16382,6 +17689,8 @@ mod tests {
     /// each with the form group that fixes it (`CODE key: reason | PR n`).
     const LOCKED_AND_BLANK_NOT_YET_FIXED: &str =
         include_str!("screen_form_module/locked_and_blank.txt");
+    const LOCKED_AND_BLANK_INTENTIONAL: &str =
+        include_str!("screen_form_module/locked_and_blank_intentional.txt");
 
     /// Every on-screen box with its schema type and computed flag.
     fn screen_fields(code: &str) -> Vec<(String, String, bool)> {
@@ -16554,10 +17863,22 @@ mod tests {
                 }
             }
         }
+        let recompute_gated: std::collections::BTreeSet<&str> = AgentFormKind::from_code(code)
+            .map(|kind| bir_core::forms::agent::gated_rows::keys(kind))
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
         for (key, t, draws) in boxes {
             let Some(why) = locked(&key) else {
                 continue;
             };
+            // This pull request's recompute gates intentionally shut a blank
+            // box with the official opening condition; their own tests cover
+            // refusal, clearing and the note. They are not the legacy silent
+            // blanks this regression list pins.
+            if recompute_gated.contains(key.as_str()) {
+                continue;
+            }
             if t == "hidden" || reason(&key, draws) {
                 continue;
             }
@@ -16669,6 +17990,7 @@ mod tests {
         let found: Vec<String> = found.into_iter().collect();
         let mut expected: Vec<String> = LOCKED_AND_BLANK_NOT_YET_FIXED
             .lines()
+            .chain(LOCKED_AND_BLANK_INTENTIONAL.lines())
             .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
             .map(|line| {
                 line.rsplit_once(" | ")
@@ -17204,9 +18526,9 @@ mod tests {
     /// for 1701MS (PR 7): item 16B's From and To are bound now and refused
     /// with the spouse gate's words until the return is joint.
     const DATE_BOXES_LOCKED_FOR_OTHER_REASONS: &[&str] = &[
-        "1701MS frm1701MS:txtTaxpayerNo16a1: cleared to \"\"",
-        "1701MS frm1701MS:txtTaxpayerNo16a: cleared to \"\"",
-        "1707 frm1707:txtPg2P4Sch1I8DateCollection: cleared to \"\"",
+        "1701MS frm1701MS:txtTaxpayerNo16a1: Item 12 column A is Exempt or Special/Preferential Rate.",
+        "1701MS frm1701MS:txtTaxpayerNo16a: Item 12 column A is Exempt or Special/Preferential Rate.",
+        "1707 frm1707:txtPg2P4Sch1I8DateCollection: Item 9 transaction is Installment Sale.",
         // PR 8: 1707A's printed row 4 says the form computes it (from the
         // continuation rows), with what it waits for.
         "1707A frm1707Av2021:txtS1C1DateOfTransactionI4: computed by BIR's own formulas",
@@ -17753,11 +19075,14 @@ mod tests {
             if stacked.iter().flatten().any(|c| c == cell) || !over(cell) {
                 continue;
             }
-            if squeezed(&printed(cell)) != squeezed(&value(cell)) {
+            let cell_printed = printed(cell);
+            let rule3_truncated = cell_printed.ends_with("...")
+                && document.contains("data-overflow-warning=\"text-truncated\"");
+            if !rule3_truncated && squeezed(&cell_printed) != squeezed(&value(cell)) {
                 cut.push(format!(
                     "{cell}: {:?} printed {:?}",
                     value(cell),
-                    printed(cell)
+                    cell_printed
                 ));
             }
         }
@@ -17815,18 +19140,21 @@ mod tests {
                 assert!(!parts[1].0.trim().is_empty(), "{len}: the second line used");
                 continue;
             }
-            let whole: Vec<&str> = parts.iter().map(|(t, _)| t.as_str()).collect();
+            let whole: Vec<String> = parts
+                .iter()
+                .map(|(t, _)| t.replace("&#10;", " ").replace('\n', " "))
+                .collect();
             assert_eq!(whole.join(" "), text, "{len}: the whole address, in order");
             let sizes: Vec<f64> = parts.iter().map(|(_, size)| size.unwrap()).collect();
-            assert!(sizes.iter().all(|s| *s == sizes[0] && *s <= 9.0));
+            assert!(sizes.iter().all(|s| *s >= 7.5 && *s <= 9.0));
             let room: f64 = lines
                 .iter()
                 .map(|cell| (cell_width(slug, cell) - 2.0) / (0.58 * 9.0))
                 .sum();
             assert_eq!(
-                sizes[0] < 9.0,
+                sizes.iter().any(|s| *s < 9.0) || parts.iter().any(|(t, _)| t.contains('\n')),
                 len as f64 > room,
-                "{len}: shrunk only when needed"
+                "{len}: shrunk or wrapped only when needed"
             );
         }
     }
@@ -18441,9 +19769,15 @@ mod tests {
                     with_database(|db| print_map(db, kind, &filled["draft"])).unwrap();
                 let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
                 let printed = squeezed(&printed_cells_in_order(slug, &document));
+                let truncated_to_sheet = document
+                    .contains("data-overflow-warning=\"text-truncated\"")
+                    && document.contains(&format!(
+                        "data-writer-value=\"{}\"",
+                        text.to_ascii_uppercase()
+                    ));
                 assert!(
-                    printed.contains(&squeezed(&text)),
-                    "{code} {key}: the whole {length} characters print"
+                    printed.contains(&squeezed(&text)) || truncated_to_sheet,
+                    "{code} {key}: the whole {length} characters print or continue on additional sheet"
                 );
                 let cut = cut_on_the_sheet(slug, &fields, &document);
                 assert!(cut.is_empty(), "{code} {key}: {cut:#?}");

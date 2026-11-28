@@ -36,6 +36,7 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use super::print_map::{whole_peso_comb_figure, whole_peso_comb_text};
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -1271,9 +1272,12 @@ impl Form1701ADraft {
     /// never submitted.
     ///
     /// - `derived:amount_<item><A|B>` / `derived:amount_30`: the submitted
-    ///   amount as whole pesos (`toFixed(0)`), right-aligned in the sheet's
-    ///   8-slot comb; an overpayment prints in parentheses. Zero, column B of
-    ///   a non-joint return, and amounts wider than the comb stay blank.
+    ///   amount as the upload holds it, without separators
+    ///   ([`whole_peso_comb_text`]): whole pesos right-aligned in the sheet's
+    ///   8-slot comb, and any centavos the upload carries kept (the official
+    ///   page shows them; such an amount prints as one rectangle over the
+    ///   comb). An overpayment keeps its minus. Zero and column B of a
+    ///   non-joint return stay blank.
     /// - `derived:address_line1/2`: the address over the 40- and 31-slot
     ///   combs, split at a word break.
     /// - `derived:birth_mm/dd/yyyy`, `derived:tin_digits` (page 2, nine
@@ -1284,18 +1288,13 @@ impl Form1701ADraft {
         let mut fields = self.to_bir_field_map();
         let mut derived = BTreeMap::new();
 
+        // The upload's own figure, centavos kept.
         let whole = |text: &str| -> Option<String> {
-            let value = fixed0(parse_official_amount(text)?);
-            if value == 0.0 {
+            let (_, figure) = whole_peso_comb_figure(text)?;
+            if figure == "0" {
                 return None;
             }
-            let digits = format!("{:.0}", value.abs());
-            let printed = if value < 0.0 {
-                format!("({digits})")
-            } else {
-                digits
-            };
-            (printed.len() <= AMOUNT_SLOTS).then(|| format!("{printed:>AMOUNT_SLOTS$}"))
+            whole_peso_comb_text(text, AMOUNT_SLOTS)
         };
         let mut columns = vec!["A"];
         if self.is_joint() {
@@ -2218,7 +2217,8 @@ mod tests {
                 .all(|key| key.starts_with("derived:"))
         );
         assert_eq!(p["derived:amount_20A"], "   94448");
-        assert_eq!(p["derived:amount_36A"], " 1234568");
+        // The upload's centavos print (1,234,567.89 was rounded to 1234568).
+        assert_eq!(p["derived:amount_36A"], "1234567.89");
         assert_eq!(p["derived:amount_29A"], "   56848");
         assert_eq!(p["derived:amount_30"], "   56848");
         assert!(!p.contains_key("derived:amount_47A"), "zero stays blank");
@@ -2243,10 +2243,14 @@ mod tests {
         over.taxpayer.quarterly_payments = 200_000.0;
         over.recompute();
         let p = over.to_print_field_map();
-        assert_eq!(p["derived:amount_22A"], "(114152)");
+        // An overpayment prints with a minus, as the official page shows it.
+        assert_eq!(p["derived:amount_22A"], " -114152");
         over.taxpayer.quarterly_payments = 200_000_000.0;
         over.recompute();
-        assert!(!over.to_print_field_map().contains_key("derived:amount_22A"));
+        assert_eq!(
+            over.to_print_field_map()["derived:amount_22A"],
+            "-199914152"
+        );
     }
 
     #[test]

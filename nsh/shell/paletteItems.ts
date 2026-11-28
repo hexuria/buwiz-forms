@@ -131,6 +131,13 @@ export const paletteItems = computed<PaletteItem[]>(() => {
     });
     items.push({ group: "Actions", label: "Change theme", icon: "moon", hint: keymap.label("mod+t"), run: app.cycleTheme });
   }
+  // The add row: the owner and the help desk admin always start a new tax profile (a client session may only ever
+  // add the first one — app.canAddTaxpayer decides); the typed query still narrows it away like any other row. On the
+  // phone it closes the picker list under the taxpayer rows; on the desktop it comes after every page, form and
+  // action row, so an exact page or profile match never loses its place to it.
+  if (app.canAddTaxpayer()) {
+    items.push({ group: profilesOnly ? "Taxpayers" : "Actions", label: "New tax profile", icon: "plus", run: () => app.go("new_taxpayer") });
+  }
   if (!q) return items;
   return items.filter((x) => x.match || `${x.label} ${x.hint ?? ""}`.toLowerCase().includes(q));
 });

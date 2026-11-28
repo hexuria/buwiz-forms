@@ -18,7 +18,7 @@
 ![Windows](assets/badges/windows.svg)
 
 <p align="center">
-  <img src="assets/readme/showcase.png" alt="eBIRForms on iPhone (sign-in), Mac (home) and iPad (BIR Form 2551Q)" width="100%">
+  <img src="assets/readme/showcase.png" alt="Buwiz Forms on iPhone (sign-in), Mac (home) and iPad (BIR Form 2551Q)" width="100%">
 </p>
 
 E-BIRForms is an offline-first desktop app to prepare, validate, print and

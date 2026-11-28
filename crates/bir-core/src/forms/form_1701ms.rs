@@ -383,19 +383,22 @@ fn print_right_aligned(text: String) -> String {
 }
 
 /// A whole-peso amount as the printed comb shows it: digits only, an
-/// overpayment in parentheses.
+/// overpayment with a minus, as the official page shows it (its upload,
+/// which copies the box, holds `-26,000` for an overpayment of 26,000).
 fn print_whole_amount(value: f64) -> String {
     let whole = js_round(value.abs()) as u64;
     if value < 0.0 && whole != 0 {
-        print_right_aligned(format!("({whole})"))
+        print_right_aligned(format!("-{whole}"))
     } else {
         print_right_aligned(whole.to_string())
     }
 }
 
-/// An Item 31 amount (centavos kept), without thousands separators.
+/// An Item 31 amount (centavos kept), without thousands separators, its
+/// sign kept: the upload (`official_amount`) carries a minus, so the print
+/// does too.
 fn print_cents_amount(value: f64) -> String {
-    print_right_aligned(official_amount(value.abs()).replace(',', ""))
+    print_right_aligned(official_amount(value).replace(',', ""))
 }
 
 /// Item 16 as the sheet prints it: whole percent in the 2-slot comb, the
@@ -756,9 +759,17 @@ impl Form1701MsColumn {
             )
     }
 
-    /// Items 8 and 10A–10C follow Itemized Deductions.
+    /// Items 8 and 10A–10C follow Itemized Deductions under graduated
+    /// rates. The exempt/special-rate branch opens them while Item 17 is
+    /// disabled, so they do not depend on an Item 17 answer there.
     pub fn itemized_open(&self) -> bool {
-        self.schedule_b1_open() && self.deduction == Form1701MsDeduction::Itemized
+        self.schedule_b1_open()
+            && (self.tax_option.is_exempt_or_special()
+                || self.deduction == Form1701MsDeduction::Itemized)
+    }
+
+    fn itemized_method(&self) -> bool {
+        self.tax_option.is_exempt_or_special() || self.deduction == Form1701MsDeduction::Itemized
     }
 
     /// Schedule B2 is open for business income under the 8% option.
@@ -802,9 +813,13 @@ impl Form1701MsColumn {
             self.deduction = Form1701MsDeduction::Unanswered;
         }
         match self.tax_option {
+            // incomeIsSubjectToTP ticks Itemized and then disables Item 17
+            // (BIR-Form1701MS.hta L10287-10288; spouse L10539). The itemized
+            // boxes themselves open for exempt/special rates in `itemized_open`.
             Form1701MsTaxOption::Exempt | Form1701MsTaxOption::Special => {
-                // incomeIsSubjectTo* ticks Itemized and locks Item 17.
-                self.deduction = Form1701MsDeduction::Itemized;
+                if self.source.has_business() {
+                    self.deduction = Form1701MsDeduction::Itemized;
+                }
             }
             Form1701MsTaxOption::EightPercent | Form1701MsTaxOption::Unanswered => {
                 self.deduction = Form1701MsDeduction::Unanswered;
@@ -908,15 +923,18 @@ impl Form1701MsColumn {
         self.gross_income = self.net_sales - self.cost_of_sales;
         self.total_deductions =
             self.itemized_deductions + self.special_allowable_deductions + self.nolco;
-        self.osd = if self.deduction == Form1701MsDeduction::Osd {
+        self.osd = if self.tax_option == T::Graduated && self.deduction == Form1701MsDeduction::Osd
+        {
             js_round(self.net_sales * 0.40)
         } else {
             0.0
         };
-        self.net_income = match self.deduction {
-            Form1701MsDeduction::Itemized => self.gross_income - self.total_deductions,
-            Form1701MsDeduction::Osd => self.gross_income - self.osd,
-            Form1701MsDeduction::Unanswered => 0.0,
+        self.net_income = if self.itemized_method() {
+            self.gross_income - self.total_deductions
+        } else if self.tax_option == T::Graduated && self.deduction == Form1701MsDeduction::Osd {
+            self.gross_income - self.osd
+        } else {
+            0.0
         };
         self.taxable_business_income = self.net_income + self.non_operating_income;
         let positive = |v: f64| if v > 0.0 { v } else { 0.0 };
@@ -1470,15 +1488,27 @@ impl Form1701MsDraft {
         let (a, b, c, branch) = split_tin(&self.tin);
         // Page 2's TIN comb has nine inputs; the branch `00000` is preprinted.
         put("tin_digits", format!("{a}{b}{c}"));
-        put("page2_name", self.taxpayer_name.trim().to_uppercase());
-        put("tp_tin", format!("{a}-{b}-{c}-{branch}"));
+        put(
+            "page2_name",
+            self.taxpayer_name
+                .split(',')
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_uppercase(),
+        );
+        if !self.tin.trim().is_empty() {
+            put("tp_tin", format!("{a}-{b}-{c}-{branch}"));
+        }
         put("tp_rdo", self.rdo_code.trim().to_string());
         put("tp_email", self.email.trim().to_string());
         put("tp_contact", self.contact_number.trim().to_string());
         if self.is_joint() {
             let spouse = &self.spouse_info;
-            let (a, b, c, branch) = split_tin(&spouse.tin);
-            put("sp_tin", format!("{a}-{b}-{c}-{branch}"));
+            if !spouse.tin.trim().is_empty() {
+                let (a, b, c, branch) = split_tin(&spouse.tin);
+                put("sp_tin", format!("{a}-{b}-{c}-{branch}"));
+            }
             put("sp_rdo", spouse.rdo_code.trim().to_string());
             put("sp_name", spouse.name.trim().to_uppercase());
             put("sp_email", spouse.email.trim().to_string());
@@ -2267,7 +2297,11 @@ mod tests {
         };
         d.recompute();
         let tp = &d.taxpayer;
-        assert_eq!(tp.deduction, Form1701MsDeduction::Itemized);
+        assert_eq!(
+            tp.deduction,
+            Form1701MsDeduction::Itemized,
+            "incomeIsSubjectToTP ticks Itemized before disabling Item 17 (BIR-Form1701MS.hta L10287-10288)"
+        );
         assert_eq!(tp.gross_income, 1_500_000.0);
         assert_eq!(tp.special_tax_due, 75_000.0);
         assert_eq!(tp.income_tax_due, 75_000.0);
@@ -2570,11 +2604,13 @@ mod tests {
     }
 
     #[test]
-    fn print_amounts_right_align_digits_and_bracket_overpayments() {
+    fn print_amounts_right_align_digits_and_sign_overpayments() {
         assert_eq!(print_whole_amount(0.0), "        0");
         assert_eq!(print_whole_amount(123_456_789.0), "123456789");
-        assert_eq!(print_whole_amount(-4_500.0), "   (4500)");
-        assert_eq!(print_cents_amount(-1_234.5), "  1234.50");
+        assert_eq!(print_whole_amount(-4_500.0), "    -4500");
+        assert_eq!(print_cents_amount(1_234.5), "  1234.50");
+        // The sign is never lost: the upload holds -1,234.50.
+        assert_eq!(print_cents_amount(-1_234.5), " -1234.50");
         assert_eq!(print_rate(5.0), ("5".to_string(), "0".to_string()));
         assert_eq!(print_rate(7.5), ("7".to_string(), "5".to_string()));
     }
@@ -2714,6 +2750,20 @@ mod tests {
                 .iter()
                 .any(|(field, _)| field == "refund_amount"),
             "a three-decimal amount must still be refused"
+        );
+    }
+
+    #[test]
+    fn print_map_uses_last_name_before_comma_and_omits_empty_spouse_tin() {
+        let mut draft = sample();
+        draft.taxpayer_name = "Santos, Juana".into();
+        draft.filing = Form1701MsFiling::Jointly;
+        draft.spouse_info.tin = "   ".into();
+        let fields = draft.to_print_field_map();
+        assert_eq!(fields["derived:page2_name"], "SANTOS");
+        assert!(
+            !fields.contains_key("derived:sp_tin"),
+            "empty spouse TIN must not format as ---00000"
         );
     }
 }

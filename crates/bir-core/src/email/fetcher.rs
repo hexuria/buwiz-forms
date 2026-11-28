@@ -340,7 +340,7 @@ fn fetch_with_auth(
                             processed.push(submission_receipt);
                         }
                         if let Some((title, body)) = pending_notice {
-                            crate::notification::send_notification(&title, &body);
+                            crate::background_cron::send_notice(&title, &body);
                         }
                     }
                     Err(e) => {

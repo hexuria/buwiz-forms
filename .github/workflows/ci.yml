@@ -1,15 +1,19 @@
 name: CI
 
-# Two lanes (docs/CI.md):
+# The lanes (docs/CI.md):
 # - The quick lane: a pull request, or a push to main or codex/**, runs the quick checks on Linux only (formatting,
 #   clippy, the production-boundary check, the NSH type check, the Python script tests, legacy-guard). About ten
 #   minutes; this is what `ci-ok`, the one required status, reports.
-# - A draft pull request runs nothing until it is marked ready (`ready_for_review` starts the quick lane). A pull
-#   request that closes or merges runs nothing either; its `closed` run only takes the pull request's concurrency
-#   group, which cancels the runs still queued or running for it.
+# - A draft pull request runs nothing until it is marked ready (`ready_for_review` starts the quick lane), except that
+#   a ci:suite* label is an explicit request and runs even on a draft. A pull request that closes or merges runs
+#   nothing either; its `closed` run only takes the pull request's concurrency group, which cancels the runs still
+#   queued or running for it.
 # - The test lane: a push to test/** (the branch name picks the systems), a manual run, and the nightly run on main
 #   run the test suites. Checks attach to the commit, so pushing a pull request's head to test/... shows the results
 #   on the pull request. `just ci-test [linux|windows|macos|all]` does that push.
+# - The suite lane: a labeled event whose label is ci:suite* runs the quick checks and the test suites on the pull
+#   request itself. Only that event asks for it; a later push plans the quick lane alone. `just ci-suite <pr>` is the
+#   ask. Any other label plans nothing and gets a concurrency group of its own, so it cancels nothing.
 # scripts/ci_plan.py decides what each run does; nsh.yml uses the same script.
 on:
   push:
@@ -17,8 +21,9 @@ on:
   pull_request:
     branches: [ "main", "gol/**", "codex/**", "feat/**" ]
     # `closed` runs nothing (every job's `if` is false for it, see `changes`), but it takes the pull request's
-    # concurrency group below and so cancels its runs still queued or running once it merges or closes.
-    types: [ opened, synchronize, reopened, ready_for_review, closed ]
+    # concurrency group below and so cancels its runs still queued or running once it merges or closes. `labeled`
+    # reaches the planner; only the fixed ci:suite* names plan work.
+    types: [ opened, synchronize, reopened, ready_for_review, closed, labeled ]
   # Nightly safety net: everything, validation audits included, on all three systems. 18:00 UTC is 02:00 in Manila.
   schedule:
     - cron: "0 18 * * *"
@@ -52,12 +57,14 @@ env:
 # One run per pull request or ref: a newer push to the same pull request or test/... branch cancels the older run,
 # whose result nobody reads. A pull request's group is keyed on its number, not on github.ref, so its `closed` run
 # (whatever ref GitHub gives a merged pull request's event) lands in the same group and cancels what is still queued
-# or running for it. main is the exception: every run there gets a group of its own (its run id) and is never
+# or running for it. A ci:suite* labeled event joins that group: it replaces the quick run with quick + suites, and a
+# later push replaces it. A labeled event with any other name plans nothing, so it gets its own group (its run id)
+# and cancels nothing. main is the exception: every run there gets a group of its own (its run id) and is never
 # cancelled. Four merges in three minutes used to cancel each other and leave main with no complete run; now each
 # merge gets its quick run, and a merge can no longer cancel the nightly or a manual complete run either.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all' && github.run_id || github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
+  cancel-in-progress: ${{ (github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all') && (github.event_name == 'pull_request' || github.ref != 'refs/heads/main') }}
 
 jobs:
   # One job for both lanes, so the two never drift apart. In the quick lane it
@@ -143,7 +150,7 @@ jobs:
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
-        sudo apt-get update
+        sudo bash scripts/ci/apt_update.sh
         sudo apt-get install -y \
           pkg-config \
           libx11-dev \
@@ -401,7 +408,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         mkdir -p ~/apt-archives/partial
-        sudo apt-get update
+        sudo bash buwiz-forms/scripts/ci/apt_update.sh
         sudo -E apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" \
           build-essential pkg-config perl python3 \
           clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
@@ -473,26 +480,115 @@ jobs:
           exit 1
         fi
 
+  # Compile-proof the agent plug on the pull requests that move it. `nsh check` builds the app without `agent`,
+  # so a pin bump in nsh/Cargo.toml and nsh/Cargo.lock otherwise merges without nsh-gpui-agent-linux ever being
+  # compiled here. This is the compile half of nsh.yml's agent-feature step, direct by cargo so it needs no nsh CLI.
+  nsh-agent-check:
+    name: NSH app agent compile check (Linux)
+    needs: changes
+    if: needs.changes.outputs.nsh_agent_check == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: "1.99.0"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      BUWIZ_NO_KEYCHAIN: "1"
+      EBIR_TEST_ENV: "1"
+      BIR_AUTH_BYPASS: "1"
+      BIR_SFTP_DRY_RUN: "1"
+    steps:
+    - name: Check out buwiz-forms
+      uses: actions/checkout@v4
+      with:
+        path: buwiz-forms
+
+    - name: Read the NSH pin from nsh.yml
+      id: pin
+      run: |
+        ref=$(sed -n 's/^  NSH_PINNED_REF: *\([0-9a-f]\{40\}\) *$/\1/p' buwiz-forms/.github/workflows/nsh.yml)
+        [ -n "$ref" ] || { echo "::error::no NSH_PINNED_REF in nsh.yml"; exit 1; }
+        echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+    - name: Check out NSH (the pinned commit, beside buwiz-forms)
+      uses: actions/checkout@v4
+      with:
+        repository: hexuria/nsh
+        ref: ${{ steps.pin.outputs.ref }}
+        token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+        path: nsh
+        persist-credentials: false
+
+    - name: Check the two checkouts line up
+      run: |
+        test -f nsh/crates/nsh-core/Cargo.toml
+        test -f buwiz-forms/nsh/Cargo.toml
+        git -C nsh log -1 --format='NSH at %H %s'
+
+    - name: Restore the Linux packages
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/apt-archives
+        key: nsh-linux-apt-${{ runner.arch }}-${{ hashFiles('buwiz-forms/.github/workflows/nsh.yml') }}
+        restore-keys: nsh-linux-apt-${{ runner.arch }}-
+
+    - name: Install GTK 4, WebKitGTK, GStreamer and the build tools
+      timeout-minutes: 45
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        mkdir -p ~/apt-archives/partial
+        sudo bash buwiz-forms/scripts/ci/apt_update.sh
+        sudo -E apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" \
+          build-essential pkg-config perl python3 \
+          clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+          gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+          libdbus-1-dev libssl-dev \
+          xvfb xauth at-spi2-core libxtst6
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+
+    - name: Install huacnlee/cargo
+      uses: ./nsh/.github/actions/cargo
+      with:
+        cache: buwiz-nsh-app
+        lockfiles: buwiz-forms/nsh/Cargo.lock
+
+    # `--no-run` is the compile proof: the app's crate and its test targets build with `agent`, which links the
+    # Linux plug crate at the pin in Cargo.lock. Running the data-plane tests stays in the complete NSH suite.
+    - name: Compile the app and Linux plug with the agent feature
+      working-directory: buwiz-forms
+      run: cargo test --locked --manifest-path nsh/Cargo.toml --features agent --no-run
+
   # Decides what this run does: scripts/ci_plan.py (docs/CI.md has the same
   # rules in words, and scripts/tests/test_ci_plan.py tests them). The lane
   # comes from the event, the systems from the branch name or the inputs, and
   # the suites from the files the change touches. nsh.yml's `plan` job runs the
   # same script.
   # A closed pull request and a draft plan nothing (ci_plan.py's first rule),
-  # and this `if` says the same so that no runner is taken for them: every job
-  # below needs this one, and the two that do not (legacy-guard, ci-ok) carry
-  # the same condition. scripts/tests/test_ci_plan.py checks all three.
+  # except that a labeled event reaches the planner: a ci:suite* label is a
+  # draft's explicit request, while any other label plans nothing. Closed
+  # pull requests and drafts without a label event take no runner.
+  # scripts/tests/test_ci_plan.py checks the condition here and below.
   changes:
-    if: ${{ (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
+    if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
       pull-requests: read
     outputs:
       lane: ${{ steps.decide.outputs.lane }}
+      docs_only: ${{ steps.decide.outputs.docs_only }}
+      legacy_in_changes: ${{ steps.decide.outputs.legacy_in_changes }}
+      legacy_guard: ${{ steps.decide.outputs.legacy_guard }}
       check: ${{ steps.decide.outputs.check }}
       check_matrix: ${{ steps.decide.outputs.check_matrix }}
       nsh_check: ${{ steps.decide.outputs.nsh_check }}
+      nsh_agent_check: ${{ steps.decide.outputs.nsh_agent_check }}
       scripts: ${{ steps.decide.outputs.scripts }}
       installer: ${{ steps.decide.outputs.installer }}
       validation: ${{ steps.decide.outputs.validation }}
@@ -507,6 +603,8 @@ jobs:
       env:
         EVENT: ${{ github.event_name }}
         ACTION: ${{ github.event.action }}
+        LABEL: ${{ github.event.label.name }}
+        PR_STATE: ${{ github.event.pull_request.state }}
         DRAFT: ${{ github.event.pull_request.draft }}
         REF: ${{ github.ref }}
         BRANCH: ${{ github.head_ref || github.ref_name }}
@@ -522,6 +620,16 @@ jobs:
         IN_SCREENS: ${{ inputs.screens }}
         IN_SHARD: ${{ inputs.shard }}
       run: python3 -I scripts/ci_plan.py
+
+    # A docs-only quick run needs no second runner for the legacy scans: this
+    # job already has the checkout and Python. Any other plan keeps the
+    # separate legacy-guard job below.
+    - name: Check for retired crate references
+      if: steps.decide.outputs.legacy_in_changes == 'true'
+      run: python3 -I scripts/check_no_legacy_desktop.py
+    - name: Check for retired shell references
+      if: steps.decide.outputs.legacy_in_changes == 'true'
+      run: python3 -I scripts/check_no_bir_shell.py
 
   # The Python script tests on their own, for changes `check` does not run for
   # (packaging, setup scripts, release workflows, the tests themselves). When
@@ -678,11 +786,15 @@ jobs:
   # Always-on guard: the painted desktop crate, the JS-shell crate and the
   # legacy app/ tree were retired, and nothing may bring their names or
   # paths back (not even docs).
-  # No `needs` on purpose: a docs-only PR must still fail if it brings an
-  # old name back. A test/** push skips it: the pull request's run checked the
-  # same commit. So does a closed or draft pull request (see `changes`).
+  # It needs only the planner, never one of the checks: a docs-only PR must
+  # still fail if it brings an old name back. For exactly that plan the scans
+  # run inside `changes` instead, so this job plans nothing and `ci-ok` is the
+  # only runner after the planner. A test/** push skips it: the pull request's
+  # run checked the same commit. A run the planner empties (a closed or draft
+  # pull request, or a non-suite label) skips it too.
   legacy-guard:
-    if: ${{ !startsWith(github.ref, 'refs/heads/test/') && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
+    needs: changes
+    if: ${{ !startsWith(github.ref, 'refs/heads/test/') && needs.changes.outputs.legacy_guard == 'true' && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -740,21 +852,26 @@ jobs:
   # cancelled run now reports no `ci-ok` at all.
   #
   # Not on a closed or draft pull request (see `changes`): it is skipped
-  # there, as every other job is, so no runner is taken. GitHub does not
-  # evaluate a skipped job's name, so that run adds no check named `ci-ok`
-  # (it lists one named after the expression below): a draft shows the
-  # required `ci-ok` as not reported yet, and a closed pull request keeps the
-  # `ci-ok` its last real run reported. Marking a draft ready starts the run
-  # whose `ci-ok` counts.
+  # there, as every other job is, so no runner is taken. A skipped job's name
+  # is still evaluated, so the expression below first reads the plan: lane
+  # `none` is always `label-ignored`, whatever spelling the event's label had,
+  # and cannot add a skipped check named `ci-ok` (which GitHub would treat as
+  # passing). A closed pull request's empty job is `closed`, and a draft's
+  # empty quick-check job is named `not-ready` for the same reason: after it
+  # is marked ready, no skipped `ci-ok` from the draft can satisfy the
+  # required check while the new run starts. A suite label is a draft's
+  # explicit request, so that run's real gate stays `ci-ok`.
   #
-  # Named `ci-ok` in the quick lane only. A test/** push or a manual or nightly
-  # run reports `tests-ok` instead, so a test lane on a pull request's commit
-  # never adds a second `ci-ok` result (green or red) to the one the required
-  # check reads.
+  # Named `ci-ok` on a pull request (including a suite-label run, whose quick
+  # checks are part of its work) and on a non-test push, but `label-ignored`
+  # on a lane-none empty run. A test/** push or a manual or nightly run
+  # reports `tests-ok` instead, so a test lane on a pull request's commit
+  # never adds a second `ci-ok` result to the required check. The separate
+  # tests-ok job below is the suite label's proof.
   ci-ok:
-    name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok' }}
-    needs: [ changes, check, nsh-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.action != 'closed' && !github.event.pull_request.draft)) }}
+    name: ${{ needs.changes.outputs.lane == 'none' && 'label-ignored' || github.event_name == 'pull_request' && github.event.action == 'closed' && 'closed' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all') && 'label-ignored' || (github.event_name == 'pull_request' && github.event.pull_request.draft && github.event.action != 'labeled') && 'not-ready' || ((github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}
+    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
+    if: ${{ !cancelled() && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
     steps:
     - name: Result
@@ -765,6 +882,8 @@ jobs:
         WANT_CHECK: ${{ needs.changes.outputs.check }}
         NSH_CHECK: ${{ needs.nsh-check.result }}
         WANT_NSH_CHECK: ${{ needs.changes.outputs.nsh_check }}
+        NSH_AGENT_CHECK: ${{ needs.nsh-agent-check.result }}
+        WANT_NSH_AGENT_CHECK: ${{ needs.changes.outputs.nsh_agent_check }}
         WINDOWS_SETUP: ${{ needs.windows-setup.result }}
         WANT_WINDOWS_SETUP: ${{ needs.changes.outputs.installer }}
         SCRIPTS: ${{ needs.scripts.result }}
@@ -773,10 +892,10 @@ jobs:
         V2: ${{ needs.validation-rules-v2.result }}
         WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
         LEGACY_GUARD: ${{ needs.legacy-guard.result }}
-        WANT_LEGACY_GUARD: ${{ !startsWith(github.ref, 'refs/heads/test/') }}
+        WANT_LEGACY_GUARD: ${{ needs.changes.outputs.legacy_guard }}
       run: |
         set -euo pipefail
-        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
+        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
         fail() { echo "::error::$1"; exit 1; }
         [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
         expect() {
@@ -788,6 +907,58 @@ jobs:
         }
         expect check "$CHECK" "$WANT_CHECK"
         expect nsh-check "$NSH_CHECK" "$WANT_NSH_CHECK"
+        expect nsh-agent-check "$NSH_AGENT_CHECK" "$WANT_NSH_AGENT_CHECK"
+        expect windows-setup "$WINDOWS_SETUP" "$WANT_WINDOWS_SETUP"
+        expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
+        expect validation-rules-v1 "$V1" "$WANT_VALIDATION"
+        expect validation-rules-v2 "$V2" "$WANT_VALIDATION"
+        expect legacy-guard "$LEGACY_GUARD" "$WANT_LEGACY_GUARD"
+
+  # The suite-label proof the batch gate reads. Unlike ci-ok it uses always(): tests-ok is not the required status,
+  # so a run replaced or cancelled before its suites finished may truthfully report red instead of vanishing. Its
+  # skipped job is still named, so the name first reads the plan: only the suite lane may call it `tests-ok`.
+  tests-ok:
+    name: ${{ needs.changes.outputs.lane != 'suite' && 'tests-not-requested' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all')) && 'tests-ok' || 'tests-not-requested' }}
+    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
+    if: ${{ always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+    - name: Result
+      shell: bash
+      env:
+        CHANGES: ${{ needs.changes.result }}
+        CHECK: ${{ needs.check.result }}
+        WANT_CHECK: ${{ needs.changes.outputs.check }}
+        NSH_CHECK: ${{ needs.nsh-check.result }}
+        WANT_NSH_CHECK: ${{ needs.changes.outputs.nsh_check }}
+        NSH_AGENT_CHECK: ${{ needs.nsh-agent-check.result }}
+        WANT_NSH_AGENT_CHECK: ${{ needs.changes.outputs.nsh_agent_check }}
+        WINDOWS_SETUP: ${{ needs.windows-setup.result }}
+        WANT_WINDOWS_SETUP: ${{ needs.changes.outputs.installer }}
+        SCRIPTS: ${{ needs.scripts.result }}
+        WANT_SCRIPTS: ${{ needs.changes.outputs.scripts }}
+        V1: ${{ needs.validation-rules-v1.result }}
+        V2: ${{ needs.validation-rules-v2.result }}
+        WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
+        LEGACY_GUARD: ${{ needs.legacy-guard.result }}
+        WANT_LEGACY_GUARD: ${{ needs.changes.outputs.legacy_guard }}
+      run: |
+        set -euo pipefail
+        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
+        fail() { echo "::error::$1"; exit 1; }
+        [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
+        expect() {
+          if [[ "$3" == true ]]; then
+            [[ "$2" == success ]] || fail "$1 was needed and finished: $2"
+          else
+            [[ "$2" == skipped || "$2" == success ]] || fail "$1 was not needed but finished: $2"
+          fi
+        }
+        expect check "$CHECK" "$WANT_CHECK"
+        expect nsh-check "$NSH_CHECK" "$WANT_NSH_CHECK"
+        expect nsh-agent-check "$NSH_AGENT_CHECK" "$WANT_NSH_AGENT_CHECK"
         expect windows-setup "$WINDOWS_SETUP" "$WANT_WINDOWS_SETUP"
         expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
         expect validation-rules-v1 "$V1" "$WANT_VALIDATION"

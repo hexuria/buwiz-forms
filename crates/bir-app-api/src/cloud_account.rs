@@ -295,11 +295,12 @@ fn verb_refresh(
     // could never have answered it.)
     let force = stored.access_expires_at_unix > now.saturating_add(30);
     // B1: the rejected access token goes in — the fast paths never answer it back.
-    match bir_core::account_session::access_token_rejecting(
+    match bir_core::account_session::access_token_rejecting_at_epoch(
         http,
         now,
         force,
         owner,
+        epoch,
         Some(&stored.access_token),
     ) {
         Ok((access, credential)) => {
@@ -1133,6 +1134,38 @@ mod tests {
         fn scripted() -> (std::sync::Arc<ScriptServer>, ScriptHttp) {
             let server = std::sync::Arc::new(ScriptServer::default());
             (server.clone(), ScriptHttp(server))
+        }
+
+        /// The verb carries the epoch it was spawned with into the keyed flight. A stale verb
+        /// never reaches the token server in the new session; if the flight re-read the current
+        /// epoch instead, this unscripted token call errors and the test is red.
+        #[test]
+        fn a_stale_verb_refresh_never_reaches_the_token_server() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            signed_in(|_file| {
+                let mut expired = stored("access-stale", "refresh-stale");
+                expired.access_expires_at_unix = 1_000;
+                save_stored(&expired).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                // Keep the credential itself current on disk: the test isolates the epoch half,
+                // so the stale verb must not enter the server-ended close path.
+                let mut current = expired.clone();
+                current.refresh_token = "refresh-current".into();
+                save_stored(&current).unwrap();
+                let stale_epoch = bir_core::session_epoch::current();
+                bir_core::session_epoch::set(stale_epoch + 1);
+                let now = cloud_account::unix_now();
+                let (server, mut http) = scripted();
+                let outcome = verb_refresh(&mut http, &expired, &owner, stale_epoch, now);
+                assert!(
+                    outcome.is_ok(),
+                    "the stale verb reached the unscripted token server: {outcome:?}"
+                );
+                assert!(server.tokens.lock().unwrap().is_empty());
+                assert!(server.me_bearers.lock().unwrap().is_empty());
+                bir_core::session_epoch::set(stale_epoch);
+            });
         }
 
         /// N1 (row 4): /me rejects the access token although it is valid by the clock — the

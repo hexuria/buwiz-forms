@@ -3,7 +3,7 @@
 //   moving | transient | transient-copy | moved | offered   (transient-copy: the copy-saved line after step 3 passed)
 import { host, mount } from "nsh";
 import "./theme/fonts";
-import { MovedNotOpenedPage, MovingPage, OfferPage, TransientPage } from "./screens/auth/migration";
+import { DeviceStorePage, MovedNotOpenedPage, MovingPage, OfferPage, TransientPage } from "./screens/auth/migration";
 import { View } from "nsh";
 
 const params = (host.params ?? {}) as { page?: string };
@@ -16,6 +16,7 @@ function Demo() {
       {page === "transient" ? <TransientPage copySaved={false} detail="Could not reach the device folder." /> : null}
       {page === "transient-copy" ? <TransientPage copySaved detail="The move was interrupted." /> : null}
       {page === "moved" ? <MovedNotOpenedPage detail="The database did not pass its check." /> : null}
+      {page === "device-store" ? <DeviceStorePage detail="the device store cannot be read" /> : null}
       {page === "offered" ? <OfferPage /> : null}
     </View>
   );

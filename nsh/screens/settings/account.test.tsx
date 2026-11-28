@@ -96,12 +96,12 @@ for (const { name, size } of SIZES) {
     expect(real.shows("id:settings-account-practice")).toBe(false);
   }, 60_000);
 
-  test(`${name}: who is signed in, the registered name and email with a pencil each, Sign out and Add account`, async () => {
+  test(`${name}: who is signed in, the registered name and email with a pencil each, Sign out and New tax profile`, async () => {
     const app = await openSettings(size, { solo: true }, "account");
     await app.waitFor(ready);
     expectTexts(app, ["Juana Santos", "juana@example.com", name === "phone" ? "Admin · this device" : "Admin · this computer", "Registered name", "TIN 000-123-453", "Email", "Printed on this profile's returns"]);
-    // "Just me" with a taxpayer already: no Add account.
-    expect(app.shows("id:settings-add-account")).toBe(false);
+    // "Just me" with a taxpayer already: the owner always starts a new tax profile, so the add control stays.
+    expect(app.shows("id:settings-add-account")).toBe(true);
     await app.press("id:settings-profile-email-edit");
     await app.waitFor("text:/view=profile/");
     expect(state(app)).toContain('view=profile {"edit":"address"}');

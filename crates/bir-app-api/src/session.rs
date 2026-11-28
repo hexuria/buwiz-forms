@@ -143,7 +143,7 @@ impl Phase {
 static BYPASSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Auth bypass (§9): a debug run unlocks with no owner, outside the machine. The one caller is
-/// prepare_launch's bypass branch (wired in commit 3). Marks the machine bypassed so
+/// prepare_launch's bypass branch. Marks the machine bypassed so
 /// check_invariants steps aside; the gate and practice writes are the machine's own, centralised
 /// here so nothing else writes them outside the machine.
 pub fn bypass_unlock() {
@@ -329,10 +329,10 @@ fn close_locked(
     // A held legacy scan is room-scoped state: no close — sign-out, server-ended, replacement —
     // may leave one behind for the next session to import from.
     crate::legacy_import_module::forget_scan();
-    // The owner-ending steps run when the owner really ends — and, until the machine is wired
-    // (commit 3), the phase never leaves SignedOut on the real path, so the cache the close just
-    // cleared is the evidence the owner existed at all. Without it the forget, the TIN invalidate
-    // and the listeners would never run on a real sign-out: the F2 safety regression.
+    // The owner-ending steps run when the owner really ends. When the phase never left
+    // SignedOut, the cache the close just cleared is the evidence the owner existed at all;
+    // without it the forget, the TIN invalidate and the listeners would never run on a real
+    // sign-out: the F2 safety regression.
     let owner_ended = match (&previous, kind) {
         (None, CloseKind::OwnerEnds) => cache_key.is_some(),
         (None, CloseKind::ReplacedBy(_)) => false,
@@ -757,7 +757,7 @@ pub fn close_if_owner(owner: &Owner, reason: Reason) -> bool {
             tracing::info!("close_if_owner: the phase is another owner's — nothing closes");
             return false;
         }
-        // (b): a torn read (write_secret_file is not atomic) is an Err — it is NOT an empty
+        // (b): a torn read (write_secret_file mid-write is impossible — the save is atomic — but an unreadable file) is an Err — it is NOT an empty
         // disk, and nothing closes on evidence nobody read. Only a clean None is empty.
         match disk {
             Ok(None) => {}
@@ -1042,8 +1042,7 @@ pub fn server_ended(
 }
 
 /// signed_in (§4, F8'): a sign-in's write — the persist under the account lock OUTSIDE SESSION,
-/// then one SESSION section setting the cache. Commit 3 adds the begin_open here;
-/// register_device_soon stays where it is until commit moves it into commit.
+/// then one SESSION section setting the cache and beginning the open together.
 pub fn signed_in(
     stored: &bir_core::cloud_account::StoredAccount,
     engine: u64,
@@ -1097,7 +1096,7 @@ pub fn signed_in(
 }
 
 use bir_core::cloud_account::StoredAccount;
-use bir_core::legacy_claim::{Claimant, LegacyClaim, NotHere, Outcome, Start};
+use bir_core::legacy_claim::{Claimant, Failure, LegacyClaim, NotHere, Outcome, Start};
 use bir_core::rooms::Layout;
 
 /// What the claim decided to open, opened outside SESSION after CLAIM_RUN lets go.
@@ -1124,6 +1123,22 @@ fn claimant_of(stored: &StoredAccount) -> Claimant {
     }
 }
 
+/// Test seam: force the next claim thread's open target to this room, as a decision-layer
+/// regression or a stale resumed record would. One-shot; never in a shipped build.
+#[cfg(test)]
+static FORCE_NEXT_OPEN_ROOM: Mutex<Option<bir_core::rooms::RoomId>> = Mutex::new(None);
+
+/// Test seam: the retry after an unusable device store is set aside is corrupted once, so the
+/// retry-failure classification is exercised at the production decision point.
+#[cfg(test)]
+static CORRUPT_STORE_RETRY: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(test)]
+pub(crate) fn force_next_open_room_for_test(room: bir_core::rooms::RoomId) {
+    *lock(&FORCE_NEXT_OPEN_ROOM) = Some(room);
+}
+
 /// The claim thread's work (§3 step 2): the claim, the target, the open — all outside SESSION —
 /// ending in the compare-and-swap commit. Only the commit writes anything visible (§5.9).
 fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64, guard: ClaimGuard) {
@@ -1132,13 +1147,27 @@ fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64, guard:
     if PANIC_CLAIM.swap(false, std::sync::atomic::Ordering::SeqCst) {
         panic!("the test's injected claim panic");
     }
-    let (target, spec) = {
+    #[allow(unused_mut)] // test-only force-next-open overrides below
+    let (mut target, mut spec) = {
         let _claim_run = lock(&CLAIM_RUN);
         hooks::at("claim.before_start");
         let decided = decide_claim(&owner);
         hooks::at("claim.after_claim");
         decided
     };
+    #[cfg(test)]
+    if let Some(room) = lock(&FORCE_NEXT_OPEN_ROOM).take() {
+        target = Target::Room {
+            room_id: room.clone(),
+            note: Note::None,
+            count_opened: false,
+        };
+        spec = Some(OpenSpec::Room {
+            path: Layout::here().room_database(&room),
+            room_id: room,
+            copy_saved: true,
+        });
+    }
     // CLAIM_RUN released: the open runs outside it and outside SESSION (§3 step 2) — migrations
     // and the checkpoint inside Database::open can take real time. A stale opener can only
     // migrate its own room's file: the same account's, idempotent, the evidence already passed.
@@ -1170,15 +1199,9 @@ fn open_spec(
             path,
             room_id,
             copy_saved,
-        }) => {
-            let layout = Layout::here();
-            if let Err(error) = layout.create_room_dir(room_id) {
-                return Err((*copy_saved, error.to_string()));
-            }
-            crate::open_room::open_path(path, Some(room_id))
-                .map(|handle| Some((handle, path.clone())))
-                .map_err(|error| (*copy_saved, error))
-        }
+        }) => crate::open_room::open_path(path, Some(room_id))
+            .map(|handle| Some((handle, path.clone())))
+            .map_err(|error| (*copy_saved, error)),
         Some(OpenSpec::LegacyInPlace { path }) => crate::open_room::open_path(path, None)
             .map(|handle| Some((handle, path.clone())))
             .map_err(|error| (false, error)),
@@ -1196,24 +1219,60 @@ enum LookupNote {
     Offered,
 }
 
-/// The account's room by the device-store lookup (rooms A1): known, or new and empty.
-fn lookup_target(layout: &Layout, owner: &Owner, note: LookupNote) -> (Target, Option<OpenSpec>) {
+/// The account's own room id by the device-store lookup (rooms A1): known, or the id a new empty
+/// room would get. Never the room of a claim record made for somebody else.
+fn lookup_room_id(layout: &Layout, owner: &Owner) -> Result<bir_core::rooms::RoomId, String> {
     let store = bir_core::rooms::DeviceStore::open(layout).ok();
     let stored = crate::cloud_account::load_stored().ok().flatten();
     let server_url = stored
         .as_ref()
         .map(|stored| stored.server_url.clone())
         .unwrap_or_default();
-    let lookup = bir_core::rooms::room_for(store.as_ref(), &server_url, &owner.user_id);
-    let room_id = match lookup {
-        Ok(bir_core::rooms::RoomLookup::Known(record)) => record.room_id,
-        Ok(bir_core::rooms::RoomLookup::New { room_id, .. }) => room_id,
+    let lookup = bir_core::rooms::room_for(store.as_ref(), &server_url, &owner.user_id)
+        .map_err(|error| error.to_string())?;
+    // N3: a real account's lookup-created room is a room even before its first write: write its
+    // row at once, so a later locked legacy file and headless serve can never treat the install as
+    // roomless. Practice lookup rooms deliberately write no row; they must not change what a real
+    // account opens.
+    if let bir_core::rooms::RoomLookup::New { room_id, origin } = &lookup
+        && !owner.practice
+        && let Some(store) = store.as_ref()
+    {
+        let record = bir_core::rooms::RoomRecord {
+            room_id: room_id.clone(),
+            origin: origin.clone(),
+            user_id: owner.user_id.clone(),
+            email: stored
+                .as_ref()
+                .filter(|stored| stored.user_id == owner.user_id)
+                .and_then(|stored| stored.email.clone()),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            from_legacy: false,
+        };
+        if let Err(error) = store.add_room(&record) {
+            let already = store
+                .find_room(origin, &owner.user_id)
+                .ok()
+                .flatten()
+                .is_some_and(|existing| existing.room_id == *room_id);
+            if !already {
+                return Err(error.to_string());
+            }
+        }
+    }
+    Ok(lookup.room_id().clone())
+}
+
+/// The account's room by the device-store lookup (rooms A1): known, or new and empty.
+fn lookup_target(layout: &Layout, owner: &Owner, note: LookupNote) -> (Target, Option<OpenSpec>) {
+    let room_id = match lookup_room_id(layout, owner) {
+        Ok(room_id) => room_id,
         Err(error) => {
             tracing::warn!("room lookup failed: {error}");
             return (
                 Target::Blocked(Blocked::Transient {
                     copy_saved: false,
-                    detail: error.to_string(),
+                    detail: error,
                 }),
                 None,
             );
@@ -1238,6 +1297,60 @@ fn lookup_target(layout: &Layout, owner: &Owner, note: LookupNote) -> (Target, O
             copy_saved: false,
         }),
     )
+}
+
+/// Whether the claim record a finished resume acted on belongs to `owner`. The record's owner
+/// fields decide when they are there; otherwise the room is compared with the owner's own lookup.
+/// A record that cannot be tied to the owner is never a licence to open its room.
+fn finished_record_is_owner(
+    layout: &Layout,
+    owner: &Owner,
+    record: Option<&bir_core::legacy_claim::Record>,
+    outcome_room: Option<&bir_core::rooms::RoomId>,
+) -> bool {
+    let Some(record) = record else {
+        return false;
+    };
+    if let (Some(origin), Some(user_id)) = (&record.origin, &record.user_id) {
+        return origin == &owner.origin && user_id == &owner.user_id;
+    }
+    let room = record
+        .room
+        .as_deref()
+        .and_then(bir_core::rooms::RoomId::parse)
+        .or_else(|| outcome_room.cloned());
+    let Some(room) = room else {
+        return false;
+    };
+    lookup_room_id(layout, owner)
+        .map(|owner_room| owner_room == room)
+        .unwrap_or(false)
+}
+
+/// What a Finished start leaves open. A resume may finish the claim of an account that signed
+/// out since the move; that finish stands in the claim record, but the account signing in now
+/// opens only its own room.
+fn finished_outcome_target(
+    layout: &Layout,
+    owner: &Owner,
+    outcome: Outcome,
+    record: Option<&bir_core::legacy_claim::Record>,
+) -> (Target, Option<OpenSpec>) {
+    let outcome_room = match &outcome {
+        Outcome::Done { room, .. } => Some(room),
+        Outcome::MovedNotOpened(moved) => Some(&moved.room),
+        _ => None,
+    };
+    if matches!(outcome, Outcome::Permanent(_))
+        || finished_record_is_owner(layout, owner, record, outcome_room)
+    {
+        outcome_target(layout, owner, outcome)
+    } else {
+        tracing::warn!(
+            "a resumed claim finished for another account; opening the sign-in's own room"
+        );
+        lookup_target(layout, owner, LookupNote::None)
+    }
 }
 
 /// What an outcome of the claim leaves open (§A.3.4): Done is the claimer's room; transient opens
@@ -1281,8 +1394,8 @@ fn outcome_target(layout: &Layout, owner: &Owner, outcome: Outcome) -> (Target, 
     }
 }
 
-/// §A.3.7 legacy mode, and the store-error fallback with a legacy file present (F11's arm, kept
-/// until commit 5 reclassifies): the legacy file in place is the slot, writing nothing beside it.
+/// §A.3.7 legacy mode, and the store-error fallback with a legacy file present: the legacy file
+/// in place is the slot, writing nothing beside it.
 fn legacy_in_place(layout: &Layout) -> (Target, Option<OpenSpec>) {
     (
         Target::Legacy,
@@ -1292,8 +1405,75 @@ fn legacy_in_place(layout: &Layout) -> (Target, Option<OpenSpec>) {
     )
 }
 
-/// The claim, as room_session computed it before the machine (§12.2 item 3: today's arms; §7's
-/// reclassification is commit 5). Everything here runs on the claim thread, outside SESSION.
+/// A locked legacy file that cannot be claimed in this version, said without any account's data.
+const LOCKED_LEGACY_LATER: &str = "A locked older database is still on this device. Moving locked files comes in a later version.";
+
+/// Whether a real account's room exists, by the one rooms-layout rule: store rows or the claim
+/// record when the store can be read, never mere directory entries.
+fn non_practice_rooms_present(layout: &Layout) -> bool {
+    layout.non_practice_rooms_exist()
+}
+
+/// L3/B1(a): the device store's own unusable cases (lost, unreadable, newer) are the store-error
+/// page; I/O and SQLite moments — busy and locked included — are transient. Neither opens the
+/// legacy file in place; the room-open evidence rule survives for the process.
+fn claim_open_error_target(error: &bir_core::rooms::DeviceStoreError) -> Target {
+    // The log receives the full error, path included; the page never does — the path contains the
+    // OS user's folder. SQLite and I/O errors carry no path of their own.
+    let detail = match error {
+        bir_core::rooms::DeviceStoreError::Lost(_) => "the device store is missing".to_owned(),
+        bir_core::rooms::DeviceStoreError::Unreadable { .. } => {
+            "the device store cannot be read".to_owned()
+        }
+        bir_core::rooms::DeviceStoreError::Newer { .. } => {
+            "the device store was written by a newer version".to_owned()
+        }
+        bir_core::rooms::DeviceStoreError::Sqlite(_) | bir_core::rooms::DeviceStoreError::Io(_) => {
+            error.to_string()
+        }
+    };
+    if error.is_unusable() {
+        Target::Blocked(Blocked::DeviceStore { detail })
+    } else {
+        Target::Blocked(Blocked::Transient {
+            copy_saved: false,
+            detail,
+        })
+    }
+}
+
+/// B1(b): legacy mode in place is only for a locked install with no rooms. Once any room exists,
+/// the signed-in account's own room opens and the locked file is only a note for later.
+fn locked_legacy_target(layout: &Layout, owner: &Owner) -> (Target, Option<OpenSpec>) {
+    if non_practice_rooms_present(layout) {
+        lookup_target(
+            layout,
+            owner,
+            LookupNote::Permanent {
+                detail: LOCKED_LEGACY_LATER.to_owned(),
+            },
+        )
+    } else {
+        legacy_in_place(layout)
+    }
+}
+
+/// A migration-record read failure for the page: the OS error and any path stay in the log.
+fn migration_record_read_failure(
+    error: &bir_core::rooms::DeviceStoreError,
+) -> (Target, Option<OpenSpec>) {
+    tracing::warn!("migration record not read: {error}");
+    (
+        Target::Blocked(Blocked::Transient {
+            copy_saved: false,
+            detail: "the migration record cannot be read".into(),
+        }),
+        None,
+    )
+}
+
+/// The claim decision (§12.2 item 3, with §7's store-error classification). Everything here runs
+/// on the claim thread, outside SESSION.
 fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
     let layout = Layout::here();
     let Some(stored) = crate::cloud_account::load_stored().ok().flatten() else {
@@ -1323,21 +1503,63 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
         );
     }
     let who = claimant_of(&stored);
-    let claim = match LegacyClaim::here() {
+    let mut opened = LegacyClaim::here();
+    if let Err(error) = &opened
+        && error.is_unusable()
+        && !layout.has_rooms()
+    {
+        let legacy_present = layout.legacy_database().is_file();
+        let legacy_fallback = |detail: &str| {
+            if legacy_present && !owner.practice {
+                legacy_in_place(&layout)
+            } else {
+                (
+                    Target::Blocked(Blocked::Transient {
+                        copy_saved: false,
+                        detail: detail.to_owned(),
+                    }),
+                    None,
+                )
+            }
+        };
+        match bir_core::rooms::set_aside_unusable(&layout) {
+            Ok(Some(aside)) => {
+                tracing::warn!(aside = %aside.display(), "unusable device store set aside");
+                opened = LegacyClaim::here();
+                #[cfg(test)]
+                if CORRUPT_STORE_RETRY.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                    drop(opened);
+                    std::fs::write(layout.device_db(), b"still not sqlite").unwrap();
+                    opened = LegacyClaim::here();
+                }
+                if opened.is_err() {
+                    tracing::warn!("legacy claim still not opened after the store was set aside");
+                    return (
+                        Target::Blocked(Blocked::Transient {
+                            copy_saved: false,
+                            detail:
+                                "the device store still cannot be opened after it was set aside"
+                                    .to_owned(),
+                        }),
+                        None,
+                    );
+                }
+            }
+            Ok(None) if legacy_present => {
+                return legacy_fallback("the device store cannot be used");
+            }
+            Ok(None) => {}
+            Err(set_aside) => {
+                tracing::warn!("unusable device store not set aside: {set_aside}");
+                return legacy_fallback("the device store could not be set aside");
+            }
+        }
+    }
+    let claim = match opened {
         Ok(claim) => claim,
         Err(error) => {
-            // F11, narrowed (kept until commit 5): with a legacy file present, an empty room
-            // beside it is forbidden, so the file opens in place as the one slot, writing nothing
-            // beside it. A practice account is never given the legacy file.
             tracing::warn!("legacy claim not opened ({error})");
-            bir_core::legacy_claim::note_claim_impossible(layout.device_dir());
-            if layout.legacy_database().is_file() && !owner.practice {
-                tracing::warn!(
-                    "legacy file present and the claim store unusable: legacy mode in place"
-                );
-                return legacy_in_place(&layout);
-            }
-            return lookup_target(&layout, owner, LookupNote::None);
+            return (claim_open_error_target(&error), None);
         }
     };
     // F8: the registry is checked before start(); the refusal applies only when the probe says
@@ -1387,10 +1609,18 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
             // no rooms.
             (Target::NotHere(PathBuf::new()), Some(OpenSpec::NamedFile))
         }
-        Start::Locked(_locked) => legacy_in_place(&layout),
-        Start::Finished(outcome) => outcome_target(&layout, owner, outcome),
+        Start::Locked(_locked) => locked_legacy_target(&layout, owner),
+        Start::Finished(outcome) => {
+            let record = match claim.record() {
+                Ok(record) => record,
+                Err(error) => return migration_record_read_failure(&error),
+            };
+            finished_outcome_target(&layout, owner, outcome, record.as_ref())
+        }
         Start::Offer(offer) => match offer {
-            bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => legacy_in_place(&layout),
+            bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => {
+                locked_legacy_target(&layout, owner)
+            }
             bir_core::legacy_claim::OfferStart::Open(_open_offer) => {
                 // The offer waits for the page; the account's room opens, never merged (§A.3.6).
                 // X2: never to a practice account — the store-review account is nobody's heir.
@@ -1403,6 +1633,26 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
                 lookup_target(&layout, owner, note)
             }
         },
+        Start::Failed(Failure::Transient(transient)) => {
+            let record = match claim.record() {
+                Ok(record) => record,
+                Err(error) => return migration_record_read_failure(&error),
+            };
+            let foreign_unfinished = record.as_ref().is_some_and(|record| {
+                !matches!(
+                    record.step,
+                    bir_core::legacy_claim::Step::Done | bir_core::legacy_claim::Step::Closed
+                ) && !finished_record_is_owner(&layout, owner, Some(record), None)
+            });
+            if foreign_unfinished && transient.record_room {
+                tracing::warn!(
+                    "finishing another account's move failed transiently; opening the sign-in's own room"
+                );
+                lookup_target(&layout, owner, LookupNote::None)
+            } else {
+                outcome_target(&layout, owner, Outcome::Transient(transient))
+            }
+        }
         Start::Failed(failure) => outcome_target(&layout, owner, Outcome::from(failure)),
     }
 }
@@ -1412,8 +1662,7 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
 /// stored sign-in is re-read inside the lock order SESSION → account_session::lock() (I2); a
 /// mismatch abandons too. On a room or legacy target the gate unlocks LAST, after everything
 /// else is in the phase (I1).
-// Used by the machine's tests now; the claim thread — production code — calls it from commit 3,
-// which is why it is pub(crate) and not pub (F18).
+// Used by the machine's tests and by the production claim thread; pub(crate), never public (F18).
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Database>>, PathBuf)>) {
     hooks::at("commit.enter");
@@ -1560,6 +1809,21 @@ fn stored_owner_key() -> Option<(String, String)> {
 /// need a machine room without driving a whole claim. The open is the machine's in everything
 /// after: snapshot reads it, close ends it, the generation is the machine's own.
 #[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
+pub fn swap_room_for_test(handle: Arc<Mutex<Database>>, path: std::path::PathBuf, generation: u64) {
+    let mut session = locked();
+    match &mut session.phase {
+        Phase::Open { room, .. } | Phase::Legacy { room, .. } => {
+            room.handle = handle;
+            room.path = path.clone();
+            room.generation = generation;
+            room.room_id = None;
+        }
+        _ => panic!("no open room to swap"),
+    }
+    bir_core::db::set_open_room_database(Some(path));
+}
+
 pub fn open_legacy_in_place_for_test(
     layout: &bir_core::rooms::Layout,
     user_id: String,
@@ -1592,8 +1856,8 @@ pub fn open_legacy_in_place_for_test(
     Ok((handle, generation))
 }
 
-/// quit (§8's state part): the epoch bumps, the phase is terminal, the gate locks. The release
-/// order — worker, Arc holders, checkpoint, registry, guards — lands in commit 6.
+/// quit (§8's state part): the epoch bumps, the phase is terminal, the gate locks. The full
+/// release order — worker, Arc holders, checkpoint, registry, guards — is still pending.
 pub fn quit() {
     let dropped = {
         let mut session = locked();
@@ -1602,7 +1866,7 @@ pub fn quit() {
         crate::account_gate::set_unlocked(false);
         bir_core::transport::set_practice_account(false);
         // F6: the phase's room comes out under the lock and drops after it — the database's
-        // close never holds SESSION. (Commit 6 hands the room to the release step instead.)
+        // close never holds SESSION. (The pending release step takes ownership of the room instead.)
         match std::mem::replace(&mut session.phase, Phase::Quitting) {
             Phase::Open { room, .. } | Phase::Legacy { room, .. } => Some(room),
             _ => None,
@@ -1614,10 +1878,9 @@ pub fn quit() {
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-/// §5.8 step 4's mechanism (the import's reinstall, as much of it as commit 2 needs): under
-/// SESSION, CAS on the epoch — if the session moved on since the import started, the new handle
-/// installs nothing and the caller is told. Within the epoch the room is replaced with a new
-/// generation. The importing flag and the pause dance are commit 4's.
+/// §5.8 step 4's mechanism: under SESSION, CAS on the epoch — if the session moved on since the
+/// import started, the new handle installs nothing and the caller is told. Within the epoch the
+/// room is replaced with a new generation.
 pub fn reinstall_room(epoch: u64, handle: Arc<Mutex<Database>>, path: PathBuf) -> bool {
     let mut session = locked();
     if session.epoch != epoch {
@@ -1655,8 +1918,7 @@ pub enum MigrationState {
     MovedNotOpened {
         detail: String,
     },
-    /// The device store cannot be read and rooms exist (§7, wired in commit 5): the support
-    /// page plus Try again.
+    /// The device store cannot be read and rooms exist (§7): the support page plus Try again.
     DeviceStore {
         detail: String,
     },
@@ -1701,9 +1963,8 @@ pub fn migration_state() -> Option<MigrationState> {
     }
 }
 
-/// The offer's "Not now", and its answered-in-success end (§5.11's note clearing, as much as
-/// commit 2 needs for the verb to run against the machine): the note leaves the phase under
-/// SESSION. The full boundary — the epoch binding, the room lock — is commit 4's.
+/// The offer's "Not now", and its answered-in-success end (§5.11): the note leaves the phase
+/// under SESSION.
 pub fn clear_offer_note() {
     let mut session = locked();
     if let Phase::Open { note, .. } = &mut session.phase {
@@ -1806,6 +2067,18 @@ pub fn check_invariants() -> Result<(), String> {
         breaches.push(format!(
             "I2: a {:?} slot is open for an owner who is not the stored sign-in",
             snap.phase_kind
+        ));
+    }
+    // I3: the room open under an account phase is that account's own room, never the room a
+    // resumed claim record names for another sign-in.
+    if open_kind
+        && let Some(owner) = &snap.owner
+        && let Some((_, _, Some(room_id), _)) = &snap.room
+        && room_id != &bir_core::rooms::room_id_for(&owner.origin, &owner.user_id)
+    {
+        breaches.push(format!(
+            "I3: room {room_id} is open for {} but is not that owner's room",
+            owner.user_id
         ));
     }
     // I4: no room is open while the claim's move evidence for it is pending.
@@ -2022,6 +2295,9 @@ pub(crate) fn reset_for_tests() {
     // process-wide, so every later check_invariants in the process would step aside. Tests
     // never MEAN to set it: reset it here, with the rest of the machine's process state.
     BYPASSED.store(false, std::sync::atomic::Ordering::SeqCst);
+    CORRUPT_STORE_RETRY.store(false, std::sync::atomic::Ordering::SeqCst);
+    lock(&FORCE_NEXT_OPEN_ROOM).take();
+    bir_core::legacy_claim::clear_fail_next_legacy_lock_for_test();
     let dropped = {
         let mut session = locked();
         let outcome = close_locked(&mut session, &CloseKind::OwnerEnds, None);
@@ -2613,6 +2889,962 @@ mod tests {
         .unwrap();
     }
 
+    fn sha256_file(path: &std::path::Path) -> String {
+        use sha2::Digest;
+        let mut file = std::fs::File::open(path).unwrap();
+        let mut hash = sha2::Sha256::new();
+        std::io::copy(&mut file, &mut hash).unwrap();
+        hash.finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    /// A crash image of A's move already in A's room, with the legacy name gone: a valid closed
+    /// database copied there, and A's claim record at `step`.
+    fn write_moved_claim_image(
+        scratch: &Scratch,
+        owner: &Owner,
+        step: bir_core::legacy_claim::Step,
+    ) -> (bir_core::rooms::RoomId, std::path::PathBuf) {
+        let legacy = scratch.layout.legacy_database();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        drop(store);
+        Database::open(&legacy).unwrap().close().unwrap();
+        let room_id = bir_core::rooms::room_id_for(&owner.origin, &owner.user_id);
+        let room_file = scratch.layout.room_database(&room_id);
+        std::fs::create_dir_all(room_file.parent().unwrap()).unwrap();
+        std::fs::copy(&legacy, &room_file).unwrap();
+        std::fs::remove_file(&legacy).unwrap();
+        let raw_sha256 = sha256_file(&room_file);
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        let record = bir_core::legacy_claim::Record {
+            stamp: "test-stamp".into(),
+            room: Some(room_id.as_str().to_owned()),
+            origin: Some(owner.origin.clone()),
+            user_id: Some(owner.user_id.clone()),
+            email: Some(format!("{}@example.test", owner.user_id)),
+            unlocked_by: Some(bir_core::legacy_claim::UnlockedBy::NoLock),
+            empty_room_aside: false,
+            empty_room_file: None,
+            os_login_used: false,
+            raw_user_version: None,
+            raw_sha256: Some(raw_sha256),
+            zip: None,
+            zip_sha256: None,
+            hash_checked: false,
+            open_checked: false,
+            step,
+            failure: None,
+            done_at: None,
+            launch_days: vec![],
+            room_opened_since: false,
+            zip_deleted_at: None,
+            legacy_file: None,
+            owner_pin_phc: None,
+        };
+        conn.execute(
+            "INSERT OR REPLACE INTO migration (key, value) VALUES ('legacy', ?1)",
+            rusqlite::params![serde_json::to_string(&record).unwrap()],
+        )
+        .unwrap();
+        (room_id, room_file)
+    }
+
+    /// Put A's moved claim into the link window with a returned WAL: the room file and the
+    /// legacy path are one file, and finishing A's unlink fails transiently.
+    fn a_move_stuck_in_the_link_window(
+        scratch: &Scratch,
+        owner_a: &Owner,
+    ) -> bir_core::rooms::RoomId {
+        let (room_a, room_file) =
+            write_moved_claim_image(scratch, owner_a, bir_core::legacy_claim::Step::Moved);
+        let legacy = scratch.layout.legacy_database();
+        std::fs::hard_link(&room_file, &legacy).unwrap();
+        std::fs::write(legacy.with_extension("db-wal"), b"wal").unwrap();
+        room_a
+    }
+
+    fn add_legacy_taxpayer(db: &Database, root: &str, name: &str) {
+        db.create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+            tin_root: root.into(),
+            name: name.into(),
+            taxpayer_type: bir_core::profile::TaxpayerType::Corporation,
+            birth_date: None,
+            head_office: bir_core::tax_profile::BranchFacts {
+                rdo_code: "040".into(),
+                registered_address: "1 Example Street, Pasig".into(),
+                zip_code: "1600".into(),
+                phone: "0280000000".into(),
+                email: "office@example.com".into(),
+            },
+        })
+        .unwrap();
+    }
+
+    /// A legacy install locked by its old help-desk PIN, written with the app's own schema and
+    /// carrying one taxpayer with one Queued return.
+    fn locked_legacy_file(scratch: &Scratch) {
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        add_legacy_taxpayer(&db, "123456788", "Owner Trading");
+        db.set_setting("access_mode", "helpdesk").unwrap();
+        db.set_setting("app_lock_pin_hash", &bir_core::crypto::hash_pin("1357"))
+            .unwrap();
+        db.close().unwrap();
+        let conn = rusqlite::Connection::open(scratch.layout.legacy_database()).unwrap();
+        conn.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+             VALUES ('12345678800000', '2551Q', 2026, 1, 'Queued', ?1)",
+            [
+                serde_json::to_string(&serde_json::json!({ "note": "queued in the legacy file" }))
+                    .unwrap(),
+            ],
+        )
+        .unwrap();
+    }
+
+    /// A Done claim of A plus a byte-for-byte reappearance of the PIN-locked legacy file. A's
+    /// room already exists and carries one valid Queued 2551Q; the reappeared file carries its own
+    /// older Queued row, so a wrong legacy-in-place or import path would make a second copy.
+    fn locked_reappeared_install(scratch: &Scratch, owner: &Owner) -> bir_core::rooms::RoomId {
+        locked_legacy_file(scratch);
+        create_device_store(scratch);
+        let room_id = bir_core::rooms::room_id_for(&owner.origin, &owner.user_id);
+        let room_file = scratch.layout.room_database(&room_id);
+        std::fs::create_dir_all(room_file.parent().unwrap()).unwrap();
+        let room_db = Database::open(&room_file).unwrap();
+        add_legacy_taxpayer(&room_db, "123456788", "Owner Trading");
+        let profile = room_db.get_profile("12345678800000").unwrap().unwrap();
+        let mut effective_profile = profile.clone();
+        effective_profile.ensure_profile_version_ledger();
+        let mut draft = bir_core::forms::Form2551QDraft::new_from_effective_profile(
+            &effective_profile,
+            2026,
+            1,
+        );
+        draft.item_13_election = bir_core::forms::form_2551q::Item13Election::NotApplicable;
+        draft.transition_to_queued().unwrap();
+        room_db
+            .save_queued_2551q_draft_and_election(&draft)
+            .unwrap();
+        drop(room_db);
+
+        let raw_sha256 = sha256_file(&scratch.layout.legacy_database());
+        let record = bir_core::legacy_claim::Record {
+            stamp: "test-stamp".into(),
+            room: Some(room_id.as_str().to_owned()),
+            origin: Some(owner.origin.clone()),
+            user_id: Some(owner.user_id.clone()),
+            email: Some(format!("{}@example.test", owner.user_id)),
+            unlocked_by: Some(bir_core::legacy_claim::UnlockedBy::NoLock),
+            raw_sha256: Some(raw_sha256),
+            step: bir_core::legacy_claim::Step::Done,
+            done_at: Some("test-done".into()),
+            ..bir_core::legacy_claim::Record::default()
+        };
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO migration (key, value) VALUES ('legacy', ?1)",
+            rusqlite::params![serde_json::to_string(&record).unwrap()],
+        )
+        .unwrap();
+        room_id
+    }
+
+    fn create_device_store(scratch: &Scratch) {
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        drop(bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap());
+    }
+
+    fn claim_record(scratch: &Scratch) -> bir_core::legacy_claim::Record {
+        bir_core::legacy_claim::LegacyClaim::at(scratch.layout.clone())
+            .unwrap()
+            .record()
+            .unwrap()
+            .expect("a claim record")
+    }
+
+    /// L1: a crash between A's move and Done is finished by B's sign-in, but B opens B's room —
+    /// never A's. The claim's finish stands in its record.
+    #[test]
+    fn l1_a_crash_after_as_move_finished_by_b_opens_bs_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner_b.origin, &owner_b.user_id),
+            "B's sign-in opened the room the record's move belonged to"
+        );
+        assert_eq!(
+            claim_record(&scratch).step,
+            bir_core::legacy_claim::Step::Done,
+            "A's finish did not stand"
+        );
+    }
+
+    /// L1: the transient-after-move shape. A's finish is still stuck on a transient store write when B
+    /// signs in; that transient is A's claim's business, not a reason to keep B out of B's room.
+    #[test]
+    fn l1_a_transient_after_as_move_under_b_opens_bs_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        bir_core::legacy_claim::fail_next_device_rows_write_for_test();
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner_b.origin, &owner_b.user_id),
+            "A's unfinished transient must not block or replace B's own room"
+        );
+        assert!(
+            matches!(
+                claim_record(&scratch).failure,
+                Some(bir_core::legacy_claim::RecordedFailure::Transient { .. })
+            ),
+            "A's unfinished transient was not recorded"
+        );
+    }
+
+    /// N1/N4: when finishing A's move keeps failing as an Err(Failure::Transient), B is not
+    /// blocked in a loop and is told nothing about A's copy: B opens B's own room with no migration
+    /// state at all.
+    #[test]
+    fn n1_a_transient_error_finishing_as_move_still_lets_b_open_bs_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        a_move_stuck_in_the_link_window(&scratch, &owner_a);
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "B stayed blocked on A's failing move"
+        );
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner_b.origin, &owner_b.user_id),
+            "B did not open B's own room"
+        );
+        assert!(
+            migration_state().is_none(),
+            "B was shown another account's move: {:?}",
+            migration_state()
+        );
+    }
+
+    /// L1 through the literal public sequence: A is signed in and opens, A signs out, then B's
+    /// signed_in meets A's moved record. B still opens only B's room.
+    #[test]
+    fn l1_literal_sign_out_then_signed_in_never_opens_as_room_for_b() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        sign_out();
+        a_move_stuck_in_the_link_window(&scratch, &owner_a);
+        let stored_b = bir_core::cloud_account::StoredAccount {
+            server_url: "https://buwiz.example.test".into(),
+            access_token: "access-b".into(),
+            refresh_token: "refresh-b".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-b".into(),
+            email: Some("user-b@example.test".into()),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        permit_claim_threads();
+        signed_in(&stored_b, 1).expect("B's sign-in");
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the literal sign_out → signed_in sequence left B blocked"
+        );
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for("https://buwiz.example.test", "user-b"),
+            "B opened A's room through the literal sequence"
+        );
+    }
+
+    /// N3: the open path does not trust a device-store row. Even when the row says B's room is
+    /// A's id, opening that id for B is refused and no room is installed.
+    #[test]
+    fn n3_a_store_row_naming_another_room_for_the_owner_is_refused() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        drop(store);
+        let owner_b = seed_stored("user-b", false);
+        let room_a = bir_core::rooms::room_id_for(&owner_b.origin, "user-a");
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        conn.execute(
+            "INSERT INTO rooms (room_id, origin, user_id, email, created_at, from_legacy) VALUES (?1, ?2, ?3, NULL, 'now', 0)",
+            rusqlite::params![room_a.as_str(), owner_b.origin, owner_b.user_id],
+        )
+        .unwrap();
+        drop(conn);
+        permit_claim_threads();
+        begin_open(owner_b, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        assert!(
+            snapshot().room.is_none(),
+            "the store row's foreign room opened"
+        );
+    }
+
+    /// L3/B1(a): a store error while the legacy file is present is a blocked migration state,
+    /// never legacy-in-place. The room-open evidence rule still demands a real claim start in
+    /// this process.
+    #[test]
+    fn b1_a_store_error_with_legacy_blocks_instead_of_opening_legacy_in_place() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        Database::open(scratch.layout.legacy_database())
+            .unwrap()
+            .close()
+            .unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        std::fs::create_dir_all(scratch.layout.rooms_dir()).unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        match migration_state() {
+            Some(MigrationState::DeviceStore { detail }) => {
+                assert!(detail.contains("device store"), "{detail}")
+            }
+            other => panic!("not a device-store block: {other:?}"),
+        }
+        let room = bir_core::rooms::room_id_for(&owner.origin, &owner.user_id);
+        let refusal = bir_core::legacy_claim::room_open_allowed(&scratch.layout, &room)
+            .expect_err("the room-open evidence rule was switched off");
+        assert!(refusal.contains("start() has not run"), "{refusal}");
+    }
+
+    /// B1(a)'s transient half: busy and locked SQLite answers classify as Transient, never as a
+    /// dead store.
+    #[test]
+    fn b1_busy_and_locked_store_errors_are_transient() {
+        for code in [5, 6] {
+            let error = bir_core::rooms::DeviceStoreError::Sqlite(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(code),
+                Some("database is busy or locked".to_owned()),
+            ));
+            assert!(
+                matches!(
+                    claim_open_error_target(&error),
+                    Target::Blocked(Blocked::Transient { .. })
+                ),
+                "SQLite code {code} is not transient"
+            );
+        }
+    }
+
+    /// B1(b): with rooms present, a locked legacy file is only a note in the account's own room —
+    /// never the legacy file opened instead of that room.
+    #[test]
+    fn b1_a_locked_legacy_file_with_rooms_opens_the_accounts_room_with_a_note() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        let owner = seed_stored("user-a", false);
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        store
+            .add_room(&bir_core::rooms::RoomRecord {
+                room_id: bir_core::rooms::room_id_for(&owner.origin, "another-user"),
+                origin: owner.origin.clone(),
+                user_id: "another-user".to_owned(),
+                email: None,
+                created_at: "2026-11-28T00:00:00+00:00".to_owned(),
+                from_legacy: false,
+            })
+            .unwrap();
+        drop(store);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the locked legacy file opened in place"
+        );
+        let (_, _, room_id, _) = snapshot().room.expect("the account's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner.origin, &owner.user_id),
+            "the open room is not the signed-in account's own"
+        );
+        match migration_state() {
+            Some(MigrationState::Permanent { detail }) => {
+                assert!(
+                    detail.contains("Moving locked files comes in a later version"),
+                    "{detail}"
+                )
+            }
+            other => panic!("no locked-file note: {other:?}"),
+        }
+    }
+
+    /// Positive control for legacy mode: with no rooms at all, the same locked install still opens
+    /// the legacy file in place.
+    #[test]
+    fn b1_a_locked_legacy_file_without_rooms_still_opens_legacy_in_place() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Legacy);
+    }
+
+    /// LB1: a practice account's lookup-created empty room is not a real account's room. The next
+    /// real sign-in on the same locked install still opens the legacy file, Queued return and all.
+    #[test]
+    fn lb1_a_practice_lookup_room_does_not_hide_the_locked_legacy_file() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        let practice = seed_stored("practice-user", true);
+        permit_claim_threads();
+        begin_open(practice, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        assert!(
+            scratch.layout.rooms_dir().is_dir(),
+            "positive control: the practice lookup made a room directory"
+        );
+        sign_out();
+        join_claim_threads();
+
+        let owner = seed_stored("user-a", false);
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Legacy,
+            "the practice room hid the locked legacy install"
+        );
+        let (handle, _, _, path) = snapshot().room.expect("legacy mode's handle");
+        assert_eq!(path, scratch.layout.legacy_database());
+        assert_eq!(
+            handle.lock().unwrap().count_queued_drafts().unwrap(),
+            1,
+            "the legacy file's Queued return is the file that opened"
+        );
+    }
+
+    /// LB1's noise half: a stray entry inside rooms/ is not a room either.
+    #[test]
+    fn lb1_a_stray_entry_in_rooms_does_not_hide_the_locked_legacy_file() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        std::fs::create_dir_all(scratch.layout.rooms_dir()).unwrap();
+        std::fs::write(scratch.layout.rooms_dir().join(".DS_Store"), b"noise").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Legacy,
+            "a stray rooms/ entry hid the locked legacy install"
+        );
+    }
+
+    /// N3: a real account's lookup-created room writes its store row at once, so later routing
+    /// knows the install has a non-practice room even before the room file has user data.
+    #[test]
+    fn n3_a_lookup_created_non_practice_room_writes_its_store_row() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        let row = store
+            .find_room(&owner.origin, &owner.user_id)
+            .unwrap()
+            .expect("the lookup-created real room wrote no row");
+        assert_eq!(
+            row.room_id,
+            bir_core::rooms::room_id_for(&owner.origin, &owner.user_id)
+        );
+    }
+
+    /// N3's practice half and positive control for LB1's rule: a practice lookup room writes no row.
+    #[test]
+    fn n3_a_lookup_created_practice_room_writes_no_store_row() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        let owner = seed_stored("practice-user", true);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        assert!(
+            store
+                .find_room(&owner.origin, &owner.user_id)
+                .unwrap()
+                .is_none(),
+            "the practice lookup wrote a non-practice room row"
+        );
+    }
+
+    /// The migration-record read refusal is page wording only; the raw store error keeps the
+    /// path in the log, never on screen.
+    #[test]
+    fn migration_record_read_details_never_carry_os_paths() {
+        let path = std::path::PathBuf::from("/Users/os-user/private/device.db");
+        let raw = path.to_string_lossy().to_string();
+        let error = bir_core::rooms::DeviceStoreError::Unreadable {
+            path,
+            reason: "not sqlite".into(),
+        };
+        assert!(
+            error.to_string().contains(&raw),
+            "positive control: the raw store error has a path"
+        );
+        let (target, spec) = migration_record_read_failure(&error);
+        assert!(spec.is_none());
+        let Target::Blocked(Blocked::Transient { detail, .. }) = target else {
+            panic!("not a transient block")
+        };
+        assert!(!detail.contains(&raw), "{detail}");
+    }
+
+    /// LB3: on a pre-rooms install with no rooms, an unreadable device.db is set aside, the claim
+    /// store is retried, and the locked legacy file still opens in place.
+    #[test]
+    fn lb3_an_unusable_store_with_no_rooms_is_set_aside_and_legacy_opens() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        locked_legacy_file(&scratch);
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Legacy,
+            "the unusable pre-rooms store became a permanent Try again"
+        );
+        assert!(
+            std::fs::read_dir(scratch.layout.device_dir())
+                .unwrap()
+                .flatten()
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("device.db.unusable-")),
+            "the unreadable store was not set aside"
+        );
+        assert!(
+            bir_core::rooms::DeviceStore::open(&scratch.layout).is_ok(),
+            "the retry did not leave a usable fresh store"
+        );
+    }
+
+    /// LB3's boundary pin: the set-aside is right only for a true no-rooms install. Once rooms
+    /// exist, the same unusable store is the support page and is never moved aside.
+    #[test]
+    fn lb3_an_unusable_store_with_rooms_is_never_set_aside() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.rooms_dir().join("noise")).unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        assert!(
+            matches!(migration_state(), Some(MigrationState::DeviceStore { .. })),
+            "not a device-store block: {:?}",
+            migration_state()
+        );
+        assert!(
+            !std::fs::read_dir(scratch.layout.device_dir())
+                .unwrap()
+                .flatten()
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("device.db.unusable-")),
+            "the store was set aside even though rooms exist"
+        );
+    }
+
+    /// N5: the no-rooms set-aside does not depend on a legacy file being present. With no legacy
+    /// file, the retry leaves a usable store and the account's lookup-created room opens.
+    #[test]
+    fn n5_an_unusable_store_without_legacy_or_rooms_is_set_aside_and_the_room_opens() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the no-legacy unusable store stayed a permanent block"
+        );
+        assert!(
+            std::fs::read_dir(scratch.layout.device_dir())
+                .unwrap()
+                .flatten()
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("device.db.unusable-")),
+            "the unreadable store was not set aside"
+        );
+    }
+
+    /// N5: a newer store cannot be renamed aside, but on a true pre-rooms install with a legacy
+    /// file §7 still falls back to legacy in place rather than a permanent device-store block.
+    #[test]
+    fn n5_a_newer_store_with_legacy_and_no_rooms_opens_legacy_in_place() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        conn.pragma_update(
+            None,
+            "user_version",
+            bir_core::rooms::DEVICE_SCHEMA_VERSION + 1,
+        )
+        .unwrap();
+        drop(conn);
+        locked_legacy_file(&scratch);
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Legacy,
+            "the newer store became a permanent block instead of the §7 legacy fallback"
+        );
+    }
+
+    /// N6: the §7 legacy fallback is never for the practice owner. The same newer-store install
+    /// blocks transiently instead of opening another account's legacy file in place.
+    #[test]
+    fn n6_the_store_fallback_never_opens_legacy_for_practice() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        conn.pragma_update(
+            None,
+            "user_version",
+            bir_core::rooms::DEVICE_SCHEMA_VERSION + 1,
+        )
+        .unwrap();
+        drop(conn);
+        locked_legacy_file(&scratch);
+        let owner = seed_stored("practice-user", true);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        assert!(
+            matches!(migration_state(), Some(MigrationState::Transient { .. })),
+            "practice did not get the transient store fallback: {:?}",
+            migration_state()
+        );
+    }
+
+    /// N6: once the unusable store was set aside, a failed retry is transient. It is never the
+    /// legacy-in-place fallback: the store's state after the retry is unknown.
+    #[test]
+    fn n6_a_failed_store_retry_is_transient_not_legacy_in_place() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        locked_legacy_file(&scratch);
+        CORRUPT_STORE_RETRY.store(true, std::sync::atomic::Ordering::SeqCst);
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Blocked,
+            "the failed retry opened the legacy file in place"
+        );
+        assert!(
+            matches!(migration_state(), Some(MigrationState::Transient { .. })),
+            "the failed retry is not Transient: {:?}",
+            migration_state()
+        );
+    }
+
+    /// LB5 through the production wiring: A's sign-in really runs decide_claim, where the Done
+    /// record plus PIN-locked reappearance is OfferStart::Locked; that decision opens A's room with
+    /// the locked-later note, and the already-queued copy in that room is what the worker sends.
+    /// The legacy bytes never change, so the old file is never opened in place or imported.
+    #[test]
+    fn lb5_a_locked_reappeared_file_opens_the_room_and_the_worker_sends_one_copy() {
+        const CHILD: &str = "BIR_APP_API_LB5_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "session::tests::lb5_a_locked_reappeared_file_opens_the_room_and_the_worker_sends_one_copy",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .env_remove("BIR_RELAY_URL")
+                .status()
+                .unwrap();
+            assert!(status.success(), "the child process failed");
+            return;
+        }
+        let _queue_turn = bir_core::background_cron::queue_transport_test_turn_blocking();
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        let room_id = locked_reappeared_install(&scratch, &owner_a);
+        let legacy_before = std::fs::read(scratch.layout.legacy_database()).unwrap();
+        permit_claim_threads();
+        begin_open(owner_a, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let (_, _, opened_room, _) = snapshot().room.expect("A's room open");
+        assert_eq!(opened_room, Some(room_id), "the open room is not A's own");
+        assert!(
+            matches!(
+                migration_state(),
+                Some(MigrationState::Permanent { ref detail, .. }) if *detail == LOCKED_LEGACY_LATER
+            ),
+            "the OfferStart::Locked decision did not produce the locked-later room note: {:?}",
+            migration_state()
+        );
+        assert!(
+            !matches!(migration_state(), Some(MigrationState::Offered)),
+            "the locked file was treated as an open offer"
+        );
+        assert!(
+            crate::bir_module::submission_worker_started(),
+            "the production room commit did not start the worker"
+        );
+
+        let (handle, ..) = snapshot().room.expect("A's room handle");
+        crate::bir_module::wake_submission_worker();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let status = loop {
+            crate::bir_module::wake_submission_worker();
+            let status = {
+                let room = handle.lock().unwrap();
+                room.get_2551q_draft("12345678800000", 2026, 1)
+                    .unwrap()
+                    .map(|draft| draft.status)
+            };
+            if status == Some(bir_core::forms::FilingStatus::Submitted) {
+                break status;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the room copy was not sent by the worker: {status:?}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+        assert_eq!(status, Some(bir_core::forms::FilingStatus::Submitted));
+        assert_eq!(
+            std::fs::read(scratch.layout.legacy_database()).unwrap(),
+            legacy_before,
+            "the locked legacy file was opened or changed in place"
+        );
+        assert!(
+            !scratch
+                .layout
+                .legacy_database()
+                .with_extension("db-wal")
+                .exists()
+                && !scratch
+                    .layout
+                    .legacy_database()
+                    .with_extension("db-shm")
+                    .exists(),
+            "the locked legacy file was opened: its SQLite sidecars exist"
+        );
+    }
+
+    /// LB4: the device-store page's detail carries no OS-user path.
+    #[test]
+    fn lb4_the_device_store_detail_never_shows_the_store_path() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        std::fs::create_dir_all(scratch.layout.rooms_dir()).unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        let Some(MigrationState::DeviceStore { detail }) = migration_state() else {
+            panic!("not a device-store block: {:?}", migration_state())
+        };
+        assert!(!detail.contains(scratch.layout.device_db().to_string_lossy().as_ref()));
+        assert!(!detail.contains(scratch.layout.device_dir().to_string_lossy().as_ref()));
+        assert!(detail.contains("device store"), "{detail}");
+    }
+
+    /// P-F1: a foreign unfinished record makes only the record-room finish definitive. B's own
+    /// pre-move transient error still blocks B with Try again; it never opens an empty room.
+    #[test]
+    fn pf1_bs_own_pre_move_transient_error_still_blocks_with_try_again() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Copied);
+        let legacy = Database::open(scratch.layout.legacy_database()).unwrap();
+        legacy.set_setting("different", "content").unwrap();
+        legacy.close().unwrap();
+        bir_core::legacy_claim::fail_next_legacy_lock_for_test();
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Blocked,
+            "B's own pre-move transient opened a room"
+        );
+        assert!(
+            matches!(migration_state(), Some(MigrationState::Transient { .. })),
+            "not the Try again page: {:?}",
+            migration_state()
+        );
+    }
+
+    /// N4: a legacy-lock failure while A's move is finishing in the link window is part of the
+    /// record-room finish. B therefore opens B's own room through the real claim thread; it is not
+    /// blocked by an untagged transient of A's claim.
+    #[test]
+    fn n4_a_link_window_lock_failure_is_part_of_the_record_room_finish() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        let (_room_a, room_file) =
+            write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        std::fs::hard_link(&room_file, scratch.layout.legacy_database()).unwrap();
+        bir_core::legacy_claim::fail_next_legacy_lock_for_test();
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "B was blocked by A's untagged link-window lock failure"
+        );
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner_b.origin, &owner_b.user_id),
+            "the open room is not B's own"
+        );
+    }
+
+    /// The every-build invariant at the open path: even if a decision-layer regression forces A's
+    /// room into B's open, the room is refused and B ends blocked with nothing open.
+    #[test]
+    fn l1_a_mismatched_room_never_opens_for_the_owner() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        let (room_a, _) =
+            write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        force_next_open_room_for_test(room_a);
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Blocked,
+            "the mismatched room was not refused"
+        );
+        assert!(snapshot().room.is_none(), "a mismatched room installed");
+    }
+
+    /// L1: the resume runs before the practice-account refusal, so a practice sign-in can meet
+    /// A's moved record. It still opens only the practice account's own empty room.
+    #[test]
+    fn l1_a_practice_sign_in_after_as_move_opens_the_practice_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        let practice = seed_stored("practice-user", true);
+        permit_claim_threads();
+        begin_open(practice.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let (_, _, room_id, _) = snapshot().room.expect("the practice room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&practice.origin, &practice.user_id),
+            "the practice account opened A's claimed room"
+        );
+        assert_eq!(
+            claim_record(&scratch).step,
+            bir_core::legacy_claim::Step::Done,
+            "A's finish did not stand for the practice resume"
+        );
+    }
+
     /// F1: the invariants are not decoration — a deliberate I1 break (the raw gate unlocked
     /// while SignedOut) is reported, whatever the environment's auth bypass says.
     #[test]
@@ -2693,74 +3925,12 @@ mod tests {
         );
     }
 
-    // ---------- §11's named interleavings: scripted now, un-ignored by their commit ----------
-    //
-    // Where the path a test drives lands in a later commit, the test calls a clearly named stub
-    // (the `commit_N_wires_*` functions below). Each stub is the hole the commit fills; the
-    // test's assertions are the final ones, so un-ignoring is the commit removing its stub.
-
-    // The commitN_* stubs are the holes their commits fill (the reviewer's rule: an empty or
-    // vacuous stub would let its test pass before the behavior exists). Every one PANICS, so its
-    // test fails today and passes only when the commit replaces the stub with the real drive.
-    // The names keep the design page's numbering; the build order renumbering is the page's next
-    // revision.
-
-    /// commit 3 wires the claim thread's real work (the claim, the classify, the open, the
-    /// commit); the tests then drive the real thread with pauses on its real hooks, never this.
-    fn commit3_claim_thread_opens(scratch: &Scratch, owner: &Owner, epoch: u64, name: &str) {
-        let _ = (scratch, owner, epoch, name);
-        panic!("commit 3 wires this")
-    }
-
     /// Hand-drive an open session for the tests whose subject is the stored sign-in, not the
     /// claim: begin_open already ran, so the phase is Opening at `epoch`; this drives the real
-    /// commit() the claim thread will own from commit 3.
+    /// commit() the claim thread uses.
     fn open_hand(scratch: &Scratch, owner: &Owner, epoch: u64, name: &str) {
         let (handle, path) = scratch_handle(scratch, name);
         commit(epoch, room_target(owner), Some((handle, path)));
-    }
-
-    /// commit 4 wires the send spawn: a spawned send carries the tick's owner and epoch, and
-    /// takes its token only for them.
-    fn commit4_spawn_send(owner: &Owner, epoch: u64) {
-        let _ = (owner, epoch);
-        panic!("commit 4 wires this")
-    }
-
-    /// commit 4 wires the OAuth loopback registry: a bind after the epoch's close is refused.
-    fn commit4_oauth_bind(epoch: u64) -> Result<(), String> {
-        let _ = epoch;
-        panic!("commit 4 wires this")
-    }
-
-    /// commit 4 wires the import: pause, the re-check under the room's lock, the CAS install.
-    fn commit4_run_import(owner: &Owner, epoch: u64) {
-        let _ = (owner, epoch);
-        panic!("commit 4 wires this")
-    }
-
-    /// commit 4 wires the inbox write: captured (epoch, generation) or dropped.
-    fn commit4_inbox_write(owner: &Owner, epoch: u64, generation: u64) {
-        let _ = (owner, epoch, generation);
-        panic!("commit 4 wires this")
-    }
-
-    /// commit 4 wires the device-key registration: written only if the stored owner and the
-    /// epoch are still the registration's own.
-    fn commit4_register_device_key(owner: &Owner, epoch: u64) {
-        let _ = (owner, epoch);
-        panic!("commit 4 wires this")
-    }
-
-    /// commit 5 wires the claim classify: the store's error kinds to their phases.
-    fn commit5_claim_classify(scratch: &Scratch) {
-        let _ = scratch;
-        panic!("commit 5 wires this")
-    }
-
-    /// commit 6 wires quit's release order: worker, holders, checkpoint, registry, guards.
-    fn commit6_quit_releases() {
-        panic!("commit 6 wires this")
     }
 
     /// K1, deterministic: signed_in paused between SESSION's release and the spawn — a
@@ -3064,7 +4234,7 @@ mod tests {
         assert_invariants();
     }
 
-    /// (b): a torn read — write_secret_file is not atomic — is an Err, never an empty disk:
+    /// (b): a torn read — write_secret_file mid-write is impossible — the save is atomic — but an unreadable file is an Err, never an empty disk:
     /// nothing closes on evidence nobody read.
     #[test]
     fn a_torn_disk_read_closes_nothing() {
@@ -3239,119 +4409,53 @@ mod tests {
         assert_invariants();
     }
 
-    /// n2: a store read error with a moved record opens nothing (G1's evidence rule on the real
-    /// path, with the claim-store classify of §7).
-    #[test]
-    #[ignore = "commit 5"]
-    fn n2_a_store_read_error_with_a_moved_record_opens_nothing() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::Launch);
-        let epoch = snapshot().epoch;
-        // The claim thread's classify (commit 5): the record says Moved with no hash check.
-        commit5_claim_classify(&scratch);
-        commit(
-            epoch,
-            Target::Blocked(Blocked::MovedNotOpened {
-                detail: "the move finished but the copy was never checked".to_string(),
-            }),
-            None,
-        );
-        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
-        assert!(snapshot().room.is_none(), "no room opened on the evidence");
-        assert!(!gate_unlocked());
-        assert_invariants();
-    }
-
-    /// n3: a browser preconnect (a connection with no request line) is closed, and the real GET
-    /// after it completes the consent (the OAuth loopback's accept loop, with real sockets).
-    #[test]
-    #[ignore = "commit 4"]
-    fn n3_a_preconnect_then_the_get_completes_the_consent() {
-        let _turn = test_turn();
-        let _scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        assert_invariants();
-        // commit 4 wires the real listener; the scripted interleaving is final.
-        assert!(
-            commit4_oauth_bind(epoch).is_ok(),
-            "the bind registers under the live epoch"
-        );
-        assert_invariants();
-    }
-
-    /// n3 (second arm): a bind racing a close is refused — no listener survives a close.
-    #[test]
-    #[ignore = "commit 4"]
-    fn n3_a_bind_during_close_is_refused() {
-        let _turn = test_turn();
-        let _scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        let close_gate = hooks::pause("close.locked");
-        let scratch_dir = _scratch.layout.device_dir().to_path_buf();
-        let closer = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            close(Reason::SignOut);
-        });
-        close_gate.reached();
-        close_gate.release();
-        closer.join().unwrap();
-        assert!(
-            commit4_oauth_bind(epoch).is_err(),
-            "a bind after the close's epoch bump is refused"
-        );
-        assert_invariants();
-    }
-
     /// f7: a send spawned in A, run after the switch to B, takes no token — the return stays
-    /// Queued in A's room, and B's sign-in is intact.
+    /// Queued in A's room, and B's sign-in is intact. The token read is the real
+    /// AccountTokens::access_token inside the send's captured context.
     #[test]
-    #[ignore = "commit 4"]
     fn f7_a_send_spawned_in_a_after_the_switch_takes_no_token() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        assert_invariants();
-        // A's tick spawns the send with A's owner and epoch.
-        let send_gate = hooks::pause("send.before_token");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let send = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            commit4_spawn_send(&owner, epoch_a);
-            hooks::at("send.before_token");
-        });
-        send_gate.reached();
-        // The account switches to B before the send runs.
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a, epoch_a);
         sign_out();
-        bir_core::account_session::clear_stored();
+        join_device_forget_threads();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
         let epoch_b = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        assert_invariants();
-        let fetches_before = bir_core::account_session::token_fetches_for(
-            &bir_core::account_session::OwnerKey::of(
-                &bir_core::cloud_account::load_stored_account()
-                    .unwrap()
-                    .unwrap(),
-            )
-            .unwrap(),
+        open_hand(&scratch, &owner_b, epoch_b, "b-room.db");
+        let key_b = bir_core::account_session::OwnerKey {
+            origin: owner_b.origin.clone(),
+            user_id: owner_b.user_id.clone(),
+        };
+        let fetches_before = bir_core::account_session::token_fetches_for(&key_b);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(
+            context,
+            async {
+                let tokens = bir_core::account_session::AccountTokens;
+                bir_core::bir_submit::TokenSource::access_token(&tokens, false).await
+            },
+        ));
+        assert!(
+            matches!(result, Err(bir_core::bir_submit::ClientError::SignedOut)),
+            "A's dead send was answered with a token"
         );
-        send_gate.release();
-        send.join().unwrap();
-        // B's session stands; nothing of A's send touched it — and no token was ever fetched
-        // for A's dead send (the count did not move).
+        assert_eq!(
+            bir_core::account_session::token_fetches_for(&key_b),
+            fetches_before,
+            "NO token was taken for the dead send"
+        );
         assert_eq!(
             snapshot()
                 .owner
@@ -3359,18 +4463,6 @@ mod tests {
                 .map(|owner| owner.user_id.as_str()),
             Some("user-b"),
             "B's sign-in is intact"
-        );
-        assert_eq!(
-            bir_core::account_session::token_fetches_for(
-                &bir_core::account_session::OwnerKey::of(
-                    &bir_core::cloud_account::load_stored_account()
-                        .unwrap()
-                        .unwrap()
-                )
-                .unwrap()
-            ),
-            fetches_before,
-            "NO token was taken for the dead send"
         );
         assert_invariants();
     }
@@ -3462,58 +4554,7 @@ mod tests {
         assert_invariants();
     }
 
-    /// r1: a send inserted after the import's active-jobs check is still seen — the re-check
-    /// runs under the room's lock, which the send needs to load its draft.
-    #[test]
-    #[ignore = "commit 4"]
-    fn r1_a_send_inserted_after_the_check_is_seen_under_the_room_lock() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // The import pauses after its session check, before the room lock.
-        let import_gate = hooks::pause("import.after_room_lock");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let import = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            hooks::at("import.after_room_lock");
-            commit4_run_import(&owner, epoch);
-        });
-        import_gate.reached();
-        // A send inserts its job key in the gap.
-        commit4_spawn_send(&owner_a, epoch);
-        import_gate.release();
-        import.join().unwrap();
-        assert_invariants();
-    }
-
-    /// quit: the release order — worker, holders, checkpoint, registry, guards — and a relaunch
-    /// meets no live writer.
-    #[test]
-    #[ignore = "commit 6"]
-    fn quit_releases_in_order_and_a_relaunch_meets_no_live_writer() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        quit();
-        commit6_quit_releases();
-        assert_eq!(snapshot().phase_kind, PhaseKind::Quitting);
-        // The device guard is released last of all: after quit, a new copy can take it.
-        assert!(
-            bir_core::db::take_device_instance_lock(scratch.layout.device_dir()).is_ok(),
-            "the relaunch meets no live writer"
-        );
-    }
-
-    // ---------- commit 2: the stored sign-in ----------
+    // ---------- the stored sign-in ----------
 
     /// The device key files of the scratch install: the key itself and its owner record.
     fn write_device_key(scratch: &Scratch, key: &str, owner: Option<(&str, &str)>) {
@@ -4691,7 +5732,7 @@ mod tests {
         let epoch = snapshot().epoch;
         open_hand(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // The production cache state at commit 2: never filled.
+        // The production cache state this regression exercised: never filled.
         bir_core::account_session::cache_owner(None);
         let failed = bir_core::cloud_account::load_stored_account()
             .unwrap()
@@ -5011,6 +6052,43 @@ mod tests {
             device_key_files(&scratch),
             before,
             "the same owner's try-again keeps the device key byte-identical"
+        );
+    }
+
+    /// C1: the forget's epoch gate, discriminating — a close whose epoch has MOVED forgets
+    /// nothing. The production primitive is called the way the close calls it: the recorded
+    /// epoch stale versus current. Positive control: the current epoch really forgets.
+    #[test]
+    fn a_forget_whose_epoch_moved_deletes_nothing() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        let epoch = bir_core::session_epoch::current();
+        // the stale close: its epoch moved on before the forget ran — the key is the newer
+        // session's now and survives
+        bir_core::relay::forget_device_key_at_epoch(
+            &bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            epoch.wrapping_sub(1),
+        );
+        assert!(
+            !device_key_files(&scratch).is_empty(),
+            "a forget whose epoch moved must delete nothing"
+        );
+        // positive control: the current epoch really forgets
+        bir_core::relay::forget_device_key_at_epoch(
+            &bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            bir_core::session_epoch::current(),
+        );
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "positive control: the current epoch forgets"
         );
     }
 
@@ -5557,69 +6635,6 @@ mod tests {
         assert_invariants();
     }
 
-    /// d4a: a device-key registration of A's, resolving after the switch, writes nothing for B.
-    #[test]
-    #[ignore = "commit 3"]
-    fn d4a_a_late_registration_of_a_writes_no_device_key_for_b() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch_a = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        // The switch.
-        sign_out();
-        bir_core::account_session::clear_stored();
-        let owner_b = seed_stored("user-b", false);
-        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
-        let epoch_b = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
-        assert_invariants();
-        // A's registration resolves now: it writes nothing. The device-key file of the device
-        // directory — whatever relay writes there for a registration — is byte-for-byte what it
-        // was before the late resolve.
-        let key_files_before: Vec<(std::path::PathBuf, Vec<u8>)> =
-            std::fs::read_dir(scratch.layout.device_dir())
-                .map(|entries| {
-                    entries
-                        .flatten()
-                        .map(|entry| {
-                            let path = entry.path();
-                            let bytes = std::fs::read(&path).unwrap_or_default();
-                            (path, bytes)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-        commit4_register_device_key(&owner_a, epoch_a);
-        let key_files_after: Vec<(std::path::PathBuf, Vec<u8>)> =
-            std::fs::read_dir(scratch.layout.device_dir())
-                .map(|entries| {
-                    entries
-                        .flatten()
-                        .map(|entry| {
-                            let path = entry.path();
-                            let bytes = std::fs::read(&path).unwrap_or_default();
-                            (path, bytes)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-        assert_eq!(
-            key_files_before, key_files_after,
-            "the device-key file is unchanged: A's late registration wrote nothing for B"
-        );
-        assert_eq!(
-            snapshot()
-                .owner
-                .as_ref()
-                .map(|owner| owner.user_id.as_str()),
-            Some("user-b"),
-            "B's session stands"
-        );
-        assert_invariants();
-    }
-
     /// The child process of [`d4c_a_second_copy_refused_before_any_room_opens`]: with the env
     /// var set, takes the device guard and holds it until stdin closes. In the normal suite the
     /// var is never set and the test returns at once.
@@ -5713,41 +6728,6 @@ mod tests {
         assert_invariants();
     }
 
-    /// d5: a close landing while an import runs — the import's install CAS misses, and nothing
-    /// of it installs (the restored file on disk is the next sign-in's).
-    #[test]
-    #[ignore = "commit 4"]
-    fn d5_a_close_during_the_import_installs_nothing() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // The import pauses with the session check passed, before the install.
-        let import_gate = hooks::pause("import.after_session_lock");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let import = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            hooks::at("import.after_session_lock");
-            commit4_run_import(&owner, epoch);
-        });
-        import_gate.reached();
-        close(Reason::SignOut);
-        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
-        import_gate.release();
-        import.join().unwrap();
-        assert_eq!(
-            snapshot().phase_kind,
-            PhaseKind::SignedOut,
-            "the import installed nothing past the close"
-        );
-        assert!(snapshot().room.is_none());
-        assert_invariants();
-    }
-
     /// q4: a stale opener installs nothing — an opener thread opens its handle, the close lands
     /// while it is paused before the commit, and the commit with the old epoch abandons: nothing
     /// is installed, and the handle itself drops (the Weak is dead).
@@ -5756,14 +6736,14 @@ mod tests {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
-        // The pause is set BEFORE begin_open (F5's rule): when commit 3 wires the real claim
-        // thread it spawns inside begin_open, and a pause set after could be slipped past.
+        // The pause is set BEFORE begin_open (F5's rule): the real claim thread spawns inside
+        // begin_open, and a pause set after could be slipped past.
         let open_gate = hooks::pause("open.done");
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
         // The opener opens its handle for real, keeps only a Weak of it, and pauses at the
-        // open-done point the claim thread will pass (commit 3 wires the thread onto the same
-        // hooks; the interleaving the test drives is the commit's own compare-and-swap).
+        // open-done point the claim thread passes; the interleaving the test drives is the
+        // commit's own compare-and-swap.
         let owner = owner_a.clone();
         let scratch_dir = scratch.layout.device_dir().to_path_buf();
         let opener = std::thread::spawn(move || {
@@ -5792,82 +6772,48 @@ mod tests {
         assert_invariants();
     }
 
-    /// i3: an inbox write captured for a room whose session ended is refused — the write checks
-    /// the captured epoch and generation under the room's lock.
+    /// i5: a send never takes a token after its epoch ends — even when the SAME owner signs in
+    /// again. Its captured owner and epoch travel with it; the token read refuses the stale send.
     #[test]
-    #[ignore = "commit 4"]
-    fn i3_inbox_write_after_a_switch_is_refused() {
+    fn i5_a_send_asks_no_token_after_its_epoch_ends() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch_a = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        let generation_a = snapshot().room.unwrap().1;
-        // The inbox thread captures its epoch and generation, then the session switches.
-        let inbox_gate = hooks::pause("inbox.before_write");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let inbox = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            hooks::at("inbox.before_write");
-            commit4_inbox_write(&owner, epoch_a, generation_a);
-        });
-        inbox_gate.reached();
+        open_hand(&scratch, &owner_a, epoch_a, "a-room.db");
+        let key_a = bir_core::account_session::OwnerKey {
+            origin: owner_a.origin.clone(),
+            user_id: owner_a.user_id.clone(),
+        };
+        let context = bir_core::account_session::SendContext::new(key_a.clone(), epoch_a);
         sign_out();
-        inbox_gate.release();
-        inbox.join().unwrap();
-        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
-        assert_invariants();
-    }
-
-    /// i5: a send never takes a token for another owner — its captured owner travels with it,
-    /// and the token read refuses anyone else's.
-    #[test]
-    #[ignore = "commit 4"]
-    fn i5_a_send_asks_no_token_for_another_owner() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch_a = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch_a, "a-room.db");
-        // The switch before the send's token read.
-        sign_out();
-        bir_core::account_session::clear_stored();
-        let owner_b = seed_stored("user-b", false);
-        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
-        let epoch_b = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
-        // A's send reaches its token: it must not read B's.
-        let fetches_before = bir_core::account_session::token_fetches_for(
-            &bir_core::account_session::OwnerKey::of(
-                &bir_core::cloud_account::load_stored_account()
-                    .unwrap()
-                    .unwrap(),
-            )
-            .unwrap(),
+        join_device_forget_threads();
+        let owner_again = seed_stored("user-a", false);
+        begin_open(owner_again.clone(), 1, OpenWhy::SignIn);
+        let epoch_again = snapshot().epoch;
+        assert_ne!(epoch_a, epoch_again);
+        open_hand(&scratch, &owner_again, epoch_again, "a-room-again.db");
+        let fetches_before = bir_core::account_session::token_fetches_for(&key_a);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime.block_on(bir_core::account_session::SEND_CONTEXT.scope(
+            context,
+            async {
+                let tokens = bir_core::account_session::AccountTokens;
+                bir_core::bir_submit::TokenSource::access_token(&tokens, false).await
+            },
+        ));
+        assert!(
+            matches!(result, Err(bir_core::bir_submit::ClientError::SignedOut)),
+            "the stale send was answered with the new session's token"
         );
-        commit4_spawn_send(&owner_a, epoch_a);
         assert_eq!(
-            bir_core::account_session::token_fetches_for(
-                &bir_core::account_session::OwnerKey::of(
-                    &bir_core::cloud_account::load_stored_account()
-                        .unwrap()
-                        .unwrap()
-                )
-                .unwrap()
-            ),
+            bir_core::account_session::token_fetches_for(&key_a),
             fetches_before,
-            "NO token was asked for another owner"
-        );
-        assert_eq!(
-            snapshot()
-                .owner
-                .as_ref()
-                .map(|owner| owner.user_id.as_str()),
-            Some("user-b"),
-            "nothing of A's send touched B's session"
+            "NO token was asked after the send's epoch ended"
         );
         assert_invariants();
     }

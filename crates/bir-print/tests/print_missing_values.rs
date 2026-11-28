@@ -20,6 +20,23 @@ use bir_core::TaxpayerProfile;
 use bir_print::frozen_html::{filled_document, printed_cell};
 use serde_json::json;
 
+/// The signed number an amount cell prints: commas dropped, `(123)` and
+/// `-123` both negative. Amounts compare as numbers so the sheet's own way of
+/// showing a negative (parentheses on 1702MX) and its thousands separators
+/// pass, while a lost sign or digit fails.
+fn amount(printed: &str) -> Option<i64> {
+    let t = printed.trim().replace(',', "");
+    let (negative, digits) = match t.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
+        Some(inner) => (true, inner.to_string()),
+        None => match t.strip_prefix('-') {
+            Some(rest) => (true, rest.to_string()),
+            None => (false, t.clone()),
+        },
+    };
+    let magnitude: i64 = digits.parse().ok()?;
+    Some(if negative { -magnitude } else { magnitude })
+}
+
 fn demo_profile() -> TaxpayerProfile {
     serde_json::from_value(json!({
         "id": null,
@@ -370,26 +387,23 @@ fn form_1702mx_prints_part_ii_and_schedule_1_details() {
     let map = d.to_print_field_map();
     let doc = filled_document("1702mx-2018c", &map).expect("1702mx-2018c render");
 
-    // Part II Items 14-21 (whole-peso combs)
+    // Part II Items 14-21 (whole-peso combs), compared as signed numbers
     assert_eq!(
-        printed_cell(&doc, "p1c59").0,
-        d.part_ii.item_14_total_tax_due_or_overpayment.0.to_string()
+        amount(&printed_cell(&doc, "p1c59").0),
+        Some(d.part_ii.item_14_total_tax_due_or_overpayment.0)
     );
     assert_eq!(
-        printed_cell(&doc, "p1c61").0,
-        d.part_ii.item_15_total_tax_credits.0.to_string()
+        amount(&printed_cell(&doc, "p1c61").0),
+        Some(d.part_ii.item_15_total_tax_credits.0)
     );
     assert_eq!(
-        printed_cell(&doc, "p1c63").0,
-        d.part_ii
-            .item_16_net_tax_payable_or_overpayment
-            .0
-            .to_string()
+        amount(&printed_cell(&doc, "p1c63").0),
+        Some(d.part_ii.item_16_net_tax_payable_or_overpayment.0)
     );
-    assert_eq!(printed_cell(&doc, "p1c66").0, "1234");
-    assert_eq!(printed_cell(&doc, "p1c68").0, "2345");
-    assert_eq!(printed_cell(&doc, "p1c70").0, "3456");
-    assert_eq!(printed_cell(&doc, "p1c72").0, "7035");
+    assert_eq!(amount(&printed_cell(&doc, "p1c66").0), Some(1234));
+    assert_eq!(amount(&printed_cell(&doc, "p1c68").0), Some(2345));
+    assert_eq!(amount(&printed_cell(&doc, "p1c70").0), Some(3456));
+    assert_eq!(amount(&printed_cell(&doc, "p1c72").0), Some(7035));
 
     // Schedule 1 Items 1-3 (Investment Promotion Agency, Legal Basis, Registered Activity)
     assert_eq!(printed_cell(&doc, "p2c17").0, "PEZA");
@@ -403,9 +417,9 @@ fn form_1702mx_prints_part_ii_and_schedule_1_details() {
     assert_eq!(printed_cell(&doc, "p2c27").0, "LOGISTICS");
 
     // Schedule 2 sales row
-    assert_eq!(printed_cell(&doc, "p2c70").0, "123456789");
-    assert_eq!(printed_cell(&doc, "p2c71").0, "234567890");
-    assert_eq!(printed_cell(&doc, "p2c72").0, "345678901");
+    assert_eq!(amount(&printed_cell(&doc, "p2c70").0), Some(123_456_789));
+    assert_eq!(amount(&printed_cell(&doc, "p2c71").0), Some(234_567_890));
+    assert_eq!(amount(&printed_cell(&doc, "p2c72").0), Some(345_678_901));
 }
 
 #[test]

@@ -2191,8 +2191,12 @@ fn pr9_1707_schedules_2_and_3_rows_a_to_d_are_open() {
     assert_eq!(filled["draft"]["shares"][0]["number_of_shares"], 1000.0);
     assert_eq!(filled["draft"]["shares"][3]["certificate_number"], "C-4");
     assert_eq!(filled["draft"]["expenses"][3]["amount"], 250.0);
+    assert_eq!(
+        filled["values"]["frm1707:txtPg2P4Sch2NoOfShares1"],
+        "1,000.000"
+    );
     let map = printed("1707", &filled["draft"]);
-    assert_eq!(map["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000.000");
+    assert_eq!(map["frm1707:txtPg2P4Sch2NoOfShares1"], "1,000");
     assert_eq!(map["frm1707:txtPg2P4Sch3Amount4"], "250.00");
     let mut typed: bir_core::forms::form_1707::Form1707Draft =
         serde_json::from_value(filled["draft"].clone()).unwrap();
@@ -3418,4 +3422,487 @@ fn agent_fill_2552_writes_item_12_total_shares_and_part_iv_amounts() {
     assert_eq!(map["frm2552:txtPg2P4I3Amount"], "350.25");
     assert_eq!(map["frm2552:txtPg2P4I4Amount"], "450.50");
     assert_eq!(map["frm2552:txtPg2P4I5Amount"], "550.75");
+}
+
+#[test]
+fn v2018_1606_installment_boxes_are_shut_and_refuse_writes_while_gated() {
+    setup();
+    use bir_core::forms::agent::draft_locks::installment_1606 as gate;
+    let opened = open("1606", 1);
+    for key in gate::KEYS {
+        assert_eq!(opened["locks"][key], gate::LOCK, "{key}");
+        assert_eq!(opened["lock_notes"][key], gate::LOCK_NOTE, "{key}");
+        assert_eq!(opened["values"][key], "", "{key}");
+    }
+
+    // Item 20 unanswered, then a cash sale: a write to every gated box is
+    // refused with the gate's reason and leaves the draft unchanged.
+    for key in gate::KEYS {
+        let refused = fill("1606", &opened["draft"], json!({key: "42"}));
+        assert_eq!(refused["rejected"][key], gate::LOCK, "{key}");
+    }
+    let cash = fill(
+        "1606",
+        &opened["draft"],
+        json!({"frm1606:j_id395:_1": "true"}),
+    );
+    for key in gate::KEYS {
+        assert_eq!(cash["relocks"][key], gate::LOCK, "{key}");
+        let refused = fill("1606", &cash["draft"], json!({key: "42"}));
+        assert_eq!(refused["rejected"][key], gate::LOCK, "{key}");
+    }
+
+    // Installment Sale opens the boxes and their writes land.
+    let installment = fill(
+        "1606",
+        &cash["draft"],
+        json!({"frm1606:j_id395:_3": "true"}),
+    );
+    for key in gate::KEYS {
+        assert_eq!(installment["relocks"][key], Value::Null, "{key}");
+    }
+    let typed = fill(
+        "1606",
+        &installment["draft"],
+        json!({
+            "frm1606:txtSelling": "5000",
+            "frm1606:txtCost": "42",
+            "frm1606:txtMortgage": "43",
+            "frm1606:txtTotalP": "44",
+            "frm1606:txtAmount": "45",
+            "frm1606:txtTotalN": "4"
+        }),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    assert_eq!(typed["draft"]["gross_selling_price"], 5000.0);
+    assert_eq!(typed["draft"]["cost_and_expenses"], 42.0);
+    assert_eq!(typed["draft"]["mortgage_assumed"], 43.0);
+    assert_eq!(typed["draft"]["initial_year_payments"], 44.0);
+    assert_eq!(typed["draft"]["installment_this_month"], 45.0);
+    assert_eq!(typed["draft"]["number_of_installments"], 4.0);
+
+    // Item 28A is outside the installment gate: it stays typeable while
+    // Items 21 to 26 are shut, and a blank write into shut Item 21 cannot
+    // clear it.
+    let base = fill(
+        "1606",
+        &opened["draft"],
+        json!({"frm1606:txtGross": "5000"}),
+    );
+    assert_eq!(base["rejected"], json!({}));
+    assert_eq!(base["draft"]["gross_selling_price"], 5000.0);
+    let blank_copy = fill("1606", &base["draft"], json!({"frm1606:txtSelling": ""}));
+    assert_eq!(blank_copy["rejected"]["frm1606:txtSelling"], gate::LOCK);
+    assert_eq!(blank_copy["draft"]["gross_selling_price"], 5000.0);
+}
+
+#[test]
+fn v2018_1606_installment_amounts_clear_once_when_the_gate_closes() {
+    setup();
+    use bir_core::forms::agent::draft_locks::installment_1606 as gate;
+    let installment = fill(
+        "1606",
+        &open("1606", 1)["draft"],
+        json!({"frm1606:j_id395:_3": "true"}),
+    );
+    let typed = fill(
+        "1606",
+        &installment["draft"],
+        json!({
+            "frm1606:txtCost": "42",
+            "frm1606:txtMortgage": "43",
+            "frm1606:txtTotalP": "44",
+            "frm1606:txtAmount": "45",
+            "frm1606:txtTotalN": "4"
+        }),
+    );
+
+    let cash = fill(
+        "1606",
+        &typed["draft"],
+        json!({"frm1606:j_id395:_1": "true"}),
+    );
+    for field in [
+        "cost_and_expenses",
+        "mortgage_assumed",
+        "initial_year_payments",
+        "installment_this_month",
+        "number_of_installments",
+    ] {
+        assert_eq!(cash["draft"][field], 0.0, "{field}");
+    }
+    for key in gate::KEYS {
+        assert_eq!(cash["relocks"][key], gate::LOCK, "{key}");
+        assert_eq!(cash["relock_notes"][key], gate::CLEARED_NOTE, "{key}");
+        assert_eq!(cash["values"][key], "", "{key}");
+    }
+
+    // Opening Item 20 again brings none of the installment-only amounts back.
+    let installment_again = fill(
+        "1606",
+        &cash["draft"],
+        json!({"frm1606:j_id395:_3": "true"}),
+    );
+    for field in [
+        "cost_and_expenses",
+        "mortgage_assumed",
+        "initial_year_payments",
+        "installment_this_month",
+        "number_of_installments",
+    ] {
+        assert_eq!(installment_again["draft"][field], 0.0, "{field}");
+    }
+
+    // Every other Item 20 answer closes the gate the same way.
+    for close in [
+        "frm1606:j_id395:_4",
+        "frm1606:j_id395:_2",
+        "frm1606:j_id395:_5",
+    ] {
+        let installment = fill(
+            "1606",
+            &open("1606", 1)["draft"],
+            json!({"frm1606:j_id395:_3": "true"}),
+        );
+        let typed = fill(
+            "1606",
+            &installment["draft"],
+            json!({"frm1606:txtCost": "42", "frm1606:txtTotalN": "4"}),
+        );
+        let closed = fill("1606", &typed["draft"], json!({close: "true"}));
+        assert_eq!(closed["draft"]["cost_and_expenses"], 0.0, "{close}");
+        assert_eq!(closed["draft"]["number_of_installments"], 0.0, "{close}");
+        for key in gate::KEYS {
+            assert_eq!(
+                closed["relock_notes"][key],
+                gate::CLEARED_NOTE,
+                "{close} {key}"
+            );
+        }
+    }
+}
+
+#[test]
+fn v2018_1606_a_legacy_dormant_installment_amount_is_cleared_on_open_and_said_once() {
+    setup();
+    use bir_core::forms::agent::draft_locks::installment_1606 as gate;
+    let installment = fill(
+        "1606",
+        &open("1606", 1)["draft"],
+        json!({"frm1606:j_id395:_3": "true"}),
+    );
+    let typed = fill(
+        "1606",
+        &installment["draft"],
+        json!({"frm1606:txtCost": "42"}),
+    );
+    let saved = save("1606", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    // Make the stored row a pre-fix dormant draft: no installment sale, yet
+    // holding installment-only amounts. Opening recomputes and clears them,
+    // and offers the clearing sentence once.
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["transaction"] = Value::Null;
+    legacy["cost_and_expenses"] = json!(42.25);
+    legacy["installment_this_month"] = json!(45.75);
+    legacy["number_of_installments"] = json!(7.0);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+    let first = open("1606", 1);
+    assert_eq!(first["draft"]["cost_and_expenses"], 0.0);
+    assert_eq!(first["draft"]["installment_this_month"], 0.0);
+    assert_eq!(first["draft"]["number_of_installments"], 0.0);
+    // Opening saved the migration: the stored row and the payload built
+    // from it no longer hold the dormant amounts.
+    let stored_json = raw_row(id).1;
+    let stored: bir_core::forms::form_1606::Form1606Draft =
+        serde_json::from_str(&stored_json).unwrap();
+    assert_eq!(stored.cost_and_expenses, 0.0);
+    assert_eq!(stored.installment_this_month, 0.0);
+    assert_eq!(stored.number_of_installments, 0.0);
+    // Complete only the unrelated required answers so the filing payload
+    // can be built without Queue; the installment amounts under test are
+    // the stored ones above.
+    let mut payload_draft = stored.clone();
+    payload_draft.seller_tin = "98765432100000".into();
+    payload_draft.seller_rdo_code = "040".into();
+    payload_draft.seller_name = "Sample Seller Inc".into();
+    payload_draft.seller_address = "456 Example Ave Makati".into();
+    payload_draft.seller_type = Some(bir_core::forms::form_1606::Form1606SellerType::Corporation);
+    payload_draft.agent_category = Some(bir_core::forms::form_1606::Form1606AgentCategory::Private);
+    payload_draft.property_class =
+        Some(bir_core::forms::form_1606::Form1606PropertyClass::Commercial);
+    payload_draft.property_location = "Lot 1 Block 2 Sample Subdivision".into();
+    payload_draft.property_rdo_code = "039".into();
+    payload_draft.tct_number = "T-12345".into();
+    payload_draft.set_transaction(bir_core::forms::form_1606::Form1606Transaction::CashSale);
+    payload_draft.gross_selling_price = 5_000.0;
+    payload_draft.fmv_land_tax_declaration = Some(3_000.0);
+    payload_draft.fmv_improvements_tax_declaration = Some(1_500.0);
+    payload_draft.fmv_land_zonal = Some(4_200.0);
+    payload_draft.fmv_improvements_bir = Some(1_000.0);
+    payload_draft.taxable_base_box =
+        Some(bir_core::forms::form_1606::Form1606TaxableBaseBox::FairMarketValue);
+    payload_draft.tax_rate = Some(bir_core::forms::form_1606::Form1606TaxRate::Six);
+    payload_draft.recompute();
+    let payload = payload_draft.official_payload().unwrap();
+    assert!(!payload.contains("42.25"), "{payload}");
+    assert!(!payload.contains("45.75"), "{payload}");
+    assert!(!payload.contains("txtTotalN=7"), "{payload}");
+    for key in gate::KEYS {
+        assert_eq!(first["locks"][key], gate::LOCK, "{key}");
+    }
+    let notes = first["notes"].as_array().unwrap();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0]["text"], gate::CLEARED_NOTE);
+    let key = notes[0]["key"].as_str().unwrap().to_string();
+    assert!(
+        key.starts_with(&format!("notice_seen:1606_installment:{id}:")),
+        "{key}"
+    );
+    // Until the page records the offered note seen, a second open still
+    // shows it; an open that quits before drawing it records nothing.
+    let second = open("1606", 1);
+    assert_eq!(second["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(second["notes"][0]["key"], key);
+    assert_eq!(
+        call("screen_form_notes_seen", vec![json(json!([key.clone()]))]).unwrap(),
+        json!([key])
+    );
+    assert_eq!(open("1606", 1)["notes"], json!([]));
+}
+
+#[cfg(feature = "agent")]
+#[test]
+fn v2018_1606_an_assistant_clearing_is_pending_for_the_page_open() {
+    setup();
+    use bir_core::forms::agent::draft_locks::installment_1606 as gate;
+    let installment = fill(
+        "1606",
+        &open("1606", 1)["draft"],
+        json!({"frm1606:j_id395:_3": "true"}),
+    );
+    let typed = fill(
+        "1606",
+        &installment["draft"],
+        json!({"frm1606:txtCost": "42"}),
+    );
+    let saved = save("1606", &typed["draft"]);
+    let id = stored_id(&saved);
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["transaction"] = Value::Null;
+    legacy["cost_and_expenses"] = json!(42.25);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+
+    // The assistant's form.open itself saves every Draft through
+    // agent::save_draft. That save clears the dormant value before any page
+    // has opened; the page still receives the pending notice on its first open.
+    use gpui_agent::AgentHost;
+    let mut assistant = crate::agent::Session::new(crate::agent::UiQueue::discarding());
+    assistant.set_db(crate::bir_module::database_handle().unwrap(), None);
+    let opened = assistant
+        .dispatch(&gpui_agent::protocol::Op::Invoke {
+            name: "form.open".into(),
+            args: json!({"code": "1606", "year": YEAR, "period": 1, "tin": TIN}),
+        })
+        .unwrap();
+    assert_eq!(opened.value.unwrap()["form"], "1606");
+    let first = open("1606", 1);
+    assert_eq!(first["draft"]["cost_and_expenses"], 0.0);
+    let stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    assert_eq!(stored["cost_and_expenses"], 0.0);
+    assert_eq!(first["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(first["notes"][0]["text"], gate::CLEARED_NOTE);
+    assert!(
+        first["notes"][0]["key"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("notice_seen:1606_installment:{id}:"))
+    );
+    assert_eq!(open("1606", 1)["notes"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn v2018_1601fq_schedule_1_is_shut_and_refuses_writes_until_item_13_yes() {
+    setup();
+    use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+    let opened = open("1601FQ", 1);
+    for key in gate::keys() {
+        assert_eq!(opened["locks"][&key], gate::LOCK, "{key}");
+        assert_eq!(opened["lock_notes"][&key], gate::LOCK, "{key}");
+    }
+    for key in gate::keys() {
+        let refused = fill("1601FQ", &opened["draft"], json!({key.clone(): "42"}));
+        assert_eq!(refused["rejected"][key.clone()], gate::LOCK, "{key}");
+    }
+    assert_eq!(opened["draft"]["schedule1"], json!([]));
+
+    let no = fill(
+        "1601FQ",
+        &opened["draft"],
+        json!({"frm1601FQ:SpecialTax_2": "true"}),
+    );
+    for key in gate::keys() {
+        assert_eq!(no["relocks"][&key], gate::LOCK, "{key}");
+    }
+    let refused = fill("1601FQ", &no["draft"], json!({"txtAmtIncomePay0": "42"}));
+    assert_eq!(refused["rejected"]["txtAmtIncomePay0"], gate::LOCK);
+
+    let yes = fill(
+        "1601FQ",
+        &no["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    for key in gate::keys() {
+        let expected = if key.starts_with("txtNatIncPayment") || key.starts_with("txtReqWithheld") {
+            json!("computed by BIR's own formulas")
+        } else {
+            Value::Null
+        };
+        assert_eq!(yes["relocks"][&key], expected, "{key}");
+    }
+    assert_eq!(yes["draft"]["schedule1"].as_array().unwrap().len(), 5);
+    assert_eq!(yes["draft"]["schedule1"][0]["income_payment"], 0.0);
+    let typed = fill(
+        "1601FQ",
+        &yes["draft"],
+        json!({"txtAmtIncomePay0": "42", "txtRate0": "10"}),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    assert_eq!(typed["draft"]["schedule1"][0]["income_payment"], 42.0);
+    assert_eq!(typed["draft"]["schedule1"][0]["tax_rate"], 10.0);
+}
+
+#[test]
+fn v2018_1601fq_schedule_1_reopened_at_yes_keeps_its_computed_base_locks() {
+    setup();
+    let yes = fill(
+        "1601FQ",
+        &open("1601FQ", 1)["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    save("1601FQ", &yes["draft"]);
+    let reopened = open("1601FQ", 1);
+    for index in 0..5 {
+        let nature = format!("txtNatIncPayment{index}");
+        assert!(
+            reopened["locks"][&nature].as_str().is_some(),
+            "{nature}: {}",
+            reopened["locks"][&nature]
+        );
+        let withheld = format!("txtReqWithheld{index}");
+        assert_eq!(
+            reopened["locks"][&withheld], "computed by BIR's own formulas",
+            "{withheld}"
+        );
+    }
+    let percent = fill("1601FQ", &reopened["draft"], json!({"txtRate0": "10.555"}));
+    assert_eq!(percent["rejected"], json!({}));
+    assert_eq!(percent["values"]["txtRate0"], "10.56");
+}
+
+#[test]
+fn v2018_1601fq_schedule_1_clears_once_when_item_13_closes() {
+    setup();
+    use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+    let yes = fill(
+        "1601FQ",
+        &open("1601FQ", 1)["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    let typed = fill(
+        "1601FQ",
+        &yes["draft"],
+        json!({"txtAmtIncomePay0": "42", "txtRate0": "10"}),
+    );
+    let no = fill(
+        "1601FQ",
+        &typed["draft"],
+        json!({"frm1601FQ:SpecialTax_2": "true"}),
+    );
+    assert_eq!(no["draft"]["schedule1"], json!([]));
+    let cleared = "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes.";
+    for key in gate::keys() {
+        assert_eq!(no["relocks"][&key], gate::LOCK, "{key}");
+        let expected = if gate::keys_for_row(0).contains(&key) {
+            cleared
+        } else {
+            gate::LOCK
+        };
+        assert_eq!(no["relock_notes"][&key], expected, "{key}");
+    }
+    let yes_again = fill(
+        "1601FQ",
+        &no["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    assert_eq!(yes_again["draft"]["schedule1"].as_array().unwrap().len(), 5);
+    assert_eq!(yes_again["draft"]["schedule1"][0]["income_payment"], 0.0);
+    assert_eq!(yes_again["draft"]["schedule1"][0]["tax_rate"], 0.0);
+}
+
+#[test]
+fn v2018_1601fq_legacy_dormant_schedule_1_is_cleared_on_open_and_said_once() {
+    setup();
+    use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+    let yes = fill(
+        "1601FQ",
+        &open("1601FQ", 1)["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    let typed = fill(
+        "1601FQ",
+        &yes["draft"],
+        json!({
+            "txtAmtIncomePay0": "42",
+            "txtRate0": "10",
+            "txtAmtIncomePay1": "24",
+            "txtRate1": "10",
+        }),
+    );
+    let saved = save("1601FQ", &typed["draft"]);
+    let id = stored_id(&saved);
+
+    let mut legacy: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    legacy["tax_relief"] = Value::Null;
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
+    );
+    let first = open("1601FQ", 1);
+    assert_eq!(first["draft"]["schedule1"], json!([]));
+    for key in gate::keys() {
+        assert_eq!(first["locks"][&key], gate::LOCK, "{key}");
+    }
+    let notes = first["notes"].as_array().unwrap();
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    let key = notes[0]["key"].as_str().unwrap().to_string();
+    assert!(
+        key.starts_with(&format!(
+            "notice_seen:1601fq_schedule1:row-00000000000000000001,row-00000000000000000002:{id}:"
+        )),
+        "{key}"
+    );
+    assert_eq!(
+        notes[0]["text"],
+        "Schedule 1's rows were cleared: they apply only when item 13 is Yes."
+    );
+    assert!(
+        !notes[0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("row-00000000000000000001")
+    );
+    assert_eq!(open("1601FQ", 1)["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        call("screen_form_notes_seen", vec![json(json!([key.clone()]))]).unwrap(),
+        json!([key])
+    );
+    assert_eq!(open("1601FQ", 1)["notes"], json!([]));
 }

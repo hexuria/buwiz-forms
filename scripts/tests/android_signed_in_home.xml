@@ -2,5 +2,5 @@
 <hierarchy rotation="0">
   <node package="dev.goldcoders.bir" text="Welcome to eBIRForms" />
   <node package="dev.goldcoders.bir" text="Prepare, print and track BIR returns for every taxpayer you handle. Everything stays on this device." />
-  <node package="dev.goldcoders.bir" content-desc="Add your first taxpayer" clickable="true" enabled="true" bounds="[48,1400][1032,1520]" />
+  <node package="dev.goldcoders.bir" resource-id="welcome-add-taxpayer" content-desc="New tax profile" clickable="true" enabled="true" bounds="[48,1400][1032,1520]" />
 </hierarchy>
