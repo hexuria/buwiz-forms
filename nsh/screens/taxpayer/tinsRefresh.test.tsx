@@ -14,6 +14,7 @@ interface App {
   waitFor: (sel: string, opts?: object) => Promise<void>;
   waitUntil: (fn: () => boolean, opts?: object) => Promise<void>;
   wait: (ms: number) => Promise<void>;
+  setLifecycle: (state: string) => Promise<void>;
 }
 
 function tinsCalls(app: App): string[] {
@@ -63,4 +64,20 @@ test("desktop: opening the Fix action does not itself re-read the account (nothi
   await app.press("id:tp-tin-status-action");
   await app.wait(1500);
   expect(tinsCalls(app).filter((c) => c === "account_tins(0)").length).toBe(standing);
+}, 30_000);
+
+test("phone: a resume after the Fix link was opened asks fresh once", async () => {
+  // The phone has no window focus: the return from the account site is the lifecycle coming back to active.
+  const app = (await open(ENTRY, asking({ tins: "fix" }))) as unknown as App;
+  await app.waitFor("id:tp-tin-status-action");
+  await app.press("id:tp-tin-status-action");
+  const before = tinsCalls(app).filter((c) => c === "account_tins(0)").length;
+  await app.setLifecycle("background");
+  await app.setLifecycle("active");
+  await app.waitUntil(() => tinsCalls(app).filter((c) => c === "account_tins(0)").length === before + 1, { timeout: 10000 });
+  // Once, not again: a second resume inside the minute reads the cache.
+  await app.setLifecycle("background");
+  await app.setLifecycle("active");
+  await app.wait(1500);
+  expect(tinsCalls(app).filter((c) => c === "account_tins(0)").length).toBe(before + 1);
 }, 30_000);

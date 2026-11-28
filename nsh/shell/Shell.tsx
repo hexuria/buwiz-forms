@@ -3,7 +3,7 @@
 // tab bar and the sheets (under 600 points), floats the sidebar and panel as overlays under 860, and mounts the dialogs
 // and the toaster once. Screens are drawn by views.tsx.
 import type { JSX } from "nsh";
-import { cleanup, computed, effect, ErrorBoundary, keymap, platform, safeArea, Scroll, untracked, View } from "nsh";
+import { cleanup, computed, effect, ErrorBoundary, keymap, lifecycle, platform, safeArea, Scroll, untracked, View } from "nsh";
 import { Button } from "nsh/base";
 import { isAvailable as desktopAvailable, currentWindow, focusedWindow, titleBar } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
@@ -277,11 +277,15 @@ export function Shell(props: ShellProps) {
   // D2: the account's TINs are asked at start and when the app becomes active (never on a timer).
   void refreshTins(0);
   let tinWasFocused = untracked(() => focusedWindow() !== null);
+  let tinWasActive = untracked(() => lifecycle() === "active");
   let lastFocusRead = 0;
   effect(() => {
     const focused = focusedWindow() !== null;
+    // Phones have no window focus: the return there is the lifecycle coming back to active, as clock.ts reads it.
+    const resumed = lifecycle() === "active" && !tinWasActive;
+    tinWasActive = lifecycle() === "active";
     // A focus flicker is not a return from the account site: at most one read a minute, or the cache answers.
-    if (focused && !tinWasFocused) {
+    if ((focused && !tinWasFocused) || resumed) {
       // A return from the account site (the Fix or Verify link was opened) asks fresh once, however close the last read.
       if (takeAccountSiteOpened()) {
         lastFocusRead = Date.now();

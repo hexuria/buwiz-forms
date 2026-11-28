@@ -176,6 +176,18 @@ test("desktop: after the account owner changes a failing read clears the old lis
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
 
+test("desktop: an amount typed during the account read drops the press with its reason, nothing queued", async () => {
+  // What the read checked was the draft as the press saw it. An edit during the read is not in it, and 2551Q queues
+  // the STORED row: queueing anyway would file what the screen never showed. The press drops with a toast instead.
+  const app = await pageAndQueue("activated", { tinsDelayMs: 2500, openParts: "all" });
+  await pressToRead(app);
+  await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
+  await app.type("id:fp-frm2551Qv2018:txt15", "100");
+  await new Promise((r) => setTimeout(r, 3500));
+  expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
+  await app.waitUntil(() => app.texts().some((t) => t.includes("Queue was stopped")), { timeout: 8000 });
+}, 40_000);
+
 test("desktop: a switch to the filed original during the account read queues nothing", async () => {
   // "View the filed original" opens the SAME form, period and TIN in another mode. What the read answered was the
   // draft's activation, not the filed original's: nothing queues, nothing blocks.

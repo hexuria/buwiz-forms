@@ -4080,6 +4080,8 @@ export class FormSession {
     const targetKey = (t: typeof pressed) => `${t.tin}|${t.formCode}|${t.year}|${t.period}|${t.mode ?? "return"}|${t.mode === "amend" ? (t.key ?? "") : ""}|${t.mode === "filed_original" ? (t.snapshotId ?? "") : ""}`;
     const pressedKey = targetKey(pressed);
     const [tinRoot, branch] = tinKeyParts(pressed.tin);
+    // What the press checked is the draft as it then was; an edit during the account read is not in it.
+    const pressedSeq = this.st.editSeq;
     void (async () => {
       let blocked: { state: string; message: string | null; action_url: string | null; test_only: boolean; stale: boolean; fetched_at: number } | null = null;
       try {
@@ -4096,6 +4098,14 @@ export class FormSession {
       // another return during the wait means the TIN read answered for a target this page no longer shows.
       if (this.disposed) return;
       if (targetKey(this.st.target) !== pressedKey) return;
+      // An edit typed during the read is not what the read checked, and the stored row it never reached is what the
+      // period-path forms would file for real: the press is dropped with its reason, never queued half-seen. (Rather
+      // than locking the page for a network-length wait, which freezes typing with no visible cause.)
+      if (this.st.editSeq !== pressedSeq) {
+        this.toast("Queue was stopped: the return changed while the account answered. Press Queue again.", "info");
+        this.publish();
+        return;
+      }
       const now = this.st;
       if (blocked) {
         now.overlay = { kind: "tin-blocked", row: blocked };
