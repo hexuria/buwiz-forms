@@ -33,14 +33,14 @@
       "ok": true,
       "elapsed_ms": 224,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/05-open-2551q/005-s5.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/05-open-2551q/005-s5.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/05-open-2551q/005-s5.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/05-open-2551q/005-s5.png",
       "ok": true
     }
   ],

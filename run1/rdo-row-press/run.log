@@ -1,4 +1,4 @@
-2026-11-28T05:39:48.820Z	launch	nsh-run-agent macos /Users/devin/BuwizNsh/agents/e2e-macos-20261127-213948.db	started	0ms
+2026-11-28T05:39:48.820Z	launch	nsh-run-agent macos ~/BuwizNsh/agents/e2e-macos-20261127-213948.db	started	0ms
 2026-11-28T05:39:55.358Z	wait	window plane	ready	6532ms
 2026-11-28T05:39:55.388Z	wait	data plane	ready	29ms
 2026-11-28T05:39:55.423Z	app.info	database	test	34ms
@@ -8,4 +8,4 @@
 2026-11-28T05:40:50.790Z	recipe	sign-up	pass	12391ms
 2026-11-28T05:42:51.534Z	recipe	profile-pick-press	pass	120744ms
 2026-11-28T05:42:51.747Z	stop	app	stopped	213ms
-2026-11-28T05:42:51.749Z	clean	/Users/devin/BuwizNsh/agents/e2e-macos-20261127-213948.db	scratch database removed	0ms
+2026-11-28T05:42:51.749Z	clean	~/BuwizNsh/agents/e2e-macos-20261127-213948.db	scratch database removed	0ms

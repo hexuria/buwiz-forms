@@ -16,7 +16,7 @@
       "ok": true,
       "elapsed_ms": 438,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/002-s2.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/002-s2.png",
         "ok": true
       }
     },
@@ -59,7 +59,7 @@
       "ok": true,
       "elapsed_ms": 482,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/009-s9.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/009-s9.png",
         "ok": true
       }
     },
@@ -91,7 +91,7 @@
       "ok": true,
       "elapsed_ms": 355,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/014-s14.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/014-s14.png",
         "ok": true
       }
     },
@@ -106,7 +106,7 @@
       "ok": true,
       "elapsed_ms": 438,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/016-s16.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/016-s16.png",
         "ok": true
       }
     },
@@ -123,30 +123,30 @@
       "error_code": "timeout",
       "elapsed_ms": 20484,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/018-s18.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/018-s18.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/002-s2.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/002-s2.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/009-s9.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/009-s9.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/014-s14.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/014-s14.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/016-s16.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/016-s16.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/018-s18.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/09-queue/018-s18.png",
       "ok": true
     }
   ],

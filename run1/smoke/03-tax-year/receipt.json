@@ -88,14 +88,14 @@
       "ok": true,
       "elapsed_ms": 280,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/03-tax-year/015-s15.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/03-tax-year/015-s15.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213137/03-tax-year/015-s15.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-213137/03-tax-year/015-s15.png",
       "ok": true
     }
   ],

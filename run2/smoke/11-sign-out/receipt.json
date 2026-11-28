@@ -29,14 +29,14 @@
       "error_code": "timeout",
       "elapsed_ms": 10154,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214356/11-sign-out/004-s4.png",
+        "path": "~/BuwizNsh/evidence/e2e/macos-20261127-214356/11-sign-out/004-s4.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214356/11-sign-out/004-s4.png",
+      "path": "~/BuwizNsh/evidence/e2e/macos-20261127-214356/11-sign-out/004-s4.png",
       "ok": true
     }
   ],

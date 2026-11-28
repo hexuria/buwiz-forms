@@ -2,7 +2,7 @@
  "suite": "rdo-row-press",
  "target": "macos",
  "started": "20261127-213948",
- "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-213948",
+ "out": "~/BuwizNsh/evidence/e2e/macos-20261127-213948",
  "cli_version": "0.4.1",
  "app_commit": "b3bddd4d",
  "platform": "desktop",

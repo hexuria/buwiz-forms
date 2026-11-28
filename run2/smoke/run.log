@@ -1,4 +1,4 @@
-2026-11-28T05:43:56.172Z	launch	nsh-run-agent macos /Users/devin/BuwizNsh/agents/e2e-macos-20261127-214356.db	started	0ms
+2026-11-28T05:43:56.172Z	launch	nsh-run-agent macos ~/BuwizNsh/agents/e2e-macos-20261127-214356.db	started	0ms
 2026-11-28T05:44:00.966Z	wait	window plane	ready	4792ms
 2026-11-28T05:44:00.989Z	wait	data plane	ready	22ms
 2026-11-28T05:44:01.026Z	app.info	database	test	36ms
@@ -15,4 +15,4 @@
 2026-11-28T05:45:26.128Z	recipe	birth-date	pass	4251ms
 2026-11-28T05:45:38.433Z	recipe	sign-out	known gap at s4: wait_until timed out: node `locked-screen` not found	12051ms
 2026-11-28T05:45:38.647Z	stop	app	stopped	213ms
-2026-11-28T05:45:38.648Z	clean	/Users/devin/BuwizNsh/agents/e2e-macos-20261127-214356.db	scratch database removed	0ms
+2026-11-28T05:45:38.648Z	clean	~/BuwizNsh/agents/e2e-macos-20261127-214356.db	scratch database removed	0ms

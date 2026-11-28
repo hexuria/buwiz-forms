@@ -1,4 +1,4 @@
-build: app b3bddd4d, nsh 8c78cfd6 beside it, tool nsh 0.6.1 (8c78cfd), cargo 1.99.0 (5f94df478 2026-08-27) (/Users/devin/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/cargo), folder /Users/devin/BuwizNsh/target-nsh
+build: app b3bddd4d, nsh 8c78cfd6 beside it, tool nsh 0.6.1 (8c78cfd), cargo 1.99.0 (5f94df478 2026-08-27) (~/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/cargo), folder ~/BuwizNsh/target-nsh
 ✓ built the Rust crate nsh-app-ebirforms (4m 57s)
 ✓ built App.tsx (1.5 MB js, 5.6 MB bytecode, 230ms)
 ✓ built the development host for macOS (1m 19s, 1 warning: -v shows it)
