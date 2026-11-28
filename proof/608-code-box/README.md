@@ -3,8 +3,11 @@ recipe: signin-code.json (in this folder)
 
 # Proof for #608: `type gate-code-boxes 246810` in the real window
 
-Real-app run on the macOS desktop, driven only by gpui-agent-cli 0.5.0
-(recipe `signin-code.json`, receipt `report.json` — all 15 steps pass).
+Real-app run on the macOS desktop at the PR head `d5017c5296bb588b3667218ca947ec30c423899e`,
+driven only by gpui-agent-cli 0.5.0 (recipe `signin-code.json`, receipt `report.json` — all 15 steps pass).
+The launch log of the run shows the four conditions in the environment: loopback `127.0.0.1:3008`
+only (`BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL`), `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1
+BIR_SFTP_DRY_RUN=1`, `BIR_AUTH_BYPASS` unset, never `BIR_SFTP_LIVE`; a debug build with a scratch database.
 
 The four conditions of the owner's exception to the bypass rule:
 
