@@ -113,16 +113,37 @@ test("a return the dry-run worker sent says Dry run, not sent to BIR", async () 
 
 test("a Confirmed return carrying the old test-send mark reads as filed", async () => {
   createDemoTaxpayer();
-  const draft: Record<string, unknown> = { ...((await bir.screen_form_open(DEMO.tin, "2550Q", YEAR, 2)).draft as Record<string, unknown>) };
+  // The mark is the worker's, never a page's: save_form_draft strips a client-sent submitted_dry_run, and nothing in the
+  // dry-run test env confirms a send, so no host path stores such a row here. The session is shown the draft as the host
+  // would build it for that row (a stubbed open, this test only). The print side of the same rule is covered in the host's
+  // own test a_confirmed_return_with_the_test_send_mark_prints_as_filed_with_its_receipt.
+  const door = bir as unknown as Record<string, unknown>;
+  const realOpen = door.screen_form_open as (tin: string, form: string, year: number, period: number) => Promise<{ draft: Record<string, unknown> }>;
+  const openedSample = await realOpen(DEMO.tin, "2550Q", YEAR, 2);
+  const draft: Record<string, unknown> = { ...(openedSample.draft as Record<string, unknown>) };
   delete draft.screen_form_sample;
   const life = draft.lifecycle && typeof draft.lifecycle === "object" ? (draft.lifecycle as Record<string, unknown>) : draft;
   life.status = "Confirmed";
   life.submitted_at = "2025-07-20T01:02:03+00:00";
   life.confirmed_at = "2025-07-21T01:02:03+00:00";
   life.submitted_dry_run = true;
-  bir.save_form_draft(DEMO.tin, "2550Q", YEAR, 2, "Confirmed", draft);
-  expect(await line(at("2550Q", 2))).toBe("Sent to BIR Jul 20, 2025, confirmed Jul 21, 2025. Nothing here can be changed.");
-  expect((await header(at("2550Q", 2))).chip).toBe("Confirmed");
+  // What the host returns for such a row: the facts at the opened envelope's top level, not only inside the draft.
+  door.screen_form_open = () =>
+    Promise.resolve({
+      ...openedSample,
+      draft,
+      status: "Confirmed",
+      editable: false,
+      submitted_at: "2025-07-20T01:02:03+00:00",
+      confirmed_at: "2025-07-21T01:02:03+00:00",
+      submitted_dry_run: true,
+    });
+  try {
+    expect(await line(at("2550Q", 2))).toBe("Sent to BIR Jul 20, 2025, confirmed Jul 21, 2025. Nothing here can be changed.");
+    expect((await header(at("2550Q", 2))).chip).toBe("Confirmed");
+  } finally {
+    door.screen_form_open = realOpen;
+  }
 });
 
 test("a return sent for real (no dry-run fact) says Sent to BIR", async () => {
