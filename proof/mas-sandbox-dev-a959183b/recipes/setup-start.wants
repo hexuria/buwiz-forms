@@ -1,0 +1,4 @@
+# Smoke 1, every form factor: a fresh database opens on first-run setup. "Just me", then the New taxpayer form.
+wait_until setup-solo --timeout-ms 30000 --screenshot
+click setup-solo
+wait_until new-tp-name --timeout-ms 5000

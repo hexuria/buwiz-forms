@@ -1,0 +1,62 @@
+{
+ "suite": "smoke",
+ "target": "macos",
+ "started": "20261127-174506",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-174506",
+ "cli_version": "0.4.1",
+ "app_commit": "a959183b",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 645,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 7714,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6065,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 8652,
+   "note": null,
+   "file": "agent-recipes/ui/ui-navigate-app.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1806,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q.wants"
+  }
+ ]
+}
