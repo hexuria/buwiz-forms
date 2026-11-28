@@ -1,0 +1,123 @@
+{
+ "suite": "smoke",
+ "target": "ios",
+ "started": "20261127-162115",
+ "out": "/Users/devin/repos/e2e-recipes-refresh/ios-run-final",
+ "cli_version": "0.4.1",
+ "app_commit": "73302a0c",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "sign-up-seed",
+   "status": "pass",
+   "ms": 211,
+   "note": null,
+   "file": "agent-recipes/e2e/seed-tax-profile.json"
+  },
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 154,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start-seeded.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 12724,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 2843,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 3334,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 13251,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced-phone.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 54,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "pass",
+   "ms": 21442,
+   "note": null,
+   "file": "agent-recipes/e2e/queue-phone.json"
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 8452,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 12380,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "issue #450: BIR_AUTH_BYPASS=1 leaves no lock screen after Log out",
+   "screenshot": "/Users/devin/repos/e2e-recipes-refresh/ios-run-final/12-sign-out/failure.png",
+   "tree": "/Users/devin/repos/e2e-recipes-refresh/ios-run-final/12-sign-out/failure-tree.json"
+  }
+ ]
+}

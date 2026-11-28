@@ -1,0 +1,120 @@
+{
+ "suite": "smoke",
+ "target": "macos",
+ "started": "20261127-161123",
+ "out": "/Users/devin/repos/e2e-recipes-refresh/macos-run-final",
+ "cli_version": "0.4.1",
+ "app_commit": "9abbb928",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 699,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up-seed",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 7645,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 5932,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 9326,
+   "note": null,
+   "file": "agent-recipes/ui/ui-navigate-app.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1920,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 17366,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 287,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "pass",
+   "ms": 17926,
+   "note": null,
+   "file": "agent-recipes/e2e/queue-desktop.json"
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 4298,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date.wants"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 12109,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "issue #450: BIR_AUTH_BYPASS=1 leaves no lock screen after Log out",
+   "screenshot": "/Users/devin/repos/e2e-recipes-refresh/macos-run-final/12-sign-out/failure.png",
+   "tree": "/Users/devin/repos/e2e-recipes-refresh/macos-run-final/12-sign-out/failure-tree.json"
+  }
+ ]
+}
