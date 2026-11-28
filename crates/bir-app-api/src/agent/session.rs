@@ -4369,7 +4369,7 @@ mod tests {
 
         // The fill recomputes before it saves, so its in-memory before-image
         // is already zero. The save must compare with the stored row instead.
-        call(
+        let answer = call(
             &mut session,
             "form.fill",
             json!({"fields": {"frm2551Qv2018:amendedRtn_2": "true"}}),
@@ -4379,12 +4379,25 @@ mod tests {
             session.open.as_ref().unwrap().draft["tax_paid_previous"],
             0.0
         );
+        assert_eq!(
+            answer["clearances"][0]["gate"], "2551q_item16",
+            "the assistant's fill is the one announcement: {answer}"
+        );
+        assert!(
+            answer["clearances"][0]["text"]
+                .as_str()
+                .is_some_and(|text| text.contains("Item 16 was cleared")),
+            "{answer}"
+        );
         let db = session.lock_db().unwrap();
         let pending = db
             .settings_with_prefix("notice_pending:2551q_item16:")
             .unwrap();
-        assert_eq!(pending.len(), 1, "{pending:?}");
-        assert!(pending[0].1.contains("Item 16 was cleared"), "{pending:?}");
+        assert_eq!(pending.len(), 0, "already said at the change: {pending:?}");
+        let seen = db
+            .settings_with_prefix("notice_seen:2551q_item16:")
+            .unwrap();
+        assert_eq!(seen.len(), 1, "{seen:?}");
     }
 
     fn open_1600pt(session: &mut Session) {

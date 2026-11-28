@@ -2372,7 +2372,10 @@ mod tests {
         let mut d = sample();
         d.vat_paid_previous = 100.0;
         d.recompute();
-        assert_eq!(d.vat_paid_previous, 0.0);
+        assert_eq!(
+            d.vat_paid_previous, 100.0,
+            "init only disables 23D; recompute is not the No radio's click"
+        );
         d.is_amended = true;
         d.vat_paid_previous = 100.0;
         d.recompute();
