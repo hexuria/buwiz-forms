@@ -647,11 +647,20 @@ def redact_file(path, log):
         Path(path).write_text(masked, encoding="utf-8")
 
 
+AFTER_SCROLLS = re.compile(r"after (\d+) scroll\(s\) towards the middle")
+
+
 def step_scrolled(step):
-    """How many times a step's press scrolled its target clear of a cover first (the plug's `scrolled` result, #28)."""
-    result = step.get("result") if isinstance(step, dict) else None
+    """How many times a step scrolled its target clear of a cover first: the plug's `scrolled` result (#28), or, for a
+    step refused after scrolling, the count its error names ("… after N scroll(s) towards the middle")."""
+    if not isinstance(step, dict):
+        return 0
+    result = step.get("result")
     count = result.get("scrolled") if isinstance(result, dict) else None
-    return count if isinstance(count, int) and not isinstance(count, bool) and count > 0 else 0
+    if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+        return count
+    match = AFTER_SCROLLS.search(step.get("error") or "")
+    return int(match.group(1)) if match else 0
 
 
 def scroll_check(receipt, entry, context):

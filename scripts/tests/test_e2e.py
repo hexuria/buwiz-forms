@@ -333,6 +333,18 @@ class SuiteTests(unittest.TestCase):
         desktop = {"target": "macos", "form_factor": "desktop"}
         self.assertIsNotNone(E2E.scroll_check(receipt, {"may_scroll": {"phone": ["s14"]}}, desktop)[1])
 
+    def test_a_step_refused_after_scrolling_records_its_scrolls(self):
+        # The plug answers only an error then ("occluded_by: 9 after 2 scroll(s) towards the middle"): the count is
+        # read from it, so a failed step's scrolls show in the report too.
+        context = {"target": "android", "form_factor": "phone"}
+        receipt = {"ok": False, "steps": [
+            {"id": "s5", "ok": False, "error": "occluded_by: cover after 2 scroll(s) towards the middle"},
+        ]}
+        self.assertEqual(E2E.scroll_check(receipt, {"may_scroll": ["s5"]}, context), ({"s5": 2}, None))
+        self.assertEqual(E2E.scroll_check(receipt, {}, context)[0], {"s5": 2})
+        refused = {"ok": False, "steps": [{"id": "s5", "ok": False, "error": "occluded_by: cover"}]}
+        self.assertEqual(E2E.scroll_check(refused, {}, context), ({}, None))
+
     def test_a_step_that_did_not_scroll_is_untouched(self):
         context = {"target": "linux", "form_factor": "desktop"}
         for result in (None, {}, {"changed": True}, {"scrolled": 0}, {"scrolled": True}, "text"):
