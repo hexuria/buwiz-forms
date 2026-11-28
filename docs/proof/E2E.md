@@ -230,6 +230,9 @@ Why the recipes look as they do (each from a machine's run on the real app, `pro
   a toggle). The money boxes type the amounts as written (`500.25`): since #403 a money box keeps its text while
   focused and formats only on leaving, so the box reads `$amount` while focused and `$amount_shown` after it. They do
   not promise to leave Items 15 and 16 at zero; the queue recipes never reuse that return.
+- Each queue rehearsal opens its own fresh return, where Item 15 (creditable percentage tax withheld) starts empty
+  and is required: every queue and queue-send variant opens Part II and sets Item 15 to `0` before Check, or Check
+  leaves "1 item needs attention" and the recipe stops at its `fp-pill-count` wait.
 - On the macOS strict adapter a bare `type` does not move focus out of the segmented TIN control: the desktop
   recipes click a box before typing into it (sign-up's name, the birth date, delete-row's amount).
 - 2551Q's Schedule 1 pre-holds row 1, and Delete row is disabled on an empty row: delete-row fills the new row's
@@ -240,6 +243,8 @@ Why the recipes look as they do (each from a machine's run on the real app, `pro
   hide the software keyboard after `set_value`: the next low control is otherwise keyboard-occluded. Linux's window is
   narrow enough to need the same layout, but its desktop host has no system keyboard actions, so the Linux queue recipes
   are the phone recipes without the hide step.
+- The iPhone never runs queue or queue-send: their phone recipes hide the keyboard (`system.keyboard_hide`), which
+  the iOS host does not offer, so the suite marks them `needs_feature` for iOS and the run reports them as needs.
 
 ## Results on the real apps (2026-11-27, gpui-agent-cli 0.4.1)
 

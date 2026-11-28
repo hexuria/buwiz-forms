@@ -462,6 +462,26 @@ class SuiteTests(unittest.TestCase):
         self.assertEqual((money[1].get("op"), money[1].get("target")),
                          ("click", "fp-frm2551Qv2018:amendedRtn_1"))
 
+    def test_every_queue_variant_fills_item_15_before_check(self):
+        # Each queue rehearsal opens its own fresh 2551Q return, where Item 15 (creditable percentage tax withheld)
+        # starts empty and is required: Check would leave "1 item needs attention" and the recipe would stop at its
+        # `fp-pill-count --absent` wait. On main the queue ran on money-boxes' return, which had filled it.
+        suite = E2E.load_suite("smoke")
+        for name in ("queue", "queue-send"):
+            entry = next(entry for entry in suite["recipes"] if entry["name"] == name)
+            files = sorted({value for key, value in entry.items()
+                            if key in ("desktop", "windows", "linux", "macos", "phone", "android", "ios", "file")
+                            and isinstance(value, str)})
+            self.assertTrue(files, name)
+            for file in files:
+                with self.subTest(recipe=name, file=file):
+                    steps = E2E.recipe_steps(suite["_dir"] / file)
+                    text = [json.dumps(step) for step in steps]
+                    check = next(i for i, step in enumerate(text) if "fp-check" in step)
+                    fills = [i for i, step in enumerate(text)
+                             if "fp-frm2551Qv2018:txt15" in step and ("set_value" in step or '"type"' in step)]
+                    self.assertTrue(fills and fills[0] < check, f"{file} fills Item 15 before Check")
+
     def test_linux_queue_files_are_the_phone_files_minus_keyboard_hide(self):
         for phone_file, linux_file in (("queue-phone.json", "queue-linux.json"),
                                        ("queue-send-phone.json", "queue-send-linux.json")):

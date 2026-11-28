@@ -18,6 +18,11 @@ type fp-txtEmail#occurrence-1 e2e@example.com
 click fp-frm2551Qv2018:taxTreaty_2 --screenshot
 # Jump back to the top after the low Part I answers: deep in the scroll the toolbar is culled from the tree and fp-queue is gone.
 click fp-frm2551Qv2018:taxRateNA --screenshot
+# The queue rehearsal opens its own fresh return, where Item 15 (creditable percentage tax withheld) starts empty
+# and is required: fill it with zero so Check has nothing left (on main it was filled by money-boxes' return).
+click fp-part-2-toggle
+wait_until fp-frm2551Qv2018:txt15 --timeout-ms 5000
+set_value fp-frm2551Qv2018:txt15 0
 click fp-nav-0 --screenshot
 click fp-check
 wait_until fp-pill-count --timeout-ms 1000 --absent
