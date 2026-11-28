@@ -45,6 +45,15 @@ thread_local! {
 /// Cloud-account settings use this while the filing UI is still locked.
 pub(crate) fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError>
 {
+    open_database_slot_for(&crate::session::snapshot())
+}
+
+/// P3: the one-snapshot open. The caller's OWN session snapshot decides the room — a verb that
+/// already snapshotted the machine passes it in, so an Opening→Open racing the read can never
+/// pair the old owner and epoch with the new room.
+pub(crate) fn open_database_slot_for(
+    session: &crate::session::Snap,
+) -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
     // A test's ephemeral injection, or this thread's already-open single-room handle, first: rooms
     // mode never populates the thread-local slot, so a filled one is never a room's stale twin.
     if let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) {
@@ -60,7 +69,8 @@ pub(crate) fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Dat
     }
     // A3a (§A.4): the open room is the slot, read from the machine. The handle is never replaced
     // inside an old Arc; a new room is a new Arc with a new generation, and the reader follows it.
-    if let Some((handle, generation, _, _)) = crate::session::snapshot().room {
+    if let Some((handle, generation, _, _)) = &session.room {
+        let (handle, generation) = (handle.clone(), *generation);
         if READER_GENERATION.with(std::cell::Cell::get) != generation {
             // F15: a poisoned room mutex must not keep the old reader — recover the guard and
             // reinstall; the database behind a poisoned lock is still the room's one connection.

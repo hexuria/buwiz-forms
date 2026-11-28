@@ -103,6 +103,19 @@ pub trait TokenSource: Send + Sync {
     fn device_key_is_current(&self) -> bool {
         true
     }
+    /// The check and the forget as ONE step (C5): `forget` runs only when the deletion still
+    /// belongs to the session that asked — in hosts with per-session sends inside the device-key
+    /// lock with the epoch re-checked there, so a key registered after the epoch moved is never
+    /// taken by the old session's forget. Returns whether the forget ran. The default is the
+    /// bare pair, correct for single-session clients: no second session can register meanwhile.
+    fn forget_device_key_if_current(&self, forget: &dyn Fn()) -> bool {
+        if self.device_key_is_current() {
+            forget();
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -587,6 +600,28 @@ impl Submitter {
         device_key_or_create(self.store.as_ref())
     }
 
+    /// C5: the check-then-delete as one step through the token source — in production the
+    /// forget runs inside the device-key lock with the epoch re-checked there, so a send of a
+    /// session that ended mid-call never deletes the newer session's key.
+    fn forget_device_if_current(&self) -> Result<(), ClientError> {
+        let error = std::sync::Mutex::new(None);
+        self.tokens.forget_device_key_if_current(&|| {
+            if let Err(forget_error) = self.forget_device() {
+                *error
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(forget_error);
+            }
+        });
+        if let Some(forget_error) = error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+        {
+            return Err(forget_error);
+        }
+        Ok(())
+    }
+
     /// Forgets this device's key and id, and the TIN list: a new sign-in
     /// registers a new key. The host calls it on sign-in and sign-out.
     pub fn forget_device(&self) -> Result<(), ClientError> {
@@ -713,15 +748,11 @@ impl Submitter {
                 Err(ClientError::Server {
                     status: 401, code, ..
                 }) if code == "unknown_device" && !registered_again => {
-                    if self.tokens.device_key_is_current() {
-                        self.forget_device()?;
-                    }
+                    self.forget_device_if_current()?;
                     registered_again = true;
                 }
                 Err(ClientError::Server { code, .. }) if code == "device_revoked" => {
-                    if self.tokens.device_key_is_current() {
-                        self.forget_device()?;
-                    }
+                    self.forget_device_if_current()?;
                     self.tokens.session_ended();
                     return Err(ClientError::DeviceRevoked);
                 }

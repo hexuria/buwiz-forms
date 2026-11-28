@@ -1,3 +1,22 @@
+/// F9: a notice raised by a job of one session must never show after the session moved —
+/// the banner would tell B about A's filing. The job's captured epoch rides its SEND_CONTEXT
+/// (scoped at the spawn); a mismatch posts NOTHING. The alert row is not here — it is the
+/// filing record the same code writes into the job's own room either way. Outside a job's
+/// context (the interactive paths) there is no gate.
+pub(crate) fn send_notice(title: &str, body: &str) {
+    let stale = crate::account_session::SEND_CONTEXT
+        .try_with(|context| context.epoch != crate::session_epoch::current())
+        .unwrap_or(false);
+    if stale {
+        tracing::info!(
+            title,
+            "a notice of the previous session posts nothing after the switch"
+        );
+        return;
+    }
+    crate::notification::send_notification(title, body);
+}
+
 use crate::db::{Claim1601CSubmissionResult, Claim2551QSubmissionResult, Database};
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
@@ -1660,7 +1679,7 @@ fn finish_sent_queueable<F: QueueableForm>(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    send_notice(&notice_title, &notice_body);
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
@@ -2175,7 +2194,7 @@ fn finish_sent_2551q(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    send_notice(&notice_title, &notice_body);
     // Keep the exact bytes that were encrypted for PUT.
     if let Some(xml_payload) = xml_payload {
         draft.submitted_payload = Some(xml_payload);
@@ -2776,7 +2795,7 @@ fn finish_sent_1601c(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    send_notice(&notice_title, &notice_body);
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
@@ -3421,6 +3440,50 @@ mod tests {
     /// F7, the send across a switch through the cron's production spawn wiring and a transport
     /// that really asks AccountTokens: after the machine's sign-in transition the return stays
     /// Queued, the transport is never opened, and neither account's token is fetched.
+    /// F9: a notice raised by a job of A's epoch after the switch to B posts NOTHING; the same
+    /// job before the switch posts (the positive control, so a silent notification layer can't
+    /// pass). The alert row is the filing record the job writes either way — the gate is only
+    /// over what is SHOWN.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_notice_of_the_old_epoch_posts_nothing_after_the_switch() {
+        use crate::account_session::{OwnerKey, SEND_CONTEXT, SendContext};
+        let _turn = crate::session_epoch::test_turn();
+        crate::notification::POSTED_TITLES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+        let owner = OwnerKey {
+            origin: "localhost:3008".into(),
+            user_id: "user-a".into(),
+        };
+        let epoch = crate::session_epoch::current() + 1;
+        crate::session_epoch::set(epoch);
+        SEND_CONTEXT
+            .scope(SendContext::new(owner.clone(), epoch), async {
+                // positive control: the same job BEFORE the switch posts
+                crate::background_cron::send_notice("control-title", "body");
+                assert!(
+                    crate::notification::POSTED_TITLES
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .contains(&"control-title".to_owned()),
+                    "positive control: before the switch the notice posts"
+                );
+                // the switch: the epoch moves, the job's context does not
+                crate::session_epoch::set(epoch + 1);
+                crate::background_cron::send_notice("stale-title", "body");
+                assert!(
+                    !crate::notification::POSTED_TITLES
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .contains(&"stale-title".to_owned()),
+                    "the old epoch's notice posts nothing after the switch"
+                );
+            })
+            .await;
+        crate::session_epoch::set(epoch);
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_before_a_switch_is_never_sent_under_the_new_sign_in() {
         let _transport_turn = queue_transport_test_turn().await;

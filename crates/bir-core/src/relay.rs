@@ -311,6 +311,16 @@ pub fn forget_device_key_for(owner: &crate::account_session::OwnerKey) {
 /// the epoch moved — the newer session's — is never taken by the old session's forget, however
 /// the wait ordered them. Deletes only its own owner's key: a key recorded for a newer owner is
 /// never touched.
+/// C5: a forget's check-and-delete inside DEVICE_KEY. The caller's closure runs with the lock
+/// held; the epoch is re-checked inside it, so a key registered after the epoch moved — the
+/// newer session's — is never taken however the wait ordered them.
+pub(crate) fn with_device_key_lock<R>(inside: impl FnOnce() -> R) -> R {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    inside()
+}
+
 pub fn forget_device_key_at_epoch(owner: &crate::account_session::OwnerKey, epoch: u64) {
     let _device_key = DEVICE_KEY
         .lock()
@@ -689,10 +699,13 @@ pub(crate) async fn settle(pending: &str) -> Settlement {
     match saved.as_ref().map(|saved| saved.server_url.as_str()) {
         Some(saved) if saved.trim_end_matches('/') == pending.server.trim_end_matches('/') => {}
         Some(_) => {
-            // The account moved to another server. That is not proof that this send is gone,
-            // but it is also not a sign-in gap that can heal: let the unanswered record age into
-            // needs-attention instead of keeping it forever.
-            return Settlement::NotYet;
+            // The account moved to another server: the send is kept, whatever the server. The
+            // NotYet this returned before REOPENED the disk-before-epoch window — a switch's
+            // close writes the disk before the epoch, so the new server's sign-in could age a
+            // mid-move send into needs-attention and drop a filing. This server can no more
+            // answer for the send than a signed-out one can; the keep is never evidence the
+            // send is gone.
+            return Settlement::Keep;
         }
         None => {
             // The disk answer is not evidence that the send is gone. Sign-out writes the disk before
@@ -700,6 +713,20 @@ pub(crate) async fn settle(pending: &str) -> Settlement {
             // can be asked again.
             return Settlement::Keep;
         }
+    }
+    // C6: the server matching is not enough — the USER must be the send's own too. A same-server
+    // sign-in of another account would ask after this send with a token that is not its owner's,
+    // and the server's honest "unknown" would read a live filing as Gone. The send's owner is the
+    // task-local context the tick was spawned in; with none (a caller outside a send) the server
+    // check above is all there is, as before.
+    let context_user = crate::account_session::SEND_CONTEXT
+        .try_with(|context| context.owner.user_id.clone())
+        .ok();
+    if let (Some(context_user), Some(saved)) = (context_user, saved.as_ref())
+        && saved.user_id != context_user
+    {
+        tracing::info!("settle keeps the send: the disk sign-in is another user's");
+        return Settlement::Keep;
     }
     #[cfg(test)]
     AFTER_SETTLE_DISK_CHECK
@@ -1226,6 +1253,91 @@ mod tests {
         }
     }
 
+    /// C3: the pure map — a SignedOut answer of the client is Keep, never Gone: the server's
+    /// sign-in state is not evidence the send is gone. Positive control: Gone still maps Gone.
+    #[test]
+    fn a_signed_out_settle_maps_to_keep_never_gone() {
+        assert!(
+            matches!(
+                settlement(bir_submit::Settled::SignedOut),
+                Settlement::Keep
+            ),
+            "SignedOut must keep the send"
+        );
+        assert!(
+            matches!(settlement(bir_submit::Settled::Gone), Settlement::Gone),
+            "positive control: Gone still maps Gone"
+        );
+        assert!(
+            matches!(
+                settlement(bir_submit::Settled::NotYet),
+                Settlement::NotYet
+            ),
+            "positive control: NotYet still maps NotYet"
+        );
+    }
+
+    /// C6: a same-server sign-in of ANOTHER user does not answer for the send — without the
+    /// user compare the settle would ask the server with a token that is not the owner's, and
+    /// the honest "unknown" would read a live filing as Gone. Positive control: the send's own
+    /// user on disk passes the gate (and the settle then ends NotYet for want of a relay
+    /// here, never Keep-for-mismatch).
+    #[tokio::test(flavor = "current_thread")]
+    async fn settle_keeps_the_send_when_the_disk_user_is_not_the_sends() {
+        use crate::account_session::{OwnerKey, SEND_CONTEXT, SendContext};
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let mut other = stored_for("http://localhost:3008");
+                other.user_id = "user-b".into();
+                crate::account_session::save_stored(&other).unwrap();
+                let pending = pending_for("http://localhost:3008", chrono::Utc::now());
+                let owner_a = OwnerKey {
+                    origin: "localhost:3008".into(),
+                    user_id: "user-a".into(),
+                };
+                let epoch = crate::session_epoch::current();
+                let answer = SEND_CONTEXT
+                    .scope(SendContext::new(owner_a, epoch), async {
+                        settle(&pending).await
+                    })
+                    .await;
+                assert!(
+                    matches!(answer, Settlement::Keep),
+                    "another user's same-server sign-in must keep the send: {answer:?}"
+                );
+                // positive control: the send's OWN user on disk passes the gate — the settle
+                // is then NotYet for want of a relay here, never the mismatch's Keep
+                let mut own = stored_for("http://localhost:3008");
+                own.user_id = "user-a".into();
+                crate::account_session::save_stored(&own).unwrap();
+                let answer = SEND_CONTEXT
+                    .scope(
+                        SendContext::new(
+                            OwnerKey {
+                                origin: "localhost:3008".into(),
+                                user_id: "user-a".into(),
+                            },
+                            epoch,
+                        ),
+                        async { settle(&pending).await },
+                    )
+                    .await;
+                assert!(
+                    !matches!(answer, Settlement::Keep),
+                    "positive control: the send's own user passes the user gate: {answer:?}"
+                );
+            },
+        )
+        .await;
+    }
+
     fn stored_for(server: &str) -> crate::cloud_account::StoredAccount {
         crate::cloud_account::StoredAccount {
             server_url: server.into(),
@@ -1307,8 +1419,12 @@ mod tests {
         );
     }
 
+    /// P1: the window is CLOSED — a send for a server the account left is kept, whatever the
+    /// server, exactly as a signed-out send is: the close writes the disk before the epoch, so
+    /// the another-server read can be a move still under way, and ageing it out would drop a
+    /// filing. (This test asserted the old NotYet; the correction of semantics is the fix.)
     #[test]
-    fn a_pending_send_for_a_server_the_account_left_is_not_kept_for_ever() {
+    fn a_pending_send_for_a_server_the_account_left_is_kept() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("account.json");
         temp_env::with_var(
@@ -1325,7 +1441,7 @@ mod tests {
                     tokio::runtime::Runtime::new()
                         .unwrap()
                         .block_on(settle(&pending)),
-                    Settlement::NotYet
+                    Settlement::Keep
                 ));
             },
         );

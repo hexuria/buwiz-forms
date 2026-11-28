@@ -629,6 +629,20 @@ impl bir_submit::TokenSource for AccountTokens {
             .unwrap_or(true)
     }
 
+    fn forget_device_key_if_current(&self, forget: &dyn Fn()) -> bool {
+        // C5: the check AND the forget inside DEVICE_KEY — the epoch is re-checked with the
+        // lock held, so a key the newer session registered while this call waited is never
+        // deleted by the old session's forget.
+        crate::relay::with_device_key_lock(|| {
+            if self.device_key_is_current() {
+                forget();
+                true
+            } else {
+                false
+            }
+        })
+    }
+
     fn session_ended(&self) {
         // The server's 401 ended the session of THE SEND'S owner, at the send's epoch, on the
         // credential the send's token came from — all three read from the send's task-local,
@@ -1807,6 +1821,71 @@ mod tests {
     /// blocking thread. A same-owner re-sign-in in the load gap moves the process epoch, and the
     /// old context must answer SignedOut rather than the new session's token. The positive control
     /// then shows the real token path answers when the epoch still matches.
+    /// C5, the discriminating proof: the epoch is re-checked INSIDE the device-key lock. The
+    /// test holds the lock, starts the forget on another thread (which blocks on the lock),
+    /// moves the epoch, then releases: the forget must NOT run. With the bare pair — the check
+    /// outside the lock — the worker's check passes before it ever blocks, the epoch move
+    /// lands too late, and the forget runs: the test fails.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_forget_rechecks_the_epoch_inside_the_device_key_lock() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let _turn = turn();
+        let owner = test_owner();
+        let epoch = crate::session_epoch::current() + 5;
+        crate::session_epoch::set(epoch);
+        use bir_submit::TokenSource;
+        let started = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // hold the device-key lock first: the worker's forget must queue behind it
+        let worker = {
+            let started = started.clone();
+            let ran = ran.clone();
+            let owner = owner.clone();
+            std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    SEND_CONTEXT
+                        .scope(SendContext::new(owner, epoch), async {
+                            started.wait();
+                            AccountTokens.forget_device_key_if_current(&|| {
+                                ran.store(true, std::sync::atomic::Ordering::SeqCst);
+                            });
+                        })
+                        .await;
+                });
+            })
+        };
+        crate::relay::with_device_key_lock(|| {
+            started.wait();
+            // the worker is inside its call now, blocked on this lock. The epoch moves — the
+            // newer session's sign-in — before the lock is released.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            crate::session_epoch::set(epoch + 1);
+        });
+        worker.join().unwrap();
+        assert!(
+            !ran.load(std::sync::atomic::Ordering::SeqCst),
+            "the epoch moved while the forget waited on the lock: it must not run"
+        );
+        // positive control: with the epoch unmoved the same call forgets
+        crate::session_epoch::set(epoch);
+        let control_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let control = control_ran.clone();
+        SEND_CONTEXT
+            .scope(SendContext::new(owner, epoch), async {
+                AccountTokens.forget_device_key_if_current(&move || {
+                    control.store(true, std::sync::atomic::Ordering::SeqCst);
+                });
+            })
+            .await;
+        assert!(
+            control_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "positive control: an unmoved epoch forgets"
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn account_tokens_carries_the_context_epoch_onto_the_blocking_thread() {
         let _epoch_turn = crate::session_epoch::test_turn();

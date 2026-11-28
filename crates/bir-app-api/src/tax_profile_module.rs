@@ -1671,7 +1671,7 @@ fn account_room_snapshot() -> Result<
     let Some((handle, _generation, _room_id, _path)) = snap.room.clone() else {
         // Single-room mode, a named development database and the test bypass have no room Arc:
         // they use the same database slot the other host verbs use.
-        return crate::bir_module::open_database_slot().map(|handle| (snap, handle));
+        return crate::bir_module::open_database_slot_for(&snap).map(|handle| (snap, handle));
     };
     Ok((snap, handle))
 }
@@ -4176,6 +4176,60 @@ mod tests {
                 "the room branch row did not list: {list}"
             );
         });
+        crate::session::close(crate::session::Reason::SignOut);
+        bir_core::platform::set_device_dir_override(None);
+    }
+
+    /// Row 8, made non-vacuous: the room changes BETWEEN the verb's snapshot and the read. The
+    /// read must use the verb's OWN snapshot — the room it captured — never the machine's room
+    /// of now: a re-read would pair the old owner and epoch with the NEW room. Positive control:
+    /// a same-room read still answers the room.
+    #[test]
+    fn the_one_snapshot_open_reads_the_verbs_own_room_after_a_switch() {
+        let _turn = crate::open_room::room_test_turn();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        // two layouts: one path one handle — the same file would be the same Arc and no
+        // room change at all
+        let layout_a = bir_core::rooms::Layout::at(folder.path().join("a"));
+        let layout_b = bir_core::rooms::Layout::at(folder.path().join("b"));
+        std::fs::create_dir_all(layout_a.device_dir()).unwrap();
+        std::fs::create_dir_all(layout_b.device_dir()).unwrap();
+        let (room_a, _generation_a) = crate::session::open_legacy_in_place_for_test(
+            &layout_a,
+            "user-a".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        let verbs_snap = crate::session::snapshot();
+        assert!(
+            std::sync::Arc::ptr_eq(
+                &verbs_snap.room.as_ref().unwrap().0,
+                &room_a
+            ),
+            "the test did not capture the first room"
+        );
+        // the switch: the machine moves to another owner's room before the read
+        let (room_b, _generation_b) = crate::session::open_legacy_in_place_for_test(
+            &layout_b,
+            "user-b".into(),
+            "https://api.buwiz.test".into(),
+        )
+        .unwrap();
+        assert!(
+            !std::sync::Arc::ptr_eq(&room_a, &room_b),
+            "the test did not drive a room change"
+        );
+        let read = crate::bir_module::open_database_slot_for(&verbs_snap)
+            .expect("the verb's snapshot did not open");
+        assert!(
+            std::sync::Arc::ptr_eq(&read, &room_a),
+            "the read must use the verb's own snapshot — a re-read pairs the old epoch with the new room"
+        );
+        assert!(
+            !std::sync::Arc::ptr_eq(&read, &room_b),
+            "the read followed the machine's room of now"
+        );
         crate::session::close(crate::session::Reason::SignOut);
         bir_core::platform::set_device_dir_override(None);
     }

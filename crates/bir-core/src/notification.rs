@@ -10,7 +10,18 @@
 /// fallback for a bare binary (`cargo run`, a loose `bir-headless`): the
 /// notification center aborts the process when there is no bundle, and the
 /// App Sandbox blocks `osascript`, which only matters for bundled builds.
+/// F9's test seam: every title asked of the banner, delivery or not — the epoch gate's test
+/// proves a notice of the old session never reaches even this point.
+#[cfg(test)]
+pub(crate) static POSTED_TITLES: std::sync::LazyLock<std::sync::Mutex<Vec<String>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
 pub fn send_notification(title: &str, body: &str) {
+    #[cfg(test)]
+    POSTED_TITLES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(title.to_owned());
     if !delivery_enabled() {
         tracing::debug!(
             title,
