@@ -596,7 +596,7 @@ testflight *args="": (app args) testflight-upload
 
 # An agent build carries the driver's socket and com.apple.security.network.server: internal TestFlight only, never review.
 # It is the one upload that may carry the agent (testflight-upload refuses one otherwise, scripts/agent_upload_guard.py),
-# and its provenance file says agent=1, so its build number is never the one chosen for review (CUT-1.0.0.md).
+# and its provenance file (beside the .pkg) says agent=1: that build number must never be the one chosen for review.
 testflight-agent *args="":
     just app --agent {{args}}
     just testflight-upload yes
