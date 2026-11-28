@@ -254,8 +254,46 @@ impl Layout {
     }
 
     /// Whether a `rooms/` folder is on disk: then a missing `device.db` was lost, not never made (L2).
+    /// This is ONLY the loss/set-aside question. It is deliberately not evidence that a real
+    /// account's room exists: a practice lookup or noise can create the folder.
     pub fn has_rooms(&self) -> bool {
         self.rooms_dir().is_dir()
+    }
+
+    /// Whether the device-store rows or the claim record prove a non-practice account's room.
+    /// This is the sign-in/locked-legacy question, never the store-loss or set-aside question:
+    /// directory entries do not count. An absent or unreadable store proves nothing here; the
+    /// store error path handles that case before this answer is used.
+    pub fn non_practice_rooms_exist(&self) -> bool {
+        let Ok(Some(store)) = DeviceStore::open_existing(self) else {
+            return false;
+        };
+        match store.rooms() {
+            Ok(rooms) if !rooms.is_empty() => return true,
+            Err(_) => return true,
+            _ => {}
+        }
+        // When no room row is there — before the row write, or because that write or a later
+        // close failed — the claim record is the evidence that a real account's room exists. The
+        // side effect is deliberate: even a Closed or pre-move record with `room` counts here.
+        // A lookup-created empty practice room writes neither it nor a row.
+        match store
+            .conn()
+            .query_row(
+                "SELECT value FROM migration WHERE key = ?1",
+                params![crate::legacy_claim::RECORD_KEY],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(DeviceStoreError::from)
+        {
+            Ok(Some(raw)) => serde_json::from_str::<serde_json::Value>(&raw)
+                .ok()
+                .and_then(|record| record.get("room")?.as_str().map(str::to_owned))
+                .is_some(),
+            Ok(None) => false,
+            Err(_) => true,
+        }
     }
 
     /// Make the room's folder (and `rooms/`) inside the device folder, and answer it.
@@ -1077,6 +1115,46 @@ mod tests {
     }
 
     #[test]
+    fn non_practice_rooms_exist_reads_the_claim_record_from_migration() {
+        let folder = tempfile::tempdir().unwrap();
+        let layout = Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        let store = DeviceStore::open(&layout).unwrap();
+        assert!(
+            !layout.non_practice_rooms_exist(),
+            "negative control: no claim record and no room row is not a room"
+        );
+        store
+            .conn()
+            .execute(
+                "INSERT INTO migration (key, value) VALUES (?1, ?2)",
+                params![crate::legacy_claim::RECORD_KEY, r#"{"step":"Closed"}"#],
+            )
+            .unwrap();
+        assert!(
+            !layout.non_practice_rooms_exist(),
+            "negative control: a claim record without room is not a room"
+        );
+        for step in ["Closed", "Copied"] {
+            store
+                .conn()
+                .execute(
+                    "UPDATE migration SET value = ?2 WHERE key = ?1",
+                    params![
+                        crate::legacy_claim::RECORD_KEY,
+                        format!(r#"{{"room":"room-a","step":"{step}"}}"#)
+                    ],
+                )
+                .unwrap();
+            assert!(
+                layout.non_practice_rooms_exist(),
+                "a {step} or pre-move claim record with room counts as a room"
+            );
+        }
+        drop(store);
+    }
+
+    #[test]
     fn room_id_normalises_the_origin() {
         let a = room_for(None, "https://api.buwiz.com/", "user-1").unwrap();
         let b = room_for(None, "https://API.buwiz.com", "user-1").unwrap();
@@ -1465,6 +1543,7 @@ mod tests {
                 let layout = Layout::here();
                 let room = room_id_for("https://api.buwiz.com", "user-1");
                 layout.create_room_dir(&room).unwrap();
+                let _turn = crate::db::room_path_test_turn();
                 crate::db::set_open_room_database(Some(layout.room_database(&room)));
                 let opened = Database::open(crate::db::app_database_path()).unwrap();
                 let during = files();

@@ -11,7 +11,9 @@ async fn request_shutdown_stops_the_background_cron() {
     let db = Arc::new(Mutex::new(
         bir_core::db::Database::open_ephemeral().expect("ephemeral database"),
     ));
-    let job = tokio::spawn(bir_core::background_cron::start_cron_jobs(db));
+    let job = tokio::spawn(bir_core::background_cron::start_cron_jobs(
+        bir_core::background_cron::fixed_room_source(db),
+    ));
     tokio::time::sleep(Duration::from_millis(50)).await;
     bir_core::background_cron::request_shutdown();
     tokio::time::timeout(Duration::from_secs(15), job)

@@ -311,10 +311,6 @@ mod tests {
     use super::*;
     use bir_core::rooms::{DeviceStore, Layout, RoomRecord, room_id_for};
 
-    /// The unlocked room is one slot for the process, as the app has one room open at a time: tests that open a
-    /// room take turns.
-    static ONE_ROOM_AT_A_TIME: Mutex<()> = Mutex::new(());
-
     /// A device folder in a temporary directory with one room open on this thread, and its `rooms` row.
     struct Room {
         _folder: tempfile::TempDir,
@@ -324,9 +320,7 @@ mod tests {
 
     impl Room {
         fn open(user: &str) -> Self {
-            let turn = ONE_ROOM_AT_A_TIME
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let turn = crate::open_room::room_test_turn();
             let folder = tempfile::tempdir().unwrap();
             bir_core::rooms::forget_ephemeral_device_store();
             // Single-room mode names the device folder; the room is open beside it.
@@ -452,6 +446,7 @@ mod tests {
 
     #[test]
     fn with_no_room_open_the_verbs_say_so() {
+        let _turn = crate::open_room::room_test_turn();
         bir_core::db::set_open_room_database(None);
         bir_core::rooms::use_ephemeral_device_store();
         assert_eq!(state()["room_open"], false);
@@ -570,7 +565,7 @@ mod tests {
                 .contains("Try again in")
         }));
         assert_eq!(owner_failures(&room), 6);
-        assert_eq!(state()["wait_secs"].as_f64().unwrap() > 50.0, true);
+        assert!(state()["wait_secs"].as_f64().unwrap() > 50.0);
     }
 
     /// N7 and F2: a lock that comes in after a set or a check was queued wins. The set stores no PIN and says the

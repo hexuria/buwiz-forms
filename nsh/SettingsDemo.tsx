@@ -65,6 +65,7 @@ interface Params {
   status?: "refused" | "invalid";
   update?: boolean;
   noise?: boolean;
+  waiting?: number;
   start?: string;
   theme?: string;
 }
@@ -308,6 +309,10 @@ function Demo() {
   if (p.jobs) fakeJobs();
   if (p.log) fakeLog(p.log);
   if (p.cloud) fakeCloud(p.cloud);
+  if (typeof p.waiting === "number") {
+    const count = p.waiting;
+    swap("returns_waiting_count", () => () => count);
+  }
   if (p.import) fakeImport(p.import);
   if (p.ebir) fakeEbir(p.ebir);
   if (p.update) fakeUpdate();

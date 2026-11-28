@@ -4,8 +4,9 @@
 // is nothing to protect: "Open without signing in".
 import { cleanup, keymap, signal, View } from "nsh";
 import { app } from "../../shell";
-import { AppButton, DigitCells, PinCells, TextField } from "../../ui";
+import { AppButton, DigitCells, PinCells, Text, TextField } from "../../ui";
 import { signInLine } from "./logic";
+import { dismissWaitingNotice, returnsWaitingNotice } from "../settings/cloud";
 import { Actions, AuthCard, ErrorLine, Heading, Labelled, TextLink } from "./parts";
 import { auth } from "./state";
 
@@ -45,6 +46,17 @@ export function SignIn() {
     <View testID="sign-in" class="min-h-0 flex-1">
       <AuthCard testID="auth-card">
         <Heading title="Sign in" line={line()} testID="auth-title" />
+        {/* §A.5: after a sign-out that left returns waiting, the notice shows once, with no names. */}
+        <If when={returnsWaitingNotice() > 0}>
+          {(() => {
+            const count = returnsWaitingNotice();
+            return (
+              <Text variant="meta" tone="fg2" testID="returns-waiting-notice">
+                {"Returns are waiting to send on this device. They send when their account signs in again."}
+              </Text>
+            );
+          })()}
+        </If>
         <Labelled label="TIN">
           <DigitCells
             testID="auth-tin"

@@ -12,6 +12,7 @@ import { recentLabel, visibleRecent } from "../../shell/Sidebar";
 import { recentOpenOptions } from "../../lib/recent";
 import { AppButton, deviceCopy, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text, TOUCH } from "../../ui";
 import { WelcomeNote } from "../auth/welcome";
+import { HomeMigrationNote } from "../auth/migrationNote";
 import { AsNeededHead, AsNeededUndated, DeadlineStrip, DueRow, FiledRow, StatTile, TaxpayerRow } from "./parts";
 import { homePick } from "./pick";
 import { openFilings } from "./preset";
@@ -124,6 +125,8 @@ function Dashboard(props: { width: () => number }) {
   return (
     <View testID="home-dashboard" class="w-full">
       <PageHeader title={greeting(today())} lede={`${longToday(today())}.`} />
+      {/* The permanent failure's note, once per account (§A.3.4); afterwards it lives under Settings › Account. */}
+      <HomeMigrationNote />
       <View testID="home-tiles" class="mt-6 w-full flex-row flex-wrap" style={{ gap: TILE_GAP }}>
         <Each of={specs()} key={(s) => s.key}>
           {(s) => (

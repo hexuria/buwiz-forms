@@ -25,6 +25,8 @@ thread_local! {
     /// writer and dropped with it. Only this thread reads through it, so it
     /// needs no mutex: that is what keeps its reads off the worker's lock.
     static READER: RefCell<Option<std::rc::Rc<Database>>> = const { RefCell::new(None) };
+    /// The open room's generation the reader belongs to (A3a): a new generation reinstalls it.
+    static READER_GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 /// The shared handle behind [`with_database`], exposed for host functions
@@ -41,7 +43,53 @@ thread_local! {
 /// does not start the submission worker, except to finish a launch that found
 /// the database held ([`open_database_at_launch`]) once the gate is open.
 /// Cloud-account settings use this while the filing UI is still locked.
-fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+pub(crate) fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError>
+{
+    open_database_slot_for(&crate::session::snapshot())
+}
+
+/// P3: the one-snapshot open. The caller's OWN session snapshot decides the room — a verb that
+/// already snapshotted the machine passes it in, so an Opening→Open racing the read can never
+/// pair the old owner and epoch with the new room.
+pub(crate) fn open_database_slot_for(
+    session: &crate::session::Snap,
+) -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+    // A test's ephemeral injection, or this thread's already-open single-room handle, first: rooms
+    // mode never populates the thread-local slot, so a filled one is never a room's stale twin.
+    if let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) {
+        if RELEASED.get() {
+            let (mut database, _path, _recovered) =
+                db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+            install_reader(&mut database);
+            *bir_core::lock_timing::lock(&handle)
+                .map_err(|_| HostError::new("database lock poisoned"))? = database;
+            RELEASED.set(false);
+        }
+        return Ok(handle);
+    }
+    // A3a (§A.4): the open room is the slot, read from the machine. The handle is never replaced
+    // inside an old Arc; a new room is a new Arc with a new generation, and the reader follows it.
+    if let Some((handle, generation, _, _)) = &session.room {
+        let (handle, generation) = (handle.clone(), *generation);
+        if READER_GENERATION.with(std::cell::Cell::get) != generation {
+            // F15: a poisoned room mutex must not keep the old reader — recover the guard and
+            // reinstall; the database behind a poisoned lock is still the room's one connection.
+            let mut guard = handle
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            install_reader(&mut guard);
+            READER_GENERATION.with(|slot| slot.set(generation));
+        }
+        return Ok(handle);
+    }
+    // Rooms mode (every real install): the room is the only slot — nothing opens the legacy file
+    // off the slot, before the claim or behind the gate's back. Single-room mode (a named database
+    // in a debug or test run) keeps the file path open of before.
+    if bir_core::db::single_room_database().is_none() {
+        return Err(HostError::new(
+            "no room is open: the filing UI is behind a migration page or the gate",
+        ));
+    }
     let mut opened = false;
     let handle = DATABASE.with(|slot| {
         let mut slot = slot.borrow_mut();
@@ -75,7 +123,12 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
     if opened {
         // A new handle: its own end, its own owner lock.
         ENGINE_SHUT_DOWN.with(|done| done.set(false));
-        if LAUNCH_PENDING.with(std::cell::Cell::get) && crate::account_gate::is_unlocked() {
+        // LAUNCH_PENDING is single-room mode's (§9): in rooms mode the machine's commit starts
+        // the worker, and a launch that found the room held is begin_open's retry, not this.
+        if bir_core::db::single_room_database().is_some()
+            && LAUNCH_PENDING.with(std::cell::Cell::get)
+            && crate::account_gate::is_unlocked()
+        {
             launch_on(handle.clone());
         }
     }
@@ -106,6 +159,21 @@ fn drop_reader() {
 pub fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
     crate::account_gate::ensure_unlocked()?;
     open_database_slot()
+}
+
+/// The calling thread's own slot when one is filled — a test's ephemeral
+/// database, or single-room mode's handle — re-opened through
+/// [`open_database_slot`] when the worker's end released it. Rooms mode never
+/// fills the thread-local slot, so a filled one is never a room's stale twin
+/// and verb resolution must prefer it over the process-wide room: a test's
+/// ephemeral database has to win off the room even while another test's
+/// session holds one open.
+pub(crate) fn thread_slot_handle()
+-> Result<Option<std::sync::Arc<std::sync::Mutex<Database>>>, HostError> {
+    if DATABASE.with(|slot| slot.borrow().is_some()) {
+        return open_database_slot().map(Some);
+    }
+    Ok(None)
 }
 
 /// The submission worker that runs now: at most one per process, owned by
@@ -148,7 +216,7 @@ thread_local! {
     static LAUNCH_PENDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-fn this_engine() -> u64 {
+pub(crate) fn this_engine() -> u64 {
     ENGINE.with(|engine| {
         if engine.get() == 0 {
             engine.set(NEXT_ENGINE.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
@@ -251,6 +319,77 @@ pub fn submission_worker_refused() -> bool {
     SUBMISSION_WORKER_REFUSED.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+/// The process's worker in rooms mode (§6): started at the first commit into Open or Legacy,
+/// only woken at every later one — this is idempotent. The engine that asks is recorded, but the
+/// worker no longer ends with it: shutdown_at_engine_end leaves it in rooms mode, and only quit
+/// stops it (§8).
+/// How often the commit's log maintenance ran — the item-9 test's evidence.
+#[cfg(test)]
+pub(crate) static LOG_MAINTENANCE_RUNS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
+    start_submission_worker(db.clone());
+    // Item 9: launch log maintenance runs here, at the machine's commit, not only at the
+    // launch's open — in rooms mode the launch's is_unlocked check is false until the commit,
+    // so the maintenance never started. Same shape as launch_on's.
+    let days = bir_core::lock_timing::lock(&db)
+        .ok()
+        .map(|guard| bir_core::log_files::retention_days(&guard));
+    if let Some(days) = days {
+        bir_core::log_files::remember_retention(days);
+        let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
+        #[cfg(test)]
+        LOG_MAINTENANCE_RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+    // E3: the six-hour round too, once per process (spawn_retention's own Once) — launch_on
+    // starts it in single-room mode; in rooms mode the commit is the only place it can start.
+    #[cfg(not(test))]
+    bir_core::log_files::spawn_retention();
+}
+
+#[cfg(test)]
+static ROOM_SOURCE_AFTER_SNAPSHOT: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<u64, Box<dyn FnOnce() + Send>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// The submission worker's rooms-mode source. Every tick's room Arc, owner and epoch are read
+/// from ONE machine snapshot; nothing is re-read from the newer session afterwards.
+fn session_room_source() -> bir_core::background_cron::RoomSource {
+    std::sync::Arc::new(|| {
+        let snap = crate::session::snapshot();
+        #[cfg(test)]
+        ROOM_SOURCE_AFTER_SNAPSHOT
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&snap.epoch)
+            .map(|hook| hook());
+        if !matches!(
+            snap.phase_kind,
+            crate::session::PhaseKind::Open | crate::session::PhaseKind::Legacy
+        ) {
+            return None;
+        }
+        let owner = snap.owner.map(|owner| bir_core::account_session::OwnerKey {
+            origin: owner.origin,
+            user_id: owner.user_id,
+        });
+        let epoch = snap.epoch;
+        snap.room.map(|(handle, _generation, room_id, _path)| {
+            let key = match room_id {
+                Some(room) => format!("room:{}", room.as_str()),
+                None => "legacy".to_owned(),
+            };
+            bir_core::background_cron::RoomTick {
+                db: handle,
+                key,
+                owner,
+                epoch,
+            }
+        })
+    })
+}
+
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — on a Tokio runtime of its
 /// own, owned by this engine. Nothing happens while a worker runs already
@@ -305,7 +444,16 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     }
     let stop = bir_core::background_cron::CronStop::new();
     let (done, finished) = std::sync::mpsc::channel();
-    let cron = bir_core::background_cron::run_cron_jobs(db, stop.clone());
+    // §A.4: the worker takes a room source, not the handle. In rooms mode each tick asks the open
+    // room (None — a migration page, the gate, a sign-out — skips the tick); in single-room mode the
+    // launch handle is the one room, as before.
+    let source: bir_core::background_cron::RoomSource =
+        if bir_core::db::single_room_database().is_some() {
+            bir_core::background_cron::fixed_room_source(db)
+        } else {
+            session_room_source()
+        };
+    let cron = bir_core::background_cron::run_cron_jobs(source, stop.clone());
     runtime.spawn(async move {
         cron.await;
         let _ = done.send(());
@@ -398,6 +546,9 @@ pub fn shutdown_for_quit() {
     LAUNCH_PENDING.with(|pending| pending.set(false));
     finish_worker(take_worker(None), this_engine());
     release_taken(take_database_slot());
+    // F9: the rooms-mode slot and the device guard go too — an update relaunch must not meet
+    // this process's device guard or room lock.
+    crate::open_room::release_all_for_quit();
 }
 
 /// [`shutdown_for_quit`] at an engine thread's end (the NSH door's guard,
@@ -413,6 +564,12 @@ pub fn shutdown_at_engine_end() {
         return;
     }
     LAUNCH_PENDING.with(|pending| pending.set(false));
+    // §6: in rooms mode the worker is the process's, stopped only at quit — an engine's end
+    // releases only that engine's thread-local reader. Single-room mode keeps the old path (§9).
+    if bir_core::db::single_room_database().is_none() {
+        drop_reader();
+        return;
+    }
     let engine = this_engine();
     // Taken and told to stop here, before anything can fail: a loop told to
     // stop ends at its next check, and its tasks end with their sends.
@@ -722,6 +879,12 @@ pub(crate) fn with_reader<R>(
             f(&guard)
         }
     }
+}
+
+#[cfg(test)]
+pub(crate) fn thread_database_slot_for_tests() -> Option<std::sync::Arc<std::sync::Mutex<Database>>>
+{
+    DATABASE.with(|slot| slot.borrow().clone())
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
@@ -3027,7 +3190,7 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
 /// 3. drop the cached connection (it holds the owner lock and an open handle
 ///    on the file being replaced) and put the checked file in its place; if
 ///    that fails, the connection is reopened on the file that is still there.
-fn restore_database_archive(archive: &std::path::Path, stamp: u64) -> HostResult {
+pub(crate) fn restore_database_archive(archive: &std::path::Path, stamp: u64) -> HostResult {
     let db_path = db::app_database_path();
     let staged = bir_core::import::stage_database_zip(archive, &db_path)
         .map_err(|error| HostError::new(error.to_string()))?;
@@ -3040,6 +3203,78 @@ thread_local! {
     /// copy, with the database lock held: a test's writer tries to commit there.
     static AFTER_RESTORE_CHECKPOINT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
+    /// Runs once on the restoring thread after the first active-jobs check and before the room
+    /// lock: a test registers a send in exactly the race window R1 closes.
+    static AFTER_ACTIVE_JOBS_CHECK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// §A.3.8: the newest 3 import safety copies per room are kept; the older ones go. The copies are
+/// `bir_data.safety-<stamp>.db` of the one folder — the room's own in rooms mode — so pruning the
+/// folder is pruning the room.
+fn prune_safety_copies(folder: &std::path::Path) {
+    let mut copies: Vec<std::path::PathBuf> = std::fs::read_dir(folder)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.file_name()
+                        .is_some_and(|name| name.to_string_lossy().starts_with("bir_data.safety-"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    // F14: by the stamp's number, not the string — string order breaks across digit lengths.
+    copies.sort_by_key(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .and_then(|name| {
+                name.strip_prefix("bir_data.safety-")
+                    .and_then(|rest| rest.strip_suffix(".db"))
+                    .and_then(|stamp| stamp.parse::<u64>().ok())
+            })
+            .unwrap_or(0)
+    });
+    while copies.len() > 3 {
+        let eldest = copies.remove(0);
+        // F13: a failed remove is warned, never recorded as deleted — the copy is still there.
+        if let Err(error) = std::fs::remove_file(&eldest) {
+            tracing::warn!(?eldest, "old import safety copy not pruned: {error}");
+        }
+    }
+}
+
+/// R1: sending pauses for the import's check-to-swap span and unpauses on every exit — success,
+/// refusal or failure — restoring the state it found (the sign-in flow pauses too, and that one
+/// is not this one's to lift).
+struct UnpauseOnDrop {
+    was_paused: bool,
+}
+
+impl UnpauseOnDrop {
+    fn new() -> Self {
+        let was_paused = bir_core::background_cron::submission_paused();
+        bir_core::background_cron::set_submission_paused(true);
+        Self { was_paused }
+    }
+}
+
+impl Drop for UnpauseOnDrop {
+    fn drop(&mut self) {
+        bir_core::background_cron::set_submission_paused(self.was_paused);
+    }
+}
+
+/// Whether the open room has a send in flight, by the worker's room-scoped active-job keys.
+fn open_room_busy(open_prefix: &str) -> bool {
+    bir_core::background_cron::get_active_jobs()
+        .lock()
+        .map(|jobs| {
+            jobs.iter()
+                .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
+        })
+        .unwrap_or(false)
 }
 
 /// Steps 2 and 3 of [`restore_database_archive`] for a database already
@@ -3049,6 +3284,21 @@ fn restore_staged_database(
     db_path: &std::path::Path,
     stamp: u64,
 ) -> HostResult {
+    // F1' + R1: pause first, so no send can start in the gap between the check and the swap; then
+    // refuse while a send is in flight — it holds the old Arc, and were the install to swap the file
+    // under it, its receipt and status would land in the placeholder and be lost. The pause lifts
+    // on every exit, the refusal's included: a failed import never leaves sending paused.
+    let _unpause = UnpauseOnDrop::new();
+    // Narrowed to the open room's jobs once keys carry the room (F6): another account's send in
+    // flight writes into its own room's file, never into the one this import replaces.
+    let open_prefix = crate::open_room::job_key_prefix();
+    if open_room_busy(&open_prefix) {
+        return Err(HostError::new(
+            "A return is being sent. Try the import again when it has finished.",
+        ));
+    }
+    #[cfg(test)]
+    AFTER_ACTIVE_JOBS_CHECK.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
     if db_path.exists()
         && let Some(parent) = db_path.parent()
     {
@@ -3063,6 +3313,13 @@ fn restore_staged_database(
         // and the connection let go is the one it was copied from.
         let mut db = bir_core::lock_timing::lock(&handle)
             .map_err(|_| HostError::new("database lock poisoned"))?;
+        // R1: re-check under the room lock. A send that registered after the first check cannot
+        // pass this one and then write into the file being swapped out.
+        if open_room_busy(&open_prefix) {
+            return Err(HostError::new(
+                "A return is being sent. Try the import again when it has finished.",
+            ));
+        }
         // Flush the WAL first: a raw copy of bir_data.db alone can miss
         // commits still living in -wal, and this copy is the restore
         // point if the replace goes wrong. A checkpoint a reader keeps from
@@ -3090,6 +3347,7 @@ fn restore_staged_database(
                 "Could not save a safety copy of the current database ({error}), so nothing was imported. The current database was left as it is."
             )));
         }
+        prune_safety_copies(parent);
         // What `reset_database` does, under the lock already held: the
         // database a folder was scanned against for the eBIRForms import
         // goes away here, so that scan is let go and never imported into the
@@ -3102,7 +3360,33 @@ fn restore_staged_database(
         reset_database()?;
     }
     match staged.install() {
-        Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
+        Ok(()) => {
+            // F1: in rooms mode nothing may serve the ephemeral placeholder past the install —
+            // the room reopens on the restored file at once, a new Arc and a new generation,
+            // reinstalled into the machine. §5.8's wider boundary — the importing flag, the
+            // epoch CAS and the room-lock re-check — remains the send worker's concern.
+            let snap = crate::session::snapshot();
+            if let Some((_, _, _room_id, room_path)) = snap.room {
+                let path = if matches!(snap.phase_kind, crate::session::PhaseKind::Legacy) {
+                    bir_core::rooms::Layout::here().legacy_database()
+                } else {
+                    room_path
+                };
+                match crate::open_room::reopen_fresh(&path) {
+                    Ok(handle) => {
+                        if !crate::session::reinstall_room(snap.epoch, handle, path) {
+                            tracing::warn!(
+                                "the room did not reinstall on the restored file: the session moved on"
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        tracing::warn!("the room did not reopen on the restored file: {error}");
+                    }
+                }
+            }
+            Ok(HostObject::new().field("kind", "database").into())
+        }
         Err(error) => {
             // Back on the file that is still there, now rather than at the next call.
             let _ = open_database_slot();
@@ -3411,6 +3695,9 @@ fn agent_take() -> HostResult {
 
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
+    // F11: the door's dispatch choke point drains the machine's menu-and-chrome notice onto
+    // whatever engine thread the dispatch arrived on (the shim runs it at every call).
+    gpui_shell::host_modules::set_dispatch_hook(Box::new(crate::session::drain_menu_notice));
     let module = HostModule::new("bir")
         .function("system_info", |_| system_info())
         .function("set_global_hotkey", set_global_hotkey)
@@ -3478,9 +3765,10 @@ pub fn module() -> HostModule {
     let module = crate::dashboard_module::register(module);
     let module = crate::legacy_import_module::register(module);
     let module = crate::owner_lock_module::register(module);
+    let module = crate::room_session::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::cloud_email::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
@@ -3488,6 +3776,7 @@ pub fn module() -> HostModule {
         crate::dashboard_module::DECLARATIONS,
         crate::legacy_import_module::DECLARATIONS,
         crate::owner_lock_module::DECLARATIONS,
+        crate::room_session::DECLARATIONS,
     ))
 }
 
@@ -3719,6 +4008,43 @@ mod tests {
     use gpui_shell::HostArguments;
 
     const TIN: &str = "12345678800000";
+
+    /// AL1/e: the production rooms-mode RoomSource carries the owner and epoch of the same
+    /// snapshot as the room Arc. A session change immediately after that snapshot changes nothing
+    /// in the tick; if owner or epoch were read again afterwards this test turns red.
+    #[test]
+    fn room_source_carries_one_snapshots_owner_and_epoch() {
+        let _turn = crate::session::test_turn();
+        crate::session::reset_for_tests();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        crate::session::open_legacy_in_place_for_test(
+            &layout,
+            "user-a".into(),
+            "example.test".into(),
+        )
+        .unwrap();
+        let before = crate::session::snapshot();
+        let source = session_room_source();
+        ROOM_SOURCE_AFTER_SNAPSHOT.lock().unwrap().insert(
+            before.epoch,
+            Box::new(|| {
+                crate::session::reset_for_tests();
+            }),
+        );
+        let tick = source().expect("the snapshot's open room makes a tick");
+        assert_eq!(tick.epoch, before.epoch, "the epoch was read again");
+        assert_eq!(
+            tick.owner.map(|owner| owner.user_id).as_deref(),
+            Some("user-a"),
+            "the owner was read again"
+        );
+        assert_eq!(tick.key, "legacy");
+        crate::session::reset_for_tests();
+        bir_core::platform::set_device_dir_override(None);
+    }
 
     #[test]
     fn locked_state_refuses_data_verbs() {
@@ -4091,6 +4417,12 @@ mod tests {
                 key,
                 format!("form:{code}:{TIN}:{RESOLVE_YEAR}:{period}"),
                 "the worker's key"
+            );
+            // Production keys carry the room (F6); with no room open the slot's prefix is the
+            // fixed key, the same one send_of reads through job_key_prefix.
+            let key = bir_core::background_cron::room_job_key(
+                &bir_core::background_cron::fixed_room_key(),
+                &key,
             );
             bir_core::background_cron::get_active_jobs()
                 .lock()
@@ -5565,19 +5897,17 @@ mod tests {
                 ),
             ],
             || {
-                bir_core::cloud_account::save_stored_account(
-                    &bir_core::cloud_account::StoredAccount {
-                        server_url: WELCOME_SERVER.into(),
-                        access_token: "access".into(),
-                        refresh_token: "refresh".into(),
-                        access_expires_at_unix: i64::MAX / 2,
-                        user_id: user_id.into(),
-                        email: Some(email.into()),
-                        offline: false,
-                        last_refresh_unix: 1_000,
-                        practice: false,
-                    },
-                )
+                bir_core::account_session::save_stored(&bir_core::cloud_account::StoredAccount {
+                    server_url: WELCOME_SERVER.into(),
+                    access_token: "access".into(),
+                    refresh_token: "refresh".into(),
+                    access_expires_at_unix: i64::MAX / 2,
+                    user_id: user_id.into(),
+                    email: Some(email.into()),
+                    offline: false,
+                    last_refresh_unix: 1_000,
+                    practice: false,
+                })
                 .unwrap();
                 body()
             },
@@ -6314,6 +6644,53 @@ mod tests {
         );
     }
 
+    /// R1: a send whose job key lands after the first active-jobs check is still seen before the
+    /// swap. The first import is refused; with the send finished the same archive imports — the
+    /// positive control that the refusal really is the registered send.
+    #[test]
+    fn r1_a_send_registering_before_the_import_swap_is_seen() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = good_database_archive(&scratch);
+            let key = bir_core::background_cron::room_job_key(
+                &crate::open_room::job_key_prefix(),
+                "job:import-race",
+            );
+            {
+                let key = key.clone();
+                AFTER_ACTIVE_JOBS_CHECK.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        bir_core::background_cron::get_active_jobs()
+                            .lock()
+                            .unwrap()
+                            .insert(key);
+                    }));
+                });
+            }
+            match restore_database_archive(&archive, 31) {
+                Ok(_) => panic!("the import swapped under a send that registered after the check"),
+                Err(error) => assert!(
+                    error.message().contains("A return is being sent"),
+                    "{}",
+                    error.message()
+                ),
+            }
+            bir_core::background_cron::get_active_jobs()
+                .lock()
+                .unwrap()
+                .remove(&key);
+            assert_eq!(profile_names(), ["Kept Trading Corp"]);
+            restore_database_archive(&archive, 32).expect("the positive control imports");
+            assert_eq!(profile_names(), ["Restored Holdings Inc"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "r1_a_send_registering_before_the_import_swap_is_seen",
+            &ScratchDir::new("import-race"),
+        );
+    }
+
     /// No safety copy, no import: when the copy of the file about to be
     /// replaced cannot be made, the import stops with that said, the live
     /// database keeps its data, and nothing is left behind.
@@ -6815,12 +7192,16 @@ mod tests {
     }
 
     fn job_key_1601c(month: u8) -> String {
-        bir_core::background_cron::submission_job_key(
-            "1601C",
-            &demo_profile().tin.full(),
-            ENGINE_YEAR,
-            Some(month),
-            None,
+        // The worker files keys under the fixed room's prefix in single-room and test mode (F6).
+        bir_core::background_cron::room_job_key(
+            &bir_core::background_cron::fixed_room_key(),
+            &bir_core::background_cron::submission_job_key(
+                "1601C",
+                &demo_profile().tin.full(),
+                ENGINE_YEAR,
+                Some(month),
+                None,
+            ),
         )
     }
 

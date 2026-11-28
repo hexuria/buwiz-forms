@@ -709,27 +709,42 @@ pub fn single_room_database() -> Option<PathBuf> {
     None
 }
 
-thread_local! {
-    /// The open room's database file on this thread, once a room is open
-    /// (PLAN §A.4). Nothing in A1 opens a room, so outside tests it stays
-    /// `None` and [`app_database_path`] answers the legacy file as before.
-    static OPEN_ROOM_DATABASE: std::cell::RefCell<Option<PathBuf>> =
-        const { std::cell::RefCell::new(None) };
+#[cfg(any(test, feature = "test-support"))]
+static ROOM_PATH_TEST_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// One turn for every test touching the process-wide open-room path: the tests run in parallel in
+/// one process, and the path is process-wide in production now — never per-thread — so a test that
+/// sets it holds this turn and resets the path before letting go. This is the whole mechanism: no
+/// test reads a per-thread shadow of the slot, so a thread-local regression cannot hide (X1).
+#[cfg(any(test, feature = "test-support"))]
+pub fn room_path_test_turn() -> std::sync::MutexGuard<'static, ()> {
+    ROOM_PATH_TEST_TURN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// Name the open room's database file for this thread (`None`: no room is
-/// open). [`app_database_path`] answers it unless single-room mode names a
-/// file. The device-wide files never follow it: they live in
+/// The open room's database file, once a room is open (PLAN §A.4): process-wide, never per-thread.
+/// The slot is one room for the whole process, so every engine thread — the print preview's included —
+/// reads the same room, and a sign-out written on any thread (the account thread's) clears it for all.
+static OPEN_ROOM_DATABASE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// Name the open room's database file (`None`: no room is open). [`app_database_path`] answers it
+/// unless single-room mode names a file. The device-wide files never follow it: they live in
 /// [`crate::platform::device_dir`].
 pub fn set_open_room_database(path: Option<PathBuf>) {
-    OPEN_ROOM_DATABASE.with(|slot| *slot.borrow_mut() = path);
+    *OPEN_ROOM_DATABASE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path;
 }
 
 fn open_room_database() -> Option<PathBuf> {
-    OPEN_ROOM_DATABASE.with(|slot| slot.borrow().clone())
+    OPEN_ROOM_DATABASE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
 }
 
-/// The id of the room open on this thread ([`set_open_room_database`]): its folder's name under `rooms/`.
+/// The id of the open room ([`set_open_room_database`], process-wide): its folder's name under `rooms/`.
 /// `None` while no room is open (the legacy file, single-room mode, or before A3a opens one).
 pub fn open_room_id() -> Option<crate::rooms::RoomId> {
     let file = open_room_database()?;
@@ -739,6 +754,20 @@ pub fn open_room_id() -> Option<crate::rooms::RoomId> {
         return None;
     }
     crate::rooms::RoomId::parse(folder.file_name()?.to_str()?)
+}
+
+/// The device folder `path` is a room of — `<device>/rooms/<id>/bir_data.db` — or `None` for the
+/// legacy file, a single-room file, and everything else. The R1 guards key on this.
+pub fn room_device_dir(path: &Path) -> Option<PathBuf> {
+    if path.file_name()? != "bir_data.db" {
+        return None;
+    }
+    let room_dir = path.parent()?;
+    let rooms = room_dir.parent()?;
+    if rooms.file_name()? != crate::rooms::ROOMS_DIR {
+        return None;
+    }
+    Some(rooms.parent()?.to_path_buf())
 }
 
 /// Live DB file painted `bir` and `bir-headless serve` open.
@@ -863,6 +892,28 @@ pub fn hold_owner_lock(db_path: &Path) -> Result<OwnerLock, DbError> {
     Ok(OwnerLock { _file: file })
 }
 
+/// The device-wide one-copy guard (#423's review, A3a item 1): one lock file for the whole device
+/// folder, `<device>/device.instance.lock`, taken with the same non-blocking exclusive lock as the
+/// per-database owner locks. The one-copy rule is device-wide in the rooms world — the databases are
+/// many, the app instance is one — so the guard moved off the legacy database file. An older build
+/// still finds the new one because the new build also holds the legacy file's owner lock for the whole
+/// run ([`hold_owner_lock`] in legacy mode); the new build finds an older one through that same lock.
+pub fn device_instance_lock_path(device_dir: &Path) -> PathBuf {
+    device_dir.join("device.instance.lock")
+}
+
+/// Take the device-wide one-copy guard; `Err(DbError::LiveDatabaseInUse)` while another copy holds it.
+/// The returned lock keeps the guard for as long as it is alive — for the whole run, once taken.
+pub fn take_device_instance_lock(device_dir: &Path) -> Result<OwnerLock, DbError> {
+    let lock_path = device_instance_lock_path(device_dir);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    Ok(OwnerLock {
+        _file: std::sync::Arc::new(take_owner_lock_file(&lock_path, device_dir)?),
+    })
+}
+
 /// Exclusive non-blocking lock so painted `bir` and `bir-headless` cannot
 /// both own the live file. There is no protocol `Op::Yield`.
 ///
@@ -882,6 +933,19 @@ pub fn try_acquire_live_owner_lock(db_path: &Path) -> Result<OwnerLock, DbError>
         if let Some(lock) = held_owner_lock(&held, &held_key(&lock_path)) {
             return Ok(lock);
         }
+    }
+    Ok(OwnerLock {
+        _file: std::sync::Arc::new(take_owner_lock_file(&lock_path, db_path)?),
+    })
+}
+
+/// A take of the owner lock that skips this process's held registry, as another process's take
+/// would: tests of one process play both the running copy and the copy that finds it.
+#[cfg(any(test, feature = "test-support"))]
+pub fn raw_take_owner_lock_for_test(db_path: &Path) -> Result<OwnerLock, DbError> {
+    let lock_path = live_owner_lock_path(db_path);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
     Ok(OwnerLock {
         _file: std::sync::Arc::new(take_owner_lock_file(&lock_path, db_path)?),
@@ -950,6 +1014,27 @@ fn acquire_exclusive_owner_lock(file: &File, db_path: &Path) -> Result<(), DbErr
 /// ephemeral in-memory fixture. Painted `bir` uses [`Database::open_or_recreate`].
 pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbError> {
     let path = app_database_path();
+    // R1(b): the choke point every room open in the app passes. A room's database is never opened
+    // before the legacy claim's start() ran for its device folder in this session: the open runs
+    // migrations and a checkpoint, and those writes change bytes the move's hash check still needs
+    // as evidence. The legacy file and single-room files are not rooms and open as before.
+    if let Some(device_dir) = room_device_dir(&path) {
+        // R1(b) + G1: the choke point every room open in the app passes, and the one rule for all of
+        // them — start() ran this session, and no unchecked move evidence names this room. The legacy
+        // file and single-room files are not rooms and open as before.
+        if let Some(room_id) = path
+            .parent()
+            .and_then(|folder| folder.file_name())
+            .and_then(|name| name.to_str())
+            .and_then(crate::rooms::RoomId::parse)
+        {
+            crate::legacy_claim::room_open_allowed(
+                &crate::rooms::Layout::at(&device_dir),
+                &room_id,
+            )
+            .map_err(|message| DbError::Io(std::io::Error::other(message)))?;
+        }
+    }
     prepare_app_database_file(&path);
     let lock = try_acquire_live_owner_lock(&path)?;
     let (db, recovered) = Database::open_or_recreate(&path)?;
@@ -2241,6 +2326,7 @@ mod tests {
     #[cfg(feature = "sqlcipher")]
     #[test]
     fn test_open_or_recreate_quarantines_unreadable_db() {
+        let _turn = crate::db::room_path_test_turn();
         let mut db_file = NamedTempFile::new().unwrap();
         db_file.write_all(b"not-a-sqlite-database").unwrap();
 
@@ -2383,6 +2469,7 @@ mod tests {
     /// legacy file back.
     #[test]
     fn an_open_room_answers_the_database_path_until_it_closes() {
+        let _turn = room_path_test_turn();
         let folder = tempfile::tempdir().expect("temporary directory");
         let room = folder.path().join("rooms").join("a").join("bir_data.db");
         let named = folder.path().join("named.db");
@@ -2405,6 +2492,7 @@ mod tests {
     /// that must see the name is handed it, see the next two tests.)
     #[test]
     fn an_in_process_database_path_wins_over_the_environment() {
+        let _turn = crate::db::room_path_test_turn();
         let named = tempfile::tempdir().expect("temporary directory");
         let from_env = named.path().join("from-env.db");
         let in_process = named.path().join("in-process.db");

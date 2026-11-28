@@ -5,6 +5,20 @@ use std::panic::AssertUnwindSafe;
 use super::fixtures::*;
 use super::*;
 
+fn open_room_guarded(
+    layout: &crate::rooms::Layout,
+    room: &crate::rooms::RoomId,
+) -> Result<crate::db::Database, crate::rooms::DeviceStoreError> {
+    // The production rule (G1), both halves — the started half and the move-evidence half —
+    // never a copy of it here: a copy drifts, and the drift is invisible exactly where it matters.
+    crate::legacy_claim::room_open_allowed(layout, room)
+        .map_err(|why| crate::rooms::DeviceStoreError::Io(std::io::Error::other(why)))?;
+    crate::db::Database::open(layout.room_database(room)).map_err(|error| match error {
+        crate::db::DbError::Sqlite(sqlite) => crate::rooms::DeviceStoreError::Sqlite(sqlite),
+        other => crate::rooms::DeviceStoreError::Io(std::io::Error::other(other.to_string())),
+    })
+}
+
 /// The claim of `who` from start to end, for a file with no lock.
 fn claim_unlocked(install: &Install, who: &Claimant) -> Outcome {
     let claim = install.claim();
@@ -31,6 +45,22 @@ fn claim_cut_at(install: &Install, who: &Claimant, point: Cut) {
     let claim = install.claim();
     let Start::Ready(ready) = claim.start(who) else {
         panic!("not ready");
+    };
+    CUT_AT.with(|at| at.set(Some(point)));
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
+    CUT_AT.with(|at| at.set(None));
+    assert!(result.is_err(), "the claim was not cut at {point:?}");
+}
+
+/// Run a locked claim for `who` (unlocked with `pin`) and cut it at `point`, as a kill there.
+fn locked_claim_cut_at(install: &Install, who: &Claimant, pin: &str, point: Cut) {
+    let claim = install.claim();
+    let Start::Locked(locked) = claim.start(who) else {
+        panic!("not locked")
+    };
+    let ready = match locked.unlock(&claim, LegacyCredential::Pin(pin)) {
+        Ok(ready) => ready,
+        Err(_) => panic!("refused"),
     };
     CUT_AT.with(|at| at.set(Some(point)));
     let result = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
@@ -355,9 +385,16 @@ fn what_the_offer_carries() {
     let room = Database::open(room_dir.path().join("bir_data.db")).unwrap();
     // Through the offer's own code path (a client PIN is not an admin lock, so no unlock comes first).
     let lock = crate::db::hold_owner_lock(&install.legacy()).unwrap();
+    let claim_room = super::ClaimRoom {
+        room_id: crate::rooms::room_id_for("https://buwiz.example.test", "user-a"),
+        origin: "https://buwiz.example.test".into(),
+        user_id: "user-a".into(),
+        email: Some("user-a@example.test".into()),
+    };
     let added = files::add_offered(
-        &install.layout,
+        &install.claim(),
         &room,
+        &claim_room,
         crate::safe_fs::file_id(&install.legacy()).ok(),
     )
     .unwrap();
@@ -538,18 +575,24 @@ fn computer_login_is_accepted_once_per_claim() {
         .unlock(&claim, LegacyCredential::ComputerLogin)
         .unwrap();
     assert_eq!(ready.unlocked_by(), UnlockedBy::ComputerLogin);
-    drop(ready); // the claim was cut before it moved anything
+    // Cut mid-move (after the copy's record): the resume needs a new unlock, and L1's ruling offers the button
+    // again — a person must never lose their fallback because the app was closed at the wrong second.
+    CUT_AT.with(|at| at.set(Some(Cut::AfterCopyRecorded)));
+    let cut = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
+    CUT_AT.with(|at| at.set(None));
+    assert!(cut.is_err(), "the claim was not cut");
     let Start::Locked(locked) = claim.start(&account("a")) else {
         panic!("not locked")
     };
     assert!(
-        !locked.offers_computer_login(&claim),
-        "not offered a second time"
+        locked.offers_computer_login(&claim),
+        "offered again for the resume (L1)"
     );
     assert!(
         locked
             .unlock(&claim, LegacyCredential::ComputerLogin)
-            .is_err()
+            .is_ok(),
+        "the computer login opens the resume"
     );
 }
 
@@ -570,17 +613,23 @@ fn computer_login_is_usable_again_when_the_claim_ends() {
     let ready = locked
         .unlock(&claim, LegacyCredential::ComputerLogin)
         .unwrap();
-    drop(ready);
+    // Cut mid-move (after the copy's record): the resume needs a new unlock, and L1's ruling offers the button
+    // again — a kill before the move never strands the fallback. The refusal that remains is within one live
+    // claim, no start() between the uses (a_second_use_within_one_live_claim_is_refused).
+    CUT_AT.with(|at| at.set(Some(Cut::AfterCopyRecorded)));
+    let cut = std::panic::catch_unwind(AssertUnwindSafe(|| ready.claim(&claim)));
+    CUT_AT.with(|at| at.set(None));
+    assert!(cut.is_err(), "the claim was not cut");
     let Start::Locked(locked) = claim.start(&a) else {
         panic!("not locked")
     };
-    let refused = locked
-        .unlock(&claim, LegacyCredential::ComputerLogin)
-        .expect_err("refused within the same claim");
-    let locked = refused.into_inner();
+    assert!(
+        locked.offers_computer_login(&claim),
+        "offered again for the resume (L1)"
+    );
     let ready = locked
-        .unlock(&claim, LegacyCredential::Pin("1357"))
-        .unwrap();
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("the computer login opens the resume");
     done_room(&ready.claim(&claim));
     assert!(
         !install.claim().os_login_used().unwrap(),
@@ -1718,4 +1767,494 @@ fn a_reused_inode_never_finishes_on_the_accounts_own_room() {
     let record = claim.record().unwrap().unwrap();
     assert_eq!(record.step, Step::Closed);
     assert_eq!(record.failure, None);
+}
+
+/// N1/N4: a foreign claimant's transient error in the link window is still definitive for the
+/// account asking now, and the error it can carry leaks nothing about the other account's copy.
+#[test]
+fn a_foreign_transient_in_the_link_window_is_definitive_and_neutral() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterLink);
+    // B's sign-in is another process after the cut: the process-local definitive set starts empty.
+    clear_started_for_test(install.layout.device_dir());
+    std::fs::write(install.legacy().with_extension("db-wal"), b"wal").unwrap();
+    let claim = install.claim();
+    let b = account("b");
+    assert!(
+        !claim_started_this_session(install.layout.device_dir()),
+        "the folder began this test already definitive"
+    );
+    match claim.start(&b) {
+        Start::Failed(Failure::Transient(transient)) => {
+            assert!(
+                !transient.copy_saved,
+                "B was told a copy of A's data was saved"
+            );
+            assert_eq!(
+                transient.detail, "the account could not be opened just now",
+                "the non-claimant detail is not neutral"
+            );
+        }
+        other => panic!("not transient: {other:?}"),
+    }
+    assert!(
+        claim_started_this_session(install.layout.device_dir()),
+        "A's unfinished move kept the folder non-definitive for B"
+    );
+}
+
+/// PLAN §A.8 reviewer pass, M1: a read error in the Copied window (an EIO, a sharing violation) is transient,
+/// never a permanent close: the record stays at Copied, and a later run with the error gone finishes the move.
+#[test]
+fn a_read_error_at_the_room_check_is_transient_not_closed() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    // A move the record never learned of: the legacy file is the room file now.
+    std::fs::rename(install.legacy(), install.room_file(&room)).unwrap();
+    ROOM_CHECK_ERR.with(|err| err.set(true));
+    let started = claim.start(&a);
+    assert!(
+        matches!(started, Start::Failed(Failure::Transient(_))),
+        "not transient: {started:?}"
+    );
+    let record = claim.record().unwrap().unwrap();
+    assert_eq!(record.step, Step::Copied, "the record must stay at Copied");
+    assert!(
+        !matches!(record.step, Step::Closed),
+        "a read error must never close the claim"
+    );
+    let finished = claim.start(&a);
+    assert!(
+        matches!(finished, Start::Finished(Outcome::Done { .. })),
+        "the move does not finish once the error is gone: {finished:?}"
+    );
+}
+
+/// PLAN §A.8 reviewer pass, L1: a kill or a dropped ReadyClaim between the used mark's write and the Unlocked
+/// record must not hide the computer login for the rest of that claim: the next start() offers it again.
+#[test]
+fn computer_login_offered_again_when_the_unlock_died_before_the_record() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(locked.offers_computer_login(&claim), "offered first");
+    let ready = locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .unwrap();
+    // The kill window: the mark is written, the Unlocked record never is.
+    drop(ready);
+    assert!(
+        claim.os_login_used().unwrap(),
+        "the mark was written at the unlock"
+    );
+    let claim = install.claim();
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(
+        locked.offers_computer_login(&claim),
+        "the computer login must be offered again: the claim it was spent in never began"
+    );
+}
+
+// ------------------------------------------------------------------------- T1: the used-mark clears, one test each
+
+fn write_used_mark(claim: &LegacyClaim) {
+    claim
+        .set_migration_value(OS_LOGIN_USED_KEY, &now_text())
+        .unwrap();
+    assert!(claim.os_login_used().unwrap(), "the mark is set");
+}
+
+/// T1: the used mark is gone after the claim closes (nothing to claim).
+#[test]
+fn the_used_mark_is_cleared_at_closed() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    std::fs::remove_file(install.legacy()).unwrap();
+    let claim = install.claim();
+    write_used_mark(&claim);
+    let started = claim.start(&a);
+    assert!(matches!(started, Start::Nothing), "{started:?}");
+    assert_eq!(claim.record().unwrap().unwrap().step, Step::Closed);
+    assert!(
+        !claim.os_login_used().unwrap(),
+        "the used mark is cleared at Closed"
+    );
+}
+
+/// T1: the used mark is gone after clear_permanent.
+#[test]
+fn the_used_mark_is_cleared_in_clear_permanent() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    let claim = install.claim();
+    claim
+        .record_permanent(&Permanent {
+            reason: PermanentReason::NotPlainSqlite,
+            detail: "a test's permanent failure".into(),
+        })
+        .unwrap();
+    write_used_mark(&claim);
+    claim.clear_permanent().unwrap();
+    assert!(
+        !claim.os_login_used().unwrap(),
+        "the used mark is cleared in clear_permanent"
+    );
+}
+
+/// T1: the used mark is gone after record_permanent.
+#[test]
+fn the_used_mark_is_cleared_in_record_permanent() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let claim = install.claim();
+    write_used_mark(&claim);
+    claim
+        .record_permanent(&Permanent {
+            reason: PermanentReason::NotPlainSqlite,
+            detail: "a test's permanent failure".into(),
+        })
+        .unwrap();
+    assert!(
+        !claim.os_login_used().unwrap(),
+        "the used mark is cleared in record_permanent"
+    );
+}
+
+/// R1: a room's database is never opened before the claim's start() ran in this session — a migration or a
+/// checkpoint would change the bytes the move's hash check still needs. The open is refused before start(),
+/// the claim then still finishes, and the open is allowed after.
+#[test]
+fn a_room_open_is_refused_before_start_and_the_claim_still_finishes() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    let before = open_room_guarded(&install.layout, &room);
+    assert!(
+        before.is_err(),
+        "the room opened before the claim's start() ran"
+    );
+    let outcome = claim_unlocked(&install, &a);
+    assert_eq!(done_room(&outcome), room);
+    open_room_guarded(&install.layout, &room).expect("the room opens once the claim ran");
+}
+
+// ------------------------------------------------------------------------- L1, the orchestrator's ruling
+
+/// The mark protects nothing and can strand a person: after a kill during the copy (the record is
+/// at Unlocked, no failure), the resume needs a new unlock — and the button must be offered.
+#[test]
+fn a_cut_at_unlocked_offers_the_computer_login_again() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    // A kill during the copy: the record got to Unlocked, no failure, the legacy file in place.
+    locked_claim_cut_at(&install, &a, "1357", Cut::AfterCopyRecorded);
+    let mut record = claim.record().unwrap().unwrap();
+    record.step = Step::Unlocked;
+    claim.write_record(&record).unwrap();
+    write_used_mark(&claim);
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(
+        locked.offers_computer_login(&claim),
+        "the button stayed hidden after a kill during the copy"
+    );
+    locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("the computer login opens the resume");
+}
+
+/// After a kill before the move (the record at Copied, the legacy file present), the resume needs
+/// a new unlock — and the button must be offered.
+#[test]
+fn a_cut_at_copied_with_the_legacy_file_present_offers_the_computer_login_again() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    locked_claim_cut_at(&install, &a, "1357", Cut::AfterCopyRecorded);
+    assert!(install.legacy().exists());
+    write_used_mark(&claim);
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(
+        locked.offers_computer_login(&claim),
+        "the button stayed hidden after a kill before the move"
+    );
+    locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .expect("the computer login opens the resume");
+}
+
+/// The refusal that remains: a second use within one live claim, no start() between the uses. The
+/// mark is written at the first use, and until the claim ends the button is not offered again.
+#[test]
+fn a_second_use_within_one_live_claim_is_refused() {
+    let install = Install::new();
+    close(helpdesk(&install, "1357", None));
+    let claim = install.claim();
+    let a = account("a");
+    let Start::Locked(locked) = claim.start(&a) else {
+        panic!("not locked")
+    };
+    assert!(locked.offers_computer_login(&claim), "offered first");
+    let ready = locked
+        .unlock(&claim, LegacyCredential::ComputerLogin)
+        .unwrap();
+    // The claim is live: no start() since the use. The mark stands, so the page does not offer the
+    // button again and the credential is refused while this claim lives.
+    assert!(
+        claim.os_login_used().unwrap(),
+        "the mark must stand within the live claim"
+    );
+    assert!(
+        !claim.offers_computer_login_standing(),
+        "a second use within one live claim must be refused"
+    );
+    drop(ready);
+}
+
+/// #7: the guard these tests open rooms through IS the production rule — the evidence half too,
+/// not the started half alone. A definitive start already ran in this session; a move then cut at
+/// Copied (the record naming the room, the hash evidence still at stake) refuses the open.
+#[test]
+fn the_test_guard_is_the_production_room_open_rule() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let outcome = claim_unlocked(&install, &a);
+    let room = done_room(&outcome);
+    // The started half is satisfied for this session now. Wound the record back to Copied — a
+    // kill mid-move — so only the evidence half can refuse the open.
+    let claim = install.claim();
+    let mut wounded = claim.record().unwrap().expect("the claim's record");
+    wounded.step = Step::Copied;
+    claim.write_record(&wounded).unwrap();
+    let refused = open_room_guarded(&install.layout, &room);
+    assert!(
+        refused.is_err(),
+        "the production guard refuses a room whose move evidence is still at stake"
+    );
+}
+
+// ------------------------------------------------------------------------- R1, the reviewer's holes
+
+/// R1(a): a start() that answers a transient failure never opens the room of the record. In M1's
+/// own case — the record at Copied, the legacy file gone, the room read failing — opening the room
+/// would migrate its bytes and close the move unfinished: the open is refused.
+#[test]
+fn a_transient_room_check_does_not_open_the_room() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterCopyRecorded);
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    std::fs::rename(install.legacy(), install.room_file(&room)).unwrap();
+    // The cut claim ran in a previous session — a kill: this session has answered nothing yet.
+    crate::legacy_claim::clear_started_for_test(install.layout.device_dir());
+    ROOM_CHECK_ERR.with(|err| err.set(true));
+    let started = claim.start(&a);
+    assert!(
+        matches!(started, Start::Failed(Failure::Transient(_))),
+        "not transient: {started:?}"
+    );
+    assert!(
+        !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
+        "a transient answer must not open the room"
+    );
+    let refused = std::panic::catch_unwind(|| open_room_guarded(&install.layout, &room));
+    match refused {
+        Ok(result) => assert!(result.is_err(), "the room opened after a transient answer"),
+        Err(_) => {} // a panic is a refusal too, either way the room did not open
+    }
+    // The error gone, the claim finishes — and now the room opens.
+    let finished = claim.start(&a);
+    assert!(
+        matches!(finished, Start::Finished(Outcome::Done { .. })),
+        "{finished:?}"
+    );
+    open_room_guarded(&install.layout, &room)
+        .expect("the room opens once the claim has a definitive answer");
+}
+
+/// R1(d): the set's key is canonical — a device folder reached through a symlinked parent is the
+/// same folder, so the owner is never refused their own room.
+#[test]
+fn a_symlinked_device_folder_is_the_same_for_the_guard() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_unlocked(&install, &a);
+    assert!(crate::legacy_claim::claim_started_this_session(
+        install.layout.device_dir()
+    ));
+    // The same folder through a symlinked parent.
+    let link = install.dir().parent().unwrap().join("a3a-linked-data");
+    std::os::unix::fs::symlink(install.dir(), &link).unwrap();
+    assert!(
+        crate::legacy_claim::claim_started_this_session(&link),
+        "the symlinked path is not the same folder for the guard"
+    );
+    std::fs::remove_file(&link).unwrap();
+}
+
+/// R1(b): the guard sits at the choke point every room open in the app passes — `open_live_database`
+/// behind `app_database_path` — not only in `open_room_guarded`. An open through the app's real path
+/// before start() is refused; once the claim has run, the same open goes through.
+#[test]
+fn the_apps_real_open_path_is_refused_before_start() {
+    let _turn = crate::db::room_path_test_turn();
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    install.layout.create_room_dir(&room).unwrap();
+    crate::db::set_open_room_database(Some(install.room_file(&room)));
+    let before = std::panic::catch_unwind(crate::db::open_live_database);
+    crate::db::set_open_room_database(None);
+    match before {
+        Ok(result) => assert!(
+            result.is_err(),
+            "the room opened through the app's real path before start() ran"
+        ),
+        Err(_) => {} // the debug_assert fired: refused either way
+    }
+    claim_unlocked(&install, &a);
+    crate::db::set_open_room_database(Some(install.room_file(&room)));
+    let after = crate::db::open_live_database();
+    crate::db::set_open_room_database(None);
+    after.expect("the room opens through the app's real path once the claim ran");
+}
+
+/// The widened guard (the orchestrator's ruling): a record at Moved but not yet HashChecked — step 7's
+/// hash evidence is still at stake — refuses the room open through the app's real path, even though
+/// start() ran to a definitive answer in this session.
+#[test]
+fn a_room_cut_at_moved_refuses_the_open_through_the_apps_path() {
+    let _turn = crate::db::room_path_test_turn();
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let claim = install.claim();
+    let room = room_of(&claim, &a);
+    claim_cut_at(&install, &a, Cut::AfterMoveRecorded);
+    let record = claim.record().unwrap().expect("a record");
+    assert_eq!(record.step, Step::Moved, "the cut did not land at Moved");
+    // The started guard passes: start() answered Ready — definitive — in this session.
+    assert!(crate::legacy_claim::claim_started_this_session(
+        install.layout.device_dir()
+    ));
+    crate::db::set_open_room_database(Some(install.room_file(&room)));
+    let refused = crate::db::open_live_database();
+    crate::db::set_open_room_database(None);
+    assert!(
+        refused.is_err(),
+        "the room opened while the record is at Moved with no hash check"
+    );
+}
+
+/// Item 6 (the ruling): a start() that finishes into a transient outcome after the move is not a
+/// definitive answer — the folder must not open rooms on its word alone.
+#[test]
+fn a_transient_finish_after_the_move_does_not_fill_the_started_set() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterMoveRecorded);
+    // The resume is a new session (the cut was the kill): nothing answered yet.
+    crate::legacy_claim::clear_started_for_test(install.layout.device_dir());
+    let claim = install.claim();
+    INJECT_AT.with(|at| at.set(Some(Inject::DeviceRows)));
+    let resumed = claim.start(&a);
+    assert!(
+        matches!(resumed, Start::Finished(Outcome::Transient(_))),
+        "not a transient finish: {resumed:?}"
+    );
+    assert!(
+        !crate::legacy_claim::claim_started_this_session(install.layout.device_dir()),
+        "a transient finish after the move must not fill the set"
+    );
+}
+
+/// N11: transient details are the page's words, never the OS-user paths inside the underlying
+/// store/file errors. The raw error assertions are the positive control that the detector has a
+/// path to hide where one exists.
+#[test]
+fn transient_details_never_carry_os_paths() {
+    let path = std::path::PathBuf::from("/Users/os-user/private/device.db");
+    let raw = path.to_string_lossy().to_string();
+    for error in [
+        crate::rooms::DeviceStoreError::Lost(path.clone()),
+        crate::rooms::DeviceStoreError::Unreadable {
+            path: path.clone(),
+            reason: "not sqlite".into(),
+        },
+        crate::rooms::DeviceStoreError::Newer {
+            path: path.clone(),
+            version: 99,
+        },
+    ] {
+        assert!(
+            error.to_string().contains(&raw),
+            "positive control: the raw error has no path"
+        );
+        let transient = store_transient(error, false);
+        assert!(!transient.detail.contains(&raw), "{}", transient.detail);
+        assert!(transient.detail.contains("device store"));
+    }
+
+    let io = std::io::Error::other(format!("cannot open {raw}"));
+    assert!(
+        io.to_string().contains(&raw),
+        "positive control: the raw I/O error has no path"
+    );
+    let failure = io_failure(io);
+    let Failure::Transient(transient) = failure else {
+        panic!("not transient")
+    };
+    assert!(!transient.detail.contains(&raw), "{}", transient.detail);
+
+    let io = std::io::Error::other(format!("cannot open {raw}"));
+    let step = db_failure(MovedNotOpenedReason::Open, crate::db::DbError::Io(io));
+    let StepFailure::Passing(_, detail) = step else {
+        panic!("not passing")
+    };
+    assert!(!detail.contains(&raw), "{detail}");
+
+    let raw_error = crate::db::DbError::NotPlainSqlite(path.clone());
+    assert!(
+        raw_error.to_string().contains(&raw),
+        "positive control: the raw database error has no path"
+    );
+    let step = db_failure(MovedNotOpenedReason::Open, raw_error);
+    let StepFailure::Moved(_, detail) = step else {
+        panic!("not moved-not-opened")
+    };
+    assert!(!detail.contains(&raw), "{detail}");
 }

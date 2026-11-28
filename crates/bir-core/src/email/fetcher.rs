@@ -343,7 +343,7 @@ fn fetch_with_auth(
                             processed.push(submission_receipt);
                         }
                         if pending_notice {
-                            crate::notification::notify(
+                            crate::background_cron::send_notice(
                                 crate::notification::NotificationKind::ConfirmationArrived,
                             );
                         }

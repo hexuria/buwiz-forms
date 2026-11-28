@@ -3705,7 +3705,7 @@ fn v2018_1606_an_assistant_clearing_is_pending_for_the_page_open() {
     // has opened; the page still receives the pending notice on its first open.
     use gpui_agent::AgentHost;
     let mut assistant = crate::agent::Session::new(crate::agent::UiQueue::discarding());
-    assistant.set_db(crate::bir_module::database_handle().unwrap());
+    assistant.set_db(crate::bir_module::database_handle().unwrap(), None);
     let opened = assistant
         .dispatch(&gpui_agent::protocol::Op::Invoke {
             name: "form.open".into(),

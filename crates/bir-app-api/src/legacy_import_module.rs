@@ -21,7 +21,6 @@
 //! The query never reads the stored file or its fields, so no bytes and no
 //! values can be in the answer.
 
-use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -123,10 +122,15 @@ struct SourceFile {
     modified: Option<SystemTime>,
 }
 
-thread_local! {
-    /// The scan under review, on the thread that owns the database slot.
-    static HELD: RefCell<Option<HeldScan>> = const { RefCell::new(None) };
-    static NEXT_SCAN: Cell<u64> = const { Cell::new(1) };
+/// The scan under review: process-wide, never per-thread (X3). A sign-out runs on the account
+/// thread, not the engine's, and must end the scan for everyone; the scan already records the
+/// database path it was made against and refuses an import when the room changed, so one scan
+/// for the process cannot cross rooms either.
+static HELD: std::sync::Mutex<Option<HeldScan>> = std::sync::Mutex::new(None);
+static NEXT_SCAN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn held_lock() -> std::sync::MutexGuard<'static, Option<HeldScan>> {
+    HELD.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 pub fn register(module: HostModule) -> HostModule {
@@ -235,9 +239,7 @@ pub(crate) fn scan_folder(path: &Path) -> HostResult {
     let taxpayers = taxpayer_count(&scan);
     let has_something = !scan.profiles.is_empty() || !scan.returns.is_empty();
     let id = if has_something {
-        let id = NEXT_SCAN.get();
-        NEXT_SCAN.set(id + 1);
-        id
+        NEXT_SCAN.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     } else {
         0
     };
@@ -258,7 +260,7 @@ pub(crate) fn scan_folder(path: &Path) -> HostResult {
             sources,
             scan,
         };
-        HELD.with(|slot| *slot.borrow_mut() = Some(held));
+        *held_lock() = Some(held);
     }
     Ok(summary)
 }
@@ -274,14 +276,14 @@ fn legacy_import(arguments: &HostArguments) -> HostResult {
         }
     };
     crate::account_gate::ensure_unlocked()?;
-    let Some(held) = HELD.with(|slot| slot.borrow_mut().take()) else {
+    let Some(held) = held_lock().take() else {
         return Err(HostError::new(
             "There is no scanned folder to import. Choose the folder again.",
         ));
     };
     if u64::try_from(id).ok() != Some(held.id) {
         // A newer scan is the one under review: keep it.
-        HELD.with(|slot| *slot.borrow_mut() = Some(held));
+        *held_lock() = Some(held);
         return Err(HostError::new(
             "That is not the folder under review. Scan the folder again.",
         ));
@@ -348,13 +350,13 @@ fn list_legacy_filed_returns(arguments: &HostArguments) -> HostResult {
 /// Lets the held scan go: after an import, on cancel, when another scan
 /// starts, and when the open database is replaced (a restore).
 pub(crate) fn forget_scan() {
-    HELD.with(|slot| slot.borrow_mut().take());
+    held_lock().take();
 }
 
 /// Whether a scan is held for `legacy_import`.
 #[cfg(test)]
 pub(crate) fn holds_scan() -> bool {
-    HELD.with(|slot| slot.borrow().is_some())
+    held_lock().is_some()
 }
 
 /// A file's name as the page may show it. The old program writes the address
@@ -484,8 +486,17 @@ mod tests {
         copy
     }
 
+    /// The scan under review is process-wide (X3): parallel tests in this
+    /// module share it, so they take turns.
+    fn scan_turn() -> std::sync::MutexGuard<'static, ()> {
+        // The session tests scan too (cloud_account's sign-out ends the
+        // review), so the turn is the machine's one turn, not a local one.
+        crate::session::test_turn()
+    }
+
     #[test]
     fn a_scan_of_the_fixture_counts_what_is_there_and_shows_no_values() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let summary = scan(&fixture());
         assert_eq!(summary["kind"], "scanned");
@@ -509,6 +520,7 @@ mod tests {
     /// file name carries.
     #[test]
     fn a_skipped_e_mailed_copy_is_named_without_its_address() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let copy = fixture_copy();
         std::fs::write(
@@ -533,6 +545,7 @@ mod tests {
     /// what was reviewed against one database is not imported into another.
     #[test]
     fn a_scan_does_not_outlive_the_database_it_was_reviewed_against() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let summary = scan(&fixture());
         crate::bir_module::reset_database().unwrap();
@@ -544,6 +557,7 @@ mod tests {
 
     #[test]
     fn the_import_brings_in_the_reviewed_scan_once_and_a_second_import_adds_nothing() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let first = scan(&fixture());
         let report = to_json(&import(&first["scan"]).unwrap());
@@ -583,6 +597,7 @@ mod tests {
 
     #[test]
     fn an_import_with_no_scan_another_scan_or_after_cancel_is_refused() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         legacy_scan_cancel().unwrap();
         assert_eq!(
@@ -610,6 +625,7 @@ mod tests {
 
     #[test]
     fn a_folder_changed_since_the_scan_is_scanned_again_first() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let copy = fixture_copy();
         let summary = scan(copy.path());
@@ -631,6 +647,7 @@ mod tests {
 
     #[test]
     fn an_empty_or_wrong_folder_says_so_and_holds_nothing() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let wrong = tempfile::tempdir().unwrap();
         std::fs::create_dir(wrong.path().join("Documents")).unwrap();
@@ -653,6 +670,7 @@ mod tests {
     /// taken, is refused before anything opens or is read.
     #[test]
     fn the_verbs_refuse_a_path() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let module = crate::bir_module::module();
         for verb in [
@@ -714,6 +732,7 @@ mod tests {
     /// running app there is nothing to open it on, so the call refuses.
     #[test]
     fn the_folder_dialog_needs_a_running_app() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let module = crate::bir_module::module();
         assert!(module.is_async("legacy_scan_folder"));
@@ -730,6 +749,7 @@ mod tests {
 
     #[test]
     fn a_locked_gate_refuses_the_scan_and_the_import() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         crate::account_gate::force_locked(|| {
             let locked = crate::account_gate::LOCKED_MESSAGE;
@@ -786,6 +806,7 @@ mod tests {
 
     #[test]
     fn the_imported_returns_are_listed_for_their_taxpayer_and_no_other() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         assert_eq!(listed(FIXTURE_TIN), json!([]), "nothing before the import");
         import_fixture();
@@ -847,6 +868,7 @@ mod tests {
     /// A form this app has no code for is named as the old program named it.
     #[test]
     fn a_form_the_app_does_not_know_is_listed_under_its_stored_identity() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let demo = "00012345300000";
         insert(demo, "9999Xv2000", None, "2025", None);
@@ -866,6 +888,7 @@ mod tests {
     /// Records only: the answer has these keys and nothing the stored file holds.
     #[test]
     fn the_list_holds_no_file_bytes_and_no_field_values() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         import_fixture();
         insert("00012345300000", "1601Cv2018", None, "062025", None);
@@ -923,6 +946,7 @@ mod tests {
 
     #[test]
     fn the_list_is_a_verb_that_takes_a_tin() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let module = crate::bir_module::module();
         assert!(module.has("list_legacy_filed_returns"));
@@ -952,6 +976,7 @@ mod tests {
 
     #[test]
     fn a_locked_gate_refuses_the_list() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         import_fixture();
         crate::account_gate::force_locked(|| {

@@ -6,12 +6,17 @@ use std::path::{Path, PathBuf};
 use rusqlite::{Connection, OpenFlags};
 use sha2::{Digest, Sha256};
 
+#[cfg(test)]
 use super::{
-    Added, Cut, Failure, Permanent, PermanentReason, SCRATCH_DIR, Transient, TransientCause,
-    ZIP_PREFIX, cut,
+    Added, ClaimRoom, Failure, OfferConsumptionMatch, OfferConsumptionState, Step, UnlockedBy,
+};
+use super::{
+    Cut, Permanent, PermanentReason, SCRATCH_DIR, Transient, TransientCause, ZIP_PREFIX, cut,
 };
 use crate::rooms::{Layout, ROOM_DB_FILE, RoomId};
-use crate::safe_fs::{FileId, Placed};
+#[cfg(test)]
+use crate::safe_fs::FileId;
+use crate::safe_fs::Placed;
 
 /// The tables whose rows make a room "not empty" (PLAN §A.3.5: no taxpayer, no draft, no filed return).
 const DATA_TABLES: [&str; 6] = [
@@ -105,20 +110,27 @@ fn transient(cause: TransientCause, copy_saved: bool, detail: impl Into<String>)
     Transient {
         cause,
         copy_saved,
+        record_room: false,
         detail: detail.into(),
     }
 }
 
 fn io_transient(what: &str, error: &std::io::Error, copy_saved: bool) -> Transient {
+    tracing::warn!(what, "legacy claim file operation failed: {error}");
     let cause = if is_disk_full(error) {
         TransientCause::DiskFull
     } else {
         TransientCause::Io
     };
-    transient(cause, copy_saved, format!("{what}: {error}"))
+    transient(
+        cause,
+        copy_saved,
+        "the device cannot complete the file operation",
+    )
 }
 
 fn sqlite_transient(what: &str, error: &rusqlite::Error, copy_saved: bool) -> Transient {
+    tracing::warn!(what, "legacy claim database operation failed: {error}");
     let cause = match error {
         rusqlite::Error::SqliteFailure(failure, _) => match failure.code {
             rusqlite::ErrorCode::DiskFull => TransientCause::DiskFull,
@@ -129,7 +141,7 @@ fn sqlite_transient(what: &str, error: &rusqlite::Error, copy_saved: bool) -> Tr
         },
         _ => TransientCause::Io,
     };
-    transient(cause, copy_saved, format!("{what}: {error}"))
+    transient(cause, copy_saved, "the room database cannot be used")
 }
 
 /// A `-wal` or `-shm` beside `database`.
@@ -203,16 +215,22 @@ pub(super) fn raw_safety_copy(layout: &Layout, legacy: &Path) -> Result<SafetyCo
         }
         Ok(_) => {}
         Err(error) => {
+            tracing::warn!("legacy claim file kind not read: {error}");
             return Err(CopyError::Transient(transient(
                 TransientCause::Io,
                 false,
-                error.to_string(),
+                "the legacy file could not be read",
             )));
         }
     }
     let user_version = checkpoint_and_close(legacy, false).map_err(CopyError::Transient)?;
     let supported = crate::db::current_schema_version().map_err(|error| {
-        CopyError::Transient(transient(TransientCause::Io, false, error.to_string()))
+        tracing::warn!("legacy claim schema version not read: {error}");
+        CopyError::Transient(transient(
+            TransientCause::Io,
+            false,
+            "the device cannot complete the file operation",
+        ))
     })?;
     if user_version > supported {
         return Err(CopyError::Permanent(Permanent {
@@ -522,10 +540,11 @@ pub(super) fn move_into_room(
 /// bare connection first, under the room's own owner lock, so no `-wal` is left for the next file to read.
 fn set_empty_room_aside(room_file: &Path, room_dir: &Path) -> Result<String, Transient> {
     let lock = crate::db::hold_owner_lock(room_file).map_err(|error| {
+        tracing::warn!("empty room owner lock not taken: {error}");
         transient(
             TransientCause::OwnerLockHeld,
             true,
-            format!("the empty room is open: {error}"),
+            "the empty room is open elsewhere",
         )
     })?;
     if !room_is_empty(room_file) {
@@ -593,14 +612,39 @@ fn move_safety_files(layout: &Layout, room_dir: &Path) {
     }
 }
 
-/// The offer's "Add" (§A.3.6): the whole-profile export of the legacy file, taken from a scratch copy this build
-/// opened, imported into `room`; then the legacy file is renamed `bir_data.offered-<stamp>.db`, never replacing. The
-/// file's `-wal` is folded in first, so the renamed file alone holds every commit.
+#[cfg(any(test, debug_assertions))]
+static FAIL_NEXT_OFFER_RENAME: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Test seam, debug builds only: the next offered-file rename answers as a sharing/AV failure.
+#[cfg(any(test, debug_assertions))]
+#[doc(hidden)]
+pub fn fail_next_offer_rename_for_test() {
+    FAIL_NEXT_OFFER_RENAME.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(any(test, debug_assertions))]
+static CUT_AFTER_IMPORTING_MARK: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Test seam, debug builds only: the next offer answers as though the process was cut immediately
+/// after its `importing` mark and before the import could commit.
+#[cfg(any(test, debug_assertions))]
+#[doc(hidden)]
+pub fn cut_next_offer_after_importing_mark_for_test() {
+    CUT_AFTER_IMPORTING_MARK.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Test-only remnant of the removed Add path (§A.3.6): the whole-profile export imported into `room`,
+/// then the legacy file renamed aside. Production callers never reach it.
+#[cfg(test)]
 pub(super) fn add_offered(
-    layout: &Layout,
+    claim: &super::LegacyClaim,
     room: &crate::db::Database,
+    claim_room: &ClaimRoom,
     probed: Option<FileId>,
 ) -> Result<Added, Failure> {
+    let layout = &claim.layout;
     let legacy = layout.legacy_database();
     let fail = |transient: Transient| Failure::Transient(transient);
     if crate::safe_fs::file_id(&legacy).ok() != probed || probed.is_none() {
@@ -622,6 +666,8 @@ pub(super) fn add_offered(
     let result = (|| -> Result<Added, Failure> {
         let copy = scratch.join(ROOM_DB_FILE);
         std::fs::copy(&legacy, &copy).map_err(io("copy"))?;
+        // The mark keys these exact bytes. Opening the copy may migrate it, so hash before the open.
+        let content_sha256 = sha256_file(&copy).map_err(io("hash"))?;
         let source = crate::db::Database::open(&copy).map_err(|error| {
             Failure::Permanent(Permanent {
                 reason: PermanentReason::CannotOpen,
@@ -630,27 +676,103 @@ pub(super) fn add_offered(
         })?;
         let profiles = source
             .list_profiles()
-            .map_err(|error| fail(transient(TransientCause::Io, false, error.to_string())))?
+            .map_err(|error| {
+                tracing::warn!("offered profiles not read: {error}");
+                fail(transient(
+                    TransientCause::Io,
+                    false,
+                    "the offered data could not be read",
+                ))
+            })?
             .len();
         let archive = scratch.join("profiles.zip");
         crate::export::export_all_profiles_data(&source, &archive).map_err(|error| {
+            tracing::warn!("offered profiles not exported: {error}");
             fail(transient(
                 TransientCause::Io,
                 false,
-                format!("export: {error}"),
+                "the offered data could not be exported",
             ))
         })?;
         drop(source);
-        crate::import::import_profile_data(room, &archive).map_err(|error| {
-            fail(transient(
-                TransientCause::Io,
-                false,
-                format!("import: {error}"),
-            ))
-        })?;
+        let probed = probed.expect("the identity was checked above");
+        let mut imported = false;
+        match claim
+            .offer_consumption_match(&claim_room.room_id, &content_sha256)
+            .map_err(super::store_failure)?
+        {
+            OfferConsumptionMatch::OtherRoom => {
+                return Err(fail(transient(
+                    TransientCause::FileChanged,
+                    false,
+                    "the file offered was already added to another account's room",
+                )));
+            }
+            OfferConsumptionMatch::Own(OfferConsumptionState::Imported) => {}
+            OfferConsumptionMatch::None
+            | OfferConsumptionMatch::Own(OfferConsumptionState::Importing) => {
+                claim
+                    .write_offer_consumption(
+                        &claim_room.room_id,
+                        &content_sha256,
+                        OfferConsumptionState::Importing,
+                    )
+                    .map_err(super::store_failure)?;
+                #[cfg(any(test, debug_assertions))]
+                if CUT_AFTER_IMPORTING_MARK.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                    return Err(fail(transient(
+                        TransientCause::Io,
+                        false,
+                        "injected offer-import cut after the importing mark",
+                    )));
+                }
+                crate::import::import_profile_data(room, &archive).map_err(|error| {
+                    tracing::warn!("offered profiles not imported: {error}");
+                    fail(transient(
+                        TransientCause::Io,
+                        false,
+                        "the offered data could not be imported",
+                    ))
+                })?;
+                claim
+                    .write_offer_consumption(
+                        &claim_room.room_id,
+                        &content_sha256,
+                        OfferConsumptionState::Imported,
+                    )
+                    .map_err(super::store_failure)?;
+                imported = true;
+            }
+        }
+
+        // B2b: the consumed offer leaves a real claim record. Even when the rename is refused, a
+        // later sign-in can see which room the file belongs to; the content mark is what stops the
+        // offer for every other room.
+        let mut record = claim
+            .record()
+            .map_err(super::store_failure)?
+            .unwrap_or_default();
+        record.room = Some(claim_room.room_id.as_str().to_owned());
+        record.origin = Some(claim_room.origin.clone());
+        record.user_id = Some(claim_room.user_id.clone());
+        record.email = claim_room.email.clone();
+        record.unlocked_by = record.unlocked_by.or(Some(UnlockedBy::NoLock));
+        record.legacy_file = Some(probed);
+        record.raw_sha256 = Some(content_sha256.clone());
+        record.failure = None;
+        record.step = Step::Done;
+        record.done_at = Some(chrono::Utc::now().to_rfc3339());
+        claim.write_record(&record).map_err(super::store_failure)?;
+
         let offered = layout
             .device_dir()
             .join(format!("bir_data.offered-{stamp}.db"));
+        #[cfg(any(test, debug_assertions))]
+        if FAIL_NEXT_OFFER_RENAME.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            return Err(io("rename")(std::io::Error::other(
+                "injected offered-file rename failure",
+            )));
+        }
         crate::safe_fs::rename_no_replace(&legacy, &offered).map_err(io("rename"))?;
         crate::safe_fs::sync_dir(layout.device_dir()).map_err(io("fsync"))?;
         tracing::info!(
@@ -658,7 +780,7 @@ pub(super) fn add_offered(
             "an older version's tax profiles were added to this account"
         );
         Ok(Added {
-            profiles,
+            profiles: if imported { profiles } else { 0 },
             offered_file: offered,
         })
     })();

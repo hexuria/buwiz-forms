@@ -64,15 +64,40 @@ export function signIn(): void {
   app.lockCloud();
 }
 
+/** The count the last sign-out left waiting (the sign-in page's one-time notice); -1 = no notice. */
+const waitingNotice = signal(-1);
+
+/** The one-time notice for the sign-in page (§A.5): how many returns wait, no names; -1 while none. */
+export function returnsWaitingNotice(): number {
+  return waitingNotice();
+}
+
+/** The notice was shown once: it does not show again. */
+export function dismissWaitingNotice(): void {
+  waitingNotice.set(-1);
+}
+
+/** The open room's waiting returns (Queued or sending now), for the confirm sheet's count. */
+export function returnsWaitingCount(): number {
+  try {
+    return store.call("returns_waiting_count") as unknown as number;
+  } catch {
+    return 0;
+  }
+}
+
 export async function signOut(): Promise<void> {
   if (busy()) return;
   busy.set(true);
   failure.set(null);
+  // §A.5: the count is read before the room closes — afterwards it is the notice's, with no names.
+  const waiting = returnsWaitingCount();
   try {
     status.set(await store.call("cloud_account_sign_out"));
     failure.set(null);
     signInFlow.reset();
     app.lockCloud();
+    if (waiting > 0) waitingNotice.set(waiting);
   } catch (error) {
     failure.set(errorText(error));
   }

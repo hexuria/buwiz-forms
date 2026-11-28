@@ -200,6 +200,15 @@ export const list_zip_codes = (...args: Parameters<typeof Host.list_zip_codes>):
 export const mac_login = (...args: Parameters<typeof Host.mac_login>): ReturnType<typeof Host.mac_login> =>
   Door.callAsync("mac_login", args) as ReturnType<typeof Host.mac_login>;
 
+export const migration_offer_answer = (...args: Parameters<typeof Host.migration_offer_answer>): ReturnType<typeof Host.migration_offer_answer> =>
+  Door.call("migration_offer_answer", args) as ReturnType<typeof Host.migration_offer_answer>;
+
+export const migration_state = (...args: Parameters<typeof Host.migration_state>): ReturnType<typeof Host.migration_state> =>
+  Door.call("migration_state", args) as ReturnType<typeof Host.migration_state>;
+
+export const migration_try_again = (...args: Parameters<typeof Host.migration_try_again>): ReturnType<typeof Host.migration_try_again> =>
+  Door.call("migration_try_again", args) as ReturnType<typeof Host.migration_try_again>;
+
 export const move_branch_code = (...args: Parameters<typeof Host.move_branch_code>): ReturnType<typeof Host.move_branch_code> =>
   Door.call("move_branch_code", args) as ReturnType<typeof Host.move_branch_code>;
 
@@ -224,8 +233,14 @@ export const record_screen_log = (...args: Parameters<typeof Host.record_screen_
 export const resolve_unknown_send = (...args: Parameters<typeof Host.resolve_unknown_send>): ReturnType<typeof Host.resolve_unknown_send> =>
   Door.call("resolve_unknown_send", args) as ReturnType<typeof Host.resolve_unknown_send>;
 
+export const returns_waiting_count = (...args: Parameters<typeof Host.returns_waiting_count>): ReturnType<typeof Host.returns_waiting_count> =>
+  Door.call("returns_waiting_count", args) as ReturnType<typeof Host.returns_waiting_count>;
+
 export const revoke_send = (...args: Parameters<typeof Host.revoke_send>): ReturnType<typeof Host.revoke_send> =>
   Door.call("revoke_send", args) as ReturnType<typeof Host.revoke_send>;
+
+export const safety_copy_status = (...args: Parameters<typeof Host.safety_copy_status>): ReturnType<typeof Host.safety_copy_status> =>
+  Door.call("safety_copy_status", args) as ReturnType<typeof Host.safety_copy_status>;
 
 export const save_form_draft = (...args: Parameters<typeof Host.save_form_draft>): ReturnType<typeof Host.save_form_draft> =>
   Door.call("save_form_draft", args) as ReturnType<typeof Host.save_form_draft>;
@@ -549,6 +564,9 @@ export const bir = {
   list_taxpayers,
   list_zip_codes,
   mac_login,
+  migration_offer_answer,
+  migration_state,
+  migration_try_again,
   move_branch_code,
   move_taxpayer_tin,
   pull_device_filings,
@@ -557,7 +575,9 @@ export const bir = {
   record_income_tax_election,
   record_screen_log,
   resolve_unknown_send,
+  returns_waiting_count,
   revoke_send,
+  safety_copy_status,
   save_form_draft,
   save_setup,
   screen_form_amend,
@@ -685,6 +705,9 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "list_taxpayers", kind: "sync" },
   { name: "list_zip_codes", kind: "sync" },
   { name: "mac_login", kind: "async" },
+  { name: "migration_offer_answer", kind: "sync" },
+  { name: "migration_state", kind: "sync" },
+  { name: "migration_try_again", kind: "sync" },
   { name: "move_branch_code", kind: "sync" },
   { name: "move_taxpayer_tin", kind: "sync" },
   { name: "pull_device_filings", kind: "sync" },
@@ -693,7 +716,9 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "record_income_tax_election", kind: "sync" },
   { name: "record_screen_log", kind: "sync" },
   { name: "resolve_unknown_send", kind: "sync" },
+  { name: "returns_waiting_count", kind: "sync" },
   { name: "revoke_send", kind: "sync" },
+  { name: "safety_copy_status", kind: "sync" },
   { name: "save_form_draft", kind: "sync" },
   { name: "save_setup", kind: "sync" },
   { name: "screen_form_amend", kind: "async" },

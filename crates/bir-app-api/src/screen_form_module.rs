@@ -5568,6 +5568,7 @@ pub(crate) fn removes(
 /// shut on `draft` (corpus `enabled_when` conditions and host module gates).
 /// Blank and untick writes are clears and are never refused by a gate,
 /// except shut Item 21 of a 1606 (it writes Item 28A through their shared amount).
+#[cfg(feature = "agent")]
 pub(crate) fn page_gate_refusal(
     kind: AgentFormKind,
     draft: &Value,

@@ -43,6 +43,27 @@ for (const { name, size } of SIZES) {
     expect(calls(app)).toEqual(["cloud_account_refresh", "cloud_account_sign_out", "cloud_account_session_closed"]);
   }, 60_000);
 
+  test(`${name}: the sign-out count shows while returns wait, and the notice shows once on the sign-in page`, async () => {
+    // X6: returns_waiting_count answers a plain number; the sheet counts it and the notice follows.
+    const app = await openSettings(size, { cloud: "in", solo: true, waiting: 3 }, "account");
+    await app.waitFor(ready);
+    await app.waitFor("text:calls: cloud_account_refresh");
+    await app.press("id:settings-account-sign-out");
+    await app.waitFor("id:settings-sign-out-confirm");
+    await app.waitFor("id:sign-out-waiting-count");
+    expect(app.texts()).toContain("3 returns are waiting to send. They send when you sign in again.");
+    await app.press("id:settings-sign-out-yes");
+    await app.waitFor("id:gate-start");
+    await app.waitFor("id:returns-waiting-notice");
+    expect(app.texts()).toContain("Returns are waiting to send on this device. They send when their account signs in again.");
+    // And with nothing waiting the sheet shows no count.
+    const clear = await openSettings(size, { cloud: "in", solo: true, waiting: 0 }, "account");
+    await clear.waitFor(ready);
+    await clear.press("id:settings-account-sign-out");
+    await clear.waitFor("id:settings-sign-out-confirm");
+    expect(clear.shows("id:sign-out-waiting-count")).toBe(false);
+  }, 60_000);
+
   test(`${name}: signed out (a development state): "Not signed in to Buwiz" and Sign in, which shows the gate`, async () => {
     const app = await openSettings(size, { cloud: "out", solo: true }, "account");
     await app.waitFor(ready);

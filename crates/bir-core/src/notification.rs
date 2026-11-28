@@ -76,9 +76,20 @@ pub(crate) fn banner_text(kind: NotificationKind) -> (&'static str, &'static str
     ("eBIRForms", body)
 }
 
+/// F9's test seam: every banner kind asked of the OS, delivery or not — the epoch gate's test
+/// proves a notice of the old session never reaches even this point.
+#[cfg(test)]
+pub(crate) static POSTED_KINDS: std::sync::LazyLock<std::sync::Mutex<Vec<NotificationKind>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
 /// Post one OS banner. Every banner call site selects a [`NotificationKind`]
 /// here rather than assembling text of its own.
 pub fn notify(kind: NotificationKind) {
+    #[cfg(test)]
+    POSTED_KINDS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(kind);
     let (title, body) = banner_text(kind);
     send_notification(title, body);
 }

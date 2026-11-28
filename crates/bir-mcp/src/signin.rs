@@ -133,11 +133,11 @@ impl SessionStore for DesktopStore {
         }
         stored.offline = false;
         stored.last_refresh_unix = unix_now();
-        cloud_account::save_stored_account(&stored).map_err(|error| error.to_string())
+        bir_core::account_session::save_stored(&stored).map_err(|error| error.to_string())
     }
 
     fn clear(&self) -> Result<(), String> {
-        cloud_account::clear_stored_account();
+        bir_core::account_session::clear_stored();
         Ok(())
     }
 }
@@ -162,7 +162,7 @@ pub fn persist_refresh(
 
 /// Drop the desktop account from the keychain and the private file.
 pub fn clear_desktop_session() {
-    cloud_account::clear_stored_account();
+    bir_core::account_session::clear_stored();
 }
 
 #[cfg(test)]

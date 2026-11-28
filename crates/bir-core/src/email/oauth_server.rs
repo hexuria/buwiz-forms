@@ -16,6 +16,25 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tracing::info;
 
+/// The live listeners' cancel flags (F4): when the room a consent was started in closes, the
+/// callback it waits for is no longer wanted — a grant completing afterwards belongs to nobody.
+static LISTENERS: std::sync::LazyLock<
+    std::sync::Mutex<Vec<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
+/// Cancel every listener waiting now: each answers Err and its thread exits. Called when the
+/// room closes (a sign-out, a switch), so a consent page still open in the browser cannot
+/// complete into whatever account signs in next.
+pub fn cancel_listeners() {
+    for flag in LISTENERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .drain(..)
+    {
+        flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// How long the sign-in waits for Google's redirect.
 pub const CALLBACK_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
@@ -51,8 +70,19 @@ fn start_callback_server_until(
 
     info!("OAuth callback server listening on 127.0.0.1:{}", port);
 
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    LISTENERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(cancel.clone());
+
     std::thread::spawn(move || {
-        let outcome = wait_for_callback(&listener, &expected_state, Instant::now() + timeout);
+        let outcome = wait_for_callback(
+            &listener,
+            &expected_state,
+            Instant::now() + timeout,
+            &cancel,
+        );
         let _ = tx.send(outcome);
         // Listener drops here, freeing the port
     });
@@ -64,8 +94,12 @@ fn wait_for_callback(
     listener: &TcpListener,
     expected_state: &str,
     deadline: Instant,
+    cancel: &std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<String, String> {
     while Instant::now() < deadline {
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("the sign-in this consent was started for is closed".to_owned());
+        }
         match listener.accept() {
             Ok((stream, _addr)) => {
                 if let Some(outcome) = answer(stream, expected_state, deadline) {
@@ -374,6 +408,33 @@ mod tests {
     const STATE: &str = "expected state";
 
     #[test]
+    fn a_callback_after_cancel_is_never_accepted() {
+        // F4: the room the consent was started in has closed — the listener answers Err and the
+        // late callback connects to nothing.
+        let _turn = server_test_turn();
+        let (port, rx) = start_callback_server(STATE.into()).unwrap();
+        assert!(
+            get(port, "/favicon.ico").starts_with("HTTP/1.1 404"),
+            "positive control: the listener accepts before the cancel"
+        );
+        cancel_listeners();
+        let answer = rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the cancelled listener must answer");
+        assert_eq!(
+            answer,
+            Err("the sign-in this consent was started for is closed".to_owned())
+        );
+        for _ in 0..50 {
+            if TcpStream::connect(("127.0.0.1", port)).is_err() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("the listener is still accepting after the cancel");
+    }
+
+    #[test]
     fn a_callback_with_our_state_gives_the_decoded_code() {
         let request = "GET /?code=a%2Fb&state=expected%20state&scope=x HTTP/1.1\r\n";
         assert_eq!(classify(request, STATE), Callback::Code("a/b".into()));
@@ -442,8 +503,17 @@ mod tests {
         rx.recv_timeout(Duration::from_secs(10)).unwrap()
     }
 
+    static SERVER_TEST_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn server_test_turn() -> std::sync::MutexGuard<'static, ()> {
+        SERVER_TEST_TURN
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     #[test]
     fn the_server_waits_past_a_favicon_and_returns_the_code() {
+        let _turn = server_test_turn();
         let (port, rx) = start_callback_server(STATE.into()).unwrap();
         assert!(get(port, "/favicon.ico").starts_with("HTTP/1.1 404"));
         assert!(get(port, "/?code=the-code&state=expected%20state").starts_with("HTTP/1.1 200"));
@@ -452,6 +522,7 @@ mod tests {
 
     #[test]
     fn a_request_split_across_writes_is_read_whole() {
+        let _turn = server_test_turn();
         let (port, rx) = start_callback_server(STATE.into()).unwrap();
         let answer = send(
             port,
@@ -468,6 +539,7 @@ mod tests {
 
     #[test]
     fn a_callback_with_another_state_does_not_end_the_sign_in() {
+        let _turn = server_test_turn();
         let (port, rx) = start_callback_server(STATE.into()).unwrap();
         assert!(get(port, "/?code=stolen&state=guess").starts_with("HTTP/1.1 400"));
         assert!(rx.try_recv().is_err(), "still waiting");
@@ -477,6 +549,7 @@ mod tests {
 
     #[test]
     fn the_server_reports_cancel_and_refusal() {
+        let _turn = server_test_turn();
         let (port, rx) = start_callback_server(STATE.into()).unwrap();
         assert!(
             get(port, "/?error=access_denied&state=expected%20state").starts_with("HTTP/1.1 200")
@@ -494,6 +567,7 @@ mod tests {
 
     #[test]
     fn a_slow_sender_is_cut_off_and_the_callback_behind_it_succeeds() {
+        let _turn = server_test_turn();
         let (port, rx) = start_callback_server(STATE.into()).unwrap();
         let started = Instant::now();
         // One byte a second, for longer than a connection may take.
@@ -525,6 +599,7 @@ mod tests {
 
     #[test]
     fn the_deadline_ends_the_wait_even_while_a_slow_sender_is_connected() {
+        let _turn = server_test_turn();
         let deadline = Duration::from_millis(1500);
         let (port, rx) = start_callback_server_until(STATE.into(), deadline).unwrap();
         let started = Instant::now();
@@ -540,6 +615,7 @@ mod tests {
 
     #[test]
     fn the_server_gives_up_after_its_timeout() {
+        let _turn = server_test_turn();
         let (_port, rx) =
             start_callback_server_until(STATE.into(), Duration::from_millis(300)).unwrap();
         assert_eq!(outcome(&rx), Err(CALLBACK_TIMED_OUT.into()));

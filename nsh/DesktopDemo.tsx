@@ -125,7 +125,13 @@ function Demo() {
   if (p.solo && bir.auth_state().mode === null) bir.setup_solo(createDemoTaxpayer().tin_root);
   if (p.refuse) refusing.add(p.refuse);
   if (p.hotkey) bir.set_global_hotkey(p.hotkey);
-  if (p.locked) app.setCloudLocked(true);
+  if (p.locked) {
+    // The account lock follows the host gate now: the fixture locks the host, rather than forcing the shell's mirror.
+    const h = bir as unknown as Record<string, unknown>;
+    h.cloud_account_gate = () => ({ unlocked: false, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
+    h.migration_state = () => ({ kind: "none", copy_saved: false, detail: "" });
+    app.setCloudLocked(true);
+  }
   if (p.quit === "fake") {
     quitSteps.ends = () => true;
     quitSteps.shutdown = () => {};

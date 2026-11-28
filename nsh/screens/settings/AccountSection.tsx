@@ -2,6 +2,7 @@
 // second account), Google, Security; each only where the search keeps its row.
 import { deviceCopy } from "../../ui";
 import { BuwizCard } from "./Buwiz";
+import { SettingsMigrationRow } from "../auth/migrationNote";
 import { GoogleBlock } from "./Google";
 import { IdentityBlock } from "./Identity";
 import { Labeled } from "./parts";
@@ -14,6 +15,8 @@ export function AccountSection(props: { rows: string[] }) {
       <If when={has("buwiz")}>
         <Labeled label="Buwiz account" testID="settings-buwiz-heading">
           <BuwizCard />
+          {/* The permanent failure's note lives here after Home showed it once (§A.3.4). */}
+          <SettingsMigrationRow />
         </Labeled>
       </If>
       <If when={has("identity")}>

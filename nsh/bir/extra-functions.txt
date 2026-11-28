@@ -1,35 +1,35 @@
-# Host functions the old app never calls but a new screen needs: one name per line, then run nsh/bir/regenerate.sh.
 # (Lines starting with # are ignored. regenerate.sh wraps the names in old-app-functions.txt plus these.)
-save_form_draft
-queue_form_draft
-get_form_draft
 # F18: the import from BIR's official eBIRForms (Settings > Import / Export).
-legacy_standard_folders
-legacy_scan_folder
-legacy_scan_standard
-legacy_import
-legacy_scan_cancel
 # F20: the returns imported from the old program, read back for one branch's TIN (Filings).
-list_legacy_filed_returns
-
+# Host functions the old app never calls but a new screen needs: one name per line, then run nsh/bir/regenerate.sh.
 # PR 4: the "Save to profile?" ask-once answer, remembered per TIN + year + field.
-screen_form_profile_asked
-
 # Relay filing: a person answers whether the BIR's email came for a send with an unknown outcome (the form page).
-resolve_unknown_send
-
-
 # The email-and-code sign-in: start with an address, check the code, Resend, end the request, and the request after a relaunch.
-cloud_account_email_start
-cloud_account_email_verify
-cloud_account_email_resend
-cloud_account_email_cancel
-cloud_account_email_pending
-screen_form_remove_row
-
 # Track D: the account's TINs for the tax-profile page, the picker and Queue (chips, Activate this TIN to send).
+# accounts-and-lock W3: the welcome line's "first time", the host's answer for the signed-in account (no account named).
+# A3a: the migration pages' state, try again, the offer's answer, the waiting-returns count and the safety copy's status.
 account_tins
 activate_tin
-
-# accounts-and-lock W3: the welcome line's "first time", the host's answer for the signed-in account (no account named).
+cloud_account_email_cancel
+cloud_account_email_pending
+cloud_account_email_resend
+cloud_account_email_start
+cloud_account_email_verify
+get_form_draft
+legacy_import
+legacy_scan_cancel
+legacy_scan_folder
+legacy_scan_standard
+legacy_standard_folders
+list_legacy_filed_returns
+migration_offer_answer
+migration_state
+migration_try_again
+queue_form_draft
+resolve_unknown_send
+returns_waiting_count
+safety_copy_status
+save_form_draft
+screen_form_remove_row
+screen_form_profile_asked
 welcome_first_time

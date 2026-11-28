@@ -280,9 +280,42 @@ pub fn drain_gated(
         refuse(batch, &message);
         return false;
     }
+    // A3a §A.5: the cached handle is compared with the open room's generation on each batch. On a
+    // change the session is rebuilt — selected_tin = None, open = None, a new db.
+    {
+        // The machine's one read (§1): the slot is gone — the generation asked after is the
+        // open room's in the snapshot, and there is no other open room.
+        let current = crate::session::snapshot()
+            .room
+            .map(|(_, generation, _, _)| generation);
+        let stale = {
+            let session = session.borrow();
+            session.cached_generation() != current
+                && (session.cached_generation().is_some() || current.is_some())
+        };
+        if stale {
+            tracing::info!("agent session rebuilt: the open room changed");
+            session.borrow_mut().rebuild();
+        }
+    }
     if session.borrow().needs_db() {
-        match crate::bir_module::database_handle() {
-            Ok(handle) => session.borrow_mut().set_db(handle),
+        // X4: the handle and the generation come from one read of the slot — a switch between
+        // two reads would pair one room's Arc with the other's generation, and every later
+        // batch would read the old room as "not stale". Single-room mode has no slot (no room
+        // switches there): the separate reads are safe.
+        let pair = match crate::session::snapshot().room {
+            Some((handle, generation, _, _)) => Ok((handle, Some(generation))),
+            None => crate::bir_module::database_handle().map(|handle| {
+                (
+                    handle,
+                    crate::session::snapshot()
+                        .room
+                        .map(|(_, generation, _, _)| generation),
+                )
+            }),
+        };
+        match pair {
+            Ok((handle, generation)) => session.borrow_mut().set_db(handle, generation),
             Err(error) => {
                 let message = error.to_string();
                 for posted in batch {

@@ -106,8 +106,70 @@ pub(crate) fn secrets_dir() -> std::path::PathBuf {
     crate::platform::device_dir()
 }
 
+thread_local! {
+    /// The key material of the key the gate created ON THIS THREAD, if it just did (F6): the
+    /// registration's discard deletes only a key it knows is its own — never whatever the disk
+    /// happens to hold after another registration interleaved, which a disk read back could
+    /// not tell apart.
+    static CREATED_ON_THIS_THREAD: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn note_key_created_here(raw: String) {
+    CREATED_ON_THIS_THREAD.with(|slot| *slot.borrow_mut() = Some(raw));
+}
+
+fn take_key_created_here() -> Option<String> {
+    CREATED_ON_THIS_THREAD.with(|slot| slot.borrow_mut().take())
+}
+
+/// The creation gate of F7, installed once: bir-submit's lazy first key is created under
+/// DEVICE_KEY, and the owner record is written in the same step from the owner cache — no key
+/// is ever created outside the funnel or, while anyone is signed in, without its owner. The
+/// cache is the only owner source allowed here: the disk read would take the account lock,
+/// which is never taken under DEVICE_KEY. A creation with nobody cached — no send should ever
+/// reach one — leaves the key unowned for the adoption at the next sign-in's first commit.
+pub fn install_device_key_gate() {
+    bir_submit::client::set_device_key_gate(std::sync::Arc::new(|create| {
+        let _device_key = DEVICE_KEY
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let key = create()?;
+        // The creation marker: inside DEVICE_KEY on the creating thread, the stored key IS the
+        // one just made — a discard on this thread can only ever mean this one.
+        if let Some(raw) = stored_device_key_raw() {
+            note_key_created_here(raw);
+        }
+        let owner = crate::account_session::SEND_CONTEXT
+            .try_with(|context| context.owner.clone())
+            .ok()
+            .or_else(crate::account_session::stored_owner);
+        if let Some(owner) = owner {
+            write_device_owner(&owner);
+        } else {
+            tracing::warn!(
+                "a device key was created with nobody signed in: unowned until adoption"
+            );
+        }
+        Ok(key)
+    }));
+}
+
+/// The already-constructed submitter for the configured server, if one exists — a PEEK that
+/// never constructs (N3): under SESSION a construction would read the install id, the platform
+/// store and the DEVICE_KEY gate, so the owner-ending close invalidates only what exists.
+pub fn peek_submitter() -> Option<Arc<Submitter>> {
+    let server = crate::cloud_account::configured_server().ok()?;
+    let slot = SUBMITTER.lock().ok()?;
+    match slot.as_ref() {
+        Some((url, submitter)) if *url == server.url => Some(submitter.clone()),
+        _ => None,
+    }
+}
+
 /// The client for the configured Buwiz server, made once per server.
 pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
+    install_device_key_gate();
     let server = crate::cloud_account::configured_server()
         .map_err(|error| TransportError::Config(error.to_string()))?;
     server_allowed(&server.url, cfg!(debug_assertions))?;
@@ -137,15 +199,339 @@ pub fn submitter() -> Result<Arc<Submitter>, TransportError> {
     Ok(submitter)
 }
 
+/// Drop the cached submitter — the tests' reset, since the slot is process-wide and a test
+/// proving no construction needs a clean start.
+#[cfg(any(test, feature = "test-support"))]
+pub fn reset_submitter_for_test() {
+    if let Ok(mut slot) = SUBMITTER.lock() {
+        *slot = None;
+    }
+}
+
 /// Forget this device's key on the Buwiz server's side of things: a new
 /// sign-in registers a new key. The account layer calls it on sign-in and
 /// sign-out. Nothing to forget when the client cannot be made.
 pub fn forget_device() {
-    if let Ok(submitter) = submitter()
-        && let Err(error) = submitter.forget_device()
-    {
-        tracing::warn!("could not forget the relay device key: {error}");
+    // N3: never CONSTRUCT a client to forget with — a construction reads the install id, the
+    // platform store and the device-key gate, and the close paths run this on the sign-out's
+    // own thread. An existing client clears its TIN cache too; with none, the store deletion
+    // stands alone (no cache exists to clear).
+    if let Some(submitter) = peek_submitter() {
+        if let Err(error) = submitter.forget_device() {
+            tracing::warn!("could not forget the relay device key: {error}");
+        }
+        return;
     }
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    if let Err(error) = store.delete(bir_submit::DEVICE_KEY) {
+        tracing::warn!("could not forget the device key: {error}");
+    }
+    if let Err(error) = store.delete(bir_submit::DEVICE_ID) {
+        tracing::warn!("could not forget the device id: {error}");
+    }
+}
+
+// ---------- I6: the device key's owner, recorded (F2') ----------
+
+/// The one lock of the device key's lifecycle (F2'b): the forget's check-and-delete and the
+/// registration's replace-and-write both run under it, so they can never interleave. NEVER
+/// nested inside SESSION — the session machine calls in only after its own lock is released.
+static DEVICE_KEY: Mutex<()> = Mutex::new(());
+
+/// Where the key's owner is recorded: a small file beside the key in the secrets folder,
+/// written in the same step as the key itself. Two lines: the normalised origin, the user id.
+fn device_owner_path() -> std::path::PathBuf {
+    secrets_dir().join("buwiz_submit_device_owner.txt")
+}
+
+/// The owner recorded beside the device key, or None for a key from before the recording
+/// (an existing install's — the adoption case) or no key at all.
+pub fn device_key_owner() -> Option<crate::account_session::OwnerKey> {
+    let text = std::fs::read_to_string(device_owner_path()).ok()?;
+    let mut lines = text.lines();
+    let origin = lines.next()?.trim().to_string();
+    let user_id = lines.next()?.trim().to_string();
+    if origin.is_empty() || user_id.is_empty() {
+        return None;
+    }
+    Some(crate::account_session::OwnerKey { origin, user_id })
+}
+
+/// Write the owner beside the key, in the key's own step. The caller holds DEVICE_KEY.
+fn write_device_owner(owner: &crate::account_session::OwnerKey) {
+    let text = format!(
+        "{}
+{}
+",
+        owner.origin, owner.user_id
+    );
+    if let Err(error) = std::fs::write(device_owner_path(), text) {
+        tracing::warn!("could not record the device key's owner: {error}");
+    }
+}
+
+/// The caller holds DEVICE_KEY.
+fn clear_device_owner() {
+    match std::fs::remove_file(device_owner_path()) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => tracing::warn!("could not remove the device key's owner record: {error}"),
+    }
+}
+
+/// The forget's half of I6, under DEVICE_KEY: forget the key only while it is still the ending
+/// owner's — recorded as his, or unrecorded (a pre-recording install's key, which is the current
+/// sign-in's until adoption). A key already recorded for a NEWER owner is never touched: someone
+/// got there first, and it is not this ending's to take.
+pub fn forget_device_key_for(owner: &crate::account_session::OwnerKey) {
+    match device_key_owner() {
+        Some(recorded) if recorded != *owner => {
+            tracing::info!("device key forget skipped: the key is a newer owner's already");
+            return;
+        }
+        _ => {}
+    }
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    // The owner is re-read inside the lock: a registration in the gap may have re-recorded it.
+    match device_key_owner() {
+        Some(recorded) if recorded != *owner => {
+            tracing::info!("device key forget skipped: the key is a newer owner's already");
+            return;
+        }
+        _ => {}
+    }
+    forget_device_key_local();
+    clear_device_owner();
+}
+
+/// The close's forget (F7): the epoch is re-checked INSIDE DEVICE_KEY, so a key registered after
+/// the epoch moved — the newer session's — is never taken by the old session's forget, however
+/// the wait ordered them. Deletes only its own owner's key: a key recorded for a newer owner is
+/// never touched.
+/// C5: a forget's check-and-delete inside DEVICE_KEY. The caller's closure runs with the lock
+/// held; the epoch is re-checked inside it, so a key registered after the epoch moved — the
+/// newer session's — is never taken however the wait ordered them.
+pub(crate) fn with_device_key_lock<R>(inside: impl FnOnce() -> R) -> R {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    inside()
+}
+
+pub fn forget_device_key_at_epoch(owner: &crate::account_session::OwnerKey, epoch: u64) {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if crate::session_epoch::current() != epoch {
+        tracing::info!("device key forget skipped: the epoch moved on while the lock was waited");
+        return;
+    }
+    match device_key_owner() {
+        Some(recorded) if recorded != *owner => {
+            tracing::info!("device key forget skipped: the key is a newer owner's already");
+            return;
+        }
+        _ => {}
+    }
+    forget_device_key_local();
+    clear_device_owner();
+}
+
+/// The key and id deleted from the device store directly — never through the submitter's
+/// construction, so the forget cannot be skipped for want of a server config (the deletion is
+/// local in bir-submit too; nothing here reaches the network).
+/// The public half of the key in the device store, if one is stored and parseable.
+#[cfg(any(test, feature = "test-support"))]
+fn stored_device_public_key() -> Option<String> {
+    stored_device_key_raw()
+        .and_then(|raw| bir_submit::device::DeviceKey::from_stored(&raw))
+        .map(|key| key.public_key())
+}
+
+/// The stored key material verbatim — the identity a discard compares (F6: the public key IS
+/// the key, so the raw compares identically, parseable or not), so it deletes only its own
+/// registration's key, never a newer one.
+fn stored_device_key_raw() -> Option<String> {
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    store.get(bir_submit::DEVICE_KEY).ok().flatten()
+}
+
+fn forget_device_key_local() {
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    if let Err(error) = store.delete(bir_submit::DEVICE_KEY) {
+        tracing::warn!("could not forget the device key: {error}");
+    }
+    if let Err(error) = store.delete(bir_submit::DEVICE_ID) {
+        tracing::warn!("could not forget the device id: {error}");
+    }
+    forget_device();
+}
+
+/// The registration's half of I6, under DEVICE_KEY: a key recorded for ANOTHER owner, or one
+/// with no owner recorded, is replaced — the old key and its server registration go, a new key
+/// is made and registered, and key plus owner are written in this one step. So a failed, skipped
+/// or crashed forget never hands A's key to B. A key already this owner's is kept (signing in
+/// again as the same owner breaks no sends).
+pub fn register_device_key_for(
+    owner: &crate::account_session::OwnerKey,
+    epoch: u64,
+) -> Registration {
+    register_device_key_with(owner, epoch, register_after_sign_in)
+}
+
+/// The registration's wall-clock bound: the DEVICE_KEY lock is held across the register step's
+/// network, so that step must be bounded. bir-submit's reqwest client carries a 30 s per-request
+/// timeout (client.rs), and register_device is the one POST — the network is already inside this
+/// bound. The elapsed check here is the belt: a register step that comes back past the bound,
+/// however it ended, is discarded — no key, no owner record.
+const REGISTER_BOUND: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The tests' shorter bound, so `a_registration_past_its_timeout_writes_nothing` does not wait
+/// 30 s. Zero means every registration is past it.
+#[cfg(any(test, feature = "test-support"))]
+static REGISTER_BOUND_OVERRIDE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(u64::MAX);
+
+/// Override the registration's wall-clock bound (milliseconds) for a test.
+#[cfg(any(test, feature = "test-support"))]
+pub fn set_register_bound_for_test(milliseconds: u64) {
+    REGISTER_BOUND_OVERRIDE.store(milliseconds, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn register_bound() -> std::time::Duration {
+    #[cfg(any(test, feature = "test-support"))]
+    {
+        let over = REGISTER_BOUND_OVERRIDE.load(std::sync::atomic::Ordering::SeqCst);
+        if over != u64::MAX {
+            return std::time::Duration::from_millis(over);
+        }
+    }
+    REGISTER_BOUND
+}
+
+/// The registration's decision logic, with the register step injected: the tests drive it with
+/// a registration that needs no server, so the replace-and-write is proven file by file.
+///
+/// The DEVICE_KEY lock IS held across the register step's network: bir-submit writes the key
+/// inside it, and the write of key plus owner record must stay one step, or a forget can
+/// interleave and hand the new key no owner — or the old key a new one. DEVICE_KEY is never
+/// nested inside SESSION, so the only other waiter is a forget; the network is bounded (see
+/// [`REGISTER_BOUND`]), so the wait is too.
+fn register_device_key_with(
+    owner: &crate::account_session::OwnerKey,
+    epoch: u64,
+    register: impl FnOnce() -> Registration,
+) -> Registration {
+    // F6: DEVICE_KEY is never held across the network. Step 1, a short locked section: the
+    // pre-clean — a key recorded for ANOTHER owner, or one with no owner, is forgotten before
+    // this owner's registration, so a failed or crashed forget never hands A's key to B.
+    {
+        let _device_key = DEVICE_KEY
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if device_key_owner().as_ref() != Some(owner) {
+            forget_device_key_local();
+            clear_device_owner();
+        }
+    }
+    // Step 2: the token fetch and the register with NO LOCK of any kind. The InvalidGrant hook
+    // the fetch may run therefore never fires under DEVICE_KEY either — it takes the account
+    // lock and SESSION freely, and a forget waiting its turn is never deadlocked against it.
+    let _ = take_key_created_here();
+    let started = std::time::Instant::now();
+    let registration = register();
+    let elapsed = started.elapsed();
+    if !matches!(
+        registration,
+        Registration::Registered | Registration::AlreadyDone
+    ) {
+        return registration;
+    }
+    // The key THIS registration created, if it created one — the gate's own record on this
+    // thread, immune to whatever another registration wrote in between. A registration that
+    // reused an existing key created nothing, and its discard deletes nothing either: the key
+    // was never its own.
+    let key_created_here = take_key_created_here();
+    // Step 3, under DEVICE_KEY: the write gate (the page, revision 5's C) — the cache is still
+    // this owner AND the session is still at the registration's epoch AND the register step
+    // came back inside its bound. Only then is the owner record written. Otherwise the
+    // registration is discarded: no owner record, and the key deleted ONLY if it is still this
+    // registration's own — a newer registration's key and record are never taken.
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let cache_is_owner = crate::account_session::stored_owner().as_ref() == Some(owner);
+    let epoch_current = crate::session_epoch::current() == epoch;
+    let inside_bound = elapsed < register_bound();
+    if cache_is_owner && epoch_current && inside_bound {
+        write_device_owner(owner);
+    } else {
+        if key_created_here.is_some() && stored_device_key_raw() == key_created_here {
+            forget_device_key_local();
+            clear_device_owner();
+        }
+        tracing::info!(
+            "device registration discarded: the session moved on or the register step overran (cache {cache_is_owner}, epoch {epoch_current}, elapsed {elapsed:?})"
+        );
+    }
+    registration
+}
+
+/// The test door of [`register_device_key_with`]: a registration without a server.
+#[cfg(any(test, feature = "test-support"))]
+pub fn register_device_key_for_test(
+    owner: &crate::account_session::OwnerKey,
+    epoch: u64,
+    register: impl FnOnce() -> Registration,
+) -> Registration {
+    register_device_key_with(owner, epoch, register)
+}
+
+/// Test instrumentation: the DEVICE_KEY lock itself, so the funnel test can hold it and prove
+/// the forget and the registration both wait on it.
+#[cfg(any(test, feature = "test-support"))]
+pub fn device_key_lock_for_test() -> std::sync::MutexGuard<'static, ()> {
+    DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// The test door of the lazy creation: a first key exactly as a send's client creates it —
+/// through the installed gate — in this thread's device folder.
+#[cfg(any(test, feature = "test-support"))]
+pub fn lazy_first_key_for_test() -> bool {
+    install_device_key_gate();
+    let store =
+        bir_submit::secrets::platform_store(secrets_dir(), !crate::platform::keychain_disabled());
+    let before = stored_device_public_key();
+    let created = bir_submit::client::device_key_or_create(store.as_ref())
+        .map(|key| key.public_key())
+        .ok();
+    before.is_none() && created.is_some()
+}
+
+/// Adoption (F2'): an existing install's key has no owner recorded. The stored sign-in's owner
+/// adopts it — the record is written, the key keeps working — at the first commit after the
+/// update, under DEVICE_KEY, and only while the owner cache is that owner. Never replaced while
+/// the same owner is signed in, so nobody's sends break on the update. Answers whether the
+/// adoption ran.
+pub fn adopt_device_key(owner: &crate::account_session::OwnerKey) -> bool {
+    let _device_key = DEVICE_KEY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if device_key_owner().is_some() {
+        return false;
+    }
+    if crate::account_session::stored_owner().as_ref() != Some(owner) {
+        return false;
+    }
+    write_device_owner(owner);
+    true
 }
 
 /// What [`register_after_sign_in`] did. Never an error the sign-in sees.
@@ -289,9 +675,11 @@ pub(crate) enum Settlement {
     Sent(StoreReport),
     /// No receipt: the outcome the send itself would have had.
     Failed(TransportError),
-    /// Nothing to go on yet (the server cannot be asked, the person is signed
-    /// out or signed in elsewhere, the submission is still under way).
+    /// Nothing to go on yet (the server cannot be asked or the submission is still under way).
     NotYet,
+    /// The owner signed out or changed: keep the record indefinitely. It is never evidence that
+    /// the send is gone.
+    Keep,
     /// The server does not know the submission, or the record is unreadable.
     Gone,
 }
@@ -300,16 +688,55 @@ pub(crate) enum Settlement {
 /// `bir_submit::PendingSend` JSON) ended. Only through the client this
 /// build may send through ([`submitter`]: a development build's rules hold),
 /// and only with a sign-in for that server: otherwise nothing is asked.
+#[cfg(test)]
+static AFTER_SETTLE_DISK_CHECK: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
+
 pub(crate) async fn settle(pending: &str) -> Settlement {
     let Ok(pending) = serde_json::from_str::<bir_submit::PendingSend>(pending) else {
         return Settlement::Gone;
     };
+    let saved = crate::cloud_account::load_stored_account().ok().flatten();
+    match saved.as_ref().map(|saved| saved.server_url.as_str()) {
+        Some(saved) if saved.trim_end_matches('/') == pending.server.trim_end_matches('/') => {}
+        Some(_) => {
+            // The account moved to another server: the send is kept, whatever the server. The
+            // NotYet this returned before REOPENED the disk-before-epoch window — a switch's
+            // close writes the disk before the epoch, so the new server's sign-in could age a
+            // mid-move send into needs-attention and drop a filing. This server can no more
+            // answer for the send than a signed-out one can; the keep is never evidence the
+            // send is gone.
+            return Settlement::Keep;
+        }
+        None => {
+            // The disk answer is not evidence that the send is gone. Sign-out writes the disk before
+            // the epoch and room close finish, so a noted send keeps its record until its own account
+            // can be asked again.
+            return Settlement::Keep;
+        }
+    }
+    // C6: the server matching is not enough — the USER must be the send's own too. A same-server
+    // sign-in of another account would ask after this send with a token that is not its owner's,
+    // and the server's honest "unknown" would read a live filing as Gone. The send's owner is the
+    // task-local context the tick was spawned in; with none (a caller outside a send) the server
+    // check above is all there is, as before.
+    let context_user = crate::account_session::SEND_CONTEXT
+        .try_with(|context| context.owner.user_id.clone())
+        .ok();
+    if let (Some(context_user), Some(saved)) = (context_user, saved.as_ref())
+        && saved.user_id != context_user
+    {
+        tracing::info!("settle keeps the send: the disk sign-in is another user's");
+        return Settlement::Keep;
+    }
+    #[cfg(test)]
+    AFTER_SETTLE_DISK_CHECK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+        .map(|hook| hook());
     let Ok(submitter) = submitter() else {
         return Settlement::NotYet;
     };
-    if signed_in_to(&submitter.config().server_url).is_err() {
-        return Settlement::NotYet;
-    }
     settlement(submitter.settle(&pending).await)
 }
 
@@ -322,6 +749,7 @@ pub(crate) fn settlement(settled: bir_submit::Settled) -> Settlement {
         },
         bir_submit::Settled::Failed(error) => Settlement::Failed(send_failure(error)),
         bir_submit::Settled::NotYet => Settlement::NotYet,
+        bir_submit::Settled::SignedOut => Settlement::Keep,
         bir_submit::Settled::Gone => Settlement::Gone,
     }
 }
@@ -547,6 +975,36 @@ mod tests {
         .join()
         .unwrap();
         assert!(matches!(dead, Registration::Failed(_)), "{dead:?}");
+    }
+
+    /// F2 through the production settle entry point: when the disk cannot prove the pending
+    /// send's sign-in, the answer is Keep, never a NotYet that the queue can age into Clear.
+    #[tokio::test(flavor = "current_thread")]
+    async fn settle_keeps_a_noted_send_when_the_disk_sign_in_does_not_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let pending = serde_json::to_string(&bir_submit::PendingSend {
+                    server: "http://localhost:3008".into(),
+                    submission_id: "s1".into(),
+                    jti: "jti-1".into(),
+                    xml_sha256: "0".repeat(64),
+                    opening: true,
+                    noted_at: chrono::Utc::now(),
+                })
+                .unwrap();
+                assert!(
+                    matches!(settle(&pending).await, Settlement::Keep),
+                    "a disk-signed-out settle was left to age into Clear"
+                );
+            },
+        )
+        .await;
     }
 
     #[test]
@@ -793,5 +1251,193 @@ mod tests {
             assert_eq!(error.no_receipt(), NoReceipt::Unknown);
             assert!(!error.relay_did_not_accept());
         }
+    }
+
+    /// C3: the pure map — a SignedOut answer of the client is Keep, never Gone: the server's
+    /// sign-in state is not evidence the send is gone. Positive control: Gone still maps Gone.
+    #[test]
+    fn a_signed_out_settle_maps_to_keep_never_gone() {
+        assert!(
+            matches!(settlement(bir_submit::Settled::SignedOut), Settlement::Keep),
+            "SignedOut must keep the send"
+        );
+        assert!(
+            matches!(settlement(bir_submit::Settled::Gone), Settlement::Gone),
+            "positive control: Gone still maps Gone"
+        );
+        assert!(
+            matches!(settlement(bir_submit::Settled::NotYet), Settlement::NotYet),
+            "positive control: NotYet still maps NotYet"
+        );
+    }
+
+    /// C6: a same-server sign-in of ANOTHER user does not answer for the send — without the
+    /// user compare the settle would ask the server with a token that is not the owner's, and
+    /// the honest "unknown" would read a live filing as Gone. Positive control: the send's own
+    /// user on disk passes the gate (and the settle then ends NotYet for want of a relay
+    /// here, never Keep-for-mismatch).
+    #[tokio::test(flavor = "current_thread")]
+    async fn settle_keeps_the_send_when_the_disk_user_is_not_the_sends() {
+        use crate::account_session::{OwnerKey, SEND_CONTEXT, SendContext};
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let mut other = stored_for("http://localhost:3008");
+                other.user_id = "user-b".into();
+                crate::account_session::save_stored(&other).unwrap();
+                let pending = pending_for("http://localhost:3008", chrono::Utc::now());
+                let owner_a = OwnerKey {
+                    origin: "localhost:3008".into(),
+                    user_id: "user-a".into(),
+                };
+                let epoch = crate::session_epoch::current();
+                let answer = SEND_CONTEXT
+                    .scope(SendContext::new(owner_a, epoch), async {
+                        settle(&pending).await
+                    })
+                    .await;
+                assert!(
+                    matches!(answer, Settlement::Keep),
+                    "another user's same-server sign-in must keep the send: {answer:?}"
+                );
+                // positive control: the send's OWN user on disk passes the gate — the settle
+                // is then NotYet for want of a relay here, never the mismatch's Keep
+                let mut own = stored_for("http://localhost:3008");
+                own.user_id = "user-a".into();
+                crate::account_session::save_stored(&own).unwrap();
+                let answer = SEND_CONTEXT
+                    .scope(
+                        SendContext::new(
+                            OwnerKey {
+                                origin: "localhost:3008".into(),
+                                user_id: "user-a".into(),
+                            },
+                            epoch,
+                        ),
+                        async { settle(&pending).await },
+                    )
+                    .await;
+                assert!(
+                    !matches!(answer, Settlement::Keep),
+                    "positive control: the send's own user passes the user gate: {answer:?}"
+                );
+            },
+        )
+        .await;
+    }
+
+    fn stored_for(server: &str) -> crate::cloud_account::StoredAccount {
+        crate::cloud_account::StoredAccount {
+            server_url: server.into(),
+            access_token: "access".into(),
+            refresh_token: "refresh".into(),
+            access_expires_at_unix: i64::MAX,
+            user_id: "user".into(),
+            email: Some("filer@example.test".into()),
+            offline: true,
+            last_refresh_unix: 0,
+            practice: true,
+        }
+    }
+
+    fn pending_for(server: &str, noted_at: chrono::DateTime<chrono::Utc>) -> String {
+        serde_json::to_string(&crate::bir_submit::PendingSend {
+            server: server.into(),
+            submission_id: "s1".into(),
+            jti: "jti".into(),
+            xml_sha256: "0".repeat(64),
+            opening: false,
+            noted_at,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn settle_disk_check_keeps_a_signed_out_send_before_any_server_ask() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("account.json");
+        temp_env::with_var(
+            crate::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.as_os_str()),
+            || {
+                let pending = pending_for("http://server-a.example", chrono::Utc::now());
+                let continued = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                let mark = continued.clone();
+                *AFTER_SETTLE_DISK_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(move || {
+                    mark.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }));
+                let context = crate::account_session::SendContext::new(
+                    crate::account_session::OwnerKey {
+                        origin: "server-a.example".into(),
+                        user_id: "user".into(),
+                    },
+                    crate::session_epoch::current(),
+                );
+                let answer = tokio::runtime::Runtime::new().unwrap().block_on(
+                    crate::account_session::SEND_CONTEXT.scope(context, settle(&pending)),
+                );
+                assert!(matches!(answer, Settlement::Keep));
+                assert_eq!(continued.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+                // Positive control: when the disk holds the same server's account, the disk check
+                // passes and the settle reaches the path that would ask the server.
+                crate::account_session::save_stored(&stored_for("http://server-a.example"))
+                    .unwrap();
+                let mark = continued.clone();
+                *AFTER_SETTLE_DISK_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(move || {
+                    mark.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }));
+                let context = crate::account_session::SendContext::new(
+                    crate::account_session::OwnerKey {
+                        origin: "server-a.example".into(),
+                        user_id: "user".into(),
+                    },
+                    crate::session_epoch::current(),
+                );
+                let _answer = tokio::runtime::Runtime::new().unwrap().block_on(
+                    crate::account_session::SEND_CONTEXT.scope(context, settle(&pending)),
+                );
+                assert_eq!(continued.load(std::sync::atomic::Ordering::SeqCst), 1);
+            },
+        );
+    }
+
+    /// P1: the window is CLOSED — a send for a server the account left is kept, whatever the
+    /// server, exactly as a signed-out send is: the close writes the disk before the epoch, so
+    /// the another-server read can be a move still under way, and ageing it out would drop a
+    /// filing. (This test asserted the old NotYet; the correction of semantics is the fix.)
+    #[test]
+    fn a_pending_send_for_a_server_the_account_left_is_kept() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("account.json");
+        temp_env::with_var(
+            crate::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.as_os_str()),
+            || {
+                crate::account_session::save_stored(&stored_for("http://server-b.example"))
+                    .unwrap();
+                let pending = pending_for(
+                    "http://server-a.example",
+                    chrono::Utc::now() - chrono::Duration::hours(25),
+                );
+                assert!(matches!(
+                    tokio::runtime::Runtime::new()
+                        .unwrap()
+                        .block_on(settle(&pending)),
+                    Settlement::Keep
+                ));
+            },
+        );
     }
 }

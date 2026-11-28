@@ -4,6 +4,7 @@
 import { View } from "nsh";
 import { app } from "../../shell";
 import { AccessError } from "./AccessError";
+import { migrationPage, MigrationPages } from "./migration";
 import { AccountGate } from "./Gate";
 import { Setup, SoloTaxpayer } from "./Setup";
 import { SignIn } from "./SignIn";
@@ -24,19 +25,22 @@ export function LockedScreen() {
     <View testID="locked-screen" class="min-h-0 flex-1">
       {/* After the first sign-in, when a page before the app comes first (first-run setup, the PIN sign-in). */}
       <WelcomeNote centred when={() => !app.cloudLocked() && !app.chromeVisible()} />
-      <If when={app.cloudLocked()}>
+      <If when={migrationPage() !== null}>
+        <MigrationPages />
+      </If>
+      <If when={migrationPage() === null && app.cloudLocked()}>
         <AccountGate />
       </If>
-      <If when={!app.cloudLocked() && app.accessError() !== null}>
+      <If when={migrationPage() === null && !app.cloudLocked() && app.accessError() !== null}>
         <AccessError />
       </If>
-      <If when={!app.cloudLocked() && app.accessError() === null && soloPending()}>
+      <If when={migrationPage() === null && !app.cloudLocked() && app.accessError() === null && soloPending()}>
         <SoloTaxpayer />
       </If>
-      <If when={!app.cloudLocked() && app.accessError() === null && setupShows() && app.setup().pending !== "solo"}>
+      <If when={migrationPage() === null && !app.cloudLocked() && app.accessError() === null && setupShows() && app.setup().pending !== "solo"}>
         <Setup />
       </If>
-      <If when={!app.cloudLocked() && app.accessError() === null && !setupShows() && app.appLocked()}>
+      <If when={migrationPage() === null && !app.cloudLocked() && app.accessError() === null && !setupShows() && app.appLocked()}>
         <SignIn />
       </If>
     </View>

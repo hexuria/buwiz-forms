@@ -389,6 +389,7 @@ impl TinsCache {
     /// offline (a send was just refused for a TIN).
     pub(crate) fn invalidate(&self) {
         self.state.lock().expect("tins cache").generation += 1;
+        INVALIDATIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// The generation a read starting now belongs to.
@@ -776,12 +777,16 @@ fn add_error(error: ClientError) -> AddTinError {
             code: "device_not_registered".to_owned(),
             message: error.to_string(),
         },
-        ClientError::Other(message) => AddTinError::Other {
+        ClientError::Account(message) | ClientError::Other(message) => AddTinError::Other {
             code: "unreadable".to_owned(),
             message,
         },
     }
 }
+
+/// Test instrumentation: how many invalidations this process ran. The real-path sign-out test
+/// counts them — the cache itself is the submitter's private state.
+pub static INVALIDATIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn tins_error(error: ClientError) -> TinsError {
     match error {
@@ -809,7 +814,7 @@ fn tins_error(error: ClientError) -> TinsError {
         ClientError::Server { code, message, .. } | ClientError::NotATry { code, message, .. } => {
             TinsError::Server { code, message }
         }
-        ClientError::Other(message) => TinsError::Server {
+        ClientError::Account(message) | ClientError::Other(message) => TinsError::Server {
             code: "unreadable".to_owned(),
             message,
         },
