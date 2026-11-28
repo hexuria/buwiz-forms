@@ -71,7 +71,7 @@
   {
    "id": "h1",
    "op": "system",
-   "action": "home"
+   "action": "background"
   },
   {
    "id": "h2",
@@ -106,7 +106,7 @@
   {
    "id": "h7",
    "op": "system",
-   "action": "home"
+   "action": "background"
   },
   {
    "id": "h8",
