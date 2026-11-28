@@ -1,0 +1,488 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "rdo-row-press",
+  "fingerprint": "fnv1a64:f148c352f3273f83",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 444
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 326
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2596
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 65
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 495,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/005-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 52
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 52
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 369
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 348
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2734
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 59
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 370
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 55
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 50
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 55
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 379
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 371
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2548
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 53
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 376
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 54
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "elapsed_ms": 46
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "elapsed_ms": 48
+    },
+    {
+      "id": "s25",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 352
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 348
+    },
+    {
+      "id": "s27",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2662
+    },
+    {
+      "id": "s28",
+      "ok": true,
+      "elapsed_ms": 62
+    },
+    {
+      "id": "s29",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 352
+    },
+    {
+      "id": "s30",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s31",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s32",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s33",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 348
+    },
+    {
+      "id": "s34",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 335
+    },
+    {
+      "id": "s35",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2704
+    },
+    {
+      "id": "s36",
+      "ok": true,
+      "elapsed_ms": 52
+    },
+    {
+      "id": "s37",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 518,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/037-s37.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s38",
+      "ok": true,
+      "elapsed_ms": 55
+    },
+    {
+      "id": "s39",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s40",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s41",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 481
+    },
+    {
+      "id": "s42",
+      "ok": true,
+      "elapsed_ms": 77
+    },
+    {
+      "id": "s43",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 401
+    },
+    {
+      "id": "s44",
+      "ok": true,
+      "elapsed_ms": 59
+    },
+    {
+      "id": "s45",
+      "ok": true,
+      "elapsed_ms": 48
+    },
+    {
+      "id": "s46",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 462
+    },
+    {
+      "id": "s47",
+      "ok": true,
+      "elapsed_ms": 79
+    },
+    {
+      "id": "s48",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 409
+    },
+    {
+      "id": "s49",
+      "ok": true,
+      "elapsed_ms": 73
+    },
+    {
+      "id": "s50",
+      "ok": true,
+      "elapsed_ms": 46
+    },
+    {
+      "id": "s51",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 441
+    },
+    {
+      "id": "s52",
+      "ok": true,
+      "elapsed_ms": 76
+    },
+    {
+      "id": "s53",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 509,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/053-s53.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s54",
+      "ok": true,
+      "elapsed_ms": 58
+    },
+    {
+      "id": "s55",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s56",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 359
+    },
+    {
+      "id": "s57",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 354
+    },
+    {
+      "id": "s58",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2732
+    },
+    {
+      "id": "s59",
+      "ok": true,
+      "elapsed_ms": 71
+    },
+    {
+      "id": "s60",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 373
+    },
+    {
+      "id": "s61",
+      "ok": true,
+      "elapsed_ms": 56
+    },
+    {
+      "id": "s62",
+      "ok": true,
+      "elapsed_ms": 45
+    },
+    {
+      "id": "s63",
+      "ok": true,
+      "elapsed_ms": 43
+    },
+    {
+      "id": "s64",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 419
+    },
+    {
+      "id": "s65",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 361
+    },
+    {
+      "id": "s66",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2696
+    },
+    {
+      "id": "s67",
+      "ok": true,
+      "elapsed_ms": 78
+    },
+    {
+      "id": "s68",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 370
+    },
+    {
+      "id": "s69",
+      "ok": true,
+      "elapsed_ms": 51
+    },
+    {
+      "id": "s70",
+      "ok": true,
+      "elapsed_ms": 45
+    },
+    {
+      "id": "s71",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s72",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 387
+    },
+    {
+      "id": "s73",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 358
+    },
+    {
+      "id": "s74",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2597
+    },
+    {
+      "id": "s75",
+      "ok": true,
+      "elapsed_ms": 58
+    },
+    {
+      "id": "s76",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 401
+    },
+    {
+      "id": "s77",
+      "ok": true,
+      "elapsed_ms": 52
+    },
+    {
+      "id": "s78",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s79",
+      "ok": true,
+      "elapsed_ms": 136,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/079-s79.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s80",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 360
+    },
+    {
+      "id": "s81",
+      "ok": true,
+      "elapsed_ms": 49
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/005-s5.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/037-s37.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/053-s53.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538/02-rdo-row-press/079-s79.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 35878
+}

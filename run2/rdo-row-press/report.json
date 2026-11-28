@@ -1,0 +1,57 @@
+{
+ "suite": "rdo-row-press",
+ "target": "macos",
+ "started": "20261127-214538",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-214538",
+ "cli_version": "0.4.1",
+ "app_commit": "b3bddd4d",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 713,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "rdo-row-press",
+   "status": "pass",
+   "ms": 35906,
+   "note": null,
+   "file": "agent-recipes/e2e/rdo-row-press.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 8587,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants"
+  },
+  {
+   "name": "profile-pick-press",
+   "status": "pass",
+   "ms": 111722,
+   "note": null,
+   "file": "agent-recipes/e2e/profile-pick-press.wants"
+  }
+ ]
+}
