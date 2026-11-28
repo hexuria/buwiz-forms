@@ -126,7 +126,7 @@ A suite is `agent-recipes/e2e/<name>.json`:
  "recipes": [
   {"name": "sign-up", "desktop": "sign-up.wants", "linux": "sign-up-linux.wants", "phone": "sign-up-phone.json",
    "android": "sign-up-android.json",
-   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits"}}, "required": true},
+   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits", "after": "s3"}}, "required": true},
   {"name": "money-boxes", "desktop": "money-boxes-paced.json", "phone": "money-boxes-paced-phone.json",
    "needs_cli": "0.4.1", "needs_feature": {"phone": "software_keyboard"},
    "fallback": {"phone": "money-boxes-phone.json", "file": "money-boxes.wants"}, "known_gap": {"macos": "gap 2: ..."}},

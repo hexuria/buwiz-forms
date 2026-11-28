@@ -294,6 +294,21 @@ class SuiteTests(unittest.TestCase):
         self.assertEqual(tax_year["android"], "tax-year-android.json")
         self.assertEqual(delete_row["phone"], "delete-row.json")
 
+    def test_sign_up_resolves_the_tin_box_after_the_form_is_shown(self):
+        for suite_name in ("smoke", "mbprobe", "rdo-row-press"):
+            suite = E2E.load_suite(suite_name)
+            entry = next(entry for entry in suite["recipes"] if entry["name"] == "sign-up")
+            self.assertEqual(entry["resolve"]["tin_field"].get("after"), "s3", suite_name)
+
+        ui_steps = E2E.recipe_steps(ROOT / "agent-recipes" / "ui" / "ui-sign-up.wants")
+        self.assertEqual([(step.get("op"), step.get("target")) for step in ui_steps[:3]], [
+            ("wait_until", "setup-solo"),
+            ("click", "setup-solo"),
+            ("wait_until", "new-tp-name"),
+        ])
+        first_use = next(index for index, step in enumerate(ui_steps, 1) if "$tin_field" in json.dumps(step))
+        self.assertGreater(first_use, 3)
+
     def test_queue_recipes_open_their_own_fresh_period_before_setup(self):
         def json_open(path, opener, period):
             steps = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / path)
