@@ -782,10 +782,7 @@ mod tests {
             ("frm0619E:txtTelNum".to_string(), "09123456789".to_string()),
             ("frm0619E:optCategory:P".to_string(), "true".to_string()),
             ("frm0619E:optCategory:G".to_string(), "false".to_string()),
-            (
-                "txtEmail".to_string(),
-                "codeitlikemiley@gmail.com".to_string(),
-            ),
+            ("txtEmail".to_string(), "filer@example.com".to_string()),
             ("frm0619E:txtTax14".to_string(), "1,000.00".to_string()),
             ("frm0619E:txtTax15".to_string(), "0.00".to_string()),
             ("frm0619E:txtTax16".to_string(), "1,000.00".to_string()),
@@ -1170,10 +1167,9 @@ mod tests {
             .expect("canonical plaintext replay must satisfy the typed contract");
         assert_eq!(replayed_plain.to_bir_field_map(), canonical_plain_fields);
 
-        let encrypted = std::fs::read(
-            directory.join("00000000000000-0619E-042026#codeitlikemiley@gmail.com#.xml"),
-        )
-        .expect("reviewed encrypted companion must be readable");
+        let encrypted =
+            std::fs::read(directory.join("00000000000000-0619E-042026#filer@example.com#.xml"))
+                .expect("reviewed encrypted companion must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),
             REVIEWED_ENCRYPTED_XML_SHA256

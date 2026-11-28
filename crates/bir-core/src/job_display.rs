@@ -155,9 +155,9 @@ mod tests {
                 Some(9),
                 None,
                 "00000000000000",
-                Some("codeitlikemiley@gmail.com"),
+                Some("filer@example.com"),
             ),
-            "Submit 1601C Sep 2026 for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+            "Submit 1601C Sep 2026 for 000-000-000-00000 (filer@example.com)"
         );
     }
 
@@ -170,9 +170,9 @@ mod tests {
                 Some(9),
                 None,
                 "00000000000000",
-                Some("codeitlikemiley@gmail.com"),
+                Some("filer@example.com"),
             ),
-            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (filer@example.com)"
         );
     }
 
@@ -242,14 +242,14 @@ mod tests {
             status: FilingStatus::Queued,
             updated_at: "2026-09-11T00:00:00Z".into(),
         };
-        let label = FilingJobLabel::from_summary(&summary, Some("codeitlikemiley@gmail.com"));
+        let label = FilingJobLabel::from_summary(&summary, Some("filer@example.com"));
         assert_eq!(
             label.submit_name(),
-            "Submit 1601C Sep 2026 for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+            "Submit 1601C Sep 2026 for 000-000-000-00000 (filer@example.com)"
         );
         assert_eq!(
             label.confirmation_poll_name(),
-            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (codeitlikemiley@gmail.com)"
+            "Waiting for 1601C Sep 2026 confirmation for 000-000-000-00000 (filer@example.com)"
         );
     }
 }

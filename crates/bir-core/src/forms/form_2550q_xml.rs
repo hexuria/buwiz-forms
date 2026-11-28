@@ -2201,7 +2201,7 @@ mod tests {
             "registered_address": "OLONGAPO",
             "zip_code": "2200",
             "phone": "09123456789",
-            "email": "CODEITLIKEMILEY@GMAIL.COM",
+            "email": "Filer@Example.com",
             "default_form_type": "2550Qv2024",
             "taxpayer_type": "Individual",
             "tax_classification": "SelfEmployed",
@@ -2270,10 +2270,7 @@ mod tests {
             ("frm2550qv2024:taxpayerAddress", "OLONGAPO"),
             ("frm2550qv2024:taxpayerZip", "2200"),
             ("frm2550qv2024:taxpayerContactNumber", "09123456789"),
-            (
-                "frm2550qv2024:taxpayerEmailAddress",
-                "CODEITLIKEMILEY@GMAIL.COM",
-            ),
+            ("frm2550qv2024:taxpayerEmailAddress", "Filer@Example.com"),
             ("frm2550qv2024:taxPayerClassification1", "false"),
             ("frm2550qv2024:taxPayerClassification2", "false"),
             ("frm2550qv2024:taxPayerClassification3", "true"),
@@ -2605,10 +2602,7 @@ mod tests {
             ("frm2550qv2024:taxpayerAddress", "OLONGAPO"),
             ("frm2550qv2024:taxpayerZip", "2200"),
             ("frm2550qv2024:taxpayerContactNumber", "09123456789"),
-            (
-                "frm2550qv2024:taxpayerEmailAddress",
-                "CODEITLIKEMILEY@GMAIL.COM",
-            ),
+            ("frm2550qv2024:taxpayerEmailAddress", "Filer@Example.com"),
         ];
         let coherent = reviewed_sample_draft();
         for (field_key, raw) in expected {
@@ -2901,7 +2895,7 @@ mod tests {
         assert_eq!(plain_replay.to_bir_field_map(), plain_fields);
 
         let encrypted_path = std::path::Path::new(&source_dir)
-            .join("00000000000000-2550Qv2024-122025Q1#CODEITLIKEMILEY@GMAIL.COM#.xml");
+            .join("00000000000000-2550Qv2024-122025Q1#Filer@Example.com#.xml");
         let encrypted = std::fs::read(&encrypted_path).expect("encrypted source must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),

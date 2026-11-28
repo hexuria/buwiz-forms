@@ -2039,11 +2039,11 @@ mod tests {
         profile.imap_email = None;
         assert_eq!(profile.inbox_email(), "jane@example.com");
 
-        profile.imap_email = Some("  codeitlikemiley@gmail.com  ".to_string());
-        assert_eq!(profile.inbox_email(), "codeitlikemiley@gmail.com");
+        profile.imap_email = Some("  filer@example.com  ".to_string());
+        assert_eq!(profile.inbox_email(), "filer@example.com");
         assert!(inbox_emails_match(
             profile.inbox_email(),
-            "CodeItLikeMiley@gmail.com"
+            "Filer@Example.com"
         ));
         assert!(!profile.has_usable_oauth_refresh());
         profile.oauth_refresh_token = Some("   ".to_string());

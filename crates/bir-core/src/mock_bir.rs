@@ -782,7 +782,8 @@ mod tests {
     #[tokio::test]
     async fn loopback_submit_iaf_with_endpoint_stores_fixture_basename() {
         let (server, _root) = spawn_loopback().await;
-        let filename = r"C:\eBIRForms\IAF_RDO_Copy\00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml";
+        let filename =
+            r"C:\eBIRForms\IAF_RDO_Copy\00000000000000-1601Cv2018-092026#filer@example.com#.xml";
         let payload = b"ENCRYPTED-IAF-DUMMY-PAYLOAD-\x00\x01\x02\x03";
         submit_iaf_with_endpoint(
             "1601Cv2018",

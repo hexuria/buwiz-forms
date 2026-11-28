@@ -137,7 +137,7 @@ mod tests {
     use crate::profile::{EmailAuthMethod, TaxpayerProfile};
     use crate::receipt::BirReceiptConfirmation;
 
-    const SHARED_INBOX: &str = "codeitlikemiley@gmail.com";
+    const SHARED_INBOX: &str = "filer@example.com";
 
     fn profile(seg1: &str, name: &str) -> TaxpayerProfile {
         let mut profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
@@ -345,13 +345,8 @@ mod tests {
             profile
         });
         save(&db, profile("222", "Jane"));
-        db.persist_google_oauth_for_inbox(
-            "CodeItLikeMiley@gmail.com",
-            "access-new",
-            "refresh-new",
-            None,
-        )
-        .unwrap();
+        db.persist_google_oauth_for_inbox("Filer@Example.com", "access-new", "refresh-new", None)
+            .unwrap();
 
         let auth = resolve_inbox_fetch_profile(&db, SHARED_INBOX)
             .unwrap()
@@ -526,14 +521,13 @@ mod tests {
     #[test]
     fn case_insensitive_inbox_match_still_selects_credentials() {
         let mut alejandro = profile("111", "Alejandro");
-        alejandro.imap_email = Some("CodeItLikeMiley@gmail.com".to_string());
+        alejandro.imap_email = Some("Filer@Example.com".to_string());
         alejandro.oauth_refresh_token = None;
         let mut jane = profile("222", "Jane");
         jane.imap_email = Some(SHARED_INBOX.to_string());
         jane.oauth_refresh_token = Some("refresh-good".to_string());
 
-        let selected =
-            select_imap_auth_profile(&[alejandro, jane], "CODEITLIKEMILEY@GMAIL.COM").unwrap();
+        let selected = select_imap_auth_profile(&[alejandro, jane], "Filer@Example.com").unwrap();
         assert_eq!(selected.full_name, "Jane");
     }
 }

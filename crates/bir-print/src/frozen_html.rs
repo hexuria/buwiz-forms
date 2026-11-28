@@ -7617,7 +7617,7 @@ mod tests {
     /// whole in a rectangle, one without them in the boxes.
     #[test]
     fn peso_only_combs_print_the_uploads_centavos() {
-        use super::{peso_print, NegativeStyle::*, PesoPrint::*};
+        use super::{NegativeStyle::*, PesoPrint::*, peso_print};
         assert_eq!(peso_print("-1,000.51", Minus), Rect("-1,000.51".into()));
         assert_eq!(peso_print("1234.50", Minus), Rect("1,234.50".into()));
         assert_eq!(peso_print("0.49", Minus), Rect("0.49".into()));
@@ -7637,7 +7637,7 @@ mod tests {
     /// centavos; before, `-1,000.51` printed `-1,001`.
     #[test]
     fn whole_peso_plain_boxes_print_the_uploads_centavos() {
-        use super::{format_plain_whole_peso_with_commas as plain, NegativeStyle::*};
+        use super::{NegativeStyle::*, format_plain_whole_peso_with_commas as plain};
         assert_eq!(plain("-1,000.51", Minus).as_deref(), Some("-1,000.51"));
         assert_eq!(plain("1000.49", Minus).as_deref(), Some("1,000.49"));
         assert_eq!(
@@ -7661,9 +7661,11 @@ mod tests {
         let html = comb("frm1601C:txtTax", 4);
         let fields = BTreeMap::from([("frm1601C:txtTax".to_string(), "123,456.78".to_string())]);
         let doc = super::fill_by_name(&html, &fields);
-        assert!(comb_values(&doc, "frm1601C:txtTax")
-            .iter()
-            .all(String::is_empty));
+        assert!(
+            comb_values(&doc, "frm1601C:txtTax")
+                .iter()
+                .all(String::is_empty)
+        );
         let warnings = super::overflow_warnings(&doc);
         assert_eq!(warnings.len(), 1, "{doc}");
         assert_eq!(warnings[0].kind, "text-truncated");
@@ -7870,9 +7872,11 @@ mod tests {
         );
         let fields = BTreeMap::from([("frm1601C:txtTIN1".to_string(), "123456788000".to_string())]);
         let doc = super::fill_by_name(&html, &fields);
-        assert!(comb_values(&doc, "frm1601C:txtTIN1")
-            .iter()
-            .all(String::is_empty));
+        assert!(
+            comb_values(&doc, "frm1601C:txtTIN1")
+                .iter()
+                .all(String::is_empty)
+        );
         assert_eq!(
             super::printed_cell(&doc, "frm1601C:txtTIN1").0,
             "123456788000"
@@ -7882,9 +7886,11 @@ mod tests {
         let html = comb("frm1601C:txtName", 4);
         let fields = BTreeMap::from([("frm1601C:txtName".to_string(), "SAMPLE NAME".to_string())]);
         let doc = super::fill_by_name(&html, &fields);
-        assert!(comb_values(&doc, "frm1601C:txtName")
-            .iter()
-            .all(String::is_empty));
+        assert!(
+            comb_values(&doc, "frm1601C:txtName")
+                .iter()
+                .all(String::is_empty)
+        );
         let warnings = super::overflow_warnings(&doc);
         assert_eq!(warnings.len(), 1, "{doc}");
         assert_eq!(warnings[0].value, "SAMPLE NAME");
@@ -7901,9 +7907,11 @@ mod tests {
         )]);
         let doc = super::filled_document("2200p-2020", &fields).unwrap();
         assert_eq!(super::printed_text(&doc, "p2c99"), "-200000000000");
-        assert!(!super::overflow_warnings(&doc)
-            .iter()
-            .any(|w| w.kind == "text-truncated"));
+        assert!(
+            !super::overflow_warnings(&doc)
+                .iter()
+                .any(|w| w.kind == "text-truncated")
+        );
     }
 
     /// N1: an amount shrunk below 5 pt to fit its box still prints there,
@@ -8605,7 +8613,7 @@ mod tests {
             filename: "00000000000000-1601Cv2018-112026.xml".into(),
             subject: "Tax Return Receipt Confirmation".into(),
             from: "ebirforms-noreply@bir.gov.ph".into(),
-            to: "codeitlikemiley@gmail.com".into(),
+            to: "filer@example.com".into(),
             received_at: "12 September 2026, 02:52 PM".into(),
             email_received_at: Some("12 September 2026, 02:59 PM".into()),
             body_text: "This confirms receipt <of> your submission".into(),
@@ -8634,13 +8642,16 @@ mod tests {
             "html body embedded as given"
         );
         assert!(with.contains("<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">Tax Return Receipt Confirmation</h1>"));
-        assert!(with
-            .contains("<b>ebirforms-noreply@bir.gov.ph</b> &lt;ebirforms-noreply@bir.gov.ph&gt;"));
+        assert!(
+            with.contains(
+                "<b>ebirforms-noreply@bir.gov.ph</b> &lt;ebirforms-noreply@bir.gov.ph&gt;"
+            )
+        );
         assert!(
             with.contains("12 September 2026, 02:59 PM"),
             "email arrival time shown"
         );
-        assert!(with.contains("To: codeitlikemiley@gmail.com"));
+        assert!(with.contains("To: filer@example.com"));
         assert!(!with.contains("<th"), "no label table of our own");
         assert!(
             !with.contains("receipt &lt;of&gt;"),
@@ -8774,9 +8785,11 @@ mod tests {
             assert!(allowed.contains(name), "{name} is not in fields.json");
         }
         assert!(html_2551q().contains("id=\"p1c20-s0\""));
-        assert!(input_tags(html_2551q())
-            .into_iter()
-            .all(|tag| tag.name != "p1c20"));
+        assert!(
+            input_tags(html_2551q())
+                .into_iter()
+                .all(|tag| tag.name != "p1c20")
+        );
     }
 
     #[test]
@@ -9607,7 +9620,7 @@ mod tests {
 
     #[test]
     fn filled_document_2553_fills_identity_rows_totals_and_boxes() {
-        use bir_core::forms::form_2553::{Form2553Draft, FORM_2553_ATC_OPTIONS};
+        use bir_core::forms::form_2553::{FORM_2553_ATC_OPTIONS, Form2553Draft};
         let profile: bir_core::profile::TaxpayerProfile =
             serde_json::from_value(serde_json::json!({
                 "id": null, "full_name": "Special Law Fixture Inc", "tin": {"segment1": "123",
@@ -13071,9 +13084,11 @@ mod donor_estate_print_tests {
             assert_eq!(digest(&html), golden, "{slug}");
         }
         // Only 1800 and 1801 have PR 10 joins.
-        assert!(DONOR_ESTATE_JOINS
-            .iter()
-            .all(|(slug, _, _)| matches!(*slug, "1800-2018" | "1801-2018")));
+        assert!(
+            DONOR_ESTATE_JOINS
+                .iter()
+                .all(|(slug, _, _)| matches!(*slug, "1800-2018" | "1801-2018"))
+        );
     }
 
     #[test]

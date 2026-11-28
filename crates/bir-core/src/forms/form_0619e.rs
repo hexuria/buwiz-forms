@@ -410,7 +410,7 @@ mod tests {
             "registered_address": "OLONGAPO",
             "zip_code": "2200",
             "phone": "09123456789",
-            "email": "codeitlikemiley@gmail.com",
+            "email": "filer@example.com",
             "default_form_type": "0619Ev2018",
             "taxpayer_type": "Individual"
         }))

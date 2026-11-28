@@ -1730,10 +1730,9 @@ mod tests {
             crate::bir_xml::parse_bir_xml_checked(plain_xml).expect("plain source parses");
         assert_exact_semantic_replay(&plain_fields, "plain source");
 
-        let encrypted = std::fs::read(
-            directory.join("00000000000000-1701v2018-122025#codeitlikemiley@gmail.com#.xml"),
-        )
-        .expect("encrypted source is readable");
+        let encrypted =
+            std::fs::read(directory.join("00000000000000-1701v2018-122025#filer@example.com#.xml"))
+                .expect("encrypted source is readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),
             super::super::form_1701::REVIEWED_ENCRYPTED_XML_SHA256

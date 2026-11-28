@@ -155,7 +155,7 @@ pub fn claim_is_recoverable(
 /// Mandatory lab taxpayer for 1601-C tests.
 ///
 /// TIN `00000000000000`, Juan Dela Cruz, RDO 018, Olongapo, Software
-/// Development, ZIP 2200, `codeitlikemiley@gmail.com`, `09156837000`.
+/// Development, ZIP 2200, `filer@example.com`, `09156837000`.
 /// Never substitute a real taxpayer. Never invent tax amounts.
 #[cfg(test)]
 pub fn mandatory_lab_1601c_profile() -> TaxpayerProfile {
@@ -173,7 +173,7 @@ pub fn mandatory_lab_1601c_profile() -> TaxpayerProfile {
         "registered_address": "Olongapo",
         "zip_code": "2200",
         "phone": "09156837000",
-        "email": "codeitlikemiley@gmail.com",
+        "email": "filer@example.com",
         "default_form_type": "1601Cv2018",
         "taxpayer_type": "Individual"
     }))
@@ -313,7 +313,7 @@ mod tests {
         assert_eq!(draft.registered_address, "Olongapo");
         assert_eq!(draft.line_of_business, "Software Development");
         assert_eq!(draft.zip_code, "2200");
-        assert_eq!(draft.email_address, "codeitlikemiley@gmail.com");
+        assert_eq!(draft.email_address, "filer@example.com");
         assert_eq!(draft.contact_number, "09156837000");
         assert_eq!(draft.month, 9);
         assert_eq!(draft.taxable_year, 2026);
@@ -357,7 +357,7 @@ mod tests {
         assert_eq!(fields["frm1601c:txtTax36"], "0.00");
         assert_eq!(
             draft.default_submission_filename(),
-            "00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml"
+            "00000000000000-1601Cv2018-092026#filer@example.com#.xml"
         );
         assert!(xml.contains("frm1601c:txtMonth"), "{xml}");
         assert_eq!(
@@ -422,7 +422,7 @@ mod tests {
         assert_eq!(draft.tax_36_total_amount_payable, 0.0);
         assert_eq!(
             draft.default_submission_filename(),
-            "00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml"
+            "00000000000000-1601Cv2018-102026#filer@example.com#.xml"
         );
     }
 }

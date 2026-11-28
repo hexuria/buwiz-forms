@@ -1476,7 +1476,7 @@ mod tests {
         let source_dir = Path::new(&source_dir);
         let editable_path = source_dir.join("00000000000000-1702MXv2018C-1225.xml");
         let encrypted_path =
-            source_dir.join("00000000000000-1702MXv2018C-1225#CODEITLIKEMILEY@GMAIL.COM#.xml");
+            source_dir.join("00000000000000-1702MXv2018C-1225#Filer@Example.com#.xml");
         let official_path = source_dir.join("1702-MX Jan 2018 ENCS Final with OSDv2.pdf");
         let attachment_path = source_dir.join("1702-MX Attachment Jan 2018 ENCS Final4.pdf");
 

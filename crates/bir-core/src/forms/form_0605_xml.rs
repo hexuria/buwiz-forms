@@ -918,7 +918,7 @@ mod tests {
             ("ebirOnlineConfirmUsername", ""),
             ("ebirOnlineSecret", ""),
             ("ebirOnlineUsername", ""),
-            ("txtEmail", "codeitlikemiley@gmail.com"),
+            ("txtEmail", "filer@example.com"),
             ("txtEnroll", "Y"),
             ("txtFinalFlag", "1"),
             ("frm0605:itemFiscalStartMonth:_1", "true"),
@@ -1174,13 +1174,13 @@ mod tests {
             (
                 "00000000000000-0605-01312026102841.xml",
                 "01992fcdaef50493e756b89728af8d107ec1a0cafa94e677edbac1e2f08dc499",
-                "00000000000000-0605-01312026102841#codeitlikemiley@gmail.com#.xml",
+                "00000000000000-0605-01312026102841#filer@example.com#.xml",
                 "09cd3626efd6a7490b5922c9dbb6fad98b0b066ffb5de87c3ea6a6677210620f",
             ),
             (
                 "00000000000000-0605-12312025143024.xml",
                 "f8659d2011d2914073725ccef1fc4f2e74d4f315bf333d5ec3084a1fdff524f7",
-                "00000000000000-0605-12312025143024#codeitlikemiley@gmail.com#.xml",
+                "00000000000000-0605-12312025143024#filer@example.com#.xml",
                 "c53a196dcfe1fb585fefc7b48c2a4f2abe9ec9114d55541e44a40e4399c39928",
             ),
         ] {

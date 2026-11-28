@@ -1566,7 +1566,7 @@ mod tests {
             zip_code: "2200".to_string(),
             incorporation_date: Form1702RTDate::new(2019, 12, 10).ok(),
             contact_number: "09123456789".to_string(),
-            email: "CODEITLIKEMILEY@GMAIL.COM".to_string(),
+            email: "Filer@Example.com".to_string(),
             deduction_method: Form1702RTDeductionMethod::OptionalStandard,
             president_signatory_title: "PRESIDENT".to_string(),
             president_signatory_tin: "12345678900000".to_string(),
@@ -1660,7 +1660,7 @@ mod tests {
         assert_eq!(draft.to_bir_field_map(), fields);
 
         let encrypted = std::fs::read(
-            directory.join("00000000000000-1702RTv2018C-122025#CODEITLIKEMILEY@GMAIL.COM#.xml"),
+            directory.join("00000000000000-1702RTv2018C-122025#Filer@Example.com#.xml"),
         )
         .expect("encrypted source is readable");
         assert_eq!(
