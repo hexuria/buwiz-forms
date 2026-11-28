@@ -38,6 +38,7 @@ const TABLE = {
   form: { label: "Return", icon: "file-text", needsTaxpayer: true, layout: "self" },
   kit: { label: "UI kit", icon: "layout-template", needsTaxpayer: false, layout: "self", dev: true },
   theme: { label: "Theme page", icon: "monitor", needsTaxpayer: false, layout: "self", dev: true },
+  lockdebug: { label: "Lock pages debug", icon: "lock", needsTaxpayer: false, layout: "self", dev: true },
 } as const satisfies Record<string, RouteMeta>;
 
 /** A view's name. */
