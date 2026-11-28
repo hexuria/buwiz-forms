@@ -529,7 +529,10 @@ mod token_endpoint_failure_tests {
             r#"{"error":"invalid_grant","error_description":"Token has been expired or revoked."}"#,
         );
         assert!(msg.contains("invalid_grant"), "{msg}");
-        assert!(msg.contains("Token has been expired or revoked"), "{msg}");
+        assert!(
+            !msg.contains("Token has been expired or revoked"),
+            "Google's description is free text and stays out: {msg}"
+        );
         assert!(
             msg.contains("Email Settings"),
             "must say where to reconnect: {msg}"
@@ -566,13 +569,23 @@ mod token_endpoint_failure_tests {
     }
 
     #[test]
-    fn a_non_json_body_still_reports_something_useful() {
-        let msg = describe_token_endpoint_failure(502, "<html>Bad Gateway</html>");
+    fn a_non_json_body_reports_the_status_and_never_the_body() {
+        let msg = describe_token_endpoint_failure(502, "<html>PRIVATE-MARKER-7c1e</html>");
         assert!(msg.contains("502"), "{msg}");
         assert!(
-            msg.contains("Bad Gateway"),
-            "the raw body must not be lost: {msg}"
+            !msg.contains("PRIVATE-MARKER-7c1e") && !msg.contains("<html>"),
+            "a raw body never reaches the message: {msg}"
         );
+    }
+
+    #[test]
+    fn a_description_never_reaches_the_message() {
+        let msg = describe_token_endpoint_failure(
+            400,
+            r#"{"error":"invalid_grant","error_description":"PRIVATE-MARKER-7c1e"}"#,
+        );
+        assert!(msg.contains("HTTP 400, invalid_grant"), "{msg}");
+        assert!(!msg.contains("PRIVATE-MARKER-7c1e"), "{msg}");
     }
 
     #[test]
