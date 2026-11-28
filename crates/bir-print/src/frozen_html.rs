@@ -5475,6 +5475,11 @@ struct Rule6Insertion {
     truncated: bool,
     input_classes: String,
     greys: Vec<(f64, f64)>,
+    /// The lowest bottom (pt, before shifting) of the value cells in the
+    /// specify row the strip spans. A thick closing rule has those cells
+    /// ending inside it, below the cut, and the band's text starts under
+    /// them so it never covers an amount cell.
+    row_cells_bottom: f64,
 }
 
 /// RULES.md rule 6: when a named inline "(specify)" field in
@@ -5791,6 +5796,7 @@ fn apply_rule6_specify_bands(
             // of the added lines grey out. The row is the field cells level with the specify cell.
             let (mut row_x0, mut row_x1) = (r6.x0, x1);
             let mut greys: Vec<(f64, f64)> = Vec::new();
+            let mut row_cells_bottom = f64::NEG_INFINITY;
             if let Some((cl, ct, cw)) = cell_div_geometry(&page_html, &r6.cell_id) {
                 let same_row = |t: f64| (t - ct).abs() < 4.0;
                 row_x0 = value_cells
@@ -5812,11 +5818,18 @@ fn apply_rule6_specify_bands(
                     .collect();
                 spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
                 greys = spans;
+                row_cells_bottom = value_cells
+                    .iter()
+                    .filter(|(_, _, t, _, _)| same_row(*t))
+                    .map(|(_, _, t, _, h)| t + h)
+                    .fold(f64::NEG_INFINITY, f64::max);
             }
             let text_right = greys.first().map(|(l, _)| l - 4.0).unwrap_or(row_x1);
             let room = shrunk_room(((text_right - row_x0) - 6.0).max(20.0));
-            let cell_room =
-                cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
+            // The cell's line is shrunk text like any other: it sets within its
+            // input's room less the 1 pt every shrunk value keeps to spare.
+            let cell_room = cell_div_width(&page_html, &r6.cell_id)
+                .map(|w| shrunk_room(input_room(w, &inp_tag)));
             let composed = compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val);
             let legacy = matches!(composed, Rule6Composition::Legacy);
             if !legacy {
@@ -5849,6 +5862,7 @@ fn apply_rule6_specify_bands(
                         truncated: band_truncated,
                         input_classes,
                         greys: greys.clone(),
+                        row_cells_bottom,
                     });
                 }
                 continue;
@@ -5905,6 +5919,7 @@ fn apply_rule6_specify_bands(
                 truncated,
                 input_classes,
                 greys,
+                row_cells_bottom,
             });
         }
 
@@ -6468,13 +6483,23 @@ fn shift_page_and_insert_rule6(
                 if line_idx + 1 == band_lines.len() { warn_attr.as_str() } else { "" }
             ));
         }
+        // The text starts under the row's amount cells where they end inside a
+        // thick closing rule (1701MS item 9: 0.25 pt below the strip's top);
+        // never lower than such a rule is thick.
+        let lift = ins.row_cells_bottom - (ins.cut_y + 0.5);
+        let pad = if lift > 0.0 && lift <= RULE6_FRAME_LINE_MAX_PT {
+            lift
+        } else {
+            0.0
+        };
+        let top = y + 0.5 + pad;
         out.push_str(&format!(
             "<div class=\"c f\" data-rule6-band=\"true\" data-rule6-of=\"{}\" style=\"left:{:.2}pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt\">{}</div>",
             ins.cell_id,
             ins.x0 + 1.5,
-            y + 0.5,
+            top,
             w,
-            h,
+            (h - pad).max(8.0),
             inputs_html
         ));
         prior_dh += ins.dh;
@@ -11777,6 +11802,37 @@ mod tests {
         );
     }
 
+    /// Every input of `doc` printing overflow of cell `cell`
+    /// (`data-overflow-of`), in document order. A Rule 6 band prints one
+    /// nameless input per line, so `input_tags` never lists them.
+    pub(super) fn overflow_inputs_of<'a>(doc: &'a str, cell: &str) -> Vec<&'a str> {
+        let needle = format!(" data-overflow-of=\"{cell}\"");
+        let mut out = Vec::new();
+        let mut from = 0;
+        while let Some(rel) = doc[from..].find("<input") {
+            let start = from + rel;
+            let Some(gt) = doc[start..].find('>') else {
+                break;
+            };
+            let tag = &doc[start..=start + gt];
+            if tag.contains(&needle) {
+                out.push(tag);
+            }
+            from = start + gt + 1;
+        }
+        out
+    }
+
+    /// A Rule 6 band's lines for `cell`, joined by newlines.
+    fn band_text_of(doc: &str, cell: &str) -> String {
+        overflow_inputs_of(doc, cell)
+            .iter()
+            .filter_map(|tag| super::attr(tag, "value"))
+            .map(|value| value.replace("&#10;", "\n"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     /// For every overflow input of `doc`: the cell it names and the real
     /// `id` of the `<div>` it lies in (`None` inside a `<template>` or
     /// outside any `<div>`).
@@ -12162,16 +12218,18 @@ mod tests {
         };
         let band_top = pt("top");
         let band_bottom = band_top + pt("height");
+        // Page 2 only: page 1 has ticks of its own at these heights.
+        let page = &doc[doc.find("id=\"page-2\"").unwrap()..];
         // Comb ticks of the amount columns: thin uprights 3 to 7 pt tall.
         let ticks_in = |y0: f64, y1: f64| -> usize {
             let mut n = 0;
             let mut cursor = 0;
-            while let Some(rel) = doc[cursor..].find("<rect ") {
+            while let Some(rel) = page[cursor..].find("<rect ") {
                 let start = cursor + rel;
-                let Some(end_rel) = doc[start..].find('>') else {
+                let Some(end_rel) = page[start..].find('>') else {
                     break;
                 };
-                let tag = &doc[start..start + end_rel + 1];
+                let tag = &page[start..start + end_rel + 1];
                 let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
                 if let (Some(x), Some(y), Some(w), Some(h)) =
                     (num("x"), num("y"), num("width"), num("height"))
@@ -12186,7 +12244,7 @@ mod tests {
         };
         assert!(
             ticks_in(band_top - 20.0, band_top - 12.0) >= 8,
-            "the detector must find row 8's ticks above the strip"
+            "the detector must find the ticks of the row above item 9"
         );
         assert!(
             ticks_in(band_top - 8.0, band_top) >= 8,
@@ -12406,19 +12464,7 @@ mod tests {
         let mut fields = BTreeMap::new();
         fields.insert("frm1701:txtPg4IPart7_9Specify".to_string(), text.clone());
         let html = filled_document("1701-2018", &fields).unwrap();
-        // The band's continuation inputs carry no name (the cell's own input
-        // keeps it), so `input_tags` skips them: scan the raw tags instead.
-        let value = html
-            .split("<input")
-            .skip(1)
-            .filter(|piece| piece.contains("data-overflow-of=\"p4c213\""))
-            .filter_map(|piece| {
-                let end = piece.find('>').unwrap_or(piece.len());
-                super::attr(&piece[..end], "value")
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-            .replace("&#10;", "\n");
+        let value = band_text_of(&html, "p4c213");
         assert!(!value.is_empty(), "1701 item 9 Rule 6 band");
         assert!(
             value.contains("..."),
@@ -12480,19 +12526,7 @@ mod tests {
             },
             "the cell line ends on a whole word: {cell_value:?}"
         );
-        // Every continuation input of the band, in line order, named or not:
-        // the joined lines are the whole band text, not only its first line.
-        let band_value = html
-            .split("<input")
-            .skip(1)
-            .filter(|piece| piece.contains("data-overflow-of=\"p4c213\""))
-            .filter_map(|piece| {
-                let end = piece.find('>').unwrap_or(piece.len());
-                super::attr(&piece[..end], "value")
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-            .replace("&#10;", "\n");
+        let band_value = band_text_of(&html, "p4c213");
         assert!(!band_value.is_empty(), "the item 9 band");
         assert!(
             !band_value.starts_with("UNIT 1203"),
@@ -14789,26 +14823,32 @@ mod donor_estate_print_tests {
             html.contains("data-rule6-band=\"true\" data-rule6-of=\"p1c223\""),
             "1601C item 20 must insert a Rule 6 full-width band"
         );
+        // The owner's wrap rule: item 20's own field prints the first words,
+        // the band only what exceeds it, and together they are the whole text.
         let tags = super::input_tags(&html);
         let inline_tag = tags
             .iter()
             .find(|t| t.name == "p1c223" && !t.tag.contains("data-overflow-of=\"p1c223\""))
             .expect("1601c inline p1c223")
             .tag;
-        assert_eq!(
-            super::attr(inline_tag, "value"),
-            Some(""),
-            "inline p1c223 must be cleared when Rule 6 band is inserted"
+        let inline = super::attr(inline_tag, "value").unwrap_or("").trim_end();
+        assert!(
+            !inline.is_empty() && long_specify.starts_with(inline),
+            "inline p1c223 prints the value's first words: {inline:?}"
         );
-        let band_tag = tags
+        let band = super::tests::overflow_inputs_of(&html, "p1c223")
             .iter()
-            .find(|t| t.tag.contains("data-overflow-of=\"p1c223\""))
-            .expect("1601c Rule 6 band input")
-            .tag;
+            .filter_map(|tag| super::attr(tag, "value"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(!band.is_empty(), "1601c Rule 6 band input");
+        let joined = format!("{inline} {band}")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
         assert_eq!(
-            super::attr(band_tag, "value"),
-            Some(long_specify),
-            "1601C item 20 full-width band must hold the full 90-char text"
+            joined, long_specify,
+            "1601C item 20's field and band together hold the full 90-char text"
         );
     }
 
