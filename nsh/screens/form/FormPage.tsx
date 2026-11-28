@@ -22,6 +22,7 @@
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
 import { cleanup, computed, effect, keymap, List, openUrl, Scroll, signal, untracked, View, windowSize } from "nsh";
 import { markAccountSiteOpened } from "../taxpayer/tins";
+import type { SendState } from "../../bir";
 import { BREAK, SIZE } from "../../theme/tokens";
 import {
   AppButton,
@@ -96,6 +97,15 @@ function kitIcon(name: string | undefined): IconName | undefined {
   return name && name in ICONS ? (name as IconName) : undefined;
 }
 
+function sameSend(a: SendState | null, b: SendState | null): boolean {
+  if (!a || !b) return a === b;
+  return a.stage === b.stage && a.line === b.line && a.code === b.code && a.next_try_at === b.next_try_at && a.can_resolve === b.can_resolve;
+}
+
+function sendKey(send: SendState | null | undefined): string {
+  return send ? [send.stage, send.line, send.code, send.next_try_at, send.can_resolve].join("\u001f") : "none";
+}
+
 export function FormPage(props: FormPageProps) {
   const hooks: SessionHooks = {
     toast: (message, o) => {
@@ -119,13 +129,19 @@ export function FormPage(props: FormPageProps) {
   void s.open().then(() => s.notesDrawn());
   cleanup(() => s.dispose());
 
-  // The submission worker sends a Queued return and tells nobody. The frame reads its lists again (its Queued watch and polls, and a queue
-  // action at once and after 1, 3 and 10 s), so while this page says Queued it looks at what the lists hold: once they no longer list this
-  // return as Queued, the session reads it again (the page stays drawn) and shows what is stored. The lists are read only while the page says
-  // Queued, nothing here asks the host itself or runs a timer, and the effect ends with the page. A page the lists keep disagreeing with
-  // reads once: `behind` is a boolean, so only its change moves the effect, not each look of the frame at the lists.
+  // The submission worker sends or reschedules a Queued return and tells nobody. The frame reads its lists again (its Queued watch and polls,
+  // and a queue action at once and after 1, 3 and 10 s), so while this page says Queued it looks at what the lists hold: once they no longer
+  // list this return as Queued, or their send state is not the one this page drew, the session reads it again (the page stays drawn) and shows
+  // what is stored. The lists are read only while the page says Queued, nothing here asks the host itself or runs a timer, and the effect ends
+  // with the page. A page the lists keep disagreeing with reads once: the row/session pair is the effect's value, so only a changed
+  // disagreement reads again, not each look, and a jump past a middle state still reads again.
   const shownQueued = computed(() => s.queuedShown());
-  const behind = computed(() => shownQueued() && !store.returns("filed").some((r) => r.status === "Queued" && s.isReturn(r.id)));
+  const behind = computed(() => {
+    if (!shownQueued()) return "";
+    const row = store.returns("filed").find((r) => s.isReturn(r.id));
+    if (row && row.status === "Queued" && sameSend(row.send, s.queuedSend())) return "";
+    return `${row?.status ?? "missing"}|${sendKey(row?.send)}>${sendKey(s.queuedSend())}`;
+  });
   effect(() => {
     if (behind()) untracked(() => s.refreshQueued());
   });

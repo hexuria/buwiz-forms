@@ -29,8 +29,12 @@ env:
   CARGO_INCREMENTAL: '0'
   NSH_REPOSITORY: hexuria/nsh
   NSH_PINNED_REF: 8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf
-  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+  # bir-core compiles Google's OAuth client in (option_env!). No build carries it unless the repository variable
+  # STORE_GMAIL is exactly 1 (owner, 2026-11-28: 1.0.0 ships no Google client; the name predates it governing every
+  # build). Gmail sign-in returns after 1.0.0 with native clients that hold no secret, and this switch's
+  # secret-passing "on" branch is removed then.
+  GOOGLE_CLIENT_ID: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
+  GOOGLE_CLIENT_SECRET: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
   BUWIZ_NO_KEYCHAIN: '1'
   EBIR_TEST_ENV: '1'
   BIR_AUTH_BYPASS: '1'
@@ -124,6 +128,28 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build Linux packages
         run: packaging/linux/build-packages.sh --version "${{ steps.version.outputs.version }}" --target "${{ matrix.target }}" --out target/release-artifacts
+      - name: Check the Linux packages against STORE_GMAIL
+        # The detector's positive control first (it finds a planted id and secret), then every .tar.gz this job built:
+        # the .deb and .rpm carry the same binary. With the switch off they hold neither; with STORE_GMAIL=1, both.
+        env:
+          GMAIL_BUILT_IN: ${{ vars.STORE_GMAIL == '1' }}
+          HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}
+        run: |
+          python3 scripts/audit_google_client.py --self-test
+          expect=--absent
+          if [ "$GMAIL_BUILT_IN" = true ]; then
+            if [ "$HAS_CLIENT" != true ]; then
+              echo '::error title=Google OAuth client secrets are empty::STORE_GMAIL is 1 but GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty. Set both repository secrets, or unset STORE_GMAIL.'
+              exit 1
+            fi
+            expect=--present
+          fi
+          shopt -s nullglob
+          packages=(target/release-artifacts/*.tar.gz)
+          [ "${#packages[@]}" -gt 0 ] || { echo "No .tar.gz in target/release-artifacts" >&2; exit 1; }
+          for package in "${packages[@]}"; do
+            python3 scripts/audit_google_client.py "$expect" "$package"
+          done
       - name: Smoke test Linux packages
         timeout-minutes: 60
         env:

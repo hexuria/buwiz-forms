@@ -173,8 +173,9 @@ jobs:
       run:
         working-directory: buwiz-forms
     env:
-      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      # No build carries Google's OAuth client unless the repository variable STORE_GMAIL is exactly 1 (release.yml).
+      GOOGLE_CLIENT_ID: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
+      GOOGLE_CLIENT_SECRET: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
       EXPECTED_SIGNING_IDENTITY: "Developer ID Application: Goldcoders Corp (5KZ8MD34QW)"
     steps:
       - uses: actions/checkout@v4
@@ -196,11 +197,14 @@ jobs:
               exit 1
             fi
           done
-          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
-            if [ -z "${!name}" ]; then
-              echo "::warning::optional secret $name is not set; the build will ship without Google OAuth credentials"
-            fi
-          done
+          if [ "${{ vars.STORE_GMAIL }}" = 1 ]; then
+            for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
+              if [ -z "${!name}" ]; then
+                echo "::error title=Google OAuth client secrets are empty::STORE_GMAIL is 1 but $name is empty. Set both repository secrets, or unset STORE_GMAIL."
+                exit 1
+              fi
+            done
+          fi
 
       # One pin for every workflow: NSH_PINNED_REF in nsh.yml.
       - name: Read the NSH pin
@@ -335,6 +339,21 @@ jobs:
 
       # The updater installs an update only when this passes
       # (nsh-updater, macOS install: codesign --verify --deep --strict).
+      - name: Check the macOS archives against STORE_GMAIL
+        # The detector's positive control first, then each update archive: with the switch off they hold no Google
+        # client; with STORE_GMAIL=1 (checked above), both the id and the secret.
+        shell: bash
+        run: |
+          python3 scripts/audit_google_client.py --self-test
+          expect=--absent
+          if [ "${{ vars.STORE_GMAIL }}" = 1 ]; then expect=--present; fi
+          shopt -s nullglob
+          archives=(target/release-artifacts/*.tar.gz)
+          [ "${#archives[@]}" -gt 0 ] || { echo "No .tar.gz in target/release-artifacts" >&2; exit 1; }
+          for archive in "${archives[@]}"; do
+            python3 scripts/audit_google_client.py "$expect" "$archive"
+          done
+
       - name: Check the update archive passes the updater's signature check
         shell: bash
         run: |

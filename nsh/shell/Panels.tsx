@@ -72,7 +72,7 @@ function EmptyProfile() {
       </Text>
       <If when={app.canAddTaxpayer()}>
         <View class="mt-2">
-          <AppButton testID="panel-new-taxpayer" label="New taxpayer" variant="primary" size="sm" icon="plus" onPress={() => app.go("new_taxpayer")} />
+          <AppButton testID="panel-new-taxpayer" label="New tax profile" variant="primary" size="sm" icon="plus" onPress={() => app.go("new_taxpayer")} />
         </View>
       </If>
     </View>
@@ -200,7 +200,7 @@ function ProfileLists(props: { tp: Taxpayer }) {
           )}
         </Each>
         <If when={app.canAddTaxpayer()}>
-          <NavRow testID="panel-new-tp" leading="plus" label="New taxpayer" onPress={() => app.go("new_taxpayer")} />
+          <NavRow testID="panel-new-tp" leading="plus" label="New tax profile" onPress={() => app.go("new_taxpayer")} />
         </If>
       </If>
     </View>
