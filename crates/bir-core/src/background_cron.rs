@@ -776,23 +776,23 @@ impl SubmissionTransport for NetworkSubmissionTransport {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 static USE_TOKEN_FETCHING_TRANSPORT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 static TOKEN_TRANSPORT_OPENS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 static TOKEN_TRANSPORT_CALLS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
 /// The cron tests' transport stub: no network, but its session open really asks the process-wide
 /// AccountTokens for a token. That is the production send's token path under the spawned job's
 /// SEND_CONTEXT; a stale or ownerless context fails here exactly as it would before a relay send.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 struct TokenFetchingTransport;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl SubmissionTransport for TokenFetchingTransport {
     type Session = String;
 
@@ -857,6 +857,31 @@ impl SubmissionTransport for TokenFetchingTransport {
 
 /// The worker's note of a Buwiz relay send ([`SubmissionTransport::store_session`]): the client's pending send, as
 /// JSON, written by `write` on the claimed return. It fails when the claim is no longer this worker's.
+/// The token-fetching transport switched on or off — reachable outside bir-core's own tests
+/// (the test-support feature) for the daemon proof (#5 of the #613 follow-ups).
+#[cfg(any(test, feature = "test-support"))]
+pub fn use_token_fetching_transport(on: bool) {
+    USE_TOKEN_FETCHING_TRANSPORT.store(on, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// (opens, stores) through the token-fetching transport. Every open really asked the
+/// process-wide AccountTokens for a token, so an open counted here is the proof the token
+/// fetch happened.
+#[cfg(any(test, feature = "test-support"))]
+pub fn token_transport_counts() -> (usize, usize) {
+    (
+        TOKEN_TRANSPORT_OPENS.load(std::sync::atomic::Ordering::SeqCst),
+        TOKEN_TRANSPORT_CALLS.load(std::sync::atomic::Ordering::SeqCst),
+    )
+}
+
+/// Zero the counters, so a test counts only its own sends.
+#[cfg(any(test, feature = "test-support"))]
+pub fn reset_token_transport_counts() {
+    TOKEN_TRANSPORT_OPENS.store(0, std::sync::atomic::Ordering::SeqCst);
+    TOKEN_TRANSPORT_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn pending_note<'a, W>(
     db: &'a Arc<Mutex<Database>>,
     write: W,
@@ -1817,7 +1842,7 @@ async fn process_queued_2551q(
     profile: &TaxpayerProfile,
     db: Arc<Mutex<Database>>,
 ) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if USE_TOKEN_FETCHING_TRANSPORT.load(std::sync::atomic::Ordering::SeqCst) {
         process_queued_2551q_with_transport(summary, profile, db, &TokenFetchingTransport).await;
         return;

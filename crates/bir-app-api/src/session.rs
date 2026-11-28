@@ -741,7 +741,7 @@ pub fn close_if_owner(owner: &Owner, reason: Reason) -> bool {
             tracing::info!("close_if_owner: the phase is another owner's — nothing closes");
             return false;
         }
-        // (b): a torn read (write_secret_file is not atomic) is an Err — it is NOT an empty
+        // (b): a torn read (write_secret_file mid-write is impossible — the save is atomic — but an unreadable file) is an Err — it is NOT an empty
         // disk, and nothing closes on evidence nobody read. Only a clean None is empty.
         match disk {
             Ok(None) => {}
@@ -4201,7 +4201,7 @@ mod tests {
         assert_invariants();
     }
 
-    /// (b): a torn read — write_secret_file is not atomic — is an Err, never an empty disk:
+    /// (b): a torn read — write_secret_file mid-write is impossible — the save is atomic — but an unreadable file is an Err, never an empty disk:
     /// nothing closes on evidence nobody read.
     #[test]
     fn a_torn_disk_read_closes_nothing() {

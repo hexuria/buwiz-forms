@@ -128,19 +128,34 @@ pub const NOT_SIGNED_IN: &str = "Sign in in the eBIRForms app first.";
 /// Otherwise it refuses with [`NOT_SIGNED_IN`]. It never creates `data_dir()/bir_data.db` or a room, and it never
 /// makes `device.db`.
 pub fn serve_database_path() -> Result<std::path::PathBuf, String> {
+    serve_database_path_and_account().map(|(path, _)| path)
+}
+
+/// [`serve_database_path`] plus the stored sign-in its one read saw — #3: the read that picks
+/// the room is the read the daemon captures its expected owner from, and it happens inside
+/// serve's retry loop, so a `--wait` retry never opens the new account's room under the old
+/// account's expectation. Single-room and dev modes carry the same read: the daemon's
+/// sign-in check means the same there.
+fn serve_database_path_and_account() -> Result<
+    (
+        std::path::PathBuf,
+        Option<bir_core::cloud_account::StoredAccount>,
+    ),
+    String,
+> {
     if let Some(why) = ignored_override_refusal(db::ignored_database_path().as_deref()) {
         return Err(why);
     }
-    if let Some(named) = db::single_room_database() {
-        return Ok(named);
-    }
-    if let Some(dev) = bir_core::dev_mode::dev_database_path() {
-        return Ok(dev);
-    }
-    let stored = bir_core::cloud_account::load_stored_account()
+    let stored = bir_core::cloud_account::load_stored_account_shared()
         .ok()
         .flatten();
-    serve_database_for(&bir_core::rooms::Layout::here(), stored.as_ref())
+    if let Some(named) = db::single_room_database() {
+        return Ok((named, stored));
+    }
+    if let Some(dev) = bir_core::dev_mode::dev_database_path() {
+        return Ok((dev, stored));
+    }
+    serve_database_for(&bir_core::rooms::Layout::here(), stored.as_ref()).map(|path| (path, stored))
 }
 
 /// Why `serve` refuses a database it was named but would not obey (`BIR_DATABASE_PATH` or the in-process name in a
@@ -212,8 +227,22 @@ pub(crate) fn signed_in_room_database(
 /// Uses [`db::open_serve_database_at`] (`Database::open` + exclusive owner lock),
 /// not `open_or_recreate`: a daemon must not quarantine a taxpayer DB.
 pub fn open_serve_database() -> Result<(Database, std::path::PathBuf), String> {
-    let path = serve_database_path()?;
-    db::open_serve_database_at(&path).map_err(|error| format_serve_open_error(&path, error))
+    open_serve_database_with_account().map(|(opened, path, _)| (opened, path))
+}
+
+/// [`open_serve_database`] plus the stored sign-in of the read that picked the room (#3).
+fn open_serve_database_with_account() -> Result<
+    (
+        Database,
+        std::path::PathBuf,
+        Option<bir_core::cloud_account::StoredAccount>,
+    ),
+    String,
+> {
+    let (path, stored) = serve_database_path_and_account()?;
+    db::open_serve_database_at(&path)
+        .map(|(opened, opened_path)| (opened, opened_path, stored))
+        .map_err(|error| format_serve_open_error(&path, error))
 }
 
 fn format_serve_open_error(path: &std::path::Path, error: db::DbError) -> String {
@@ -472,24 +501,58 @@ pub(crate) const ACCOUNT_CHANGED: &str = "the signed-in account changed; start b
 
 type HeadlessRoomSlot = Arc<Mutex<Option<Arc<Mutex<Database>>>>>;
 
-fn stored_owner_and_server() -> Option<(bir_core::account_session::OwnerKey, String)> {
-    let stored = bir_core::cloud_account::load_stored_account()
-        .ok()
-        .flatten()?;
-    let owner = bir_core::account_session::OwnerKey::of(&stored)?;
-    Some((owner, stored.server_url))
+fn stored_owner_and_server() -> Result<Option<(bir_core::account_session::OwnerKey, String)>, String>
+{
+    // #4: the shared read holds the account-session lock the save writes under — a same-owner
+    // refresh is never read back in its write window — and an unchanged file (by modification
+    // time) answers from memory, so a batch costs no keychain call.
+    // N7: a read ERROR is not a sign-in state: it rides out as Err, never as nobody.
+    let stored =
+        bir_core::cloud_account::load_stored_account_shared().map_err(|error| error.to_string())?;
+    let Some(stored) = stored else {
+        return Ok(None);
+    };
+    let Some(owner) = bir_core::account_session::OwnerKey::of(&stored) else {
+        return Ok(None);
+    };
+    Ok(Some((owner, stored.server_url)))
 }
 
-/// The daemon's per-batch account check. The open room belongs to the stored sign-in captured
-/// when serve started; any owner or server change, including an empty store, ends that room's use.
+/// How the per-request account check failed (N7): a definite change — a different owner, or
+/// definitely nobody — ends the daemon; a read ERROR refuses only that batch: the file is
+/// mid-write or briefly unreadable, and the app treats a read error as "nothing closes", so
+/// the daemon keeps running and exits only on a definite different owner or a definite nobody.
+/// The open room belongs to the stored sign-in captured when serve started; any owner or
+/// server change, including an empty store, ends that room's use.
+pub(crate) enum AccountRefusal {
+    Changed,
+    ReadError(String),
+}
+
+impl std::fmt::Display for AccountRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Changed => write!(f, "{ACCOUNT_CHANGED}"),
+            Self::ReadError(error) => write!(
+                f,
+                "the saved sign-in could not be read ({error}); the batch is refused, the daemon keeps running"
+            ),
+        }
+    }
+}
+
 fn headless_account_error(
     expected: &Option<(bir_core::account_session::OwnerKey, String)>,
-) -> Result<Option<bir_core::account_session::OwnerKey>, String> {
-    let current = stored_owner_and_server();
-    if current != *expected {
-        return Err(ACCOUNT_CHANGED.to_owned());
+) -> Result<Option<bir_core::account_session::OwnerKey>, AccountRefusal> {
+    // The owner is the account: the normalised origin key, so a trailing slash or a server
+    // string rewrite resolving to the same origin is not a change (#4). The raw server string
+    // rides in the tuple for the capture site only; it is never compared here.
+    let read = stored_owner_and_server().map_err(AccountRefusal::ReadError)?;
+    let owner = read.map(|(owner, _)| owner);
+    if owner != expected.as_ref().map(|(owner, _)| owner.clone()) {
+        return Err(AccountRefusal::Changed);
     }
-    Ok(current.map(|(owner, _)| owner))
+    Ok(owner)
 }
 
 /// The daemon cron's room source: the same account check on every tick, with the handle held in
@@ -497,11 +560,19 @@ fn headless_account_error(
 fn headless_room_source(
     slot: HeadlessRoomSlot,
     expected: Option<(bir_core::account_session::OwnerKey, String)>,
+    close_flag: Arc<std::sync::atomic::AtomicBool>,
 ) -> bir_core::background_cron::RoomSource {
     Arc::new(move || {
         let owner = match headless_account_error(&expected) {
             Ok(owner) => owner,
-            Err(_) => {
+            Err(AccountRefusal::ReadError(_)) => {
+                // N7: a read error is not an account change — no room this tick, no close.
+                return None;
+            }
+            Err(AccountRefusal::Changed) => {
+                // THE RULING: the first refusal from the worker's tick asks the serve loop for
+                // the one shared close and the exit — the daemon does not live on.
+                close_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                 *slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
                 bir_core::account_session::cache_owner(None);
                 return None;
@@ -520,9 +591,110 @@ fn headless_room_source(
     })
 }
 
+/// THE RULING's one shared close (#613 follow-up): the daemon does not live on after an
+/// account change. The FIRST refusal — a batch in the serve loop or the cron worker's tick
+/// through `close_flag` — runs this once:
+/// - an in-flight send that already holds the old account's token completes under it into the
+///   old room, with a bounded wait for the sending keys to drain;
+/// - mail and the other generic jobs STOP (`request_shutdown`) instead of running on in the
+///   old room;
+/// - every handle to the room drops — the host Session's Arc too — so the exclusive owner
+///   lock is released and the room can be opened again;
+/// - the pid file, the discovery record and the port belong to the serve loop's guards and
+///   listener: setting `shutdown` ends the loop and they drop with it, and the process exits.
+/// How one batch ended (the check runs before EACH request — #1, the unit-testable heart of
+/// N2: the check is a parameter, so the test flips it between request 1 and request 2 of one
+/// batch and watches the rest be refused).
+pub(crate) enum BatchVerdict {
+    Answered,
+    RefusedFatal,
+    RefusedReadError,
+    Quit,
+}
+
+pub(crate) fn process_batch(
+    batch: Vec<gpui_agent::mailbox::MailboxRequest>,
+    host: &Arc<Mutex<Session>>,
+    account_close: &Arc<std::sync::atomic::AtomicBool>,
+    check: &dyn Fn() -> Result<Option<bir_core::account_session::OwnerKey>, AccountRefusal>,
+) -> BatchVerdict {
+    let mut posts = batch.into_iter();
+    while let Some(posted) = posts.next() {
+        let refusal = if account_close.load(std::sync::atomic::Ordering::SeqCst) {
+            Some(AccountRefusal::Changed)
+        } else {
+            check().err()
+        };
+        if let Some(refusal) = refusal {
+            let fatal = matches!(refusal, AccountRefusal::Changed);
+            let message = refusal.to_string();
+            // the client that triggered the refusal still gets its clear error first,
+            // and every later request of this batch is refused the same way
+            let id = posted.request.id.clone();
+            posted.reply(gpui_agent::Response::err(id, message.clone()));
+            for rest in posts.by_ref() {
+                let id = rest.request.id.clone();
+                rest.reply(gpui_agent::Response::err(id, message.clone()));
+            }
+            return if fatal {
+                BatchVerdict::RefusedFatal
+            } else {
+                BatchVerdict::RefusedReadError
+            };
+        }
+        let req = posted.request.clone();
+        let mut guard = host.lock().expect("host");
+        let resp = request_log::handle_request_logged(&mut *guard, req, None, None);
+        let stop = guard.should_quit();
+        drop(guard);
+        posted.reply(resp);
+        if stop {
+            return BatchVerdict::Quit;
+        }
+    }
+    BatchVerdict::Answered
+}
+
+fn close_for_account_change(
+    host: &Arc<Mutex<Session>>,
+    room_slot: &HeadlessRoomSlot,
+    shutdown: &std::sync::atomic::AtomicBool,
+) {
+    // 1. bounded wait: the sending keys of THIS room drain. A send holding the old account's
+    //    token finishes into the old room; it is never cut off mid-flight here.
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        let busy = bir_core::background_cron::get_active_jobs()
+            .lock()
+            .map(|jobs| {
+                jobs.iter().any(|key| {
+                    bir_core::background_cron::room_of_job_key(key)
+                        == bir_core::background_cron::fixed_room_key()
+                })
+            })
+            .unwrap_or(false);
+        if !busy || std::time::Instant::now() >= deadline {
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    // N14: the line says what already happened, so it prints only now that the close is
+    // running and the wait for the in-flight send has ended — never before the 30 s wait.
+    eprintln!("the signed-in account changed; bir serve has stopped");
+    // 2. mail and the generic jobs stop with the room.
+    bir_core::background_cron::request_shutdown();
+    // 3. every handle to the room drops.
+    host.lock().expect("host").rebuild();
+    *room_slot
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    bir_core::account_session::cache_owner(None);
+    // 4. the guards and the listener end with the serve loop.
+    shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn serve(wait: bool) -> Result<(), ExitCode> {
     bir_core::account_session::fill_owner_cache();
-    let expected_account = stored_owner_and_server();
     let mut config = load_serve_config()?;
     // `--wait` exists to wait for the port (restart handoff), so it must not
     // fall back to an ephemeral port while the old server still holds it.
@@ -536,7 +708,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         // (what `serve_blocker` does) is closed before that listen. On
         // Windows, closing the previous socket — listening or not — can
         // leave the next listener unable to accept.
-        let (opened, path) = match open_serve_database() {
+        let (opened, path, opened_account) = match open_serve_database_with_account() {
             Ok(opened) => opened,
             Err(error) if wait && error.contains("already open") => {
                 eprintln!("waiting for live DB owner lock …");
@@ -548,6 +720,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
                 return Err(ExitCode::from(1));
             }
         };
+        // #3: the expectation is the same read that opened this room, captured here in the
+        // retry loop — a `--wait` retry re-reads and can never open the new account's room
+        // still expecting the old one.
+        let expected_account = opened_account.and_then(|stored| {
+            bir_core::account_session::OwnerKey::of(&stored).map(|owner| (owner, stored.server_url))
+        });
 
         let db = Arc::new(Mutex::new(opened));
         let room_slot: HeadlessRoomSlot = Arc::new(Mutex::new(Some(db.clone())));
@@ -591,7 +769,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             return Err(ExitCode::from(2));
         }
 
-        let cron_source = headless_room_source(room_slot.clone(), expected_account.clone());
+        let account_close = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cron_source = headless_room_source(
+            room_slot.clone(),
+            expected_account.clone(),
+            account_close.clone(),
+        );
         thread::spawn(move || {
             if let Ok(rt) = tokio::runtime::Runtime::new() {
                 rt.block_on(async move {
@@ -665,34 +848,44 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
 
         // Poll fast while a client is sending steps back to back (a recipe
         // run), and fall back to the idle interval once it goes quiet.
+        let mut read_error_streak = 0u32;
         let mut last_request = None::<std::time::Instant>;
         while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
-            let batch = mailbox.take();
-            if !batch.is_empty()
-                && let Err(message) = headless_account_error(&expected_account)
-            {
-                host.lock().expect("host").rebuild();
-                *room_slot
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-                bir_core::account_session::cache_owner(None);
-                for posted in batch {
-                    let id = posted.request.id.clone();
-                    posted.reply(gpui_agent::Response::err(id, message.clone()));
-                }
-                continue;
+            // THE RULING: the first refusal from the worker's tick — or right here below —
+            // runs the one shared close and the daemon exits.
+            if account_close.load(std::sync::atomic::Ordering::SeqCst) {
+                close_for_account_change(&host, &room_slot, &shutdown);
+                // N13: an account-change exit is a failure, never a clean zero.
+                return Err(ExitCode::from(3));
             }
-            for posted in batch {
-                last_request = Some(std::time::Instant::now());
-                let req = posted.request.clone();
-                let mut guard = host.lock().expect("host");
-                let resp = request_log::handle_request_logged(&mut *guard, req, None, None);
-                let stop = guard.should_quit();
-                drop(guard);
-                posted.reply(resp);
-                if stop {
-                    shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
-                    break;
+            let batch = mailbox.take();
+            if !batch.is_empty() {
+                let check = || headless_account_error(&expected_account);
+                match process_batch(batch, &host, &account_close, &check) {
+                    BatchVerdict::Answered => {}
+                    BatchVerdict::RefusedFatal => {
+                        close_for_account_change(&host, &room_slot, &shutdown);
+                        // N13: an account-change exit is a failure, never a clean zero.
+                        return Err(ExitCode::from(3));
+                    }
+                    BatchVerdict::RefusedReadError => {
+                        // N7: a read error refuses only this batch; the daemon keeps running —
+                        // but a read error that never clears is nobody's sign-in in effect:
+                        // the backstop exits after N consecutive refused batches.
+                        read_error_streak += 1;
+                        if read_error_streak >= 10 {
+                            eprintln!(
+                                "the saved sign-in cannot be read for {} batches in a row; bir serve stops",
+                                read_error_streak
+                            );
+                            close_for_account_change(&host, &room_slot, &shutdown);
+                            return Err(ExitCode::from(3));
+                        }
+                    }
+                    BatchVerdict::Quit => break,
+                }
+                if read_error_streak > 0 && headless_account_error(&expected_account).is_ok() {
+                    read_error_streak = 0;
                 }
             }
             if host.lock().expect("host").should_quit() {
@@ -989,7 +1182,11 @@ mod tests {
                     }
                     let slot: super::HeadlessRoomSlot =
                         std::sync::Arc::new(std::sync::Mutex::new(Some(db.clone())));
-                    let source = super::headless_room_source(slot.clone(), expected.clone());
+                    let source = super::headless_room_source(
+                        slot.clone(),
+                        expected.clone(),
+                        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    );
                     let stop = bir_core::background_cron::CronStop::new();
                     let worker = tokio::spawn(bir_core::background_cron::run_cron_jobs(
                         source.clone(),
@@ -1021,9 +1218,12 @@ mod tests {
 
                     let stored_b = stored_for("http://localhost:3008", "user-b");
                     bir_core::account_session::save_stored(&stored_b).unwrap();
-                    assert_eq!(
-                        super::headless_account_error(&expected).unwrap_err(),
-                        super::ACCOUNT_CHANGED
+                    assert!(
+                        matches!(
+                            super::headless_account_error(&expected).unwrap_err(),
+                            super::AccountRefusal::Changed
+                        ),
+                        "a different owner is the definite account change"
                     );
                     assert!(
                         source().is_none(),
@@ -1079,6 +1279,696 @@ mod tests {
             serve_database_for(&layout, None).unwrap_err(),
             NOT_SIGNED_IN
         );
+    }
+
+    /// #5, THE PROOF: through serve()'s own start-up and one batch, on the token-fetching
+    /// transport of #613's F6 tests — never the dry run, whose route never reaches
+    /// AccountTokens or SEND_CONTEXT. A queued → sent: the transport's open really asked the
+    /// process-wide AccountTokens for a token under the worker's SEND_CONTEXT (the counters
+    /// count it), and the store counted the send. Then B on disk → the batch's client still
+    /// gets its clear error, the daemon does the one shared close and exits: the room's lock
+    /// is free (the test opens the room itself) and the pid file is gone. The nobody-on-disk
+    /// case: the same. Positive control: with A still on disk the same batch is answered,
+    /// never refused. STORED_OWNER is restored, the transport restored, and the global cron
+    /// worker stopped at the end.
+    #[test]
+    fn serve_exits_on_the_account_change_through_the_relay_route() {
+        let _queue_turn = bir_core::background_cron::queue_transport_test_turn_blocking();
+        use bir_core::forms::{Form2551QDraft, form_2551q::Item13Election};
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+
+        // the room before serve opens it: one reviewed profile, one queued 2551Q
+        {
+            let (opened, _) = bir_core::db::open_serve_database_at(&db_path).unwrap();
+            let profile = reviewed_profile();
+            let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2024, 1);
+            draft.item_13_election = Item13Election::Graduated;
+            draft.transition_to_queued().unwrap();
+            opened.save_profile(profile).unwrap();
+            opened.save_queued_2551q_draft_and_election(&draft).unwrap();
+        }
+
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let account_b = stored_for("http://localhost:3008", "user-b");
+        // the port is held until the env is set, then freed for serve to bind
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::background_cron::use_token_fetching_transport(true);
+            bir_core::background_cron::reset_token_transport_counts();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let pid_path = dir.path().join("serve.pid");
+            let log = || std::fs::read_to_string(dir.path().join("serve.log")).unwrap_or_default();
+
+            // POSITIVE CONTROL: with A on disk the batch is answered, never refused.
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered; log: {}",
+                    log()
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+
+            // A queued → SENT: the token fetch happened (the open counted it) and the send
+            // was stored — never the dry-run route, which reaches neither.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+            loop {
+                let (opens, stores) = bir_core::background_cron::token_transport_counts();
+                if opens > 0 && stores > 0 {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "no token-fetching send happened (opens {opens}, stores {stores}); log: {}",
+                    log()
+                );
+                std::thread::sleep(std::time::Duration::from_millis(300));
+            }
+
+            // B on disk: the next batch is refused with the clear error, then the daemon
+            // does the one shared close and exits.
+            bir_core::account_session::save_stored(&account_b).unwrap();
+            // no pause: the batch must reach the serve loop before the cron's own tick can
+            // close the room first — the batch path's clear error is what is asserted here
+            // Either refusal order is the ruling working: the batch reaches the serve loop
+            // first and is answered with the clear error, or the cron's own tick closes the
+            // room first and the batch dies with the connection. What must NEVER happen is
+            // the batch answered Ok — the change is always seen.
+            // N1: STICKY, not resettable — B's save precedes the first Hello, so ANY Ok at
+            // all fails, whether a later Err follows it or not. Either refusal order is the
+            // ruling working: the clear error, or the close's own disconnect.
+            for _ in 0..20 {
+                match client.expect_ok(Op::Hello) {
+                    Ok(_) => panic!("a batch under B is never answered Ok"),
+                    Err(error) => {
+                        assert!(
+                            error.to_string().contains("the signed-in account changed")
+                                || error.to_string().contains("no reply")
+                                || error.to_string().contains("connect")
+                                || error.to_string().contains("closed"),
+                            "the clear error or the close's own disconnect, got: {error}"
+                        );
+                        break;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            wait_for_serve_exit(&outcome);
+            assert!(
+                !pid_path.exists(),
+                "the pid file is gone once the daemon has stopped"
+            );
+            // the room's lock is FREE: the test opens the room itself
+            drop(
+                bir_core::db::open_serve_database_at(&db_path).unwrap_or_else(|error| {
+                    panic!("the room must open again after the close: {error}")
+                }),
+            );
+
+            // nobody on disk: the same. A fresh serve under B, then the file goes away.
+            bir_core::account_session::save_stored(&account_b).unwrap();
+            let outcome2 = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome2_in_thread = outcome2.clone();
+            let (tx2, rx2) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx2.send(()).unwrap();
+                *outcome2_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx2.recv().unwrap();
+            let mut client2 = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client2.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the second daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // sign out entirely: nobody on disk
+            let _ = std::fs::remove_file(&account_path);
+            bir_core::account_session::cache_owner(None);
+            // N1: sticky here too — nobody on disk precedes the first Hello, so ANY Ok fails.
+            for _ in 0..20 {
+                match client2.expect_ok(Op::Hello) {
+                    Ok(_) => panic!("a batch with nobody on disk is never answered Ok"),
+                    Err(error) => {
+                        assert!(
+                            error.to_string().contains("the signed-in account changed")
+                                || error.to_string().contains("no reply")
+                                || error.to_string().contains("connect")
+                                || error.to_string().contains("closed"),
+                            "the clear error or the close's own disconnect, got: {error}"
+                        );
+                        break;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            wait_for_serve_exit(&outcome2);
+            drop(
+                bir_core::db::open_serve_database_at(&db_path)
+                    .unwrap_or_else(|error| panic!("the room must open again: {error}")),
+            );
+
+            // the Drop guards restore STORED_OWNER, the transport, and the cron worker even
+            // when an assertion panics — the release workflows' cargo test runs these too.
+        });
+    }
+
+    /// N8: the proof's global-state restores as Drop guards, so a panicking assertion can
+    /// never leak them into the next test of the same process.
+    struct ProofGuards;
+    impl ProofGuards {
+        fn arm() -> Self {
+            ProofGuards
+        }
+    }
+    impl Drop for ProofGuards {
+        fn drop(&mut self) {
+            bir_core::account_session::cache_owner(None);
+            bir_core::background_cron::use_token_fetching_transport(false);
+            bir_core::background_cron::request_shutdown();
+        }
+    }
+
+    fn wait_for_serve_exit(
+        outcome: &std::sync::Arc<std::sync::Mutex<Option<Result<(), std::process::ExitCode>>>>,
+    ) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+        loop {
+            if outcome.lock().unwrap().is_some() {
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the daemon did not exit after the account change"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
+    /// N2, the proof that discriminates: ONE batch — the mailbox's own posts — worked through
+    /// by the production loop body, with the account check FLIPPING between request 1 and
+    /// request 2. Request 1 is answered; request 2 and every later request are refused with
+    /// the clear error and the verdict is the fatal close. With the check at batch level the
+    /// whole batch is answered — the test fails. (The pipeline-shaped proof could never batch:
+    /// the driver answers one request per connection, so the second loop iteration never ran.)
+    #[test]
+    fn a_batch_is_checked_before_each_request() {
+        use gpui_agent::{Op, protocol::Request};
+        use std::sync::{Arc, Mutex};
+        let mailbox = gpui_agent::AgentMailbox::new();
+        let rx1 = mailbox.push(Request::new("r1", Op::Hello));
+        let rx2 = mailbox.push(Request::new("r2", Op::Hello));
+        let rx3 = mailbox.push(Request::new("r3", Op::Hello));
+        let batch = mailbox.take();
+        assert_eq!(
+            batch.len(),
+            3,
+            "positive control: one batch of three requests"
+        );
+        let host = Arc::new(Mutex::new(crate::agent::session::Session::new(
+            crate::agent::session::UiQueue::discarding(),
+        )));
+        let close = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // the check flips after the first call: request 1 passes, request 2 is the change
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let check = || {
+            if calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                Ok(None)
+            } else {
+                Err(super::AccountRefusal::Changed)
+            }
+        };
+        let verdict = super::process_batch(batch, &host, &close, &check);
+        assert!(
+            matches!(verdict, super::BatchVerdict::RefusedFatal),
+            "the batch ends in the fatal close"
+        );
+        assert!(rx1.recv().unwrap().ok, "request 1 is answered");
+        let err2 = rx2.recv().unwrap();
+        assert!(!err2.ok, "request 2 is refused");
+        assert!(
+            err2.error
+                .unwrap_or_default()
+                .contains("the signed-in account changed"),
+            "the refusal is the clear error"
+        );
+        assert!(
+            !rx3.recv().unwrap().ok,
+            "request 3 — the rest of the batch — is refused"
+        );
+    }
+
+    /// N7: a read ERROR of the sign-in file is not an account change. The batch is refused
+    /// with the read error, and the daemon KEEPS RUNNING — where the old code read
+    /// `.ok().flatten()`, counted the error as nobody-on-disk and exited. Positive control:
+    /// once the file reads again, the next batch is answered Ok.
+    #[test]
+    #[cfg(unix)]
+    fn a_read_error_refuses_the_batch_but_the_daemon_keeps_running() {
+        use gpui_agent::Op;
+        use std::os::unix::fs::PermissionsExt;
+        if unsafe { libc::geteuid() } == 0 {
+            eprintln!("skipped as root: chmod 000 is ignored for root");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // the file is there but cannot be READ. A trailing newline first: the
+            // mtime/length/inode cache must MISS or the cached owner answers and the file
+            // is never read at all.
+            let mut bytes = std::fs::read(&account_path).unwrap();
+            bytes.push(b'\n');
+            std::fs::write(&account_path, &bytes).unwrap();
+            std::fs::set_permissions(&account_path, std::fs::Permissions::from_mode(0o000))
+                .unwrap();
+            let error = client
+                .expect_ok(Op::Hello)
+                .expect_err("the batch is refused")
+                .to_string();
+            assert!(
+                error.contains("could not be read"),
+                "the refusal is the read error, got: {error}"
+            );
+            // restore: the daemon is still running and answers again — it did NOT exit
+            std::fs::set_permissions(&account_path, std::fs::Permissions::from_mode(0o600))
+                .unwrap();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "positive control failed: the daemon must keep running after a read error"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            let _ = client.expect_ok(Op::Shutdown);
+            // the shutdown is real: the serve thread ends, never a slept-for assumption
+            wait_for_serve_exit(&outcome);
+        });
+    }
+
+    /// #4: the account check compares the OwnerKey — the normalized origin — not the raw
+    /// server_url string: a trailing slash appearing or going in a same-account token refresh
+    /// is not an account change, and the daemon does not exit for nothing.
+    /// Positive control: a different user_id still errors.
+    #[test]
+    fn the_account_check_compares_the_owner_not_the_raw_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_var(
+            bir_core::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.to_str().unwrap()),
+            || {
+                let slashed = stored_for("http://localhost:3008/", "user-1");
+                bir_core::account_session::save_stored(&slashed).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&slashed).unwrap();
+                // The expected tuple as a start under the unslashed spelling captured it.
+                let unslashed = stored_for("http://localhost:3008", "user-1");
+                let expected = Some((
+                    bir_core::account_session::OwnerKey::of(&unslashed).unwrap(),
+                    unslashed.server_url.clone(),
+                ));
+                assert_eq!(owner, expected.clone().unwrap().0, "the owner keys are one");
+                assert!(
+                    super::headless_account_error(&expected).is_ok(),
+                    "a trailing slash is not an account change"
+                );
+                // Positive control: another user really is a change.
+                let other = stored_for("http://localhost:3008", "user-2");
+                bir_core::account_session::save_stored(&other).unwrap();
+                assert!(
+                    super::headless_account_error(&expected).is_err(),
+                    "another account errors"
+                );
+            },
+        );
+    }
+
+    /// The ruling, test (a): a reader that sees ZERO BYTES — the torn read of the in-place
+    /// PermissionDenied fallback, common on Windows — gets a read error and the daemon keeps
+    /// running; it does not exit as if signed out. The empty file here is exactly what the
+    /// torn fallback write exposes mid-write.
+    #[test]
+    fn zero_bytes_is_a_read_error_and_the_daemon_keeps_running() {
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // zero bytes — the torn read of the in-place fallback. The trailing-newline cache
+            // miss of the chmod test is not needed: empty differs in length from any save.
+            std::fs::write(&account_path, "").unwrap();
+            assert!(
+                client.expect_ok(Op::Hello).is_err(),
+                "the batch over a torn read is refused, not answered"
+            );
+            // restore: the daemon is still running and answers again — it did NOT exit
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "positive control failed: the daemon must keep running after a torn read"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            let _ = client.expect_ok(Op::Shutdown);
+            wait_for_serve_exit(&outcome);
+        });
+    }
+
+    /// The ruling, test (c): an old-format EMPTY file left by an earlier build is a read
+    /// error, and the backstop — ten consecutive read-error batches — ends the daemon, so it
+    /// is not held refusing for ever.
+    #[test]
+    fn an_old_empty_file_is_a_read_error_and_the_backstop_ends_it() {
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // the old-format empty file: a read error now, every batch refused
+            std::fs::write(&account_path, "").unwrap();
+            for batch in 1..=10 {
+                assert!(
+                    client.expect_ok(Op::Hello).is_err(),
+                    "batch {batch} over the empty file is refused"
+                );
+            }
+            // the backstop ends the daemon — never a slept-for assumption
+            wait_for_serve_exit(&outcome);
+            let end = outcome.lock().unwrap();
+            assert!(
+                end.is_some(),
+                "the backstop ended the daemon after the consecutive read errors"
+            );
+        });
+    }
+
+    /// The daemon half of (b): the sentinel file — what a sign-out leaves when the remove
+    /// fails — is a definite nobody, and the daemon exits AT ONCE (no backstop count, no
+    /// refusal streak): one batch is enough.
+    #[test]
+    fn the_sentinel_file_exits_the_daemon_at_once() {
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // the sign-out's sentinel: a definite nobody — one batch ends the daemon
+            // the sentinel literal pinned, not the constant: the format is a contract with
+            // every build that ever wrote it, so the test spells it out
+            std::fs::write(&account_path, "{\"signed_out\":true}\n").unwrap();
+            let _ = client.expect_ok(Op::Hello);
+            wait_for_serve_exit(&outcome);
+            let end = outcome.lock().unwrap();
+            assert!(
+                end.is_some(),
+                "the sentinel ended the daemon at once — one batch, no backstop count"
+            );
+        });
     }
 }
 

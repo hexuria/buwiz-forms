@@ -9,11 +9,10 @@ fn open_room_guarded(
     layout: &crate::rooms::Layout,
     room: &crate::rooms::RoomId,
 ) -> Result<crate::db::Database, crate::rooms::DeviceStoreError> {
-    if !crate::legacy_claim::claim_started_this_session(layout.device_dir()) {
-        return Err(crate::rooms::DeviceStoreError::Io(std::io::Error::other(
-            "the legacy claim's start() has not run for this device folder in this session",
-        )));
-    }
+    // The production rule (G1), both halves — the started half and the move-evidence half —
+    // never a copy of it here: a copy drifts, and the drift is invisible exactly where it matters.
+    crate::legacy_claim::room_open_allowed(layout, room)
+        .map_err(|why| crate::rooms::DeviceStoreError::Io(std::io::Error::other(why)))?;
     crate::db::Database::open(layout.room_database(room)).map_err(|error| match error {
         crate::db::DbError::Sqlite(sqlite) => crate::rooms::DeviceStoreError::Sqlite(sqlite),
         other => crate::rooms::DeviceStoreError::Io(std::io::Error::other(other.to_string())),
@@ -2038,6 +2037,29 @@ fn a_second_use_within_one_live_claim_is_refused() {
     drop(ready);
 }
 
+/// #7: the guard these tests open rooms through IS the production rule — the evidence half too,
+/// not the started half alone. A definitive start already ran in this session; a move then cut at
+/// Copied (the record naming the room, the hash evidence still at stake) refuses the open.
+#[test]
+fn the_test_guard_is_the_production_room_open_rule() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    let outcome = claim_unlocked(&install, &a);
+    let room = done_room(&outcome);
+    // The started half is satisfied for this session now. Wound the record back to Copied — a
+    // kill mid-move — so only the evidence half can refuse the open.
+    let claim = install.claim();
+    let mut wounded = claim.record().unwrap().expect("the claim's record");
+    wounded.step = Step::Copied;
+    claim.write_record(&wounded).unwrap();
+    let refused = open_room_guarded(&install.layout, &room);
+    assert!(
+        refused.is_err(),
+        "the production guard refuses a room whose move evidence is still at stake"
+    );
+}
+
 // ------------------------------------------------------------------------- R1, the reviewer's holes
 
 /// R1(a): a start() that answers a transient failure never opens the room of the record. In M1's
@@ -2068,7 +2090,7 @@ fn a_transient_room_check_does_not_open_the_room() {
     let refused = std::panic::catch_unwind(|| open_room_guarded(&install.layout, &room));
     match refused {
         Ok(result) => assert!(result.is_err(), "the room opened after a transient answer"),
-        Err(_) => {} // the debug_assert fired: refused either way
+        Err(_) => {} // a panic is a refusal too, either way the room did not open
     }
     // The error gone, the claim finishes — and now the room opens.
     let finished = claim.start(&a);
