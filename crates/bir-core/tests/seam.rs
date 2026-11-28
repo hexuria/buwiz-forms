@@ -184,11 +184,20 @@ fn the_seam_is_nothing_outside_the_test_environment() {
 #[test]
 fn an_invalid_seam_exits_early_with_one_stderr_line() {
     let real_home = tempfile::tempdir().unwrap();
+    // the missing folder is built from a tempdir join: absolute on Windows too, where a
+    // unix-style absolute path is not (the reviewer's item 1)
+    let missing = tempfile::tempdir()
+        .unwrap()
+        .path()
+        .join("missing")
+        .to_str()
+        .unwrap()
+        .to_owned();
     for (value, wrong) in [
-        ("relative/folder", "not an absolute path"),
-        ("/definitely/not/there-ebir-seam", "does not exist"),
+        ("relative/folder".to_owned(), "not an absolute path"),
+        (missing, "does not exist"),
     ] {
-        let extra = [(DEVICE_DIR_ENV, value)];
+        let extra = [(DEVICE_DIR_ENV, value.as_str())];
         let envs = probe_envs(&real_home, &extra);
         let output = std::process::Command::new(probe_binary())
             .envs(envs)

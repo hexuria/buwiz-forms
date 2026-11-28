@@ -96,7 +96,7 @@ mock-relay *args="":
 # database with one taxpayer profile and one Queued return, written only inside the run folder
 # (the target's parent).
 legacy-fixture target:
-    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; cargo run --locked -p bir-core --features test-support --bin legacy_fixture -- '" + target + "'" } else { "EBIR_TEST_ENV=1 cargo run --locked -p bir-core --features test-support --bin legacy_fixture -- '" + target + "'" } }}
+    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; cargo run --locked -p bir-core --features test-support --bin legacy_fixture -- " + quote(target) } else { "EBIR_TEST_ENV=1 cargo run --locked -p bir-core --features test-support --bin legacy_fixture -- " + quote(target) } }}
 
 # In-memory development accounts on localhost:3008 (docs/cloud-account.md).
 mock-account *args="":
