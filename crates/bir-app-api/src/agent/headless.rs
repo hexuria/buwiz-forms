@@ -602,6 +602,7 @@ fn headless_room_source(
 ///   lock is released and the room can be opened again;
 /// - the pid file, the discovery record and the port belong to the serve loop's guards and
 ///   listener: setting `shutdown` ends the loop and they drop with it, and the process exits.
+///
 /// How one batch ended (the check runs before EACH request — #1, the unit-testable heart of
 /// N2: the check is a parameter, so the test flips it between request 1 and request 2 of one
 /// batch and watches the rest be refused).
@@ -849,7 +850,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         // Poll fast while a client is sending steps back to back (a recipe
         // run), and fall back to the idle interval once it goes quiet.
         let mut read_error_streak = 0u32;
-        let mut last_request = None::<std::time::Instant>;
+        let last_request = None::<std::time::Instant>;
         while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
             // THE RULING: the first refusal from the worker's tick — or right here below —
             // runs the one shared close and the daemon exits.
