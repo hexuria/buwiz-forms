@@ -6238,16 +6238,6 @@ fn shift_page_and_insert_rule6(
                 y + h - 0.5,
                 w
             ));
-            out.push_str(&format!(
-                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"1.2\" height=\"{:.2}\" fill=\"#000000\"/>",
-                ins.x0, y, h
-            ));
-            out.push_str(&format!(
-                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"1.2\" height=\"{:.2}\" fill=\"#000000\"/>",
-                ins.x1 - 1.2,
-                y,
-                h
-            ));
             prior_dh += ins.dh;
         }
         out.push_str("</g></svg>");
