@@ -741,7 +741,7 @@
                        "required_when":  null,
                        "enabled_when":  null,
                        "visible_when":  null,
-                       "default_value":  "filer@example.com",
+                       "default_value":  "#email-redacted#",
                        "empty_representation":  "",
                        "constraints":  {
 

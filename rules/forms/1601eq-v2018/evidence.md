@@ -12,7 +12,7 @@ The local January 2019 PDF (`5277addc...`) and guide (`64730a52...`) are incompa
 
 ## Field and control proof
 
-The representative dummy save contains the initial six ATC rows. Source inspection proves up to 111 dynamic row positions. Because each added row contributes four serialized keys, the complete category-dependent source-reachable union is 621 fields. `fields.json` contains all 621 and hashes its ordered IDs to `4599618d0a2da5bace1ff7e721e4840df72d0d9ed596e3a21a6abb09d82e8bd0`.
+The representative dummy save contains the initial six ATC rows. The representative save's email value is redacted as `#email-redacted#` in captured field metadata. Source inspection proves up to 111 dynamic row positions. Because each added row contributes four serialized keys, the complete category-dependent source-reachable union is 621 fields. `fields.json` contains all 621 and hashes its ordered IDs to `4599618d0a2da5bace1ff7e721e4840df72d0d9ed596e3a21a6abb09d82e8bd0`.
 
 `fixtures/runtime-control-inventory-v796.json` separately records 98 static controls (93 with IDs and five without) and a source-derived maximum of 654 runtime control instances. HTML-looking strings inside script blocks are excluded from this DOM inventory.
 

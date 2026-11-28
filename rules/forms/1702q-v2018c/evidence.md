@@ -11,7 +11,7 @@ The HTA title, help title, printed header, PDF, and serialized `formTyp` agree o
 
 ## Extraction
 
-`extract-1702q-controls.ps1` inventories the `frmMain` controls in DOM order. `extract-1702q-fields.ps1` assigns stable occurrence-aware keys. The representative save contains the same 113-element order, with ordered serialized-key SHA-256 `a5e56fa2a7e6fb528e8f5dbe03735c0508fac57f4c724d92a63ea52f578334e4`. The representative save's email value is redacted as `#email-redacted#` in the inventory; the extractor otherwise records serialized values literally.
+`extract-1702q-controls.ps1` inventories the `frmMain` controls in DOM order. `extract-1702q-fields.ps1` assigns stable occurrence-aware keys. The representative save contains the same 113-element order, with ordered serialized-key SHA-256 `a5e56fa2a7e6fb528e8f5dbe03735c0508fac57f4c724d92a63ea52f578334e4`. The representative save's email value is redacted as `#email-redacted#` in the inventory and captured field metadata; the extractor otherwise records serialized values literally.
 
 The sole duplicate serialized key is `frm1702q:txtTelNum`: the printed Item 10 contact control and a hidden profile contact control. `fields.json` represents these as `#occurrence-1` and `#occurrence-2` while preserving the shared serialized key.
 

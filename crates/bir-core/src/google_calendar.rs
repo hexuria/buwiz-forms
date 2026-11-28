@@ -1011,16 +1011,14 @@ impl GoogleCalendarClient {
 
     fn refresh(&mut self) -> Result<(), anyhow::Error> {
         let client_id = google_client_id()?;
-        let client_secret = google_client_secret()?;
         let response = self
             .http
             .post(TOKEN_URL)
-            .form(&[
-                ("client_id", client_id.as_str()),
-                ("client_secret", client_secret.as_str()),
-                ("grant_type", "refresh_token"),
-                ("refresh_token", self.credentials.refresh_token.as_str()),
-            ])
+            .form(&with_client_secret(vec![
+                ("client_id", client_id),
+                ("grant_type", "refresh_token".into()),
+                ("refresh_token", self.credentials.refresh_token.clone()),
+            ]))
             .send()?;
         let status = response.status();
         let text = response.text()?;
@@ -1072,18 +1070,16 @@ fn start_calendar_oauth_flow() -> Result<GoogleCalendarCredential, anyhow::Error
         .recv()
         .map_err(|_| anyhow::anyhow!("OAuth callback was cancelled"))?
         .map_err(anyhow::Error::msg)?;
-    let client_secret = google_client_secret()?;
     let http = reqwest::blocking::Client::new();
     let response = http
         .post(TOKEN_URL)
-        .form(&[
-            ("client_id", client_id.as_str()),
-            ("client_secret", client_secret.as_str()),
-            ("code", code.as_str()),
-            ("redirect_uri", redirect_uri.as_str()),
-            ("grant_type", "authorization_code"),
-            ("code_verifier", verifier.as_str()),
-        ])
+        .form(&with_client_secret(vec![
+            ("client_id", client_id),
+            ("code", code),
+            ("redirect_uri", redirect_uri),
+            ("grant_type", "authorization_code".into()),
+            ("code_verifier", verifier),
+        ]))
         .send()?;
     let status = response.status();
     let text = response.text()?;
@@ -1133,16 +1129,25 @@ fn google_client_id() -> Result<String, anyhow::Error> {
         .ok_or_else(|| anyhow::anyhow!("GOOGLE_CLIENT_ID is not configured"))
 }
 
-fn google_client_secret() -> Result<String, anyhow::Error> {
+/// A Desktop client's secret, if one is configured. Google treats it as not confidential and native clients have
+/// none, so the client id alone configures Google; the secret is sent only when present.
+fn google_client_secret() -> Option<String> {
     std::env::var("GOOGLE_CLIENT_SECRET")
         .ok()
         .or_else(|| option_env!("GOOGLE_CLIENT_SECRET").map(String::from))
         .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| anyhow::anyhow!("GOOGLE_CLIENT_SECRET is not configured"))
+}
+
+/// A token request's form, with `client_secret` added only when one is configured.
+fn with_client_secret(mut form: Vec<(&'static str, String)>) -> Vec<(&'static str, String)> {
+    if let Some(secret) = google_client_secret() {
+        form.push(("client_secret", secret));
+    }
+    form
 }
 
 fn google_oauth_is_configured() -> bool {
-    google_client_id().is_ok() && google_client_secret().is_ok()
+    google_client_id().is_ok()
 }
 
 fn is_resource_not_found(error: &anyhow::Error) -> bool {

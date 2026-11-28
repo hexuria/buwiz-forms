@@ -677,6 +677,13 @@ impl Session {
             }
             pending.push((key.clone(), value.clone()));
         }
+        // A batch means its final answers, not the accidental JSON order of its
+        // boxes. The 1701MS source/rate/deduction choices reset Part V Item 6 in
+        // the official runtime, so apply those reset choices before any dependent
+        // amounts; the stable sort keeps unrelated input order unchanged.
+        if kind.form_code() == "1701MS" {
+            pending.sort_by_key(|(key, value)| !agent::ms_part_reset_choice(key, value));
+        }
         // Enforce the form page's gates (`screen_form_module::page_gate_refusal`)
         // using the same reviewed reason a person sees. Defer gated keys until
         // earlier/sibling answers in the same call have been applied and computed
@@ -914,7 +921,11 @@ impl Session {
         refused.extend(kept_answers);
         let def = kind.definition();
         let mut chosen = BTreeMap::new();
-        for (key, value) in &fields {
+        let mut ordered: Vec<(&String, &Value)> = fields.iter().collect();
+        if kind.form_code() == "1701MS" {
+            ordered.sort_by_key(|(key, value)| !agent::ms_part_reset_choice(key, value));
+        }
+        for (key, value) in ordered {
             match agent::fill(kind, &mut draft, key, value, Some(&from_profile)) {
                 Ok(()) => {
                     note_choice(kind, def, key, value, &mut chosen);
@@ -3795,6 +3806,68 @@ mod tests {
         assert!(why.contains("cannot be left unanswered"), "{checked}");
     }
 
+    /// A 1701MS batch means its final answers, not the accidental JSON order
+    /// of its boxes: the source/rate/deduction choices whose official clicks
+    /// reset Part V Item 6 are applied before an Item 6 amount either way.
+    #[test]
+    fn form_fill_and_check_put_1701ms_reset_choices_before_amounts() {
+        let amount = "frm1701MS:txtTaxPaidPreviouslyFiledNo6a";
+        let choice = "frm1701MS:txtTaxpayerNo11group";
+        let amended = "frm1701MS:txtAmendedYesNo2";
+        for amount_first in [true, false] {
+            let mut session = session();
+            save_scratch(&mut session);
+            call(
+                &mut session,
+                "form.open",
+                json!({"code": "1701MS", "year": 2025, "period": 0, "tin": TIN}),
+            )
+            .unwrap();
+            call(
+                &mut session,
+                "form.fill",
+                json!({"fields": {amended: "true"}}),
+            )
+            .unwrap();
+            let edits = if amount_first {
+                json!({amount: "444", choice: "a"})
+            } else {
+                json!({choice: "a", amount: "444"})
+            };
+            let filled = call(&mut session, "form.fill", json!({"fields": edits})).unwrap();
+            assert_eq!(
+                session.open.as_ref().unwrap().draft["taxpayer"]["previously_filed"],
+                json!(444.0),
+                "form.fill amount_first={amount_first}: {filled}"
+            );
+            assert!(
+                !filled["not_shown"]
+                    .as_array()
+                    .is_some_and(|keys| keys.contains(&json!(amount))),
+                "form.fill amount_first={amount_first} keeps Item 6 visible: {filled}"
+            );
+
+            let check_edits = if amount_first {
+                json!({amended: "true", amount: "444", choice: "a"})
+            } else {
+                json!({amended: "true", choice: "a", amount: "444"})
+            };
+            let checked = call(
+                &mut session,
+                "form.check",
+                json!({"code": "1701MS", "year": 2025, "period": 0, "tin": TIN,
+                       "fields": check_edits}),
+            )
+            .unwrap();
+            assert!(
+                !checked["discarded"]
+                    .as_array()
+                    .is_some_and(|keys| keys.contains(&json!(amount))),
+                "form.check amount_first={amount_first} keeps Item 6: {checked}"
+            );
+        }
+    }
+
     #[test]
     fn form_check_validates_without_writing() {
         let mut session = session();
@@ -4228,6 +4301,51 @@ mod tests {
                     .as_f64()
                     .unwrap_or(0.0),
                 0.0
+            );
+        }
+    }
+
+    #[test]
+    fn form_fill_holds_the_three_new_previous_payment_gates() {
+        for (code, key, path, lock) in [
+            (
+                "0619E",
+                "frm0619E:txtTax15",
+                "item_15_amount_remitted_previously",
+                "Item 15 applies only to an amended return.",
+            ),
+            (
+                "0619F",
+                "frm0619F:txtTax16",
+                "item_16_remitted_previously",
+                "Item 16 applies only to an amended return.",
+            ),
+            (
+                "2550M",
+                "frm2550m:txtTax23D",
+                "vat_paid_previous",
+                "Item 23D applies only to an amended return.",
+            ),
+        ] {
+            let mut session = session();
+            save_scratch(&mut session);
+            call(
+                &mut session,
+                "form.open",
+                json!({"code": code, "year": 2026, "period": 1, "tin": TIN}),
+            )
+            .unwrap_or_else(|error| panic!("{code} opens: {error}"));
+
+            let refused = call(&mut session, "form.fill", json!({"fields": {key: "42"}})).unwrap();
+            assert_eq!(refused["refused"][key], lock, "{code}: {refused}");
+            let zero = call(&mut session, "form.fill", json!({"fields": {key: "0"}})).unwrap();
+            assert!(zero.get("refused").is_none(), "{code} zero: {zero}");
+            assert_eq!(
+                session.open.as_ref().unwrap().draft[path]
+                    .as_f64()
+                    .unwrap_or(0.0),
+                0.0,
+                "{code}: zero leaves the model empty"
             );
         }
     }

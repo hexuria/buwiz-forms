@@ -24,7 +24,11 @@ DEV = (FIXTURES / "android_bundle_manifest_dev.pb").read_bytes()
 PLAY_ARGS = {"package": "com.buwiz.ebirforms", "version_code": 27, "target_sdk": 36}
 
 
-def write_bundle(path: Path, manifest: bytes, abis=("arm64-v8a",), updater=True, signed=True) -> None:
+# A library as a release build's reads: ELF, the production addresses, nothing a debug build carries.
+RELEASE_LIBRARY = b"\x7fELF\0https://api.buwiz.com\0https://account.buwiz.com\0"
+
+
+def write_bundle(path: Path, manifest: bytes, abis=("arm64-v8a",), updater=True, signed=True, library=None) -> None:
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("BundleConfig.pb", b"\x0a\x08\x0a\x061.18.1", compress_type=zipfile.ZIP_DEFLATED)
         zf.writestr(android_bundle.MANIFEST, manifest, compress_type=zipfile.ZIP_DEFLATED)
@@ -32,7 +36,8 @@ def write_bundle(path: Path, manifest: bytes, abis=("arm64-v8a",), updater=True,
         zf.writestr("base/assets/nsh/bundle.nshc", b"bytecode", compress_type=zipfile.ZIP_DEFLATED)
         for abi in abis:
             # Native libraries are stored, as NSH writes them (extractNativeLibs="false").
-            zf.writestr(f"base/lib/{abi}/libnsh.so", b"\x7fELF" + abi.encode(), compress_type=zipfile.ZIP_STORED)
+            zf.writestr(f"base/lib/{abi}/libnsh.so", library or RELEASE_LIBRARY + abi.encode(),
+                        compress_type=zipfile.ZIP_STORED)
         if updater:
             zf.writestr(android_bundle.UPDATER_ASSET, b'{"github":"hexuria/buwiz-forms"}')
         if signed:
@@ -71,6 +76,83 @@ class BundleTests(unittest.TestCase):
         write_bundle(self.built, PLAY)
         android_bundle.prepare(self.built, self.ready)
         self.assertEqual(android_bundle.check(self.ready, **PLAY_ARGS), [])
+
+    def test_a_permission_the_listing_does_not_declare_is_a_problem(self):
+        write_bundle(self.built, PLAY)
+        android_bundle.prepare(self.built, self.ready)
+        real = android_bundle.read_manifest
+
+        def with_camera(data):
+            manifest = real(data)
+            manifest.children.append(android_bundle.Element(
+                "uses-permission", {(android_bundle.ANDROID_NS, "name"): "android.permission.CAMERA"}, []))
+            return manifest
+
+        android_bundle.read_manifest = with_camera
+        try:
+            problems = android_bundle.check(self.ready, **PLAY_ARGS)
+        finally:
+            android_bundle.read_manifest = real
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("android.permission.CAMERA", problems[0])
+
+    def test_the_library_must_be_a_release_build(self):
+        # The positive control: the same detector that passes a release library finds each development marker.
+        self.assertEqual(android_bundle.library_problems("arm64-v8a", 10, RELEASE_LIBRARY), [])
+        for marker in android_bundle.DEBUG_MARKERS:
+            with self.subTest(marker=marker):
+                problems = android_bundle.library_problems("arm64-v8a", 10, RELEASE_LIBRARY + b"\0" + marker)
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("debug or development build", problems[0])
+        for marker in android_bundle.RELEASE_MARKERS:
+            with self.subTest(missing=marker):
+                problems = android_bundle.library_problems("arm64-v8a", 10, RELEASE_LIBRARY.replace(marker, b""))
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("not a release build's addresses", problems[0])
+
+    def test_the_sentinel_is_dev_envs_and_named_nowhere_else(self):
+        root = Path(__file__).resolve().parents[2]
+        dev_env = (root / "nsh/src/dev_env.rs").read_text(encoding="utf-8")
+        self.assertIn(f'const SENTINEL_TEXT: &str = "{android_bundle.DEV_LIST_SENTINEL.decode()}";', dev_env)
+        named = [path for folder in ("crates", "nsh/src") for path in (root / folder).rglob("*.rs")
+                 if android_bundle.DEV_LIST_SENTINEL in path.read_bytes()]
+        self.assertEqual(named, [root / "nsh/src/dev_env.rs"])
+
+    def test_text_a_release_library_keeps_is_no_marker(self):
+        # A release library keeps this error message (nsh/src/door.rs use_database, bir-app-api agent/headless.rs):
+        # the test list's own text cannot be the marker for a baked test list.
+        release = RELEASE_LIBRARY + b"useDatabase is for test environments (EBIR_TEST_ENV=1).\0"
+        self.assertEqual(android_bundle.library_problems("arm64-v8a", 10, release), [])
+        self.assertNotIn(b"attempt to add with overflow", android_bundle.DEBUG_MARKERS)
+
+    def test_a_google_client_is_compiled_in_exactly_when_gmail_is_on(self):
+        with_client = RELEASE_LIBRARY + b"1234-abc.apps.googleusercontent.com\0"
+        # Off (the store default): a client id in the library is a problem; none is right.
+        self.assertEqual(android_bundle.library_problems("arm64-v8a", 10, RELEASE_LIBRARY), [])
+        off = android_bundle.library_problems("arm64-v8a", 10, with_client)
+        self.assertEqual(len(off), 1, off)
+        self.assertIn("STORE_GMAIL=1", off[0])
+        # On: the same detector finds it (the positive control), and its absence is the problem.
+        self.assertEqual(android_bundle.library_problems("arm64-v8a", 10, with_client, gmail=True), [])
+        on = android_bundle.library_problems("arm64-v8a", 10, RELEASE_LIBRARY, gmail=True)
+        self.assertEqual(len(on), 1, on)
+        self.assertIn("no Google client id", on[0])
+
+    def test_a_library_over_its_ceiling_is_a_problem(self):
+        # Cargo's default release profile: 122,876,080 bytes on arm64 (job 59), over the ceiling.
+        problems = android_bundle.library_problems("arm64-v8a", 122_876_080, RELEASE_LIBRARY)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("did not reach the build", problems[0])
+        self.assertEqual(android_bundle.library_problems("arm64-v8a", 88_396_528, RELEASE_LIBRARY), [])
+        self.assertEqual(android_bundle.library_problems("armeabi-v7a", 76_143_608, RELEASE_LIBRARY), [])
+        self.assertEqual(len(android_bundle.library_problems("armeabi-v7a", 99_077_356, RELEASE_LIBRARY)), 1)
+
+    def test_a_bundle_whose_library_is_a_debug_build_fails_the_check(self):
+        write_bundle(self.built, PLAY, library=RELEASE_LIBRARY + b"http://localhost:3008")
+        android_bundle.prepare(self.built, self.ready)
+        problems = android_bundle.check(self.ready, **PLAY_ARGS)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("localhost:3008", problems[0])
 
     def test_prepare_drops_only_the_signature_and_the_updater(self):
         write_bundle(self.built, PLAY, abis=("arm64-v8a", "armeabi-v7a"))

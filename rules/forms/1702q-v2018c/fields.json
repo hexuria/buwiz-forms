@@ -871,7 +871,7 @@
                        "required_when":  null,
                        "enabled_when":  "Enabled only by the official dependency/state transition recorded in validations.json or workflow.json.",
                        "visible_when":  null,
-                       "default_value":  "filer@example.com",
+                       "default_value":  "#email-redacted#",
                        "empty_representation":  "",
                        "constraints":  {
                                            "maxlength":  60,
