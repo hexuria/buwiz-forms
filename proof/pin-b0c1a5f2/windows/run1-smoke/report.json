@@ -1,0 +1,113 @@
+{
+ "suite": "smoke",
+ "target": "windows",
+ "started": "20261128-050615",
+ "out": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050615",
+ "cli_version": "0.5.0",
+ "app_commit": "b3bddd4d",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 674,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 6877,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 4202,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tax-year.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 9225,
+   "note": null,
+   "file": "agent-recipes\\ui\\ui-navigate-app.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 9363,
+   "note": null,
+   "file": "agent-recipes\\e2e\\open-2551q-windows.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 17580,
+   "note": null,
+   "file": "agent-recipes\\e2e\\money-boxes-paced.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "pass",
+   "ms": 11371,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sheet-press.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "pass",
+   "ms": 4640,
+   "note": null,
+   "file": "agent-recipes\\e2e\\delete-row.wants"
+  },
+  {
+   "name": "queue",
+   "status": "pass",
+   "ms": 14390,
+   "note": null,
+   "file": "agent-recipes\\e2e\\queue-windows.wants"
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 3860,
+   "note": null,
+   "file": "agent-recipes\\e2e\\birth-date.wants"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 11312,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-out.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
+   "screenshot": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050615\\11-sign-out\\failure.png",
+   "tree": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050615\\11-sign-out\\failure-tree.json"
+  }
+ ]
+}

@@ -1,0 +1,78 @@
+warning: patch `nsh-cli v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-cli)` was not used in the crate graph
+warning: patch `nsh-ios-host v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-ios-host)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+windows-core v0.62.2
+├── fontique v0.12.0
+│   ├── parley v0.12.0
+│   │   ├── blitz-dom v0.3.0-beta.3
+│   │   │   ├── blitz-html v0.3.0-beta.3
+│   │   │   │   └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   │   │   ├── blitz-paint v0.3.0-beta.3
+│   │   │   │   └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   │   │   └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   │   └── blitz-paint v0.3.0-beta.3 (*)
+│   └── parley_engine v0.12.0
+│       └── parley v0.12.0 (*)
+├── nsh-platform-windows v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-platform-windows)
+│   ├── nsh-gpui-agent-windows v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2)
+│   │   └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   └── nsh-windows-host v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-windows-host)
+│       └── nsh-gpui-agent-windows v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2) (*)
+├── webview2-com v0.39.1
+│   ├── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   └── nsh-platform-windows v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-platform-windows) (*)
+├── webview2-com-sys v0.39.1
+│   └── webview2-com v0.39.1 (*)
+├── wgpu-hal v29.0.4
+│   ├── wgpu v29.0.4
+│   │   └── nsh-engine v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-engine)
+│   │       ├── nsh-platform-windows v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-platform-windows) (*)
+│   │       ├── nsh-testing v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-testing)
+│   │       │   ├── nsh-agent-actions v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2)
+│   │       │   │   ├── nsh-gpui-agent v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2)
+│   │       │   │   │   └── nsh-gpui-agent-windows v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2) (*)
+│   │       │   │   └── nsh-gpui-agent-windows v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2) (*)
+│   │       │   ├── nsh-gpui-agent v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2) (*)
+│   │       │   ├── nsh-gpui-agent-windows v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2) (*)
+│   │       │   └── nsh-platform-windows v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-platform-windows) (*)
+│   │       └── nsh-windows-host v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-windows-host) (*)
+│   ├── wgpu-core v29.0.4
+│   │   └── wgpu v29.0.4 (*)
+│   └── wgpu-core-deps-windows-linux-android v29.0.4
+│       └── wgpu-core v29.0.4 (*)
+├── windows v0.62.2
+│   ├── fontique v0.12.0 (*)
+│   ├── gpu-allocator v0.28.0
+│   │   └── wgpu-hal v29.0.4 (*)
+│   ├── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   ├── nsh-engine v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-engine) (*)
+│   ├── nsh-gpui-agent-windows v0.1.0 (https://github.com/hexuria/nsh-gpui-agent?rev=b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b#b0c1a5f2) (*)
+│   ├── nsh-platform-windows v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-platform-windows) (*)
+│   ├── pageant v0.2.5
+│   │   └── russh v0.63.3
+│   │       └── bir-core v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\crates\bir-core)
+│   │           ├── bir-app-api v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\crates\bir-app-api)
+│   │           │   └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   │           ├── bir-print v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\crates\bir-print)
+│   │           │   ├── bir-app-api v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\crates\bir-app-api) (*)
+│   │           │   └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   │           └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   │           [dev-dependencies]
+│   │           └── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   ├── tauri-winrt-notification v0.8.1
+│   │   └── notify-rust v4.19.0
+│   │       └── bir-core v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\crates\bir-core) (*)
+│   ├── webview2-com v0.39.1 (*)
+│   ├── webview2-com-sys v0.39.1 (*)
+│   └── wgpu-hal v29.0.4 (*)
+├── windows-collections v0.3.2
+│   └── windows v0.62.2 (*)
+├── windows-future v0.3.2
+│   ├── nsh-app-ebirforms v0.2.1 (<home>\repos\pin-b0c1a5f2-windows\buwiz-forms\nsh)
+│   └── windows v0.62.2 (*)
+└── windows-numerics v0.3.1
+    ├── nsh-platform-windows v0.6.1 (<home>\repos\pin-b0c1a5f2-windows\nsh\crates\nsh-platform-windows) (*)
+    └── windows v0.62.2 (*)

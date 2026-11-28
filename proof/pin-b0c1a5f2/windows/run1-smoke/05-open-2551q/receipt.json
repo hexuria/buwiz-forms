@@ -1,0 +1,110 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "open-2551q-windows",
+  "fingerprint": "fnv1a64:d3795cd34c7ea8c2",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 618
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 57
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 433
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 720
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 231,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050615\\05-open-2551q\\005-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 458
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 72
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 340
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1927
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 61
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1454
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 97
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 444
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1925
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 58
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 442
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050615\\05-open-2551q\\005-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9343
+}

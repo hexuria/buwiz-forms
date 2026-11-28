@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tax-year",
+  "fingerprint": "fnv1a64:b5adf073e096fa36",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 431
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 38
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 453
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 397
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 34
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 398
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 478
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 94
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 683
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 37
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 431
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 516
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 174,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-051153\\03-tax-year\\015-s15.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-051153\\03-tax-year\\015-s15.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 4247
+}

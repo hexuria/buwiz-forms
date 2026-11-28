@@ -1,0 +1,488 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "rdo-row-press",
+  "fingerprint": "fnv1a64:f148c352f3273f83",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 553
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 367
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2374
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 30
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 549,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\005-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 52
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 419
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 385
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2344
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 26
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 418
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 32
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 23
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 406
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 366
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2425
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 414
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 27
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "elapsed_ms": 21
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s25",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 416
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 335
+    },
+    {
+      "id": "s27",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2440
+    },
+    {
+      "id": "s28",
+      "ok": true,
+      "elapsed_ms": 26
+    },
+    {
+      "id": "s29",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 429
+    },
+    {
+      "id": "s30",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s31",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s32",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s33",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 417
+    },
+    {
+      "id": "s34",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 360
+    },
+    {
+      "id": "s35",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2273
+    },
+    {
+      "id": "s36",
+      "ok": true,
+      "elapsed_ms": 29
+    },
+    {
+      "id": "s37",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 549,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\037-s37.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s38",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s39",
+      "ok": true,
+      "elapsed_ms": 22
+    },
+    {
+      "id": "s40",
+      "ok": true,
+      "elapsed_ms": 18
+    },
+    {
+      "id": "s41",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1465
+    },
+    {
+      "id": "s42",
+      "ok": true,
+      "elapsed_ms": 39
+    },
+    {
+      "id": "s43",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 412
+    },
+    {
+      "id": "s44",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s45",
+      "ok": true,
+      "elapsed_ms": 31
+    },
+    {
+      "id": "s46",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1423
+    },
+    {
+      "id": "s47",
+      "ok": true,
+      "elapsed_ms": 41
+    },
+    {
+      "id": "s48",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 387
+    },
+    {
+      "id": "s49",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s50",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s51",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1442
+    },
+    {
+      "id": "s52",
+      "ok": true,
+      "elapsed_ms": 42
+    },
+    {
+      "id": "s53",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 539,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\053-s53.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s54",
+      "ok": true,
+      "elapsed_ms": 27
+    },
+    {
+      "id": "s55",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s56",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 380
+    },
+    {
+      "id": "s57",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 366
+    },
+    {
+      "id": "s58",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2434
+    },
+    {
+      "id": "s59",
+      "ok": true,
+      "elapsed_ms": 32
+    },
+    {
+      "id": "s60",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 422
+    },
+    {
+      "id": "s61",
+      "ok": true,
+      "elapsed_ms": 32
+    },
+    {
+      "id": "s62",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s63",
+      "ok": true,
+      "elapsed_ms": 22
+    },
+    {
+      "id": "s64",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 380
+    },
+    {
+      "id": "s65",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 379
+    },
+    {
+      "id": "s66",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2296
+    },
+    {
+      "id": "s67",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s68",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 429
+    },
+    {
+      "id": "s69",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s70",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s71",
+      "ok": true,
+      "elapsed_ms": 23
+    },
+    {
+      "id": "s72",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 424
+    },
+    {
+      "id": "s73",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 350
+    },
+    {
+      "id": "s74",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2363
+    },
+    {
+      "id": "s75",
+      "ok": true,
+      "elapsed_ms": 28
+    },
+    {
+      "id": "s76",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 435
+    },
+    {
+      "id": "s77",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s78",
+      "ok": true,
+      "elapsed_ms": 24
+    },
+    {
+      "id": "s79",
+      "ok": true,
+      "elapsed_ms": 171,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\079-s79.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s80",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 420
+    },
+    {
+      "id": "s81",
+      "ok": true,
+      "elapsed_ms": 27
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\005-s5.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\037-s37.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\053-s53.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-050759\\02-rdo-row-press\\079-s79.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 36339
+}
