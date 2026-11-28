@@ -50,6 +50,11 @@ pub(crate) fn is_unlocked(room: &RoomId) -> bool {
     unlock_state().room.as_ref() == Some(room)
 }
 
+/// Forget the process's owner unlock when the room closes or locks.
+pub(crate) fn clear_unlocked() {
+    unlock_state().room = None;
+}
+
 /// The number of locks so far, taken when a set or check is asked for.
 fn locks_so_far() -> u64 {
     unlock_state().locks
@@ -221,6 +226,7 @@ fn set_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> {
             }
             write()?;
             state.room = Some(room.clone());
+            crate::account_gate::set_room_unlocked(true);
             crate::account_gate::clear_client_scope();
             Ok(())
         })
@@ -244,6 +250,7 @@ fn verify_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> 
             owner_lock::verify_owner_pin(&store, &room, &typed, &now).map_err(host_error)?;
         let matched = crate::auth_limiter::answer(attempt)?;
         if matched && unlock_unless_locked_since(room, locks_then) {
+            crate::account_gate::set_room_unlocked(true);
             crate::account_gate::clear_client_scope();
         }
         Ok(HostValue::Bool(matched))
@@ -452,6 +459,34 @@ mod tests {
             .pin_phc
             .unwrap();
         assert!(phc.starts_with("$argon2id$"), "{phc}");
+    }
+
+    #[test]
+    fn closing_the_room_forgets_the_owner_unlock() {
+        let _room = Room::open("user-close");
+        call("set_owner_pin", pin("0817")).unwrap();
+        assert!(
+            crate::account_gate::ensure_unlocked().is_ok(),
+            "positive control"
+        );
+
+        crate::account_gate::clear_room_unlocked();
+
+        assert_eq!(state()["unlocked"], false);
+        assert_eq!(
+            crate::account_gate::ensure_unlocked()
+                .unwrap_err()
+                .message(),
+            crate::account_gate::LOCKED_MESSAGE
+        );
+        assert_eq!(
+            call("verify_owner_pin", pin("0817")).unwrap(),
+            HostValue::Bool(true)
+        );
+        assert!(
+            crate::account_gate::ensure_unlocked().is_ok(),
+            "positive control"
+        );
     }
 
     #[test]

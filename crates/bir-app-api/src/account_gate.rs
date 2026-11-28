@@ -92,6 +92,7 @@ pub fn set_room_unlocked(unlocked: bool) {
 pub fn clear_room_unlocked() {
     ROOM_UNLOCKED.store(false, Ordering::SeqCst);
     clear_client_scope();
+    crate::owner_lock_module::clear_unlocked();
 }
 
 /// The taxpayer whose own PIN or authenticator opened a client session.
@@ -157,12 +158,7 @@ pub fn ensure_unlocked() -> Result<(), HostError> {
     if !room_unlocked() && crate::bir_module::open_room_has_no_lock_configured()? {
         set_room_unlocked(true);
     }
-    let owner_pin_open = crate::session::snapshot()
-        .room
-        .and_then(|(_, _, room, _)| room)
-        .or_else(bir_core::db::open_room_id)
-        .is_some_and(|room| crate::owner_lock_module::is_unlocked(&room));
-    if room_unlocked() || owner_pin_open {
+    if room_unlocked() {
         Ok(())
     } else {
         Err(HostError::new(LOCKED_MESSAGE))
