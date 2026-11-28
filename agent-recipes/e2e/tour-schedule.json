@@ -1,0 +1,120 @@
+{
+ "v": 1,
+ "name": "tour-schedule",
+ "params": [
+  "table"
+ ],
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "fp-part-3-toggle"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "$table-add",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s4",
+   "op": "click",
+   "target": "$table-add"
+  },
+  {
+   "id": "s5",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt2",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s6",
+   "op": "click",
+   "target": "fp-txtATCAmt2"
+  },
+  {
+   "id": "s7",
+   "op": "type",
+   "target": "fp-txtATCAmt2",
+   "text": "1000",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s8",
+   "op": "assert",
+   "target": "fp-txtATCAmt2",
+   "value": "1000"
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "$table-done"
+  },
+  {
+   "id": "s10",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt2",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 500.0,
+   "id": "s11"
+  },
+  {
+   "op": "wait",
+   "timeout_ms": 700,
+   "id": "s12"
+  },
+  {
+   "id": "s13",
+   "op": "click",
+   "target": "$table-add"
+  },
+  {
+   "id": "s14",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt3",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s15",
+   "op": "click",
+   "target": "fp-txtATCAmt3"
+  },
+  {
+   "id": "s16",
+   "op": "type",
+   "target": "fp-txtATCAmt3",
+   "text": "2000",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s17",
+   "op": "assert",
+   "target": "fp-txtATCAmt3",
+   "value": "2000"
+  },
+  {
+   "id": "s18",
+   "op": "click",
+   "target": "$table-done"
+  },
+  {
+   "id": "s19",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt3",
+   "timeout_ms": 5000,
+   "exists": false,
+   "screenshot": true
+  }
+ ]
+}

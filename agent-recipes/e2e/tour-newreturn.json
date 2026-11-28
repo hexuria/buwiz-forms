@@ -1,0 +1,42 @@
+{
+ "v": 1,
+ "name": "tour-newreturn",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "sb-new"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "new-return-2551Q",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "new-return-2551Q"
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "new-return-open",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "new-return-open"
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000,
+   "screenshot": true
+  }
+ ]
+}

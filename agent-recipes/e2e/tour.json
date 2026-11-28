@@ -1,0 +1,70 @@
+{
+ "v": 1,
+ "description": "The screen tour for the Taffy 0.16 before/after comparison: sign-up and a 2551Q return reusing the smoke steps, then a picture at every screen the layout engine shapes \u2014 Home, the shell with the sidebar open, New return, the Library grid, the Calendar, Settings top and end, the form page top/middle/end with its navigation list, a Schedule table with three rows, the print preview top and end.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E TOUR TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "year": "2026"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "tax-year",
+   "file": "tax-year.wants",
+   "required": true
+  },
+  {
+   "name": "tour-shell",
+   "file": "tour-shell.json",
+   "required": true
+  },
+  {
+   "name": "tour-newreturn",
+   "file": "tour-newreturn.json",
+   "required": true
+  },
+  {
+   "name": "tour-form",
+   "file": "tour-form.json",
+   "required": true
+  },
+  {
+   "name": "tour-schedule",
+   "file": "tour-schedule.json",
+   "resolve": {
+    "table": {
+     "id_regex": "^(fp-table-.+)-add$",
+     "group": 1,
+     "after": "s2"
+    }
+   },
+   "needs_cli": "0.4.1"
+  },
+  {
+   "name": "tour-print",
+   "file": "tour-print.json"
+  }
+ ]
+}

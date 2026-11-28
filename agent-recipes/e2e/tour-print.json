@@ -1,0 +1,78 @@
+{
+ "v": 1,
+ "name": "tour-print",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000
+  },
+  {
+   "id": "s2",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0
+  },
+  {
+   "id": "s3",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0
+  },
+  {
+   "id": "s4",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0
+  },
+  {
+   "id": "s5",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0
+  },
+  {
+   "id": "s6",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0
+  },
+  {
+   "id": "s7",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0
+  },
+  {
+   "id": "s8",
+   "op": "wait_until",
+   "target": "fp-print",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "fp-print"
+  },
+  {
+   "id": "s10",
+   "op": "wait_until",
+   "target": "print-sheet",
+   "timeout_ms": 20000,
+   "screenshot": true
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "print-zoom-100"
+  },
+  {
+   "id": "s12",
+   "op": "wait_until",
+   "target": "print-sheet",
+   "timeout_ms": 5000,
+   "screenshot": true
+  }
+ ]
+}
