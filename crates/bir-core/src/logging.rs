@@ -85,6 +85,9 @@ pub fn shell_filter(developer_mode: bool) -> &'static str {
 pub struct InstallOptions {
     pub developer_mode: bool,
     pub default_filter: &'static str,
+    /// A terminal layer on stdout. GUI apps set it false: nothing they log
+    /// may ever write to stdout, where a host tool's protocol can live.
+    pub stdout: bool,
 }
 
 /// Install the process subscriber and the panic hook. A second call is a no-op
@@ -148,7 +151,7 @@ fn subscriber(options: InstallOptions) -> impl tracing::Subscriber + Send + Sync
         .with_line_number(options.developer_mode);
     Registry::default()
         .with(env_filter)
-        .with(stdout_layer)
+        .with(options.stdout.then_some(stdout_layer))
         .with(file_layer)
 }
 
@@ -1545,6 +1548,7 @@ fn demo(
     fn shell_subscriber_writes_errors_to_the_daily_file_and_drops_debug_noise() {
         let dir = tempfile::tempdir().unwrap();
         let options = InstallOptions {
+            stdout: true,
             developer_mode: false,
             default_filter: shell_filter(false),
         };

@@ -40,6 +40,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         let options = InstallOptions {
+            stdout: true,
             developer_mode: false,
             default_filter: shell_filter(false),
         };

@@ -3,6 +3,18 @@
 The NSH (TSX) app in `nsh/`, updated 2026-11-24. Plan and hard rules: [docs/plans/nsh-tsx-migration.md](../plans/nsh-tsx-migration.md) (a dated migration plan, kept as a record). Working notes and commands:
 [nsh/AGENTS.md](../../nsh/AGENTS.md). The other pages here ([macos.md](macos.md), [windows.md](windows.md), [linux.md](linux.md)) describe this app.
 
+## Logging
+
+The app writes a daily log file, `ebirforms.YYYY-MM-DD.log`, inside the `logs` folder of its data
+directory, and only there: it never writes its log to stdout, so a `just nsh-run` terminal shows
+nothing of it. The file on each desktop platform:
+
+- macOS: `~/Library/Application Support/dev.goldcoders.bir/logs/` (a release build inside its group container uses the group container's `logs/` instead)
+- Windows: `%LOCALAPPDATA%\dev.goldcoders.bir\logs\`
+- Linux: `~/.local/share/dev.goldcoders.bir/logs/`
+
+The Logs screen in the app tails today's file.
+
 ## Status
 
 | Platform | Status |

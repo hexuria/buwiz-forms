@@ -686,6 +686,7 @@ mod tests {
     fn detached_stderr_masks_eprintln_and_panic() {
         if std::env::var_os(DETACHED_ENV).is_some() {
             let installed = bir_core::logging::install(bir_core::logging::InstallOptions {
+                stdout: true,
                 developer_mode: false,
                 default_filter: bir_core::logging::shell_filter(false),
             });

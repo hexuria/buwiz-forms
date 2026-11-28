@@ -4274,6 +4274,7 @@ mod tests {
         let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
         let dir = tempfile::tempdir().unwrap();
         let options = crate::logging::InstallOptions {
+            stdout: true,
             developer_mode: false,
             default_filter: crate::logging::shell_filter(false),
         };
@@ -4315,6 +4316,7 @@ mod tests {
         ));
         let dir = tempfile::tempdir().unwrap();
         let options = crate::logging::InstallOptions {
+            stdout: true,
             developer_mode: false,
             default_filter: crate::logging::shell_filter(false),
         };

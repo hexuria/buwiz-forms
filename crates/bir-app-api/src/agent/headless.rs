@@ -81,6 +81,7 @@ enum Command {
 pub fn run() -> ExitCode {
     // First, before any record: without it a real `serve --detach` panic went raw into bir-headless.log, TINs and all.
     bir_core::logging::install(bir_core::logging::InstallOptions {
+        stdout: true,
         developer_mode: bir_core::logging::developer_mode_enabled(),
         default_filter: "warn,bir_app_api=info,bir_core=info,js=warn",
     });

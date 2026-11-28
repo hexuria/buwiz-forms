@@ -50,13 +50,25 @@ fn native(registry: &mut Registry) {
     // bir-core's redacting file writer. Android's JNI_OnLoad installs its
     // logger before this crate can run, so this cannot replace that one at
     // the pin; those OS-log lines never enter the app's daily file.
+    // The kit's describe program prints the sets as JSON on stdout: nothing
+    // may run there that can write a line, so registration installs no
+    // logging in it at all. This exe-name check is only a second layer — the
+    // real fix is that the app's logging never takes a stdout layer at all
+    // (logging_options in door.rs), so no host tool's protocol can be
+    // disturbed, whatever the binary is called.
     #[cfg(not(target_os = "android"))]
-    door::install_log_facade_bridge();
+    let describe = door::is_describe_program();
+    #[cfg(not(target_os = "android"))]
+    if !describe {
+        door::install_log_facade_bridge();
+    }
     // Install logging here, at registration, not on the first door call: a record made before that call
     // (the launch storage's own lines included) must reach the daily file too. install_logging is a Once,
     // so the first door call's install is a no-op after this.
     #[cfg(not(target_os = "android"))]
-    door::install_logging();
+    if !describe {
+        door::install_logging();
+    }
     // The plug's window control plane: `native()` runs before the host opens any surface, so this is
     // where the platform crate's surface hook is installed (see agent.rs, "Agent remote control").
     agent::install_window_plane();
@@ -75,7 +87,12 @@ fn native(registry: &mut Registry) {
     if !door::scratch_database_wanted() {
         bir_core::platform::prepare_print_previews();
     }
-    registry.module::<Bridge>().module::<Door>().module::<agent::Agent>().module::<desktop::Desktop>().module::<print::Print>();
+    registry
+        .module::<Bridge>()
+        .module::<Door>()
+        .module::<agent::Agent>()
+        .module::<desktop::Desktop>()
+        .module::<print::Print>();
 }
 
 /// Proof that TSX reaches this crate.
@@ -167,7 +184,11 @@ impl Door {
 
     /// Calls the asynchronous host function `name` with `args`: a promise of its value, rejected with the
     /// host's message on a host error. A sync function, or an unknown name, rejects too.
-    pub async fn call_async(name: String, args: Vec<JsonValue>, system: System) -> Result<JsonValue, String> {
+    pub async fn call_async(
+        name: String,
+        args: Vec<JsonValue>,
+        system: System,
+    ) -> Result<JsonValue, String> {
         prepare_door(system)?;
         // On the engine thread: the UI thread's job pipe (the sign-in's browser, the screen kept on during a send).
         #[cfg(target_os = "android")]
@@ -218,11 +239,8 @@ impl Door {
                 Ok(None)
             } else {
                 door::prepare_android(_system.data_dir)?;
-                crate::dev_command::consume(
-                    &bir_core::platform::data_dir(),
-                    dev_command_enabled(),
-                )
-                .map(|command| command.map(str::to_owned))
+                crate::dev_command::consume(&bir_core::platform::data_dir(), dev_command_enabled())
+                    .map(|command| command.map(str::to_owned))
             }
         }
         #[cfg(not(target_os = "android"))]
@@ -256,15 +274,176 @@ mod tests {
         assert_eq!(Bridge::ping(), "pong");
     }
 
+    /// The kit's describe program prints the crate's UI sets as one JSON
+    /// document on stdout, and the tool parses exactly that. This test runs
+    /// the same steps the generated describe main runs — the crate's
+    /// registration, then one JSON document on stdout — in-process, with
+    /// file descriptor 1 captured into a pipe for the duration. Anything
+    /// registration writes to stdout (a log line at any level, a bare
+    /// println) lands in the capture and fails the parse exactly as it
+    /// fails the kit's. Running in-process means the test always exercises
+    /// the code of the build it belongs to: no binary left from an older
+    /// build can give a false green or red, and no nested cargo build can
+    /// block on the outer run's lock.
+    ///
+    /// Warn-level probes through both facades follow the document: the
+    /// registration installs the process's logging, so if any stdout layer
+    /// exists at all, the probes reach the capture whether or not this
+    /// test's own registration call was the one to install it.
+    #[cfg(unix)]
+    #[test]
+    fn the_describe_programs_stdout_parses_as_json() {
+        // The capture is process-wide, and this test binary runs other tests
+        // whose re-executed children share fd 1 — so the capture runs in a
+        // dedicated child process of this same binary: no concurrent test
+        // can write into it, the binary is always the build under test, and
+        // no nested cargo build can block on the outer run's lock.
+        const CHILD: &str = "NSH_DESCRIBE_STDOUT_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let captured = capture_stdout_fd(|| {
+                let sets = vec![crate::__nsh_native_module()];
+                let json = nsh_core::element::description::Description::of(&sets).to_json();
+                write_fd1(&format!("{json}\n"));
+                tracing::warn!("describe probe");
+                log::warn!("describe probe");
+            });
+            if let Err(error) = serde_json::from_str::<serde_json::Value>(&captured) {
+                write_fd2(&format!(
+                    "the describe program's stdout is not JSON ({error}): {}\n",
+                    &captured[..captured.len().min(300)]
+                ));
+                std::process::exit(1);
+            }
+            return;
+        }
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::the_describe_programs_stdout_parses_as_json",
+            ])
+            .env(CHILD, "1")
+            .env("BUWIZ_NO_KEYCHAIN", "1")
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_AUTH_BYPASS", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .env_remove("BIR_SFTP_LIVE")
+            .output()
+            .expect("the describe child process");
+        assert!(
+            output.status.success(),
+            "the describe child's stdout did not parse as JSON: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// The capture cannot stall: more than any system's pipe buffer passes
+    /// through it whole, because the draining thread reads while the write
+    /// side is still writing. In a dedicated child process, as the describe
+    /// capture: the capture is process-wide.
+    #[cfg(unix)]
+    #[test]
+    fn the_stdout_capture_passes_more_than_a_pipe_buffer() {
+        const CHILD: &str = "NSH_PIPE_CAPACITY_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let line = "x".repeat(1024);
+            let captured = capture_stdout_fd(|| {
+                for _ in 0..256 {
+                    write_fd1(&format!("{line}\n"));
+                }
+            });
+            std::process::exit(if captured.len() == 256 * 1025 { 0 } else { 1 });
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::the_stdout_capture_passes_more_than_a_pipe_buffer",
+            ])
+            .env(CHILD, "1")
+            .status()
+            .expect("the pipe-capacity child process");
+        assert!(status.success(), "the capture stalled or lost bytes");
+    }
+
+    /// Writes `text` to file descriptor 1 itself, bypassing the test
+    /// harness's output capture: the describe program's stdout is a real
+    /// file descriptor write, and the capture below measures exactly that.
+    #[cfg(unix)]
+    fn write_fd1(text: &str) {
+        use std::io::Write as _;
+        use std::os::unix::io::FromRawFd as _;
+        let mut out = std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(1) });
+        out.write_all(text.as_bytes()).expect("write fd 1");
+        out.flush().expect("flush fd 1");
+    }
+
+    /// The same direct write for file descriptor 2: the child reports its
+    /// red line where the test harness's output capture cannot swallow it.
+    #[cfg(unix)]
+    fn write_fd2(text: &str) {
+        use std::io::Write as _;
+        use std::os::unix::io::FromRawFd as _;
+        let mut out = std::mem::ManuallyDrop::new(unsafe { std::fs::File::from_raw_fd(2) });
+        out.write_all(text.as_bytes()).expect("write fd 2");
+        out.flush().expect("flush fd 2");
+    }
+
+    /// Runs `run` with the process's file descriptor 1 redirected into a
+    /// pipe and returns everything written to it. Logging layers write to
+    /// stdout as a file descriptor, so the capture is at the same level.
+    /// The pipe drains on a thread while `run` writes: a pipe holds only
+    /// 16–64 KB, and reading only after `run` returned would block the
+    /// write side forever once the buffer fills.
+    #[cfg(unix)]
+    fn capture_stdout_fd(run: impl FnOnce()) -> String {
+        use std::io::Write as _;
+        unsafe {
+            let mut ends = [0i32; 2];
+            assert_eq!(libc::pipe(ends.as_mut_ptr()), 0, "pipe");
+            let (reader, writer) = (ends[0], ends[1]);
+            let draining = std::thread::spawn(move || {
+                let mut captured = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    let n = libc::read(reader, buf.as_mut_ptr().cast(), buf.len());
+                    if n <= 0 {
+                        break;
+                    }
+                    captured.extend_from_slice(&buf[..n as usize]);
+                }
+                libc::close(reader);
+                captured
+            });
+            let saved = libc::dup(1);
+            assert!(saved >= 0, "dup stdout");
+            let _ = std::io::stdout().flush();
+            assert_eq!(libc::dup2(writer, 1), 1, "redirect stdout");
+            libc::close(writer);
+            run();
+            let _ = std::io::stdout().flush();
+            assert_eq!(libc::dup2(saved, 1), 1, "restore stdout");
+            libc::close(saved);
+            let captured = draining.join().expect("the draining thread");
+            String::from_utf8_lossy(&captured).into_owned()
+        }
+    }
+
     #[cfg(target_os = "android")]
     #[test]
     fn android_status_uses_injected_directory_without_a_reactive_runtime() {
         use super::{Door, System};
 
-        assert!(Door::status(System::default()).unwrap_err().contains("no private data directory"));
+        assert!(
+            Door::status(System::default())
+                .unwrap_err()
+                .contains("no private data directory")
+        );
         let mut system = System::default();
         system.data_dir = Some("relative".into());
-        assert!(Door::status(system.clone()).unwrap_err().contains("must be absolute"));
+        assert!(
+            Door::status(system.clone())
+                .unwrap_err()
+                .contains("must be absolute")
+        );
 
         let folder = tempfile::tempdir().expect("private data folder");
         system.data_dir = Some(folder.path().to_path_buf());
@@ -272,10 +451,14 @@ mod tests {
             [("BIR_RELAY_URL", None), ("BIR_SFTP_DRY_RUN", Some("1"))],
             || {
                 let first = Door::status(system.clone()).expect("status needs no reactive runtime");
-                let second = Door::status(system).expect("repeated status needs no reactive runtime");
+                let second =
+                    Door::status(system).expect("repeated status needs no reactive runtime");
                 assert_eq!(first.sending, "dry_run");
                 assert_eq!(second.database_path, first.database_path);
-                assert_eq!(crate::guards::account_home(), Some(folder.path().canonicalize().unwrap()));
+                assert_eq!(
+                    crate::guards::account_home(),
+                    Some(folder.path().canonicalize().unwrap())
+                );
             },
         );
     }

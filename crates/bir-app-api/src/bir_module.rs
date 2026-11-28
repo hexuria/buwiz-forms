@@ -3823,7 +3823,10 @@ mod tests {
         assert!(name.starts_with("BIR_Profile_"), "{name}");
         assert!(name.ends_with(".zip"), "{name}");
         for run in name.split(|c: char| !c.is_ascii_digit()) {
-            assert!(run.len() != 9 && run.len() != 12 && run.len() != 14, "TIN-shaped digits in {name}");
+            assert!(
+                run.len() != 9 && run.len() != 12 && run.len() != 14,
+                "TIN-shaped digits in {name}"
+            );
         }
     }
 
@@ -7072,6 +7075,7 @@ mod tests {
         };
         assert!(bir_core::logging::install(
             bir_core::logging::InstallOptions {
+                stdout: true,
                 developer_mode: false,
                 default_filter: "info",
             }
