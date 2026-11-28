@@ -390,7 +390,8 @@ fn render_snapshot_module(snapshot: &AuditedSnapshot) -> Result<String> {
         .expect("canonical JSON is valid UTF-8");
     let mut output = generated_banner();
     output.push_str(
-        "use crate::serialization::{\n\
+        "#[allow(unused_imports)] // A snapshot uses only the codecs its rules need.\n\
+         use crate::serialization::{\n\
          \x20   AbsentValuePolicy, BlankValuePolicy, BodyCodec, ExactDatePattern,\n\
          \x20   SerializationArtifactTarget,\n\
          };\n\
