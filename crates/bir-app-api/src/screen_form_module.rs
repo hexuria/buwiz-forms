@@ -5539,8 +5539,14 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     if let Some(spec) = bir_core::forms::agent::draft_locks::previous_payment::spec(kind) {
         let was = before[spec.path].as_f64().unwrap_or(0.0);
         let now = draft[spec.path].as_f64().unwrap_or(0.0);
+        // 2550M's own removal question and Undo toast already announce this
+        // exact clearing. Keep the gate marked as reported below, but do not
+        // put a second copy in the box note (and then a pending third one).
+        let removal_already_says_it =
+            kind.form_code() == "2550M" && removes.is_some() && edits.contains_key(spec.no_key);
         if was.abs() >= 0.005
             && now.abs() < 0.005
+            && !removal_already_says_it
             && bir_core::forms::agent::draft_locks::previous_payment::lock_reason(spec, &draft)
                 .is_some()
         {

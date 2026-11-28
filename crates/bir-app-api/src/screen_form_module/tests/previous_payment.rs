@@ -94,10 +94,24 @@ fn gate_flow(spec: &Spec) {
         no["relocks"][spec.key], spec.lock,
         "{code}: closing the gate shuts the box"
     );
-    assert_eq!(
-        no["relock_notes"][spec.key], spec.cleared,
-        "{code}: closing the gate says what was cleared inline"
-    );
+    if code == "2550M" {
+        assert_eq!(
+            no["relock_notes"][spec.key], spec.lock,
+            "{code}: the removal question is the one clearing announcement"
+        );
+        assert!(
+            no["removes"]["message"].as_str().is_some_and(|message| {
+                message.contains("Changing Amended Return to No clears item 23D")
+            }),
+            "{code}: the removal question names the clearing: {:?}",
+            no["removes"]
+        );
+    } else {
+        assert_eq!(
+            no["relock_notes"][spec.key], spec.cleared,
+            "{code}: closing the gate says what was cleared inline"
+        );
+    }
     assert_eq!(
         agent::field_map(kind, &no["draft"]).unwrap()[spec.key],
         "0.00",
@@ -186,7 +200,12 @@ fn amended_return_previous_payment_yes_to_no_save_records_the_clearing() {
         let saved = save(code, &typed["draft"]);
         let id = stored_id(&saved);
         let no = fill(code, &saved["draft"], json!({spec.no_key: "true"}));
-        assert_eq!(no["relock_notes"][spec.key], spec.cleared);
+        if code == "2550M" {
+            assert_eq!(no["relock_notes"][spec.key], spec.lock);
+            assert!(no["removes"]["message"].as_str().is_some());
+        } else {
+            assert_eq!(no["relock_notes"][spec.key], spec.cleared);
+        }
         save(code, &no["draft"]);
 
         // The inline note was shown, so the transactional pending notice is
