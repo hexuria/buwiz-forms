@@ -106,6 +106,15 @@ files with the same planner code as a `test/**` push. Its `tests-ok` job in each
 machine's own run at the exact head is also proof and needs no label; keep the machine's result with the pull request
 as before. `just ci-test` and `just ci-test-pr` stay for machines and batch branches.
 
+Two things that surprise people:
+
+- A label only starts a run on a pull request whose own branch already has these workflows. GitHub reads a
+  `pull_request` workflow from the pull request's branch, so on a branch cut before the label lanes existed, adding a
+  label starts nothing: merge `main` into the branch first.
+- A run started by hand (`workflow_dispatch`, or `gh workflow run`) is NOT among a pull request's checks, even at the
+  same commit. Nothing that waits on "the pull request's checks" waits for it: read such a run by its id before
+  merging on it.
+
 ## Asking for tests on a branch
 
 ```sh
