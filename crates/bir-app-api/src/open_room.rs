@@ -149,7 +149,6 @@ pub fn release_all_for_quit() {
 /// process-wide): tests in different modules would otherwise write them over each other. The
 /// turn is bir-core's room test turn, so bir-core's room tests serialise with these and no two
 /// turns can deadlock.
-
 #[cfg(test)]
 pub(crate) fn room_test_turn() -> std::sync::MutexGuard<'static, ()> {
     bir_core::db::room_path_test_turn()

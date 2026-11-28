@@ -11,7 +11,7 @@ use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, H
 pub const DECLARATIONS: &str = r#"
 /** The migration state the sign-in flow shows a page for after session_opened. */
 export function migration_state(): {
-    kind: "none" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
+    kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
     copy_saved: boolean;
     detail: string;
 };
@@ -46,6 +46,7 @@ fn migration_state_value() -> HostResult {
     let (kind, copy_saved, detail) = match crate::session::migration_state() {
         None => ("none", false, String::new()),
         Some(crate::session::MigrationState::Moving) => ("moving", false, String::new()),
+        Some(crate::session::MigrationState::Opening) => ("opening", false, String::new()),
         Some(crate::session::MigrationState::Transient { copy_saved, detail }) => {
             ("transient", copy_saved, detail)
         }

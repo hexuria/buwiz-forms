@@ -78,7 +78,7 @@ pub fn prepare_launch() {
     if crate::account_gate::auth_bypass_enabled() {
         // §9: the bypass is the machine's own door, so check_invariants knows to step aside.
         crate::session::bypass_unlock();
-        bir_core::background_cron::set_submission_paused(!crate::account_gate::is_unlocked());
+        crate::session::sync_pause();
         return;
     }
     let (qualifies, _practice) = restore_saved_session();
@@ -97,7 +97,7 @@ pub fn prepare_launch() {
     // A second engine's boot must not pause a live session's sending for the whole process:
     // the boot's own pause above is the safety while the restore runs; what stands at the end
     // is the gate's truth — unlocked sends, locked pauses.
-    bir_core::background_cron::set_submission_paused(!crate::account_gate::is_unlocked());
+    crate::session::sync_pause();
 }
 
 pub(crate) fn status_now() -> HostResult {
@@ -467,12 +467,16 @@ pub(crate) fn refresh_account(
                 bir_core::transport::set_practice_account(practice);
             }
             VerbRefresh::Ended => {
-                // Finding 10: an Ended on an EMPTY disk means server_ended cleared nothing —
-                // some other path already emptied it — and the machine still shows the open
-                // session of an owner nobody stores. While the cache names the owner that is
-                // the signed-in-elsewhere shape: the session closes, as main's sign-out closed.
-                if bir_core::account_session::stored_owner().is_some() {
-                    crate::session::close(crate::session::Reason::SignedInElsewhere);
+                // Finding 10, E1: an Ended on an EMPTY disk means server_ended cleared nothing
+                // — some other path already emptied it — and the machine may still show the
+                // open session of an owner nobody stores. The close is close_if_owner: decided
+                // under SESSION, the phase's owner must BE this verb's owner — a stale verb of
+                // A never closes B's newer session — and the disk must be empty.
+                if let Some(machine_owner) = crate::session::Owner::of_stored(&stored) {
+                    crate::session::close_if_owner(
+                        &machine_owner,
+                        crate::session::Reason::SignedInElsewhere,
+                    );
                 }
             }
             VerbRefresh::Offline | VerbRefresh::Gone => {}
@@ -1621,7 +1625,7 @@ mod tests {
             crate::session::begin_open(owner.clone(), 1, crate::session::OpenWhy::SignIn);
             let epoch = crate::session::snapshot().epoch;
             let folder = tempfile::tempdir().unwrap();
-            let path = folder.into_path().join("room.db");
+            let path = folder.keep().join("room.db");
             let handle = std::sync::Arc::new(std::sync::Mutex::new(
                 bir_core::db::Database::open(&path).unwrap(),
             ));
@@ -1840,7 +1844,13 @@ mod tests {
                 set_test_refresh_http(Some(Box::new(move || {
                     Box::new(ScriptHttp(std::sync::Arc::clone(&factory_server)))
                 })));
-                prepare_launch();
+                // The bypass branch is not the boot being tested: bypass_unlock's own
+                // set_unlocked unpauses by itself, so a boot through it proves nothing about
+                // the ending sync. BIR_AUTH_BYPASS off for the call — the restore branch is
+                // the production boot's.
+                temp_env::with_vars([("BIR_AUTH_BYPASS", Some("0"))], || {
+                    prepare_launch();
+                });
                 set_test_refresh_http(None);
                 assert!(
                     !bir_core::background_cron::submission_paused(),

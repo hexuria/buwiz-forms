@@ -297,6 +297,11 @@ pub fn submission_worker_refused() -> bool {
 /// only woken at every later one — this is idempotent. The engine that asks is recorded, but the
 /// worker no longer ends with it: shutdown_at_engine_end leaves it in rooms mode, and only quit
 /// stops it (§8).
+/// How often the commit's log maintenance ran — the item-9 test's evidence.
+#[cfg(test)]
+pub(crate) static LOG_MAINTENANCE_RUNS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     start_submission_worker(db.clone());
     // Item 9: launch log maintenance runs here, at the machine's commit, not only at the
@@ -308,7 +313,13 @@ pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     if let Some(days) = days {
         bir_core::log_files::remember_retention(days);
         let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
+        #[cfg(test)]
+        LOG_MAINTENANCE_RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
+    // E3: the six-hour round too, once per process (spawn_retention's own Once) — launch_on
+    // starts it in single-room mode; in rooms mode the commit is the only place it can start.
+    #[cfg(not(test))]
+    bir_core::log_files::spawn_retention();
 }
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,

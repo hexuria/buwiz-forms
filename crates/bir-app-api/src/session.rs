@@ -596,6 +596,9 @@ fn claim_thread_alive(epoch: u64) -> bool {
 /// the commit itself — the Opening it served does not stand forever. A normal completion
 /// disarms the guard after its commit; any other end commits Blocked::Transient, which the
 /// commit's own staleness check discards if a newer session has already replaced this one.
+/// Release builds are panic = "abort": a panic there kills the process and no guard runs, so
+/// the panic half of this protection is debug and test only — in release the half that matters
+/// is the spawn-failure commit in spawn_claim_thread.
 struct ClaimGuard {
     epoch: u64,
     disarmed: bool,
@@ -653,7 +656,7 @@ fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
             .push(thread);
     });
     #[cfg(not(test))]
-    let spawn = spawn.map(|thread| drop(thread));
+    let spawn = spawn.map(drop);
     if spawn.is_err() {
         lock(&LIVE_CLAIMS).retain(|live| *live != epoch);
         let error = spawn.err().unwrap();
@@ -697,6 +700,58 @@ pub(crate) fn join_claim_threads() {
             None => return,
         }
     }
+}
+
+/// E1: close only when the phase's owner IS `owner` AND the disk is empty, both decided under
+/// SESSION. The verb's Ended-on-empty-disk arm runs it: a stale verb of A must never close B's
+/// newer session, and an empty disk under Open(A) — nobody stored, the machine open — is the
+/// signed-in-elsewhere shape main's sign-out closed for.
+pub fn close_if_owner(owner: &Owner, reason: Reason) -> bool {
+    if locked().phase.kind() == PhaseKind::Quitting {
+        tracing::info!("close_if_owner after quit ignored: the session is terminal");
+        return false;
+    }
+    let outcome = {
+        let mut session = locked();
+        let phase_owner = session.phase.owner().cloned();
+        if phase_owner.as_ref() != Some(owner) {
+            tracing::info!("close_if_owner: the phase is another owner's — nothing closes");
+            return false;
+        }
+        // The disk re-read inside the lock order SESSION → account_session (I2's order, as
+        // commit does it): a stored sign-in — anybody's — means the disk is not empty and this
+        // is not the empty-disk ending.
+        if crate::cloud_account::load_stored().ok().flatten().is_some() {
+            tracing::info!("close_if_owner: the disk is not empty — nothing closes");
+            return false;
+        }
+        let cache_key = bir_core::account_session::stored_owner();
+        bir_core::account_session::cache_owner(None);
+        close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
+    };
+    tracing::info!("session closed: {reason:?}");
+    post_menu_notice();
+    crate::open_room::sweep_registry();
+    finish_close(&outcome, ForgetMode::Backgrounded);
+    drop(outcome.dropped);
+    report_invariants();
+    true
+}
+
+/// E2: the pause truth under SESSION. The boot's ending sync was check-then-act outside SESSION:
+/// a close landing between the gate read and the write left the session locked and UNPAUSED.
+/// Here the machine's own truth — a room or legacy phase sends, anything else pauses — is read
+/// and written in the one section a close can't interleave with.
+pub fn sync_pause() {
+    let session = locked();
+    // The bypass (§9) unlocks with no owner and no phase: it sends, exactly as the gate's truth
+    // said before — the sync changes the RACE, not the bypass's meaning.
+    let sends = BYPASSED.load(std::sync::atomic::Ordering::SeqCst)
+        || matches!(
+            session.phase.kind(),
+            PhaseKind::Open | PhaseKind::Legacy
+        );
+    bir_core::background_cron::set_submission_paused(!sends);
 }
 
 /// sign_out (§4, F8'): persistence first, the cache inside SESSION.
@@ -1465,6 +1520,9 @@ pub fn reinstall_room(epoch: u64, handle: Arc<Mutex<Database>>, path: PathBuf) -
 /// offered. `None` is an ordinary sign-in — SignedOut, Quitting, Open with no note, Legacy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MigrationState {
+    /// A boot with no legacy file to move: the room opens, nothing migrates. The page polls a
+    /// plainer progress than Moving's.
+    Opening,
     Moving,
     Transient {
         copy_saved: bool,
@@ -1489,9 +1547,16 @@ pub enum MigrationState {
 
 /// The migration state, computed from the phase in one read (§1: MIGRATION is gone).
 pub fn migration_state() -> Option<MigrationState> {
+    // The legacy file's presence is read BEFORE SESSION (a metadata stat, never a lock-holder):
+    // it is what tells the page a plain relaunch's boot (no file to move) from a real move.
+    let legacy_present = bir_core::rooms::Layout::here().legacy_database().is_file();
     let session = locked();
     match &session.phase {
-        Phase::Opening { .. } => Some(MigrationState::Moving),
+        Phase::Opening { .. } => Some(if legacy_present {
+            MigrationState::Moving
+        } else {
+            MigrationState::Opening
+        }),
         Phase::Blocked { reason, .. } => Some(match reason {
             Blocked::Transient { copy_saved, detail } => MigrationState::Transient {
                 copy_saved: *copy_saved,
@@ -1833,6 +1898,10 @@ pub fn test_turn() -> std::sync::MutexGuard<'static, ()> {
 pub(crate) fn reset_for_tests() {
     hooks::reset();
     lock(&LIVE_CLAIMS).clear();
+    // A test that drove prepare_launch (item 3's) set BYPASSED through the bypass branch —
+    // process-wide, so every later check_invariants in the process would step aside. Tests
+    // never MEAN to set it: reset it here, with the rest of the machine's process state.
+    BYPASSED.store(false, std::sync::atomic::Ordering::SeqCst);
     let dropped = {
         let mut session = locked();
         let outcome = close_locked(&mut session, &CloseKind::OwnerEnds, None);
@@ -2722,11 +2791,21 @@ mod tests {
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        // No legacy file in the scratch: a plain relaunch's boot reads Opening, not Moving.
         assert!(
-            matches!(migration_state(), Some(MigrationState::Moving)),
-            "migration_state does not answer Moving during Opening: {:?}",
+            matches!(migration_state(), Some(MigrationState::Opening)),
+            "migration_state does not answer Opening for a plain relaunch: {:?}",
             migration_state()
         );
+        // With a legacy file present the same phase reads Moving: the page tells a real move
+        // from a plain relaunch by this one field.
+        std::fs::write(scratch.layout.legacy_database(), b"sqlite").unwrap();
+        assert!(
+            matches!(migration_state(), Some(MigrationState::Moving)),
+            "migration_state does not answer Moving with a legacy file present: {:?}",
+            migration_state()
+        );
+        std::fs::remove_file(scratch.layout.legacy_database()).unwrap();
         assert!(
             !gate_unlocked(),
             "the gate is unlocked before the commit — the page would poll an open session"
@@ -2759,6 +2838,124 @@ mod tests {
             DRAIN_RUNS.load(std::sync::atomic::Ordering::SeqCst),
             after,
             "the drain ran twice for one notice"
+        );
+        assert_invariants();
+    }
+
+    /// Item 9: the launch's log maintenance runs at the machine's commit — in rooms mode the
+    /// launch's is_unlocked check is false until the commit, so it never started there.
+    #[test]
+    fn the_log_maintenance_runs_at_commit() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        let before = crate::bir_module::LOG_MAINTENANCE_RUNS
+            .load(std::sync::atomic::Ordering::SeqCst);
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        let after = crate::bir_module::LOG_MAINTENANCE_RUNS
+            .load(std::sync::atomic::Ordering::SeqCst);
+        assert!(
+            after > before,
+            "the commit ran no log maintenance — in rooms mode it never starts (item 9)"
+        );
+        assert_invariants();
+    }
+
+    /// E1(a): a stale verb of A — its Ended landing after B signed in and opened — closes
+    /// nothing of B's. close_if_owner decides under SESSION: the phase is B's, so the close
+    /// refuses even though the disk check would pass.
+    #[test]
+    fn a_stale_ended_of_a_leaves_bs_session_untouched() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        // B signs in and opens: the phase is B's now, and B's is the stored sign-in.
+        let owner_b = seed_stored("user-b", false);
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        let epoch_b = snapshot().epoch;
+        open_hand(&scratch, &owner_b, epoch_b, "b-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        assert_eq!(snapshot().owner.as_ref().map(|o| o.user_id.as_str()), Some("user-b"));
+        // A's stale verb ends: the disk holds B, and the phase is B's — nothing closes.
+        let closed = close_if_owner(&owner_a, Reason::SignedInElsewhere);
+        assert!(!closed, "the stale close of A ran");
+        // The harder shape: the disk emptied after B opened (bir-mcp's sign-out outside). The
+        // disk check passes now — only the owner check keeps B's session alive.
+        bir_core::account_session::clear_stored();
+        let closed = close_if_owner(&owner_a, Reason::SignedInElsewhere);
+        assert!(
+            !closed,
+            "the stale close of A ran on the empty disk — only the owner check protects B"
+        );
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "B's session was closed by A's stale Ended — the E1 hole"
+        );
+        assert_eq!(snapshot().owner.as_ref().map(|o| o.user_id.as_str()), Some("user-b"));
+        assert!(gate_unlocked(), "B's gate stayed unlocked");
+        assert_invariants();
+    }
+
+    /// E1(b): the cache is None while Open(A) and the disk is empty — nobody stored, the
+    /// machine open — the signed-in-elsewhere close runs: the phase owner IS the verb's owner.
+    #[test]
+    fn an_empty_cache_and_disk_under_open_closes() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        // The cache and the disk both empty — bir-mcp's sign-out cleared everything outside.
+        bir_core::account_session::clear_stored();
+        bir_core::account_session::cache_owner(None);
+        assert!(bir_core::account_session::stored_owner().is_none());
+        let closed = close_if_owner(&owner_a, Reason::SignedInElsewhere);
+        assert!(closed, "the close did not run — the machine stayed open for nobody");
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::SignedOut,
+            "the machine stayed open with nobody stored"
+        );
+        assert!(snapshot().room.is_none(), "the room dropped");
+        assert!(!gate_unlocked(), "the gate locked");
+        assert_invariants();
+    }
+
+    /// E2: sync_pause is the machine's truth — a room phase sends, anything else pauses. The
+    /// race it closes (a close between the boot's gate read and its pause write) is structural:
+    /// the read and the write are one SESSION section, so the contract test is the truth table.
+    #[test]
+    fn sync_pause_is_the_machines_truth() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        sync_pause();
+        assert!(
+            bir_core::background_cron::submission_paused(),
+            "a signed-out session must pause sending"
+        );
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        sync_pause();
+        assert!(
+            !bir_core::background_cron::submission_paused(),
+            "an open session must send"
+        );
+        close(Reason::SignOut);
+        sync_pause();
+        assert!(
+            bir_core::background_cron::submission_paused(),
+            "the closed session must pause — locked-and-unpaused is the E2 hole"
         );
         assert_invariants();
     }
@@ -4172,7 +4369,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn server_ended_for_a_stale_owner_or_epoch_changes_nothing() {
         let _turn = test_turn();
         let scratch = scratch();
@@ -4582,9 +4778,18 @@ mod tests {
         for engine in 1..=2u64 {
             let owner = owner_a.clone();
             let barrier = barrier.clone();
+            // The overrides ride the engine threads: device and database resolution are
+            // thread-local, and without them the boot — and the claim thread it spawns, which
+            // captures ITS caller's overrides — reads the REAL device folder.
+            let device = bir_core::platform::capture_device_dir_override();
+            let database = bir_core::db::capture_database_path_override();
             threads.push(std::thread::spawn(move || {
-                barrier.wait();
-                begin_open(owner, engine, OpenWhy::Launch);
+                database.run(move || {
+                    device.run(move || {
+                        barrier.wait();
+                        begin_open(owner, engine, OpenWhy::Launch);
+                    });
+                });
             }));
         }
         for thread in threads {
