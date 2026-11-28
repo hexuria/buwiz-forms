@@ -5640,16 +5640,22 @@ fn compose_rule6_cell_and_band(
         None
     } else {
         // Invariant: `lo` fits, every size above `hi` does not.
-        let (mut lo, mut hi) = (floor, 850i64);
-        while lo < hi {
-            let mid = lo + (hi - lo + 1) / 2;
-            if fits(mid).is_some() {
-                lo = mid;
-            } else {
-                hi = mid - 1;
+        if full_val.contains('\t') {
+            // Tab stops make the set width non-monotone in the size, so a
+            // bisection can land on a size that does not set: scan down.
+            (floor..=850i64).rev().find(|h| fits(*h).is_some())
+        } else {
+            let (mut lo, mut hi) = (floor, 850i64);
+            while lo < hi {
+                let mid = lo + (hi - lo + 1) / 2;
+                if fits(mid).is_some() {
+                    lo = mid;
+                } else {
+                    hi = mid - 1;
+                }
             }
+            Some(lo)
         }
-        Some(lo)
     };
     if let Some(hundredths) = largest_fit {
         let s = hundredths as f64 / 100.0;
@@ -12400,11 +12406,16 @@ mod tests {
         let mut fields = BTreeMap::new();
         fields.insert("frm1701:txtPg4IPart7_9Specify".to_string(), text.clone());
         let html = filled_document("1701-2018", &fields).unwrap();
-        let tags = super::input_tags(&html);
-        let value = tags
-            .iter()
-            .filter(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
-            .filter_map(|t| super::attr(t.tag, "value"))
+        // The band's continuation inputs carry no name (the cell's own input
+        // keeps it), so `input_tags` skips them: scan the raw tags instead.
+        let value = html
+            .split("<input")
+            .skip(1)
+            .filter(|piece| piece.contains("data-overflow-of=\"p4c213\""))
+            .filter_map(|piece| {
+                let end = piece.find('>').unwrap_or(piece.len());
+                super::attr(&piece[..end], "value")
+            })
             .collect::<Vec<_>>()
             .join("\n")
             .replace("&#10;", "\n");
@@ -12469,11 +12480,24 @@ mod tests {
             },
             "the cell line ends on a whole word: {cell_value:?}"
         );
-        let band = tags
+        let band_owned;
+        let band = match tags
             .iter()
             .find(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
-            .expect("the item 9 band")
-            .tag;
+            .map(|t| t.tag)
+        {
+            Some(tag) => tag,
+            None => {
+                // The band's inputs carry no name: scan the raw html.
+                band_owned = html
+                    .split("<input")
+                    .skip(1)
+                    .find(|piece| piece.contains("data-overflow-of=\"p4c213\""))
+                    .map(|piece| piece[..piece.find('>').unwrap_or(piece.len())].to_string())
+                    .expect("the item 9 band");
+                &band_owned
+            }
+        };
         let band_value = super::attr(band, "value").unwrap().replace("&#10;", "\n");
         assert!(
             !band_value.starts_with("UNIT 1203"),
