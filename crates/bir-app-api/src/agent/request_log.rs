@@ -213,7 +213,7 @@ mod tests {
             "ts",
             "id4",
             &Op::Screenshot {
-                path: Some("/Users/uri/secret.png".into()),
+                path: Some("/Users/alice/secret.png".into()),
                 mode: Default::default(),
                 target: None,
                 max_height_px: None,
@@ -223,7 +223,7 @@ mod tests {
             Some("screenshot_unavailable"),
         );
         assert!(shot.contains("op=screenshot"), "{shot}");
-        assert!(!shot.contains("/Users/uri"), "{shot}");
+        assert!(!shot.contains("/Users/alice"), "{shot}");
         assert!(shot.contains("ok=false"), "{shot}");
         assert!(shot.contains("error=screenshot_unavailable"), "{shot}");
     }
