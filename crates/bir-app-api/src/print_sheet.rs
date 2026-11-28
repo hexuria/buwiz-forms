@@ -43,7 +43,7 @@ fn fit_css(native: (f32, f32)) -> String {
     format!(
         "@page{{size:{w:.2}pt {h:.2}pt;margin:0}}\
 html,body{{width:{w:.2}pt;margin:0 auto;padding:0;background:#fff}}\
-body>:not(.sheet){{display:none !important}}\
+body>:not(.sheet):not(.test-send-warning){{display:none !important}}\
 .sheet{{position:relative;width:{w:.2}pt;height:{sheet_h:.2}pt;box-sizing:border-box;overflow:hidden;background:#fff;padding-top:{safety:.0}pt;break-after:page;page-break-after:always}}\
 .sheet:last-of-type{{break-after:auto;page-break-after:auto}}\
 .sheet-flow{{height:auto;min-height:{sheet_h:.2}pt;overflow:visible}}\
@@ -233,6 +233,19 @@ mod tests {
             assert!(css.contains(".sheet>.page{transform:scale("), "{css}");
             assert!(!css.contains(".sheet>.page{zoom:"), "{css}");
         }
+    }
+
+    #[test]
+    fn paper_css_does_not_hide_a_test_send_warning() {
+        let fields = std::collections::BTreeMap::new();
+        let html =
+            bir_print::frozen_html::filled_document_test_send("1601c-2018", &fields).unwrap();
+        let out = super::prepare_html(&html);
+        assert!(out.contains("class=\"test-send-warning\""));
+        assert!(
+            out.contains("body>:not(.sheet):not(.test-send-warning)"),
+            "the warning stays visible in preview and print"
+        );
     }
 
     #[test]

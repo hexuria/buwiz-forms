@@ -6365,7 +6365,7 @@ pub fn filled_document_test_send(
 ) -> Result<String, String> {
     Ok(prepend_after_body_start(
         &filled_document_with_receipt(slug, fields, None)?,
-        "<div style=\"position:absolute;top:2mm;left:0;right:0;z-index:9999;text-align:center;color:#9f1239;font:bold 10pt sans-serif\">Test send: not filed. Nothing reached the BIR.</div>",
+        "<div class=\"test-send-warning\" style=\"position:absolute;top:2mm;left:0;right:0;z-index:9999;text-align:center;color:#9f1239;font:bold 10pt sans-serif\">Test send: not filed. Nothing reached the BIR.</div>",
     ))
 }
 
