@@ -1,0 +1,12 @@
+command: just nsh-check
+repo commit: 92b3e2013f7a60a86dda120dd93e5473cb4b0c16
+started: 2026-11-28T15:44:54.7289553+00:00
+free disk GB before: 56.2
+--- output ---
+✓ checked nsh-app-ebirforms (13m 39s)
+✓ built the Rust crate nsh-app-ebirforms (21m 9s)
+--- result ---
+exit code: 0
+ended: 2026-11-28T16:21:06.4669411+00:00
+duration minutes: 36.2
+free disk GB after: 49.3

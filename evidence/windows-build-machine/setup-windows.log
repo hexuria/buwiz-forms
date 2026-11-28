@@ -1,0 +1,61 @@
+
+==> Chocolatey already installed -  skipping
+
+==> Installing packages: openssl, just, strawberryperl, nasm, powershell-core, innosetup, python
+Chocolatey v2.7.5
+Installing the following packages:
+openssl;just;strawberryperl;nasm;powershell-core;innosetup;python
+By installing, you accept licenses for the packages.
+openssl v4.1.0 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+just v1.59.0 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+strawberryperl v5.42.3.1 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+nasm v3.2.0 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+powershell-core v7.6.10 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+InnoSetup v6.7.1 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+python v3.15.2 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+
+Chocolatey installed 0/7 packages. 
+ See the log for details (C:\ProgramData\chocolatey\logs\chocolatey.log).
+
+Warnings:
+ - InnoSetup - InnoSetup v6.7.1 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+ - just - just v1.59.0 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+ - nasm - nasm v3.2.0 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+ - openssl - openssl v4.1.0 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+ - powershell-core - powershell-core v7.6.10 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+ - python - python v3.15.2 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+ - strawberryperl - strawberryperl v5.42.3.1 already installed.
+ Use --force to reinstall, specify a version to install, or try upgrade.
+
+==> MSVC C++ build tools + Windows 11 SDK already installed -  skipping
+
+==> Rust already installed -  skipping
+
+==> Setting user env: OPENSSL_DIR=C:\Program Files\OpenSSL-Win64, OPENSSL_LIB_DIR=C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD
+
+==> Installing gpui-agent CLI (pinned version 0.4.0, matches Cargo.toml)
+     Ignored package `gpui-agent-cli v0.4.0` is already installed, use --force to override
+
+==> impeccable already installed at pinned version 0.2.1 -  skipping
+
+==> impeccable-rust skill already at 6c52a01 -  skipping
+
+==> Done. Open a NEW PowerShell window, then:  cd <repo> ; just run
+Agent control plane: build --features agent, set GPUI_AGENT=1, drive with gpui-agent.
+NOTE: Token auth works on Windows at the current pin; set GPUI_AGENT_TOKEN for
+secure driving. GPUI_AGENT_INSECURE_NO_TOKEN=1 remains for local-only driving.
+
+EXIT CODE: 0

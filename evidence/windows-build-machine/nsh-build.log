@@ -1,0 +1,12 @@
+command: just nsh-build
+repo commit: 92b3e2013f7a60a86dda120dd93e5473cb4b0c16
+started: 2026-11-28T16:21:06.5303432+00:00
+free disk GB before: 49.3
+--- output ---
+✓ built the Rust crate nsh-app-ebirforms (2.6s)
+✓ built App.tsx into .nsh\out (1.1 MB js, 3.2 MB bytecode, 62 assets, 2.0s)
+--- result ---
+exit code: 0
+ended: 2026-11-28T16:21:12.3049074+00:00
+duration minutes: 0.1
+free disk GB after: 49.3
