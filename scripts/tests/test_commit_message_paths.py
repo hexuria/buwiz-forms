@@ -246,6 +246,29 @@ class HookTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("absolute local path", result.stderr)
 
+    def test_a_python_2_named_python_is_skipped_not_run(self):
+        # An old `python` (Python 2) answers `-c "import sys"`, then fails the script with a SyntaxError, which would
+        # refuse every commit on that machine. The hook must ask for the version and go on to the next candidate.
+        with tempfile.TemporaryDirectory() as directory:
+            stubs = Path(directory) / "bin"
+            stubs.mkdir(parents=True)
+            write_executable(
+                stubs / "python",
+                "#!/bin/sh\n"
+                'if [ "$1" = "-c" ]; then case "$2" in *version_info*) exit 1 ;; *) exit 0 ;; esac; fi\n'
+                'echo "SyntaxError: invalid syntax" >&2\nexit 1\n',
+            )
+            python_stub(stubs, "python3", working=True)
+            env = path_with_stubs(stubs)
+
+            clean = self.run_hook("commit-msg", "a plain message\n", env=env)
+            refused = self.run_hook("commit-msg", "built in /Users/alice/project\n", env=env)
+
+        self.assertEqual(clean.returncode, 0, clean.stderr)
+        self.assertNotIn("SyntaxError", clean.stderr)
+        self.assertEqual(refused.returncode, 1, refused.stderr)
+        self.assertIn("absolute local path", refused.stderr)
+
     def test_hooks_without_a_working_python_print_one_line_and_pass(self):
         with tempfile.TemporaryDirectory() as directory:
             stubs = Path(directory) / "bin"
