@@ -5493,7 +5493,6 @@ struct Rule6Insertion {
     truncated: bool,
     input_classes: String,
     greys: Vec<(f64, f64)>,
-    frame_pt: f64,
     /// The lowest bottom (pt, before shifting) of the value cells in the
     /// specify row the strip spans: where a thick closing rule has them
     /// ending below the cut, the band's text starts under them so it never
@@ -5623,12 +5622,12 @@ fn without_font_size(tag: &str) -> String {
 const RULE6_MAX_BAND_LINES: usize = 6;
 
 /// How many continuation lines a page-room budget (in pt) admits at the
-/// line pitch: one strip consumes max(pitch+1, 14) pt.
+/// line pitch: one strip consumes pitch+1 = 12 pt.
 fn rule6_band_lines_cap(line_budget: f64, pitch_pt: f64) -> usize {
     let candidates = ((line_budget - 1.0) / pitch_pt).floor().max(0.0) as usize;
-    // One strip consumes max(pitch+1, 14) pt: a budget that admits one line
-    // by pitch but not the strip's 14 pt minimum admits no line at all.
-    if candidates == 1 && line_budget < 14.0 {
+    // One strip consumes pitch+1 = 12 pt: a budget that admits one line by
+    // pitch but not the strip's 12 pt minimum admits no line at all.
+    if candidates == 1 && line_budget < pitch_pt + 1.0 {
         0
     } else {
         candidates
@@ -5856,8 +5855,6 @@ fn apply_rule6_specify_bands(
                         })
                 })
                 .unwrap_or(r6.insert_after_y);
-            let frame_pt = sheet_frame_thickness_pt(&page_html);
-
             let (x1, cut_y) = rule6_place_band(r6.x0, r6.x1, base_cut_y, &r6.cell_id, &value_cells);
 
             // The owner's composition (lifted from #510): the inserted lines
@@ -5888,7 +5885,14 @@ fn apply_rule6_specify_bands(
                     .map(|(_, l, _, w, _)| (*l, *w))
                     .collect();
                 spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-                greys = spans;
+                // The greyed span is CONTINUOUS from the first amount column
+                // to the row's right edge: the narrow decimal-point separator
+                // column between the pesos and centavos boxes is not a value
+                // cell, but where the row above has it the strip greys it too
+                // (1601C item 20, 2551Q item 17 — white there reads as a hole).
+                if let Some((first_left, _)) = spans.first().copied() {
+                    greys = vec![(first_left, (row_x1 - first_left).max(1.0))];
+                }
                 row_cells_bottom = value_cells
                     .iter()
                     .filter(|(_, _, tt, _, _)| same_row(*tt))
@@ -5928,7 +5932,7 @@ fn apply_rule6_specify_bands(
                 continue;
             };
             let pitch = pitch_pt;
-            let dh = (pitch * band_lines as f64 + 1.0).max(14.0);
+            let dh = (pitch * band_lines as f64 + 1.0).max(pitch + 1.0);
             line_budget -= dh;
             // The original input's own column, for the underline freeze: the
             // field's box stays closed at its sheet position.
@@ -5950,7 +5954,6 @@ fn apply_rule6_specify_bands(
                 truncated: band_truncated,
                 input_classes,
                 greys,
-                frame_pt,
                 row_cells_bottom,
             });
         }
@@ -6033,33 +6036,6 @@ fn row_bottom_frame_line_y(page_html: &str, x0: f64, x1: f64, after_y: f64) -> O
         sc = rs + re_rel;
     }
     best
-}
-
-/// The sheet's own frame-line thickness on this page: the thickest wide
-/// horizontal frame line, defaulting to the legacy 1.2 pt when the page
-/// draws none.
-fn sheet_frame_thickness_pt(page_html: &str) -> f64 {
-    let mut best = 0.0f64;
-    let mut sc = 0;
-    while let Some(rel) = page_html[sc..].find("<rect ") {
-        let rs = sc + rel;
-        let Some(re_rel) = page_html[rs..].find('>') else {
-            break;
-        };
-        let tag = &page_html[rs..rs + re_rel];
-        let get = |n: &str| attr(tag, n).and_then(|v| v.parse::<f64>().ok());
-        if let (Some(w), Some(h)) = (get("width"), get("height")) {
-            if w >= 200.0 && h <= 2.0 {
-                best = best.max(h);
-            }
-        }
-        sc = rs + re_rel;
-    }
-    if best > 0.0 {
-        best
-    } else {
-        1.2
-    }
 }
 
 /// The width a Rule 6 band's text is fitted to and drawn at: one value, so
@@ -6498,49 +6474,73 @@ fn shift_page_and_insert_rule6(
             let x0 = snap(ins.x0, false);
             let x1 = snap(ins.x1, true);
             let w = (x1 - x0).max(10.0);
+            let h = ins.dh;
+            // The owner's drawing (#510 at b70e42ef, reimplemented here): the
+            // strip is its own row — a WHITE text area closed by a full-width
+            // rule above and below — drawn OVER the sheet's line work, so the
+            // item-number column's divider and the cell's grey stub stop at
+            // the strip's rules by design. ONLY the amount columns are grey
+            // (one continuous span, decimal separator included), their
+            // dividers and right border redrawn unbroken through the strip.
             fills.push_str(&format!(
-                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#e3e3e3\"/>",
-                x0, y, w, ins.dh
+                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#ffffff\"/>",
+                x0 + 1.0,
+                y + 0.25,
+                (w - 2.0).max(1.0),
+                (h - 0.5).max(1.0)
             ));
-            // The strip keeps its side edges — without them a strip with no
-            // grey columns prints edgeless — drawn at the sheet's own
-            // frame-line thickness, never lighter than the sheet's lines.
-            let ft = ins.frame_pt;
-            fills.push_str(&format!(
-                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#000000\"/>",
-                x0, y, ft, ins.dh
-            ));
-            fills.push_str(&format!(
-                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#000000\"/>",
-                x1 - ft,
-                y,
-                ft,
-                ins.dh
-            ));
-            // The amount columns on the added lines grey out one shade darker,
-            // still under every frame and divider line.
             for (gx, gw) in &ins.greys {
                 fills.push_str(&format!(
                     "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#d9d9d9\"/>",
                     gx + 0.5,
                     y + 0.25,
                     (gw - 1.0).max(1.0),
-                    (ins.dh - 0.5).max(1.0)
+                    (h - 0.5).max(1.0)
                 ));
             }
+            // The grey columns' dividers and right border run through the
+            // strip at the sheet's own position and weight: every vertical
+            // rule inside the grey span touching the cut.
+            for &(vx, vy, vw, vh) in &verticals {
+                let in_grey = ins
+                    .greys
+                    .iter()
+                    .any(|&(gx, gw)| vx + vw > gx + 0.25 && vx < gx + gw - 0.25);
+                if in_grey && vy <= ins.cut_y + 1.0 && vy + vh >= ins.cut_y - 1.0 {
+                    fills.push_str(&format!(
+                        "<rect x=\"{vx:.2}\" y=\"{y:.2}\" width=\"{vw:.2}\" height=\"{h:.2}\" fill=\"#000000\"/>"
+                    ));
+                }
+            }
+            fills.push_str(&format!(
+                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"0.5\" fill=\"#000000\"/>",
+                x0, y, w
+            ));
+            fills.push_str(&format!(
+                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"0.5\" fill=\"#000000\"/>",
+                x0,
+                y + h - 0.5,
+                w
+            ));
+            // The strip's own side edges, drawn whatever its columns are, so a
+            // strip with no amount columns beside it is still closed.
+            fills.push_str(&format!(
+                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"1.2\" height=\"{:.2}\" fill=\"#000000\"/>",
+                x0, y, h
+            ));
+            fills.push_str(&format!(
+                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"1.2\" height=\"{:.2}\" fill=\"#000000\"/>",
+                x1 - 1.2,
+                y,
+                h
+            ));
             prior_dh += ins.dh;
         }
         if !fills.is_empty() {
-            // Over the sheet's painted background (the svg's image) but under
-            // every frame and divider line: just before the first line rect.
-            if let Some(svg_open) = out.find("<svg") {
-                let first_rect = out[svg_open..].find("<rect ").map(|at| svg_open + at);
-                let anchor =
-                    first_rect.or_else(|| out[svg_open..].find('>').map(|gt| svg_open + gt + 1));
-                if let Some(at) = anchor {
-                    out.insert_str(at, &fills);
-                }
-            }
+            // Over the sheet's line work — the white text area and the greys
+            // cover the interior dividers inside the strip, which is how they
+            // stop at its rules — inside a layer group just before </svg>.
+            out.push_str(&format!("<g class=\"layer-rule6\">{fills}</g>"));
         }
         out.push_str("</svg>");
         se + "</svg>".len()
@@ -11982,21 +11982,33 @@ mod tests {
                 // the width floor is the grey strip's, not the text box's:
                 // the continuation's text is confined to its field's column
                 // while the grey runs the band's width.
+                // The owner's drawing: each strip's backing is its white
+                // text-area rect inside the layer group — the floor and the
+                // count apply to it; the amount columns' grey is narrower by
+                // design.
                 let mut grey_count = 0usize;
                 let mut cursor = 0usize;
-                while let Some(rel) = doc[cursor..].find("fill=\"#e3e3e3\"") {
-                    let at = cursor + rel;
-                    let rs = doc[..at].rfind("<rect ").unwrap_or(0);
-                    let rtag = &doc[rs..at + 20];
-                    if let Some(width) = attr(rtag, "width").and_then(|v| v.parse::<f64>().ok()) {
-                        grey_count += 1;
-                        if width + 0.01 < super::RULE6_BAND_FLOOR_PT {
-                            misplaced.push(format!(
-                                "{slug} ({len}): grey strip narrower than the floor: {width:.2} pt"
-                            ));
+                while let Some(rel) = doc[cursor..].find("<g class=\"layer-rule6\">") {
+                    let gstart = cursor + rel;
+                    let Some(gend_rel) = doc[gstart..].find("</g>") else {
+                        break;
+                    };
+                    let group = &doc[gstart..gstart + gend_rel];
+                    for m in group.match_indices("fill=\"#ffffff\"") {
+                        let at = m.0;
+                        let rs = group[..at].rfind("<rect ").unwrap_or(0);
+                        let rtag = &group[rs..group.len().min(at + 20)];
+                        if let Some(width) = attr(rtag, "width").and_then(|v| v.parse::<f64>().ok())
+                        {
+                            grey_count += 1;
+                            if width + 0.01 < super::RULE6_BAND_FLOOR_PT {
+                                misplaced.push(format!(
+                                    "{slug} ({len}): strip backing narrower than the floor: {width:.2} pt"
+                                ));
+                            }
                         }
                     }
-                    cursor = at + 20;
+                    cursor = gstart + gend_rel;
                 }
                 let band_divs = doc.matches("data-rule6-of=\"").count();
                 if grey_count != band_divs {
@@ -12010,7 +12022,7 @@ mod tests {
         // drops them cannot pass by checking none. Pages without the room
         // fall back to the sheet's own truncation path instead of inserting
         // a band, so the count is below the field count.
-        assert_eq!(bands, 49, "Rule 6 bands printed by the long fills");
+        assert_eq!(bands, 52, "Rule 6 bands printed by the long fills");
         misplaced.dedup();
         assert!(
             misplaced.is_empty(),
@@ -15506,7 +15518,7 @@ mod donor_estate_print_tests {
             let Some(rs) = html[..at].rfind("<rect ") else {
                 break;
             };
-            let tag = &html[rs..at + 20];
+            let tag = &html[rs..html.len().min(at + 20)];
             let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
             if let (Some(x), Some(y), Some(h)) = (num("x"), num("y"), num("height")) {
                 if (y - band_top).abs() < 2.0 && h >= 8.0 && (y + h - band_bottom).abs() < 2.0 {
@@ -15536,25 +15548,290 @@ mod donor_estate_print_tests {
         }
     }
 
-    /// (c2) The grey strip is drawn UNDER the sheet's frame/divider lines:
-    /// the grey fill rect appears in the svg BEFORE the vertical frame
-    /// segments that cross it, and those segments are still present.
+    /// (c2) The owner's drawing (#510, adopted 2026-11-28): the strip is its
+    /// own row drawn OVER the sheet's line work — the white text area covers
+    /// the interior dividers, which is how the item-number divider and the
+    /// cell's stub stop at the strip's rules — and the amount columns'
+    /// dividers and right border are redrawn black, unbroken, inside the
+    /// layer.
     #[test]
-    fn rule6_grey_is_under_the_frame_lines() {
+    fn rule6_amount_dividers_run_unbroken_through_the_strip() {
         let html = filled_document("1701ms-2024", &rule6_proof_fill("1701ms-2024")).unwrap();
-        let grey_at = html
-            .find("fill=\"#e3e3e3\"")
-            .expect("a grey strip fill is drawn");
-        // the amount-column divider x=327.45 crosses the strip on page 2:
-        // its rect must appear in the svg AFTER the grey fill (on top).
-        let div_at = html.find("x=\"327.45\"").expect("divider present");
+        let layer_at = html
+            .find("<g class=\"layer-rule6\">")
+            .expect("the strip layer");
+        let layer_end = html[layer_at..].find("</g>").unwrap() + layer_at;
+        let layer = &html[layer_at..layer_end];
+        // the strip frame, from the white text-area rect
+        let strips = rule6_strip_frames(&html);
+        assert!(!strips.is_empty(), "strips present");
+        // the amount-column divider at x=327.45 must be redrawn inside the
+        // layer, spanning the strip's full height — unbroken through it.
+        let mut redrawn = false;
+        for m in layer.match_indices("fill=\"#000000\"") {
+            let at = m.0;
+            let Some(rs) = layer[..at].rfind("<rect ") else {
+                continue;
+            };
+            let tag = &layer[rs..layer.len().min(at + 20)];
+            let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+            if let (Some(x), Some(y), Some(w), Some(h)) =
+                (num("x"), num("y"), num("width"), num("height"))
+            {
+                if (x - 327.45).abs() < 1.5
+                    && w <= 1.6
+                    && strips
+                        .iter()
+                        .any(|&(_, _, sy, sh)| (y - sy).abs() < 1.0 && (h - sh).abs() < 1.0)
+                {
+                    redrawn = true;
+                }
+            }
+        }
         assert!(
-            grey_at < div_at,
-            "the grey fill must be drawn before (under) the frame lines it crosses"
+            redrawn,
+            "the amount-column divider runs unbroken through the strip"
         );
-        // and the divider must still cross the strip vertically (height
-        // spanning the strip, i.e. it was not covered or removed): the
-        // divider rect spans across the strip's y range.
+    }
+
+    /// The owner's drawing: the item-number column's divider STOPS at the
+    /// strip's rules — the strip's white text area, drawn over the line work,
+    /// covers the divider's passage through the strip, so what shows of it
+    /// ends at the strip's top rule and resumes at its bottom rule. The stop's
+    /// y is the rule's y: the white area is inset inside the rules, never over
+    /// them. 1701 page 2, item 19's strip.
+    #[test]
+    fn rule6_item_number_divider_stops_at_the_strips_rules() {
+        let html = filled_document("1701-2018", &rule6_proof_fill("1701-2018")).unwrap();
+        let strips = rule6_strip_frames(&html);
+        assert!(!strips.is_empty(), "strips present");
+        let mut layer = String::new();
+        let mut scan = 0usize;
+        while let Some(rel) = html[scan..].find("<g class=\"layer-rule6\">") {
+            let gstart = scan + rel;
+            let Some(gend_rel) = html[gstart..].find("</g>") else {
+                break;
+            };
+            layer.push_str(&html[gstart..gstart + gend_rel]);
+            scan = gstart + gend_rel;
+        }
+        assert!(!layer.is_empty(), "the strip layer");
+        let layer = layer.as_str();
+        let num_in = |tag: &str, a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+        // the item-number divider x positions: interior verticals left of the
+        // text columns on page 2 — take them from the row ABOVE the strip,
+        // where they are visible.
+        let mut checked = 0usize;
+        for &(x0, x1, sy, sh) in &strips {
+            // (a) the white text-area rect spans the strip interior
+            // horizontally, covering every interior x in [x0, x1]
+            let mut white: Option<(f64, f64, f64, f64)> = None;
+            let mut rules: Vec<(f64, f64, f64)> = Vec::new(); // (y, rx0, rx1)
+            for m in layer.match_indices("<rect ") {
+                let rs = m.0;
+                let win = &layer[rs..layer.len().min(rs + 200)];
+                let tag = match win.find('>') {
+                    Some(e) => &win[..e + 1],
+                    None => win,
+                };
+                if let (Some(x), Some(y), Some(w), Some(h)) = (
+                    num_in(tag, "x"),
+                    num_in(tag, "y"),
+                    num_in(tag, "width"),
+                    num_in(tag, "height"),
+                ) {
+                    if tag.contains("fill=\"#ffffff\"") && (y - 0.25 - sy).abs() < 1.0 {
+                        white = Some((x, y, w, h));
+                    }
+                    if tag.contains("fill=\"#000000\"")
+                        && h <= 1.0
+                        && w > (x1 - x0) * 0.8
+                        && ((y - sy).abs() < 1.0 || (y - (sy + sh - 0.5)).abs() < 1.0)
+                    {
+                        rules.push((y, x, x + w));
+                    }
+                }
+            }
+            let (wx, wy, ww, wh) = white.expect("the strip's white text area");
+            // (b) the white area covers the strip interior from its left edge
+            // to its right edge — any divider passing through is underneath
+            assert!(
+                (wx - (x0 + 1.0)).abs() < 0.6,
+                "white starts at the strip's left inset"
+            );
+            assert!(
+                (wx + ww - (x1 - 1.0)).abs() < 0.6,
+                "white ends at the strip's right inset"
+            );
+            // (c) full-width rules close the strip above and below, and the
+            // white area's edges sit just inside them — the visual stop of
+            // the item-number divider is the rule's y, within the half-point
+            // rule and the quarter-point inset
+            let top_rule = rules.iter().any(|&(ry, _, _)| (ry - sy).abs() < 1.0);
+            let bot_rule = rules
+                .iter()
+                .any(|&(ry, _, _)| (ry - (sy + sh - 0.5)).abs() < 1.0);
+            assert!(top_rule, "a full-width rule closes the strip's top at {sy}");
+            assert!(bot_rule, "a full-width rule closes the strip's bottom");
+            assert!(
+                (wy - (sy + 0.25)).abs() < 0.6,
+                "the white top sits inside the top rule"
+            );
+            assert!(
+                (wy + wh - (sy + sh - 0.25)).abs() < 0.6,
+                "the white bottom sits inside the bottom rule"
+            );
+            checked += 1;
+        }
+        assert!(checked >= 1, "at least one strip examined");
+    }
+
+    /// The greyed span of a strip is CONTINUOUS from the first amount column
+    /// to the right border — the decimal separator column between the pesos
+    /// and centavos boxes greys too (1601C item 20, 2551Q item 17; 1701 item
+    /// 19 has no such column but its span is equally continuous).
+    #[test]
+    fn rule6_strip_grey_is_continuous_to_the_right_border() {
+        for (slug, cell) in [
+            ("1601c-2018", "p1c223"),
+            ("2551q-2018", "p1c187"),
+            ("1701-2018", "p4c213"),
+        ] {
+            let mut fields = rule6_proof_fill(slug);
+            // txt20Other matches no long-fill marker in the proof fill — fill
+            // it explicitly so item 20 overflows.
+            if slug == "1601c-2018" {
+                fields.insert(
+                    "frm1601c:txt20Other".to_string(),
+                    "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOORX".to_string(),
+                );
+            }
+            let html = filled_document(slug, &fields).unwrap();
+            if !html.contains(&format!("data-rule6-of=\"{}\"", cell)) {
+                panic!("{slug} {cell}: band present");
+            }
+            let mut checked = false;
+            let mut cur = 0;
+            while let Some(rel) = html[cur..].find("<g class=\"layer-rule6\">") {
+                let gstart = cur + rel;
+                let Some(gend_rel) = html[gstart..].find("</g>") else {
+                    break;
+                };
+                let group = &html[gstart..gstart + gend_rel];
+                cur = gstart + gend_rel;
+                // collect this group's grey spans per strip row
+                let mut greys: Vec<(f64, f64, f64)> = Vec::new();
+                for m in group.match_indices("fill=\"#d9d9d9\"") {
+                    let at = m.0;
+                    let Some(rs) = group[..at].rfind("<rect ") else {
+                        continue;
+                    };
+                    let tag = &group[rs..group.len().min(at + 20)];
+                    let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                    if let (Some(x), Some(y), Some(w)) = (num("x"), num("y"), num("width")) {
+                        greys.push((y, x, x + w));
+                    }
+                }
+                // for each strip row: exactly one continuous grey span, and
+                // its right edge reaches the strip's right border within a hair
+                let strips = rule6_strip_frames(&html);
+                for &(x0, x1, sy, _sh) in &strips {
+                    let row: Vec<_> = greys
+                        .iter()
+                        .filter(|(gy, _, _)| (gy - sy).abs() < 1.5)
+                        .collect();
+                    if row.is_empty() {
+                        continue;
+                    }
+                    checked = true;
+                    assert_eq!(
+                        row.len(),
+                        1,
+                        "{slug} {cell}: one continuous grey span, not {}",
+                        row.len()
+                    );
+                    let (_, gl, gr) = row[0];
+                    assert!(
+                        (*gr - (x1 - 1.2)).abs() < 2.5,
+                        "{slug} {cell}: grey right edge {gr:.2} reaches the strip's right border {:.2}",
+                        x1 - 1.2
+                    );
+                    assert!(*gl > x0, "{slug} {cell}: grey starts inside the strip");
+                }
+            }
+            assert!(checked, "{slug} {cell}: a greyed strip row was examined");
+        }
+    }
+
+    /// The owner's page composition on 1701 page 2 with the 200-word fill:
+    /// exactly one strip prints, under item 19; item 20 truncates in its cell
+    /// ending on a whole word with "..."; rows 21-25 and the page frame sit
+    /// at their unshifted positions; nothing prints within 4 pt of the 936
+    /// page edge.
+    #[test]
+    fn rule6_owner_page_composition_on_1701_page_2() {
+        let html = filled_document("1701-2018", &rule6_proof_fill("1701-2018")).unwrap();
+        // one strip under item 19 (p2c134), none under item 20 (p2c139)
+        assert!(
+            html.contains("data-rule6-of=\"p2c134\""),
+            "item 19 prints a strip"
+        );
+        assert!(
+            !html.contains("data-rule6-of=\"p2c139\""),
+            "item 20 has no strip"
+        );
+        // item 20's cell truncates with three dots on a whole word
+        let at = html.find("id=\"p2c139-i\"").expect("item 20 input");
+        let end = at + html[at..].find('>').unwrap();
+        let val = attr(&html[at..=end], "value").unwrap_or("").to_string();
+        assert!(
+            val.ends_with("...")
+                || html[html.find("data-rule6-of=\"p2c134\"").unwrap_or(0)..]
+                    .contains("data-overflow-warning"),
+            "item 20 truncates or the overflow is marked: {val:?}"
+        );
+        // the strip is 12 pt for one line — read item 19's strip frame height
+        let strips = rule6_strip_frames(&html);
+        let s19 = strips
+            .iter()
+            .copied()
+            .min_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+        if let Some((_, _, _, sh)) = s19 {
+            assert!(
+                (sh - 12.0).abs() < 1.0 || (sh - 23.0).abs() < 1.0,
+                "the strip is 12 pt per line plus 1: got height {sh:.2}"
+            );
+        }
+        // rows below the strip keep their positions within the page budget:
+        // nothing of the page's content passes 936 - 4.
+        let mut max_bottom = 0.0f64;
+        let mut cur = 0;
+        let page_start = html.find("class=\"page page-2").unwrap_or(0);
+        while let Some(rel) = html[cur..].find("<div ") {
+            let start = cur + rel;
+            if start < page_start {
+                cur = start + 5;
+                continue;
+            }
+            let Some(e) = html[start..].find('>') else {
+                break;
+            };
+            let tag = &html[start..start + e + 1];
+            cur = start + e + 1;
+            if tag.contains("page page-3") {
+                break;
+            }
+            if let (Some(t), Some(h)) = (
+                super::style_pt_prop(tag, "top"),
+                super::style_pt_prop(tag, "height"),
+            ) {
+                max_bottom = max_bottom.max(t + h);
+            }
+        }
+        assert!(
+            max_bottom <= 936.0 - 4.0 + 0.01,
+            "content bottom {max_bottom:.2} keeps the 4 pt reserve off the 936 edge"
+        );
     }
 
     /// (c3) The amount cell keeps the sheet's original height: the comb
@@ -15572,6 +15849,36 @@ mod donor_estate_print_tests {
     }
 
     /// REVIEW FIX TESTS (failing first). Helpers.
+    /// The strips the owner's drawing prints, read from the layer-rule6
+    /// group: each white text-area rect gives (x0, x1, y, h) of its strip —
+    /// the white rect is inset 1.0/0.25 from the strip's own frame.
+    fn rule6_strip_frames(html: &str) -> Vec<(f64, f64, f64, f64)> {
+        let mut out = Vec::new();
+        let mut cur = 0;
+        while let Some(rel) = html[cur..].find("<g class=\"layer-rule6\">") {
+            let gstart = cur + rel;
+            let Some(gend_rel) = html[gstart..].find("</g>") else {
+                break;
+            };
+            let group = &html[gstart..gstart + gend_rel];
+            for m in group.match_indices("fill=\"#ffffff\"") {
+                let at = m.0;
+                let Some(rs) = group[..at].rfind("<rect ") else {
+                    continue;
+                };
+                let tag = &group[rs..group.len().min(at + 20)];
+                let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    out.push((x - 1.0, x - 1.0 + w + 2.0, y - 0.25, h + 0.5));
+                }
+            }
+            cur = gstart + gend_rel;
+        }
+        out
+    }
+
     fn rule6_band_span<'a>(html: &'a str, cell: &str) -> Option<&'a str> {
         let at = html.find(&format!("data-rule6-of=\"{cell}\""))?;
         let end = html[at..].find("</div>").map(|e| at + e)?;
@@ -15603,7 +15910,7 @@ mod donor_estate_print_tests {
             let Some(rs) = html[..at].rfind("<rect ") else {
                 break;
             };
-            let tag = &html[rs..at + 20];
+            let tag = &html[rs..html.len().min(at + 20)];
             let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
             if let (Some(x), Some(y), Some(h)) = (num("x"), num("y"), num("height")) {
                 if (y - band_top).abs() < 2.0
@@ -15715,11 +16022,12 @@ mod donor_estate_print_tests {
     /// The reviewer's side edges: every strip keeps black side edges at the
     /// sheet's own frame thickness — never edgeless, never lighter than the
     /// sheet's own lines (1701MS draws 1.5 pt).
-    /// (a) A second strip on the same page keeps its frame lines too: on
-    /// 1701q page 2 the strips for p2c148, p2c150 and p2c152 stack, and the
-    /// page's left frame edge (x = 12.72) must run continuously through ALL
-    /// of them — the `d_top.abs() <= 1e-4` guard used to stop the stretch
-    /// once an earlier strip sat above the segment.
+    /// (a) The outer page frame is unchanged by the strips: on 1701q page 2
+    /// the strips for p2c148, p2c150 and p2c152 stack, and the page's left
+    /// frame edge (x = 12.72) runs continuously through ALL of them — the
+    /// strip's white text area starts inside the frame, never over it, so the
+    /// frame edge shows unbroken (owner's drawing, decision of 2026-11-28;
+    /// interior dividers stop at the strips instead, by design).
     #[test]
     fn a_second_rule6_strip_on_a_page_keeps_the_frame_lines() {
         let slug = "1701q-2018";
@@ -15936,72 +16244,58 @@ mod donor_estate_print_tests {
     }
 
     #[test]
-    fn rule6_strip_keeps_black_side_edges_at_sheet_thickness() {
-        for (slug, cell, want) in [
-            ("1701ms-2024", "p2c179", 1.5f64),
-            ("1701-2018", "p4c213", 0.0f64),
-        ] {
+    fn rule6_strip_keeps_black_side_edges() {
+        // The owner's drawing (#510, adopted 2026-11-28): the strip closes
+        // with black side edges at its x0/x1, drawn over the sheet's line
+        // work inside the layer — no longer measured against the sheet's
+        // frame thickness, the edges are the strip's own 1.2 pt rules.
+        for (slug, cell) in [("1701ms-2024", "p2c179"), ("1701-2018", "p4c213")] {
             let html = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
-            let band_at = html
-                .find(&format!("data-rule6-of=\"{}\"", cell))
-                .unwrap_or_else(|| panic!("{slug} {cell} band"));
-            let div_start = html[..band_at].rfind("<div ").unwrap();
-            let div_end = html[div_start..].find('>').unwrap() + div_start;
-            let div_tag = &html[div_start..=div_end];
-            let band_top = super::style_pt_prop(div_tag, "top").unwrap();
-            // the strip span from the grey fill
-            let mut strip = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-            for (ri, _) in html.match_indices("fill=\"#e3e3e3\"") {
-                let rs = html[..ri].rfind("<rect ").unwrap();
-                let rtag = &html[rs..ri + 30];
-                let num = |a: &str| super::attr(rtag, a).and_then(|v| v.parse::<f64>().ok());
-                if let (Some(rx), Some(ry), Some(rw), Some(rh)) =
-                    (num("x"), num("y"), num("width"), num("height"))
-                {
-                    if (ry - band_top).abs() < 2.0 {
-                        strip = (rx, rx + rw, ry, rh);
-                        break;
-                    }
-                }
-            }
-            assert!(strip.1 > strip.0, "{slug}: grey strip found");
-            let mut left_edge = false;
-            let mut right_edge = false;
-            let mut thickness = 0.0f64;
-            let mut cursor = 0;
-            while let Some(rel) = html[cursor..].find("<rect ") {
-                let start = cursor + rel;
-                let Some(e) = html[start..].find('>') else {
+            assert!(
+                html.contains(&format!("data-rule6-of=\"{}\"", cell)),
+                "{slug} {cell} band"
+            );
+            let strips = rule6_strip_frames(&html);
+            assert!(!strips.is_empty(), "{slug}: strip frames read");
+            let mut found = 0usize;
+            for m in html.match_indices("<g class=\"layer-rule6\">") {
+                let gstart = m.0;
+                let Some(gend_rel) = html[gstart..].find("</g>") else {
                     break;
                 };
-                let tag = &html[start..start + e + 1];
-                cursor = start + e + 1;
-                if !tag.contains("fill=\"#000000\"") {
-                    continue;
-                }
-                let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
-                if let (Some(x), Some(y), Some(w), Some(h)) =
-                    (num("x"), num("y"), num("width"), num("height"))
-                {
-                    if (y - strip.2).abs() < 1.0 && (h - strip.3).abs() < 1.0 && w <= 2.0 {
-                        if (x - strip.0).abs() < 0.6 {
-                            left_edge = true;
-                            thickness = w;
+                let group = &html[gstart..gstart + gend_rel];
+                for &(x0, x1, y, h) in &strips {
+                    let mut left_ok = false;
+                    let mut right_ok = false;
+                    for r in group.match_indices("fill=\"#000000\"") {
+                        let at = r.0;
+                        let Some(rs) = group[..at].rfind("<rect ") else {
+                            continue;
+                        };
+                        let tag = &group[rs..group.len().min(at + 20)];
+                        let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                        if let (Some(x), Some(ry), Some(w), Some(rh)) =
+                            (num("x"), num("y"), num("width"), num("height"))
+                        {
+                            if (ry - y).abs() < 0.75 && (rh - h).abs() < 0.75 {
+                                if (x - x0).abs() < 0.3 && (w - 1.2).abs() < 0.3 {
+                                    left_ok = true;
+                                }
+                                if (x + w - x1).abs() < 0.3 && (w - 1.2).abs() < 0.3 {
+                                    right_ok = true;
+                                }
+                            }
                         }
-                        if (x + w - strip.1).abs() < 0.6 {
-                            right_edge = true;
-                        }
+                    }
+                    if left_ok && right_ok {
+                        found += 1;
                     }
                 }
             }
-            assert!(left_edge, "{slug} {cell}: strip has no left side edge");
-            assert!(right_edge, "{slug} {cell}: strip has no right side edge");
-            if want > 0.0 {
-                assert!(
-                    (thickness - want).abs() < 0.3,
-                    "{slug}: side edge thickness {thickness:.2} should read the sheet's own {want:.2} pt lines"
-                );
-            }
+            assert!(
+                found >= 1,
+                "{slug} {cell}: strip closes with black side edges"
+            );
         }
     }
 
@@ -16024,18 +16318,13 @@ mod donor_estate_print_tests {
             let top = super::style_pt_prop(div_tag, "top").unwrap();
             let height = super::style_pt_prop(div_tag, "height").unwrap();
             let strip = (top, top + height);
-            // the strip's horizontal span is the grey fill's, not the text
-            // box's: find the grey rect at the strip's top edge.
+            // the strip's horizontal span is the strip frame's, read from
+            // the layer's white text-area rect at the strip's top edge.
             let mut strip_x = (0.0f64, 0.0f64);
-            for (ri, _) in html.match_indices("fill=\"#e3e3e3\"") {
-                let rs = html[..ri].rfind("<rect ").unwrap();
-                let rtag = &html[rs..ri + 20];
-                let num = |a: &str| super::attr(rtag, a).and_then(|v| v.parse::<f64>().ok());
-                if let (Some(rx), Some(ry), Some(rw)) = (num("x"), num("y"), num("width")) {
-                    if (ry - top).abs() < 2.0 {
-                        strip_x = (rx, rx + rw);
-                        break;
-                    }
+            for &(x0, x1, sy, _sh) in &rule6_strip_frames(&html) {
+                if (sy + 0.5 - top).abs() < 2.0 {
+                    strip_x = (x0, x1);
+                    break;
                 }
             }
             // the comb cells on the row: data-cell-kind field divs of this
@@ -16077,16 +16366,13 @@ mod donor_estate_print_tests {
                 if (3.0..=10.0).contains(&h) && y + h <= strip.0 + 0.5 && y + h >= strip.0 - 14.0 {
                     examined += 1;
                 }
-                // in or across the strip at all: a narrowed band never
-                // reaches the amount columns, so only a full-width strip can
-                // carry ticks at all.
-                if y + h <= strip.0 + 0.5 || y >= strip.1 - 0.5 {
+                // The owner's drawing: the strip's own row carries the
+                // amount combs, whose ticks legitimately enter the strip and
+                // are covered by its grey — what must never happen is a tick
+                // poking BELOW the strip's bottom rule into the next row.
+                if y + h <= strip.1 + 0.75 || y >= strip.1 - 0.5 {
                     continue;
                 }
-                // strictly inside a comb cell's span, overlapping it
-                // vertically: a digit tick — at ANY height: a wrongly
-                // stretched tick outgrows one comb row, so a height filter
-                // here would make this test unable to fail (F2).
                 let interior = combs.iter().any(|&(left, width, ctop, ch)| {
                     x > left + 3.0
                         && x < left + width - 3.0
@@ -16440,11 +16726,12 @@ mod donor_estate_print_tests {
 
     #[test]
     fn rule6_lines_cap_never_admits_a_strip_the_page_cannot_hold() {
-        // review (c): a one-line strip consumes max(11*1+1, 14) = 14 pt; a
-        // page budget of 13.4 pt (1701 page 2) admits zero lines, not one.
-        assert_eq!(super::rule6_band_lines_cap(13.4, 11.0), 0);
-        assert_eq!(super::rule6_band_lines_cap(13.99, 11.0), 0);
-        assert_eq!(super::rule6_band_lines_cap(14.0, 11.0), 1);
+        // the owner's 12 pt strip: one line consumes 11+1 = 12 pt, so a page
+        // budget of 13.4 pt (1701 page 2) admits exactly one strip with 1.4 pt
+        // to spare, and the 4 pt bottom reserve is never touched.
+        assert_eq!(super::rule6_band_lines_cap(11.99, 11.0), 0);
+        assert_eq!(super::rule6_band_lines_cap(12.0, 11.0), 1);
+        assert_eq!(super::rule6_band_lines_cap(13.4, 11.0), 1);
         assert_eq!(super::rule6_band_lines_cap(22.9, 11.0), 1);
         assert_eq!(super::rule6_band_lines_cap(23.0, 11.0), 2);
         assert_eq!(super::rule6_band_lines_cap(0.0, 11.0), 0);
@@ -16540,11 +16827,15 @@ mod donor_estate_print_tests {
     /// in-cell because the page has no room for even one strip.
     #[test]
     fn rule6_cell_truncation_ends_on_a_whole_word() {
+        // With the owner's 12 pt strip, 1701 page 2's 13.4 pt of room admits
+        // item 19's strip — the truncation case moves to item 20, whose own
+        // strip does not fit after item 19's consumes the room.
         let mut fields = BTreeMap::new();
         let full = "SPECIMEN OTHER NON-OPERATING INCOME LONG DESCRIPTION WRAPPING OVER SEVERAL LINES OF PRINT";
         fields.insert("frm1701:txtPg2IShed3_19Desc".to_string(), full.to_string());
+        fields.insert("frm1701:txtPg2IShed3_20Desc".to_string(), full.to_string());
         let doc = filled_document("1701-2018", &fields).unwrap();
-        let at = doc.find("id=\"p2c134-i\"").expect("the cell input");
+        let at = doc.find("id=\"p2c139-i\"").expect("the cell input");
         let end = at + doc[at..].find('>').unwrap();
         let val = attr(&doc[at..=end], "value").unwrap_or("").to_string();
         let Some(prefix) = val.strip_suffix("...") else {
@@ -16641,12 +16932,11 @@ mod donor_estate_print_tests {
             if !doc.contains("data-rule6-band") {
                 continue;
             }
-            // Every grey strip edge must equal the x of a frame divider that
-            // OVERLAPS the strip's own y range: the left edge a divider's left
-            // x, the right edge a divider's right x (vx + vw). Dividers
-            // elsewhere on the page never count, and neither does the strip's
-            // own side rect (drawn at the sheet's frame-line thickness, well
-            // under the 8 pt a real frame divider spans).
+            // The owner's drawing: the strip is its own row inside the layer.
+            // Its outer edges still sit on the sheet's frame dividers — the
+            // left edge on a divider's left x, the right edge on a divider's
+            // right x (vx + vw) — reading only dividers that overlap the
+            // strip's own y range (F9).
             let mut dividers: Vec<(f64, f64, f64, f64)> = Vec::new();
             for m in doc.match_indices("<rect ") {
                 let start = m.0;
@@ -16654,25 +16944,23 @@ mod donor_estate_print_tests {
                     break;
                 };
                 let tag = &doc[start..start + e + 1];
+                if tag.contains("layer-rule6") {
+                    continue;
+                }
                 let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
                 if let (Some(x), Some(y), Some(w), Some(h)) =
                     (num("x"), num("y"), num("width"), num("height"))
                 {
-                    if w <= 1.6 && h >= 8.0 && !tag.contains("#e3e3e3") {
+                    if w <= 1.6 && h >= 8.0 && !tag.contains("#d9d9d9") && !tag.contains("#ffffff")
+                    {
                         dividers.push((x, y, w, h));
                     }
                 }
             }
+            let strips = rule6_strip_frames(&doc);
+            assert!(!strips.is_empty(), "{slug}: strips examined");
             let mut checked = 0usize;
-            for m in doc.match_indices("fill=\"#e3e3e3\"") {
-                let at = m.0;
-                let start = doc[..at].rfind("<rect ").unwrap();
-                let end = at + doc[at..].find('>').unwrap() + 1;
-                let tag = &doc[start..end];
-                let x = attr(tag, "x").unwrap().parse::<f64>().unwrap();
-                let y = attr(tag, "y").unwrap().parse::<f64>().unwrap();
-                let w = attr(tag, "width").unwrap().parse::<f64>().unwrap();
-                let h = attr(tag, "height").unwrap().parse::<f64>().unwrap();
+            for &(x0, x1, y, h) in &strips {
                 let overlapping: Vec<(f64, f64)> = dividers
                     .iter()
                     .filter(|&&(_, dy, _, dh)| dy < y + h && dy + dh > y)
@@ -16682,7 +16970,7 @@ mod donor_estate_print_tests {
                     !overlapping.is_empty(),
                     "{slug}: strip at y {y:.2} overlaps no frame divider"
                 );
-                for (edge, use_right) in [(x, false), (x + w, true)] {
+                for (edge, use_right) in [(x0, false), (x1, true)] {
                     let hit = overlapping.iter().any(|&(dx, dr)| {
                         let cand = if use_right { dr } else { dx };
                         (cand - edge).abs() <= 0.01
