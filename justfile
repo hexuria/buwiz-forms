@@ -1547,6 +1547,12 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
 e2e target="check" suite="smoke" *args="":
     {{PYTHON}} scripts/e2e {{quote(target)}} {{quote(suite)}} {{args}}
 
+# App Store screenshots: drive the booted iPhone or iPad Simulator through gpui-agent only.
+store-shots device="iphone" *args="":
+    @test "{{device}}" = iphone -o "{{device}}" = ipad || { echo "store-shots: device is iphone or ipad" >&2; exit 2; }
+    @echo "store-shots: using the one booted {{device}} Simulator"
+    @data=$(xcrun simctl get_app_container booted com.longbridge.nsh.host data 2>/dev/null || true); [ -z "$data" ] || rm -f "$data/Library/Caches/gpui-agent-token"; export NSH_AGENT_TOKEN_PAUSE=0.01; if [ "{{device}}" = iphone ]; then exec {{PYTHON}} scripts/e2e ios agent-recipes/store-shots/store-shots.json {{args}}; else exec {{PYTHON}} scripts/e2e ios agent-recipes/store-shots/store-shots-ipad.json {{args}}; fi
+
 # NSH: the Android device choice and token hand-off of nsh-run-agent, against a stand-in adb (no device needed).
 [unix]
 nsh-agent-handoff-test:
