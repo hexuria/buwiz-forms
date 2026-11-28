@@ -5437,6 +5437,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         .ok_or_else(|| host_error("edits must be an object of key -> value"))?;
     let editable = agent::identity(kind, &draft).map_err(host_error)?.status == FilingStatus::Draft;
     let edits: Map<String, Value> = edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
+    let no_key_written = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+        .is_some_and(|spec| edits.contains_key(spec.no_key));
     let unlocked = unlocked_argument(arguments, 3);
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
@@ -5477,7 +5479,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             let closes_previous_payment =
                 bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
                     &before, &draft,
-                );
+                ) || no_key_written;
             bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
                 kind,
                 &mut draft,

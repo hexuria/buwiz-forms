@@ -655,6 +655,8 @@ impl Session {
             return Err("this return is no longer a draft".into());
         }
         let fields = collect_fill_fields(args)?;
+        let no_key_written = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+            .is_some_and(|spec| fields.contains_key(spec.no_key));
         let source = fill_source(args, &fields, kind, &draft)?;
         let db = self.lock_db()?;
         let profile = load_profile(&db, &tin, year)?;
@@ -720,7 +722,7 @@ impl Session {
                 let closes_previous_payment =
                     bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
                         &before, &draft,
-                    );
+                    ) || no_key_written;
                 bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
                     kind,
                     &mut draft,
@@ -737,7 +739,7 @@ impl Session {
             let closes_previous_payment =
                 bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
                     &before, &draft,
-                );
+                ) || no_key_written;
             bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
                 kind,
                 &mut draft,
@@ -945,6 +947,8 @@ impl Session {
             Some(Value::Object(object)) => object.clone(),
             Some(_) => return Err("form.check requires args.fields as an object".into()),
         };
+        let no_key_written = bir_core::forms::agent::draft_locks::previous_payment::spec(kind)
+            .is_some_and(|spec| fields.contains_key(spec.no_key));
         let strict = args.get("strict").and_then(Value::as_bool) == Some(true);
         let db = self.lock_db()?;
         let profile = load_profile(&db, &tin, year)?;
@@ -997,7 +1001,7 @@ impl Session {
             let closes_previous_payment =
                 bir_core::forms::agent::draft_locks::previous_payment::moved_amended_yes_to_no(
                     &before, &draft,
-                );
+                ) || no_key_written;
             bir_core::forms::agent::draft_locks::previous_payment::clear_on_no_radio(
                 kind,
                 &mut draft,

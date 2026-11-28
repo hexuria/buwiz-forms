@@ -1629,7 +1629,8 @@ pub mod previous_payment {
     /// 0619E/F's load handlers disable the box without running that onclick,
     /// so a dormant legacy amount survives opening there. Any write path that
     /// moves Amended from Yes to No is the radio's choice, including a group
-    /// key or an untick of the Yes member.
+    /// key or an untick of the Yes member; naming the No key itself is the
+    /// official click even when the draft was already No.
     pub fn clear_on_no_radio(kind: AgentFormKind, draft: &mut Value, no_chosen: bool) {
         if !no_chosen {
             return;
