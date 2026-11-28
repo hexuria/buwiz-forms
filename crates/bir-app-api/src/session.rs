@@ -1106,6 +1106,16 @@ fn claimant_of(stored: &StoredAccount) -> Claimant {
     }
 }
 
+/// Test seam: force the next claim thread's open target to this room, as a decision-layer
+/// regression or a stale resumed record would. One-shot; never in a shipped build.
+#[cfg(test)]
+static FORCE_NEXT_OPEN_ROOM: Mutex<Option<bir_core::rooms::RoomId>> = Mutex::new(None);
+
+#[cfg(test)]
+pub(crate) fn force_next_open_room_for_test(room: bir_core::rooms::RoomId) {
+    *lock(&FORCE_NEXT_OPEN_ROOM) = Some(room);
+}
+
 /// The claim thread's work (§3 step 2): the claim, the target, the open — all outside SESSION —
 /// ending in the compare-and-swap commit. Only the commit writes anything visible (§5.9).
 fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64, guard: ClaimGuard) {
@@ -1114,13 +1124,26 @@ fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64, guard:
     if PANIC_CLAIM.swap(false, std::sync::atomic::Ordering::SeqCst) {
         panic!("the test's injected claim panic");
     }
-    let (target, spec) = {
+    let (mut target, mut spec) = {
         let _claim_run = lock(&CLAIM_RUN);
         hooks::at("claim.before_start");
         let decided = decide_claim(&owner);
         hooks::at("claim.after_claim");
         decided
     };
+    #[cfg(test)]
+    if let Some(room) = lock(&FORCE_NEXT_OPEN_ROOM).take() {
+        target = Target::Room {
+            room_id: room.clone(),
+            note: Note::None,
+            count_opened: false,
+        };
+        spec = Some(OpenSpec::Room {
+            path: Layout::here().room_database(&room),
+            room_id: room,
+            copy_saved: true,
+        });
+    }
     // CLAIM_RUN released: the open runs outside it and outside SESSION (§3 step 2) — migrations
     // and the checkpoint inside Database::open can take real time. A stale opener can only
     // migrate its own room's file: the same account's, idempotent, the evidence already passed.
@@ -2806,6 +2829,28 @@ mod tests {
             ),
             "A's unfinished transient was not recorded"
         );
+    }
+
+    /// The every-build invariant at the open path: even if a decision-layer regression forces A's
+    /// room into B's open, the room is refused and B ends blocked with nothing open.
+    #[test]
+    fn l1_a_mismatched_room_never_opens_for_the_owner() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        let (room_a, _) =
+            write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        force_next_open_room_for_test(room_a);
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Blocked,
+            "the mismatched room was not refused"
+        );
+        assert!(snapshot().room.is_none(), "a mismatched room installed");
     }
 
     /// L1: the resume runs before the practice-account refusal, so a practice sign-in can meet

@@ -61,11 +61,31 @@ pub(crate) fn open_path(
 ) -> Result<Arc<Mutex<Database>>, String> {
     // G1 (I4): the whole room-open rule on the room's real path — Database::open below migrates
     // and checkpoints, so a room never opens before start() ran or while its move evidence is
-    // unchecked. Legacy mode passes no room id and is not a room.
-    if let Some(room) = room_id {
+    // unchecked. Legacy mode passes no room id and is not a room. The id is also taken from the
+    // path when the caller did not pass it, so the restore's fresh reopen is the same open.
+    let room = room_id.cloned().or_else(|| {
+        bir_core::db::room_device_dir(path)?;
+        path.parent()
+            .and_then(|folder| folder.file_name())
+            .and_then(|name| name.to_str())
+            .and_then(bir_core::rooms::RoomId::parse)
+    });
+    if let Some(room) = room {
         let device_dir = bir_core::db::room_device_dir(path)
             .ok_or_else(|| format!("no device folder for {}", path.display()))?;
-        bir_core::legacy_claim::room_open_allowed(&bir_core::rooms::Layout::at(&device_dir), room)?;
+        bir_core::legacy_claim::room_open_allowed(
+            &bir_core::rooms::Layout::at(&device_dir),
+            &room,
+        )?;
+        // I3 in every build, at the one entry point the machine's room opens pass through: a room
+        // is opened only for the owner whose session is opening it. A claim record or a stale
+        // decision naming another account's room is a transient refusal, never an open.
+        let owner = crate::session::snapshot()
+            .owner
+            .ok_or_else(|| "no account is opening this room".to_string())?;
+        if room != bir_core::rooms::room_id_for(&owner.origin, &owner.user_id) {
+            return Err("that room belongs to another account; try again".to_string());
+        }
     }
     static OPEN_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _opening = lock(&OPEN_SERIAL);
