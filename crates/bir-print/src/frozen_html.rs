@@ -5475,8 +5475,6 @@ struct Rule6Insertion {
     truncated: bool,
     input_classes: String,
     greys: Vec<(f64, f64)>,
-
-    slack: f64,
 }
 
 /// RULES.md rule 6: when a named inline "(specify)" field in
@@ -5746,20 +5744,13 @@ fn apply_rule6_specify_bands(
             let input_classes = "fi".to_string();
             let letter = sheet.letter;
 
-            let base_cut_y = r6.insert_after_y;
-            let slack = page
-                .bands
+            let row_right = value_cells
                 .iter()
-                .find(|b| b.id == r6.band_id)
-                .map(|b| {
-                    let gap = b.y1 - r6.insert_after_y;
-                    if gap > 0.5 && gap <= 14.0 {
-                        gap
-                    } else {
-                        0.0
-                    }
-                })
-                .unwrap_or(0.0);
+                .map(|(_, l, _, w, _)| l + w)
+                .fold(r6.x1, f64::max);
+            let base_cut_y =
+                row_bottom_frame_line_y(&page_html, r6.x0, row_right, r6.insert_after_y)
+                    .unwrap_or(r6.insert_after_y);
 
             let (x1, cut_y) = rule6_place_band(r6.x0, r6.x1, base_cut_y, &r6.cell_id, &value_cells);
 
@@ -5826,7 +5817,6 @@ fn apply_rule6_specify_bands(
                         truncated: band_truncated,
                         input_classes,
                         greys: greys.clone(),
-                        slack,
                     });
                 }
                 continue;
@@ -5883,7 +5873,6 @@ fn apply_rule6_specify_bands(
                 truncated,
                 input_classes,
                 greys,
-                slack,
             });
         }
 
@@ -5918,17 +5907,6 @@ fn apply_rule6_specify_bands(
             (f64::INFINITY, 0.0)
         };
 
-        let total_slack: f64 = insertions.iter().map(|i| i.slack).sum();
-        let (elastic_cut_y, elastic_shrink) = if total_slack > 0.1 {
-            let cut = insertions
-                .iter()
-                .map(|i| i.cut_y + 0.5)
-                .fold(f64::INFINITY, f64::min)
-                .min(elastic_cut_y);
-            (cut, elastic_shrink + total_slack)
-        } else {
-            (elastic_cut_y, elastic_shrink)
-        };
         let transformed =
             shift_page_and_insert_rule6(&page_html, &insertions, elastic_cut_y, elastic_shrink);
         out.replace_range(pg_start..pg_end, &transformed);
@@ -5940,6 +5918,33 @@ fn apply_rule6_specify_bands(
 /// the band moves down below the obstructing cell instead, so the text always
 /// has room a person can read.
 const RULE6_BAND_FLOOR_PT: f64 = 120.0;
+
+/// The y of the horizontal frame line closing the row that contains `after_y`,
+/// scanned from the page's svg rects: the first line spanning most of
+/// `x0..x1` whose top sits within 20 pt below `after_y`. Rule 6 strips cut on
+/// this line, so nothing of the row is left below the strip.
+fn row_bottom_frame_line_y(page_html: &str, x0: f64, x1: f64, after_y: f64) -> Option<f64> {
+    let mut best: Option<f64> = None;
+    let mut sc = 0;
+    while let Some(rel) = page_html[sc..].find("<rect ") {
+        let rs = sc + rel;
+        let Some(re_rel) = page_html[rs..].find('>') else {
+            break;
+        };
+        let tag = &page_html[rs..rs + re_rel];
+        let get = |n: &str| attr(tag, n).and_then(|v| v.parse::<f64>().ok());
+        if let (Some(y), Some(w), Some(x), Some(h)) =
+            (get("y"), get("width"), get("x"), get("height"))
+        {
+            let spans_row = w >= (x1 - x0) * 0.8 && x <= x0 + 2.0 && h <= 1.2;
+            if spans_row && y > after_y + 0.5 && y <= after_y + 20.0 {
+                best = Some(best.map_or(y, |b: f64| b.min(y)));
+            }
+        }
+        sc = rs + re_rel;
+    }
+    best
+}
 
 /// The width a Rule 6 band's text is fitted to and drawn at: one value, so
 /// nothing is ever fitted wider than it is drawn (a value fitted to a wider
