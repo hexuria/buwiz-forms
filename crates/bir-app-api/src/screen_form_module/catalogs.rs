@@ -645,7 +645,11 @@ fn month_year_1601c_row(kind: AgentFormKind, key: &str) -> Option<usize> {
 /// Previous Month/s (`MM/YYYY`, `maxlength="7"`). Like the row's other
 /// boxes it starts the row (and any before it); validation checks the
 /// month the way `validateMonthYear` does.
-fn fill_1601c_month_year(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+pub(super) fn fill_1601c_month_year(
+    draft: &mut Value,
+    row: usize,
+    value: &Value,
+) -> Result<(), String> {
     if row >= agent::DYNAMIC_SCHEDULE_ROW_LIMIT {
         return Err(agent::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE.to_string());
     }

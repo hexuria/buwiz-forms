@@ -1584,8 +1584,8 @@ fn incomplete_2200a_row(row: &super::form_2200a::Form2200AOtherRow, n: usize) ->
 /// evaluated before box binding so row 13, deliberately absent from the
 /// writable bindings, still receives the cap sentence. 2200A follows the
 /// official `isValidDataOnSched1` (`BIR-Form2200Av2020.hta` lines 7426-7462):
-/// a new row may not start while an earlier row is incomplete. 1601C's
-/// inventoried `addSchedule` evidence has no completeness guard
+/// the Add button may not start a new row past the printed three while an
+/// earlier row is incomplete. 1601C's inventoried `addSchedule` evidence has no completeness guard
 /// (`official-hta-runtime#addSchedule:L3349-L3385`), so only its cap applies.
 pub fn dynamic_schedule_write_refusal(
     kind: AgentFormKind,
@@ -1609,10 +1609,17 @@ pub fn dynamic_schedule_write_refusal(
     if row > DYNAMIC_SCHEDULE_ROW_LIMIT {
         return Some(DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE.to_string());
     }
-    if row <= 1 {
+    if row <= 3 {
         return None;
     }
     let typed: super::form_2200a::Form2200ADraft = serde_json::from_value(draft.clone()).ok()?;
+    if typed
+        .others
+        .get(row - 1)
+        .is_some_and(|current| !current.is_blank())
+    {
+        return None;
+    }
     for n in 1..row {
         let earlier = typed.others.get(n - 1).cloned().unwrap_or_default();
         if let Some(error) = incomplete_2200a_row(&earlier, n) {

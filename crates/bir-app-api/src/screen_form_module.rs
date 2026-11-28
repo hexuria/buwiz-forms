@@ -11240,6 +11240,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn month_year_1601c_cap_is_enforced_before_resize() {
+        setup();
+        let mut draft = open("1601C", 7)["draft"].clone();
+        let error = super::catalogs::fill_1601c_month_year(&mut draft, 1000, &json!("09/2026"))
+            .expect_err("the direct fill refuses out-of-cap rows before resizing");
+        assert_eq!(error, "This schedule takes up to 12 rows in this version.");
+        assert!(draft["schedule_1"].as_array().unwrap().len() < 1001);
+    }
+
     /// The assistant writes the same runtime rows the page exposes, and the
     /// computed field map carries them to the upload writers.
     #[test]
@@ -11311,6 +11321,72 @@ mod tests {
         )
         .expect_err("a new Others row needs the earlier rows complete");
         assert_eq!(error, "ATC is required in row #1");
+
+        let mut partial = sparse.clone();
+        for (column, value, sentence) in [
+            ("Atc", "997", "Description is required in row #1"),
+            (
+                "Desc",
+                "X",
+                "Tax Bracket/Unit of Measure is required in row #1",
+            ),
+            (
+                "Bracket",
+                "PER LITER",
+                "Applicable Tax Rate is required in row #1",
+            ),
+        ] {
+            agent::fill(
+                kind,
+                &mut partial,
+                &format!("frm2200Av2020:txtSched1_xa_others1_{column}"),
+                &json!(value),
+                None,
+            )
+            .unwrap();
+            let error = agent::fill(
+                kind,
+                &mut partial,
+                "frm2200Av2020:txtSched1_xa_others4_Atc",
+                &json!("997"),
+                None,
+            )
+            .expect_err("row four still needs row one complete");
+            assert_eq!(error, sentence);
+        }
+
+        let mut invalid = open("2200A", 1)["draft"].clone();
+        invalid["others"] = json!([{"atc_digits":"99"}]);
+        assert_eq!(
+            agent::dynamic_schedule_write_refusal(
+                kind,
+                &invalid,
+                "frm2200Av2020:txtSched1_xa_others4_Atc",
+                &json!("997"),
+            ),
+            Some("Please supply valid ATC Code for row #1".to_string())
+        );
+
+        let mut row_two_positive = open("2200A", 1)["draft"].clone();
+        agent::fill(
+            kind,
+            &mut row_two_positive,
+            "frm2200Av2020:txtSched1_xa_others2_Desc",
+            &json!("ROW TWO"),
+            None,
+        )
+        .expect("a printed row stays writable while row one is incomplete");
+
+        let mut existing_row_four = row_two_positive.clone();
+        existing_row_four["others"] = json!([{}, {}, {}, {"description":"LEGACY ROW"}]);
+        agent::fill(
+            kind,
+            &mut existing_row_four,
+            "frm2200Av2020:txtSched1_xa_others4_Bracket",
+            &json!("PER LITER"),
+            None,
+        )
+        .expect("an already-started runtime row stays editable");
 
         let error = agent::fill(
             kind,

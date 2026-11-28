@@ -3187,14 +3187,34 @@ fn every_shell_form_print_map_has_a_sheet_or_reviewed_reason() {
             let Some(bound) = kind.definition().bindings.get(&entry.key) else {
                 continue;
             };
-            let value = match &bound.binding {
+            let mut value = match &bound.binding {
                 agent::Binding::Text { date: Some(_), .. } => "06/15/2025",
                 agent::Binding::Text { .. } => "SAMPLE",
                 agent::Binding::Amount { .. } => "1234.50",
                 agent::Binding::Whole { .. } => "1",
                 _ => continue,
             };
+            if entry.key.contains("txtSched1_xa_others") {
+                continue;
+            }
             let _ = agent::fill(kind, &mut filled, &entry.key, &Value::from(value), None);
+        }
+        if code == "2200A" {
+            for row in 1..=12 {
+                for (column, value) in [
+                    ("Atc", "997"),
+                    ("Desc", "SAMPLE PRODUCT"),
+                    ("Bracket", "PER LITER"),
+                    ("Rate", "10"),
+                    ("Export", "100.00"),
+                    ("Taxable", "1000.00"),
+                    ("Due", "100.00"),
+                ] {
+                    let key = format!("frm2200Av2020:txtSched1_xa_others{row}_{column}");
+                    agent::fill(kind, &mut filled, &key, &Value::from(value), None)
+                        .unwrap_or_else(|error| panic!("{key}: {error}"));
+                }
+            }
         }
         agent::compute(kind, &mut filled).expect("filled draft computes");
 
