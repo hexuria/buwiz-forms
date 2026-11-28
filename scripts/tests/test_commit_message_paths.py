@@ -140,6 +140,26 @@ class LocalPathPatternTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertFalse(has_absolute_local_path(message))
 
+    def test_a_public_log_report_names_the_commit_but_never_repeats_the_line(self):
+        import contextlib
+        import io as _io
+
+        from scripts import commit_message_paths as module
+
+        bad = [("a" * 40, "built in /Users/alice/project")]
+        quiet = _io.StringIO()
+        with contextlib.redirect_stderr(quiet):
+            module.report_bad_commits(bad, public_log=True)
+        text = quiet.getvalue()
+        self.assertIn("a" * 40, text)
+        self.assertNotIn("/Users/alice", text)
+        self.assertNotIn("offending line:", text)
+        self.assertIn("git log -1 --format=%B", text)
+        loud = _io.StringIO()
+        with contextlib.redirect_stderr(loud):
+            module.report_bad_commits(bad)
+        self.assertIn("offending line: built in /Users/alice/project", loud.getvalue())
+
     def test_file_urls_with_a_home_or_volume_path_are_refused(self):
         for message in (
             "See file:///Users/alice/notes/plan.md",
@@ -1069,7 +1089,7 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertIn("if: github.event_name == 'pull_request'", changes)
         self.assertIn("PR_BASE: ${{ github.event.pull_request.base.sha }}", changes)
         self.assertIn("PR_HEAD: ${{ github.event.pull_request.head.sha }}", changes)
-        self.assertIn('python3 -I scripts/commit_message_paths.py range "$PR_BASE" "$PR_HEAD"', changes)
+        self.assertIn('python3 -I scripts/commit_message_paths.py range --public-log "$PR_BASE" "$PR_HEAD"', changes)
 
     def test_setup_scripts_install_the_hooks_for_an_explicit_repository_root(self):
         linux = (ROOT / "scripts/setup-linux.sh").read_text(encoding="utf-8")

@@ -235,11 +235,16 @@ def scan_pre_push(lines: Iterable[str], cwd: Path | None = None, runner: Runner 
     return bad
 
 
-def report_bad_commits(bad: Iterable[tuple[str, str]]) -> None:
+def report_bad_commits(bad: Iterable[tuple[str, str]], public_log: bool = False) -> None:
+    """Say which commits are refused. A public log (the pull-request check) names the commit and how to read its
+    message, and never repeats the line: the log outlives the branch, and the line is the very text to remove."""
     entries = list(bad)
     for sha, offending in entries:
         print(f"commit {sha}: {REASON}", file=sys.stderr)
-        print(f"offending line: {offending}", file=sys.stderr)
+        if public_log:
+            print(f"read the message with: git log -1 --format=%B {sha}", file=sys.stderr)
+        else:
+            print(f"offending line: {offending}", file=sys.stderr)
     if entries:
         print(REWORDING, file=sys.stderr)
 
@@ -314,6 +319,9 @@ def main(argv: list[str] | None = None) -> int:
             print(REWORDING, file=sys.stderr)
             return 1
         return 0
+    public_log = len(args) == 4 and args[0] == "range" and args[1] == "--public-log"
+    if public_log:
+        args = [args[0], args[2], args[3]]
     if len(args) == 3 and args[0] == "range":
         try:
             bad = scan_range(args[1], args[2])
@@ -321,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"could not scan pull-request commit messages: {error}", file=sys.stderr)
             return 2
         if bad:
-            report_bad_commits(bad)
+            report_bad_commits(bad, public_log=public_log)
             return 1
         print("no absolute local paths in pull-request commit messages")
         return 0
