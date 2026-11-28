@@ -359,7 +359,7 @@ mod tests {
             line_of_business: "Consulting Services".to_string(),
             registered_address: "123 Rizal Street, Quezon City".to_string(),
             zip_code: "1100".to_string(),
-            phone: "09156837000".to_string(),
+            phone: "09170000000".to_string(),
             email: "juan@example.com".to_string(),
             default_form_type: "2551Q".to_string(),
             taxpayer_type: crate::profile::TaxpayerType::Individual,
