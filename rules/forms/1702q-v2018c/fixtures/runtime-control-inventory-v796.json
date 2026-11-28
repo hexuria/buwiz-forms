@@ -1829,7 +1829,7 @@
                                 {
                                     "ordinal":  23,
                                     "serialized_key":  "txtEmail",
-                                    "serialized_value":  "filer@example.com"
+                                    "serialized_value":  "#email-redacted#"
                                 },
                                 {
                                     "ordinal":  24,
