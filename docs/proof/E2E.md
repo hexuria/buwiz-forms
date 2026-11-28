@@ -56,7 +56,7 @@ them again after its own read of `.env`. An account server that is not on this m
    - `run.log`: one line per action (time, verb, target, result, ms), for a proof README to include;
    - `app.log`: the app's own output;
    - one folder per recipe, with `receipt.json` (gpui-agent's receipt), the screenshots and, with `--record`, the
-     recording.
+     recording. `--record` records only iOS and Android; a desktop video is the machine recorder's, not the runner's.
 
 Results:
 - `pass`;
@@ -65,10 +65,11 @@ Results:
 - `needs`: skipped until a gpui-agent release or a host build carries what it needs;
 - `refused`: a send step without the safety conditions;
 - `skipped`: no variant for this form factor;
+- `skipped (needs --allow-send)`: a send recipe run without `--allow-send` (never a failure);
 - `setup`: a generated id was not found, before the recipe or at its `after` step;
 - `not run`: a required recipe before it failed.
 
-The exit status is 0 only when every recipe passed or was skipped.
+The exit status is 0 only when every recipe passed or has one of the skipped results.
 
 ## Safety, in code (`scripts/e2e/runner.py`)
 
@@ -78,8 +79,8 @@ The checks read every word of a step (flag values included) and every string of 
 - **Send steps.** A recipe that presses Queue, Send, Submit or File (or invokes a send) must be marked `"send": true`
   in its suite, or the suite does not run. It runs only with `--allow-send`, in the dry-run test environment
   (`EBIR_TEST_ENV=1`, `BIR_SFTP_DRY_RUN=1`, no `BIR_SFTP_LIVE`: the launch environment, or the runner's own with
-  `--no-launch`), and only when the app's data plane answers `app.info` with `"database": "test"`. Otherwise it is
-  `refused`.
+  `--no-launch`), and only when the app's data plane answers `app.info` with `"database": "test"`. Without
+  `--allow-send` it is `skipped (needs --allow-send)`; with it, a missing safety condition is `refused`.
 - **`--no-launch`** drives an app that is already running only when it answers `app.info` with `"database":
   "test"`; otherwise nothing runs.
 - **Secret boxes.** No step types, sets, pastes or keys into a box that says password, PIN, passcode, secret,
@@ -124,8 +125,8 @@ A suite is `agent-recipes/e2e/<name>.json`:
  "params": {"tin": "12345678800000"},
  "recipes": [
   {"name": "sign-up", "desktop": "sign-up.wants", "linux": "sign-up-linux.wants", "phone": "sign-up-phone.json",
-   "android": "sign-up-android.wants",
-   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits"}}, "required": true},
+   "android": "sign-up-android.json",
+   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits", "before_first_use": true}}, "required": true},
   {"name": "money-boxes", "desktop": "money-boxes-paced.json", "phone": "money-boxes-paced-phone.json",
    "needs_cli": "0.4.1", "needs_feature": {"phone": "software_keyboard"},
    "fallback": {"phone": "money-boxes-phone.json", "file": "money-boxes.wants"}, "known_gap": {"macos": "gap 2: ..."}},
@@ -150,19 +151,25 @@ into the run's evidence folder (never the repository), runs the steps through th
 resolves, then runs the rest in the same app session. `.wants` slicing assumes one step per non-comment line, the same
 shape gpui-agent parses; that is what maps a slice line number back to the original step id. The report and the merged
 receipt are still one recipe with the original step ids. A node not found there is `setup` at that step, with the
-screenshot and tree kept. A parameter used at or before its `after` step is refused by `just e2e check <suite>`.
+screenshot and tree kept; the run's summary calls it `setup failure`, and the exit status is nonzero. A parameter used at or before its `after` step is refused by `just e2e check <suite>`.
 
-The delete-row case: 2551Q's Schedule 1 is the collapsed part 3 (`fp-part-3-toggle`), and its Add row can be culled
-until that part is expanded or scrolled to. If `delete-row.wants` first takes a step that makes the table visible (that
-step must not use `$table`) and only then clicks `$table-add`, the entry's spec becomes:
+A spec may say `"before_first_use": true` in place of `after`: the node is then looked up right before the first step
+that uses the parameter, whatever that step's id is in the variant being run. Use it when one suite entry maps
+several variants of a flow whose steps are numbered differently: the `.wants` sign-up first uses `$tin_field` at
+`s4`, the JSON ones at `s6`, after two more steps that choose the start option, so one fixed `after` id is too
+early in some of them. A spec that names both is refused.
+
+The delete-row case: 2551Q's Schedule 1 is the collapsed part 4 (`fp-part-4-toggle`), and its Add row can be culled
+until that part is expanded or scrolled to. `delete-row*.json` first opens its own fresh Q1 return, scrolls to and opens
+that part without using `$table`, and only then clicks `$table-add`; the entry's spec is:
 
 ```json
-{"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "s1"}
+{"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "s3"}
 ```
 
 **Requirements and fallbacks.**
-- `needs_cli` / `needs_feature`: the installed gpui-agent-cli version, or a `hello.features` entry. Either can be a
-  map per target or form factor.
+- `needs_cli` / `needs_feature`: the installed gpui-agent-cli version, or one `hello.features` entry (a list means
+  every entry is required). Either can be a map per target or form factor.
 - `fallback`: the file to run while those are missing, or a map per form factor (`phone`, then `file`). Without one,
   the recipe is reported as `needs`.
 
@@ -186,12 +193,18 @@ step must not use `$table`) and only then clicks `$table-add`, the entry's spec 
 
 `just e2e check <suite>` checks a suite with no app:
 - every file exists and parses;
-- every param it uses is supplied;
+- every param it uses is supplied, and every placeholder a JSON recipe uses is declared in that recipe's own
+  `params` (gpui-agent-cli 0.5.0 refuses it otherwise);
 - a param resolved `after` a step is not used at or before that step;
 - in a JSON recipe, the cut after that step does not separate a step from a step it `needs`;
 - send steps are marked;
 - no secret box is typed into;
 - `key_delay_ms` appears only on `type`, and only in entries with `needs_cli`;
+- a step whose op needs a `hello.features` entry is not in the variant a target would run when the pinned plug does
+  not list that feature there (the desktop list and the iOS/Android lists differ), unless the entry's own
+  `needs_feature` sends that host to a fallback or `needs` first. These static lists are only the no-app check: a run
+  checks the live window's `hello.features`, so a host can use features it actually lists and is refused before any
+  recipe starts when it does not;
 - then `gpui-agent recipe validate` on each file the installed client can read.
 
 ## The smoke suite (`agent-recipes/e2e/smoke.json`)
@@ -203,15 +216,16 @@ a Windows file is named.
 | # | Recipe | What it proves | Desktop | Linux (narrow) | iOS / Android |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `setup-start` | first-run setup opens; "Just me" | `setup-start.wants` | same | same |
-| 2 | `sign-up` | the first taxpayer: TIN, name, address, the ZIP and RDO pickers | `sign-up.wants` | `sign-up-linux.wants` | `sign-up-phone.json` / `sign-up-android.wants` (no pickers: gap 1) |
-| 3 | `tax-year` | the year and 2551Q in Edit forms (New return is refused without them) | `tax-year.wants` | `tax-year-narrow.wants` | `tax-year.wants` / `tax-year-narrow.wants` |
+| 2 | `sign-up` | the first taxpayer: TIN, name, address, the ZIP and RDO pickers | `sign-up.wants` | `sign-up-linux.wants` | `sign-up-phone.json` / `sign-up-android.json` (no pickers: gap 1) |
+| 3 | `tax-year` | the year and 2551Q in Edit forms (New return is refused without them) | `tax-year.wants` | `tax-year-narrow.wants` | `tax-year.wants` / `tax-year-narrow.wants`; Android `tax-year-android.json` |
 | 4 | `navigate` | every screen | `../ui/ui-navigate-app.wants` | `navigate-phone.wants` | `navigate-phone.wants` |
 | 5 | `open-2551q` | New return > 2551Q | `open-2551q.wants`; Windows `open-2551q-windows.wants` (also the facts 2551Q validates) | `open-2551q-phone.wants` | `open-2551q-phone.wants` |
-| 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | `money-boxes-paced-phone.json` (awaits the software keyboard), fallback `money-boxes-phone.json` |
-| 7 | `queue` | Queue in the dry-run test build (send) | `queue.wants`; Windows `queue-windows.wants` (answers Part I) | `queue.wants` | `queue.wants` |
-| 8 | `delete-row` | a schedule row added, filled and deleted | `delete-row.wants` | same | same |
-| 9 | `birth-date` | the birth date, typed in the date box / the date sheet, read back, saved | `birth-date.wants` | `birth-date-phone.json` | `birth-date-phone.json` |
-| 10 | `sign-out` | Log out; the lock screen | `sign-out.wants` | `sign-out-phone.wants` | `sign-out-phone.wants` |
+| 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | iOS `money-boxes-paced-ios.json` / Android `money-boxes-paced-phone.json` (await the software keyboard), fallback `money-boxes-phone.json` |
+| 7 | `delete-row` | in its own fresh Q1 return, a schedule row added, filled and deleted | `delete-row-desktop.json` | `delete-row.json` | `delete-row.json` |
+| 8 | `queue` | a fresh Q2 return validated; Queue visible but not pressed | `queue-desktop.json`; Windows `queue-windows.wants` | `queue-linux.json` | `queue-phone.json`; on iOS it is `needs system.keyboard_hide` because the plug does not list that action there |
+| 9 | `queue-send` | a fresh Q3 return validated, then the explicit dry-run Queue/Continue rehearsal | `queue-send-desktop.json`; Windows `queue-send-windows.wants` | `queue-send-linux.json` | `queue-send-phone.json`; on iOS it is `needs system.keyboard_hide` because the plug does not list that action there |
+| 10 | `birth-date` | the birth date, typed in the date box / the date sheet, read back, saved | `birth-date.wants` | `birth-date-phone.json` | `birth-date-phone.json` |
+| 11 | `sign-out` | Log out; the lock screen | `sign-out.wants` | `sign-out-phone.wants` | `sign-out-phone.wants` |
 
 Why the recipes look as they do (each from a machine's run on the real app, `proof/e2e-fixes-*/README.md`):
 - After Create the app is on the taxpayer's own page (Forms tab, Add year band open), not Home. Home tiles are
@@ -222,14 +236,23 @@ Why the recipes look as they do (each from a machine's run on the real app, `pro
 - The form is an accordion on every platform: Items 15 and 16 are not in the tree until Part II
   (`fp-part-2-toggle`) is expanded; the JSON money-box recipes scroll `form-scroll` first (the floating pill can cover
   a toggle). The money boxes type the amounts as written (`500.25`): since #403 a money box keeps its text while
-  focused and formats only on leaving, so the box reads `$amount` while focused and `$amount_shown` after it.
+  focused and formats only on leaving, so the box reads `$amount` while focused and `$amount_shown` after it. They do
+  not promise to leave Items 15 and 16 at zero; the queue recipes never reuse that return.
+- Each queue rehearsal opens its own fresh return, where Item 15 (creditable percentage tax withheld) starts empty
+  and is required: every queue and queue-send variant opens Part II and sets Item 15 to `0` before Check, or Check
+  leaves "1 item needs attention" and the recipe stops at its `fp-pill-count` wait.
 - On the macOS strict adapter a bare `type` does not move focus out of the segmented TIN control: the desktop
   recipes click a box before typing into it (sign-up's name, the birth date, delete-row's amount).
 - 2551Q's Schedule 1 pre-holds row 1, and Delete row is disabled on an empty row: delete-row fills the new row's
   amount, deletes it and checks the row-2 line is gone (`$table-none` never shows).
 - Log out on a phone is `nb-menu-logout` in the header's account menu (`nsh/shell/Narrow.tsx`).
 - On Android every press inside a bottom sheet is refused (gap 1), so Android's sign-up leaves the ZIP and RDO empty
-  (valid) instead of failing the required recipe; iOS and every desktop keep the pickers.
+  (valid) instead of failing the required recipe; iOS and every desktop keep the pickers. The phone-shaped JSON recipes
+  hide the software keyboard after `set_value`: the next low control is otherwise keyboard-occluded. Linux's window is
+  narrow enough to need the same layout, but its desktop host has no system keyboard actions, so the Linux queue recipes
+  are the phone recipes without the hide step.
+- The iPhone never runs queue or queue-send: their phone recipes hide the keyboard (`system.keyboard_hide`), which
+  the iOS host does not offer, so the suite marks them `needs_feature` for iOS and the run reports them as needs.
 
 ## Results on the real apps (2026-11-27, gpui-agent-cli 0.4.1)
 
@@ -259,8 +282,7 @@ In gpui-agent and the plug (nsh-gpui-agent):
   drawer (Windows), Android's picker sheets. `set_value` into a sheet's box lands. Modal dialogs hit-test fine.
 - **Scrolling** (hexuria/gpui-agent#121): `.wants` has no scroll verb (JSON recipes have `op: scroll`), and the tree
   culls nodes outside the viewport with no "scroll until it exists" step. The runner can now resolve after a recipe
-  step, but delete-row still needs a leading step that brings Schedule 1 into the tree before `$table` can be found
-  below the fold.
+  step; delete-row uses that: it opens a fresh return, scrolls to Schedule 1 and resolves `$table` only after step s3.
 - **macOS focus** (hexuria/nsh-gpui-agent#14): bare `type` does not move focus out of the segmented TIN control;
   focus flags read false everywhere; every step reports `delivered_unverified`, landed or not.
 - **Money boxes under injected text** (hexuria/nsh-gpui-agent#15): paced `500.25` lands as `0.25` on macOS and as

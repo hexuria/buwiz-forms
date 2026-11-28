@@ -34,7 +34,8 @@
       "textbox",
       "textfield"
      ],
-     "name_regex": "^TIN, 9 digits"
+     "name_regex": "^TIN, 9 digits",
+     "before_first_use": true
     }
    },
    "required": true

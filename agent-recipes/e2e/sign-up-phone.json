@@ -61,8 +61,20 @@
   },
   {
    "id": "s9",
-   "op": "click",
+   "op": "press",
    "target": "new-tp-zip_code-trigger"
+  },
+  {
+   "id": "s9a",
+   "op": "wait_until",
+   "target": "new-tp-zip_code-search",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s9b",
+   "op": "type",
+   "target": "new-tp-zip_code-search",
+   "text": "$zip"
   },
   {
    "id": "s10",
@@ -85,8 +97,20 @@
   },
   {
    "id": "s13",
-   "op": "click",
+   "op": "press",
    "target": "new-tp-rdo_code-trigger"
+  },
+  {
+   "id": "s13a",
+   "op": "wait_until",
+   "target": "new-tp-rdo_code-search",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s13b",
+   "op": "type",
+   "target": "new-tp-rdo_code-search",
+   "text": "$rdo"
   },
   {
    "id": "s14",

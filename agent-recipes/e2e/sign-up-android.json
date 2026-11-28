@@ -1,0 +1,110 @@
+{
+ "v": 1,
+ "name": "e2e-sign-up-android",
+ "params": [
+  "tin_field",
+  "tin",
+  "name",
+  "address",
+  "start_option",
+  "tin_root"
+ ],
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "new-tp-name",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "new-tp-start-trigger"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "$start_option",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s4",
+   "op": "click",
+   "target": "$start_option"
+  },
+  {
+   "id": "s5",
+   "op": "wait_until",
+   "target": "$start_option",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "s6",
+   "op": "set_value",
+   "target": "$tin_field",
+   "value": "$tin"
+  },
+  {
+   "id": "s6h",
+   "op": "system",
+   "action": "keyboard_hide"
+  },
+  {
+   "id": "s7",
+   "op": "set_value",
+   "target": "new-tp-name",
+   "value": "$name"
+  },
+  {
+   "id": "s7h",
+   "op": "system",
+   "action": "keyboard_hide"
+  },
+  {
+   "id": "s8",
+   "op": "set_value",
+   "target": "new-tp-registered_address",
+   "value": "$address"
+  },
+  {
+   "id": "s8h",
+   "op": "system",
+   "action": "keyboard_hide"
+  },
+  {
+   "id": "s9",
+   "op": "system",
+   "action": "keyboard_hide"
+  },
+  {
+   "id": "s10",
+   "op": "click",
+   "target": "new-tp-save",
+   "screenshot": true
+  },
+  {
+   "id": "s11",
+   "op": "wait_until",
+   "target": "tp-tabs-profile",
+   "timeout_ms": 10000
+  },
+  {
+   "id": "s12",
+   "op": "click",
+   "target": "tab-home"
+  },
+  {
+   "id": "s13",
+   "op": "wait_until",
+   "target": "home-tp-$tin_root",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s14",
+   "op": "assert",
+   "target": "home-tp-$tin_root",
+   "screenshot": true
+  }
+ ]
+}

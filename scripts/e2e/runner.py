@@ -22,8 +22,9 @@ is reported as "needs ...", never silently passed.
 
 Safety, enforced here (on every word of a step, camelCase split, and again on ids resolved from the tree):
 - a recipe whose steps press Queue / Send / Submit / File (or invoke a send) must be marked "send" in its suite, and
-  runs only with --allow-send, in a dry-run test environment (EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE),
-  against an app whose app.info says "database": "test"; with --no-launch no recipe runs against any other app;
+  runs only with --allow-send (without it, it is "skipped (needs --allow-send)", never failed), in a dry-run test
+  environment (EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE), against an app whose app.info says
+  "database": "test"; with --no-launch no recipe runs against any other app;
 - no step types, sets, pastes or keys into a password, PIN, passcode, secret, token, OTP / TOTP or code box, or
   presses the software keyboard's keys;
 - Continue / Resend on a sign-in screen only in a recipe marked "sign_in", in an app this run launched, against an
@@ -52,6 +53,8 @@ RECIPES = ROOT / "agent-recipes"
 SUITES = RECIPES / "e2e"
 SCHEMA = RECIPES / "bir.schema.json"
 TARGETS = ("macos", "linux", "windows", "ios", "android")
+SKIPPED_ALLOW_SEND = "skipped (needs --allow-send)"
+SUCCESS_STATUSES = ("pass", "skipped", SKIPPED_ALLOW_SEND)
 DEFAULT_ADDR = "127.0.0.1:17421"
 # The NSH development host's id on Android and on the iOS Simulator.
 ANDROID_HOST = "com.longbridge.nsh.host"
@@ -191,16 +194,114 @@ def step_node_refs(text, ids):
 
 
 def placeholders_in_text(text, ids=()):
-    """The $params in `text` (`$$` is a literal dollar; `$<step>.node` of a step in `ids` is no param)."""
-    return {a or b for a, b in PARAM.findall(without_step_node_refs(text.replace("$$", ""), ids))}
+    """The $params in `text` as gpui-agent 0.5.0 collects them: `$$` is a literal dollar and every
+    `$name.node` / `${name}.node` is a step-node reference, never a param (an unknown one is a step error, not a
+    param). `ids` is kept for the callers that already know the step ids; collection itself is the CLI's."""
+    found = set()
+    index = 0
+    while index < len(text):
+        if text[index] == "$" and index + 1 < len(text) and text[index + 1] == "$":
+            index += 2
+            continue
+        match = PARAM.match(text, index)
+        if not match:
+            index += 1
+            continue
+        end = match.end()
+        if text.startswith(".node", end):
+            after = end + len(".node")
+            continues_ident = after < len(text) and text[after].isascii() and (
+                text[after].isalnum() or text[after] == "_")
+            if not continues_ident:
+                index = after
+                continue
+        found.add(match.group(1) or match.group(2))
+        index = end
+    return found
+
+
+def strings_in_value(value):
+    """Every string in a JSON value, object keys excluded (as the CLI's value scan reads it)."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, list):
+        for item in value:
+            yield from strings_in_value(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from strings_in_value(item)
+
+
+# The string fields gpui-agent-recipe 0.5.0 substitutes for each wire op (recipe.rs's
+# collect_placeholders_in_op / substitute_op_in_place). Step id, needs, screenshot flags and recipe metadata are
+# graph or documentation data: the CLI never substitutes there.
+JSON_OP_STRING_FIELDS = {
+    "blob": ("blob",),
+    "press": ("target",),
+    "scroll": ("target",),
+    "scroll_until": ("target",),
+    "hover": ("target",),
+    "drag": ("from", "to", "target"),
+    "swipe": ("target",),
+    "long_press": ("target",),
+    "pinch": ("target",),
+    "viewport": ("preset",),
+    "paste": ("target", "text"),
+    "system": ("value",),
+    "wait_until": ("target", "name", "value", "role", "state", "states"),
+    "assert": ("target", "name", "value", "role", "state", "states"),
+    "click": ("target",),
+    "type": ("target", "text"),
+    "set_value": ("target", "value"),
+    "key": ("target", "key"),
+    "keybinding": ("binding", "chord"),
+    "invoke": ("name",),
+    "screenshot": ("path", "target"),
+}
+JSON_NUMERIC_PARAM_FIELDS = ("x", "y", "dx", "dy", "duration_ms", "key_delay_ms", "max_steps")
+
+
+def step_substitution_strings(step):
+    """The strings of one JSON recipe step where gpui-agent-cli 0.5.0 substitutes `$param`."""
+    op = str(step.get("op") or "")
+    for key in JSON_OP_STRING_FIELDS.get(op, ()):
+        yield from strings_in_value(step.get(key))
+    if op == "invoke":
+        yield from strings_in_value(step.get("args"))
+    if isinstance(step.get("until"), str):
+        yield step["until"]
+    for key in JSON_NUMERIC_PARAM_FIELDS:
+        value = step.get(key)
+        if isinstance(value, str) and PARAM.fullmatch(value):
+            yield value
+    within = step.get("within")
+    if isinstance(within, dict):
+        for key in ("x", "y"):
+            value = within.get(key)
+            if isinstance(value, str) and PARAM.fullmatch(value):
+                yield value
+
+
+def placeholders_in_step(step, ids=()):
+    """The $params one JSON recipe step uses where the CLI substitutes them."""
+    found = set()
+    for text in step_substitution_strings(step):
+        found |= placeholders_in_text(text, ids)
+    return found
 
 
 def placeholders(path):
-    """The $params a recipe file uses (comments excluded)."""
+    """The $params a recipe file uses (comments excluded; JSON only where the CLI substitutes)."""
+    ids = step_ids(path)
+    if is_json_recipe(path):
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        found = set()
+        for step in data.get("steps") or []:
+            found |= placeholders_in_step(step, ids)
+        return found
     text = Path(path).read_text(encoding="utf-8")
-    if not str(path).endswith(".json"):
-        text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-    return placeholders_in_text(text, step_ids(path))
+    text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return placeholders_in_text(text, ids)
 
 
 def is_json_recipe(path):
@@ -213,10 +314,29 @@ def recipe_step_params(path):
     ids = step_ids(path)
     if is_json_recipe(path):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return [placeholders_in_text(json.dumps(step), ids) for step in data.get("steps") or []]
+        return [placeholders_in_step(step, ids) for step in data.get("steps") or []]
     lines = [line for line in Path(path).read_text(encoding="utf-8").splitlines()
              if line.strip() and not line.lstrip().startswith("#")]
     return [placeholders_in_text(line, ids) for line in lines]
+
+
+def resolve_after(param, spec, ids, used_by_step):
+    """The step id a late `resolve` waits for, or None for one resolved before the recipe starts.
+
+    `"after": "<step id>"` names it. `"before_first_use": true` picks the step right before the first one that
+    uses the parameter, whatever its id is in this variant: variants of one flow number their steps differently
+    (the `.wants` sign-up first uses $tin_field at s4, the JSON ones at s6), and one fixed id is then too early
+    in some of them. Raises SuiteError for a spec that names both.
+    """
+    if not isinstance(spec, dict):
+        return None
+    after = spec.get("after")
+    if spec.get("before_first_use"):
+        if after is not None:
+            raise SuiteError(f"${param}: a resolve names `after` or `before_first_use`, not both")
+        first = next((index for index, used in enumerate(used_by_step) if param in used), None)
+        return ids[first - 1] if first else None
+    return after
 
 
 def step_ids(path):
@@ -225,6 +345,88 @@ def step_ids(path):
     if is_json_recipe(path):
         return [str(step.get("id") or f"s{index}") for index, step in enumerate(steps, 1)]
     return [f"s{index}" for index, _ in enumerate(steps, 1)]
+
+
+def param_declaration_name(param):
+    """The name of one JSON recipe `params` entry: a bare string or gpui-agent 0.5.0's typed object."""
+    if isinstance(param, str):
+        return param
+    if isinstance(param, dict) and isinstance(param.get("name"), str):
+        return param["name"]
+    return None
+
+
+def recipe_declared_params(path):
+    """The params a JSON recipe declares (`.wants` recipes declare every placeholder they use)."""
+    if not is_json_recipe(path):
+        return placeholders(path)
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return {name for name in (param_declaration_name(param) for param in data.get("params") or []) if name}
+
+
+# The ops gpui-agent 0.5.0 gates on a `hello.features` string, as `Op::feature()` spells them. Click, type,
+# set_value, key, keybinding, invoke, wait and the first snapshot shape are the original ops and need none.
+FEATURE_OPS = {"press": "press", "scroll": "scroll", "scroll_until": "scroll", "hover": "hover", "drag": "drag",
+               "swipe": "swipe", "long_press": "long_press", "pinch": "pinch", "viewport": "viewport",
+               "paste": "paste"}
+# The feature ops the app's pinned window-plane plug can list, mirrored from nsh-gpui-agent
+# db0e4ac6127078a05751149f0ec6bed68204f911 crates/nsh-gpui-agent/src/lib.rs:436-493: desktop is the fallthrough
+# arm at :465, mobile the arm at :448-455 plus paste at :474-478 and Android's system actions at :479-485, and
+# every platform adds press_within/assert_states at :487-492. `software_keyboard` is conditional (:468-473) and no
+# op is gated by it; `screenshot_inline` is not listed there.
+DESKTOP_HOST_FEATURES = {"press", "scroll", "hover", "drag", "viewport", "press_within", "assert_states"}
+IOS_HOST_FEATURES = {"press", "scroll", "drag", "swipe", "long_press", "system.back", "paste", "press_within",
+                     "assert_states"}
+ANDROID_HOST_FEATURES = IOS_HOST_FEATURES | {"system.rotate", "system.keyboard_show", "system.keyboard_hide"}
+DESKTOP_TARGETS = ("macos", "linux", "windows")
+MOBILE_TARGETS = ("ios", "android")
+
+
+def static_host_features(target, form_factor):
+    """The features the pinned plug can list for `target` at `form_factor` (the static `check`, not a run)."""
+    if form_factor == "desktop":
+        return DESKTOP_HOST_FEATURES
+    return ANDROID_HOST_FEATURES if target == "android" else IOS_HOST_FEATURES
+
+
+def feature_check_contexts(feature_check):
+    """The host contexts feature validation runs for: none, the static target matrix, or one live hello."""
+    if feature_check is None:
+        return []
+    if feature_check != "static":
+        return [feature_check]
+    return [{"target": target,
+             "form_factor": "phone" if target in MOBILE_TARGETS else "desktop",
+             "features": static_host_features(target, "phone" if target in MOBILE_TARGETS else "desktop")}
+            for target in TARGETS]
+
+
+def step_feature(step):
+    """The `hello.features` string a step's op needs under gpui-agent 0.5.0, or None for an original op."""
+    op = str(step.get("op") or "")
+    if op == "system":
+        action = step.get("action")
+        if action is None:
+            action = next(iter(step.get("words") or []), "")
+        action = str(action).replace("-", "_")
+        return f"system.{action}" if action else "system"
+    if op in ("assert", "wait_until") and (step.get("state") is not None or step.get("states")):
+        return "assert_states"
+    if op == "screenshot" and step.get("inline"):
+        return "screenshot_inline"
+    if op in ("press", "long_press") and step.get("within") is not None:
+        return "press_within"
+    return FEATURE_OPS.get(op)
+
+
+def host_need_covers(entry, feature, context):
+    """Whether the suite's `needs_feature` makes a host without `feature` take the fallback / needs path."""
+    needed = for_host(entry.get("needs_feature"), context)
+    if isinstance(needed, str):
+        return needed == feature
+    if isinstance(needed, (list, tuple)):
+        return feature in needed
+    return False
 
 
 def needs_edges_cut(steps, ids, cut):
@@ -419,8 +621,20 @@ def entry_files(entry):
     return names
 
 
-def check_suite(suite):
-    """Every problem of `suite` that would stop it before a host sees it, as sentences (empty: it can run)."""
+def fallback_variant(entry, form_factor):
+    """The fallback file a host of `form_factor` would take, as plan_entry chooses it."""
+    fallback = entry.get("fallback")
+    if isinstance(fallback, dict):
+        return fallback.get(form_factor) or fallback.get("file")
+    return fallback
+
+
+def check_suite(suite, feature_check="static"):
+    """Every problem of `suite` that would stop it before a host sees it, as sentences (empty: it can run).
+
+    `feature_check` is the static pinned-plug target matrix by default, None when a run validates structure before
+    launch, or a live context `{target, form_factor, features}` once the window's hello has answered.
+    """
     problems = []
     base = suite["_dir"]
     params = dict(suite.get("params") or {})
@@ -435,7 +649,7 @@ def check_suite(suite):
         if not files:
             problems.append(f"{where}: names no recipe file (file, phone, desktop or a target)")
         supplied = set(params) | set(entry.get("set") or {}) | set(entry.get("resolve") or {})
-        for file in files:
+        for file in dict.fromkeys(files):
             path = (base / file).resolve()
             if not path.is_file():
                 problems.append(f"{where}: {file} does not exist")
@@ -448,14 +662,42 @@ def check_suite(suite):
             missing = sorted(placeholders(path) - supplied)
             if missing:
                 problems.append(f"{where}: {file} uses ${', $'.join(missing)}, which the suite does not supply")
+            if is_json_recipe(path):
+                used_placeholders = placeholders(path)
+                for param in sorted(used_placeholders - recipe_declared_params(path)):
+                    problems.append(f"{where}: {file}: placeholder ${param} is not declared in recipe.params "
+                                    f"(write $${param} for a literal)")
+                for param in sorted(recipe_declared_params(path) - used_placeholders):
+                    problems.append(f"{where}: {file}: param `{param}` is declared but no step uses ${param}")
             bound = {**params, **(entry.get("set") or {})}
             for step in steps:
                 if step.get("key_delay_ms") is not None and step.get("op") != "type":
                     problems.append(f"{where}: {file}: key_delay_ms on {step.get('op')} (only type is paced)")
+            for context in feature_check_contexts(feature_check):
+                target, form_factor = context["target"], context["form_factor"]
+                primary = variant(entry, form_factor, target)
+                fallback = fallback_variant(entry, form_factor) if feature_check == "static" else None
+                if file not in {primary, fallback}:
+                    continue
+                fallback_only = file == fallback and file != primary
+                features = set(context.get("features") or ())
+                for position, step in enumerate(steps, 1):
+                    feature = step_feature(step)
+                    if not feature or feature in features:
+                        continue
+                    if not fallback_only and host_need_covers(entry, feature, context):
+                        continue
+                    step_id = step.get("id") or f"s{position}"
+                    problems.append(f"{where}: {file}: step {step_id} needs {feature}, which {target} "
+                                    f"{form_factor} hosts do not list in hello.features")
             ids = step_ids(path)
             used_by_step = recipe_step_params(path)
             for param, spec in (entry.get("resolve") or {}).items():
-                after = spec.get("after") if isinstance(spec, dict) else None
+                try:
+                    after = resolve_after(param, spec, ids, used_by_step)
+                except SuiteError as error:
+                    problems.append(f"{where}: {file}: {error}")
+                    continue
                 if after is None:
                     continue
                 if after not in ids:
@@ -734,8 +976,8 @@ def write_recipe_slices(path, points, folder):
             if isinstance(part.get("params"), list):
                 used = set()
                 for step in part_steps:
-                    used |= placeholders_in_text(json.dumps(step), ids)
-                part["params"] = [name for name in part["params"] if name in used]
+                    used |= placeholders_in_step(step, ids)
+                part["params"] = [param for param in part["params"] if param_declaration_name(param) in used]
             part_path.write_text(json.dumps(part, indent=1) + "\n", encoding="utf-8")
             local_ids = original_ids
         else:
@@ -899,8 +1141,15 @@ def plan_entry(entry, suite, context):
     if need_cli and not version_at_least(context.get("cli_version"), need_cli):
         reasons.append(f"needs gpui-agent-cli {need_cli} (this machine has {context.get('cli_version') or 'unknown'})")
     need_feature = for_host(entry.get("needs_feature"), context)
-    if need_feature and need_feature not in context.get("features", ()):
-        host = entry.get("needs_host") or f"a host listing {need_feature}"
+    if isinstance(need_feature, str):
+        needed = [need_feature]
+    elif isinstance(need_feature, (list, tuple)):
+        needed = list(need_feature)
+    else:
+        needed = []
+    missing = [feature for feature in needed if feature not in context.get("features", ())]
+    if missing:
+        host = entry.get("needs_host") or "a host listing " + ", ".join(missing)
         reasons.append(f"needs {host}")
     if reasons:
         fallback = entry.get("fallback")
@@ -911,7 +1160,7 @@ def plan_entry(entry, suite, context):
         return None, "; ".join(reasons), "needs"
     if entry.get("send"):
         if not context.get("allow_send"):
-            return None, "presses a send control: run with --allow-send", "refused"
+            return None, "needs --allow-send", SKIPPED_ALLOW_SEND
         if not send_env_ok(context["env"]):
             return None, "presses a send control: needs EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE", \
                 "refused"
@@ -945,10 +1194,14 @@ def run_entry(index, entry, suite, context, agent, log, out):
     names = {}
     steps = recipe_steps(path)
     ids = step_ids(path)
+    used_by_step = recipe_step_params(path)
+    used_params = set().union(*used_by_step)
     early = []
     late = {}
     for param, spec in (entry.get("resolve") or {}).items():
-        after = spec.get("after") if isinstance(spec, dict) else None
+        if param not in used_params:
+            continue
+        after = resolve_after(param, spec, ids, used_by_step)
         if after is None:
             early.append((param, spec))
             continue
@@ -1174,7 +1427,7 @@ def summary(results):
     counts = {}
     for r in results:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
-    return ", ".join(f"{n} {status}" for status, n in sorted(counts.items()))
+    return ", ".join(f"{n} {'setup failure' if status == 'setup' else status}" for status, n in sorted(counts.items()))
 
 
 # --- Commands -----------------------------------------------------------------------------------------------------
@@ -1244,7 +1497,7 @@ def main(argv=None):
 
 def run(args):
     suite = load_suite(args.suite)
-    problems = check_suite(suite)
+    problems = check_suite(suite, feature_check=None)
     if problems:
         raise SuiteError("the suite cannot run:\n  " + "\n  ".join(problems))
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1292,6 +1545,9 @@ def run(args):
                    "database": header["database"],
                    "allow_send": args.allow_send, "cli_version": header["cli_version"],
                    "recorder": (lambda folder: Recorder(args.target, folder, env, log)) if args.record else None}
+        problems = check_suite(suite, feature_check=context)
+        if problems:
+            raise SuiteError("the suite cannot run on this host:\n  " + "\n  ".join(problems))
         stopped = None
         for index, entry in enumerate(suite["recipes"], 1):
             if args.only and entry["name"] not in args.only:
@@ -1303,7 +1559,7 @@ def run(args):
             agent = data if entry.get("plane") == "data" else window
             result = run_entry(index, entry, suite, context, agent, log, out)
             results.append(result)
-            if entry.get("required") and result["status"] not in ("pass", "skipped"):
+            if entry.get("required") and result["status"] not in SUCCESS_STATUSES:
                 stopped = entry["name"]
     finally:
         stop(proc, log)
@@ -1314,7 +1570,7 @@ def run(args):
         if made_db:
             remove_scratch(made_db, log)
     print(f"e2e {header['suite']} on {args.target}: {summary(results)}. Report: {out / 'report.md'}")
-    return 0 if all(r["status"] in ("pass", "skipped") for r in results) else 1
+    return 0 if all(r["status"] in SUCCESS_STATUSES for r in results) else 1
 
 
 def app_database(data, log):

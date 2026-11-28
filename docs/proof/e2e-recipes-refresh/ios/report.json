@@ -1,0 +1,112 @@
+{
+ "suite": "smoke",
+ "target": "ios",
+ "started": "20261127-195004",
+ "out": "/Users/devin/repos/e2e-recipes-refresh/ios-final507",
+ "cli_version": "0.4.1",
+ "app_commit": "d0025c42",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1650,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "fail",
+   "ms": 17670,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-phone.json",
+   "video": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/02-sign-up/recording.mp4",
+   "step": "s9a",
+   "error": "wait_until timed out: node `new-tp-zip_code-search` not found",
+   "error_code": "timeout",
+   "line": null,
+   "screenshot": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/02-sign-up/failure.png",
+   "tree": "/Users/devin/repos/e2e-recipes-refresh/ios-final507/02-sign-up/failure-tree.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "navigate",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "open-2551q",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "money-boxes",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "sheet-press",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "delete-row",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "queue",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "queue-send",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "birth-date",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  },
+  {
+   "name": "sign-out",
+   "status": "not run",
+   "ms": 0,
+   "note": "sign-up failed and the suite needs it"
+  }
+ ]
+}
