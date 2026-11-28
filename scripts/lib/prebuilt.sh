@@ -325,7 +325,7 @@ prebuilt_direct_install() {  # prebuilt_direct_install <crate> <version> <binary
 # fixed table above; any failure is announced once and retried as a pinned cargo
 # install from source with the caller's extra arguments.
 install_pinned_tool() {
-    local crate="$1" version="$2" binary installed step
+    local crate="$1" version="$2" binary installed step started
     shift 2
     prebuilt_use_cargo_bin
     binary="$(prebuilt_binary_name "$crate")"
@@ -339,7 +339,9 @@ install_pinned_tool() {
         prebuilt_cargo_source_install "$crate" "$version" "$binary" "$@"
         return
     fi
+    started="$SECONDS"
     if prebuilt_direct_install "$crate" "$version" "$binary"; then
+        printf '%s %s prebuilt %ss\n' "$crate" "$version" "$((SECONDS - started))"
         return 0
     fi
     step="$PREBUILT_FAILED_STEP"
