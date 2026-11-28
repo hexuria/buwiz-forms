@@ -22,8 +22,8 @@ env:
   APP_NAME: eBIRForms
   # bir-core compiles Google's OAuth client in (option_env!). No build carries it unless the repository variable
   # STORE_GMAIL is exactly 1 (owner, 2026-11-28: 1.0.0 ships no Google client; the name predates it governing every
-  # build). The client of 0.2.x is leaked and retired; Gmail sign-in returns in 1.0.x with native clients that hold no
-  # secret, and this switch's secret-passing "on" branch is removed then.
+  # build). Gmail sign-in returns after 1.0.0 with native clients that hold no secret, and this switch's
+  # secret-passing "on" branch is removed then.
   GOOGLE_CLIENT_ID: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
   GOOGLE_CLIENT_SECRET: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
 
