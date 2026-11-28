@@ -269,8 +269,6 @@ In gpui-agent and the plug (nsh-gpui-agent):
   which is not a person's keyed input (labelled `known gap` on phones).
 
 In the app and this repo:
-- **`ios-handoff.sh` keeps a stale agent token** (#449): the token file is written only if absent, so the next launch's
-  token never replaces a leftover one and the runner waits forever. Workaround: delete the container file first.
 - **sign-out under `BIR_AUTH_BYPASS=1`** (#450): no lock screen exists after Log out, and on Windows Log out needs an
   admin PIN the suite may not type. A suite-design question.
 - **queue** (#451): needs a taxpayer whose profile validates for 2551Q (business start date, income-tax election, Part I

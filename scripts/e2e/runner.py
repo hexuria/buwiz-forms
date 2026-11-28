@@ -104,29 +104,22 @@ def version_at_least(have, need):
     return bool(have and need and have >= need)
 
 
-def installed_cli_version(env=None, run=subprocess.run):
-    """The gpui-agent-cli version on this machine: E2E_GPUI_AGENT_CLI_VERSION, else `cargo install --list`, else the
-    version Cargo.lock pins (the setup scripts install exactly that one)."""
+def installed_cli_version(cli="gpui-agent", env=None, run=subprocess.run):
+    """The version of the gpui-agent binary the runner will invoke: E2E_GPUI_AGENT_CLI_VERSION first (tests), then
+    `<cli> --version`. cargo's install list is not evidence: a prebuilt install replaces the binary without it."""
     env = os.environ if env is None else env
-    if parse_version(env.get("E2E_GPUI_AGENT_CLI_VERSION")):
-        return env["E2E_GPUI_AGENT_CLI_VERSION"].lstrip("v")
+    override = env.get("E2E_GPUI_AGENT_CLI_VERSION")
+    if parse_version(override):
+        return override.strip().lstrip("v")
     try:
-        listed = run(["cargo", "install", "--list"], capture_output=True, text=True, timeout=30).stdout
-        match = re.search(r"^gpui-agent-cli v(\d+\.\d+\.\d+)", listed, re.M)
-        if match:
-            return match.group(1)
+        done = run([cli, "--version"], capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
-        pass
-    return pinned_gpui_agent_version()
-
-
-def pinned_gpui_agent_version(lock=ROOT / "Cargo.lock"):
-    try:
-        text = lock.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    match = re.search(r'name = "gpui-agent"\nversion = "(\d+\.\d+\.\d+)"', text)
-    return match.group(1) if match else None
+        return "unknown"
+    if getattr(done, "returncode", 0) != 0:
+        return "unknown"
+    lines = (getattr(done, "stdout", "") or "").strip().splitlines()
+    match = re.fullmatch(r"gpui-agent(?:-cli)?\s+v?(\d+\.\d+\.\d+)", lines[0] if lines else "")
+    return match.group(1) if match else "unknown"
 
 
 # --- Recipes: what their steps do --------------------------------------------------------------------------------
@@ -1191,7 +1184,7 @@ def check(suite_name, cli):
     each file the installed client can read. Exit 0 when nothing is wrong."""
     suite = load_suite(suite_name)
     problems = check_suite(suite)
-    cli_version = installed_cli_version()
+    cli_version = installed_cli_version(cli)
     validated = 0
     if shutil.which(cli) or Path(cli).exists():
         for entry in suite["recipes"]:
@@ -1266,7 +1259,7 @@ def run(args):
                                if os.environ.get(name)]
     log = RunLog(out / "run.log", secrets_=secret_values)
     header = {"suite": suite["_path"].stem, "target": args.target, "started": stamp, "out": str(out),
-              "cli_version": installed_cli_version(), "app_commit": git_head()}
+              "cli_version": installed_cli_version(args.cli), "app_commit": git_head()}
     proc = None
     results = []
     made_db = None
