@@ -1,0 +1,64 @@
+{
+ "v": 1,
+ "description": "Linux real-app amount rollback proof: a 2551Q Schedule 1 amount cell holding 1,234.56, thirteen digits typed at 450 ms per key, then Tab.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "year": "2026",
+  "expected_final": "1,234.56",
+  "birth": "01/15/1990",
+  "prior": "500.25",
+  "amount": "1234.56",
+  "amount_shown": "1,234.56",
+  "tin_root": "123456788",
+  "bstart": "01/01/2020"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "linux": "sign-up-linux.wants",
+   "phone": "sign-up-phone.json",
+   "desktop": "sign-up.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "tax-year",
+   "linux": "tax-year-narrow.wants",
+   "android": "tax-year-narrow.wants",
+   "file": "tax-year.wants",
+   "required": true
+  },
+  {
+   "name": "open-2551q",
+   "desktop": "open-2551q.wants",
+   "windows": "open-2551q-windows.wants",
+   "linux": "open-2551q-phone.wants",
+   "phone": "open-2551q-phone.wants",
+   "required": true
+  },
+  {
+   "name": "amount-notes",
+   "file": "amount-notes-linux.json",
+   "required": true,
+   "needs_cli": "0.5.0"
+  }
+ ]
+}

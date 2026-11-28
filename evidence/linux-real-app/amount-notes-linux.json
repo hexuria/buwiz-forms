@@ -1,0 +1,119 @@
+{
+ "v": 1,
+ "name": "e2e-amount-notes-linux",
+ "app": "bir-shell",
+ "params": [
+  "expected_final"
+ ],
+ "steps": [
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 600
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "fp-part-4-toggle"
+  },
+  {
+   "id": "s3",
+   "op": "scroll_until",
+   "target": "form-scroll",
+   "until": "fp-row-drpATC1-0",
+   "dy": 600,
+   "max_steps": 8
+  },
+  {
+   "id": "s4",
+   "op": "click",
+   "target": "fp-row-drpATC1-0"
+  },
+  {
+   "id": "s5",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s6",
+   "op": "click",
+   "target": "fp-txtATCAmt1"
+  },
+  {
+   "id": "s7",
+   "op": "type",
+   "target": "fp-txtATCAmt1",
+   "text": "1234.56",
+   "key_delay_ms": 80
+  },
+  {
+   "id": "s8",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "s9",
+   "op": "wait_until",
+   "target": "fp-save-state",
+   "name": "\u2713 Saved",
+   "timeout_ms": 10000
+  },
+  {
+   "id": "s10",
+   "op": "click",
+   "target": "fp-row-drpATC1-0"
+  },
+  {
+   "id": "s11",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s12",
+   "op": "assert",
+   "target": "fp-txtATCAmt1",
+   "value": "1,234.56"
+  },
+  {
+   "id": "s13",
+   "op": "click",
+   "target": "fp-txtATCAmt1"
+  },
+  {
+   "id": "s14",
+   "op": "set_value",
+   "target": "fp-txtATCAmt1",
+   "value": ""
+  },
+  {
+   "id": "s15",
+   "op": "type",
+   "target": "fp-txtATCAmt1",
+   "text": "1234567890123",
+   "key_delay_ms": 450
+  },
+  {
+   "id": "s16",
+   "op": "key",
+   "target": "fp-txtATCAmt1",
+   "key": "Tab"
+  },
+  {
+   "id": "s17",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "value": "$expected_final",
+   "timeout_ms": 10000
+  },
+  {
+   "id": "s18",
+   "op": "assert",
+   "target": "fp-txtATCAmt1",
+   "value": "$expected_final",
+   "screenshot": true
+  }
+ ]
+}

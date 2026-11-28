@@ -1,0 +1,128 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-amount-notes-linux",
+  "fingerprint": "fnv1a64:1ee94594e1d48174",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 810
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 392
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_verified",
+      "elapsed_ms": 17,
+      "result": {
+        "found": true,
+        "node": "fp-row-drpATC1-0",
+        "revision": null,
+        "steps": 0
+      }
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 663
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 380
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2977
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 693
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 329
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 658
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 369
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 349
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 5784
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 438
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 19
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 37,
+      "screenshot": {
+        "path": "/home/ubuntu/forms-validation/e2e-evidence/before-pass/05-amount-notes/018-s18.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/forms-validation/e2e-evidence/before-pass/05-amount-notes/018-s18.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 13969
+}

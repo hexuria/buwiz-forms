@@ -1,0 +1,64 @@
+{
+ "suite": "amountnotes-after",
+ "target": "linux",
+ "started": "20261128-104200",
+ "out": "/home/ubuntu/forms-validation/e2e-evidence/after-final",
+ "cli_version": "0.5.0",
+ "app_commit": "19832128",
+ "platform": "desktop",
+ "os": "linux",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 544,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 9732,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-linux.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6311,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1761,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "amount-notes",
+   "status": "pass",
+   "ms": 14102,
+   "note": null,
+   "file": "agent-recipes/e2e/amount-notes-linux.json"
+  }
+ ]
+}
