@@ -1,0 +1,22 @@
+{
+ "v": 1,
+ "name": "e2e-home",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "tab-home"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "home-tp-$tin_root",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ],
+ "params": [
+  "tin_root"
+ ]
+}

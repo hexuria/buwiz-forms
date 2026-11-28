@@ -1,0 +1,107 @@
+{
+ "v": 1,
+ "name": "tour-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "nav-home"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "home-tile-drafts",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "nav-library"
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "library-search",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "nav-calendar"
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "calendar-taxpayers-trigger",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s7",
+   "op": "click",
+   "target": "nav-filings"
+  },
+  {
+   "id": "s8",
+   "op": "wait_until",
+   "target": "filings-search",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "tb-panel"
+  },
+  {
+   "id": "s10",
+   "op": "wait_until",
+   "target": "panel-open-profile",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "tb-panel"
+  },
+  {
+   "id": "s12",
+   "op": "click",
+   "target": "account-row"
+  },
+  {
+   "id": "s13",
+   "op": "wait_until",
+   "target": "menu-account",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s14",
+   "op": "click",
+   "target": "menu-account"
+  },
+  {
+   "id": "s15",
+   "op": "wait_until",
+   "target": "settings-nav-general",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s16",
+   "op": "scroll",
+   "target": "settings-scroll",
+   "dy": 3000.0
+  },
+  {
+   "id": "s17",
+   "op": "wait_until",
+   "target": "settings-nav-general",
+   "timeout_ms": 5000,
+   "screenshot": true
+  }
+ ]
+}

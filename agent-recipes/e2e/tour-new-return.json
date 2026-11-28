@@ -1,0 +1,36 @@
+{
+ "v": 1,
+ "name": "e2e-new-return",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "nb-new"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "new-return-2551Q",
+   "screenshot": true,
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "new-return-2551Q"
+  },
+  {
+   "id": "s4",
+   "op": "click",
+   "target": "new-return-open"
+  },
+  {
+   "id": "s5",
+   "op": "wait_until",
+   "target": "form-page",
+   "screenshot": true,
+   "timeout_ms": 20000
+  }
+ ]
+}

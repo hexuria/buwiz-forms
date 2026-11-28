@@ -1,0 +1,114 @@
+{
+ "v": 1,
+ "description": "The before-and-after visual tour: one screenshot per main screen, one suite on every platform. Run `just e2e macos tour` (or ios/windows/linux/android). Lessons baked in: scroll in increments of 1500 or less (big scrolls time out the host); the schedule drawer stays mounted when closed (wait on field absence, not the drawer); the floating pager covers the table add button after a row lands (scroll before re-adding); a virtualised list unmounts options after scrolling (never click one to close a sheet); toasts and the text caret make pictures differ run-to-run (they are noise, not layout \u2014 the compare tool documents them). On macOS the print preview is a separate native window the driver cannot capture: print shots show the main window. See docs/proof/E2E.md.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "birth": "01/15/1990",
+  "prior": "500.25",
+  "amount": "1234.56",
+  "amount_shown": "1,234.56",
+  "tin_root": "123456788",
+  "year": "2026",
+  "bstart": "01/01/2020"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "setup-cards",
+   "phone": "tour-setup-cards.json"
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "phone": "sign-up-phone.json",
+   "android": "sign-up-android.wants",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "tax-year",
+   "file": "tax-year.wants",
+   "linux": "tax-year-narrow.wants",
+   "android": "tax-year-narrow.wants",
+   "required": true
+  },
+  {
+   "name": "shell",
+   "desktop": "tour-shell.json",
+   "windows": "tour-shell-windows.json"
+  },
+  {
+   "name": "home",
+   "phone": "tour-home.json"
+  },
+  {
+   "name": "navigation",
+   "phone": "navigate-phone.wants"
+  },
+  {
+   "name": "new-return",
+   "desktop": "tour-newreturn.json",
+   "windows": "tour-newreturn-windows.json",
+   "phone": "tour-new-return.json",
+   "required": true
+  },
+  {
+   "name": "form-top",
+   "file": "tour-form-top.json"
+  },
+  {
+   "name": "form-middle",
+   "file": "tour-form-middle.json"
+  },
+  {
+   "name": "form-end",
+   "file": "tour-form-end.json"
+  },
+  {
+   "name": "schedule-rows",
+   "file": "tour-schedule-rows.json",
+   "needs_cli": "0.4.1",
+   "fallback": {
+    "phone": "tour-schedule-rows.json",
+    "file": "tour-schedule-rows.json"
+   }
+  },
+  {
+   "name": "sheet-pick",
+   "file": "tour-sheet-pick.json",
+   "needs_cli": "0.4.1",
+   "fallback": {
+    "phone": "tour-sheet-pick.json",
+    "file": "tour-sheet-pick.json"
+   }
+  },
+  {
+   "name": "sheet-calendar",
+   "desktop": "tour-sheet-calendar-desktop.json",
+   "windows": "tour-sheet-calendar-desktop.json",
+   "phone": "tour-sheet-calendar.json"
+  },
+  {
+   "name": "print",
+   "desktop": "tour-print.json",
+   "windows": "tour-print-windows.json"
+  }
+ ]
+}

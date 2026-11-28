@@ -1,0 +1,48 @@
+{
+ "v": 1,
+ "name": "tour-newreturn-windows",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "viewport",
+   "width": 1280,
+   "height": 800
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "sb-new"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "new-return-2551Q",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s4",
+   "op": "click",
+   "target": "new-return-2551Q"
+  },
+  {
+   "id": "s5",
+   "op": "wait_until",
+   "target": "new-return-open",
+   "timeout_ms": 5000,
+   "screenshot": true
+  },
+  {
+   "id": "s6",
+   "op": "click",
+   "target": "new-return-open"
+  },
+  {
+   "id": "s7",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000,
+   "screenshot": true
+  }
+ ]
+}

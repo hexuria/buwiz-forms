@@ -1,0 +1,32 @@
+{
+ "v": 1,
+ "name": "e2e-form-end",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 6000
+  },
+  {
+   "id": "s2",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 6000
+  },
+  {
+   "id": "s3",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 6000
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "form-scroll",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ]
+}
