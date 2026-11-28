@@ -125,7 +125,7 @@ A suite is `agent-recipes/e2e/<name>.json`:
  "params": {"tin": "12345678800000"},
  "recipes": [
   {"name": "sign-up", "desktop": "sign-up.wants", "linux": "sign-up-linux.wants", "phone": "sign-up-phone.json",
-   "android": "sign-up-android.wants",
+   "android": "sign-up-android.json",
    "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits"}}, "required": true},
   {"name": "money-boxes", "desktop": "money-boxes-paced.json", "phone": "money-boxes-paced-phone.json",
    "needs_cli": "0.4.1", "needs_feature": {"phone": "software_keyboard"},
@@ -196,8 +196,8 @@ a Windows file is named.
 | # | Recipe | What it proves | Desktop | Linux (narrow) | iOS / Android |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `setup-start` | first-run setup opens; "Just me" | `setup-start.wants` | same | same |
-| 2 | `sign-up` | the first taxpayer: TIN, name, address, the ZIP and RDO pickers | `sign-up.wants` | `sign-up-linux.wants` | `sign-up-phone.json` / `sign-up-android.wants` (no pickers: gap 1) |
-| 3 | `tax-year` | the year and 2551Q in Edit forms (New return is refused without them) | `tax-year.wants` | `tax-year-narrow.wants` | `tax-year.wants` / `tax-year-narrow.wants` |
+| 2 | `sign-up` | the first taxpayer: TIN, name, address, the ZIP and RDO pickers | `sign-up.wants` | `sign-up-linux.wants` | `sign-up-phone.json` / `sign-up-android.json` (no pickers: gap 1) |
+| 3 | `tax-year` | the year and 2551Q in Edit forms (New return is refused without them) | `tax-year.wants` | `tax-year-narrow.wants` | `tax-year.wants` / `tax-year-narrow.wants`; Android `tax-year-android.json` |
 | 4 | `navigate` | every screen | `../ui/ui-navigate-app.wants` | `navigate-phone.wants` | `navigate-phone.wants` |
 | 5 | `open-2551q` | New return > 2551Q | `open-2551q.wants`; Windows `open-2551q-windows.wants` (also the facts 2551Q validates) | `open-2551q-phone.wants` | `open-2551q-phone.wants` |
 | 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | `money-boxes-paced-phone.json` (awaits the software keyboard), fallback `money-boxes-phone.json` |
@@ -222,7 +222,8 @@ Why the recipes look as they do (each from a machine's run on the real app, `pro
   amount, deletes it and checks the row-2 line is gone (`$table-none` never shows).
 - Log out on a phone is `nb-menu-logout` in the header's account menu (`nsh/shell/Narrow.tsx`).
 - On Android every press inside a bottom sheet is refused (gap 1), so Android's sign-up leaves the ZIP and RDO empty
-  (valid) instead of failing the required recipe; iOS and every desktop keep the pickers.
+  (valid) instead of failing the required recipe; iOS and every desktop keep the pickers. Android's JSON recipes hide
+  the software keyboard after `set_value`: the next low control is otherwise keyboard-occluded.
 
 ## Results on the real apps (2026-11-27, gpui-agent-cli 0.4.1)
 

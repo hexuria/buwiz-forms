@@ -26,7 +26,7 @@
    "name": "sign-up",
    "desktop": "sign-up.wants",
    "linux": "sign-up-linux.wants",
-   "android": "sign-up-android.wants",
+   "android": "sign-up-android.json",
    "required": true,
    "resolve": {
     "tin_field": {
@@ -46,7 +46,7 @@
    "name": "tax-year",
    "file": "tax-year.wants",
    "linux": "tax-year-narrow.wants",
-   "android": "tax-year-narrow.wants",
+   "android": "tax-year-android.json",
    "required": true,
    "phone": "tax-year-narrow.wants"
   },
