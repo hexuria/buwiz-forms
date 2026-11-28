@@ -1358,6 +1358,51 @@ fn legacy_in_place(layout: &Layout) -> (Target, Option<OpenSpec>) {
     )
 }
 
+/// A locked legacy file that cannot be claimed in this version, said without any account's data.
+const LOCKED_LEGACY_LATER: &str = "A locked older database is still on this device. Moving locked files comes in a later version.";
+
+/// Whether any room folder exists under `layout`. A read error answers true: failing closed never
+/// opens the legacy file beside rooms that may be there.
+fn any_room_dirs(layout: &Layout) -> bool {
+    match std::fs::read_dir(layout.rooms_dir()) {
+        Ok(mut entries) => entries.next().is_some(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => true,
+    }
+}
+
+/// L3/B1(a): the device store's own unusable cases (lost, unreadable, newer) are the store-error
+/// page; I/O and SQLite moments — busy and locked included — are transient. Neither opens the
+/// legacy file in place, and neither marks the claim impossible: the room-open evidence rule
+/// survives for the process.
+fn claim_open_error_target(error: &bir_core::rooms::DeviceStoreError) -> Target {
+    let detail = error.to_string();
+    if error.is_unusable() {
+        Target::Blocked(Blocked::DeviceStore { detail })
+    } else {
+        Target::Blocked(Blocked::Transient {
+            copy_saved: false,
+            detail,
+        })
+    }
+}
+
+/// B1(b): legacy mode in place is only for a locked install with no rooms. Once any room exists,
+/// the signed-in account's own room opens and the locked file is only a note for later.
+fn locked_legacy_target(layout: &Layout, owner: &Owner) -> (Target, Option<OpenSpec>) {
+    if any_room_dirs(layout) {
+        lookup_target(
+            layout,
+            owner,
+            LookupNote::Permanent {
+                detail: LOCKED_LEGACY_LATER.to_owned(),
+            },
+        )
+    } else {
+        legacy_in_place(layout)
+    }
+}
+
 /// The claim, as room_session computed it before the machine (§12.2 item 3: today's arms; §7's
 /// reclassification is commit 5). Everything here runs on the claim thread, outside SESSION.
 fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
@@ -1392,16 +1437,11 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
     let claim = match LegacyClaim::here() {
         Ok(claim) => claim,
         Err(error) => {
-            // F11, narrowed (kept until commit 5): with a legacy file present, an empty room
-            // beside it is forbidden, so the file opens in place as the one slot, writing nothing
-            // beside it. A practice account is never given the legacy file.
+            // L3/B1(a): a store error is never evidence that the legacy file may open in place,
+            // and a transient one never switches the move-evidence rule off for the process.
             tracing::warn!("legacy claim not opened ({error})");
-            bir_core::legacy_claim::note_claim_impossible(layout.device_dir());
-            if layout.legacy_database().is_file() && !owner.practice {
-                tracing::warn!(
-                    "legacy file present and the claim store unusable: legacy mode in place"
-                );
-                return legacy_in_place(&layout);
+            if layout.legacy_database().is_file() {
+                return (claim_open_error_target(&error), None);
             }
             return lookup_target(&layout, owner, LookupNote::None);
         }
@@ -1453,7 +1493,7 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
             // no rooms.
             (Target::NotHere(PathBuf::new()), Some(OpenSpec::NamedFile))
         }
-        Start::Locked(_locked) => legacy_in_place(&layout),
+        Start::Locked(_locked) => locked_legacy_target(&layout, owner),
         Start::Finished(outcome) => {
             let record = match claim.record() {
                 Ok(record) => record,
@@ -1470,7 +1510,9 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
             finished_outcome_target(&layout, owner, outcome, record.as_ref())
         }
         Start::Offer(offer) => match offer {
-            bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => legacy_in_place(&layout),
+            bir_core::legacy_claim::OfferStart::Locked(_locked_offer) => {
+                locked_legacy_target(&layout, owner)
+            }
             bir_core::legacy_claim::OfferStart::Open(_open_offer) => {
                 // The offer waits for the page; the account's room opens, never merged (§A.3.6).
                 // X2: never to a practice account — the store-review account is nobody's heir.
@@ -2810,6 +2852,21 @@ mod tests {
         room_a
     }
 
+    /// A legacy install locked by its old help-desk PIN, written with the app's own schema.
+    fn locked_legacy_file(scratch: &Scratch) {
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        db.set_setting("access_mode", "helpdesk").unwrap();
+        db.set_setting("app_lock_pin_hash", &bir_core::crypto::hash_pin("1357"))
+            .unwrap();
+        db.close().unwrap();
+    }
+
+    fn create_device_store(scratch: &Scratch) {
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        drop(bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap());
+    }
+
     fn claim_record(scratch: &Scratch) -> bir_core::legacy_claim::Record {
         bir_core::legacy_claim::LegacyClaim::at(scratch.layout.clone())
             .unwrap()
@@ -2969,6 +3026,105 @@ mod tests {
             snapshot().room.is_none(),
             "the store row's foreign room opened"
         );
+    }
+
+    /// L3/B1(a): a store error while the legacy file is present is a blocked migration state,
+    /// never legacy-in-place. The store's impossible note is not written either: the room-open
+    /// evidence rule still demands a real claim start in this process.
+    #[test]
+    fn b1_a_store_error_with_legacy_blocks_instead_of_opening_legacy_in_place() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        Database::open(scratch.layout.legacy_database())
+            .unwrap()
+            .close()
+            .unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        match migration_state() {
+            Some(MigrationState::DeviceStore { detail }) => {
+                assert!(detail.contains("device store"), "{detail}")
+            }
+            other => panic!("not a device-store block: {other:?}"),
+        }
+        let room = bir_core::rooms::room_id_for(&owner.origin, &owner.user_id);
+        let refusal = bir_core::legacy_claim::room_open_allowed(&scratch.layout, &room)
+            .expect_err("the claim-impossible note switched the evidence rule off");
+        assert!(refusal.contains("start() has not run"), "{refusal}");
+    }
+
+    /// B1(a)'s transient half: busy and locked SQLite answers classify as Transient, never as a
+    /// dead store.
+    #[test]
+    fn b1_busy_and_locked_store_errors_are_transient() {
+        for code in [5, 6] {
+            let error = bir_core::rooms::DeviceStoreError::Sqlite(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(code),
+                Some("database is busy or locked".to_owned()),
+            ));
+            assert!(
+                matches!(
+                    claim_open_error_target(&error),
+                    Target::Blocked(Blocked::Transient { .. })
+                ),
+                "SQLite code {code} is not transient"
+            );
+        }
+    }
+
+    /// B1(b): with rooms present, a locked legacy file is only a note in the account's own room —
+    /// never the legacy file opened instead of that room.
+    #[test]
+    fn b1_a_locked_legacy_file_with_rooms_opens_the_accounts_room_with_a_note() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        std::fs::create_dir_all(scratch.layout.rooms_dir().join("another-room")).unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the locked legacy file opened in place"
+        );
+        let (_, _, room_id, _) = snapshot().room.expect("the account's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner.origin, &owner.user_id),
+            "the open room is not the signed-in account's own"
+        );
+        match migration_state() {
+            Some(MigrationState::Permanent { detail }) => {
+                assert!(
+                    detail.contains("Moving locked files comes in a later version"),
+                    "{detail}"
+                )
+            }
+            other => panic!("no locked-file note: {other:?}"),
+        }
+    }
+
+    /// Positive control for legacy mode: with no rooms at all, the same locked install still opens
+    /// the legacy file in place.
+    #[test]
+    fn b1_a_locked_legacy_file_without_rooms_still_opens_legacy_in_place() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Legacy);
     }
 
     /// The every-build invariant at the open path: even if a decision-layer regression forces A's
