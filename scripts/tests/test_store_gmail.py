@@ -174,9 +174,10 @@ class RecipeTests(unittest.TestCase):
         package = (ROOT / "scripts/package_macos_release.sh").read_text(encoding="utf-8")
         self.assertNotIn("store_gmail", package)
         self.assertNotIn("STORE_GMAIL", package)
-        gated = re.compile(r"vars\.STORE_GMAIL == '1' && secrets\.GOOGLE_CLIENT_(ID|SECRET) \|\| ''")
+        # Case-insensitive: GitHub's secret names and Windows environment names both ignore case.
+        gated = re.compile(r"vars\.STORE_GMAIL == '1' && secrets\.GOOGLE_CLIENT_(ID|SECRET) \|\| ''", re.IGNORECASE)
         presence_check = "HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}"
-        reference = re.compile(r"secrets\s*(\.|\[\s*['\"])GOOGLE_CLIENT_")
+        reference = re.compile(r"secrets\s*(\.|\[\s*['\"])GOOGLE_CLIENT_", re.IGNORECASE)
         gated_count = {}
         for path in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
             text = path.read_text(encoding="utf-8")
@@ -200,7 +201,9 @@ class RecipeTests(unittest.TestCase):
         # only the secrets' names: every assignment is the same-named secret behind the switch (or a key with no value,
         # as in workflow_call's list of accepted secrets), never another secret, env.X or a literal; no step writes them
         # into a shell or $GITHUB_ENV; and no workflow reaches the secrets in a way these patterns cannot see.
-        assignment = re.compile(r"^\s*(GOOGLE_CLIENT_(?:ID|SECRET))\s*:\s*(.*?)\s*$")
+        # Anywhere on the line (a flow mapping `env: { GOOGLE_CLIENT_ID: ... }` too), in any case (Windows matches
+        # environment names without case, so `google_client_id:` reaches option_env!("GOOGLE_CLIENT_ID")).
+        assignment = re.compile(r"(GOOGLE_CLIENT_(?:ID|SECRET))\s*:", re.IGNORECASE)
         hidden = (
             re.compile(r"toJSON\(\s*secrets\s*\)", re.IGNORECASE),
             re.compile(r"secrets\s*\[\s*(?!['\"])"),
@@ -211,18 +214,22 @@ class RecipeTests(unittest.TestCase):
                 with self.subTest(workflow=path.name, line=number):
                     for pattern in hidden:
                         self.assertIsNone(pattern.search(line), line)
-                    self.assertNotRegex(line, r"GOOGLE_CLIENT_(ID|SECRET)\s*=")
-                    match = assignment.match(line)
-                    if not match or match.group(2) == "":
-                        continue
-                    name, value = match.groups()
-                    allowed = {
-                        f"${{{{ vars.STORE_GMAIL == '1' && secrets.{name} || '' }}}}",
-                        f"${{{{ inputs.release && vars.STORE_GMAIL == '1' && secrets.{name} || '' }}}}",
-                        "''",
-                    }
-                    self.assertIn(value, allowed)
-                    assignments += 1
+                    self.assertNotRegex(line, re.compile(r"GOOGLE_CLIENT_(ID|SECRET)\s*=", re.IGNORECASE))
+                    for match in assignment.finditer(line):
+                        name = match.group(1).upper()
+                        value = line[match.end() :].strip()
+                        if value == "" and line[: match.start()].strip() == "":
+                            continue  # a key with no value: workflow_call's list of accepted secrets
+                        allowed = (
+                            f"${{{{ vars.STORE_GMAIL == '1' && secrets.{name} || '' }}}}",
+                            f"${{{{ inputs.release && vars.STORE_GMAIL == '1' && secrets.{name} || '' }}}}",
+                            "''",
+                        )
+                        self.assertTrue(
+                            any(value.lower().startswith(candidate.lower()) for candidate in allowed),
+                            line,
+                        )
+                        assignments += 1
         # The detector's positive control: it saw the assignments the release workflows make.
         self.assertGreaterEqual(assignments, 10)
         # The Store job keeps its shape: named secrets, never inherit, no signing certificate.
