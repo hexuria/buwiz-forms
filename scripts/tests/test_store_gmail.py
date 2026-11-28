@@ -212,6 +212,63 @@ class ArchiveTests(unittest.TestCase):
                     self.assertFalse(ok)
                     self.assertIn("cannot read inside", message)
 
+    def test_a_refused_archive_inside_a_zip_is_refused(self):
+        # A: a .pkg or .tar.gz inside a zip is not read as empty.
+        for inner in ("inner.pkg", "x.tar.gz"):
+            with self.subTest(inner=inner), tempfile.TemporaryDirectory() as tmp:
+                archive = Path(tmp) / "eBIRForms.zip"
+                with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+                    z.writestr(inner, b"compressed bytes")
+                ok, message = store_gmail.check(archive, {})
+                self.assertFalse(ok)
+                self.assertIn(f"eBIRForms.zip!{inner}", message)
+                self.assertIn("cannot read inside", message)
+
+    def test_a_file_that_looks_like_a_zip_but_breaks_is_refused(self):
+        # B: a truncated deflated zip is not passed after the raw scan.
+        with tempfile.TemporaryDirectory() as tmp:
+            whole = Path(tmp) / "whole.zip"
+            with zipfile.ZipFile(whole, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("Payload/eBIRForms.app/eBIRForms", FAKE_ID * 50)
+            broken = Path(tmp) / "eBIRForms.ipa"
+            broken.write_bytes(whole.read_bytes()[: len(whole.read_bytes()) // 2])
+            ok, message = store_gmail.check(broken, {})
+            self.assertFalse(ok)
+            self.assertIn("looks like a zip but cannot be read", message)
+            not_a_zip = Path(tmp) / "renamed.zip"
+            not_a_zip.write_bytes(b"just bytes")
+            self.assertFalse(store_gmail.check(not_a_zip, {})[0])
+
+    def test_an_unreadable_member_is_a_clean_failure_not_a_traceback(self):
+        # C: a member that cannot be read (here a damaged entry: its bytes no longer match its CRC) ends in a FAIL line.
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "eBIRForms.ipa"
+            payload = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ" * 4
+            with zipfile.ZipFile(archive, "w", zipfile.ZIP_STORED) as z:
+                z.writestr("Payload/eBIRForms.app/eBIRForms", payload)
+            raw = archive.read_bytes()
+            at = raw.index(payload)
+            archive.write_bytes(raw[:at] + b"Z" + raw[at + 1:])
+            out = subprocess.run([sys.executable, str(ROOT / "scripts/store_gmail.py"), "check", str(archive)],
+                                 capture_output=True, env={**os.environ, "STORE_GMAIL": ""})
+            self.assertEqual(out.returncode, 1)
+            self.assertTrue(out.stderr.startswith(b"FAIL "), out.stderr)
+            self.assertNotIn(b"Traceback", out.stderr)
+            self.assertIn(b"cannot be read", out.stderr)
+
+    def test_the_last_line_names_what_was_not_read_inside(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = fake_app(Path(tmp))
+            (app / "Contents" / "Resources").mkdir()
+            (app / "Contents" / "Resources" / "Assets.car").write_bytes(b"lzfse")
+            (app / "Contents" / "Resources" / "icon.png").write_bytes(b"png")
+            ok, message = store_gmail.check(app, {})
+            self.assertTrue(ok)
+            last = message.splitlines()[-1]
+            self.assertTrue(last.startswith("Scanned 4 files"), last)
+            self.assertIn(".car (1)", last)
+            self.assertIn(".png (1)", last)
+
     def test_the_command_line_prints_plain_ascii(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = subprocess.run([sys.executable, str(ROOT / "scripts/store_gmail.py"), "check", str(fake_app(Path(tmp)))],
