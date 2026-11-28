@@ -57,6 +57,7 @@ DEFAULT_ADDR = "127.0.0.1:17421"
 ANDROID_HOST = "com.longbridge.nsh.host"
 # The Android development build's guarded test database (EBIR_TEST_ENV): a fresh run removes it.
 ANDROID_TEST_DB = "files/nsh/dev.goldcoders.bir/test-data/bir_data.db"
+ANDROID_TEST_ACCOUNT = "files/nsh/dev.goldcoders.bir/test-data/buwiz-cloud-account.json"
 
 SEND_WORDS = {"queue", "send", "submit", "file", "filing"}
 SECRET_WORDS = {"password", "passcode", "pin", "secret", "token", "otp", "totp", "recovery"}
@@ -1484,7 +1485,8 @@ def fresh_android(env, log):
         raise SuiteError("no Android emulator is online (adb devices)")
     t0 = time.monotonic()
     done = subprocess.run([adb, "-s", serial, "shell", "run-as", ANDROID_HOST, "rm", "-f", ANDROID_TEST_DB,
-                           ANDROID_TEST_DB + "-wal", ANDROID_TEST_DB + "-shm"], capture_output=True, text=True)
+                           ANDROID_TEST_DB + "-wal", ANDROID_TEST_DB + "-shm", ANDROID_TEST_ACCOUNT],
+                  capture_output=True, text=True)
     log.line("fresh", f"{serial}:{ANDROID_TEST_DB}", "removed" if done.returncode == 0 else
              f"not removed ({done.stderr.strip() or 'host not installed yet'})", (time.monotonic() - t0) * 1000)
 

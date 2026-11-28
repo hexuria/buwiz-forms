@@ -27,7 +27,8 @@ A plain run keeps the old development bypass: the account gate is open and no ac
 recipes that must prove sign-in and per-account behavior in the real app. It starts `just mock-account --auto-approve`
 (the same loopback in-memory server the Android development scripts use, pinned to `127.0.0.1:3008`), stops it at the
 end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and leaves `BIR_AUTH_BYPASS`
-out so the app starts signed out. On Android it adds the same `adb reverse tcp:3008 tcp:3008` the Android script uses.
+out so the app starts signed out. On Android it adds the same `adb reverse tcp:3008 tcp:3008` the Android script uses;
+a fresh run removes the test database and the saved sign-in beside it, never files outside `test-data`.
 
 The mode refuses to run when `BIR_AUTH_BYPASS=1` is already in the environment, when either account URL in the
 environment is not loopback (`127.0.0.1`, `[::1]` or `localhost`), or when port 3008 is already taken: the mock has no

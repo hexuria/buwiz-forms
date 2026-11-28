@@ -400,6 +400,21 @@ class AccountsMockTests(unittest.TestCase):
         self.assertIn("$env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL", text)
         self.assertIn("$authBypass", text)
 
+    def test_android_first_run_removes_the_saved_mock_sign_in_too(self):
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with mock.patch.object(E2E, "android_adb", return_value="adb"), \
+                mock.patch.object(E2E, "android_serial", return_value="emulator-5554"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=run):
+            E2E.fresh_android({}, mock.Mock())
+        self.assertEqual(calls[0][:5], ["adb", "-s", "emulator-5554", "shell", "run-as"])
+        self.assertIn(E2E.ANDROID_TEST_DB, calls[0])
+        self.assertIn("files/nsh/dev.goldcoders.bir/test-data/buwiz-cloud-account.json", calls[0])
+
     def test_the_fixture_addresses_and_code_sequence_are_invented(self):
         params = E2E.mock_account_params()
         self.assertEqual(params["account_a"], "account-a@example.com")
