@@ -221,3 +221,15 @@ test("desktop: the Queue button is enabled again after a blocked sheet is closed
   await app.waitUntil(() => app.enabled("id:fp-queue"), { timeout: 8000 });
   expect(app.enabled("id:fp-queue")).toBe(true);
 }, 40_000);
+
+test("desktop: a reopen of the same return during the account read still queues", async () => {
+  // A reopen builds a NEW target object for the same return: the press must not be dropped for that — what the read
+  // answered is still this return's TIN.
+  const app = await pageAndQueue("activated", { tinsDelayMs: 1000, reopenAfterMs: 500 });
+  for (let i = 0; i < 10; i++) {
+    if (tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
+    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 12000 });
+}, 40_000);

@@ -3929,6 +3929,7 @@ export class FormSession {
     if (this.queueGateBusySig() || this.disposed) return;
     this.queueGateBusySig.set(true);
     const pressed = this.st.target;
+    const pressedKey = `${pressed.tin}|${pressed.formCode}|${pressed.year}|${pressed.period}`;
     const [tinRoot, branch] = tinKeyParts(pressed.tin);
     void (async () => {
       let blocked: { state: string; message: string | null; action_url: string | null; test_only: boolean; stale: boolean; fetched_at: number } | null = null;
@@ -3945,7 +3946,8 @@ export class FormSession {
       // The queue itself reads the draft as it NOW is, but only for the SAME target the press checked — a switch to
       // another return during the wait means the TIN read answered for a target this page no longer shows.
       if (this.disposed) return;
-      if (this.st.target !== pressed) return;
+      const t = this.st.target;
+      if (`${t.tin}|${t.formCode}|${t.year}|${t.period}` !== pressedKey) return;
       const now = this.st;
       if (blocked) {
         now.overlay = { kind: "tin-blocked", row: blocked };

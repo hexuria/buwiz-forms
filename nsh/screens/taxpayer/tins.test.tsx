@@ -155,3 +155,16 @@ test("desktop: when the signed-in owner changes a failing read clears the old ow
   await app.waitUntil(() => !app.shows("id:tp-tin-status-state"), { timeout: 10000 });
   expect(app.shows("id:panel-tin-status-state")).toBe(false);
 }, 40_000);
+
+test("desktop: a chip mounted during an in-flight read after an owner switch fills when the read lands", async () => {
+  // Owner A's list was read at start; the owner flips and B's read is slow. While it is on the wire the chip shows
+  // nothing of A's; when the read lands the chip fills — it never stays empty until remounted.
+  const app = await desk({ tins: "activated", tinsOwnerFlipAfter: 1, tinsDelayMs: 900 });
+  await app.waitFor("id:tp-tin-status-state");
+  await app.waitUntil(() => tinsCalls(app).length >= 1, { timeout: 8000 });
+  await app.press("id:context-pill");
+  // B's read is in flight now. When it lands, the chip must fill again.
+  await app.waitUntil(() => tinsCalls(app).length >= 2, { timeout: 10000 });
+  await app.waitFor("id:tp-tin-status-state", { timeout: 10000 });
+  expect(app.shows("id:tp-tin-status-state")).toBe(true);
+}, 40_000);

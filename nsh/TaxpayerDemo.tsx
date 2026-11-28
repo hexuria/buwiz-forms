@@ -45,6 +45,8 @@ interface Params {
   tinsErrorAfter?: number;
   /** After this many reads the fake's sign-in becomes owner B (the account-switch test). */
   tinsOwnerFlipAfter?: number;
+  /** The fake account_tins answer is delayed this long. */
+  tinsDelayMs?: number;
   /** An arbitrary refusal sentence activate_tin throws verbatim (the pass-through test). */
   refusalText?: string;
 }
@@ -90,7 +92,7 @@ function fixGoogle(available: boolean) {
 function fakeTins(kind: NonNullable<Params["tins"]>, p: Params, readout: (line: string) => void): void {
   installFakeTins(bir as unknown as Record<string, unknown>, kind, p.activate, readout, {
     errorAfter: p.tinsErrorAfter,
-    ownerFlipAfter: p.tinsOwnerFlipAfter,
+    ownerFlipAfter: p.tinsOwnerFlipAfter, delayMs: p.tinsDelayMs,
     refusalText: p.refusalText,
   });
 }

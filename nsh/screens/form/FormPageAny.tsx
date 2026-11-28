@@ -41,6 +41,8 @@ interface Params {
   tinsDelayMs?: number;
   /** This many ms after mount the fixture opens ANOTHER return in the same session (a switch during a slow Queue read). */
   swapTargetAfterMs?: number;
+  /** This many ms after mount the fixture reopens the SAME return (a reopen during a slow Queue read must not drop the press). */
+  reopenAfterMs?: number;
   /** The refusal activate_tin throws. */
   activate?: FakeActivateKind;
   /** Year facts set for the demo taxpayer before the page opens (e.g. the EOPT tier a queue needs answered). */
@@ -102,6 +104,11 @@ function Fixture() {
               setTimeout(() => {
                 void s.open({ tin, formCode: "1601C", year: 2026, period: 9 } as never, true);
               }, p.swapTargetAfterMs);
+            }
+            if (p.reopenAfterMs) {
+              setTimeout(() => {
+                void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1 } as never, true);
+              }, p.reopenAfterMs);
             }
             void s.ready().then(async () => {
               sessionFields.set(String(s.fieldCount()));

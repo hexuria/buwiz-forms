@@ -19,7 +19,8 @@ let inFlight: Promise<void> | null = null;
 
 /** The list as last read, or null when there is none yet (never read, signed out, unreadable). */
 export function tinsList(): TinStatusList | null {
-  return listIsCurrentOwners() ? list() : null;
+  const kept = list();
+  return listIsCurrentOwners() ? kept : null;
 }
 
 /** Why there is no list (signed out, offline with no list, the server's refusal), or null. */
@@ -37,8 +38,10 @@ export function tinKeyParts(tin: unknown): [string, string] {
 /** The row for one TIN root (9 digits) and branch (5 digits), or null. Answers null when the signed-in owner is not
  * the owner the list was read for, so a chip mounted after a switch never shows even a moment of the old owner. */
 export function tinRow(tinRoot: string, branch: string): TinStatusRow | null {
-  if (!listIsCurrentOwners()) return null;
+  // list() is read FIRST: the chip tracks it, so a row landing after this render re-runs it. An early return before
+  // the read would leave the chip empty until it was mounted again.
   const rows = list()?.rows;
+  if (!listIsCurrentOwners()) return null;
   if (!rows) return null;
   return rows.find((row) => row.tin_root === tinRoot && row.branch === branch) ?? null;
 }
@@ -71,11 +74,17 @@ function currentOwner(): string | null {
   }
 }
 
-/** True when the kept list belongs to the owner signed in now. Checked at every render, so a newly mounted chip
- * never shows even a moment of the previous owner's statuses. */
+/** True when the kept list belongs to the owner signed in now. The owner is read once per refresh (never on a chip's
+ * evaluation): between refreshes the last read's owner stands, which is what the list belongs to. */
 function listIsCurrentOwners(): boolean {
-  return owner !== undefined && currentOwner() === owner;
+  return owner !== undefined && owner !== null && currentOwnerMemo() === owner;
 }
+
+/** The owner as the last refresh read it; reading storage is a per-refresh cost, never a per-render one. */
+function currentOwnerMemo(): string | null {
+  return ownerNow;
+}
+let ownerNow: string | null = null;
 
 /**
  * Reads the account's TINs. Screens pass 60; Queue and the moments after a change pass 0. The answer is THIS call's:
@@ -90,6 +99,7 @@ export async function refreshTins(maxAge: number): Promise<TinStatusList | null>
   }
   const run = (async (): Promise<TinStatusList | null> => {
     const me = currentOwner();
+    ownerNow = me;
     if (owner !== undefined && me !== owner) {
       list.set(null);
       refusals.set({});
