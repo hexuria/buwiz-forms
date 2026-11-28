@@ -33,8 +33,9 @@ It is read-only: never edit it.
 
 ## Verification tooling (all platforms)
 
-Every setup script (`setup-linux.sh`, `setup-macos.sh`, `setup-windows.ps1`) installs the `impeccable` CLI with
-`cargo install --locked` and downloads the `impeccable-rust` agent skill (`SKILL.md`, `performance.md`) from
+Every setup script (`setup-linux.sh`, `setup-macos.sh`, `setup-windows.ps1`) installs the `impeccable` CLI at its pin
+(through the prebuilt path below, with `cargo install --locked` as the fallback) and downloads the `impeccable-rust`
+agent skill (`SKILL.md`, `performance.md`) from
 `hexuria/impeccable-rust` into `.agents/skills/impeccable-rust/` at the repository root, where agents look for skills.
 `.agents/` is git-ignored because agent artifacts are never committed, so the skill is downloaded at a pinned commit
 instead; a `.commit` file there records which one. `--check` reports both; `--no-impeccable` (`-NoImpeccable` on
@@ -46,12 +47,52 @@ The Linux blueprint block adds them: it installs `valgrind` in `initialize`, and
 cannot build this workspace. `impeccable doctor` then shows every tool on the host except TLC, which needs Java and
 the TLA+ tools jar and is not installed.
 
-To move to a new version, edit `scripts/impeccable.pin` (CLI version, skill commit, cargo-binstall version); nothing
-else hard-codes them. Linux maintenance re-downloads `cargo-binstall` when its pin moves, runs
+The versions and digests live only in `scripts/impeccable.pin`. Move the impeccable CLI with
+`scripts/update-prebuilt-pins.py` (see "Prebuilt tools" below) and edit the skill commit or cargo-binstall version
+there; nothing else hard-codes them. Linux maintenance re-downloads `cargo-binstall` when its pin moves, runs
 `scripts/setup-impeccable.sh`, and re-syncs the host tools when the CLI or `cargo-binstall` version changes; elsewhere
 re-run the platform's setup script. On Linux and macOS, if Cargo's install directory (`$CARGO_INSTALL_ROOT/bin`, else
 `$CARGO_HOME/bin`, else `~/.cargo/bin`) is not on `PATH`, the setup scripts add it for their own run and warn you to
 add it to your shell profile.
+
+## Prebuilt tools
+
+The setup scripts use `scripts/lib/prebuilt.sh` (Linux/macOS) or `scripts/lib/Prebuilt.ps1` (Windows) for exactly two
+crate tools: `gpui-agent-cli` from `hexuria/gpui-agent` and `impeccable` from `hexuria/impeccable-rust`. For those two,
+the helper downloads the release archive directly from the release's `releases/download` URL over plain HTTPS (no
+GitHub API and no token), compares the archive's sha256 with the digest pinned in `scripts/impeccable.pin`, then
+unpacks the binary into Cargo's install bin directory and writes a `.buwiz-installed` stamp beside it. The stamp holds
+the version, the route (`prebuilt` or `source`), and the sha256 of the installed binary; replacing the binary
+invalidates the stamp.
+
+Integrity comes from the digests pinned and reviewed in this repository, as `Cargo.lock` pins crate digests. Every
+tool/target in the helper table has a `<TOOL>_SHA256_<target>` line in `scripts/impeccable.pin` (target dashes become
+underscores), and the adjacent `<TOOL>_SHA256_FOR` line names the version those digests belong to. The helper refuses
+the prebuilt route when that generation line differs from the tool's version pin, when the machine's target has
+no valid pin, or when the downloaded bytes do not match the pin. The sibling `<archive>.sha256` release file is not
+downloaded or trusted: whoever can replace the archive can replace that file too.
+
+Any failure — no table entry, no archive for the machine's target, a download error, a pin mismatch, or an archive
+layout the helper does not expect — removes the download and falls back to one pinned `cargo install <crate> --version
+=<version>` source build. Set `BUWIZ_SETUP_NO_PREBUILT=1` before running a setup script to skip prebuilt downloads and
+force every crate tool to build from source. `just`, `cargo-audit`, `cargo-outdated` and `cargo-machete` never take the
+download route; they are plain pinned cargo installs.
+
+On Windows a running `gpui-agent.exe` cannot be replaced: close anything that uses it before a setup run that moves
+the pin, or the install (prebuilt or source) fails and says so. Machines whose C library is musl (Alpine) build the CLI
+from source, because its release archives are glibc builds.
+
+The pins live in `scripts/impeccable.pin`: `GPUI_AGENT_CLI_VERSION` for the CLI (separate from the app's `gpui-agent`
+library pin because recipes can need a newer CLI), `IMPECCABLE_VERSION` and `IMPECCABLE_SKILL_COMMIT` for impeccable,
+and `CARGO_BINSTALL_VERSION` plus the two `CARGO_BINSTALL_SHA256_*_linux_musl` digests for the Linux blueprint's
+impeccable host setup. macOS and Windows do not download cargo-binstall.
+
+To bump `gpui-agent-cli` or `impeccable` after its release is published, run `scripts/update-prebuilt-pins.py` with
+the tool and version, for example `python3 scripts/update-prebuilt-pins.py gpui-agent-cli 0.4.2`. The script reads the
+release assets' `digest` fields through `gh api`, rewrites that tool's version, `_SHA256_FOR` line and every target
+digest, and refuses to touch the pin file when any target in the helper table has no asset or no usable digest. Review
+the resulting pin diff like a lock-file change. If a release changed after the bump, the pinned digest no longer
+matches and setup falls back to the source build instead of installing the changed archive.
 
 ## Local account server (all platforms)
 

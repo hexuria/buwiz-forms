@@ -15,8 +15,10 @@ name: NSH app
 # private, create NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
 # "Contents: read" on that one repository); without it the step then fails. Pull requests from forks never get it.
 
-# The test lane only (docs/CI.md): a pull request no longer starts these jobs. ci.yml's quick lane runs the app's type
-# check (`nsh check`) on every pull request that touches the app; the builds and tests here run on
+# The test lanes (docs/CI.md): an ordinary pull request does not start these jobs. ci.yml's quick lane runs the app's
+# type check (`nsh check`) on every pull request that touches the app; the builds and tests here run on
+#   - a ci:suite* labeled event on the pull request (`just ci-suite`): the label picks the systems, the changed files
+#     the suites, exactly as a test/** push chooses them;
 #   - a push to test/** (`just ci-test`): the branch name picks the systems, the changed files the suites;
 #   - a manual run (`gh workflow run nsh.yml`, docs/CI.md): the systems, suites, screen-test filter and shard asked for;
 #   - the nightly run on main: everything on all three systems, one runner per system.
@@ -27,6 +29,11 @@ name: NSH app
 on:
   push:
     branches: [ "test/**" ]
+  pull_request:
+    branches: [ "main", "gol/**", "codex/**", "feat/**" ]
+    # Only a labeled event starts this workflow's jobs on a pull request. ci_plan.py decides which label names count;
+    # a synchronize event starts an empty run only to cancel the pull request's older suite run.
+    types: [ labeled, synchronize ]
   schedule:
     - cron: "0 18 * * *"
   workflow_dispatch:
@@ -52,11 +59,13 @@ on:
 permissions:
   contents: read
 
-# One run per ref: a newer push to the same test/... branch cancels the older run. main's runs (nightly and manual)
-# each get a group of their own and are never cancelled: they are the ones that save the caches.
+# One run per pull request or ref: a ci:suite* labeled event replaces the pull request's older suite run, and a newer
+# push to the same test/... branch cancels the older run there. A labeled event with any other name plans nothing, so
+# it gets its own group (its run id) and cancels nothing. main's runs (nightly and manual) each get a group of their
+# own and are never cancelled: they are the ones that save the caches.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all' && github.run_id || github.event.pull_request.number || (github.ref == 'refs/heads/main' && github.run_id) || github.ref }}
+  cancel-in-progress: ${{ (github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all') && (github.event_name == 'pull_request' || github.ref != 'refs/heads/main') }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -76,10 +85,17 @@ env:
   BIR_SFTP_DRY_RUN: "1"
 
 jobs:
-  # Decides what this run does: scripts/ci_plan.py, the same script as ci.yml's `changes` job (docs/CI.md).
+  # Decides what this run does: scripts/ci_plan.py, the same script as ci.yml's `changes` job (docs/CI.md). A closed
+  # pull request and a draft plan nothing there, except that a labeled event reaches the planner: a ci:suite* label is
+  # a draft's explicit request, and any other label plans nothing.
   plan:
+    if: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) && github.event.action != 'synchronize' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
+      lane: ${{ steps.decide.outputs.lane }}
       nsh_macos: ${{ steps.decide.outputs.nsh_macos }}
       nsh_linux: ${{ steps.decide.outputs.nsh_linux }}
       nsh_windows: ${{ steps.decide.outputs.nsh_windows }}
@@ -101,8 +117,18 @@ jobs:
         id: decide
         env:
           EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          PR_SYNC_LANE: none
+          LABEL: ${{ github.event.label.name }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+          DRAFT: ${{ github.event.pull_request.draft }}
           REF: ${{ github.ref }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
           IN_SYSTEMS: ${{ inputs.systems }}
@@ -324,7 +350,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           mkdir -p ~/apt-archives/partial
-          sudo apt-get update
+          sudo bash buwiz-forms/scripts/ci/apt_update.sh
           sudo -E apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" \
             build-essential pkg-config perl python3 \
             clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
@@ -690,7 +716,7 @@ jobs:
 
       - name: Install Linux dependencies
         run: |
-          sudo apt-get update
+          sudo bash scripts/ci/apt_update.sh
           sudo apt-get install -y pkg-config libdbus-1-dev libssl-dev
 
       - name: Plain-SQLite tests
@@ -707,3 +733,46 @@ jobs:
     uses: ./.github/workflows/release-linux.yml
     with:
       tag: ""
+
+  # The suite-label proof the batch gate reads. `always()` is deliberate: tests-ok is not a required status, so a run
+  # whose planned suite job failed or was cancelled reports red rather than vanishing. Its skipped job is still named,
+  # so the name first reads the plan: only the suite lane may call it `tests-ok`.
+  tests-ok:
+    name: ${{ needs.plan.outputs.lane != 'suite' && 'tests-not-requested' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all')) && 'tests-ok' || 'tests-not-requested' }}
+    needs: [ plan, nsh-macos, nsh-linux, nsh-windows, core-plain-test, linux-packages ]
+    if: ${{ always() && github.event_name == 'pull_request' && needs.plan.outputs.lane == 'suite' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Result
+        shell: bash
+        env:
+          PLAN: ${{ needs.plan.result }}
+          NSH_MACOS: ${{ needs.nsh-macos.result }}
+          WANT_NSH_MACOS: ${{ needs.plan.outputs.nsh_macos }}
+          NSH_LINUX: ${{ needs.nsh-linux.result }}
+          WANT_NSH_LINUX: ${{ needs.plan.outputs.nsh_linux }}
+          NSH_WINDOWS: ${{ needs.nsh-windows.result }}
+          WANT_NSH_WINDOWS: ${{ needs.plan.outputs.nsh_windows }}
+          CORE_PLAIN: ${{ needs.core-plain-test.result }}
+          WANT_CORE_PLAIN: ${{ needs.plan.outputs.core_plain }}
+          LINUX_PACKAGES: ${{ needs.linux-packages.result }}
+          WANT_LINUX_PACKAGES: ${{ needs.plan.outputs.linux_packages }}
+        run: |
+          set -euo pipefail
+          echo "plan=$PLAN nsh-macos=$NSH_MACOS nsh-linux=$NSH_LINUX nsh-windows=$NSH_WINDOWS core-plain-test=$CORE_PLAIN linux-packages=$LINUX_PACKAGES"
+          fail() { echo "::error::$1"; exit 1; }
+          [[ "$PLAN" == success ]] || fail "could not decide what to test (plan: $PLAN)"
+          expect() {
+            if [[ "$3" == true ]]; then
+              [[ "$2" == success ]] || fail "$1 was needed and finished: $2"
+            else
+              [[ "$2" == skipped || "$2" == success ]] || fail "$1 was not needed but finished: $2"
+            fi
+          }
+          expect nsh-macos "$NSH_MACOS" "$WANT_NSH_MACOS"
+          expect nsh-linux "$NSH_LINUX" "$WANT_NSH_LINUX"
+          expect nsh-windows "$NSH_WINDOWS" "$WANT_NSH_WINDOWS"
+          expect core-plain-test "$CORE_PLAIN" "$WANT_CORE_PLAIN"
+          expect linux-packages "$LINUX_PACKAGES" "$WANT_LINUX_PACKAGES"

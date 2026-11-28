@@ -1,12 +1,33 @@
-# Pins for the impeccable verification CLI and its agent skill. The only place
-# these versions live: scripts/setup-impeccable.sh (sourced by setup-linux.sh
-# and setup-macos.sh), scripts/setup-windows.ps1 and
-# docs/platforms/devin-blueprint.yml all read this file. One KEY=value per
-# line, no spaces or trailing comments.
+# Pins for the impeccable verification CLI and its agent skill, the gpui-agent
+# CLI, and the Linux cargo-binstall helper. The only place these versions live:
+# scripts/setup-impeccable.sh (sourced by setup-linux.sh and setup-macos.sh),
+# scripts/setup-windows.ps1, scripts/lib/prebuilt.sh and scripts/lib/Prebuilt.ps1
+# read this file, and the Devin blueprint uses it through the shell helper. One
+# KEY=value per line, no spaces or trailing comments.
 #
 # IMPECCABLE_VERSION       crates.io version of the `impeccable` CLI
 # IMPECCABLE_SKILL_COMMIT  hexuria/impeccable-rust commit the skill/ files come from
-# CARGO_BINSTALL_VERSION   prebuilt cargo-binstall the Devin Linux blueprint installs
+# GPUI_AGENT_CLI_VERSION   crates.io version of the `gpui-agent-cli` CLI the setup scripts install
+# <TOOL>_SHA256_FOR        version whose release archive digests are pinned
+# <TOOL>_SHA256_<target>   sha256 of that release archive, with target dashes as underscores
+# CARGO_BINSTALL_VERSION   prebuilt cargo-binstall the Devin Linux blueprint installs for impeccable's host setup
+# CARGO_BINSTALL_SHA256_*  sha256 of each Linux musl cargo-binstall archive the blueprint may download
 IMPECCABLE_VERSION=0.2.1
 IMPECCABLE_SKILL_COMMIT=6c52a01007b260b71183b7599e8afa0bc26799ed
+GPUI_AGENT_CLI_VERSION=0.4.1
+GPUI_AGENT_CLI_SHA256_FOR=0.4.1
+GPUI_AGENT_CLI_SHA256_aarch64_apple_darwin=f6fb4786b99449993d0fe58e822b2951f6e44dc5897251eefa29af9d1be14ea6
+GPUI_AGENT_CLI_SHA256_x86_64_apple_darwin=572231364c752c32a40e607c72022affe82d27e37e980b76a97628a41845dc8e
+GPUI_AGENT_CLI_SHA256_aarch64_unknown_linux_gnu=f47a023209634ab88b89272189d66d30fad387f1799fd71f0f90cb2cc6dd5c83
+GPUI_AGENT_CLI_SHA256_x86_64_unknown_linux_gnu=525b44ec00737c787b91f04810e6ac93cd97ff7ad170bed83b75c10e8158981d
+GPUI_AGENT_CLI_SHA256_x86_64_pc_windows_msvc=abb2b90f312cdcd2e81648d7f2536d7f5d9879c7f462eb533a21a6c8fce40c67
+IMPECCABLE_SHA256_FOR=0.2.1
+IMPECCABLE_SHA256_aarch64_apple_darwin=d37cd96c3f3b6470c10c24bb7688baac72a873bc2abe3a3a5b760bd94f497776
+IMPECCABLE_SHA256_x86_64_apple_darwin=ab6cf8826fecbc191f96ef65a72e79d2b11f6649f623e22abe413e501ad5c62d
+IMPECCABLE_SHA256_aarch64_unknown_linux_musl=43f25a8b642c43d5fd196ebdd4c0850b339fec01842f4bfa392ff0c17e9caf07
+IMPECCABLE_SHA256_x86_64_unknown_linux_musl=a0ed2314cdd8598b213cfe625a5d7f207b48e29fff29b245c732f27de29a296e
+IMPECCABLE_SHA256_x86_64_pc_windows_msvc=38a3671e9e0648ac0193644044c81a3e9400fea93a97b72eda252dfc7f3c4611
+IMPECCABLE_SHA256_aarch64_pc_windows_msvc=26e80c6a0e0a8d4fb9432c2537a336fddd62b9354841b3e79830f9629e956f24
 CARGO_BINSTALL_VERSION=1.24.0
+CARGO_BINSTALL_SHA256_x86_64_unknown_linux_musl=7ffe1832c4bc3148d00f02d51c1d96c9cccdec76a0fa20e6e5692201d78bcc0b
+CARGO_BINSTALL_SHA256_aarch64_unknown_linux_musl=c2c44aba65d402ac43ee821387c49246bc574bde65d3d7f0f7a9e666c5a69f7f

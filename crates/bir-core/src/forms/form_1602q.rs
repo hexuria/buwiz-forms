@@ -429,9 +429,6 @@ impl Form1602QDraft {
 
     /// The official compute chain over values held at cents.
     pub fn recompute(&mut self) {
-        if self.is_amended != Some(true) {
-            self.tax_remitted_previous = 0.0;
-        }
         let fcd_rate = self.foreign_currency_rate();
         let mut total = 0.0;
         for (index, item) in FORM_1602Q_SCHEDULE1_ITEMS.iter().enumerate() {
@@ -945,13 +942,6 @@ impl Form1602QDraft {
                 break;
             }
         }
-        if self.is_amended != Some(true) && self.tax_remitted_previous != 0.0 {
-            err(
-                "tax_remitted_previous",
-                "Item 20 applies only to an amended return.",
-            );
-        }
-
         let mut expected = self.clone();
         expected.recompute();
         if expected.item28 != self.item28
@@ -1392,6 +1382,88 @@ mod tests {
             &|d| d.schedule3[0].ipa_code = "XYZ".into(),
             "Invalid IPA Code! Please refer to IPA Codes in Schedule 6.",
         );
+    }
+
+    /// Item 20 is enabled by the official form in every amended state: a typed
+    /// amount survives recompute, joins Items 18/19/21 in Item 22, and serializes.
+    #[test]
+    fn item_twenty_is_kept_and_computed_when_not_amended() {
+        for amended in [None, Some(false)] {
+            let mut draft = sample();
+            draft.is_amended = amended;
+            draft.tax_remitted_previous = 500.0;
+            draft.recompute();
+            assert_eq!(draft.tax_remitted_previous, 500.0, "amended={amended:?}");
+            assert_eq!(draft.item22, 4_000.51, "amended={amended:?}");
+            assert_eq!(draft.item23, 192_977.64, "amended={amended:?}");
+            assert_eq!(draft.item28, 193_013.14, "amended={amended:?}");
+            assert!(
+                messages(&draft)
+                    .iter()
+                    .all(|m| !m.contains("Item 20 applies only")),
+                "amended={amended:?}: {:?}",
+                messages(&draft)
+            );
+            if amended.is_some() {
+                let payload = draft
+                    .to_bir_xml_payload()
+                    .unwrap_or_else(|errors| panic!("1602Q must serialize: {errors:?}"));
+                assert!(
+                    payload.contains("frm1602Q:txt20=500.00"),
+                    "amended={amended:?}: upload plaintext carries Item 20"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn item_twenty_survives_amended_yes_then_no() {
+        let mut draft = sample();
+        draft.is_amended = Some(true);
+        draft.tax_remitted_previous = 500.0;
+        draft.recompute();
+        draft.is_amended = Some(false);
+        draft.recompute();
+        assert_eq!(draft.tax_remitted_previous, 500.0);
+        assert_eq!(draft.item22, 4_000.51);
+    }
+
+    #[test]
+    fn item_twenty_can_make_item_twentyeight_negative_and_keep_its_choice() {
+        let mut draft = sample();
+        draft.tax_remitted_previous = 500_000.0;
+        draft.recompute();
+        assert!(draft.item28 < 0.0);
+        assert_eq!(draft.item28, cents(draft.item23 + draft.item27));
+        draft.over_remittance = Form1602QOverRemittance::CarriedOver;
+        draft.recompute();
+        assert_eq!(draft.over_remittance, Form1602QOverRemittance::CarriedOver);
+        assert_eq!(draft.to_bir_field_map()["frm1602Q:OverRemittance3"], "true");
+    }
+
+    #[test]
+    fn item_twenty_is_part_of_the_basic_tax_due_before_penalties() {
+        let mut draft = sample();
+        draft.tax_remitted_previous = 500.0;
+        draft.penalty.clear_overrides();
+        draft.penalty.penalty_due_date = NaiveDate::from_ymd_opt(2025, 10, 31);
+        crate::forms::penalty_items::with_clock(
+            NaiveDate::from_ymd_opt(2025, 11, 1).unwrap(),
+            || {
+                draft.recompute();
+            },
+        );
+        // Official 1602Q rules: Item 22 includes Item 20, Item 23 = Item 17 -
+        // Item 22, and Item 27 = Items 24 + 25 + 26. The shared penalty rules
+        // for one late day here are surcharge = Item 23 * 25%, interest =
+        // Item 23 * 12% * 1/365, compromise = 20,000 for this tax-due bracket.
+        assert_eq!(draft.item22, 4_000.51);
+        assert_eq!(draft.item23, 192_977.64);
+        assert_eq!(draft.surcharge, 48_244.41);
+        assert_eq!(draft.interest_penalty, 63.44);
+        assert_eq!(draft.compromise, 20_000.0);
+        assert_eq!(draft.item27, 68_307.85);
+        assert_eq!(draft.item28, 261_285.49);
     }
 
     #[test]

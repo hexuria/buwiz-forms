@@ -1,0 +1,9 @@
+# Boxes intentionally locked and blank by an official gate. Unlike
+# locked_and_blank.txt's pre-existing unfinished locks, these draw their
+# filer-facing sentence and must stay blank until the gate opens.
+1606 frm1606:txtAmount: Items 21 to 26 apply only to an installment sale.
+1606 frm1606:txtCost: Items 21 to 26 apply only to an installment sale.
+1606 frm1606:txtMortgage: Items 21 to 26 apply only to an installment sale.
+1606 frm1606:txtSelling: Items 21 to 26 apply only to an installment sale.
+1606 frm1606:txtTotalN: Items 21 to 26 apply only to an installment sale.
+1606 frm1606:txtTotalP: Items 21 to 26 apply only to an installment sale.

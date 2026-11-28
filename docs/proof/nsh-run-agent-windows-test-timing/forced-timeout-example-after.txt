@@ -1,0 +1,59 @@
+the recipe did not return
+process tree at timeout:
+pid	parent	started	name	command line
+8020	8976	2026-11-27T19:52:24.41953+00:00	just.exe	just --justfile C:\Users\Administrator\repos\buwiz-timing-fix\justfile nsh-run-agent android
+5752	8020	2026-11-27T19:52:25.128981+00:00	  pwsh.exe	"pwsh" -NoProfile C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\temp\just-AuCIxV\nsh-run-agent.ps1
+6440	5752	2026-11-27T19:52:26.220013+00:00	    pwsh.exe	"C:\Program Files\PowerShell\7\pwsh.exe" -s -NoLogo -NoProfile -wd C:\Users\Administrator\repos\buwiz-timing-fix
+7596	6440	2026-11-27T19:52:26.222006+00:00	      conhost.exe	\??\C:\Windows\system32\conhost.exe 0x4
+7628	5752	2026-11-27T19:52:26.494615+00:00	    cmd.exe	C:\Windows\system32\cmd.exe /c ""C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\tools\bin\nsh.cmd" run --target android --port 8347"
+3256	7628	2026-11-27T19:52:26.504533+00:00	      python.exe	"C:\Python315\python.exe"  "C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\tools\bin\nsh.py" run --target android --port 8347
+9200	5752	2026-11-27T19:52:26.346266+00:00	    pwsh.exe	"C:\Program Files\PowerShell\7\pwsh.exe" -s -NoLogo -NoProfile -wd C:\Users\Administrator\repos\buwiz-timing-fix
+4044	9200	2026-11-27T19:52:26.348151+00:00	      conhost.exe	\??\C:\Windows\system32\conhost.exe 0x4
+partial output so far:
+build: app unknown (git not found), nsh unknown (git not found) beside it, tool nsh 0.6.1 (fake), cargo 1.99.0 (5f94df478 2026-08-27), folder C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\target-nsh
+nsh-run-agent: window plane on 127.0.0.1:17421, data plane on 127.0.0.1:17422 on emulator-5556; run: adb -s emulator-5556 forward tcp:17421 tcp:17421 && adb -s emulator-5556 forward tcp:17422 tcp:17422
+
+step timeline:
+1795809144.419	test	start
+1795809144.972	recipe	guard-start	4748
+1795809145.099	recipe	guard-empty-exit	4748
+1795809145.316	recipe	main-start	5752
+1795809146.038	recipe	before-version-probes	5752
+1795809146.079	nsh	start	--version
+1795809146.079	nsh	version	--version
+1795809146.079	nsh	exit	--version
+1795809146.085	recipe	after-nsh-version	5752
+1795809146.104	recipe	after-cargo-version	5752
+1795809146.143	recipe	adb-devices-start	5752
+1795809146.178	adb	start	devices
+1795809146.178	adb	devices	devices
+1795809146.179	adb	exit	devices
+1795809146.183	recipe	adb-devices-done-0	5752
+1795809146.196	recipe	writer-job-start	5752
+1795809146.334	recipe	writer-job-created	5752
+1795809146.338	recipe	plugger-job-start	5752
+1795809146.477	recipe	plugger-job-created	5752
+1795809146.483	recipe	before-nsh-run	5752
+1795809146.527	nsh	start	run --target android --port 8347
+1795809146.527	nsh	launch-recorded	run --target android --port 8347
+1795809146.528	nsh	mode-hang	run --target android --port 8347
+1795809146.668	adb	start	-s emulator-5556 shell run-as com.longbridge.nsh.host true
+1795809146.668	adb	device-selected	shell run-as com.longbridge.nsh.host true
+1795809146.668	adb	package-missing	shell run-as com.longbridge.nsh.host true
+1795809146.669	adb	exit	shell run-as com.longbridge.nsh.host true
+1795809146.801	adb	start	-s emulator-5556 shell run-as com.longbridge.nsh.host true
+1795809146.801	adb	device-selected	shell run-as com.longbridge.nsh.host true
+1795809146.801	adb	package-missing	shell run-as com.longbridge.nsh.host true
+1795809146.801	adb	exit	shell run-as com.longbridge.nsh.host true
+1795809147.220	adb	start	-s emulator-5556 shell run-as com.longbridge.nsh.host true
+1795809147.220	adb	device-selected	shell run-as com.longbridge.nsh.host true
+1795809147.221	adb	package-missing	shell run-as com.longbridge.nsh.host true
+1795809147.221	adb	exit	shell run-as com.longbridge.nsh.host true
+1795809147.348	adb	start	-s emulator-5556 shell run-as com.longbridge.nsh.host true
+1795809147.348	adb	device-selected	shell run-as com.longbridge.nsh.host true
+1795809147.348	adb	package-missing	shell run-as com.longbridge.nsh.host true
+1795809147.348	adb	exit	shell run-as com.longbridge.nsh.host true
+1795809147.756	adb	start	-s emulator-5556 shell run-as com.longbridge.nsh.host true
+1795809147.757	adb	device-selected	shell run-as com.longbridge.nsh.host true
+1795809147.757	adb	package-missing	shell run-as com.longbridge.nsh.host true
+1795809147.757	adb	exit	shell run-as com.longbridge.nsh.host true

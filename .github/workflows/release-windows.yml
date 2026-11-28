@@ -7,10 +7,37 @@ on:
         description: Sign workflow artifacts if the Windows certificate is configured
         type: boolean
         default: false
+      store:
+        description: >-
+          Build only the Microsoft Store .msix: never signed (the Store signs it), and given the Google OAuth client
+          only when the repository variable STORE_GMAIL is 1 (Gmail Connect's restricted scope needs Google's
+          verification). Off, the package is checked to hold no client id.
+        type: boolean
+        default: false
   workflow_call:
+    # Named so a caller can pass the Store job only what it may have (release.yml's build-windows-store); a caller
+    # with `secrets: inherit` passes every secret, as before.
+    secrets:
+      NSH_REPO_TOKEN:
+        required: false
+      GOOGLE_CLIENT_ID:
+        required: false
+      GOOGLE_CLIENT_SECRET:
+        required: false
+      WINDOWS_CERTIFICATE_PFX:
+        required: false
+      WINDOWS_CERTIFICATE_PASSWORD:
+        required: false
     inputs:
       release:
         description: Sign workflow artifacts if the Windows certificate is configured
+        type: boolean
+        default: false
+      store:
+        description: >-
+          Build only the Microsoft Store .msix: never signed (the Store signs it), and given the Google OAuth client
+          only when the repository variable STORE_GMAIL is 1 (Gmail Connect's restricted scope needs Google's
+          verification). Off, the package is checked to hold no client id.
         type: boolean
         default: false
 
@@ -65,6 +92,8 @@ jobs:
           lockfiles: buwiz-forms/nsh/Cargo.lock
 
       - name: Install installer tools
+        # The Store package needs only the Windows SDK's MakeAppx, which the image has.
+        if: ${{ !inputs.store }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
           choco install innosetup -y --no-progress
@@ -110,20 +139,66 @@ jobs:
         env:
           # Setup and updater ZIP must run without an installed VC Redistributable.
           CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-feature=+crt-static"
-          GOOGLE_CLIENT_ID: ${{ inputs.release && secrets.GOOGLE_CLIENT_ID || '' }}
-          GOOGLE_CLIENT_SECRET: ${{ inputs.release && secrets.GOOGLE_CLIENT_SECRET || '' }}
+          # bir-core compiles the Google OAuth client in (option_env!). Direct downloads keep it on release runs, as
+          # 0.2.x shipped; the Store package gets it only when the repository variable STORE_GMAIL is 1.
+          GOOGLE_CLIENT_ID: ${{ inputs.release && (!inputs.store || vars.STORE_GMAIL == '1') && secrets.GOOGLE_CLIENT_ID || '' }}
+          GOOGLE_CLIENT_SECRET: ${{ inputs.release && (!inputs.store || vars.STORE_GMAIL == '1') && secrets.GOOGLE_CLIENT_SECRET || '' }}
         run: |
           $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path"
           nsh package --target windows --out "$env:RUNNER_TEMP/nsh-windows"
 
       - name: Package and audit the NSH Windows installers
         env:
-          WINDOWS_CERTIFICATE_PFX: ${{ inputs.release && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ inputs.release && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+          WINDOWS_CERTIFICATE_PFX: ${{ inputs.release && !inputs.store && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ inputs.release && !inputs.store && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+        # A release's .msix comes from the Store job alone; a test run (not a release) still builds and smoke-tests it here.
         run: |
-          ./scripts/package_nsh_windows.ps1 -PackageRoot "$env:RUNNER_TEMP/nsh-windows" -OutDir target/release-artifacts -SmokeMsix:$${{ !inputs.release }}
+          ./scripts/package_nsh_windows.ps1 -PackageRoot "$env:RUNNER_TEMP/nsh-windows" -OutDir target/release-artifacts -SmokeMsix:$${{ !inputs.release }} -MsixOnly:$${{ inputs.store }} -NoMsix:$${{ inputs.release && !inputs.store }}
+
+      - name: Check the audit finds the client in the direct downloads
+        # The real-package positive control for the Store check below: on a release the direct build is given the
+        # client, so the audit must find both the id and the secret in the updater ZIP's files. It proves the bytes
+        # the audit reads are where the client lands.
+        if: ${{ inputs.release && !inputs.store }}
+        env:
+          HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}
+        # pwsh fails a step only on its last native exit code, so each audit's is checked where it runs.
+        run: |
+          if ($env:HAS_CLIENT -ne 'true') {
+            Write-Output '::error title=Google OAuth client secrets are empty::GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty, so the direct downloads were built without Gmail Connect and the audit has nothing to find. Set both repository secrets.'
+            exit 1
+          }
+          $zip = @(Get-ChildItem target/release-artifacts -Filter *-windows-x86_64.zip -File)
+          if ($zip.Count -ne 1) { throw "Expected one updater ZIP, found $($zip.Count)" }
+          python scripts/audit_google_client.py --present $zip[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check the Store package against STORE_GMAIL
+        # The detector's positive control first (it finds a planted id and secret). Then the package: with the switch
+        # off it holds neither; on a release with STORE_GMAIL=1 (the build above was given both) it holds both.
+        if: ${{ inputs.store }}
+        env:
+          GMAIL_BUILT_IN: ${{ inputs.release && vars.STORE_GMAIL == '1' }}
+          HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}
+        # pwsh fails a step only on its last native exit code, so each audit's is checked where it runs.
+        run: |
+          python scripts/audit_google_client.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $msix = @(Get-ChildItem target/release-artifacts -Filter *.msix -File)
+          if ($msix.Count -ne 1) { throw "Expected one .msix, found $($msix.Count)" }
+          $expect = '--absent'
+          if ($env:GMAIL_BUILT_IN -eq 'true') {
+            if ($env:HAS_CLIENT -ne 'true') {
+              Write-Output '::error title=Google OAuth client secrets are empty::STORE_GMAIL is 1 but GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty, so the Store package was built without Gmail Connect. Set both repository secrets, or unset STORE_GMAIL.'
+              exit 1
+            }
+            $expect = '--present'
+          }
+          python scripts/audit_google_client.py $expect $msix[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload Windows Artifact
+        if: ${{ !inputs.store }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
@@ -134,3 +209,13 @@ jobs:
             buwiz-forms/target/release-artifacts/*.msix
             buwiz-forms/target/release-artifacts/*-windows-x86_64.zip
             buwiz-forms/target/release-artifacts/SHA256SUMS-windows-x64.txt
+
+      - name: Upload the Store package
+        if: ${{ inputs.store }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-store
+          if-no-files-found: error
+          path: |
+            buwiz-forms/target/release-artifacts/*.msix
+            buwiz-forms/target/release-artifacts/SHA256SUMS-windows-store-x64.txt

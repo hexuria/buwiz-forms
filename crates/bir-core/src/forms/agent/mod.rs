@@ -403,7 +403,18 @@ pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, S
 
 /// Official control id -> value for `draft` as it stands.
 pub fn field_map(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
-    with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))
+    let mut fields = with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))?;
+    // A previous-payment amount belongs only to an amended return. While the
+    // gate is closed the map writes the box's empty zero even if a corrupt
+    // draft reaches this map without a recompute: the upload never carries
+    // the dormant amount, and the assistant's form card still shows the box
+    // at the zero the return holds.
+    if let Some(spec) = draft_locks::previous_payment::spec(kind)
+        && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        fields.insert(spec.key.to_string(), "0.00".to_string());
+    }
+    Ok(fields)
 }
 
 /// TIN, year, period and filing status of `draft`.
@@ -484,17 +495,32 @@ pub fn save_draft(
     db: &crate::db::Database,
     draft: &mut Value,
 ) -> Result<i64, String> {
+    let incoming = draft.clone();
+    save_draft_with_clearance_context(kind, db, draft, incoming, BTreeSet::new())
+}
+
+/// [`save_draft`] with the draft as it was before the fill being saved and
+/// the gate keys that fill already showed inline. Hidden test/host plumbing:
+/// callers normally use [`save_draft`].
+#[doc(hidden)]
+pub fn save_draft_with_clearance_context(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &mut Value,
+    incoming: Value,
+    reported: BTreeSet<String>,
+) -> Result<i64, String> {
     // The caller's bytes are only the fallback before-image. When the row
     // already exists, the transactional save reads its stored bytes and those
     // decide whether this recompute clears a dormant gated value: an assistant
     // or page fill may already have recomputed its in-memory draft.
-    let incoming = draft.clone();
     compute(kind, draft)?;
     let after = draft.clone();
     if identity(kind, draft)?.status != FilingStatus::Draft {
         return Err("this return is no longer a draft".to_string());
     }
-    let writer = move || pending_settings_writer(kind, incoming.clone(), after.clone());
+    let writer =
+        move || pending_settings_writer(kind, incoming.clone(), after.clone(), reported.clone());
     let id = match kind {
         AgentFormKind::Form1601C => save_1601c(kind, db, draft, writer())?,
         AgentFormKind::Form2551Q => save_2551q(kind, db, draft, writer())?,
@@ -517,13 +543,14 @@ pub fn pending_settings_writer(
     kind: AgentFormKind,
     incoming: Value,
     after: Value,
+    reported: BTreeSet<String>,
 ) -> crate::db::SettingsWriter<'static> {
     Some(Box::new(move |draft_id, stored_json| {
         let before = stored_json
             .and_then(|stored| serde_json::from_str::<Value>(stored).ok())
             .unwrap_or_else(|| incoming.clone());
         Ok(draft_locks::pending_notices::settings_writes(
-            kind, &before, &after, draft_id,
+            kind, &before, &incoming, &after, draft_id, &reported,
         ))
     }))
 }
@@ -1510,6 +1537,14 @@ fn fill_box(
         && key == draft_locks::item16_2551q::KEY
         && draft_locks::item16_2551q::lock_reason(draft).is_some()
         && draft_locks::item16_2551q::zero_noop(value)
+    {
+        return Ok(());
+    }
+    if !as_host
+        && let Some(spec) = draft_locks::previous_payment::spec(kind)
+        && key == spec.key
+        && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+        && draft_locks::previous_payment::zero_write(value)
     {
         return Ok(());
     }

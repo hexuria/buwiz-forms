@@ -68,9 +68,17 @@ Windows upload would then have to skip a number, and the downloads' updater woul
 ## Order of work for a release
 
 1. `python3 scripts/set_release_version.py X.Y.Z`, fix the tests it lists, open a pull request, merge it.
-2. Tag `vX.Y.Z` on `main`. The release workflows build the downloads, including the unsigned `.msix` for the
-   Microsoft Store.
+2. Tag `vX.Y.Z` on `main`. The release workflows build the downloads and, in a job of its own
+   (`build-windows-store`), the unsigned `.msix` for the Microsoft Store. That job has the Google OAuth client, and so
+   Gmail Connect, only when the repository variable `STORE_GMAIL` is `1`: Connect's restricted Gmail scope needs
+   Google's verification. Otherwise it checks that no file of the package holds a client id or secret
+   (`scripts/audit_google_client.py`). The direct downloads keep the client, and on every release the same audit must
+   find it in their updater ZIP (the positive control). The `.msix` is not on the public GitHub release: it is
+   unsigned and cannot be sideloaded. It stays in the run's `windows-store` artifact. For 1.0.0 the release waits for
+   the Store job, so a Store failure holds the direct downloads too. After 1.0.0 that may be loosened so a Store-only
+   failure no longer holds them.
 3. `just app` builds the Mac App Store package and `just ios-appstore` the iPhone and iPad one, each with the next
    build number; `just testflight-upload` and `just ios-appstore-upload` send them.
-4. Upload the `.msix` in Partner Center.
+4. Upload the `.msix` from the tag run's `windows-store` artifact in Partner Center. Check it against
+   `SHA256SUMS-windows-store-x64.txt` in the same artifact.
 5. Press Submit in each store.

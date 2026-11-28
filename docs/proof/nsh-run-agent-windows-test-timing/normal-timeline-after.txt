@@ -1,0 +1,48 @@
+1795809141.910	test	start
+1795809142.467	recipe	guard-start	3760
+1795809142.605	recipe	guard-empty-exit	3760
+1795809142.823	recipe	main-start	7548
+1795809143.571	recipe	before-version-probes	7548
+1795809143.616	nsh	start	--version
+1795809143.616	nsh	version	--version
+1795809143.617	nsh	exit	--version
+1795809143.623	recipe	after-nsh-version	7548
+1795809143.643	recipe	after-cargo-version	7548
+1795809143.684	recipe	adb-devices-start	7548
+1795809143.722	adb	start	devices
+1795809143.722	adb	devices	devices
+1795809143.723	adb	exit	devices
+1795809143.728	recipe	adb-devices-done-0	7548
+1795809143.741	recipe	writer-job-start	7548
+1795809143.881	recipe	writer-job-created	7548
+1795809143.886	recipe	plugger-job-start	7548
+1795809144.007	recipe	plugger-job-created	7548
+1795809144.012	recipe	before-nsh-run	7548
+1795809144.058	nsh	start	run --target android --port 8347
+1795809144.059	nsh	launch-recorded	run --target android --port 8347
+1795809144.059	nsh	installed	run --target android --port 8347
+1795809144.059	nsh	token-wait	run --target android --port 8347
+1795809144.208	adb	start	-s emulator-5556 shell run-as com.longbridge.nsh.host true
+1795809144.208	adb	device-selected	shell run-as com.longbridge.nsh.host true
+1795809144.208	adb	run-as-other	shell run-as com.longbridge.nsh.host true
+1795809144.208	adb	exit	shell run-as com.longbridge.nsh.host true
+1795809144.253	adb	start	-s emulator-5556 shell -T run-as com.longbridge.nsh.host sh -c 'umask 077 && mkdir -p files/nsh/dev.goldcoders.bir && cat > files/nsh/dev.goldcoders.bir/agent-token.new && mv files/nsh/dev.goldcoders.bir/agent-token.new files/nsh/dev.goldcoders.bir/agent-token'
+1795809144.253	adb	device-selected	shell -T run-as com.longbridge.nsh.host sh -c 'umask 077 && mkdir -p files/nsh/dev.goldcoders.bir && cat > files/nsh/dev.goldcoders.bir/agent-token.new && mv files/nsh/dev.goldcoders.bir/agent-token.new files/nsh/dev.goldcoders.bir/agent-token'
+1795809144.254	adb	token-write	shell -T run-as com.longbridge.nsh.host sh -c 'umask 077 && mkdir -p files/nsh/dev.goldcoders.bir && cat > files/nsh/dev.goldcoders.bir/agent-token.new && mv files/nsh/dev.goldcoders.bir/agent-token.new files/nsh/dev.goldcoders.bir/agent-token'
+1795809144.254	adb	exit	shell -T run-as com.longbridge.nsh.host sh -c 'umask 077 && mkdir -p files/nsh/dev.goldcoders.bir && cat > files/nsh/dev.goldcoders.bir/agent-token.new && mv files/nsh/dev.goldcoders.bir/agent-token.new files/nsh/dev.goldcoders.bir/agent-token'
+1795809144.261	nsh	token-seen	run --target android --port 8347
+1795809144.261	nsh	consume-token	run --target android --port 8347
+1795809144.263	nsh	exit	run --target android --port 8347
+1795809144.269	recipe	after-nsh-run-0	7548
+1795809144.273	recipe	finally-start	7548
+1795809144.278	recipe	writer-cleanup-start	7548
+1795809144.288	recipe	writer-cleanup-done	7548
+1795809144.291	recipe	plugger-cleanup-start	7548
+1795809144.318	recipe	plugger-cleanup-done	7548
+1795809144.322	recipe	adb-cleanup-start	7548
+1795809144.356	adb	start	-s emulator-5556 shell run-as com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/agent-token files/nsh/dev.goldcoders.bir/agent-token.new files/gpui-agent-token files/gpui-agent-token.new
+1795809144.356	adb	device-selected	shell run-as com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/agent-token files/nsh/dev.goldcoders.bir/agent-token.new files/gpui-agent-token files/gpui-agent-token.new
+1795809144.357	adb	token-remove	shell run-as com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/agent-token files/nsh/dev.goldcoders.bir/agent-token.new files/gpui-agent-token files/gpui-agent-token.new
+1795809144.357	adb	exit	shell run-as com.longbridge.nsh.host rm -f files/nsh/dev.goldcoders.bir/agent-token files/nsh/dev.goldcoders.bir/agent-token.new files/gpui-agent-token files/gpui-agent-token.new
+1795809144.361	recipe	adb-cleanup-done	7548
+1795809144.364	recipe	before-exit	7548

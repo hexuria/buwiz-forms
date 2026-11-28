@@ -293,6 +293,36 @@ class SuiteTests(unittest.TestCase):
                          "unique name", "does not exist"):
             self.assertIn(expected, problems)
 
+    def test_a_parameter_used_at_or_before_its_after_step_is_refused_by_check(self):
+        cases = [
+            ("click $table-add\nclick expose-table\nclick $table-delete\n", "s1"),
+            ("click expose-table\nclick $table-add\n", "s2"),
+        ]
+        for text, used_at in cases:
+            with self.subTest(used_at=used_at), tempfile.TemporaryDirectory() as folder:
+                write(folder, "late.wants", text)
+                suite = suite_of(folder, [{"name": "late", "file": "late.wants", "resolve": {
+                    "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "s2"}}}])
+                problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn(f"uses $table at {used_at}, at or before its resolve's after step s2", problems)
+
+    def test_a_json_after_that_cuts_a_needs_edge_is_refused_by_check(self):
+        recipe = {"v": 1, "name": "cut", "steps": [
+            {"id": "expose", "op": "click", "target": "expose-table"},
+            {"id": "prepare", "op": "click", "target": "prepare-table"},
+            {"id": "use", "op": "click", "target": "$table-add", "needs": ["prepare"]},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "cut.json", json.dumps(recipe))
+            suite = suite_of(folder, [{"name": "cut", "file": "cut.json", "resolve": {
+                "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "prepare"}}}])
+            problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn("$table resolves after 'prepare', cutting the needs edge prepare -> use", problems)
+
+            suite = suite_of(folder, [{"name": "cut", "file": "cut.json", "resolve": {
+                "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "expose"}}}])
+            self.assertEqual(E2E.check_suite(suite), [])
+
     def test_variants_and_fallbacks_follow_the_host(self):
         entry = {"name": "m", "desktop": "d.json", "phone": "p.json", "windows": "w.json", "linux": "narrow.json",
                  "needs_cli": "0.4.1", "needs_feature": {"phone": "software_keyboard"}, "fallback": "plain.wants"}
@@ -385,6 +415,82 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(json.loads((out / "report.json").read_text())["recipes"][1]["status"], "needs")
 
 
+LATE_FAKE_CLI = r'''
+import json, sys
+from pathlib import Path
+args = sys.argv[1:]
+log = open(sys.argv[0] + ".calls", "a")
+log.write(json.dumps(args) + "\n")
+rest = args[2:]
+if rest and rest[0] == "--reply-timeout-ms":
+    rest = rest[2:]
+op = rest[0]
+if op == "snapshot":
+    print(open(sys.argv[0] + ".tree").read())
+elif op == "screenshot":
+    open(args[args.index("--out") + 1], "wb").write(b"\x89PNG")
+    print("{}")
+elif op == "recipe":
+    path = Path(rest[rest.index("run") + 1])
+    text = path.read_text()
+    if "expose-table" in text:
+        Path(sys.argv[0] + ".tree").write_text(Path(sys.argv[0] + ".after").read_text())
+    if path.suffix == ".json":
+        steps = json.loads(text)["steps"]
+        ids = [step.get("id") for step in steps]
+        bodies = [json.dumps(step) for step in steps]
+    else:
+        lines = [line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+        ids = ["s" + str(n) for n in range(1, len(lines) + 1)]
+        bodies = lines
+    done = []
+    failure = None
+    for index, (step_id, body) in enumerate(zip(ids, bodies), 1):
+        if "die-before-receipt" in body:
+            print(f"error: {path}: line {index}: died before receipt", file=sys.stderr)
+            sys.exit(1)
+        failed = "fail-here" in body
+        done.append({"id": step_id, "ok": not failed, "elapsed_ms": 1})
+        if failed:
+            done[-1]["error"] = "no such node"
+            done[-1]["error_code"] = "no_node"
+            failure = done[-1]
+            break
+    receipt = {"v": 1, "ok": failure is None, "recipe": path.name, "steps": done,
+               "fingerprint": f"fp-{path.stem}-{len(ids)}", "session_reused": True,
+               "elapsed_ms": 5 + len(ids)}
+    print(json.dumps(receipt))
+    sys.exit(1 if failure else 0)
+'''
+
+
+def install_late_cli(folder, before, after):
+    fake = Path(folder) / "gpui-agent-late"
+    fake.write_text(f"#!{sys.executable}\n" + LATE_FAKE_CLI, encoding="utf-8")
+    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    Path(str(fake) + ".tree").write_text(json.dumps(before), encoding="utf-8")
+    Path(str(fake) + ".after").write_text(json.dumps(after), encoding="utf-8")
+    return fake
+
+
+def cli_calls(fake):
+    return [json.loads(line) for line in Path(str(fake) + ".calls").read_text().splitlines()]
+
+
+def recipe_call_path(call):
+    return Path(call[call.index("run") + 1])
+
+
+def tree_with_table():
+    return {"tree": {"nodes": [
+        {"id": "root", "role": "window"},
+        {"id": "fp-table-x-add", "role": "button", "name": "Add row", "visible": True},
+    ]}}
+
+
+EMPTY_TREE = {"tree": {"nodes": [{"id": "root", "role": "window"}]}}
+
+
 FAKE_CLI = r'''
 import json, sys
 args = sys.argv[1:]
@@ -440,6 +546,136 @@ class RunEntryTests(unittest.TestCase):
             self.assertIn("table=fp-table-frm2551Qv2018:txtSched1Atc1", run)
             self.assertIn("--screenshot-flagged", run)
             self.assertIn("resolve\t$table\tfp-table-frm2551Qv2018:txtSched1Atc1", "\n".join(log.lines))
+
+    def run_late_entry(self, folder, fake, entry, recipe_text):
+        write(folder, entry["file"], recipe_text)
+        suite = suite_of(folder, [entry])
+        out = folder / "out"
+        out.mkdir()
+        log = E2E.RunLog(out / "run.log", secrets_=["tok"], echo=False)
+        agent = E2E.Agent(str(fake), "127.0.0.1:1", dict(os.environ), log)
+        context = {"target": "macos", "form_factor": "desktop", "features": [], "cli_version": "0.4.1",
+                   "allow_send": False, "env": {}}
+        return E2E.run_entry(1, entry, suite, context, agent, log, out), suite, out, log
+
+    def late_entry(self, after="s1", name="late", file="late.wants"):
+        spec = {"id_regex": "^(fp-table-.+)-add$", "group": 1}
+        if after:
+            spec["after"] = after
+        return {"name": name, "file": file, "resolve": {"table": spec}}
+
+    def test_late_resolve_finds_the_node_only_after_the_step(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, tree_with_table())
+            entry = self.late_entry()
+            result, suite, out, log = self.run_late_entry(folder, fake, entry,
+                                                          "click expose-table\nclick $table-add\n")
+            self.assertEqual(E2E.check_suite(suite), [])
+            self.assertEqual(result["status"], "pass")
+            calls = cli_calls(fake)
+            self.assertEqual([call[2] for call in calls], ["recipe", "snapshot", "recipe"])
+            recipes = [call for call in calls if call[2] == "recipe"]
+            first, second = recipe_call_path(recipes[0]), recipe_call_path(recipes[1])
+            self.assertTrue(first.is_relative_to(out))
+            self.assertTrue(second.is_relative_to(out))
+            self.assertEqual(first.read_text(), "click expose-table\n")
+            self.assertEqual(second.read_text(), "click $table-add\n")
+            self.assertIn("table=fp-table-x", recipes[1])
+
+    def test_resolve_without_after_still_resolves_before_one_unsplit_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, tree_with_table(), tree_with_table())
+            entry = self.late_entry(after=None)
+            result, suite, out, log = self.run_late_entry(folder, fake, entry, "click $table-add\n")
+            self.assertEqual(result["status"], "pass")
+            calls = cli_calls(fake)
+            self.assertEqual([call[2] for call in calls], ["snapshot", "recipe"])
+            recipes = [call for call in calls if call[2] == "recipe"]
+            self.assertEqual(str(recipe_call_path(recipes[0])), str((folder / "late.wants").resolve()))
+            self.assertIn("table=fp-table-x", recipes[0])
+
+    def test_nothing_found_after_the_step_is_setup_with_evidence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, EMPTY_TREE)
+            entry = self.late_entry()
+            result, suite, out, log = self.run_late_entry(folder, fake, entry,
+                                                          "click expose-table\nclick $table-add\n")
+            self.assertEqual(result["status"], "setup")
+            self.assertEqual(result["step"], "s1")
+            self.assertIn("$table", result["error"])
+            self.assertIn("after s1", result["error"])
+            self.assertIn("no node matches", result["error"])
+            self.assertTrue(Path(result["screenshot"]).exists())
+            self.assertTrue(Path(result["tree"]).exists())
+            calls = cli_calls(fake)
+            self.assertEqual([call[2] for call in calls].count("recipe"), 1)
+
+    def test_a_json_recipe_splits_at_the_named_step(self):
+        recipe = {"v": 1, "name": "late-json", "app": "bir-shell", "params": ["table"], "steps": [
+            {"id": "expand", "op": "click", "target": "expose-table"},
+            {"id": "add", "op": "click", "target": "$table-add"},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, tree_with_table())
+            entry = self.late_entry(after="expand", name="json-late", file="late.json")
+            result, suite, out, log = self.run_late_entry(folder, fake, entry, json.dumps(recipe))
+            self.assertEqual(result["status"], "pass")
+            calls = cli_calls(fake)
+            self.assertEqual([call[2] for call in calls], ["recipe", "snapshot", "recipe"])
+            recipes = [call for call in calls if call[2] == "recipe"]
+            first, second = recipe_call_path(recipes[0]), recipe_call_path(recipes[1])
+            self.assertEqual([step["id"] for step in json.loads(first.read_text())["steps"]], ["expand"])
+            self.assertEqual([step["id"] for step in json.loads(second.read_text())["steps"]], ["add"])
+            self.assertIn("table=fp-table-x", recipes[1])
+            receipt = json.loads((out / "01-json-late" / "receipt.json").read_text())
+            self.assertEqual([step["id"] for step in receipt["steps"]], ["expand", "add"])
+
+    def test_a_split_wants_receipt_and_report_keep_the_original_step_ids(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, tree_with_table())
+            entry = self.late_entry(name="report-ids")
+            result, suite, out, log = self.run_late_entry(
+                folder, fake, entry, "click expose-table\nclick $table-add\nclick fail-here\n")
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["step"], "s3")
+            self.assertEqual(result["line"], "click fail-here")
+            receipt = json.loads((out / "01-report-ids" / "receipt.json").read_text())
+            self.assertEqual([step["id"] for step in receipt["steps"]], ["s1", "s2", "s3"])
+
+    def test_a_merged_split_receipt_lists_fingerprints_sums_elapsed_and_marks_split(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, tree_with_table())
+            entry = self.late_entry(name="merged-receipt")
+            result, suite, out, log = self.run_late_entry(
+                folder, fake, entry, "click expose-table\nclick $table-add\nclick done\n")
+            self.assertEqual(result["status"], "pass")
+            receipt = json.loads((out / "01-merged-receipt" / "receipt.json").read_text())
+            self.assertEqual(receipt["fingerprints"], ["fp-slice-1-1", "fp-slice-2-2"])
+            self.assertEqual(receipt["fingerprint"], "fp-slice-2-2")
+            self.assertEqual(receipt["elapsed_ms"], 13)
+            self.assertIs(receipt["split"], True)
+            self.assertIn("session_reused", receipt)
+
+    def test_a_slice_that_dies_before_its_receipt_reports_the_original_step_and_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, tree_with_table())
+            entry = self.late_entry(name="lost-receipt")
+            result, suite, out, log = self.run_late_entry(
+                folder, fake, entry, "click expose-table\nclick $table-add\nclick die-before-receipt\n")
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["step"], "s3")
+            self.assertEqual(result["line"], "click die-before-receipt")
+            self.assertIn("late.wants", result["error"])
+            self.assertIn("step s3", result["error"])
+            self.assertNotIn("slice-2.wants", result["error"])
+            self.assertNotIn("line 2", result["error"])
 
 
 if __name__ == "__main__":
