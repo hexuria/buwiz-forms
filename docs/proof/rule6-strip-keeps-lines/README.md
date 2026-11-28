@@ -43,6 +43,7 @@ sha256:
 fc0c2aee5ce9a1e86d59daa5169560a1761e05ba07720e3b484e1b0b91880eb1  before-1701ms-item9-strip.png
 4d47071f6430d258f7f3e098581a81b72683fb174dcbba13e68f51d384b338b1  after-1701ms-item9-strip.png
 d244d92e66feb13d4053b9736df9d486c09a5e289c0ee8323582df0a3a0a5d8d  official-1701ms-same-area.png
+2f02826bb0a0dbdf577536f0eb47ad2a179d75f67003ff0b4a30c2b9ab1a88e9  after-1701q-page2-stacked-strips.png
 ```
 
 * `after-1701q-page2-stacked-strips.png` — 1701q page 2: the strips for

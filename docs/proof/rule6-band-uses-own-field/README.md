@@ -14,7 +14,7 @@ columns). The page spends only the room it has — trailing space plus what
 an elastic band yields — capped at 6 added lines, and one strip is never
 admitted when it cannot hold its 14 pt (a page with less room truncates in
 the cell instead); when the value still does not fit, the last line ends
-with a whole-word "…" and the WHOLE value prints on the additional sheet
+with a whole-word "..." and the WHOLE value prints on the additional sheet
 (a test asserts no text is ever lost). In each pair:
 
 - the original specify field holds the first part of the value (before: it
@@ -37,5 +37,5 @@ bfb20e042b7997d7870049ca2dd3dc14a24de9032751ed53cb16042c871d5b40  after-1701ms-2
 a6c60b8c5c932d27945a5d13daffd32d6678eb00424ec09f60101ded9ce1103d  before-1701-2018.png
 20c395f7b9e4ea8110a71230b0bb7fbfd6cd61e0de8844ff3e67b0eb4228c4be  after-1701-2018.png
 130ba5a4bb07f35b5500110afda759d1a1460ab5df7b08871ce54956ceaa5196  before-2000-ot-2018.png
-0baf33a82fa5dcc47e9b070fead7d15e340c2b3460440568ccfcaa335e6f23b2  after-2000-ot-2018.png
+4a6e4b0e7a4abee771f134e763a5c4d271a45156670ddcdacaade62e3a829b11  after-2000-ot-2018.png
 ```
