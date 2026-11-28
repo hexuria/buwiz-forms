@@ -18,9 +18,13 @@ click fp-frm2551Qv2018:taxTreaty_2 --screenshot
 click fp-frm2551Qv2018:taxRateNA --screenshot
 # The queue rehearsal opens its own fresh return, where Item 15 (creditable percentage tax withheld) starts empty
 # and is required: fill it with zero so Check has nothing left (on main it was filled by money-boxes' return).
+# The saved-answer toast can sit over the Part II header; a money box takes a programmatic value only once it
+# has been focused and typed into, so the box is clicked and typed like a person does (the next click commits it).
+wait_until toast --absent --timeout-ms 8000
 click fp-part-2-toggle
 wait_until fp-frm2551Qv2018:txt15 --timeout-ms 5000
-set_value fp-frm2551Qv2018:txt15 0
+click fp-frm2551Qv2018:txt15
+type fp-frm2551Qv2018:txt15 0
 click fp-nav-0 --screenshot
 click fp-check
 wait_until fp-pill-count --timeout-ms 1000 --absent

@@ -478,9 +478,18 @@ class SuiteTests(unittest.TestCase):
                     steps = E2E.recipe_steps(suite["_dir"] / file)
                     text = [json.dumps(step) for step in steps]
                     check = next(i for i, step in enumerate(text) if "fp-check" in step)
-                    fills = [i for i, step in enumerate(text)
-                             if "fp-frm2551Qv2018:txt15" in step and ("set_value" in step or '"type"' in step)]
-                    self.assertTrue(fills and fills[0] < check, f"{file} fills Item 15 before Check")
+                    # A money box takes a value only once focused and typed into (a set_value on a box never
+                    # focused leaves it empty), and the saved-answer toast can cover the Part II header.
+                    clicks = [i for i, step in enumerate(text)
+                              if "fp-frm2551Qv2018:txt15" in step and '"click"' in step]
+                    types = [i for i, step in enumerate(text)
+                             if "fp-frm2551Qv2018:txt15" in step and '"type"' in step]
+                    toast = [i for i, step in enumerate(text)
+                             if '"toast"' in step and ("absent" in step or '"exists": false' in step)]
+                    toggle = next(i for i, step in enumerate(text) if "fp-part-2-toggle" in step)
+                    self.assertTrue(toast and toast[-1] < toggle, f"{file} waits for the toast before Part II")
+                    self.assertTrue(clicks and types and clicks[0] < types[0] < check,
+                                    f"{file} clicks then types Item 15 before Check")
 
     def test_linux_queue_files_are_the_phone_files_minus_keyboard_hide(self):
         for phone_file, linux_file in (("queue-phone.json", "queue-linux.json"),

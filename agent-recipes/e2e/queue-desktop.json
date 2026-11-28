@@ -179,6 +179,13 @@
    "screenshot": true
   },
   {
+   "id": "i15w",
+   "op": "wait_until",
+   "target": "toast",
+   "timeout_ms": 8000,
+   "exists": false
+  },
+  {
    "id": "i15a",
    "op": "click",
    "target": "fp-part-2-toggle"
@@ -191,9 +198,14 @@
   },
   {
    "id": "i15c",
-   "op": "set_value",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:txt15"
+  },
+  {
+   "id": "i15d",
+   "op": "type",
    "target": "fp-frm2551Qv2018:txt15",
-   "value": "0"
+   "text": "0"
   },
   {
    "id": "s25",
