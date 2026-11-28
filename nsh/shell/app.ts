@@ -13,7 +13,7 @@
 //                while a return is Queued the lists are read every 3 s for about 30 s after the Queued set last changed (startQueuedWatch,
 //                also in the dev environment; it and the library warm-up wait for the frame to be shown: nothing is read behind a lock)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, effect, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
+import { batch, computed, effect, host, platform, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
 import { Application, isAvailable } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
@@ -25,10 +25,17 @@ import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
 import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName, phoneLayout } from "../ui";
 import { eventToast, takeFresh } from "./events";
+import { lockPagesDebugCompiled } from "./lockDebug";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
 import { POLL_KEYS, store, WORKER_KEYS } from "./store";
 import { nextThemePreference, parseThemePreference, storedThemePreference, THEME_PREF_KEY, themePreferenceFromStart, type ThemePreference } from "./theme";
+
+/** A dev route needs the test environment; the lock debug route additionally needs its debug-only Rust entry point. */
+function devRouteAllowed(view: ViewName): boolean {
+  const testEnvironment = (host.params as { testEnvironment?: boolean } | undefined)?.testEnvironment === false ? false : doorStatus().testEnvironment;
+  return testEnvironment && (view !== "lockdebug" || lockPagesDebugCompiled());
+}
 
 // ---------------------------------------------------------------- types
 
@@ -574,7 +581,7 @@ function navigate(name: ViewName | "cron_tasks", params: ViewParams, from: Selec
       target = name;
     }
     const meta = ROUTES[target];
-    if ((meta.needsTaxpayer && isFresh()) || (meta.dev && !doorStatus().testEnvironment)) {
+    if ((meta.needsTaxpayer && isFresh()) || (meta.dev && !devRouteAllowed(target))) {
       target = "home";
       params = {};
     }
@@ -594,7 +601,7 @@ function navigate(name: ViewName | "cron_tasks", params: ViewParams, from: Selec
 export function replace(name: ViewName, params: ViewParams = {}): void {
   leave(() => {
     const meta = ROUTES[name];
-    if ((meta.needsTaxpayer && isFresh()) || (meta.dev && !doorStatus().testEnvironment)) return;
+    if ((meta.needsTaxpayer && isFresh()) || (meta.dev && !devRouteAllowed(name))) return;
     route.set({ view: name, params, seq: ++seq });
     closeTransient();
   });
@@ -1288,10 +1295,13 @@ function syncShellChrome(open: boolean): void {
 // ---------------------------------------------------------------- start (boot and the dev route)
 
 function runStartRoute(raw: string): void {
-  for (const { key, value } of parseStart(raw)) {
+  const steps = parseStart(raw);
+  const routeParams = Object.fromEntries(steps.filter(({ key }) => key !== "view").map(({ key, value }) => [key, value]));
+  for (const { key, value } of steps) {
     if (key === "tp") selectTaxpayer(value, { quiet: true });
     else if (key === "branch") selectBranch(value);
     else if (key === "theme") setThemePreference(parseThemePreference(value));
+    else if (key === "view" && value === "lockdebug") go("lockdebug", routeParams);
     else if (key === "view" && (isViewName(value) || value === "cron_tasks")) go(value as ViewName);
     else if (key === "section") go("settings", { section: value });
     else if (key === "panel") togglePanel(value === "notifs" ? "notifs" : "profile");
