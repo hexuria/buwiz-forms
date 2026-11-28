@@ -76,6 +76,8 @@ export interface TextFieldProps {
   onSelectionChange?: (e: { start: number; end: number }) => void;
   /** Before the text changes: the typed text, "Backspace" or "Enter". */
   onKeyPress?: (e: { key: string }) => void;
+  /** An input method's composition started, changed or ended. */
+  onCompositionChange?: (e: { composing: boolean; text: string }) => void;
   /** The input's ref, to focus it or set its selection. */
   inputRef?: (ref: InputRef) => void;
   testID?: string;
@@ -139,6 +141,7 @@ export function TextField(props: TextFieldProps) {
           onSubmit={() => props.onSubmit?.()}
           onSelectionChange={props.onSelectionChange}
           onKeyPress={props.onKeyPress}
+          onCompositionChange={props.onCompositionChange}
           class={cx(
             "h-full min-w-0 flex-1 bg-transparent caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
             props.bare || props.large ? "text-emph font-normal" : "text-body",
@@ -306,6 +309,9 @@ function MaskedField(props: MaskedProps) {
   let programmaticFocusToken = 0;
   // Whose comma the money text holds for this focus: the box's grouping, the filer's, none yet, or not attributable.
   let commaState: CommaState = initialCommaState(untracked(text));
+  // Whether the input method has a composition, and whether Android's backgrounding blurred the box only to end it.
+  let composing = false;
+  let backgroundBlur = false;
   const commaValueOf = (reading: string, leaving: boolean) =>
     props.commaStates ? (readAmountWithCommas(reading, commaState, props.commaNegative, leaving) ?? "") : props.valueOf(reading);
   const commaValid = (reading: string, leaving: boolean) =>
@@ -465,10 +471,19 @@ function MaskedField(props: MaskedProps) {
         props.field.onBlur?.();
   };
 
-  // Android keeps a focused input's IME composition alive across Home and back. Leaving the field as the app
-  // backgrounds settles the controlled text and ends that composition before a restarted input method can replay it.
+  // Android can replay a focused input method's composition through the connection made on return. Home (only
+  // Home: `inactive` is a permission dialog, voice input or picture-in-picture) ends it by blurring the native box,
+  // but that is not the person's leave: no settle, reformat or blur callback. Focus is restored on return, so a real
+  // leave later still settles; the keyboard comes back with that focus.
   effect(() => {
-    if (platform.os === "android" && lifecycle() !== "active" && untracked(focused)) input?.blur();
+    if (platform.os !== "android") return;
+    const state = lifecycle();
+    if (state === "background" && untracked(focused) && composing && !backgroundBlur) {
+      backgroundBlur = true;
+      input?.blur();
+    } else if (state === "active" && backgroundBlur && untracked(focused)) {
+      input?.focus();
+    }
   });
 
   cleanup(() => {
@@ -547,7 +562,12 @@ function MaskedField(props: MaskedProps) {
         editTyped = [...e.key].length === 1;
         props.field.onKeyPress?.(e);
       }}
+      onCompositionChange={(e) => {
+        composing = e.composing;
+        props.field.onCompositionChange?.(e);
+      }}
       onFocus={() => {
+        backgroundBlur = false;
         // A duplicate focus without a blur is not a new edit session: no reset, rewrite, reselect or renotify.
         if (untracked(focused)) {
           programmaticFocus = false;
@@ -582,7 +602,12 @@ function MaskedField(props: MaskedProps) {
         props.field.onFocus?.();
       }}
       onBlur={() => {
-        if (untracked(focused)) finishLeave(true);
+        if (!untracked(focused)) return;
+        if (platform.os === "android" && (backgroundBlur || (lifecycle() === "background" && composing))) {
+          backgroundBlur = true;
+          return;
+        }
+        finishLeave(true);
       }}
     />
   );

@@ -6,16 +6,58 @@ const commaHint = " Use a point for centavos, and commas only between thousands.
 const leftSentence = (typed: string, kept: string) =>
   `${typed} is not an amount. ${kept === "" ? "The box was left blank." : `The box kept ${kept}.`}${typed.includes(",") ? commaHint : ""}`;
 
-test("android: going to the background settles a focused amount before input restarts", async () => {
+test("android: Home with a live composition keeps the partial amount unsettled", async () => {
   const app = await open("./masked.fixture.tsx", { platform: "android" });
-  await app.type("id:m-cb", "");
+  await app.clear("id:m-cb");
+  await app.type("id:m-cb", "1,2");
+  await app.compose("id:m-cb", "2");
+  expect(app.value("id:m-cb")).toBe("1,2");
   expect(app.texts()).toContain("Cb blurs: 0");
+  expect(app.texts()).toContain("Cb focuses: 1");
   await app.setLifecycle("background");
-  expect(app.texts()).toContain("Cb blurs: 1");
-  expect(app.value("id:m-cb")).toBe("2,000.00");
+  expect(app.value("id:m-cb")).toBe("1,2");
+  expect(app.texts()).toContain("Cb blurs: 0");
   await app.setLifecycle("active");
-  expect(app.value("id:m-cb")).toBe("2,000.00");
-  expect(app.texts()).toContain("Cb blurs: 1");
+  expect(app.value("id:m-cb")).toBe("1,2");
+  expect(app.texts()).toContain("Cb blurs: 0");
+  expect(app.texts()).toContain("Cb focuses: 2");
+});
+
+test("android: inactive keeps a live composition untouched", async () => {
+  const app = await open("./masked.fixture.tsx", { platform: "android" });
+  await app.clear("id:m-cb");
+  await app.type("id:m-cb", "1,2");
+  await app.compose("id:m-cb", "2");
+  await app.setLifecycle("inactive");
+  expect(app.value("id:m-cb")).toBe("1,2");
+  expect(app.texts()).toContain("Cb blurs: 0");
+  await app.setLifecycle("active");
+  expect(app.value("id:m-cb")).toBe("1,2");
+  expect(app.texts()).toContain("Cb focuses: 1");
+});
+
+test("android: a quick Home and back race keeps the partial amount and restores focus", async () => {
+  const app = await open("./masked.fixture.tsx", { platform: "android" });
+  await app.clear("id:m-cb");
+  await app.type("id:m-cb", "1,2");
+  await app.compose("id:m-cb", "2");
+  await app.setLifecycle("background");
+  await app.setLifecycle("active");
+  expect(app.value("id:m-cb")).toBe("1,2");
+  expect(app.texts()).toContain("Cb blurs: 0");
+  expect(app.texts()).toContain("Cb focuses: 2");
+});
+
+test("android: Home with a live composition keeps a masked TIN unsettled", async () => {
+  const app = await open("./masked.fixture.tsx", { platform: "android" });
+  await app.clear("id:m-tin");
+  await app.type("id:m-tin", "1234");
+  await app.compose("id:m-tin", "4");
+  const typed = app.value("id:m-tin");
+  await app.setLifecycle("background");
+  expect(app.value("id:m-tin")).toBe(typed);
+  await app.setLifecycle("active");
+  expect(app.value("id:m-tin")).toBe(typed);
 });
 
 for (const size of SIZES) {

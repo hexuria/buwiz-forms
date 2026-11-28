@@ -9,10 +9,11 @@
   "rdo": "040",
   "start_option": "new-tp-start-opt-none",
   "prior": "500.25",
-  "amount": "1234.56",
+  "amount": "1234.5",
   "amount_shown": "1,234.56",
   "tin_root": "123456788",
-  "year": "2026"
+  "year": "2026",
+  "credits_before_home": "1734.75"
  },
  "recipes": [
   {
@@ -48,7 +49,6 @@
   },
   {
    "name": "money-home",
-   "desktop": "android-420-money-home.json",
    "phone": "android-420-money-home.json",
    "required": true,
    "needs_cli": "0.4.1"

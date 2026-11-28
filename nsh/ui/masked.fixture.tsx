@@ -30,6 +30,7 @@ function App() {
   const invalidCount = signal(0);
   const cb = signal("2000");
   const cbBlurs = signal(0);
+  const cbFocuses = signal(0);
   const comma = signal("none");
   const commaCount = signal(0);
   const outside = signal("none");
@@ -68,6 +69,7 @@ function App() {
         <Text variant="cap">{`Invalid count: ${invalidCount()}`}</Text>
         <Text variant="cap">{`Cb: ${cb() || "empty"}`}</Text>
         <Text variant="cap">{`Cb blurs: ${cbBlurs()}`}</Text>
+        <Text variant="cap">{`Cb focuses: ${cbFocuses()}`}</Text>
         <Text variant="cap">{`Comma: ${comma()}`}</Text>
         <Text variant="cap">{`Comma count: ${commaCount()}`}</Text>
         <Text variant="cap">{`Outside: ${outside()}`}</Text>
@@ -136,6 +138,7 @@ function App() {
           value={cb()}
           onChange={(v) => cb.set(v === "" ? "0" : v)}
           onBlur={() => cbBlurs.update((n) => n + 1)}
+          onFocus={() => cbFocuses.update((n) => n + 1)}
           onLeftUnreadable={(typed, kept) => {
             invalidCount.update((n) => n + 1);
             invalid.set(`${typed}|${kept}`);
