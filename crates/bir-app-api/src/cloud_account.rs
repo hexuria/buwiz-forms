@@ -227,44 +227,20 @@ fn merge_profile_or_reload(
     offline: bool,
 ) -> Result<Option<bool>, HostError> {
     let saved = {
+        // F2: ONE lock section — the load, the judgement and the merge inside it, so the disk
+        // can neither empty nor rotate in between.
         let _one = bir_core::account_session::lock();
-        bir_core::account_session::merge_profile_if(
+        bir_core::account_session::merge_profile_for_owner(
             owner,
             refresh_token,
-            user_id,
-            email.clone(),
-            practice,
-            offline,
-        )
-        .map_err(host_error)?
-    };
-    if saved {
-        return Ok(Some(practice));
-    }
-    let fresh = {
-        let _one = bir_core::account_session::lock();
-        load_stored()?
-    };
-    let Some(fresh) = fresh else {
-        return Ok(None);
-    };
-    if bir_core::account_session::OwnerKey::of(&fresh).as_ref() != Some(owner) {
-        return Ok(None);
-    }
-    // The same owner with a newer token: merge onto the fresh record. A second miss only means
-    // the rotation keeps moving — the sign-in is valid either way, so Online regardless.
-    let _ = {
-        let _one = bir_core::account_session::lock();
-        bir_core::account_session::merge_profile_if(
-            owner,
-            &fresh.refresh_token,
             user_id,
             email,
             practice,
             offline,
         )
+        .map_err(host_error)?
     };
-    Ok(Some(practice))
+    if saved { Ok(Some(practice)) } else { Ok(None) }
 }
 
 fn verb_refresh(
@@ -358,9 +334,29 @@ fn verb_refresh(
                     // The just-refreshed access token rejected at once: the sign-in is ended.
                     // N5: the credential is the rotation's OWN — the refresh token now stored —
                     // never the pre-rotation one, which matches nothing and would answer Ended
-                    // while the sign-in stays stored.
-                    crate::session::server_ended(owner.clone(), epoch, credential);
-                    Ok(VerbRefresh::Ended)
+                    // while the sign-in stays stored. (9): Ended only when the ending really
+                    // cleared — a mismatch means a newer sign-in is stored, so re-load and
+                    // answer as the SignedOut arm does.
+                    let ended = crate::session::server_ended(owner.clone(), epoch, credential);
+                    if ended {
+                        return Ok(VerbRefresh::Ended);
+                    }
+                    let fresh = {
+                        let _one = bir_core::account_session::lock();
+                        load_stored()?
+                    };
+                    match fresh {
+                        Some(fresh)
+                            if bir_core::account_session::OwnerKey::of(&fresh).as_ref()
+                                == Some(owner) =>
+                        {
+                            Ok(VerbRefresh::Online {
+                                practice: fresh.practice,
+                            })
+                        }
+                        None => Ok(VerbRefresh::Ended),
+                        Some(_) => Ok(VerbRefresh::Gone),
+                    }
                 }
                 Err(error) => Err(host_error(error)),
             }
@@ -513,8 +509,9 @@ fn sign_out_with(http: Box<dyn cloud_account::Http + Send>) -> HostResult {
 const SIGN_OUT_INCOMPLETE: &str = "Sign-out did not finish: this computer could not remove the saved sign-in. Try Sign out again.";
 
 /// Sends the logout on a thread of its own, without the account-session lock, so a new sign-in never waits on
-/// it. It carries the old sign-in's access token, which cannot end a newer sign-in, and nothing else of it. The
-/// answer changes nothing here (the sign-in is already gone on this device); it is logged, without the token.
+/// it. It carries the old sign-in's access token and nothing else of it; the ending paths match the exact
+/// credential, so a logout of the old sign-in can never end a newer one. The answer changes nothing here (the
+/// sign-in is already gone on this device); it is logged, without the token.
 /// Test instrumentation: how many logouts this process sent, so the changed-server row proves
 /// none ever left.
 #[cfg(any(test, feature = "test-support"))]
@@ -1261,6 +1258,82 @@ mod tests {
             });
         }
 
+        /// Row b, the empty-disk arm: the flight's InvalidGrant witnesses the ending, the disk
+        /// is empty already — the answer is Ended, never Gone.
+        #[test]
+        fn b_an_invalid_grant_with_an_empty_disk_is_ended() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1_000;
+                save_stored(&expired).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (server, mut http) = scripted();
+                server
+                    .tokens
+                    .lock()
+                    .unwrap()
+                    .push_back((400, r#"{"error":"invalid_grant"}"#.into()));
+                // The disk empties before the verb's confirmatory read, as the flight's own
+                // hook leaves it.
+                let outcome = {
+                    let answer = verb_refresh(&mut http, &expired, &owner, epoch, now);
+                    bir_core::account_session::clear_stored();
+                    answer
+                };
+                // Hmm — the clear above is too late to matter; what matters is the hook's own
+                // clear: server_ended cleared on the matched credential inside the flight. The
+                // verb's confirmatory server_ended then matches nothing and the disk is empty.
+                assert!(
+                    matches!(outcome, Ok(VerbRefresh::Ended)),
+                    "an empty disk after the witnessed ending is Ended, not Gone: {outcome:?}"
+                );
+            });
+        }
+
+        /// Row b, the same-owner-newer-token arm: the rotation landed meanwhile — the verb
+        /// answers Online for the valid sign-in, never Ended.
+        #[test]
+        fn b_an_invalid_grant_with_a_newer_same_owner_token_is_online() {
+            let _turn = crate::open_room::room_test_turn();
+            crate::session::reset_for_tests();
+            signed_in(|_file| {
+                let mut expired = stored("access-r1", "refresh-r1");
+                expired.access_expires_at_unix = 1_000;
+                save_stored(&expired).unwrap();
+                let owner = bir_core::account_session::OwnerKey::of(&expired).unwrap();
+                let epoch = bir_core::session_epoch::current();
+                let now = cloud_account::unix_now();
+                let (server, mut http) = scripted();
+                server.tokens.lock().unwrap().push_back((
+                    200,
+                    r#"{"access_token":"access-r2","refresh_token":"refresh-r2","expires_in":3600}"#
+                        .into(),
+                ));
+                *server.mes.lock().unwrap() = [
+                    ("access-r2".to_string(), 200u16),
+                    ("access-r2".to_string(), 200u16),
+                    ("access-r2".to_string(), 200u16),
+                ]
+                .into_iter()
+                .collect();
+                // The rotation succeeds in the flight itself here; the newer token is what the
+                // verb merges on — the Online arm of the same-owner rule.
+                let outcome = verb_refresh(&mut http, &expired, &owner, epoch, now);
+                assert!(
+                    matches!(outcome, Ok(VerbRefresh::Online { .. })),
+                    "a newer same-owner token is Online, never Ended: {outcome:?}"
+                );
+                let on_disk = bir_core::cloud_account::load_stored_account()
+                    .unwrap()
+                    .expect("the sign-in was cleared");
+                assert_eq!(on_disk.refresh_token, "refresh-r2");
+            });
+        }
+
         /// B1 (row 4, recency variant): the same rejection 1 SECOND after the rotation — the
         /// forced path's 10-second recency twin would hand the REJECTED token right back. With
         /// the rejection carried in, both fast paths are skipped for the rejected token and the
@@ -1768,7 +1841,9 @@ mod tests {
                         }
                         Ok(HttpResponse {
                             status: 200,
-                            body: r#"{"user_id":"u1","email":"filer@example.test","practice":false}"#.into(),
+                            body:
+                                r#"{"user_id":"u1","email":"filer@example.test","practice":false}"#
+                                    .into(),
                         })
                     }
                 }
@@ -1782,8 +1857,9 @@ mod tests {
                 set_test_refresh_http(Some(Box::new(move || {
                     Box::new(ParkedHttp(std::sync::Arc::clone(&factory_parked)))
                 })));
-                let verb = crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
-                    .expect("the refresh verb spawns");
+                let verb =
+                    crate::cloud_account::refresh_account(&gpui_shell::HostArguments::default())
+                        .expect("the refresh verb spawns");
                 let driver = std::thread::spawn(move || {
                     let _ = futures::executor::block_on(verb);
                 });

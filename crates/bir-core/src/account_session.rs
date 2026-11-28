@@ -93,7 +93,10 @@ impl OwnerKey {
 /// save and clear of the stored sign-in updates it inside the same account_session::lock()
 /// section as the file or keychain write, so a reader never needs the file, the keychain or the
 /// account lock. Its own small lock, no I/O.
-static STORED_OWNER: Mutex<Option<Option<OwnerKey>>> = Mutex::new(None);
+// F1: the generation is bumped by every cache_owner write, so a closer that read the cache at
+// its decision can tell whether a signed_in landed in the gap — a changed generation closes
+// nothing. The two travel in one lock so the read is atomic.
+static STORED_OWNER: Mutex<(Option<Option<OwnerKey>>, u64)> = Mutex::new((None, 0));
 
 /// Fill the owner cache from the disk — ONCE, at process start, called by session::init (the
 /// machine's own boot). Takes the account lock and reads the file and keychain HERE, where no
@@ -106,9 +109,16 @@ pub fn fill_owner_cache() {
             .flatten()
             .and_then(|stored| OwnerKey::of(&stored))
     };
-    *STORED_OWNER
+    let mut cache = STORED_OWNER
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(owner);
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if cache.0.is_some() {
+        // (4): every engine boot calls init — a refill would write a stale answer back over a
+        // sign-out's clear, or refill bir-mcp's owner and hide "signed in elsewhere".
+        tracing::debug!("fill_owner_cache skipped: the cache is filled already");
+        return;
+    }
+    *cache = (Some(owner), cache.1);
 }
 
 /// The stored sign-in's owner key, or None while nobody is stored — or while the cache was never
@@ -118,7 +128,7 @@ pub fn stored_owner() -> Option<OwnerKey> {
     let cache = STORED_OWNER
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    match cache.as_ref() {
+    match cache.0.as_ref() {
         Some(owner) => owner.clone(),
         None => {
             tracing::debug!("stored_owner read before fill_owner_cache: answering None");
@@ -127,24 +137,37 @@ pub fn stored_owner() -> Option<OwnerKey> {
     }
 }
 
+/// F1: the cache and its generation, atomically. A close path reads this inside the account-lock
+/// section where it clears the disk, and compares it under SESSION: only an unchanged
+/// (cache, generation) closes, so a signed_in that landed in the gap is never closed behind its
+/// back. The cache answer is as stored_owner() reads it: None when unfilled.
+pub fn cache_owner_with_generation() -> (Option<OwnerKey>, u64) {
+    let cache = STORED_OWNER
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    (cache.0.as_ref().and_then(|owner| owner.clone()), cache.1)
+}
+
 /// The cache's one transition door (F8'): the in-memory answer to "who is stored" changes here
 /// and nowhere else. The machine (bir-app-api's session) runs the change inside its SESSION
 /// section — persistence first: the disk write already happened under the account lock, outside
 /// SESSION, so a crash between the two leaves the disk signed out and the cache refills from it
 /// on the next launch, the safe direction. The small cache lock nests inside SESSION.
 pub fn cache_owner(owner: Option<OwnerKey>) {
-    *STORED_OWNER
+    let mut cache = STORED_OWNER
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(owner);
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *cache = (Some(owner), cache.1 + 1);
 }
 
 /// Forget the filled answer: the next stored_owner() reads the disk again. Tests use it to
 /// simulate a relaunch (the crash-window test); production never does.
 #[cfg(any(test, feature = "test-support"))]
 pub fn reset_owner_cache_for_tests() {
-    *STORED_OWNER
+    let mut cache = STORED_OWNER
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.0 = None;
 }
 
 /// Whether the stored sign-in IS this owner (the normalised origin and the user id), read from
@@ -206,6 +229,49 @@ pub fn merge_profile_if(
     if OwnerKey::of(&current).as_ref() != Some(owner) || current.refresh_token != credential {
         return Ok(false);
     }
+    let merged = StoredAccount {
+        user_id: user_id.to_string(),
+        email,
+        practice,
+        offline,
+        ..current
+    };
+    save_stored(&merged)?;
+    Ok(true)
+}
+
+/// F2: the merge-or-report in the caller's ONE lock section — never the load-merge-load of the
+/// two-section shape, whose gap could empty the disk and answer Online for nobody. Answers
+/// false when the disk is empty or the owner changed (the only Gones); the same owner with a
+/// newer token merges onto the fresh record and answers true, as does the exact match.
+/// The caller holds [`lock`].
+pub fn merge_profile_for_owner(
+    owner: &OwnerKey,
+    credential: &str,
+    user_id: &str,
+    email: Option<String>,
+    practice: bool,
+    offline: bool,
+) -> Result<bool, CloudError> {
+    let Ok(Some(current)) = cloud_account::load_stored_account() else {
+        return Ok(false);
+    };
+    if OwnerKey::of(&current).as_ref() != Some(owner) {
+        return Ok(false);
+    }
+    if current.refresh_token == credential {
+        let merged = StoredAccount {
+            user_id: user_id.to_string(),
+            email,
+            practice,
+            offline,
+            ..current
+        };
+        save_stored(&merged)?;
+        return Ok(true);
+    }
+    // The same owner with a newer token (the flight rotated meanwhile): merge onto the fresh
+    // record, never writing the spent credential back.
     let merged = StoredAccount {
         user_id: user_id.to_string(),
         email,
@@ -757,7 +823,13 @@ fn access_token_in(
                     let _one = lock();
                     let fresh = store.load();
                     match fresh {
-                        Ok(Some(fresh)) if OwnerKey::of(&fresh).as_ref() == Some(for_owner) => {
+                        Ok(Some(fresh))
+                            if OwnerKey::of(&fresh).as_ref() == Some(for_owner)
+                                && fresh.refresh_token == stored.refresh_token =>
+                        {
+                            // [R6a]/(15): the CAS is on (owner, the loaded refresh token) — a
+                            // same-owner rotation in the network window is a mismatch too, or
+                            // this save would clobber the newer rotation with spent tokens.
                             let merged = StoredAccount {
                                 access_token: next.access_token.clone(),
                                 refresh_token: next.refresh_token.clone(),
@@ -1008,6 +1080,61 @@ mod tests {
             None,
         )
         .map(|(token, _credential)| token)
+    }
+
+    /// (15)/[R6a]: the leader's save is a CAS on (owner, the loaded refresh token) — a same-owner
+    /// rotation landing in the network window makes the save discard, never clobber the newer
+    /// rotation with the spent tokens the flight just burned.
+    struct RotatingHttp<'a> {
+        inner: FakeHttp,
+        store: &'a MemoryStore,
+    }
+
+    impl Http for RotatingHttp<'_> {
+        fn exchange(&mut self, request: &HttpRequest) -> Result<HttpResponse, CloudError> {
+            let answer = self.inner.exchange(request);
+            if answer.is_ok() {
+                // Another process rotated mid-flight: same owner, a newer refresh token.
+                let mut rotated = account(0, 0);
+                rotated.refresh_token = "refresh-other".into();
+                rotated.access_token = "access-other".into();
+                *self.store.account.lock().unwrap() = Some(rotated);
+            }
+            answer
+        }
+    }
+
+    #[test]
+    fn a_rotation_in_the_network_window_is_never_clobbered() {
+        let _turn = turn();
+        let store = MemoryStore::with(account(0, 0));
+        let server = FakeServer::new(&["refresh-0"]);
+        let hook = AtomicUsize::new(0);
+        let mut http = RotatingHttp {
+            inner: FakeHttp(server),
+            store: &store,
+        };
+        let answer = access_token_in(
+            &store,
+            &mut http,
+            1_000,
+            true,
+            &test_owner(),
+            1,
+            &|_, _, _| {
+                hook.fetch_add(1, Ordering::SeqCst);
+            },
+            None,
+        );
+        // The save discards: the flight's answer is SignedOut for the stale credential…
+        assert_eq!(answer.map(|pair| pair.0), Err(TokenError::SignedOut));
+        // …and the disk still holds the newer rotation — never the spent tokens back.
+        let current = store.current().expect("the rotation survives");
+        assert_eq!(
+            current.refresh_token, "refresh-other",
+            "the leader's save clobbered a newer rotation"
+        );
+        assert_eq!(current.access_token, "access-other");
     }
 
     #[test]

@@ -54,7 +54,9 @@ fn migration_state_value() -> HostResult {
         Some(crate::session::MigrationState::MovedNotOpened { detail }) => {
             ("moved_not_opened", false, detail)
         }
-        Some(crate::session::MigrationState::DeviceStore { detail }) => ("transient", false, detail),
+        Some(crate::session::MigrationState::DeviceStore { detail }) => {
+            ("transient", false, detail)
+        }
         Some(crate::session::MigrationState::Offered) => ("offered", false, String::new()),
     };
     Ok(HostObject::new()

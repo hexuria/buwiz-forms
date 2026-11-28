@@ -3147,13 +3147,6 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// Give the restoring thread's mid-import hook (R1's pause test): runs between the checkpoint and
-/// the safety copy, inside the span the pause must cover.
-#[cfg(test)]
-pub(crate) fn set_after_restore_checkpoint_hook_for_test(hook: Box<dyn FnOnce()>) {
-    AFTER_RESTORE_CHECKPOINT.with(|slot| *slot.borrow_mut() = Some(hook));
-}
-
 /// §A.3.8: the newest 3 import safety copies per room are kept; the older ones go. The copies are
 /// `bir_data.safety-<stamp>.db` of the one folder — the room's own in rooms mode — so pruning the
 /// folder is pruning the room.

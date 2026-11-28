@@ -116,7 +116,6 @@ pub(crate) fn sweep_registry() {
     lock(&REGISTRY).retain(|_, (weak, _)| weak.upgrade().is_some());
 }
 
-
 /// The key this room's worker jobs file under (F6): the room's id in rooms mode, the fixed
 /// key in single-room mode, "legacy" for the legacy file in place. Reads the machine's snapshot —
 /// the worker's source and every reader asking after the open room's jobs build it here, so the

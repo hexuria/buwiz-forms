@@ -72,13 +72,6 @@ fn started_key(device_dir: &std::path::Path) -> std::path::PathBuf {
         .unwrap_or_else(|_| device_dir.to_path_buf())
 }
 
-/// Tests fill the started set as a finished claim's start() would (G1: a Ready that stopped at
-/// Moved leaves it filled for the folder).
-#[cfg(test)]
-pub(crate) fn mark_started_for_test(device_dir: &std::path::Path) {
-    started_insert(device_dir);
-}
-
 /// Tests simulate a new session — a kill and relaunch — by forgetting what this session answered.
 #[cfg(test)]
 pub(crate) fn clear_started_for_test(device_dir: &std::path::Path) {
