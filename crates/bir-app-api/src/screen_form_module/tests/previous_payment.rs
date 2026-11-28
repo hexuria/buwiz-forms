@@ -211,6 +211,23 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
 }
 
 #[test]
+fn already_no_previous_payment_no_click_zeroes_the_dormant_amount_on_the_page() {
+    setup();
+    for spec in &previous_payment::SPECS {
+        let code = spec.form_code;
+        let mut draft = open(code, 1)["draft"].clone();
+        draft["is_amended"] = json!(false);
+        draft[spec.path] = json!(42.0);
+        let clicked = fill(code, &draft, json!({spec.no_key: "true"}));
+        assert_eq!(
+            clicked["draft"][spec.path].as_f64().unwrap_or(0.0),
+            0.0,
+            "{code}: the official No click zeroes even when the draft was already No"
+        );
+    }
+}
+
+#[test]
 fn amended_return_previous_payment_yes_to_no_save_records_the_clearing() {
     setup();
     for spec in &previous_payment::SPECS {

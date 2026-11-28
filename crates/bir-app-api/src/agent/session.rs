@@ -4634,6 +4634,41 @@ mod tests {
     }
 
     #[test]
+    fn form_fill_already_no_previous_payment_no_click_zeroes_the_dormant_amount() {
+        for spec in bir_core::forms::agent::draft_locks::previous_payment::SPECS {
+            let code = spec.form_code;
+            let mut session = session();
+            session.commands = UiQueue::discarding();
+            save_scratch(&mut session);
+            call(
+                &mut session,
+                "form.open",
+                json!({"code": code, "year": 2026, "period": 1, "tin": TIN}),
+            )
+            .unwrap_or_else(|error| panic!("{code} opens: {error}"));
+            {
+                let open = session.open.as_mut().unwrap();
+                open.draft["is_amended"] = json!(false);
+                open.draft[spec.path] = json!(42.0);
+            }
+            let clicked = call(
+                &mut session,
+                "form.fill",
+                json!({"fields": {spec.no_key: "true"}}),
+            )
+            .unwrap();
+            assert!(clicked.get("refused").is_none(), "{code}: {clicked}");
+            assert_eq!(
+                session.open.as_ref().unwrap().draft[spec.path]
+                    .as_f64()
+                    .unwrap_or(0.0),
+                0.0,
+                "{code}: the official No click zeroes even when the draft was already No"
+            );
+        }
+    }
+
+    #[test]
     fn form_check_previous_payment_clearing_agrees_with_fill() {
         let mut session = session();
         session.commands = UiQueue::discarding();
