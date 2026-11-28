@@ -602,6 +602,7 @@ fn headless_room_source(
 ///   lock is released and the room can be opened again;
 /// - the pid file, the discovery record and the port belong to the serve loop's guards and
 ///   listener: setting `shutdown` ends the loop and they drop with it, and the process exits.
+///
 /// How one batch ended (the check runs before EACH request — #1, the unit-testable heart of
 /// N2: the check is a parameter, so the test flips it between request 1 and request 2 of one
 /// batch and watches the rest be refused).
@@ -860,6 +861,7 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
             }
             let batch = mailbox.take();
             if !batch.is_empty() {
+                last_request = Some(std::time::Instant::now());
                 let check = || headless_account_error(&expected_account);
                 match process_batch(batch, &host, &account_close, &check) {
                     BatchVerdict::Answered => {}
