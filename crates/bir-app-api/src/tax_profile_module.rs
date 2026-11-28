@@ -1382,11 +1382,15 @@ fn persist_oauth_grant(
     refresh_token: &str,
 ) -> HostResult {
     let guard = lock_db(db)?;
-    guard
-        .persist_google_oauth_for_inbox(email, access_token, refresh_token, Some(tin))
-        .map_err(|error| HostError::new(error.to_string()))?;
     // A return still waiting for the BIR's email is watched again through the new grant, as after Verify.
-    bir_core::background_cron::reschedule_email_polls_for_inbox(&guard, email);
+    bir_core::background_cron::persist_google_grant_and_resume_polls(
+        &guard,
+        email,
+        access_token,
+        refresh_token,
+        Some(tin),
+    )
+    .map_err(|error| HostError::new(error.to_string()))?;
     inbox_state_value(&guard, tin)
 }
 
@@ -1442,8 +1446,11 @@ fn apply_connection_result(
             let mut profile = load_inbox_profile(&guard, tin)?;
             profile.email_tracking_enabled = true;
             let inbox = profile.inbox_email().to_string();
-            guard
+            let profile = guard
                 .save_profile(profile)
+                .map_err(|error| HostError::new(error.to_string()))?;
+            // The mailbox is one credential: the app password just verified is the one every profile on it polls with.
+            bir_core::email::share_verified_app_password(&guard, &profile)
                 .map_err(|error| HostError::new(error.to_string()))?;
             bir_core::background_cron::reschedule_email_polls_for_inbox(&guard, &inbox);
             Ok(HostObject::new()

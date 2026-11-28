@@ -2469,6 +2469,21 @@ pub fn schedule_email_poll(
 /// on, a connection verified) nothing else would bring back a poll that ended, for example the one a Google grant this
 /// build cannot renew archived. [`schedule_email_poll`] keeps one job per return and skips an inbox whose tracking is
 /// off. Returns how many returns were looked at.
+/// Reconnect: a new Google grant for `inbox` is saved for the profiles on it, and the returns still waiting for the
+/// BIR's email are polled again through it (as after Verify).
+pub fn persist_google_grant_and_resume_polls(
+    db_guard: &Database,
+    inbox: &str,
+    access_token: &str,
+    refresh_token: &str,
+    source_tin: Option<&str>,
+) -> Result<crate::db::InboxOAuthPersistResult, crate::db::DbError> {
+    let saved =
+        db_guard.persist_google_oauth_for_inbox(inbox, access_token, refresh_token, source_tin)?;
+    reschedule_email_polls_for_inbox(db_guard, inbox);
+    Ok(saved)
+}
+
 pub fn reschedule_email_polls_for_inbox(db_guard: &Database, inbox: &str) -> usize {
     let mut seen = 0;
     let profiles = db_guard.list_profiles().unwrap_or_default();
@@ -6089,6 +6104,46 @@ mod tests {
 
         reschedule_email_polls_for_inbox(&db, "filer@example.com");
         assert_eq!(polls(&db).len(), 1, "still one job per return");
+    }
+
+    /// #504 review: Reconnect brings back the poll a Google grant this build could not renew had archived.
+    #[test]
+    fn reconnect_brings_back_an_archived_poll() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        let tin = profile.tin.full();
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        let mut job = db
+            .list_jobs()
+            .expect("the jobs are listed")
+            .into_iter()
+            .find(is_email_poll_job)
+            .expect("the waiting return has a poll");
+        job.status = "Archived".to_string();
+        db.save_job(job).expect("the poll is archived");
+        let live = |db: &Database| {
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .into_iter()
+                .filter(|job| is_email_poll_job(job) && job.status == "Queued")
+                .count()
+        };
+        assert_eq!(live(&db), 0);
+
+        persist_google_grant_and_resume_polls(
+            &db,
+            "filer@example.com",
+            "access-new",
+            "refresh-new",
+            Some(&tin),
+        )
+        .expect("the grant is saved");
+        assert_eq!(live(&db), 1, "the waiting return is polled again");
     }
 
     /// #504 review: a send to the local mock relay never had a poll (the worker skips it), so a change of the inbox's
