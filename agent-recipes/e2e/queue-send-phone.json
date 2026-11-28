@@ -175,23 +175,10 @@
    "screenshot": true
   },
   {
-   "id": "s31",
-   "op": "wait_until",
-   "target": "queue-continue",
-   "timeout_ms": 10000,
-   "screenshot": true
-  },
-  {
-   "id": "s32",
-   "op": "click",
-   "target": "queue-continue",
-   "screenshot": true
-  },
-  {
    "id": "s33",
    "op": "wait_until",
    "target": "fp-status",
-   "name": "Dry run · read-only",
+   "name": "Dry run \u00b7 read-only",
    "timeout_ms": 20000,
    "screenshot": true
   }

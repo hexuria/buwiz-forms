@@ -243,6 +243,11 @@
    "action": "keyboard_hide"
   },
   {
+   "id": "eopt1",
+   "op": "click",
+   "target": "fp-ask-eopt_tier-choices-\"Micro\""
+  },
+  {
    "id": "s26",
    "op": "press",
    "target": "fp-check",

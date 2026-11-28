@@ -194,7 +194,7 @@
   {
    "id": "i15a",
    "op": "click",
-   "target": "fp-part-2-toggle"
+   "target": "fp-nav-2"
   },
   {
    "id": "i15b",
@@ -218,6 +218,11 @@
    "op": "click",
    "target": "fp-nav-0",
    "screenshot": true
+  },
+  {
+   "id": "eopt1",
+   "op": "click",
+   "target": "fp-ask-eopt_tier-choices-\"Micro\""
   },
   {
    "id": "s26",

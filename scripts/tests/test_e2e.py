@@ -523,10 +523,32 @@ class SuiteTests(unittest.TestCase):
                              if "fp-frm2551Qv2018:txt15" in step and '"type"' in step]
                     toast = [i for i, step in enumerate(text)
                              if '"toast"' in step and ("absent" in step or '"exists": false' in step)]
-                    toggle = next(i for i, step in enumerate(text) if "fp-part-2-toggle" in step)
-                    self.assertTrue(toast and toast[-1] < toggle, f"{file} waits for the toast before Part II")
+                    part2 = next(i for i, step in enumerate(text)
+                                 if "fp-part-2-toggle" in step or "fp-nav-2" in step)
+                    self.assertTrue(toast and toast[-1] < part2, f"{file} waits for the toast before Part II")
                     self.assertTrue(clicks and types and clicks[0] < types[0] < check,
                                     f"{file} clicks then types Item 15 before Check")
+
+    def test_every_queue_variant_answers_item_20_before_check(self):
+        # The fresh Q2/Q3 returns are past their deadlines, so the late-filing path asks for the EOPT
+        # tier ("Missing in tax profile ... Answer it at Item 20, then queue."). The answer card saves
+        # the tier to the tax profile once, so the first rehearsal (queue) answers it and queue-send
+        # reads it back from the profile, exactly like the income-type card.
+        suite = E2E.load_suite("smoke")
+        entry = next(entry for entry in suite["recipes"] if entry["name"] == "queue")
+        files = sorted({value for key, value in entry.items()
+                        if key in ("desktop", "windows", "linux", "macos", "phone", "android", "ios", "file")
+                        and isinstance(value, str)})
+        self.assertTrue(files)
+        for file in files:
+            with self.subTest(recipe="queue", file=file):
+                steps = E2E.recipe_steps(suite["_dir"] / file)
+                text = [json.dumps(step) for step in steps]
+                check = next(i for i, step in enumerate(text) if "fp-check" in step)
+                answers = [i for i, step in enumerate(text)
+                           if "fp-ask-eopt_tier-choices" in step and ("click" in step or "\"click\"" in step)]
+                self.assertTrue(answers and answers[0] < check,
+                                f"{file} answers the EOPT tier at Item 20 before Check")
 
     def test_linux_queue_files_are_the_phone_files_minus_keyboard_hide(self):
         for phone_file, linux_file in (("queue-phone.json", "queue-linux.json"),
