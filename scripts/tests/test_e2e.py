@@ -468,6 +468,20 @@ class SuiteTests(unittest.TestCase):
                                                         "cli_version": "0.4.0"})[0], file, target)
         self.assertEqual(sorted(E2E.entry_files(own)), ["a.wants", "d.wants", "p.json"])
 
+    def test_android_420s_home_steps_are_gated_on_the_host_feature(self):
+        """The real android-420 suite: a host without system.background (every pinned host today) skips the
+        money-home recipe with a plain line instead of dying unsupported_op inside it."""
+        suite = E2E.load_suite(str(ROOT / "agent-recipes" / "e2e" / "android-420.json"))
+        entry = next(r for r in suite["recipes"] if r["name"] == "money-home")
+        base = {"features": [], "allow_send": False, "env": {}, "cli_version": "0.4.1"}
+        context = {**base, "target": "android", "form_factor": "phone"}
+        file, note, status = E2E.plan_entry(entry, suite, context)
+        self.assertEqual((file, status), (None, "needs"))
+        self.assertIn("system.background", note)
+        # A host listing the feature runs it.
+        file, note, status = E2E.plan_entry(entry, suite, {**context, "features": ["system.background"]})
+        self.assertEqual((file, status), ("android-420-money-home.json", None))
+
 
 class SnapshotTests(unittest.TestCase):
     def test_every_node_of_a_real_snapshot_is_walked(self):

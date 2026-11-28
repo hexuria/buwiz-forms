@@ -2,7 +2,7 @@
 // wide), Popover, Menu with MenuItem and MenuSeparator, toasts (toast, undoToast and the Toaster that shows them),
 // SidePanel, Disclosure and DisclosureGroup. Each is nsh/base's own overlay (focus, Escape, dismissal, roles), styled.
 import type { JSX, ViewRef } from "nsh";
-import { cleanup, keyboardFrame, Overlay, safeArea, Scroll, signal, View, windowSize } from "nsh";
+import { cleanup, keyboardFrame, Overlay, platform, safeArea, Scroll, signal, View, windowSize } from "nsh";
 import {
   Button, Collapsible, Dialog as BaseDialog, Menu as BaseMenu, MenuItem as BaseMenuItem, MenuSeparator as BaseMenuSeparator,
   Popover as BasePopover, Sheet as BaseSheet, Toast, type ToastEntry, ToastManager, ToastStack, Tooltip as BaseTooltip,
@@ -113,9 +113,33 @@ export function sheetSides(): { marginLeft: number; marginRight: number } {
   return { marginLeft: side, marginRight: side };
 }
 
+/**
+ * sheetMaxHeight's arithmetic as a pure function, so the test can give it the real numbers the emulator reports (the
+ * headless harness never raises a software keyboard). `keyboardHeight` is the keyboard inset as the surface reports it.
+ * On Android that inset is the whole distance from the screen's bottom to the keyboard's top — the keyboard covers the
+ * navigation bar, so the inset already includes it (the platform's ModalHost subtracts the same whole inset). Taking the
+ * bottom safe area off it again here leaves the cap one navigation-bar taller than the room above the keyboard, and a
+ * tall sheet rises under the status bar with 3-button navigation (#410's review, N57-2): 24 points too tall on the
+ * emulator, exactly the overlap the proof pictures show. Elsewhere the keyboard sits above the bottom safe area and
+ * only the height over it counts.
+ */
+export function sheetCap(windowHeight: number, safeTop: number, safeBottom: number, keyboardHeight: number, android: boolean): number {
+  const keyboard = android ? Math.max(0, keyboardHeight) : Math.max(0, keyboardHeight - safeBottom);
+  // The hard room: the status bar down to the keyboard's top. The 160 floor is clamped to it: a short window
+  // (landscape, split screen) has less than 160 above the keyboard, and a floor past the room would put the
+  // sheet's top off the screen, breaking the invariant the cap exists for. On Android API 29 and below the
+  // keyboard inset is never reported (the kit's keyboardBottom stays unset), so the cap is the no-keyboard
+  // room — exactly what the formula was before it was keyboard-aware, never worse. The same fallback happens
+  // on API 30+ while a dialog holds the keyboard and the activity's inset stays 0 (the kit's ModalHost
+  // comment): the sheet still positions above the keyboard, since the modal shrinks by the dialog's own
+  // inset; only the height cap cannot see it — that needs the engine scope fix of hexuria/buwiz-forms#645.
+  const space = Math.max(0, windowHeight - safeTop - keyboard);
+  const floor = Math.min(160, space);
+  return Math.min(space, Math.max(floor, space - 24));
+}
+
 export function sheetMaxHeight(): number {
-  const keyboard = Math.max(0, keyboardFrame().height - safeArea().bottom);
-  return Math.max(160, windowSize().height - safeArea().top - keyboard - 24);
+  return sheetCap(windowSize().height, safeArea().top, safeArea().bottom, keyboardFrame().height, platform.os === "android");
 }
 
 /** The tallest our bottom sheet's panel is: 90% of the window, and never past sheetMaxHeight. Sheet's popupStyle. */
@@ -124,16 +148,32 @@ export function sheetPanelMaxHeight(): number {
 }
 
 /**
- * The height a bottom sheet's body may take (padding included) once the grabber, the header and the bottom inset are drawn: what
+ * What a bottom sheet pads its bottom edge by: the bottom safe area, less whatever of it the software keyboard covers. On
+ * Android the keyboard reaches the screen's bottom and covers the navigation bar (sheetCap's note), so with it up the pad is
+ * max(0, safe area − keyboard), which is 0: padding for the navigation bar again cut the sheet's body and list short by a
+ * whole navigation bar above the keyboard (48 points with 3-button navigation, 24 with gestures; the last row half
+ * hidden in #515's proof). Elsewhere, and on Android with the keyboard down, it is the whole bottom safe area, as before.
+ */
+export function sheetBottomPad(safeBottom: number, keyboardHeight: number, android: boolean): number {
+  return android && keyboardHeight > 0 ? Math.max(0, safeBottom - keyboardHeight) : safeBottom;
+}
+
+/** sheetBodyRoom's arithmetic as a pure function, for the test (sheetCap's pattern). `touch` is TOUCH. */
+export function sheetBodyRoomOf(panelMaxHeight: number, safeBottom: number, keyboardHeight: number, android: boolean, touch: boolean): number {
+  const grabber = 12;
+  const header = (touch ? T_PX : 28) + 16 + 1;
+  return panelMaxHeight - grabber - header - sheetBottomPad(safeBottom, keyboardHeight, android);
+}
+
+/**
+ * The height a bottom sheet's body may take (padding included) once the grabber, the header and the bottom pad are drawn: what
  * a `scroll={false}` body sizes its own scrolling part to. It shrinks while the software keyboard is up (sheetMaxHeight), so the
  * last rows of a list in it stay above the keyboard.
- * The grabber and header heights below are Sheet's own layout as numbers (mt-2 h-1; the header's row, py-2 and its border):
+ * The grabber and header heights are Sheet's own layout as numbers (mt-2 h-1; the header's row, py-2 and its border):
  * pick.test.tsx measures the sheet and fails when they drift from it ("the list's room is the sheet's real body").
  */
 export function sheetBodyRoom(): number {
-  const grabber = 12;
-  const header = (TOUCH ? T_PX : 28) + 16 + 1;
-  return sheetPanelMaxHeight() - grabber - header - safeArea().bottom;
+  return sheetBodyRoomOf(sheetPanelMaxHeight(), safeArea().bottom, keyboardFrame().height, platform.os === "android", TOUCH);
 }
 
 /**
@@ -142,6 +182,9 @@ export function sheetBodyRoom(): number {
  */
 export function Sheet(props: SheetProps) {
   const narrow = () => phoneLayout();
+  // With the keyboard up on Android the pad is sheetBottomPad's, not the whole inset (the keyboard covers the navigation
+  // bar); otherwise the sheet keeps padding by its own env() inset, exactly as before.
+  const keyboardPad = () => platform.os === "android" && keyboardFrame().height > 0;
   return (
     <BaseSheet
       testID={props.testID}
@@ -153,12 +196,16 @@ export function Sheet(props: SheetProps) {
       // The sheet pads by the insets where IT renders (env(), the sheet's own), not the page's: a sheet is a layer of its own.
       popupClass={
         narrow()
-          ? "rounded-t-(--radius-dialog) border border-b-0 border-border bg-card pb-[env(safe-area-inset-bottom)]"
+          ? cx("rounded-t-(--radius-dialog) border border-b-0 border-border bg-card", !keyboardPad() && "pb-[env(safe-area-inset-bottom)]")
           : "border-l border-border bg-card pt-[env(safe-area-inset-top)]"
       }
       popupStyle={
         narrow()
-          ? { maxHeight: sheetPanelMaxHeight(), ...sheetSides() }
+          ? {
+            maxHeight: sheetPanelMaxHeight(),
+            ...sheetSides(),
+            ...(keyboardPad() ? { paddingBottom: sheetBottomPad(safeArea().bottom, keyboardFrame().height, true) } : {}),
+          }
           : { width: Math.min(props.width ?? 480, windowSize().width - 48) }
       }
     >
