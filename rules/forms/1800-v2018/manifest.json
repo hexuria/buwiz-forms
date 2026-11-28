@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1800v2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1800v2018.hta",
                                 "sha256":  "58b1ff5157f6d66f1ed1252c696d13ab9afe090bae0c1793faf42ef104159d37",
                                 "size":  388254,
                                 "revision_binding":  "APPLICATIONNAME/formTyp 1800v2018 and printed January 2018 ENCS."
@@ -43,7 +43,7 @@
                             {
                                 "asset_id":  "legacy-help-supporting-only",
                                 "kind":  "official-runtime-help-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1800.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1800.hta",
                                 "sha256":  "1ef140b7d7584043163c6d37020dc34266ebbd293cff6f9adb341263cb70f9ea",
                                 "size":  15835,
                                 "revision_binding":  "APPLICATIONNAME 1800; pre-2018 schedular/30% rate text contradicts the 2018 flat-rate form and is supporting only."
@@ -51,7 +51,7 @@
                             {
                                 "asset_id":  "legacy-hta-excluded",
                                 "kind":  "runtime-extracted-hta-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1800.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1800.hta",
                                 "sha256":  "0b69656574f35c1b13c0cca56fc59670ace3525453ae3d765c2a0991197a81ed",
                                 "size":  257866,
                                 "revision_binding":  "Legacy APPLICATIONNAME 1800; excluded from the 1800v2018 rule contract."

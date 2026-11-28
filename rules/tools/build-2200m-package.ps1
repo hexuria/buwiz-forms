@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot=(Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$ExtractedRoot='C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+    [string]$ExtractedRoot="$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
     [string]$OfficialDir='C:\Mac\Home\Downloads\forms\2200Mv2018',
     [string]$SampleDir='C:\Mac\Home\Downloads\forms\2200M'
 )
@@ -24,8 +24,20 @@ $expected=@{
     plain='3d8f9bf6f196d40b6dacbb38e7e26d1f65a11783b94ebd1221b799f78422e058'
     inventory='e877bfaf9467ac34a9e32ea76b54b700dd6dd0bdf6a3f03c2ad4837870634656'
 }
-function WJ([string]$Path,$Value){[IO.File]::WriteAllText($Path,(($Value|ConvertTo-Json -Depth 60)+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))}
-function WT([string]$Path,[string]$Value){[IO.File]::WriteAllText($Path,$Value,[Text.UTF8Encoding]::new($false))}
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
+function WJ([string]$p,$v){
+    $Json = $v | ConvertTo-Json -Depth 60
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($p, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+}
+function WT([string]$Path,[string]$Value){$Value = ConvertTo-SafeEvidenceText $Value;[IO.File]::WriteAllText($Path,$Value,[Text.UTF8Encoding]::new($false))}
 function HL([string[]]$Lines){$s=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($s.ComputeHash([Text.Encoding]::UTF8.GetBytes(($Lines-join"`n"))))).Replace('-','').ToLowerInvariant()}finally{$s.Dispose()}}
 function Attr([string]$Tag,[string]$Name){$m=[regex]::Match($Tag,('(?i)\b{0}\s*=\s*([''"])(.*?)\1'-f[regex]::Escape($Name)));if($m.Success){$m.Groups[2].Value}else{$null}}
 function Asset([string]$Id,[string]$Kind,[string]$Path,[string]$Binding,[string]$Display=''){$i=Get-Item -LiteralPath $Path;[pscustomobject][ordered]@{asset_id=$Id;kind=$Kind;path=if($Display){$Display}else{$Path};sha256=(Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant();size=$i.Length;revision_binding=$Binding}}

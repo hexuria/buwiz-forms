@@ -10,7 +10,7 @@
       "ok": true,
       "elapsed_ms": 33,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/01-setup-start/001-s1.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/01-setup-start/001-s1.png",
         "ok": true
       }
     },
@@ -28,7 +28,7 @@
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/01-setup-start/001-s1.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/01-setup-start/001-s1.png",
       "ok": true
     }
   ],

@@ -10,10 +10,10 @@ Input method: real hold-taps on the emulator's on-screen numeric keypad (`adb sh
 
 The production checkout was the commit above. For the proof run only, `nsh/App.tsx` was temporarily pointed at the existing `screens/form/FormPageAny` fixture and that fixture was told to `jumpTo(4, "4:0")`, so the emulator opened directly at Schedule 1 row 1 with the demo taxpayer. The harness did not change money mask, form, or platform behavior. Separately, after the screenshots were captured, one temporary `console.log` line was added in `MaskedField.onSelectionChange` only to record the caret-0 note in `caret-selection-log.txt`. All three temporary file edits were restored after the run and the worktree has no production-file modification.
 
-Build/dev server, from `/home/ubuntu/forms-validation/buwiz-keep/nsh`:
+Build/dev server, from `$HOME/forms-validation/buwiz-keep/nsh`:
 
 ```sh
-HOME=/home/ubuntu/forms-validation/home RUSTC_WRAPPER= /home/ubuntu/forms-validation/nsh2404-keep.sh nsh run --target android --port 8792
+HOME=$HOME/forms-validation/home RUSTC_WRAPPER= $HOME/forms-validation/nsh2404-keep.sh nsh run --target android --port 8792
 ```
 
 Activity launch used by the runner:
@@ -32,7 +32,7 @@ adb -s emulator-5554 shell am start -S \
 Runner:
 
 ```sh
-python3 /home/ubuntu/forms-validation/android_keep_text_matrix.py
+python3 $HOME/forms-validation/android_keep_text_matrix.py
 ```
 
 A copy is kept here as `android_keep_text_matrix.py`. The machine-readable run log is `android-keep-text-proof.log`; its final line is `ANDROID_KEEP_TEXT_PASS`.

@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$ExtractedRoot = 'C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+    [string]$ExtractedRoot = "$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
     [string]$SampleDir = 'C:\Mac\Home\Downloads\forms\1602Qv2018',
     [string]$DuplicateSampleDir = 'C:\Mac\Home\Downloads\forms\1602Q',
     [string]$MismatchedPdfDir = 'C:\Mac\Home\Downloads\forms\1602Qv2019'
@@ -27,8 +27,18 @@ $expected = @{
     rmc27 = '2609208dbb5bb2fabfed0cef0ead1bc1cf7b5ea8e6efecbe631c1c9b79c28c51'
 }
 
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
 function Write-Json([string]$Path, $Value) {
-    [IO.File]::WriteAllText($Path, (($Value | ConvertTo-Json -Depth 60) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    $Json = $Value | ConvertTo-Json -Depth 60
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
 }
 function Write-Utf8([string]$Path, [string]$Value) {
     [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))

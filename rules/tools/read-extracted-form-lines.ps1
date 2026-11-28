@@ -22,7 +22,7 @@ if ($EndLine -lt $StartLine) {
 
 $name = if ($Kind -eq 'form') { "BIR-Form$FormCode.hta" } else { "Help$FormCode.hta" }
 $candidates = @(
-    Get-ChildItem -LiteralPath 'C:\Users\uriah\AppData\Local\Temp' `
+    Get-ChildItem -LiteralPath "$env:USERPROFILE\AppData\Local\Temp" `
         -Recurse -File -Filter $name -ErrorAction SilentlyContinue
 )
 if ($candidates.Count -ne 1) {

@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2550Qv2024.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2550Qv2024.hta",
                                 "sha256":  "3a5a4d3b2b342a4dfc55a05c69b560fb9be47af6451d8c651d19e1d33406ec70",
                                 "size":  629633,
                                 "revision_binding":  "APPLICATIONNAME 2550Qv2024 and printed April 2024 ENCS."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "official-string-util-runtime",
                                 "kind":  "runtime-extracted-javascript",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\string-util.js",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\string-util.js",
                                 "sha256":  "bc7f86f70bf993389a3a0135dcbd76c3e370c49d2eb95e2fc66ff318a2ebe43c",
                                 "size":  54582,
                                 "revision_binding":  "Shared package runtime loaded by the pinned 2550Q HTA; defines arithmetic, connection, enrollment, retry, final-flag, and Final Copy control helpers."
@@ -35,7 +35,7 @@
                             {
                                 "asset_id":  "official-ebir-tools-runtime",
                                 "kind":  "runtime-extracted-vbscript",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\eBIRTools.vbs",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\eBIRTools.vbs",
                                 "sha256":  "7d0ceb5aad2c0eb90aeca189d6104ff05163ecd1820379f456125634ff7460f7",
                                 "size":  7557,
                                 "revision_binding":  "VBScript loaded by the pinned 2550Q HTA; synchronously launches the external encryption and transport helpers."
@@ -59,7 +59,7 @@
                             {
                                 "asset_id":  "official-installed-help",
                                 "kind":  "runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2550Qv2024.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2550Qv2024.hta",
                                 "sha256":  "5c81fb5028c25d1104702ed54ff284d69bba0437131ac7891f4782f89342144f",
                                 "size":  26157,
                                 "revision_binding":  "April 2024 instructions; packaged APPLICATIONNAME is incorrectly 0605."

@@ -563,7 +563,7 @@ pub(crate) fn with_home_for_test<R>(home: &Path, body: impl FnOnce() -> R) -> R 
 ///   the file system usually is (macOS, Windows).
 /// * **By identity** (Unix: device and inode; Windows: volume serial number and file index; see [`identity`]).
 ///   A protected folder that exists is known by its identity, which no
-///   spelling changes: macOS reaches the same folder as `/Users/u/x` and `/System/Volumes/Data/Users/u/x`
+///   spelling changes: macOS reaches the same folder as `/Users/<name>/x` and `/System/Volumes/Data/Users/<name>/x`
 ///   (a firmlink, not a symlink), a case-insensitive volume answers to any case, a bind mount to its other
 ///   path. So `path` is refused when any ancestor of it that exists IS a protected folder, and, when it is
 ///   an existing file with more than one link, when it is the same file as one directly inside a protected

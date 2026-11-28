@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$ExtractedRoot = 'C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+    [string]$ExtractedRoot = "$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
     [string]$PdfDir = 'C:\Mac\Home\Downloads\forms\1702EXv2018',
     [string]$SampleDir = 'C:\Mac\Home\Downloads\forms\1702EX'
 )
@@ -26,7 +26,19 @@ $expected=@{
     inventory='734d5d65c0cb102100dd8e940d7980622e3dbd00b66e33ecf8bb277458ba2a86'
     package='de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca'
 }
-function Write-Json([string]$Path,$Value){[IO.File]::WriteAllText($Path,(($Value|ConvertTo-Json -Depth 60)+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))}
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
+function Write-Json([string]$Path, $Value) {
+    $Json = $Value | ConvertTo-Json -Depth 60
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+}
 function Write-Utf8([string]$Path,[string]$Value){[IO.File]::WriteAllText($Path,$Value,[Text.UTF8Encoding]::new($false))}
 function Hash-Lines([string[]]$Lines){$s=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($s.ComputeHash([Text.Encoding]::UTF8.GetBytes(($Lines-join"`n"))))).Replace('-','').ToLowerInvariant()}finally{$s.Dispose()}}
 function Attr([string]$Tag,[string]$Name){$m=[regex]::Match($Tag,('(?i)\b{0}\s*=\s*([''"])(.*?)\1'-f[regex]::Escape($Name)));if($m.Success){$m.Groups[2].Value}else{$null}}

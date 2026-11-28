@@ -1290,7 +1290,7 @@
         "form_revision": "2024-04-01",
         "official_package_version": "7.9.6.0",
         "rule_set_id": "2550q-v2024-p7.9.6.0",
-        "source_set_sha256": "0f37a2e3a1ee16e1b8464a6454faea153bfef6250358e8c251c306a34750b766"
+        "source_set_sha256": "e09376998beb43be68b826b503668df2cb8e7d0ddda994da8994877257222ea1"
       },
       "violations": [
         {
@@ -2023,7 +2023,7 @@
       "form_revision": "2024-04-01",
       "official_package_version": "7.9.6.0",
       "rule_set_id": "2550q-v2024-p7.9.6.0",
-      "source_set_sha256": "0f37a2e3a1ee16e1b8464a6454faea153bfef6250358e8c251c306a34750b766"
+      "source_set_sha256": "e09376998beb43be68b826b503668df2cb8e7d0ddda994da8994877257222ea1"
     }
   },
   "kind": "evaluation",

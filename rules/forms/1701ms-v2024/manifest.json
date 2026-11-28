@@ -17,7 +17,7 @@
                             },
                             {
                                 "sha256":  "5737ddbd86d467457b613cc1f016c51d1add7fa91b396f6af88d213bccc48202",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1701MS.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1701MS.hta",
                                 "kind":  "runtime-extracted-hta",
                                 "revision_binding":  "Application 1701MS version 4.7 and printed August 2024 header.",
                                 "asset_id":  "official-hta-runtime",

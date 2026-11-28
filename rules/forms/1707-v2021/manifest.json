@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707v2021.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707v2021.hta",
                                 "sha256":  "a645463cf3bc7a80f0ec96a08796adde33c76ae65c617b3fefdb478e61496cd4",
                                 "size":  421881,
                                 "revision_binding":  "APPLICATIONNAME 1707v2021; April 2021 ENCS."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "predecessor-2018-excluded",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707v2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707v2018.hta",
                                 "sha256":  "2d995beea0061dfdef2ee74558f2dbf6cedd30c91fc7ac3e18668515dafab158",
                                 "size":  378719,
                                 "revision_binding":  "January 2018 predecessor; excluded from April 2021 rules."
@@ -34,7 +34,7 @@
                             {
                                 "asset_id":  "legacy-1999-excluded",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707.hta",
                                 "sha256":  "66f34ac0ff6ab7f07794bdffa10d4f3074b7b235f712a1f6f1718d950a5c06c7",
                                 "size":  256302,
                                 "revision_binding":  "July 1999 predecessor; excluded from April 2021 rules."
@@ -42,7 +42,7 @@
                             {
                                 "asset_id":  "official-help-runtime",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1707v2021.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1707v2021.hta",
                                 "sha256":  "fe3f17dc77d7b4139d2d037cae37e24813b44446420b8b7de10bc5bf0583e4e0",
                                 "size":  25305,
                                 "revision_binding":  "Revision-matched April 2021 filing, rate, penalty, and attachment guidance."

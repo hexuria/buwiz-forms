@@ -20,7 +20,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1701Qv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1701Qv2018.hta",
                                 "sha256":  "5f164dde6154b96f28e23656ed2ef29406010ee3f94333e88ea6eb107fe589a0",
                                 "size":  372180,
                                 "revision_binding":  "HTA title and application name identify 1701Qv2018.",

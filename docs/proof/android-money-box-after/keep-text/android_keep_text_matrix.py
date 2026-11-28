@@ -7,7 +7,7 @@ from PIL import Image
 
 ADB = os.path.expanduser('~/Android/Sdk/platform-tools/adb')
 SERIAL = 'emulator-5554'
-OUT = '/home/ubuntu/forms-validation/buwiz-keep/docs/proof/android-money-box-after/keep-text'
+OUT = '$HOME/forms-validation/buwiz-keep/docs/proof/android-money-box-after/keep-text'
 os.makedirs(OUT, exist_ok=True)
 LOG = os.path.join(OUT, 'android-keep-text-proof.log')
 VIDEO = '/sdcard/keep-text-proof.mp4'

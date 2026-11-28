@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Mv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Mv2018.hta",
                                 "sha256":  "5f0f128a166da6429a237883f662fa36393c4a5ac1472be79db1d04a9e27eef5",
                                 "size":  719375,
                                 "revision_binding":  "January 2018 ENCS runtime."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "legacy-runtime-excluded",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200M.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200M.hta",
                                 "sha256":  "5a9935fd72160013c0dd1468918bd7b0944dd669f19f71ce61638a2c8ba98e48",
                                 "size":  435311,
                                 "revision_binding":  "Predecessor used only for sample discrimination."
@@ -34,7 +34,7 @@
                             {
                                 "asset_id":  "revision-help",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200Mv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200Mv2018.hta",
                                 "sha256":  "158b6d4cb145bb45e06e82e092f743852f0891372ad92daaa48aea0d17d3398c",
                                 "size":  33712,
                                 "revision_binding":  "January 2018 mineral-products instructions."
@@ -42,7 +42,7 @@
                             {
                                 "asset_id":  "legacy-help-excluded",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200M.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200M.hta",
                                 "sha256":  "69a984e199192f468eb5659597b210fd03dd079bbf8805032336f4c55b3cca89",
                                 "size":  17212,
                                 "revision_binding":  "Predecessor help excluded."

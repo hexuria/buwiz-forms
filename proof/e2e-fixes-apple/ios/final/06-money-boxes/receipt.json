@@ -11,7 +11,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 1547,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/001-s1.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/001-s1.png",
         "ok": true
       }
     },
@@ -50,18 +50,18 @@
       "error_code": "assert_failed",
       "elapsed_ms": 186,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/007-s7.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/007-s7.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/001-s1.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/001-s1.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/007-s7.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/06-money-boxes/007-s7.png",
       "ok": true
     }
   ],

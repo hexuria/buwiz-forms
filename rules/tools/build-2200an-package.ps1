@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot=(Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$ExtractedRoot='C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+    [string]$ExtractedRoot="$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
     [string]$OfficialDir='C:\Mac\Home\Downloads\forms\2200ANv2018',
     [string]$SampleDir='C:\Mac\Home\Downloads\forms\2200AN'
 )
@@ -12,7 +12,19 @@ $packagePath='C:\eBIRForms\BIRForms.exe';$outDir=Join-Path $RepoRoot 'rules\form
 $expected=@{
  hta='23b5502509383379d993fe724e28fdf2d13010b75cd2694c394bc8c72af34f29';legacy='e3f84d83c3455424c66c9223d124b65f30027d3c57ff4af793b6b5b54feeecb4';help='72c3e8fca3d9ba6eab423081db51f9444afb83b44b801a222bddabdde70da7af';guide='d3b5599f459eeb354a05bd70dd9b9ea526a7660f8337c37dbc4ca48c643d6c25';annex='da64d008464d213c7c3ceb60f4fc752a4cae2d271abd2414bbd4f85a305915a2';package='de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca';cipher='9e217dae0c2fe171104510f4ce3bca20ce1c3decb872f70c730ab8306f503670';plain='f51d0ba8311d2af7a06e44b1d6b5432ce9ad92bb79124f405dbf8738d3444b97';inventory='3b4f71dfca06e7f8b2692eb124450f65d0e0ba9431a94ac86ccfb53742ec36f2'
 }
-function Write-Json([string]$Path,$Value){[IO.File]::WriteAllText($Path,(($Value|ConvertTo-Json -Depth 60)+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))}
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
+function Write-Json([string]$Path, $Value) {
+    $Json = $Value | ConvertTo-Json -Depth 60
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+}
 function Write-Utf8([string]$Path,[string]$Value){[IO.File]::WriteAllText($Path,$Value,[Text.UTF8Encoding]::new($false))}
 function Hash-Lines([string[]]$Lines){$s=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($s.ComputeHash([Text.Encoding]::UTF8.GetBytes(($Lines-join"`n"))))).Replace('-','').ToLowerInvariant()}finally{$s.Dispose()}}
 function Attr([string]$Tag,[string]$Name){$m=[regex]::Match($Tag,('(?i)\b{0}\s*=\s*([''"])(.*?)\1'-f[regex]::Escape($Name)));if($m.Success){$m.Groups[2].Value}else{$null}}

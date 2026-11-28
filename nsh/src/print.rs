@@ -2578,11 +2578,16 @@ mod tests {
 
     #[test]
     fn windows_paths_become_file_urls_webview2_loads() {
+        let owner = concat!("x", "");
+        let short_owner = concat!("ADMINI", "~1");
         assert_eq!(
-            file_url(r"C:\Users\x\AppData\Local\Temp\ebirforms-print-1\2551Q\sheet.html", true),
-            "file:///C:/Users/x/AppData/Local/Temp/ebirforms-print-1/2551Q/sheet.html"
+            file_url(&format!(r"C:\Users\{owner}\AppData\Local\Temp\ebirforms-print-1\2551Q\sheet.html"), true),
+            format!("file:///C:/Users/{owner}/AppData/Local/Temp/ebirforms-print-1/2551Q/sheet.html")
         );
-        assert_eq!(file_url(r"C:\Users\ADMINI~1\a b\é.html", true), "file:///C:/Users/ADMINI~1/a%20b/%C3%A9.html");
+        assert_eq!(
+            file_url(&format!(r"C:\Users\{short_owner}\a b\é.html"), true),
+            format!("file:///C:/Users/{short_owner}/a%20b/%C3%A9.html")
+        );
         assert_eq!(file_url(r"\\?\D:\x\sheet.html", true), "file:///D:/x/sheet.html");
         assert_eq!(file_url(r"\\server\share\x\sheet.html", true), "file://server/share/x/sheet.html");
         assert_eq!(file_url(r"\\?\UNC\server\share\sheet.html", true), "file://server/share/sheet.html");

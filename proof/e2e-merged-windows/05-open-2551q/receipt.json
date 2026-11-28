@@ -33,7 +33,7 @@
       "ok": true,
       "elapsed_ms": 301,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\05-open-2551q\\005-s5.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\05-open-2551q\\005-s5.png",
         "ok": true
       }
     },
@@ -102,7 +102,7 @@
   ],
   "screenshots": [
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\05-open-2551q\\005-s5.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\05-open-2551q\\005-s5.png",
       "ok": true
     }
   ],

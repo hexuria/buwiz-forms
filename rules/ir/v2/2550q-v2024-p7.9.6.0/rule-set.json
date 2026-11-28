@@ -6468,7 +6468,7 @@
     "form_revision": "2024-04-01",
     "official_package_version": "7.9.6.0",
     "rule_set_id": "2550q-v2024-p7.9.6.0",
-    "source_set_sha256": "0f37a2e3a1ee16e1b8464a6454faea153bfef6250358e8c251c306a34750b766"
+    "source_set_sha256": "e09376998beb43be68b826b503668df2cb8e7d0ddda994da8994877257222ea1"
   },
   "legacy_v1": {
     "declared_counts": {
@@ -10144,7 +10144,7 @@
     {
       "kind": "legacy-v1-manifest",
       "path": "forms/2550q-v2024/manifest.json",
-      "sha256": "9fcea99ed4771bdfeaeaea1d4b4184933dc6f958f863843148d630863651ec35",
+      "sha256": "5a7ee575b5192f8ae58c6517ceb4382946c95f4c0771870d37ce4d6e3a19b4de",
       "source_id": "v1-manifest"
     },
     {
@@ -10276,25 +10276,25 @@
     {
       "kind": "review-decision",
       "path": "forms/2550q-v2024/v2-candidate-edit-workflow-review.md",
-      "sha256": "797217ee02a7c96e85d7285c0fabc848f67c57f376a2e37aa6259a67fe46ab04",
+      "sha256": "39db8a3f5faba58d75a243db230e15d32a17aa74ac808345c75dbd2ebea69117",
       "source_id": "candidate-edit-workflow-review"
     },
     {
       "kind": "review-decision",
       "path": "forms/2550q-v2024/v2-candidate-final-copy-submit-workflow-review.md",
-      "sha256": "3181c1f90e322b7b9bd0de5d8f0564949d1936147a189a60a85fa4569d183d67",
+      "sha256": "8534d48629c27d627b64aea1edd2f9c928a4b24a37eb3a44e1696ceab6394047",
       "source_id": "candidate-final-copy-submit-workflow-review"
     },
     {
       "kind": "review-decision",
       "path": "forms/2550q-v2024/v2-candidate-final-copy-serialization-review.md",
-      "sha256": "7005314b7b35734546aab016f0788be3e628e93d9c302ffc0b385eb36639ce28",
+      "sha256": "dcc05ca84d4352573feeedbf28a487ede38279a0db6d5756a3a5ada7030c40a5",
       "source_id": "candidate-final-copy-serialization-review"
     },
     {
       "kind": "review-decision",
       "path": "forms/2550q-v2024/v2-candidate-plaintext-save-serialization-review.md",
-      "sha256": "3eaf4fb1eef1ad68582cc5bc41b806ff9905a484543ddd71862b9e341eab84ed",
+      "sha256": "8d90b6ce85bdac2cdce20e23959876f82e1ba20d718de43a240bad265ef6f80b",
       "source_id": "candidate-plaintext-save-serialization-review"
     },
     {

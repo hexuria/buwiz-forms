@@ -10,7 +10,7 @@
       "ok": true,
       "elapsed_ms": 235,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\01-setup-start\\001-s1.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\01-setup-start\\001-s1.png",
         "ok": true
       }
     },
@@ -28,7 +28,7 @@
   ],
   "screenshots": [
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\01-setup-start\\001-s1.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\01-setup-start\\001-s1.png",
       "ok": true
     }
   ],

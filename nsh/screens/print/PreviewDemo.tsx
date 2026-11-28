@@ -40,7 +40,7 @@ function Demo() {
       if (mode === "hang") return new Promise<string | null>(() => {});
       await wait(250);
       if (mode === "fail") throw new Error("Could not save the PDF: the disk is full.");
-      return mode === "cancel" ? null : "/Users/someone/Documents/BIR Form 2551Q - Juana Santos.pdf";
+      return mode === "cancel" ? null : "/Users/<name>/Documents/BIR Form 2551Q - Juana Santos.pdf";
     },
     stoppedWaiting(what) {
       calls.update((all) => [...all, `stopped ${what}`]);

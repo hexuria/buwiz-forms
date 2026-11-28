@@ -127,14 +127,14 @@
       "ok": true,
       "elapsed_ms": 1664,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/04-open-2551q/022-s22.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261127-085515/04-open-2551q/022-s22.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/04-open-2551q/022-s22.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261127-085515/04-open-2551q/022-s22.png",
       "ok": true
     }
   ],

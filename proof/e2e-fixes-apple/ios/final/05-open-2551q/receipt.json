@@ -33,14 +33,14 @@
       "ok": true,
       "elapsed_ms": 161,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/05-open-2551q/005-s5.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/05-open-2551q/005-s5.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/05-open-2551q/005-s5.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/05-open-2551q/005-s5.png",
       "ok": true
     }
   ],

@@ -16,7 +16,7 @@
       "ok": true,
       "elapsed_ms": 127,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/002-s2.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/002-s2.png",
         "ok": true
       }
     },
@@ -31,7 +31,7 @@
       "ok": true,
       "elapsed_ms": 125,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/004-s4.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/004-s4.png",
         "ok": true
       }
     },
@@ -46,7 +46,7 @@
       "ok": true,
       "elapsed_ms": 167,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/006-s6.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/006-s6.png",
         "ok": true
       }
     },
@@ -61,26 +61,26 @@
       "ok": true,
       "elapsed_ms": 127,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/008-s8.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/008-s8.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/002-s2.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/002-s2.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/004-s4.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/004-s4.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/006-s6.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/006-s6.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/008-s8.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/04-navigate/008-s8.png",
       "ok": true
     }
   ],

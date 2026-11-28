@@ -1,7 +1,7 @@
 # PR #355 Independent-Check Fixes Proof (Faults 1–5)
 
-Before commit: `3e8b1212` (built in `/home/ubuntu/BuwizNsh/target-355-before`, `RUSTC_WRAPPER=""`).
-After commit: head on `feat/store-launch-field-rules` (built in `/home/ubuntu/BuwizNsh/target-355-after`, `RUSTC_WRAPPER=""`).
+Before commit: `3e8b1212` (built in `$HOME/BuwizNsh/target-355-before`, `RUSTC_WRAPPER=""`).
+After commit: head on `feat/store-launch-field-rules` (built in `$HOME/BuwizNsh/target-355-after`, `RUSTC_WRAPPER=""`).
 Every app run used the running NSH desktop app with `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1`, a fresh scratch SQLite database, demo taxpayer `00012345300000`, and invented values (never `BIR_SFTP_LIVE`, never Queue).
 
 ## Recording

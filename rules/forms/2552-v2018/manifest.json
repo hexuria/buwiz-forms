@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2552v2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2552v2018.hta",
                                 "sha256":  "a608d954cff716ea0240a5648ae01bdff42e50dc0244dafe32c2747eb59114a4",
                                 "size":  431564,
                                 "revision_binding":  "January 2018 ENCS runtime."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "legacy-1999-excluded",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2552.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2552.hta",
                                 "sha256":  "3692c9ca93e09e982db28197323de56982a958da2c714f92c6749dbe856dd32e",
                                 "size":  245410,
                                 "revision_binding":  "July 1999 predecessor, excluded."
@@ -34,7 +34,7 @@
                             {
                                 "asset_id":  "packaged-help",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2552.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2552.hta",
                                 "sha256":  "81bfb72ab829ac7ff9774ed940eacb1f3ced347d710393e90b2f9dffd0e7f19e",
                                 "size":  19046,
                                 "revision_binding":  "Unversioned packaged help; deadlines/attachments used, legacy rate text not used for January 2018 calculations."

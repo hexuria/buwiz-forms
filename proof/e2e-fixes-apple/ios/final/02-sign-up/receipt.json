@@ -67,7 +67,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 1016,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/011-s11.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/011-s11.png",
         "ok": true
       }
     },
@@ -110,7 +110,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 1588,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/018-s18.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/018-s18.png",
         "ok": true
       }
     },
@@ -125,7 +125,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 2138,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/020-s20.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/020-s20.png",
         "ok": true
       }
     },
@@ -134,7 +134,7 @@
       "ok": true,
       "elapsed_ms": 127,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/021-s21.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/021-s21.png",
         "ok": true
       }
     },
@@ -146,19 +146,19 @@
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/011-s11.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/011-s11.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/018-s18.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/018-s18.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/020-s20.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/020-s20.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/021-s21.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/02-sign-up/021-s21.png",
       "ok": true
     }
   ],

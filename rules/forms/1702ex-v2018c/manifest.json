@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EXv2018C.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EXv2018C.hta",
                                 "sha256":  "1c2f990e08d6ad02bd488bffdcd1b6cf1666d3c173ed0b5617f5faa0c546a7ed",
                                 "size":  552495,
                                 "revision_binding":  "formType 1702EXv2018C; CREATE-law variant."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "pre-create-hta-excluded",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EXv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EXv2018.hta",
                                 "sha256":  "6bad84a723c0e4bd8ec3e2488f11946bd9d5117f0c7bfba7231edfb68e71d641",
                                 "size":  553038,
                                 "revision_binding":  "January 2018 predecessor; excluded from CREATE calculations."
@@ -34,7 +34,7 @@
                             {
                                 "asset_id":  "legacy-hta-excluded",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EX.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EX.hta",
                                 "sha256":  "5dbc2357e5c46b82688396cc0eeaf48aeb76e6ceda95e5e38577fe3d0ce91960",
                                 "size":  1086467,
                                 "revision_binding":  "June 2013 predecessor; excluded."
@@ -42,7 +42,7 @@
                             {
                                 "asset_id":  "legacy-help-runtime",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1702EX.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1702EX.hta",
                                 "sha256":  "eecc062d879b8417cd0d3d78a70eef8bff80235b99ee82d75bfd410d91c092bf",
                                 "size":  38878,
                                 "revision_binding":  "Packaged help is June 2013 and is not revision-matched."
@@ -58,7 +58,7 @@
                             {
                                 "asset_id":  "package-release-notes",
                                 "kind":  "official-package-release-notes",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\Release Notes 7.9.5.0.txt",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\Release Notes 7.9.5.0.txt",
                                 "sha256":  "a4539eb0d1e0ca6b5554795ed9e72f5f20952cf8d4bdafbbcbcd570de54fcb62",
                                 "size":  37574,
                                 "revision_binding":  "v7.9 explicitly introduces 1702EXv2018C for CREATE law."

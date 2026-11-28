@@ -1,16 +1,16 @@
 the recipe did not return
 process tree at timeout:
 pid	parent	started	name	command line
-8020	8976	2026-11-27T19:52:24.41953+00:00	just.exe	just --justfile C:\Users\Administrator\repos\buwiz-timing-fix\justfile nsh-run-agent android
-5752	8020	2026-11-27T19:52:25.128981+00:00	  pwsh.exe	"pwsh" -NoProfile C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\temp\just-AuCIxV\nsh-run-agent.ps1
-6440	5752	2026-11-27T19:52:26.220013+00:00	    pwsh.exe	"C:\Program Files\PowerShell\7\pwsh.exe" -s -NoLogo -NoProfile -wd C:\Users\Administrator\repos\buwiz-timing-fix
+8020	8976	2026-11-27T19:52:24.41953+00:00	just.exe	just --justfile %USERPROFILE%\repos\buwiz-timing-fix\justfile nsh-run-agent android
+5752	8020	2026-11-27T19:52:25.128981+00:00	  pwsh.exe	"pwsh" -NoProfile %USERPROFILE%\AppData\Local\Temp\nsh-run-agent-gc2a771s\temp\just-AuCIxV\nsh-run-agent.ps1
+6440	5752	2026-11-27T19:52:26.220013+00:00	    pwsh.exe	"C:\Program Files\PowerShell\7\pwsh.exe" -s -NoLogo -NoProfile -wd %USERPROFILE%\repos\buwiz-timing-fix
 7596	6440	2026-11-27T19:52:26.222006+00:00	      conhost.exe	\??\C:\Windows\system32\conhost.exe 0x4
-7628	5752	2026-11-27T19:52:26.494615+00:00	    cmd.exe	C:\Windows\system32\cmd.exe /c ""C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\tools\bin\nsh.cmd" run --target android --port 8347"
-3256	7628	2026-11-27T19:52:26.504533+00:00	      python.exe	"C:\Python315\python.exe"  "C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\tools\bin\nsh.py" run --target android --port 8347
-9200	5752	2026-11-27T19:52:26.346266+00:00	    pwsh.exe	"C:\Program Files\PowerShell\7\pwsh.exe" -s -NoLogo -NoProfile -wd C:\Users\Administrator\repos\buwiz-timing-fix
+7628	5752	2026-11-27T19:52:26.494615+00:00	    cmd.exe	C:\Windows\system32\cmd.exe /c ""%USERPROFILE%\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\tools\bin\nsh.cmd" run --target android --port 8347"
+3256	7628	2026-11-27T19:52:26.504533+00:00	      python.exe	"C:\Python315\python.exe"  "%USERPROFILE%\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\tools\bin\nsh.py" run --target android --port 8347
+9200	5752	2026-11-27T19:52:26.346266+00:00	    pwsh.exe	"C:\Program Files\PowerShell\7\pwsh.exe" -s -NoLogo -NoProfile -wd %USERPROFILE%\repos\buwiz-timing-fix
 4044	9200	2026-11-27T19:52:26.348151+00:00	      conhost.exe	\??\C:\Windows\system32\conhost.exe 0x4
 partial output so far:
-build: app unknown (git not found), nsh unknown (git not found) beside it, tool nsh 0.6.1 (fake), cargo 1.99.0 (5f94df478 2026-08-27), folder C:\Users\ADMINI~1\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\target-nsh
+build: app unknown (git not found), nsh unknown (git not found) beside it, tool nsh 0.6.1 (fake), cargo 1.99.0 (5f94df478 2026-08-27), folder %USERPROFILE%\AppData\Local\Temp\nsh-run-agent-gc2a771s\home\BuwizNsh\target-nsh
 nsh-run-agent: window plane on 127.0.0.1:17421, data plane on 127.0.0.1:17422 on emulator-5556; run: adb -s emulator-5556 forward tcp:17421 tcp:17421 && adb -s emulator-5556 forward tcp:17422 tcp:17422
 
 step timeline:

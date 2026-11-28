@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$ExtractedRoot = 'C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+    [string]$ExtractedRoot = "$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
     [string]$SourceDir = 'C:\Mac\Home\Downloads\forms\1702MXv2018c'
 )
 
@@ -31,8 +31,18 @@ $expected = @{
     package = 'de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca'
 }
 
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
 function Write-Json([string]$Path, $Value) {
-    [IO.File]::WriteAllText($Path, (($Value | ConvertTo-Json -Depth 60) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    $Json = $Value | ConvertTo-Json -Depth 60
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
 }
 function Write-Utf8([string]$Path, [string]$Value) {
     [IO.File]::WriteAllText($Path, $Value, [Text.UTF8Encoding]::new($false))
@@ -543,7 +553,7 @@ foreach ($entry in @(
 )) {
     Validate-Rule $entry[0] $entry[1] @('frm1702MX:ddlPg1I2Date','frm1702MX:txtPg1I2YearEnd') $entry[2] @('official-hta-runtime#validateYearEnd:L18352-L18433')
 }
-Validate-Rule 'year-empty-helper' 'validateYearEnd is called directly with blank year.' @('frm1702MX:txtPg1I2YearEnd') 'This field cannot be empty.' @('official-hta-runtime#validateYearEnd:L18423-L18426') 'official-bug-compatible' 'The helper alerts but fails to set isValid=false; normal Validate never reaches this branch because its preceding required check returns.' 'Return false and use the specific Item 2 required message.' 
+Validate-Rule 'year-empty-helper' 'validateYearEnd is called directly with blank year.' @('frm1702MX:txtPg1I2YearEnd') 'This field cannot be empty.' @('official-hta-runtime#validateYearEnd:L18423-L18426') 'official-bug-compatible' 'The helper alerts but fails to set isValid=false; normal Validate never reaches this branch because its preceding required check returns.' 'Return false and use the specific Item 2 required message.'
 Validate-Rule 'atc' 'Neither IC055 nor alternate ATC is checked.' @('frm1702MX:chkPg1I5ATCR1','frm1702MX:chkPg1I5ATCR2') 'Please tick at least one ATC option (Page 1 Item 5).' @('official-hta-runtime#validate:L21149-L21154')
 Validate-Rule 'incorporation-required' 'Date of incorporation / organization is blank.' @('frm1702MX:txtPg1Pt1I8') 'Please provide Date of Incorporation / Organization (Part I Item 10).' @('official-hta-runtime#validate:L21157-L21162') 'incorrect-official-behavior' 'The message says Item 10, while the control ID and printed placement are Part I Item 8.' 'Report the actual printed item and preserve the official text as compatibility evidence.'
 Validate-Rule 'incorporation-after-period' 'Incorporation month/year is after the filing month/year.' @('frm1702MX:txtPg1Pt1I8','frm1702MX:ddlPg1I2Date','frm1702MX:txtPg1I2YearEnd') 'Date of Incorporation cannot be greater than Page 1 Item 2 Date.' @('official-hta-runtime#checkDateOfIncorporation:L18504-L18531')
@@ -648,7 +658,7 @@ Calc '1702mx-schedule2-item10' @('Schedule 2 Item 10 B-D') @('Schedule 7.1 Item 
 Calc '1702mx-schedule2-item11-itemized' @('Schedule 2 Item 11 A-D') @('Schedule 2 Items 8,9,10') 'When Itemized is selected: 11A=8A+9A; 11B=8B+9B+10B; 11C=8C+9C+10C; 11D=A+B+C.' 'computePg2Sc2It11 / computePg2Sch2Items' @('1702mx-schedule2-item8','1702mx-schedule2-item9','1702mx-schedule2-item10') @('official-hta-runtime#computePg2Sc2It11:L14908-L14956','official-hta-runtime#computePg2Sch2Items:L14957-L14968') 'verified-correct' 'Encode the column-specific applicability rather than a generic all-column sum.' 'Itemized deduction selected.'
 Calc '1702mx-schedule2-item12-osd' @('Schedule 2 Item 12 C-D') @('Schedule 2 Item 7C') 'When OSD is selected: Item 12C = 40% of Item 7C; Item 12D copies C; Item 11C/D are zeroed.' 'computePg2Sc2It12' @('1702mx-schedule2-item7') @('official-hta-runtime#computePg2Sc2It12:L14969-L14982','repository-model#recompute_schedule_2:L577-L600') 'incorrect-official-behavior' 'Use the official column-specific applicability. The current repository model applies 40% to every column and should not be treated as official evidence.' 'Optional Standard Deduction selected.'
 Calc '1702mx-schedule2-item13' @('Schedule 2 Item 13 A-D') @('Schedule 2 Item 7','selected Item 11 or Item 12') 'Itemized paths subtract Item 11 by applicable column; OSD path computes only 13C = 7C - 12C and 13D copies C.' 'computePg2Sc2It11 / computePg2Sch2Items / computePg2Sc2It12' @('1702mx-schedule2-item11-itemized','1702mx-schedule2-item12-osd') @('official-hta-runtime#computePg2Sc2It11:L14908-L14968','official-hta-runtime#computePg2Sc2It12:L14969-L14982') 'verified-correct' 'Represent applicability by regime and deduction method.'
-Calc '1702mx-schedule2-item15-special' @('Schedule 2 Item 15B') @('Schedule 2 Item 1B','Item 3B','Item 7B','Item 14B rate') 'If rounded Item 3B >= rounded Item 7B, Item 15B = Item 1B × rate; otherwise Item 15B = Item 7B × rate.' 'computePg2Sc2It15' @('1702mx-schedule2-item3','1702mx-schedule2-item7') @('official-hta-runtime#computePg2Sc2It15:L14984-L15018') 'ambiguous' 'Preserve the exact comparison/base selection and flag it for domain review; comments show earlier alternative bases.' 
+Calc '1702mx-schedule2-item15-special' @('Schedule 2 Item 15B') @('Schedule 2 Item 1B','Item 3B','Item 7B','Item 14B rate') 'If rounded Item 3B >= rounded Item 7B, Item 15B = Item 1B × rate; otherwise Item 15B = Item 7B × rate.' 'computePg2Sc2It15' @('1702mx-schedule2-item3','1702mx-schedule2-item7') @('official-hta-runtime#computePg2Sc2It15:L14984-L15018') 'ambiguous' 'Preserve the exact comparison/base selection and flag it for domain review; comments show earlier alternative bases.'
 Calc '1702mx-schedule2-item15-regular' @('Schedule 2 Item 15C') @('Schedule 2 Item 13C','Item 14C rate') 'The direct product helper exists in computePg2Sc2It14C; another former product line in computePg2Sc2It15C is commented, and that function only copies Item 15C to Item 17C.' 'computePg2Sc2It14C / computePg2Sc2It15C' @('1702mx-schedule2-item13') @('official-hta-runtime#computePg2Sc2It14C:L15019-L15021','official-hta-runtime#computePg2Sc2It15C:L15022-L15027') 'official-bug-compatible' 'Bind calculations to the active event wiring and do not infer execution from a commented line.'
 Calc '1702mx-schedule2-item17' @('Schedule 2 Item 17B-C') @('Schedule 2 Items 15B/C','Item 16B') '17B = 15B - 16B and is copied to 19B; 17C copies 15C.' 'computePg2Sc2It17B / computePg2Sc2It15C' @('1702mx-schedule2-item15-special','1702mx-schedule2-item15-regular') @('official-hta-runtime#computePg2Sc2It17B:L15029-L15033','official-hta-runtime#computePg2Sc2It15C:L15022-L15027')
 Calc '1702mx-schedule2-item18-mcit' @('Schedule 2 Item 18C-D') @('Schedule 2 Item 7C') 'The source line that would compute 2% of Item 7C is commented. computePg2Sc2It18C only triggers Item 19C; Item 18C remains an enabled/input value when IC055 applies.' 'computePg2Sc2It18C' @('1702mx-schedule2-item7') @('official-hta-runtime#computePg2Sc2It18C:L15035-L15039','official-hta-runtime#enableMCITFields:L10921-L10988','repository-model#recompute_schedule_2:L616-L621') 'incorrect-official-behavior' 'Do not silently synthesize 2% as official runtime behavior. The current repository model does so and requires separate legal/product review.'

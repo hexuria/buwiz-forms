@@ -11,7 +11,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 589,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\001-s1.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\001-s1.png",
         "ok": true
       }
     },
@@ -21,7 +21,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 1974,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\002-s2.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\002-s2.png",
         "ok": true
       }
     },
@@ -43,7 +43,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 557,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\005-s5.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\005-s5.png",
         "ok": true
       }
     },
@@ -53,7 +53,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 2130,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\006-s6.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\006-s6.png",
         "ok": true
       }
     },
@@ -62,7 +62,7 @@
       "ok": true,
       "elapsed_ms": 237,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\007-s7.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\007-s7.png",
         "ok": true
       }
     },
@@ -79,34 +79,34 @@
       "error_code": "timeout",
       "elapsed_ms": 20189,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\009-s9.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\009-s9.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\001-s1.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\001-s1.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\002-s2.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\002-s2.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\005-s5.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\005-s5.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\006-s6.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\006-s6.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\007-s7.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\007-s7.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\009-s9.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\009-s9.png",
       "ok": true
     }
   ],

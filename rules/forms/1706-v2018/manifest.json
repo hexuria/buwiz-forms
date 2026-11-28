@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1706.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1706.hta",
                                 "sha256":  "f29a02e0a80fb4a72cc90046e2773d05ac631df2ec06845f4c885eabcabafca1",
                                 "size":  263298,
                                 "revision_binding":  "APPLICATIONNAME 1706; installed runtime used with January 2018 official PDF."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "official-help",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1706.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1706.hta",
                                 "sha256":  "ddeba297664de08d8862616d1161ad38eea563a62f8f088bb125e9054d472bbe",
                                 "size":  16978,
                                 "revision_binding":  "Content is Form 1706 guidance; HTA metadata is incorrectly labelled APPLICATIONNAME 0605."

@@ -71,7 +71,7 @@
       "ok": true,
       "elapsed_ms": 63,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/012-s12.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/012-s12.png",
         "ok": true
       }
     },
@@ -92,7 +92,7 @@
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/012-s12.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/012-s12.png",
       "ok": true
     }
   ],

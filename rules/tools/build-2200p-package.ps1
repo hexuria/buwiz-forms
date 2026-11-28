@@ -1,6 +1,6 @@
 param(
  [string]$RepoRoot=(Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
- [string]$ExtractedRoot='C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+ [string]$ExtractedRoot="$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
  [string]$OfficialDir='C:\Mac\Home\Downloads\forms\2200Pv2020',
  [string]$SampleDir='C:\Mac\Home\Downloads\forms\2200P'
 )
@@ -10,8 +10,20 @@ $helpPath=Join-Path $ExtractedRoot 'helpfile\Help2200Pv2020.hta';$legacyHelpPath
 $pdfPath=Join-Path $OfficialDir '2200-P Jan 2020 ENCS final version2correct.pdf';$packagePath='C:\eBIRForms\BIRForms.exe'
 $outDir=Join-Path $RepoRoot 'rules\forms\2200p-v2020';$fixtureDir=Join-Path $outDir 'fixtures'
 $expected=@{hta='fbfa4f1224b99aa2effcad00f4aa3deaf960b4cc4f0d3899bfdbc63a2a02f8ec';legacy='2a41a474b4e81c85d597f304f5c373b49f279a2116698c347032ec2e8f1d830a';help='ed7f2828ad56127b7ae3c151c964526c39acd80df5d577655ffd4aa46fcf6a86';legacy_help='28895081de6548343554c52f53aa34e88dee0d23e4b32559b2b6c6f2085de0f4';pdf='7bf29a28a93f45ae7af9ba344d4755540abd324137831d594bc623b4a0c06d2c';package='de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca';cipher='486067fae7d376db0a2a7ed00622a9204abc3de918fffe771b204d87332eb8c6';plain='0fd9030c1e4cf01bef8f7a83efdfab95f4ff744e305c87bc9f10bf41eb0055ca';inventory='9ae25b522dc21061031a5f069841fa63d2424051aa3dc9b0b36d67ef8ff5dbd1'}
-function WJ($p,$v){[IO.File]::WriteAllText($p,(($v|ConvertTo-Json -Depth 60)+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))}
-function WT($p,$v){[IO.File]::WriteAllText($p,$v,[Text.UTF8Encoding]::new($false))}
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
+function WJ([string]$p,$v){
+    $Json = $v | ConvertTo-Json -Depth 60
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($p, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+}
+function WT($p,$v){$v = ConvertTo-SafeEvidenceText $v;[IO.File]::WriteAllText($p,$v,[Text.UTF8Encoding]::new($false))}
 function HL([string[]]$l){$s=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($s.ComputeHash([Text.Encoding]::UTF8.GetBytes(($l-join"`n"))))).Replace('-','').ToLowerInvariant()}finally{$s.Dispose()}}
 function Attr($t,$n){$m=[regex]::Match($t,('(?i)\b{0}\s*=\s*([''"])(.*?)\1'-f[regex]::Escape($n)));if($m.Success){$m.Groups[2].Value}else{$null}}
 function Asset($id,$kind,$path,$binding,$display=''){$i=Get-Item -LiteralPath $path;[pscustomobject][ordered]@{asset_id=$id;kind=$kind;path=if($display){$display}else{$path};sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant();size=$i.Length;revision_binding=$binding}}

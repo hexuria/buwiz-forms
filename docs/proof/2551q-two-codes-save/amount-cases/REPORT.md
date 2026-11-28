@@ -1,6 +1,6 @@
 # 2551Q Schedule 1 invalid-amount probe — real Linux app at a8aeaca8
 
-Environment: unmodified `/home/ubuntu/urgent2551/a8aeaca8`, real GTK window resized by `wmctrl` to 448x844 (the same phone-size limit the WM allowed before), fresh scratch database, manually created demo taxpayer Juana Santos. Wrapper supplied `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1`; the container command also had `RUSTUP_HOME=/home/ubuntu/.rustup CARGO_PROFILE_DEV_DEBUG=0 GSK_RENDERER=cairo`. Queue was never pressed and `BIR_SFTP_LIVE` was never set.
+Environment: unmodified `$HOME/urgent2551/a8aeaca8`, real GTK window resized by `wmctrl` to 448x844 (the same phone-size limit the WM allowed before), fresh scratch database, manually created demo taxpayer Juana Santos. Wrapper supplied `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1`; the container command also had `RUSTUP_HOME=$HOME/.rustup CARGO_PROFILE_DEV_DEBUG=0 GSK_RENDERER=cairo`. Queue was never pressed and `BIR_SFTP_LIVE` was never set.
 
 ## Result
 

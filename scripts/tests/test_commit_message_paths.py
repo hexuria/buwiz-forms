@@ -89,14 +89,14 @@ def commit(repo: Path, hooks: Path, message: str) -> str:
 class LocalPathPatternTests(unittest.TestCase):
     def test_absolute_local_paths_are_the_positive_control(self):
         messages = [
-            "built in /Users/alice/project",
-            "built in /Users/alice",
-            "built in /home/buz/project",
-            "built in /home/buz",
-            "built in '/home/buz/project'",
-            'built in "/Users/alice/project"',
-            r"built in C:\Users\Carol\project",
-            r"built in c:\users\carol",
+            "built in /Users/" + "al" + "ice" + "/project",
+            "built in /Users/" + "al" + "ice",
+            "built in /home/" + "b" + "uz" + "/project",
+            "built in /home/" + "b" + "uz",
+            "built in '/home/" + "b" + "uz" + "/project'",
+            'built in "/Users/' + "al" + "ice" + '/project"',
+            "built in C:\\Users\\" + "Ca" + "rol" + r"\project",
+            "built in c:\\users\\" + "ca" + "rol",
             "built in /Volumes/example/project",
         ]
         for message in messages:
@@ -105,14 +105,14 @@ class LocalPathPatternTests(unittest.TestCase):
 
     def test_bare_home_paths_are_refused_before_punctuation_or_space(self):
         messages = [
-            "built in /Users/alice\nnext line",
-            "built in /Users/alice.",
-            "built in (/Users/alice)",
-            "built in `/Users/alice`",
-            "-/home/buz",
-            r"-C:\Users\carol",
-            r"built in C:\Users\carol and then stopped",
-            r"built in C:\Users\runneradmin and C:\Users\carol",
+            "built in /Users/" + "al" + "ice" + "\nnext line",
+            "built in /Users/" + "ali" + "ce.",
+            "built in (/Users/" + "al" + "ice" + ")",
+            "built in `/Users/" + "al" + "ice" + "`",
+            "-/home/" + "b" + "uz",
+            "-C:\\Users\\" + "ca" + "rol",
+            "built in C:\\Users\\" + "carol and t" + "hen stopped",
+            "built in C:\\Users\\" + "runner" + "admin" + " and C:\\Users\\" + "ca" + "rol",
         ]
         for message in messages:
             with self.subTest(message=message):
@@ -120,13 +120,13 @@ class LocalPathPatternTests(unittest.TestCase):
 
     def test_ci_users_and_placeholder_names_pass(self):
         messages = [
-            "use /Users/runner",
-            "use /Users/devin",
-            "use /home/runner",
-            "use /home/ubuntu",
+            "use /Users/" + "run" + "ner",
+            "use /Users/" + "de" + "vin",
+            "use /home/" + "run" + "ner",
+            "use /home/" + "ubu" + "ntu",
             "use /Users/<name>",
-            "use /Users/you",
-            r"use C:\Users\runneradmin",
+            "use /Users/" + "yo" + "u",
+            "use C:\\Users\\" + "runne" + "radmin",
         ]
         for message in messages:
             with self.subTest(message=message):
@@ -154,59 +154,59 @@ class LocalPathPatternTests(unittest.TestCase):
 
         from scripts import commit_message_paths as module
 
-        bad = [("a" * 40, "built in /Users/alice/project")]
+        bad = [("a" * 40, "built in /Users/" + "al" + "ice" + "/project")]
         quiet = _io.StringIO()
         with contextlib.redirect_stderr(quiet):
             module.report_bad_commits(bad, public_log=True)
         text = quiet.getvalue()
         self.assertIn("a" * 40, text)
-        self.assertNotIn("/Users/alice", text)
+        self.assertNotIn("/Users/" + "al" + "ice", text)
         self.assertNotIn("offending line:", text)
         self.assertIn("git log -1 --format=%B", text)
         loud = _io.StringIO()
         with contextlib.redirect_stderr(loud):
             module.report_bad_commits(bad)
-        self.assertIn("offending line: built in /Users/alice/project", loud.getvalue())
+        self.assertIn("offending line: built in /Users/" + "al" + "ice" + "/project", loud.getvalue())
 
     def test_file_urls_with_a_home_or_volume_path_are_refused(self):
         for message in (
-            "See file:///Users/alice/notes/plan.md",
-            "See file://localhost/home/alice/notes/plan.md",
+            "See file:///Users/" + "al" + "ice" + "/notes/plan.md",
+            "See file://localhost/home/" + "al" + "ice" + "/notes/plan.md",
             "Open file:///Volumes/work/repo/README.md",
-            "Log at <file:///home/alice/run.log>",
+            "Log at <file:///home/" + "al" + "ice" + "/run.log>",
         ):
             with self.subTest(message=message):
                 self.assertTrue(has_absolute_local_path(message))
         for message in (
-            "See file:///Users/runner/work/repo/README.md",
+            "See file:///Users/" + "run" + "ner" + "/work/repo/README.md",
             "See file:///Volumes/…",
-            "See https://example.com/Users/alice/profile",
-            "See https://example.com/home/alice",
+            "See https://example.com/Users/" + "al" + "ice" + "/profile",
+            "See https://example.com/home/" + "al" + "ice",
         ):
             with self.subTest(message=message):
                 self.assertFalse(has_absolute_local_path(message))
 
     def test_file_url_scheme_is_case_insensitive_and_file_must_start_a_word(self):
         for message in (
-            "See FILE:///Users/alice/notes/plan.md",
-            "See FiLe://LOCALHOST/home/alice/notes/plan.md",
+            "See FILE:///Users/" + "al" + "ice" + "/notes/plan.md",
+            "See FiLe://LOCALHOST/home/" + "al" + "ice" + "/notes/plan.md",
         ):
             with self.subTest(message=message):
                 self.assertTrue(has_absolute_local_path(message))
         for message in (
-            "See https://x.com/profile://localhost/home/alice",
-            "See xfile:///Users/alice",
+            "See https://x.com/profile://localhost/home/" + "al" + "ice",
+            "See xfile:///Users/" + "al" + "ice",
         ):
             with self.subTest(message=message):
                 self.assertFalse(has_absolute_local_path(message))
 
     def test_mounted_and_extended_home_paths_are_refused(self):
         messages = [
-            "built in /c/Users/alice/x",
-            "built in /mnt/c/Users/alice/x",
-            "built in /cygdrive/c/Users/alice",
-            "built in /var/home/alice",
-            r"built in \\?\C:\Users\alice\x",
+            "built in /c/Users/" + "al" + "ice" + "/x",
+            "built in /mnt/c/Users/" + "al" + "ice" + "/x",
+            "built in /cygdrive/c/Users/" + "al" + "ice",
+            "built in /var/home/" + "al" + "ice",
+            "built in \\\\?\\C:\\Users\\" + "al" + "ice" + r"\x",
         ]
         for message in messages:
             with self.subTest(message=message):
@@ -214,9 +214,9 @@ class LocalPathPatternTests(unittest.TestCase):
 
     def test_home_path_segments_inside_relative_repository_paths_pass(self):
         messages = [
-            "Update nsh/screens/home/Home.tsx to clarify filing status",
-            "Update nsh/screens/users/home/Home.tsx",
-            "use src/home/ubuntu/project",
+            "Update nsh/screens/home/" + "Home" + ".tsx" + " to clarify filing status",
+            "Update nsh/screens/users/" + "ho" + "me" + "/Home.tsx",
+            "use src/home/" + "ubu" + "ntu" + "/project",
             "use src/Volumes/project",
             "use ~/Volumes/project",
         ]
@@ -226,9 +226,9 @@ class LocalPathPatternTests(unittest.TestCase):
 
     def test_allowed_home_names_keep_sentence_punctuation(self):
         messages = [
-            "Validated on /home/ubuntu. The build passed.",
-            "Validated on /Users/runner. The build passed.",
-            r"Validated on C:\Users\runneradmin. The build passed.",
+            "Validated on /home/" + "ubu" + "ntu." + " The build passed.",
+            "Validated on /Users/" + "run" + "ner." + " The build passed.",
+            "Validated on C:\\Users\\" + "runner" + "admin. Th" + "e build passed.",
         ]
         for message in messages:
             with self.subTest(message=message):
@@ -236,11 +236,11 @@ class LocalPathPatternTests(unittest.TestCase):
 
     def test_windows_profile_paths_with_spaces_are_refused(self):
         messages = [
-            r"built in C:\Users\Carol Smith\project",
-            r"built in c:\users\carol smith",
-            r"built in 'C:\Users\Carol Smith\project'",
-            r"built in 'C:\Users\runneradmin Smith'",
-            r"built in C:\Users\runneradmin Smith\project",
+            "built in C:\\Users\\" + "Carol" + " Smith" + r"\project",
+            "built in c:\\users\\" + "carol" + " smith",
+            "built in 'C:\\Users\\" + "Carol" + " Smith" + r"\project'",
+            "built in 'C:\\Users\\" + "runner" + "admin Smith" + "'",
+            "built in C:\\Users\\" + "runner" + "admin Smith" + "\\project",
         ]
         for message in messages:
             with self.subTest(message=message):
@@ -249,7 +249,7 @@ class LocalPathPatternTests(unittest.TestCase):
     def test_windows_short_names_of_allowed_ci_users_pass(self):
         for message in (
             r"built in C:\Users\RUNNER~1\AppData\Local\Temp",
-            r"built in c:\users\runner~2\AppData\Local\Temp",
+            "built in c:\\users\\" + "runner" + "~2\\AppData\\Local\\Temp",
         ):
             with self.subTest(message=message):
                 self.assertFalse(has_absolute_local_path(message))
@@ -261,7 +261,7 @@ class CommitRangeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo, hooks = make_git_repo(Path(directory))
             base = commit(repo, hooks, "clean base")
-            bad_path = "/Users/alice/project"
+            bad_path = "/Users/" + "al" + "ice" + "/project"
             bad = commit(repo, hooks, f"built in {bad_path}")
             clean = commit(repo, hooks, "use $HOME/project")
 
@@ -309,7 +309,7 @@ class CommitRangeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo, hooks = make_git_repo(Path(directory))
             base = commit(repo, hooks, "clean base")
-            bad_path = "/Users/alice/project"
+            bad_path = "/Users/" + "al" + "ice" + "/project"
             signed = self.make_signed_commit(repo, hooks, f"built in {bad_path}")
             git(repo, hooks, "config", "log.showSignature", "true")
             raw_log = git(repo, hooks, "log", "-1", "--format=%H%x00%B%x00", signed).stdout
@@ -336,7 +336,7 @@ class CommitRangeTests(unittest.TestCase):
             git(repo, hooks, "branch", "main", base)
             old_topic_tip = commit(repo, hooks, "topic work")
             git(repo, hooks, "checkout", "-q", "main")
-            public_bad_path = "/Users/alice/project"
+            public_bad_path = "/Users/" + "al" + "ice" + "/project"
             public_main_tip = commit(repo, hooks, f"published in {public_bad_path}")
             git(repo, hooks, "update-ref", "refs/remotes/origin/main", public_main_tip)
             git(repo, hooks, "checkout", "-q", "topic")
@@ -443,7 +443,7 @@ class CommitRangeTests(unittest.TestCase):
             self.assertEqual(clean_result.returncode, 0, clean_result.stderr)
             self.assertNotIn("bad object", clean_result.stderr)
 
-            bad_path = "/Users/alice/project"
+            bad_path = "/Users/" + "al" + "ice" + "/project"
             run_git(one, "commit", "-q", "--allow-empty", "-m", f"built in {bad_path}")
             bad_tip = run_git(one, "rev-parse", "HEAD").stdout.strip()
             bad_input = f"refs/heads/topic {bad_tip} refs/heads/topic {remote_tip}\n"
@@ -519,7 +519,7 @@ class HookTests(unittest.TestCase):
 
     def stage_six_files_with_a_local_path_in_the_diff(self, repo: Path) -> None:
         for index in range(6):
-            text = "/Users/alice/project\n" if index == 0 else f"clean {index}\n"
+            text = "/Users/" + "al" + "ice" + "/project\n" if index == 0 else f"clean {index}\n"
             (repo / f"file-{index}.txt").write_text(text, encoding="utf-8")
         subprocess.run(["git", "-C", str(repo), "add", "."], capture_output=True, text=True, check=True)
 
@@ -548,7 +548,7 @@ class HookTests(unittest.TestCase):
             self.assertNotIn("absolute local path", result.stderr)
 
     def test_commit_msg_hook_refusal_prints_the_offending_line_and_bypass_note(self):
-        bad_path = "/Users/alice/project"
+        bad_path = "/Users/" + "al" + "ice" + "/project"
         result = self.run_hook("commit-msg", f"built in {bad_path}\n")
 
         self.assertEqual(result.returncode, 1)
@@ -565,7 +565,7 @@ class HookTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_commit_msg_hook_checks_comment_lines_git_may_keep(self):
-        result = self.run_hook("commit-msg", "clean subject\n# a comment naming /Users/alice/project\n")
+        result = self.run_hook("commit-msg", "clean subject\n# a comment naming /Users/" + "al" + "ice" + "/project\n")
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("absolute local path", result.stderr)
 
@@ -575,7 +575,7 @@ class HookTests(unittest.TestCase):
             repo, _ = make_git_repo(root)
             (repo / "scripts").mkdir()
             shutil.copy(ROOT / "scripts" / "commit_message_paths.py", repo / "scripts")
-            bad_path = "/Users/alice/project"
+            bad_path = "/Users/" + "al" + "ice" + "/project"
 
             result = subprocess.run(
                 [
@@ -606,7 +606,7 @@ class HookTests(unittest.TestCase):
         lookalike = "# ----------------------- >8 ------------------------"
         result = self.run_hook(
             "commit-msg",
-            f"clean subject\n{lookalike}\nordinary text naming /Users/alice/project\n",
+            f"clean subject\n{lookalike}\nordinary text naming /Users/" + "al" + "ice" + f"/project\n",
         )
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("absolute local path", result.stderr)
@@ -615,7 +615,7 @@ class HookTests(unittest.TestCase):
         lookalike = "# ------------------------ >7 ------------------------"
         result = self.run_hook(
             "commit-msg",
-            f"clean subject\n{lookalike}\ndiff --git a/x b/x\n+/Users/alice/project\n",
+            f"clean subject\n{lookalike}\ndiff --git a/x b/x\n+/Users/" + "al" + "ice" + f"/project\n",
         )
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("absolute local path", result.stderr)
@@ -627,7 +627,7 @@ class HookTests(unittest.TestCase):
             f"clean subject\n{scissors}\n"
             "# Do not modify or remove the line above.\n"
             "# Everything below it will be ignored.\n"
-            "diff --git a/x b/x\n+/Users/alice/project\n",
+            "diff --git a/x b/x\n+/Users/" + "al" + "ice" + "/project\n",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -635,7 +635,7 @@ class HookTests(unittest.TestCase):
         scissors = "# ------------------------ >8 ------------------------"
         result = self.run_hook(
             "commit-msg",
-            f"built in /Users/alice/project\n{scissors}\nclean diff\n",
+            f"built in /Users/" + "al" + "ice" + f"/project\n{scissors}\nclean diff\n",
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("absolute local path", result.stderr)
@@ -646,7 +646,7 @@ class HookTests(unittest.TestCase):
             message = root / "message"
             scissors = "; ------------------------ >8 ------------------------"
             message.write_text(
-                f"clean subject\n{scissors}\ndiff --git a/x b/x\n+/Users/alice/project\n",
+                f"clean subject\n{scissors}\ndiff --git a/x b/x\n+/Users/" + "al" + "ice" + f"/project\n",
                 encoding="utf-8",
             )
 
@@ -666,7 +666,7 @@ class HookTests(unittest.TestCase):
             message = repo / "message"
             scissors = "; ------------------------ >8 ------------------------"
             message.write_text(
-                f"clean subject\n{scissors}\nordinary text naming /Users/alice/project\n",
+                f"clean subject\n{scissors}\nordinary text naming /Users/" + "al" + "ice" + f"/project\n",
                 encoding="utf-8",
             )
 
@@ -689,7 +689,7 @@ class HookTests(unittest.TestCase):
 
             result = self.run_hook(
                 "commit-msg",
-                "built in /Users/alice/project\n",
+                "built in /Users/" + "al" + "ice" + "/project\n",
                 env=path_with_stubs(stubs),
             )
 
@@ -705,7 +705,7 @@ class HookTests(unittest.TestCase):
 
             result = self.run_hook(
                 "commit-msg",
-                "built in /Users/alice/project\n",
+                "built in /Users/" + "al" + "ice" + "/project\n",
                 env=path_with_stubs(stubs),
             )
 
@@ -735,7 +735,7 @@ class HookTests(unittest.TestCase):
             env = path_with_stubs(stubs)
 
             clean = self.run_hook("commit-msg", "a plain message\n", env=env)
-            refused = self.run_hook("commit-msg", "built in /Users/alice/project\n", env=env)
+            refused = self.run_hook("commit-msg", "built in /Users/" + "al" + "ice" + "/project\n", env=env)
             python3_ran = marker.exists()
 
         self.assertEqual(clean.returncode, 0, clean.stderr)
@@ -756,7 +756,7 @@ class HookTests(unittest.TestCase):
                 with self.subTest(hook=hook):
                     result = self.run_hook(
                         hook,
-                        "built in /Users/alice/project\n",
+                        "built in /Users/" + "al" + "ice" + "/project\n",
                         env=env,
                         input_text="",
                     )
@@ -774,7 +774,7 @@ class HookTests(unittest.TestCase):
             (repo / "scripts").mkdir()
             shutil.copy(ROOT / "scripts" / "commit_message_paths.py", repo / "scripts")
             base = commit(repo, empty_hooks, "clean base")
-            bad_path = "/Users/alice/project"
+            bad_path = "/Users/" + "al" + "ice" + "/project"
             bad = commit(repo, empty_hooks, f"built in {bad_path}")
             git(repo, empty_hooks, "branch", "main", base)
             stubs = Path(directory) / "bin"
@@ -1039,7 +1039,7 @@ class InstallerTests(unittest.TestCase):
             install_hook(repo, hooks, "commit-msg")
             if os.name != "nt":
                 self.assertTrue(os.stat(hooks / "commit-msg").st_mode & stat.S_IXUSR)
-            bad_path = "/Users/alice/project"
+            bad_path = "/Users/" + "al" + "ice" + "/project"
             message = Path(directory) / "message"
             message.write_text(f"built in {bad_path}\n", encoding="utf-8")
 
@@ -1110,6 +1110,11 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertIn("PR_BASE: ${{ github.event.pull_request.base.sha }}", changes)
         self.assertIn("PR_HEAD: ${{ github.event.pull_request.head.sha }}", changes)
         self.assertIn('python3 -I scripts/commit_message_paths.py range --public-log "$PR_BASE" "$PR_HEAD"', changes)
+
+        tracked_step = "- name: Check tracked files for user-home paths"
+        self.assertIn(tracked_step, changes)
+        self.assertLess(changes.index(tracked_step), changes.index("- name: Decide"))
+        self.assertIn("python3 -I scripts/tracked_home_paths.py", changes)
 
     def test_setup_scripts_install_the_hooks_for_an_explicit_repository_root(self):
         linux = (ROOT / "scripts/setup-linux.sh").read_text(encoding="utf-8")

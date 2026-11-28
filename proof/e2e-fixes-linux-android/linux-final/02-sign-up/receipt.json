@@ -68,7 +68,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 1341,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/011-s11.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/011-s11.png",
         "ok": true
       }
     },
@@ -100,7 +100,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 1325,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/016-s16.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/016-s16.png",
         "ok": true
       }
     },
@@ -110,7 +110,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 529,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/017-s17.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/017-s17.png",
         "ok": true
       }
     },
@@ -135,26 +135,26 @@
       "ok": true,
       "elapsed_ms": 42,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/021-s21.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/021-s21.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/011-s11.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/011-s11.png",
       "ok": true
     },
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/016-s16.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/016-s16.png",
       "ok": true
     },
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/017-s17.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/017-s17.png",
       "ok": true
     },
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/021-s21.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/02-sign-up/021-s21.png",
       "ok": true
     }
   ],

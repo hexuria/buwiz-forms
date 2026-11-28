@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Cv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Cv2018.hta",
                                 "sha256":  "d9f47fba52eafa26f03fedb113db4ef1a0074635359d991f1cd7a160383a705c",
                                 "size":  574266,
                                 "revision_binding":  "APPLICATIONNAME 2200Cv2018; printed January 2018."

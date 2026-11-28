@@ -53,7 +53,7 @@ Initialize through:
 Required initialization:
 
 (`%USERPROFILE%` stands for your own user folder. `import()` does not expand it, and on Windows it needs a file URL:
-write the folder out in the line below before running it, for example `file:///C:/Users/you/.codex/…`.)
+write the folder out in the line below before running it, for example `file:///%USERPROFILE%/.codex/…`.)
 
 if (!globalThis.sky) {
   const { setupComputerUseRuntime } = await import("file:///<your user folder>/.codex/plugins/cache/openai-bundled/computer-use/26.715.72028/scripts/computer-use-client.mjs");

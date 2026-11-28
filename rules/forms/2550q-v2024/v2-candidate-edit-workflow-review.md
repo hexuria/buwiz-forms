@@ -3,7 +3,7 @@
 ## Exact source
 
 The official source is
-`C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\forms\BIR-Form2550Qv2024.hta`,
+`%USERPROFILE%\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\forms\BIR-Form2550Qv2024.hta`,
 SHA-256
 `3a5a4d3b2b342a4dfc55a05c69b560fb9be47af6451d8c651d19e1d33406ec70`.
 The Edit button binding is at lines 3265-3267. Its

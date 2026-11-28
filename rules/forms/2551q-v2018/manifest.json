@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2551Qv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2551Qv2018.hta",
                                 "sha256":  "dc5c19710400e9bd15ceccd1bbeafc5290074b17b2d460af5f8921c6a7f93186",
                                 "size":  230243,
                                 "revision_binding":  "APPLICATIONNAME 2551Qv2018 and January 2018 printed header."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "official-installed-help",
                                 "kind":  "runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2551Qv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2551Qv2018.hta",
                                 "sha256":  "8e5010d9b103076aa571612ed31f69b3a61c05d1af786c6256ac76b502f7d470",
                                 "size":  20100,
                                 "revision_binding":  "January 2018 ENCS instructions."
@@ -43,7 +43,7 @@
                             {
                                 "asset_id":  "atc-catalog-runtime",
                                 "kind":  "official-package-xml",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
                                 "sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
                                 "size":  153753,
                                 "revision_binding":  "Catalog loaded by the exact HTA; substring filtering yields 23 entries."

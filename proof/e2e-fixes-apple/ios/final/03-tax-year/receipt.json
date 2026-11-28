@@ -88,14 +88,14 @@
       "ok": true,
       "elapsed_ms": 570,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/03-tax-year/015-s15.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/03-tax-year/015-s15.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261126-233030/03-tax-year/015-s15.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/ios-20261126-233030/03-tax-year/015-s15.png",
       "ok": true
     }
   ],

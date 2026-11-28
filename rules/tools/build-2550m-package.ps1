@@ -1,9 +1,9 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$HtaPath = 'C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\forms\BIR-Form2550M.hta',
-    [string]$HelpPath = 'C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\helpfile\Help2550M.hta',
+    [string]$HtaPath = "$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\forms\BIR-Form2550M.hta",
+    [string]$HelpPath = "$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\helpfile\Help2550M.hta",
     [string]$SavePath = 'C:\eBIRForms\savefile\00000000000000-2550M-072026.xml',
-    [string]$AtcPath = 'C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\xml\atcCodes.xml'
+    [string]$AtcPath = "$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\xml\atcCodes.xml"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,9 +18,18 @@ foreach ($required in @($HtaPath, $HelpPath, $SavePath, $AtcPath)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Required source is missing: $required" }
 }
 
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
 function Write-Json([string]$Path, $Value) {
-    $json = $Value | ConvertTo-Json -Depth 30
-    [IO.File]::WriteAllText($Path, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    $Json = $Value | ConvertTo-Json -Depth 30
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
 }
 
 function Get-Attr([string]$Tag, [string]$Name) {
@@ -406,9 +415,9 @@ $manifest = [ordered]@{
         @{asset_id='xml-editable-v1';kind='dummy-profile-editable-save';path=$SavePath;sha256='ed563de9e6ffbf2226d87c54e09205ccb04221b9b333a307bf52e2a86b9c61c5';size=9477;revision_binding='Dummy 2550M serialization; values excluded from artifacts.'},
         @{asset_id='xml-amended-v1';kind='dummy-profile-editable-save';path='C:\eBIRForms\savefile\00000000000000-2550M-072026V1.xml';sha256='679710010803f73781340e0708367d66ea4f05203528c8f681a7534cd7b4a116';size=9485;revision_binding='Dummy amended/version save with the same 142-key set.'},
         @{asset_id='atc-catalog-runtime';kind='official-package-xml';path=$AtcPath;sha256='16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b';size=153753;revision_binding='Catalog loaded by the exact HTA.'},
-        @{asset_id='official-rmc-36-2021';kind='official-circular-pdf';path='C:\Users\uriah\.codex\visualizations\2026\07\22\019f8b9e-3f1f-72c2-bf81-4294cc208f76\RMC-36-2021.pdf';sha256='644d9f85a0d978154ed0ac7ca70b43457cb34c19fe90568df4715200df4625a6';size=120740;revision_binding='Later legal change: deactivate Item 20B/Schedule 4 from January 2021 and use Item 23C/Schedule 8.'},
-        @{asset_id='official-rmc-5-2023';kind='official-circular-pdf';path='C:\Users\uriah\.codex\visualizations\2026\07\22\019f8b9e-3f1f-72c2-bf81-4294cc208f76\RMC-5-2023.pdf';sha256='0f154fd3ade2c592254353fa84b0959787235ac00946a8dc6cdf778c8f1a5581';size=12323;revision_binding='Later filing change beginning January 2023.'},
-        @{asset_id='official-rmc-52-2023';kind='official-circular-pdf';path='C:\Users\uriah\.codex\visualizations\2026\07\22\019f8b9e-3f1f-72c2-bf81-4294cc208f76\RMC-52-2023.pdf';sha256='7199bc39cdc3a9f0d37d5140b1257c66c2af8f863a8bfd4db46764c5b2a50398';size=5904;revision_binding='Clarifies optional monthly filing has no prescribed deadline.'}
+        @{asset_id='official-rmc-36-2021';kind='official-circular-pdf';path="$env:USERPROFILE\.codex\visualizations\2026\07\22\019f8b9e-3f1f-72c2-bf81-4294cc208f76\RMC-36-2021.pdf";sha256='644d9f85a0d978154ed0ac7ca70b43457cb34c19fe90568df4715200df4625a6';size=120740;revision_binding='Later legal change: deactivate Item 20B/Schedule 4 from January 2021 and use Item 23C/Schedule 8.'},
+        @{asset_id='official-rmc-5-2023';kind='official-circular-pdf';path="$env:USERPROFILE\.codex\visualizations\2026\07\22\019f8b9e-3f1f-72c2-bf81-4294cc208f76\RMC-5-2023.pdf";sha256='0f154fd3ade2c592254353fa84b0959787235ac00946a8dc6cdf778c8f1a5581';size=12323;revision_binding='Later filing change beginning January 2023.'},
+        @{asset_id='official-rmc-52-2023';kind='official-circular-pdf';path="$env:USERPROFILE\.codex\visualizations\2026\07\22\019f8b9e-3f1f-72c2-bf81-4294cc208f76\RMC-52-2023.pdf";sha256='7199bc39cdc3a9f0d37d5140b1257c66c2af8f863a8bfd4db46764c5b2a50398';size=5904;revision_binding='Clarifies optional monthly filing has no prescribed deadline.'}
     )
     counts=@{typed_fields=$fields.Count;validation_rules=$rules.Count;calculations=$calculations.Count;negative_fixtures=$negativeCases.Count;atc_records_for_form=$atcEntries.Count;confirmed_official_bugs=$bugCount;unverified_gaps=2}
     artifacts=@{fields='fields.json';validations='validations.json';calculations='calculations.json';workflow='workflow.json';evidence='evidence.md';audit='audit.md';gaps='gaps.md';runtime_control_fixture='fixtures/runtime-control-inventory-v796.json';atc_catalog_fixture='fixtures/atc-catalog-v796.json';calculation_fixtures='fixtures/calculation-boundaries.json'}
@@ -434,7 +443,7 @@ Authoritative URLs (retrieved 2026-07-23):
 - https://bir-cdn.bir.gov.ph/local/pdf/RMC%20No.%205-2023.pdf
 - https://bir-cdn.bir.gov.ph/local/pdf/RMC%20No.%2052-2023.pdf
 "@
-[IO.File]::WriteAllText((Join-Path $outDir 'evidence.md'),$evidence,[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $outDir 'evidence.md'),(ConvertTo-SafeEvidenceText $evidence),[Text.UTF8Encoding]::new($false))
 
 $gaps = @"
 # Gaps — 2550M February 2007 ENCS
@@ -442,7 +451,7 @@ $gaps = @"
 1. No destructive black-box mutation of the representative save and no online submission was performed. Exact source branches/messages are high confidence; transport-only behavior remains source-derived.
 2. The six add-row schedules are genuinely unbounded. The 42 family descriptors preserve this fact, but a finite exhaustive list of concrete indexed keys is impossible by construction. Printed page coordinates for modal-only controls remain null where the source does not bind them unambiguously.
 "@
-[IO.File]::WriteAllText((Join-Path $outDir 'gaps.md'),$gaps,[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $outDir 'gaps.md'),(ConvertTo-SafeEvidenceText $gaps),[Text.UTF8Encoding]::new($false))
 
 $audit = @"
 # Audit — 2550M February 2007 ENCS
@@ -460,7 +469,7 @@ $audit = @"
 
 Run `rtk powershell -NoProfile -ExecutionPolicy Bypass -File '\\mac\goldcoders\reverse-engineer-ebir-forms\bir-print-parity\rules\validate.ps1' -RequireJsonSchema` after updating the index.
 "@
-[IO.File]::WriteAllText((Join-Path $outDir 'audit.md'),$audit,[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $outDir 'audit.md'),(ConvertTo-SafeEvidenceText $audit),[Text.UTF8Encoding]::new($false))
 
 $readme = @"
 # BIR Form 2550M — February 2007 ENCS
@@ -469,7 +478,7 @@ Revision-specific validation knowledge for the legacy Offline eBIRForms 2550M ru
 
 Research only. No renderer or release metadata is changed, no online submission was performed, and representative values are excluded.
 "@
-[IO.File]::WriteAllText((Join-Path $outDir 'README.md'),$readme,[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $outDir 'README.md'),(ConvertTo-SafeEvidenceText $readme),[Text.UTF8Encoding]::new($false))
 
 $handoff = @"
 # Handoff
@@ -482,7 +491,7 @@ $handoff = @"
 - ATC records: $($atcEntries.Count)
 - Next priority: 1701-MS
 "@
-[IO.File]::WriteAllText((Join-Path $outDir 'HANDOFF.md'),$handoff,[Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $outDir 'HANDOFF.md'),(ConvertTo-SafeEvidenceText $handoff),[Text.UTF8Encoding]::new($false))
 
 $indexPath = Join-Path $RepoRoot 'rules\index.json'
 $index = Get-Content -LiteralPath $indexPath -Raw | ConvertFrom-Json

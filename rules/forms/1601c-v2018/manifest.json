@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1601Cv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1601Cv2018.hta",
                                 "sha256":  "3fb7b4185264e47c9d77b0def4301fa696e7b4424ad30b4e973c7c0b1f759879",
                                 "size":  275902,
                                 "revision_binding":  "January 2018 ENCS runtime; selected instead of the co-installed legacy 1601C runtime."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "packaged-help",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1601Cv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1601Cv2018.hta",
                                 "sha256":  "2395005a36fe8220e0d1fd5d6efa659456d0c4bc1e33a65ca5c67898ececf532",
                                 "size":  21985,
                                 "revision_binding":  "Packaged January 2018 instructions; content is revision-bound despite defective APPLICATIONNAME 0605."

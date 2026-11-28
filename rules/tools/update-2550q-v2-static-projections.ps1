@@ -14,12 +14,15 @@ function Read-Json([string]$Path) {
     Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
 }
 
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    # Evidence JSON must be machine-independent even when the input evidence was
+    # read from the extracting account's home folder.
+    [regex]::Replace($Json, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+}
 function Write-Json([string]$Path, $Value) {
-    [IO.File]::WriteAllText(
-        $Path,
-        (($Value | ConvertTo-Json -Depth 100) + [Environment]::NewLine),
-        [Text.UTF8Encoding]::new($false)
-    )
+    $Json = $Value | ConvertTo-Json -Depth 100
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
 }
 
 $ruleSet = Read-Json $ruleSetPath

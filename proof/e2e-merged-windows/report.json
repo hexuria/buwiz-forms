@@ -2,7 +2,7 @@
  "suite": "smoke",
  "target": "windows",
  "started": "20261127-105813",
- "out": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813",
+ "out": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813",
  "cli_version": "0.4.1",
  "app_commit": "7d3b77fe",
  "platform": "desktop",
@@ -99,8 +99,8 @@
    "error_code": "timeout",
    "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
    "known_gap": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
-   "screenshot": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\failure.png",
-   "tree": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\failure-tree.json"
+   "screenshot": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\failure.png",
+   "tree": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\failure-tree.json"
   }
  ]
 }

@@ -3,7 +3,7 @@ import { expect, test } from "nsh/test";
 import { bir } from "../bir";
 import { createDemoTaxpayer, DEMO, useDatabase } from "../bir/testing";
 
-useDatabase("/home/ubuntu/urgent2551/decimal/manual-proof/decimal-proof.db");
+useDatabase("$HOME/urgent2551/decimal/manual-proof/decimal-proof.db");
 createDemoTaxpayer();
 
 test("seed a demo taxpayer and a saved 2551Q draft", async () => {

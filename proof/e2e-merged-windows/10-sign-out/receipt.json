@@ -29,14 +29,14 @@
       "error_code": "timeout",
       "elapsed_ms": 10237,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\004-s4.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\004-s4.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\004-s4.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\10-sign-out\\004-s4.png",
       "ok": true
     }
   ],

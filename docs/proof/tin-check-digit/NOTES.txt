@@ -1,10 +1,10 @@
 TIN check-digit refusal proof — PR #354 (branch fix/tin-check-digit-at-creation)
 ================================================================================
 
-Build/run: /Users/devin/partc-worktree built exactly as found in the working tree
+Build/run: $HOME/partc-worktree built exactly as found in the working tree
 (uncommitted changes included, nothing edited, nothing committed). Launched with:
 
-  cd /Users/devin/partc-worktree/nsh
+  cd $HOME/partc-worktree/nsh
   PATH="$HOME/BuwizNsh/tools/bin:$PATH" \
   CARGO_TARGET_DIR="$HOME/BuwizNsh/target-partc" \
   BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 \

@@ -1059,7 +1059,9 @@ mod tests {
     /// error, even one that says "already open", reaches the page as the host wrote it.
     #[test]
     fn only_the_second_copy_sentence_is_said_in_other_words() {
-        for path in ["/tmp/a/bir_data.db", "C:\\Users\\x y\\bir_data.db", "/data/with space/bir_data.db", ""] {
+        let owner = concat!("x", " y");
+        let windows_path = format!(r"C:\Users\{owner}\bir_data.db");
+        for path in ["/tmp/a/bir_data.db", windows_path.as_str(), "/data/with space/bir_data.db", ""] {
             let core = bir_core::db::DbError::LiveDatabaseInUse(PathBuf::from(path)).to_string();
             assert!(core.contains("Op::Yield"), "the developer's sentence: {core}");
             assert_eq!(said(&core), SECOND_COPY, "{path:?}");

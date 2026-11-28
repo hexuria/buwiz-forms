@@ -11,7 +11,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 846,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/001-s1.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/001-s1.png",
         "ok": true
       }
     },
@@ -26,7 +26,7 @@
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/001-s1.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/001-s1.png",
       "ok": true
     }
   ],

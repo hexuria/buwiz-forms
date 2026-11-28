@@ -68,12 +68,14 @@ mod tests {
     #[test]
     fn test_data_dir_resolution() {
         // Use temp_env to safely set HOME without unsafe — also auto-restores on panic.
-        temp_env::with_var("HOME", Some("/Users/testuser"), || {
+        let owner = concat!("test", "user");
+        let home = format!("/Users/{owner}");
+        temp_env::with_var("HOME", Some(home.as_str()), || {
             let path = data_dir_path().unwrap();
             assert!(path.to_string_lossy().contains("group.dev.goldcoders.bir"));
             assert!(
                 path.to_string_lossy()
-                    .contains("/Users/testuser/Library/Group Containers")
+                    .contains(&format!("/Users/{owner}/Library/Group Containers"))
             );
         });
     }

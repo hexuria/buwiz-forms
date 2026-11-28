@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1602Qv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1602Qv2018.hta",
                                 "sha256":  "898f83932a3e85f39b9efc6ac0c148c3a1a05d00e5feab843e15360d6465cd2e",
                                 "size":  410850,
                                 "revision_binding":  "APPLICATIONNAME 1602Qv2018; printed January 2018."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "official-help-v2018",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1602Q.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1602Q.hta",
                                 "sha256":  "74f6b70ee6051946dfc054b6b17926f7f74f21db9a645350db24881ec09950b8",
                                 "size":  24618,
                                 "revision_binding":  "Revision-matched January 2018 guide and filing deadline."

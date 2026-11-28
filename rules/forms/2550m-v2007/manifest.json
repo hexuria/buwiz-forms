@@ -17,7 +17,7 @@
                             },
                             {
                                 "sha256":  "72f1422dab2f8523d140aa51fe5f54f7d9025acc2cf877b37c8d92b60c7668b5",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2550M.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2550M.hta",
                                 "kind":  "runtime-extracted-hta",
                                 "revision_binding":  "Printed header and application identifiers bind February 2007 ENCS Form 2550M.",
                                 "asset_id":  "official-hta-runtime",
@@ -25,7 +25,7 @@
                             },
                             {
                                 "sha256":  "9c4102f6377023e4dd302538f2d365c868db7a2a8f2d54ae6b4de45350f2fdcc",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2550M.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2550M.hta",
                                 "kind":  "runtime-help",
                                 "revision_binding":  "Installed legacy 2550M help; later circulars are recorded separately.",
                                 "asset_id":  "official-installed-help",
@@ -57,7 +57,7 @@
                             },
                             {
                                 "sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
                                 "kind":  "official-package-xml",
                                 "revision_binding":  "Catalog loaded by the exact HTA.",
                                 "asset_id":  "atc-catalog-runtime",
@@ -65,7 +65,7 @@
                             },
                             {
                                 "sha256":  "644d9f85a0d978154ed0ac7ca70b43457cb34c19fe90568df4715200df4625a6",
-                                "path":  "C:\\Users\\uriah\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-36-2021.pdf",
+                                "path":  "%USERPROFILE%\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-36-2021.pdf",
                                 "kind":  "official-circular-pdf",
                                 "revision_binding":  "Later legal change: deactivate Item 20B/Schedule 4 from January 2021 and use Item 23C/Schedule 8.",
                                 "asset_id":  "official-rmc-36-2021",
@@ -73,7 +73,7 @@
                             },
                             {
                                 "sha256":  "0f154fd3ade2c592254353fa84b0959787235ac00946a8dc6cdf778c8f1a5581",
-                                "path":  "C:\\Users\\uriah\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-5-2023.pdf",
+                                "path":  "%USERPROFILE%\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-5-2023.pdf",
                                 "kind":  "official-circular-pdf",
                                 "revision_binding":  "Later filing change beginning January 2023.",
                                 "asset_id":  "official-rmc-5-2023",
@@ -81,7 +81,7 @@
                             },
                             {
                                 "sha256":  "7199bc39cdc3a9f0d37d5140b1257c66c2af8f863a8bfd4db46764c5b2a50398",
-                                "path":  "C:\\Users\\uriah\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-52-2023.pdf",
+                                "path":  "%USERPROFILE%\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-52-2023.pdf",
                                 "kind":  "official-circular-pdf",
                                 "revision_binding":  "Clarifies optional monthly filing has no prescribed deadline.",
                                 "asset_id":  "official-rmc-52-2023",

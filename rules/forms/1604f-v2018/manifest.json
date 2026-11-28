@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1604F.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1604F.hta",
                                 "sha256":  "e6bf54d0fdffac4a459ceb4ff66f7afdaec10eec15f9b0e53501f66142758741",
                                 "size":  346527,
                                 "revision_binding":  "APPLICATIONNAME 1604F and printed January 2018."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "official-help",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1604F.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1604F.hta",
                                 "sha256":  "9bb5163298d12a41ea26cb9d5159a9b084d51d65200091679bdf841e97a0c3c6",
                                 "size":  16313,
                                 "revision_binding":  "Revision-matched January 2018 instructions."

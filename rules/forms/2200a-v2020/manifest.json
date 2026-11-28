@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Av2020.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Av2020.hta",
                                 "sha256":  "1df302eeb1352eccb88f6aa7a23fdcc185b6fbb4d15435996250f985a0198e2c",
                                 "size":  440229,
                                 "revision_binding":  "January 2020 ENCS runtime."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "legacy-runtime-excluded",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200A.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200A.hta",
                                 "sha256":  "192f730cc713179f5a1d8233cb5133cdd62bd3e5896b54546da14b82fa226a3f",
                                 "size":  714847,
                                 "revision_binding":  "Legacy predecessor, used only to exclude the sample."
@@ -34,7 +34,7 @@
                             {
                                 "asset_id":  "packaged-help",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200Av2020.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200Av2020.hta",
                                 "sha256":  "344b6a6f92d3854ab8b4bceb6aad2b33518d4f1116469a2a2f2572d85573ecde",
                                 "size":  17404,
                                 "revision_binding":  "January 2020 packaged instructions."
@@ -42,7 +42,7 @@
                             {
                                 "asset_id":  "legacy-help-excluded",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200A.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200A.hta",
                                 "sha256":  "7f62c7979beafb26328557b35171dcb9cc5c3c9a272b88b4130130498023c146",
                                 "size":  25578,
                                 "revision_binding":  "Legacy instructions, excluded from current legal facts."

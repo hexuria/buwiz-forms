@@ -125,5 +125,5 @@ interpreter is therefore byte-different while semantically identical. Compare
 with `jq -S -c`, not with `diff`, when judging whether evidence actually changed.
 
 `run-full-audit-background.ps1` was removed. It hardcoded `R:\`,
-`C:\Users\uriah\AppData\Local\Temp` and `powershell.exe`, so it encoded one
+`%USERPROFILE%\AppData\Local\Temp` and `powershell.exe`, so it encoded one
 machine as a default and could not run anywhere else.

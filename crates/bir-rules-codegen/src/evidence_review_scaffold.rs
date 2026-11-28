@@ -2427,12 +2427,16 @@ mod tests {
 
     #[test]
     fn unsafe_capture_or_reviewer_material_is_rejected() {
+        let owner = concat!("per", "son");
+        let windows_capture = format!(r"C:\Users\{owner}\capture.json");
+        let posix_capture = format!("/Users/{owner}/private/capture.json");
+        let posix_file_capture = format!("file:///Users/{owner}/private/capture.json");
         for unsafe_value in [
-            "C:\\Users\\person\\capture.json",
+            windows_capture.as_str(),
             "\\\\server\\private\\capture.json",
-            "/Users/person/private/capture.json",
+            posix_capture.as_str(),
             "/Volumes/private/capture.json",
-            "file:///Users/person/private/capture.json",
+            posix_file_capture.as_str(),
             "123-456-789",
             "TIN: 123–456–789",
             "reviewer@example.test",

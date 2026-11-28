@@ -11,7 +11,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 3224,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/001-s1.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/001-s1.png",
         "ok": true
       }
     },
@@ -22,18 +22,18 @@
       "error_code": "timeout",
       "elapsed_ms": 10254,
       "screenshot": {
-        "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/002-s2.png",
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/002-s2.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/001-s1.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/001-s1.png",
       "ok": true
     },
     {
-      "path": "/home/ubuntu/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/002-s2.png",
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261127-085515/07-queue/002-s2.png",
       "ok": true
     }
   ],

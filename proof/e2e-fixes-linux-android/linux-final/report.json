@@ -2,7 +2,7 @@
  "suite": "smoke",
  "target": "linux",
  "started": "20261127-085515",
- "out": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515",
+ "out": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515",
  "cli_version": "0.4.1",
  "app_commit": "85dd0097",
  "platform": "desktop",
@@ -61,8 +61,8 @@
    "error": "target_gone: fp-frm2551Qv2018:txt16",
    "error_code": "target_gone",
    "line": null,
-   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/failure.png",
-   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/05-money-boxes/failure-tree.json"
   },
   {
    "name": "delete-row",
@@ -83,8 +83,8 @@
    "error": "wait_until timed out: node `queue-continue` not found",
    "error_code": "timeout",
    "line": "wait_until queue-continue --timeout-ms 10000 --screenshot",
-   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/07-queue/failure.png",
-   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/07-queue/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/07-queue/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/07-queue/failure-tree.json"
   },
   {
    "name": "birth-date",
@@ -96,8 +96,8 @@
    "error": "`node 9282` is offscreen",
    "error_code": "host_error",
    "line": "click tp-taxpayer-birth_date-sheet-done",
-   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/failure.png",
-   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/08-birth-date/failure-tree.json"
   },
   {
    "name": "sign-out",
@@ -109,8 +109,8 @@
    "error": "occluded_by: 555",
    "error_code": "host_error",
    "line": "click nb-avatar",
-   "screenshot": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/09-sign-out/failure.png",
-   "tree": "/home/ubuntu/BuwizNsh/evidence/e2e/linux-20261127-085515/09-sign-out/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/09-sign-out/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261127-085515/09-sign-out/failure-tree.json"
   }
  ]
 }

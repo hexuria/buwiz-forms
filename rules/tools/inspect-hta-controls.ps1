@@ -12,7 +12,7 @@ if (-not $HtaPath) {
         throw 'Provide HtaPath or FormCode.'
     }
     $candidates = @(
-        Get-ChildItem -LiteralPath 'C:\Users\uriah\AppData\Local\Temp' `
+        Get-ChildItem -LiteralPath "$env:USERPROFILE\AppData\Local\Temp" `
             -Recurse -File -Filter "BIR-Form$FormCode.hta" -ErrorAction SilentlyContinue
     )
     if ($candidates.Count -ne 1) {

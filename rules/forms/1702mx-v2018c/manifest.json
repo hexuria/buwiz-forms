@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702MXv2018C.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702MXv2018C.hta",
                                 "sha256":  "34dbe79d6bf934718e86c73d8fdea4eb4a4e6a86c939ab0ecf231282d744acf7",
                                 "size":  1369887,
                                 "revision_binding":  "Exact formTyp and final-copy/transport identifiers bind 1702MXv2018C; printed January 2018."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "legacy-help-supporting-only",
                                 "kind":  "official-runtime-help-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1702MX.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1702MX.hta",
                                 "sha256":  "6a67074fe275a2584ada1d4a36a26e693bf3d17e824d5ce249e5edfb11b12f2d",
                                 "size":  50653,
                                 "revision_binding":  "June 2013 help; supporting only, not silently revision-matched."

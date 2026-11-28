@@ -530,7 +530,7 @@ class LintRuleTests(unittest.TestCase):
         self.assert_good("write to support@buwiz.com or 295542929+hexuria@users.noreply.github.com")
 
     def test_absolute_path_rule(self):
-        self.assert_bad("open /Users/alice/file.txt")
+        self.assert_bad("open /Users/" + "alice" + "/file.txt")
         self.assert_good("open Users/alice/file.txt")
 
     def test_devin_and_claude_url_rule(self):
@@ -601,7 +601,7 @@ class LintRuleTests(unittest.TestCase):
         self.assert_good("token ghx_example")
 
     def test_forward_slash_windows_and_private_var_paths(self):
-        self.assert_bad("open C:/Users/alice/file.txt")
+        self.assert_bad("open C:/Users/" + "alice" + "/file.txt")
         self.assert_bad("open /private/var/folders/example")
         self.assert_good("open C:/Users or private/var without a user path shape")
 

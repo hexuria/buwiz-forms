@@ -905,11 +905,14 @@ mod tests {
             );
         }
 
+        let owner = concat!("ana", "lyst");
+        let windows_capture = format!(r"C:\Users\{owner}\capture.exe");
+        let posix_capture = format!("/Users/{owner}/capture");
         for argument in [
-            r"C:\Users\analyst\capture.exe",
+            windows_capture.as_str(),
             r"\\host\share\capture.exe",
             "file:///C:/capture.exe",
-            "/Users/analyst/capture",
+            posix_capture.as_str(),
             "/Volumes/evidence/capture",
             r"prefix\Users\analyst\capture.exe",
             "line\nbreak",

@@ -33,12 +33,18 @@ function Read-Json([string]$Path) {
     Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
 }
 
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
 function Write-Json([string]$Path, $Value) {
-    [IO.File]::WriteAllText(
-        $Path,
-        (($Value | ConvertTo-Json -Depth 80) + [Environment]::NewLine),
-        [Text.UTF8Encoding]::new($false)
-    )
+    $Json = $Value | ConvertTo-Json -Depth 80
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
 }
 
 foreach ($name in $paths.Keys) {

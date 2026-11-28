@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Tv2020.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Tv2020.hta",
                                 "sha256":  "8ac4eaa1aa8fd5cc323e62133c6841bd9e8696bd719d27e08f1eef1d201dfe78",
                                 "size":  401683,
                                 "revision_binding":  "January 2020 Offline runtime; authoritative for this package."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "predecessor-hta-runtime",
                                 "kind":  "runtime-extracted-hta-predecessor",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200T.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200T.hta",
                                 "sha256":  "10da2116020cb8d911b66defa7451b67060a512272601b7c48412be720a23b75",
                                 "size":  662293,
                                 "revision_binding":  "April 2014 predecessor; excluded from January 2020 rule derivation."
@@ -34,7 +34,7 @@
                             {
                                 "asset_id":  "predecessor-help",
                                 "kind":  "official-runtime-help-predecessor",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200T.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200T.hta",
                                 "sha256":  "90cc5e0983b9649bce9b247fe1ed5befade01f20c367ffc4ca09fdb4e822b624",
                                 "size":  20736,
                                 "revision_binding":  "Packaged unversioned predecessor help; deadline context only."

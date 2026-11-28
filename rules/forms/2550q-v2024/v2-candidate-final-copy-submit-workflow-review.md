@@ -7,15 +7,15 @@ locally observable call made before the external online transport boundary.
 No online submission was performed.
 
 The authoritative form source is
-`C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\forms\BIR-Form2550Qv2024.hta`,
+`%USERPROFILE%\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\forms\BIR-Form2550Qv2024.hta`,
 SHA-256
 `3a5a4d3b2b342a4dfc55a05c69b560fb9be47af6451d8c651d19e1d33406ec70`.
 The loaded shared JavaScript is
-`C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\js\string-util.js`,
+`%USERPROFILE%\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\js\string-util.js`,
 SHA-256
 `bc7f86f70bf993389a3a0135dcbd76c3e370c49d2eb95e2fc66ff318a2ebe43c`.
 The loaded VBScript is
-`C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\js\eBIRTools.vbs`,
+`%USERPROFILE%\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\js\eBIRTools.vbs`,
 SHA-256
 `7d0ceb5aad2c0eb90aeca189d6104ff05163ecd1820379f456125634ff7460f7`.
 

@@ -88,14 +88,14 @@
       "ok": true,
       "elapsed_ms": 250,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\03-tax-year\\015-s15.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\03-tax-year\\015-s15.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\03-tax-year\\015-s15.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\03-tax-year\\015-s15.png",
       "ok": true
     }
   ],

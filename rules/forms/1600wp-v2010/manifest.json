@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1600WP.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1600WP.hta",
                                 "sha256":  "e33af59157e1083432cdfc360f648e06602caab75167a27fbb89a08853cb9420",
                                 "size":  201012,
                                 "revision_binding":  "APPLICATIONNAME 1600WP; printed January 2010 ENCS."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "official-help-runtime",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1600WP.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1600WP.hta",
                                 "sha256":  "6f42c395e3892e00af4178031b483dea1e2f92edc53ad611254c3a3c3131884f",
                                 "size":  12955,
                                 "revision_binding":  "Form-specific who-must-file and attachment guidance."

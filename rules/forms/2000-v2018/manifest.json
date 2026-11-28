@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000v2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000v2018.hta",
                                 "sha256":  "43aa6fcdba1ffb40bebb3dc1e8509a87b84799b38937bb6bc57273e9021c4a7b",
                                 "size":  360371,
                                 "revision_binding":  "APPLICATIONNAME 2000v2018; January 2018 ENCS."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "official-help-v2018",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000v2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000v2018.hta",
                                 "sha256":  "254279e70740ab5b3099b684fbb02a4dc7a42723e813f157baa2022ac2e144f8",
                                 "size":  18920,
                                 "revision_binding":  "Revision-matched help."
@@ -51,7 +51,7 @@
                             {
                                 "asset_id":  "legacy-hta-excluded",
                                 "kind":  "runtime-extracted-hta-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000.hta",
                                 "sha256":  "8b80e909f7f70785dbdf002488b2c14b0a4a2fca7b3c783b68cdd5a59f3ca475",
                                 "size":  260113,
                                 "revision_binding":  "Legacy txtMonth1 runtime; excluded."
@@ -59,7 +59,7 @@
                             {
                                 "asset_id":  "legacy-help-excluded",
                                 "kind":  "official-runtime-help-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000.hta",
                                 "sha256":  "36cdb3ff0bfd624b4b5f66f288c29dac512029006697f37d9ba35bd5ce65ef0e",
                                 "size":  18482,
                                 "revision_binding":  "Legacy help; excluded."

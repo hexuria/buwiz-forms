@@ -74,7 +74,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 625,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\012-s12.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\012-s12.png",
         "ok": true
       }
     },
@@ -106,7 +106,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 618,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\017-s17.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\017-s17.png",
         "ok": true
       }
     },
@@ -116,7 +116,7 @@
       "delivery_status": "delivered_unverified",
       "elapsed_ms": 693,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\018-s18.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\018-s18.png",
         "ok": true
       }
     },
@@ -130,26 +130,26 @@
       "ok": true,
       "elapsed_ms": 244,
       "screenshot": {
-        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\020-s20.png",
+        "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\020-s20.png",
         "ok": true
       }
     }
   ],
   "screenshots": [
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\012-s12.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\012-s12.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\017-s17.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\017-s17.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\018-s18.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\018-s18.png",
       "ok": true
     },
     {
-      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\020-s20.png",
+      "path": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\02-sign-up\\020-s20.png",
       "ok": true
     }
   ],

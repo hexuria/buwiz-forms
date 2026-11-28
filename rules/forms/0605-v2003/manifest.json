@@ -18,7 +18,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form0605.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form0605.hta",
                                 "sha256":  "6200b57ef2a3d9d296dc79cbdb9d2f7a605fb92d1dfcdcc4883f08de7c7fa324",
                                 "size":  220336,
                                 "revision_binding":  "September 2003 Offline runtime; authoritative for this package."
@@ -26,7 +26,7 @@
                             {
                                 "asset_id":  "packaged-help",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help0605.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help0605.hta",
                                 "sha256":  "b820994a937a73f3299a352f6b2a69759d4cbc0b18e583221a1bff5013dc40a2",
                                 "size":  11861,
                                 "revision_binding":  "Packaged 0605 help."
@@ -34,7 +34,7 @@
                             {
                                 "asset_id":  "official-atc-catalog",
                                 "kind":  "runtime-lookup-catalog",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
                                 "sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
                                 "size":  153753,
                                 "revision_binding":  "Hash-pinned runtime ATC catalog; 142 entries bind to Form 0605."
@@ -42,7 +42,7 @@
                             {
                                 "asset_id":  "official-tax-type-catalog",
                                 "kind":  "runtime-lookup-catalog",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\taxTypeCodes.xml",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\taxTypeCodes.xml",
                                 "sha256":  "496fd8e64b8854f1012a314b3d8576518fafd081b4e4726f2ea2f05ea6e3a72b",
                                 "size":  3111,
                                 "revision_binding":  "Hash-pinned runtime tax-type catalog; 39 entries bind to Form 0605 physically, but the declared count exposes only 37."

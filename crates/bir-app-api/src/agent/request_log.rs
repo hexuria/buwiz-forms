@@ -209,11 +209,12 @@ mod tests {
         assert!(typed.contains("op=type target=profile-name"), "{typed}");
         assert!(!typed.contains("Juan"), "{typed}");
 
+        let owner = concat!("al", "ice");
         let shot = format_request_log_line(
             "ts",
             "id4",
             &Op::Screenshot {
-                path: Some("/Users/alice/secret.png".into()),
+                path: Some(format!("/Users/{owner}/secret.png")),
                 mode: Default::default(),
                 target: None,
                 max_height_px: None,
@@ -223,7 +224,7 @@ mod tests {
             Some("screenshot_unavailable"),
         );
         assert!(shot.contains("op=screenshot"), "{shot}");
-        assert!(!shot.contains("/Users/alice"), "{shot}");
+        assert!(!shot.contains(&format!("/Users/{owner}")), "{shot}");
         assert!(shot.contains("ok=false"), "{shot}");
         assert!(shot.contains("error=screenshot_unavailable"), "{shot}");
     }

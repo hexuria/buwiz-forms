@@ -1210,7 +1210,7 @@ nsh-test *args="":
 # Refuses a database path inside the owner's live data, the migrated copy or the migration folder (Hard rules 2 and 3).
 # The same checks as the door's guard (nsh/src/guards.rs, which a test compares with this script): the home folder
 # is the account's own from the password database, never $HOME; the path is resolved through symlinks and ".."; and
-# it is refused by name, by device+inode (macOS reaches one folder as /Users/u/x and as /System/Volumes/Data/Users/u/x,
+# it is refused by name, by device+inode (macOS reaches one folder as /Users/<name>/x and as /System/Volumes/Data/Users/<name>/x,
 # and a volume may ignore case: an ancestor that IS a protected folder is refused), and as a hard link to a file
 # directly inside a protected folder.
 [private]

@@ -2,7 +2,7 @@
  "suite": "smoke",
  "target": "ios",
  "started": "20261127-022912",
- "out": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912",
+ "out": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912",
  "cli_version": "0.4.1",
  "app_commit": "7d3b77fe",
  "platform": "mobile",
@@ -71,8 +71,8 @@
    "error_code": "assert_failed",
    "line": null,
    "known_gap": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have",
-   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/06-money-boxes/failure.png",
-   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/06-money-boxes/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/06-money-boxes/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/06-money-boxes/failure-tree.json"
   },
   {
    "name": "queue",
@@ -84,8 +84,8 @@
    "error": "occluded_by: 575",
    "error_code": "host_error",
    "line": "click tp-branch-business_start_date",
-   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/07-queue/failure.png",
-   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/07-queue/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/07-queue/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/07-queue/failure-tree.json"
   },
   {
    "name": "delete-row",
@@ -107,8 +107,8 @@
    "error_code": "host_error",
    "line": null,
    "known_gap": "gap 1: the date is set in a date sheet",
-   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/09-birth-date/failure.png",
-   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/09-birth-date/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/09-birth-date/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/09-birth-date/failure-tree.json"
   },
   {
    "name": "sign-out",
@@ -121,8 +121,8 @@
    "error_code": "host_error",
    "line": "click nb-avatar",
    "known_gap": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
-   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/10-sign-out/failure.png",
-   "tree": "/Users/devin/BuwizNsh/evidence/e2e/ios-20261127-022912/10-sign-out/failure-tree.json"
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/10-sign-out/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/ios-20261127-022912/10-sign-out/failure-tree.json"
   }
  ]
 }

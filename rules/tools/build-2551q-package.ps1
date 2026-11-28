@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$ExtractedRoot = 'C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+    [string]$ExtractedRoot = "$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
     [string]$OfficialDir = 'C:\Mac\Home\Downloads\forms\2551Qv2018'
 )
 
@@ -35,10 +35,20 @@ function Get-InventoryHash([string[]]$Lines){
         ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()
     }finally{$sha.Dispose()}
 }
-function Write-Json([string]$Path,$Value){
-    [IO.File]::WriteAllText($Path,(($Value|ConvertTo-Json -Depth 60)+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
 }
-function Write-Text([string]$Path,[string]$Value){[IO.File]::WriteAllText($Path,$Value,[Text.UTF8Encoding]::new($false))}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
+function Write-Json([string]$Path, $Value) {
+    $Json = $Value | ConvertTo-Json -Depth 60
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($Path, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+}
+function Write-Text([string]$Path,[string]$Value){$Value = ConvertTo-SafeEvidenceText $Value;[IO.File]::WriteAllText($Path,$Value,[Text.UTF8Encoding]::new($false))}
 function New-Asset([string]$Id,[string]$Kind,[string]$Path,[string]$Binding){
     $item=Get-Item -LiteralPath $Path
     [ordered]@{asset_id=$Id;kind=$Kind;path=$Path;sha256=Get-Sha $Path;size=$item.Length;revision_binding=$Binding}

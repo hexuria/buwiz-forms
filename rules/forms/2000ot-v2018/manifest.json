@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000OTv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000OTv2018.hta",
                                 "sha256":  "e44331e99dd8edb8d6fd01529f82e5d6612a9640307c7421b8be397ac87ebe33",
                                 "size":  360791,
                                 "revision_binding":  "APPLICATIONNAME 2000OTv2018; January 2018 ENCS."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "official-help-v2018",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000-OTv2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000-OTv2018.hta",
                                 "sha256":  "e8dfb6463dacd15794db7029fa6032ab772292dd5af02b4b697915df6dcc4011",
                                 "size":  23614,
                                 "revision_binding":  "Revision-matched January 2018 guide and deadline."
@@ -43,7 +43,7 @@
                             {
                                 "asset_id":  "legacy-hta-excluded",
                                 "kind":  "runtime-extracted-hta-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000OT.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000OT.hta",
                                 "sha256":  "cb989655cc9161a7791e95a6a535604d16419bb38cfc69411d64a32b23ab19f6",
                                 "size":  248699,
                                 "revision_binding":  "Legacy split-date form; excluded."
@@ -51,7 +51,7 @@
                             {
                                 "asset_id":  "legacy-help-excluded",
                                 "kind":  "official-runtime-help-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000-OT.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000-OT.hta",
                                 "sha256":  "62ebbd7a285d0f3f9a26732b21d5c9642761c583df1f9af66ef2983b23f52a74",
                                 "size":  18196,
                                 "revision_binding":  "Legacy help; excluded."

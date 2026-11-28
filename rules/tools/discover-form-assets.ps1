@@ -4,7 +4,7 @@ param(
     [string]$FormCode,
 
     [string[]]$Roots = @(
-        'C:\Users\uriah\AppData\Local\Temp',
+        "$env:USERPROFILE\AppData\Local\Temp",
         'C:\eBIRForms\savefile',
         'C:\eBIRForms\IAF_RDO_Copy',
         'C:\Mac\Home\Downloads\forms'
@@ -14,7 +14,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-SafePath([string]$Path) {
-    $parts = $Path -split '[\\/]'
+    $normalized = $Path -replace '/', '\'
+    $normalized = [regex]::Replace($normalized, '(?i)^[A-Za-z]:\\Users\\[^\\]+\\', '%USERPROFILE%\')
+    $parts = $normalized -split '[\\/]'
     (($parts | ForEach-Object {
         if ($_ -match '@') { '#email-redacted#' } else { $_ }
     }) -join '\')

@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot=(Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [string]$ExtractedRoot='C:\Users\uriah\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}',
+    [string]$ExtractedRoot="$env:USERPROFILE\AppData\Local\Temp\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}",
     [string]$PdfDir='C:\Mac\Home\Downloads\forms\2000-DSTv2018',
     [string]$LegacySampleDir='C:\Mac\Home\Downloads\forms\2000'
 )
@@ -17,8 +17,20 @@ pdf='b18ce9d2380d216814f4410c2e132eebb02b93754f7ca0167311f368e100e79f';guide='bb
 legacy_cipher='f52eff04eb3e2e50c9d6fc626cd5344aa243a4a4ea8fb1ae954093165daefe9c';legacy_plain='d0a34a75488d15941d126e856202fb1f5e0d738165c83a0a3baa62e302636573'
 legacy_inventory='da6f3991b7570f3786a40c24ac2d686aa3e79e488a30604285a49ae495048521';package='de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca'
 }
-function WJ([string]$p,$v){[IO.File]::WriteAllText($p,(($v|ConvertTo-Json -Depth 70)+[Environment]::NewLine),[Text.UTF8Encoding]::new($false))}
-function WT([string]$p,[string]$v){[IO.File]::WriteAllText($p,$v,[Text.UTF8Encoding]::new($false))}
+function ConvertTo-SafeEvidenceText([string]$Text) {
+    $Text = [regex]::Replace($Text, '(?i)C:\\\\Users\\\\[^"\\\\]+\\\\', '%USERPROFILE%\\')
+    $Text = [regex]::Replace($Text, '(?i)C:\\Users\\[^"\\]+\\', '%USERPROFILE%\')
+    [regex]::Replace($Text, '(?i)C:/Users/[^"/]+/', '%USERPROFILE%/')
+}
+function ConvertTo-SafeEvidenceJson([string]$Json) {
+    ConvertTo-SafeEvidenceText $Json
+}
+function WJ([string]$p,$v){
+    $Json = $v | ConvertTo-Json -Depth 70
+    $Json = ConvertTo-SafeEvidenceJson $Json
+    [IO.File]::WriteAllText($p, ($Json + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+}
+function WT([string]$p,[string]$v){$v = ConvertTo-SafeEvidenceText $v;[IO.File]::WriteAllText($p,$v,[Text.UTF8Encoding]::new($false))}
 function HL([string[]]$x){$s=[Security.Cryptography.SHA256]::Create();try{([BitConverter]::ToString($s.ComputeHash([Text.Encoding]::UTF8.GetBytes(($x-join"`n"))))).Replace('-','').ToLowerInvariant()}finally{$s.Dispose()}}
 function A([string]$t,[string]$n){$m=[regex]::Match($t,('(?i)\b{0}\s*=\s*([''"])(.*?)\1'-f[regex]::Escape($n)));if($m.Success){$m.Groups[2].Value}else{$null}}
 function Asset([string]$id,[string]$kind,[string]$path,[string]$binding,[string]$display=''){$i=Get-Item -LiteralPath $path;[pscustomobject][ordered]@{asset_id=$id;kind=$kind;path=if($display){$display}else{$path};sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant();size=$i.Length;revision_binding=$binding}}

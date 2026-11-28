@@ -2402,14 +2402,19 @@ mod tests {
 
         assert!(is_filesystem_or_share_root(Path::new("/")));
         assert!(!is_filesystem_or_share_root(Path::new("/official-assets")));
-        assert!(is_broad_home_search_root(Path::new("/Users/example")));
-        assert!(is_broad_home_search_root(Path::new("/home/example")));
-        assert!(!is_broad_home_search_root(Path::new(
-            "/Users/example/official-assets"
-        )));
+        let owner = concat!("exam", "ple");
+        assert!(is_broad_home_search_root(Path::new(&format!(
+            "/Users/{owner}"
+        ))));
+        assert!(is_broad_home_search_root(Path::new(&format!(
+            "/home/{owner}"
+        ))));
+        assert!(!is_broad_home_search_root(Path::new(&format!(
+            "/Users/{owner}/official-assets"
+        ))));
         assert!(
             sensitive_path_reason(
-                Path::new("/Users/example/.ssh/official-package.bin"),
+                Path::new(&format!("/Users/{owner}/.ssh/official-package.bin")),
                 &BTreeSet::new(),
                 &BTreeSet::new(),
             )

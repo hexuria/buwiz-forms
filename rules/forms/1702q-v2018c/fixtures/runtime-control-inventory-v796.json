@@ -3,7 +3,7 @@
     "form_id":  "1702q-v2018c",
     "revision":  "2018-01-01",
     "package_version":  "7.9.6.0",
-    "hta_path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702Qv2018C.hta",
+    "hta_path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702Qv2018C.hta",
     "hta_sha256":  "7184de87a76401da98da3df38dab9e29f848acf6150b425e36574f0a2443ab01",
     "save_path":  "C:\\eBIRForms\\savefile\\00000000000000-1702Qv2018C-2025Q1.xml",
     "save_sha256":  "d97b1e9ba64dab51ab43c56a1e7058a80468730aa0aa8c61ab0e3b7c8c2d71ce",

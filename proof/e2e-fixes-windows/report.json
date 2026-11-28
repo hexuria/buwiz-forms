@@ -2,7 +2,7 @@
  "suite": "smoke",
  "target": "windows",
  "started": "20261127-070842",
- "out": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842",
+ "out": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842",
  "cli_version": "0.4.1",
  "app_commit": "172e09d8",
  "platform": "desktop",
@@ -75,8 +75,8 @@
    "error": "wait_until timed out: node `fp-cancel-queue` not found",
    "error_code": "timeout",
    "line": "wait_until fp-cancel-queue --timeout-ms 20000 --screenshot",
-   "screenshot": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\failure.png",
-   "tree": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\failure-tree.json"
+   "screenshot": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\failure.png",
+   "tree": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\07-queue\\failure-tree.json"
   },
   {
    "name": "delete-row",
@@ -98,8 +98,8 @@
    "error_code": "timeout",
    "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
    "known_gap": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
-   "screenshot": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\09-sign-out\\failure.png",
-   "tree": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\09-sign-out\\failure-tree.json"
+   "screenshot": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\09-sign-out\\failure.png",
+   "tree": "%USERPROFILE%\\BuwizNsh\\evidence\\e2e\\windows-20261127-070842\\09-sign-out\\failure-tree.json"
   }
  ]
 }

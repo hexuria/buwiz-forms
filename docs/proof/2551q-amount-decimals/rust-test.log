@@ -408,7 +408,7 @@ warning: workspace (manifest) generated 1 warning
    Compiling serde_bytes v0.11.19
    Compiling base32 v0.5.1
    Compiling constant_time_eq v0.3.1
-   Compiling bir-core v0.2.1 (/home/ubuntu/urgent2551/decimal/buwiz-forms/crates/bir-core)
+   Compiling bir-core v0.2.1 ($HOME/urgent2551/decimal/buwiz-forms/crates/bir-core)
    Compiling symlink v0.1.0
    Compiling hex-literal v1.1.0
    Compiling maplit v1.0.2
@@ -436,18 +436,18 @@ warning: workspace (manifest) generated 1 warning
    Compiling mail-parser v0.11.8
    Compiling russh-sftp v3.0.0
    Compiling aes-gcm v0.10.3
-   Compiling bir-submit v0.2.1 (/home/ubuntu/urgent2551/decimal/buwiz-forms/crates/bir-submit)
+   Compiling bir-submit v0.2.1 ($HOME/urgent2551/decimal/buwiz-forms/crates/bir-submit)
    Compiling rss v2.1.1
    Compiling open v5.4.3
    Compiling directories v6.0.0
-   Compiling bir-rules v0.2.1 (/home/ubuntu/urgent2551/decimal/buwiz-forms/crates/bir-rules)
+   Compiling bir-rules v0.2.1 ($HOME/urgent2551/decimal/buwiz-forms/crates/bir-rules)
    Compiling png v0.17.16
    Compiling pbkdf2 v0.12.2
    Compiling md-5 v0.10.6
    Compiling html-escape v0.2.15
    Compiling weezl v0.1.12
    Compiling dotenvy v0.15.7
-   Compiling bir-print v0.2.1 (/home/ubuntu/urgent2551/decimal/buwiz-forms/crates/bir-print)
+   Compiling bir-print v0.2.1 ($HOME/urgent2551/decimal/buwiz-forms/crates/bir-print)
    Compiling rangemap v1.8.0
    Compiling dyn-clone v1.0.20
    Compiling schemars v1.2.2
@@ -457,13 +457,13 @@ warning: workspace (manifest) generated 1 warning
    Compiling regex-lite v0.1.9
    Compiling gpui-agent-recipe v0.4.0
    Compiling temp-env v0.3.6
-   Compiling bir-host-shim v0.2.1 (/home/ubuntu/urgent2551/decimal/buwiz-forms/crates/bir-host-shim)
+   Compiling bir-host-shim v0.2.1 ($HOME/urgent2551/decimal/buwiz-forms/crates/bir-host-shim)
    Compiling imap v2.4.1
-   Compiling bir-app-api v0.2.1 (/home/ubuntu/urgent2551/decimal/buwiz-forms/crates/bir-app-api)
+   Compiling bir-app-api v0.2.1 ($HOME/urgent2551/decimal/buwiz-forms/crates/bir-app-api)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 9m 31s
 warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
 note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
-     Running unittests src/lib.rs (/home/ubuntu/.cargo/targets/buwiz-forms-ebe0ad3b/debug/build/bir-app-api/46148c7c1f76b706/out/bir_app_api-80b0d715d3868311)
+     Running unittests src/lib.rs ($HOME/.cargo/targets/buwiz-forms-ebe0ad3b/debug/build/bir-app-api/46148c7c1f76b706/out/bir_app_api-80b0d715d3868311)
 
 running 1 test
 test screen_form_module::tests::form_2551q_entry_check_and_queue_agree_on_amount_limits ... ok

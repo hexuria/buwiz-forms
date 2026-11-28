@@ -19,7 +19,7 @@
                             {
                                 "asset_id":  "official-hta-runtime",
                                 "kind":  "runtime-extracted-hta",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1801v2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1801v2018.hta",
                                 "sha256":  "d19c4ebe40ed109094ef43687ed5486a003bd11a67a251bdd5545a41c2f46d8d",
                                 "size":  228576,
                                 "revision_binding":  "APPLICATIONNAME 1801v2018 and printed January 2018 ENCS."
@@ -27,7 +27,7 @@
                             {
                                 "asset_id":  "official-help-v2018",
                                 "kind":  "official-runtime-help",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1801v2018.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1801v2018.hta",
                                 "sha256":  "21fc91fffadb99b78f9495cca3c25e8ba14e76a4467a181adbd73ef5607c68f5",
                                 "size":  19913,
                                 "revision_binding":  "Revision-matched January 2018 help; six-percent rate, one-year deadline, and documentary requirements."
@@ -51,7 +51,7 @@
                             {
                                 "asset_id":  "legacy-hta-excluded",
                                 "kind":  "runtime-extracted-hta-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1801.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1801.hta",
                                 "sha256":  "c102cf9b62a73dbe491e6e181e33384668d5fd8152e49b4005ee4563f4cb908b",
                                 "size":  313365,
                                 "revision_binding":  "Legacy APPLICATIONNAME 1801; excluded."
@@ -59,7 +59,7 @@
                             {
                                 "asset_id":  "legacy-help-excluded",
                                 "kind":  "official-runtime-help-legacy",
-                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1801.hta",
+                                "path":  "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1801.hta",
                                 "sha256":  "c0f36cb2700668dd1cba093afe02f614bdb561e4bb01932f2d21bca1a0c9fcb9",
                                 "size":  21167,
                                 "revision_binding":  "Legacy help; excluded from revision-specific claims."

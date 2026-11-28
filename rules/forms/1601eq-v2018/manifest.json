@@ -20,7 +20,7 @@
     {
       "asset_id": "official-hta-runtime",
       "kind": "runtime-extracted-hta",
-      "path": "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1601EQ.hta",
+      "path": "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1601EQ.hta",
       "sha256": "cd56bf18d1da2127d578af611fe8005fe49913a65781bb603b22b31bbe548b96",
       "size": 268182,
       "revision_binding": "HTA title, printed header, and help identify BIR Form 1601-EQ January 2018.",
@@ -29,7 +29,7 @@
     {
       "asset_id": "official-help-runtime",
       "kind": "runtime-extracted-help-hta",
-      "path": "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1601EQ.hta",
+      "path": "%USERPROFILE%\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1601EQ.hta",
       "sha256": "9f531a985a89e980c8870fc5fa9d6341799dd1fb7fc900284f28668ac62edf05",
       "size": 17141,
       "revision_binding": "Title states Guidelines and Instructions for BIR Form No. 1601-EQ (January 2018)."
@@ -37,7 +37,7 @@
     {
       "asset_id": "official-pdf-2018",
       "kind": "official-form-pdf",
-      "path": "C:\\Users\\uriah\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\1601-EQ-Jan-2018-Annex-A.pdf",
+      "path": "%USERPROFILE%\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\1601-EQ-Jan-2018-Annex-A.pdf",
       "sha256": "60034ceb199ebfed1b8e63a858c1a05c1331d68f81eaefadc27fa76b301f1c5c",
       "size": 902380,
       "revision_binding": "Official BIR January 2018 form and printed item numbering.",
