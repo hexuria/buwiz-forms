@@ -708,7 +708,9 @@ mod tests {
 
         use gpui_agent::protocol::{Op, Request};
 
+        crate::bir_module::use_ephemeral_database();
         crate::account_gate::set_unlocked(true);
+        crate::account_gate::set_room_unlocked(true);
         let mailbox = AgentMailbox::new();
         let hello = mailbox.push(Request::new("hello", Op::Hello));
         let invoke = mailbox.push(Request::new(
