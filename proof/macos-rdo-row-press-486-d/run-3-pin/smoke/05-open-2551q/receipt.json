@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "open-2551q",
+  "fingerprint": "fnv1a64:76fd54ae5d8fd6da",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 580
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 75
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 353
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 625
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 228,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-170253/05-open-2551q/005-s5.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-170253/05-open-2551q/005-s5.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 1862
+}

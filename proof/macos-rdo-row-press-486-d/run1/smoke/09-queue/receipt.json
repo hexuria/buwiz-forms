@@ -1,0 +1,154 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "queue",
+  "fingerprint": "fnv1a64:3eeddb2e328de57f",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3661
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 295,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4005
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 157
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 868
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 385
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 204
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 713
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 225,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/009-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 464
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 184
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 388
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1856
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 226,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/014-s14.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 576
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 222,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2357
+    },
+    {
+      "id": "s18",
+      "ok": false,
+      "error": "wait_until timed out: node `fp-send-line` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 20169,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/018-s18.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/009-s9.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/014-s14.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-164501/09-queue/018-s18.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 36964
+}
