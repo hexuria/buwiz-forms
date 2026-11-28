@@ -1160,14 +1160,17 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
         let _ = std::fs::remove_file(&temp);
     }
     if let Err(atomic_error) = written {
-        // N5: the in-place fallback is for the two cases that mean "the folder, not the
-        // disk": the sign-out's own empty overwrite (it must land even in a read-only
-        // folder, and an empty write destroys nothing a truncation could lose) and a
+        // N5: the in-place fallback is for the cases that mean "the folder, not the disk":
+        // the sign-out's own overwrite — the sentinel today, an empty write of before — (it
+        // must land even in a read-only folder, and it destroys nothing a truncation could
+        // lose: S1 — without the sentinel here, a remove that failed AND an atomic write
+        // failing for another reason, a full disk or a sharing violation, would leave the
+        // OLD ACCOUNT FILE in place and the user signed in after signing out) and a
         // permission refusal (a read-only folder: the temp or the rename is refused though
         // the file itself is writable). ANY other error — a full disk above all — leaves
         // the live file UNTOUCHED: truncating it first and then failing would destroy the
         // sign-in the atomic write exists to protect.
-        if raw.is_empty() || permission_denied {
+        if raw.is_empty() || raw.trim() == SIGNED_OUT_SENTINEL.trim() || permission_denied {
             let mut file = std::fs::OpenOptions::new()
                 .write(true)
                 .truncate(true)
@@ -2354,6 +2357,35 @@ mod tests {
                 assert!(
                     matches!(load_stored_account(), Ok(None)),
                     "the sentinel reads as the definite nobody"
+                );
+            },
+        );
+    }
+
+    /// S1: the sign-out's sentinel overwrite falls back in place even when the atomic write
+    /// fails for a NON-permission reason (the hook's full disk) — otherwise the old account
+    /// file would stay and the user would still be signed in after signing out.
+    #[test]
+    fn a_sign_out_falls_back_to_the_sentinel_on_any_atomic_failure() {
+        use std::sync::atomic::Ordering;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                (ENV_ACCOUNT_FILE, Some(path.to_str().unwrap())),
+            ],
+            || {
+                save_stored_account(&StoredAccount::from_secrets(&secrets())).unwrap();
+                FAIL_ATOMIC_FOR_TEST.store(true, Ordering::SeqCst);
+                FAIL_ACCOUNT_REMOVE_FOR_TEST.store(true, Ordering::SeqCst);
+                let _ = forget_stored_account();
+                FAIL_ATOMIC_FOR_TEST.store(false, Ordering::SeqCst);
+                FAIL_ACCOUNT_REMOVE_FOR_TEST.store(false, Ordering::SeqCst);
+                let left = std::fs::read_to_string(&path).unwrap();
+                assert_eq!(
+                    left, SIGNED_OUT_SENTINEL,
+                    "the overwrite lands as the sentinel even when the atomic write fails —                      the old account must not stay"
                 );
             },
         );

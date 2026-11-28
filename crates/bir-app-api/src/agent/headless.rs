@@ -1890,6 +1890,85 @@ mod tests {
             );
         });
     }
+
+    /// The daemon half of (b): the sentinel file — what a sign-out leaves when the remove
+    /// fails — is a definite nobody, and the daemon exits AT ONCE (no backstop count, no
+    /// refusal streak): one batch is enough.
+    #[test]
+    fn the_sentinel_file_exits_the_daemon_at_once() {
+        use gpui_agent::Op;
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("account.json");
+        let db_path = dir.path().join("bir_data.db");
+        let account_a = stored_for("http://localhost:3008", "user-a");
+        let holder = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let serve_addr = holder.local_addr().unwrap().to_string();
+        let env: Vec<(&str, Option<String>)> = vec![
+            (
+                bir_core::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            ),
+            ("EBIR_TEST_ENV", Some("1".into())),
+            ("BUWIZ_NO_KEYCHAIN", Some("1".into())),
+            (
+                "BIR_DATABASE_PATH",
+                Some(db_path.to_str().unwrap().to_owned()),
+            ),
+            ("GPUI_AGENT", Some("1".into())),
+            ("GPUI_AGENT_TOKEN", Some("proof-token".into())),
+            ("GPUI_AGENT_ADDR", Some(serve_addr.clone())),
+            (
+                "BIR_HEADLESS_LOG",
+                Some(dir.path().join("serve.log").to_str().unwrap().to_owned()),
+            ),
+            (
+                "BIR_HEADLESS_PID",
+                Some(dir.path().join("serve.pid").to_str().unwrap().to_owned()),
+            ),
+            (
+                "GPUI_AGENT_RUNTIME_DIR",
+                Some(dir.path().join("rt").to_str().unwrap().to_owned()),
+            ),
+        ];
+        temp_env::with_vars(env, || {
+            drop(holder);
+            let _guards = ProofGuards::arm();
+            bir_core::account_session::save_stored(&account_a).unwrap();
+            let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let outcome_in_thread = outcome.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                tx.send(()).unwrap();
+                *outcome_in_thread.lock().unwrap() = Some(super::serve(false));
+            });
+            rx.recv().unwrap();
+            let mut client = gpui_agent::AgentClient::connect(serve_addr.parse().unwrap())
+                .with_timeout(std::time::Duration::from_secs(3))
+                .with_token("proof-token".to_owned());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if client.expect_ok(Op::Hello).is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the daemon never answered"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            // the sign-out's sentinel: a definite nobody — one batch ends the daemon
+            // the sentinel literal pinned, not the constant: the format is a contract with
+            // every build that ever wrote it, so the test spells it out
+            std::fs::write(&account_path, "{\"signed_out\":true}\n").unwrap();
+            let _ = client.expect_ok(Op::Hello);
+            wait_for_serve_exit(&outcome);
+            let end = outcome.lock().unwrap();
+            assert!(
+                end.is_some(),
+                "the sentinel ended the daemon at once — one batch, no backstop count"
+            );
+        });
+    }
 }
 
 /// How long the serve loop sleeps between mailbox drains, given the time
