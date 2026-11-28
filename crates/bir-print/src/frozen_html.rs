@@ -5473,9 +5473,9 @@ struct Rule6Insertion {
     display: String,
     full_text: String,
     font_size_pt: f64,
-    two_lines: bool,
     truncated: bool,
     input_classes: String,
+    greys: Vec<(f64, f64)>,
 }
 
 /// RULES.md rule 6: when a named inline "(specify)" field in
@@ -5484,6 +5484,235 @@ struct Rule6Insertion {
 /// under the item's row while keeping the amount box level with the item
 /// number and shifting everything below down (shrinking an `elastic_box` band
 /// if trailing space alone is not enough).
+/// How much of `text` fits on one line `room` pt wide at `size` pt, as a byte
+/// length of the consumed prefix, preferring a word boundary: the line is the
+/// prefix trimmed at its end, the rest continues after it. A word wider than
+/// the line breaks at the character; a line that fits nothing consumes 0.
+/// (lifted from #510: a text that fits whole is never split — the mid-word
+/// cut with no ellipsis the owner caught)
+fn wrap_one_line_at(sheet: &SheetType, letter: Spacing, room: f64, text: &str, size: f64) -> usize {
+    if !text.trim_end().is_empty() && sheet.width(letter, text.trim_end(), size) <= room {
+        return text.len();
+    }
+    let mut last_fit_char = 0;
+    let mut last_fit_space = None;
+    for (idx, ch) in text.char_indices() {
+        let end = idx + ch.len_utf8();
+        let slice = text[..end].trim_end();
+        if !slice.is_empty() && sheet.width(letter, slice, size) <= room {
+            last_fit_char = end;
+            if ch.is_whitespace() {
+                last_fit_space = Some(idx);
+            }
+        } else if !ch.is_whitespace() {
+            break;
+        }
+    }
+    let split_at = last_fit_space
+        .filter(|&pos| !text[..pos].trim_end().is_empty())
+        .unwrap_or(last_fit_char);
+    if split_at == 0 {
+        return 0;
+    }
+    let mut consumed = split_at.min(text.len());
+    while consumed < text.len() {
+        let Some(ch) = text[consumed..].chars().next() else {
+            break;
+        };
+        if !ch.is_whitespace() {
+            break;
+        }
+        consumed += ch.len_utf8();
+    }
+    consumed
+}
+
+/// Greedy whole-word wrap of `text` at `size` pt over lines of the given widths,
+/// in order (the Rule 6 composition: the cell's own line first, then the band's
+/// wider lines). Every line takes as much as fits before the next begins.
+/// Returns the lines when all of `text` fits inside `widths.len()` lines, or
+/// None when it needs more.
+fn wrap_lines_at(
+    sheet: &SheetType,
+    letter: Spacing,
+    widths: &[f64],
+    text: &str,
+    size: f64,
+) -> Option<Vec<String>> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut rest = text.trim_start();
+    for (i, room) in widths.iter().enumerate() {
+        if rest.is_empty() {
+            return Some(lines);
+        }
+        let consumed = wrap_one_line_at(sheet, letter, *room, rest, size);
+        if consumed == 0 {
+            return None;
+        }
+        lines.push(rest[..consumed].trim_end().to_string());
+        rest = rest[consumed..].trim_start();
+        if i + 1 == widths.len() && !rest.is_empty() {
+            return None;
+        }
+    }
+    if rest.is_empty() {
+        Some(lines)
+    } else {
+        None
+    }
+}
+
+/// The geometry (left, top, width in pt) of the cell div `cell_id` in the page html.
+fn cell_div_geometry(page_html: &str, cell_id: &str) -> Option<(f64, f64, f64)> {
+    let needle = format!("id=\"{cell_id}\"");
+    let at = page_html.find(&needle)?;
+    let div_start = page_html[..at].rfind("<div")?;
+    let tag_end = page_html[div_start..].find('>')? + div_start + 1;
+    let tag = &page_html[div_start..tag_end];
+    Some((
+        style_pt_prop(tag, "left")?,
+        style_pt_prop(tag, "top")?,
+        style_pt_prop(tag, "width")?,
+    ))
+}
+
+fn cell_div_width(page_html: &str, cell_id: &str) -> Option<f64> {
+    cell_div_geometry(page_html, cell_id).map(|(_, _, w)| w)
+}
+
+/// `tag` without any `font-size` declaration in its inline style.
+fn without_font_size(tag: &str) -> String {
+    let Some(style) = attr(tag, "style") else {
+        return tag.to_string();
+    };
+    if !style.contains("font-size:") {
+        return tag.to_string();
+    }
+    let kept: Vec<&str> = style
+        .split(';')
+        .filter(|decl| !decl.trim_start().starts_with("font-size:"))
+        .collect();
+    replace_attr_value(tag, "style", &kept.join(";"))
+}
+
+/// The most added lines a Rule 6 continuation may wrap over before the
+/// whole-word "…" last resort (the owner's accepted cap).
+const RULE6_MAX_BAND_LINES: usize = 6;
+
+/// How a Rule 6 value composes over its own cell and the band below it: the
+/// owner's wrap rule fills the field first, and only what exceeds the field
+/// continues on the inserted lines — one type size for the whole composition,
+/// so the cell and its continuation never print in two sizes.
+#[derive(Debug)]
+enum Rule6Composition {
+    /// Everything fits inside the cell itself: no band at all.
+    CellOnly { cell: String, size: f64 },
+    /// The cell takes its first line and the band the rest.
+    Split {
+        cell: String,
+        band: String,
+        band_lines: usize,
+        size: f64,
+        truncated: bool,
+    },
+    /// The cell can take nothing even at the floor size: the legacy band-only path.
+    Legacy,
+}
+
+fn compose_rule6_cell_and_band(
+    sheet: &SheetType,
+    letter: Spacing,
+    cell_room: Option<f64>,
+    band_room: f64,
+    full_val: &str,
+) -> Rule6Composition {
+    let Some(cr) = cell_room else {
+        return Rule6Composition::Legacy;
+    };
+    if cr < 12.0 {
+        return Rule6Composition::Legacy;
+    }
+    // The largest size in [PLAIN_TEXT_MIN_PT, 8.5] at which the whole value wraps
+    // inside the cell's line plus the band's lines, at a whole hundredth of a point.
+    let mut widths: Vec<f64> = vec![cr];
+    widths.extend(std::iter::repeat_n(band_room, RULE6_MAX_BAND_LINES));
+    let mut hundredths = 850i64;
+    let floor = (PLAIN_TEXT_MIN_PT * 100.0) as i64;
+    while hundredths >= floor {
+        let s = hundredths as f64 / 100.0;
+        if let Some(lines) = wrap_lines_at(sheet, letter, &widths, full_val, s) {
+            if lines.len() <= 1 {
+                return Rule6Composition::CellOnly {
+                    cell: lines.first().cloned().unwrap_or_default(),
+                    size: s,
+                };
+            }
+            return Rule6Composition::Split {
+                cell: lines[0].clone(),
+                band: lines[1..].join("\n"),
+                band_lines: lines.len() - 1,
+                size: s,
+                truncated: false,
+            };
+        }
+        hundredths -= 1;
+    }
+    // Still too long at the floor size — the last resort the owner accepted:
+    // the cell line, as many whole band lines as the cap allows, and the rest
+    // ending with a whole-word "..." on the last line, the whole value carried
+    // to the additional sheet.
+    let s = PLAIN_TEXT_MIN_PT;
+    let c1 = wrap_one_line_at(sheet, letter, cr, full_val, s);
+    if c1 == 0 {
+        return Rule6Composition::Legacy;
+    }
+    let cell = full_val[..c1].trim_end().to_string();
+    if cell.is_empty() {
+        return Rule6Composition::Legacy;
+    }
+    let mut rest = full_val[c1..].trim_start().to_string();
+    let mut band_lines: Vec<String> = Vec::new();
+    for line_no in 0..RULE6_MAX_BAND_LINES {
+        if rest.is_empty() {
+            break;
+        }
+        if line_no + 1 == RULE6_MAX_BAND_LINES {
+            // The cap line: everything left, whole-word truncated with "...".
+            let consumed = wrap_one_line_at(sheet, letter, band_room, &rest, s);
+            let fits = consumed >= rest.trim_end().len();
+            if fits {
+                band_lines.push(rest.trim_end().to_string());
+                rest.clear();
+            } else {
+                let Some(trunc) =
+                    truncate_with_ellipsis_mode(sheet, letter, band_room, &rest, s, true)
+                else {
+                    return Rule6Composition::Legacy;
+                };
+                band_lines.push(trunc);
+            }
+            break;
+        }
+        let consumed = wrap_one_line_at(sheet, letter, band_room, &rest, s);
+        if consumed == 0 {
+            return Rule6Composition::Legacy;
+        }
+        band_lines.push(rest[..consumed].trim_end().to_string());
+        rest = rest[consumed..].trim_start().to_string();
+    }
+    if band_lines.is_empty() {
+        return Rule6Composition::Legacy;
+    }
+    let truncated = !rest.is_empty();
+    Rule6Composition::Split {
+        cell,
+        band: band_lines.join("\n"),
+        band_lines: band_lines.len(),
+        size: s,
+        truncated,
+    }
+}
+
 fn apply_rule6_specify_bands(
     html: &str,
     fields: &BTreeMap<String, String>,
@@ -5554,57 +5783,83 @@ fn apply_rule6_specify_bands(
 
             let (x1, cut_y) = rule6_place_band(r6.x0, r6.x1, base_cut_y, &r6.cell_id, &value_cells);
 
-            let rect_w = rule6_band_width(r6.x0, x1);
-
-            // The sheet's own field keeps the first part of the value: the
-            // longest whole-word prefix that sets in the original input's
-            // box at the size the fill already gave it. Only what does not
-            // fit continues on the added line below.
-            let input_room = rule6_input_room(&page_html, &r6.cell_id, &inp_tag);
-            let input_size = inp_tag
-                .find("font-size:")
-                .and_then(|at| {
-                    inp_tag[at + "font-size:".len()..]
-                        .split("pt")
-                        .next()
-                        .and_then(|s| s.trim().parse::<f64>().ok())
-                })
-                .unwrap_or(PLAIN_TEXT_MIN_PT)
-                .max(PLAIN_TEXT_MIN_PT);
-            let prefix = input_room
-                .map(|room| rule6_first_part(sheet, letter, room, full_val, input_size))
-                .unwrap_or_default();
-            let rest = full_val[prefix.len()..].trim_start().to_string();
-            let rewritten = rewrite_rule6_inline_input(&inp_tag, &prefix);
-            page_html.replace_range(inp_start..inp_end, &rewritten);
-            if rest.is_empty() {
+            // The owner's composition (lifted from #510): the inserted lines
+            // span the row's full width — the strip IS the row — and the amount
+            // columns of the added lines grey out. The continuation text wraps
+            // only up to the first greyed column, so no divider ever crosses
+            // the words; the dividers run over the grey.
+            let (mut row_x0, mut row_x1) = (r6.x0, x1);
+            let mut greys: Vec<(f64, f64)> = Vec::new();
+            if let Some((cl, ct, cw)) = cell_div_geometry(&page_html, &r6.cell_id) {
+                let same_row = |tt: f64| (tt - ct).abs() < 4.0;
+                row_x0 = value_cells
+                    .iter()
+                    .filter(|(_, _, tt, _, _)| same_row(*tt))
+                    .map(|(_, l, _, _, _)| *l)
+                    .fold(row_x0, f64::min);
+                row_x1 = value_cells
+                    .iter()
+                    .filter(|(_, _, tt, _, _)| same_row(*tt))
+                    .map(|(_, l, _, w, _)| l + w)
+                    .fold(row_x1, f64::max);
+                let mut spans: Vec<(f64, f64)> = value_cells
+                    .iter()
+                    .filter(|(id, l, tt, _, _)| {
+                        same_row(*tt) && *id != r6.cell_id && *l > cl + cw - 2.0
+                    })
+                    .map(|(_, l, _, w, _)| (*l, *w))
+                    .collect();
+                spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+                greys = spans;
+            }
+            let text_right = greys.first().map(|(l, _)| l - 4.0).unwrap_or(row_x1);
+            let room = shrunk_room(((text_right - row_x0) - 6.0).max(20.0));
+            let cell_room =
+                cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
+            let composed = compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val);
+            if matches!(composed, Rule6Composition::Legacy) {
                 continue;
             }
-            // The continuation's text stays inside the original field's own
-            // column: no frame divider of the sheet ever crosses the words.
-            // The grey still runs the band's width under the sheet's lines.
+            let (cell_text, cell_size, band) = match composed {
+                Rule6Composition::CellOnly { cell, size } => (cell, size, None),
+                Rule6Composition::Split {
+                    cell,
+                    band,
+                    band_lines,
+                    size,
+                    truncated,
+                } => (cell, size, Some((band, band_lines, truncated))),
+                Rule6Composition::Legacy => unreachable!(),
+            };
+            let mut rewritten = without_font_size(&rewrite_rule6_inline_input(&inp_tag, ""));
+            rewritten = set_value(&rewritten, &cell_text, None);
+            rewritten = with_font_size(&rewritten, cell_size);
+            page_html.replace_range(inp_start..inp_end, &rewritten);
+            let Some((band_display, band_lines, band_truncated)) = band else {
+                continue;
+            };
+            let pitch = 11.0f64;
+            let dh = (pitch * band_lines as f64 + 1.0).max(14.0);
+            // The original input's own column, for the underline freeze: the
+            // field's box stays closed at its sheet position.
             let (text_x, text_w) = rule6_input_column(&page_html, &r6.cell_id, &inp_tag)
                 .map(|(x, w)| (x + 1.0, (w - 4.0).max(10.0)))
-                .unwrap_or((r6.x0 + 1.5, rect_w));
-            let col_room = shrunk_room((text_w - 2.0).max(20.0));
-            let (dh, display, font_size_pt, lines, truncated) =
-                rule6_fit_band_lines(sheet, letter, col_room, &rest);
-            let two_lines = lines >= 2;
+                .unwrap_or((r6.x0 + 1.5, 60.0));
 
             insertions.push(Rule6Insertion {
                 cell_id: r6.cell_id.clone(),
                 cut_y,
                 dh,
-                x0: r6.x0,
-                x1,
+                x0: row_x0,
+                x1: row_x1,
                 text_x,
                 text_w,
-                display,
+                display: band_display,
                 full_text: full_val.to_string(),
-                font_size_pt,
-                two_lines,
-                truncated,
+                font_size_pt: cell_size,
+                truncated: band_truncated,
                 input_classes,
+                greys,
             });
         }
 
@@ -5665,13 +5920,13 @@ fn rule6_band_width(x0: f64, x1: f64) -> f64 {
     (x1 - x0 - 3.0).max(10.0)
 }
 
-/// The owner's placement rule: the band runs from its cell's left to just
-/// before the first other value cell its strip crosses (a 2 pt gap), so an
-/// amount on the row is never covered; if narrowing would squeeze it below
-/// [`RULE6_BAND_FLOOR_PT`], or it would still cross a value cell, it moves
-/// down below that cell instead. Only cells starting above the cut matter:
-/// anything below it shifts down with the rest of the page, out of the
-/// inserted strip. Returns the band's right edge and its cut height.
+/// The owner's placement rule: the band runs from its cell's left, and the
+/// cut keeps its sheet position inside the row — where the sheet's frame
+/// dividers span it and stretch through the strip naturally. A value cell
+/// straddling the cut that narrowing cannot clear moves the cut below it.
+/// Only cells starting above the cut matter: anything below it shifts down
+/// with the rest of the page, out of the inserted strip. Returns the row's
+/// right edge and the cut height.
 fn rule6_place_band(
     x0: f64,
     x1_full: f64,
@@ -5821,58 +6076,6 @@ fn find_cell_input_span(page_html: &str, cell_id: &str) -> Option<(usize, usize,
     ))
 }
 
-/// The longest whole-word prefix of `text` that sets within `room` pt at
-/// `size` pt in the sheet's face. The first word alone wider than the room
-/// leaves an empty prefix: nothing of the value belongs in the box.
-fn rule6_first_part(
-    sheet: &SheetType,
-    letter: Spacing,
-    room: f64,
-    text: &str,
-    size: f64,
-) -> String {
-    let mut end = 0usize;
-    let mut in_word = false;
-    let mut over = false;
-    for (idx, ch) in text.char_indices() {
-        if ch.is_whitespace() {
-            if in_word {
-                if sheet.width(letter, &text[..idx], size) <= room + FIT_EPSILON_PT {
-                    end = idx;
-                } else {
-                    over = true;
-                    break;
-                }
-                in_word = false;
-            }
-        } else {
-            in_word = true;
-        }
-    }
-    if !over && in_word && sheet.width(letter, text, size) <= room + FIT_EPSILON_PT {
-        end = text.len();
-    }
-    if end == 0 && !text.is_empty() {
-        // The first word alone is wider than the field: hard-split it at a
-        // character boundary (never inside a multi-byte character) so the
-        // sheet's own field still holds the first part of the value.
-        let mut taken = 0usize;
-        for (idx, ch) in text.char_indices() {
-            if ch.is_whitespace() {
-                break;
-            }
-            let cand_end = idx + ch.len_utf8();
-            if sheet.width(letter, &text[..cand_end], size) <= room + FIT_EPSILON_PT {
-                taken = cand_end;
-            } else {
-                break;
-            }
-        }
-        end = taken;
-    }
-    text[..end].trim_end().to_string()
-}
-
 /// The original inline input's own column on the sheet: its absolute left
 /// edge and the width it offers its text, from the cell's box less the
 /// input's `inset` (one to four lengths, per [`inset_box`]). Unparsable
@@ -5888,85 +6091,6 @@ fn rule6_input_column(page_html: &str, cell_id: &str, inp_tag: &str) -> Option<(
     let style = attr(inp_tag, "style")?;
     let (_top, right, _bottom, left) = inset_box(style);
     Some((cell_l + left, (cell_w - left - right).max(0.0)))
-}
-
-/// The width (pt) the original inline input of a Rule 6 cell offers its
-/// text: the cell's width less the input's left and right `inset`, less the
-/// same padding the plain fit allows.
-fn rule6_input_room(page_html: &str, cell_id: &str, inp_tag: &str) -> Option<f64> {
-    rule6_input_column(page_html, cell_id, inp_tag).map(|(_x, w)| (w - 2.0).max(0.0))
-}
-
-/// Fit the continuation text for the added line: the same rules as before
-/// (one line, or two wrapped lines, or "..." at the floor), but applied to
-/// the part of the value the original field did not hold.
-/// Fit the continuation inside the original field's column width, never
-/// wider: one line at a size down to the floor when it sets, else whole-word
-/// wrapped lines at the floor, the band growing a line at a time (never
-/// widening) up to four lines; past four the last line ends on a whole word
-/// with "..." and the whole value goes to the additional sheet. Returns
-/// (band height, display text, font size, line count, truncated).
-fn rule6_fit_band_lines(
-    sheet: &SheetType,
-    letter: Spacing,
-    room: f64,
-    rest: &str,
-) -> (f64, String, f64, usize, bool) {
-    let single_size = sheet.fit(letter, room, rest, 8.5);
-    if single_size >= PLAIN_TEXT_MIN_PT {
-        return (14.0, rest.to_string(), single_size, 1, false);
-    }
-    // Whole-word wrap at the floor into as many lines as the text needs.
-    let mut lines: Vec<String> = Vec::new();
-    let mut current = String::new();
-    for word in rest.split_whitespace() {
-        let candidate = if current.is_empty() {
-            word.to_string()
-        } else {
-            format!("{current} {word}")
-        };
-        if sheet.width(letter, &candidate, PLAIN_TEXT_MIN_PT) <= room + FIT_EPSILON_PT {
-            current = candidate;
-        } else {
-            if current.is_empty() {
-                // a single word wider than the column: hard-split it
-                let mut taken = 0usize;
-                for (idx, ch) in word.char_indices() {
-                    let end = idx + ch.len_utf8();
-                    if sheet.width(letter, &word[..end], PLAIN_TEXT_MIN_PT) <= room + FIT_EPSILON_PT
-                    {
-                        taken = end;
-                    } else {
-                        break;
-                    }
-                }
-                if taken == 0 {
-                    taken = word.len().min(1);
-                }
-                lines.push(word[..taken].to_string());
-                current = word[taken..].to_string();
-            } else {
-                lines.push(std::mem::take(&mut current));
-                current = word.to_string();
-            }
-        }
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    const MAX_LINES: usize = 6;
-    if lines.len() <= MAX_LINES {
-        let n = lines.len().max(1);
-        let dh = if n == 1 { 14.0 } else { 6.0 + 7.8 * n as f64 };
-        return (dh, lines.join("\n"), PLAIN_TEXT_MIN_PT, n, false);
-    }
-    lines.truncate(MAX_LINES);
-    let last = lines.pop().unwrap_or_default();
-    let cut = truncate_with_ellipsis_mode(sheet, letter, room, &last, PLAIN_TEXT_MIN_PT, true)
-        .unwrap_or_else(|| "...".to_string());
-    lines.push(cut);
-    let dh = 6.0 + 7.8 * MAX_LINES as f64;
-    (dh, lines.join("\n"), PLAIN_TEXT_MIN_PT, MAX_LINES, true)
 }
 
 /// The original inline input rewritten to hold the first part of the value:
@@ -6145,14 +6269,43 @@ fn shift_page_and_insert_rule6(
                     // never stretched over a strip; the strip's grey shows.
                     d_bot = d_top;
                 }
+                // A frozen comb tick whose bottom lands inside an inserted
+                // strip ends at the strip's top instead: no tick ever prints
+                // inside the added lines. Strip output range:
+                // [cut + prior dh, cut + prior dh + dh).
+                let tick_clip = matches!((x_val, w_val), (Some(x), Some(w)) if w <= 1.6 && is_comb_tick(comb_cells, x, y_val, h_val));
+                let strip_clip = |new_y: f64, new_h: f64| -> f64 {
+                    if !tick_clip {
+                        return new_h;
+                    }
+                    let mut clipped = new_h;
+                    let mut prior = 0.0;
+                    for ins in insertions {
+                        let strip_top = ins.cut_y + prior;
+                        let strip_bot = strip_top + ins.dh;
+                        if new_y < strip_top - 0.05
+                            && new_y + clipped > strip_top + 0.05
+                            && new_y + clipped < strip_bot + 0.05
+                        {
+                            clipped = (strip_top - new_y).max(0.1);
+                        }
+                        prior += ins.dh;
+                    }
+                    clipped
+                };
                 if d_top.abs() > 1e-4 || (d_bot - d_top).abs() > 1e-4 {
                     let new_y = y_val + d_top;
-                    let new_h = (h_val + d_bot - d_top).max(0.1);
+                    let new_h = strip_clip(new_y, (h_val + d_bot - d_top).max(0.1));
                     let mut updated = replace_attr_value(tag, "y", &format!("{new_y:.2}"));
                     updated = replace_attr_value(&updated, "height", &format!("{new_h:.2}"));
                     out.push_str(&updated);
                 } else {
-                    out.push_str(tag);
+                    let clipped = strip_clip(y_val, h_val);
+                    if (clipped - h_val).abs() > 1e-4 {
+                        out.push_str(&replace_attr_value(tag, "height", &format!("{clipped:.2}")));
+                    } else {
+                        out.push_str(tag);
+                    }
                 }
             } else {
                 out.push_str(tag);
@@ -6173,6 +6326,17 @@ fn shift_page_and_insert_rule6(
                 "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#e3e3e3\"/>",
                 ins.x0, y, w, ins.dh
             ));
+            // The amount columns on the added lines grey out one shade darker,
+            // still under every frame and divider line.
+            for (gx, gw) in &ins.greys {
+                fills.push_str(&format!(
+                    "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#d9d9d9\"/>",
+                    gx + 0.5,
+                    y + 0.25,
+                    (gw - 1.0).max(1.0),
+                    (ins.dh - 0.5).max(1.0)
+                ));
+            }
             prior_dh += ins.dh;
         }
         if !fills.is_empty() {
@@ -6239,11 +6403,6 @@ fn shift_page_and_insert_rule6(
     for ins in insertions {
         let y = ins.cut_y + prior_dh;
         let h = (ins.dh - 1.0).max(8.0);
-        let lh_css = if ins.two_lines {
-            format!("line-height:{PLAIN_TWO_LINE_CSS_HEIGHT};")
-        } else {
-            String::new()
-        };
         let warn_attr = if ins.truncated {
             format!(
                 " data-overflow-warning=\"text-truncated\" data-writer-value=\"{}\"",
@@ -6252,19 +6411,33 @@ fn shift_page_and_insert_rule6(
         } else {
             String::new()
         };
+        let band_lines: Vec<&str> = ins.display.split('\n').collect();
+        let pitch = 11.0f64;
+        let text_right = ins.greys.first().map(|(l, _)| l - 4.0).unwrap_or(ins.x1);
+        let text_width = (text_right - ins.x0 - 4.0).max(20.0);
+        let mut inputs_html = String::new();
+        for (line_idx, line) in band_lines.iter().enumerate() {
+            inputs_html.push_str(&format!(
+                "<input type=\"text\" class=\"{}\" name=\"{}\" readonly value=\"{}\" style=\"position:absolute;left:0pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt;padding:1pt 0 0 3pt;font-size:{:.2}pt;text-align:left;background:transparent;white-space:pre\" data-overflow-of=\"{}\"{}>",
+                ins.input_classes,
+                ins.cell_id,
+                html_escape(line),
+                line_idx as f64 * pitch,
+                text_width,
+                pitch,
+                ins.font_size_pt,
+                ins.cell_id,
+                if line_idx + 1 == band_lines.len() { warn_attr.as_str() } else { "" }
+            ));
+        }
         out.push_str(&format!(
-            "<div class=\"c f\" data-rule6-band=\"true\" data-rule6-of=\"{}\" style=\"left:{:.2}pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt\"><span class=\"{} fs\" style=\"inset:1pt 1pt 1pt 1pt;font-size:{:.2}pt;{}text-align:left;white-space:pre\" data-overflow-of=\"{}\"{}>{}</span></div>",
+            "<div class=\"c f\" data-rule6-band=\"true\" data-rule6-of=\"{}\" style=\"left:{:.2}pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt\">{}</div>",
             ins.cell_id,
-            ins.text_x,
+            ins.x0 + 1.5,
             y + 0.5,
-            ins.text_w,
+            (ins.x1 - ins.x0 - 1.5).max(10.0),
             h,
-            ins.input_classes,
-            ins.font_size_pt,
-            lh_css,
-            ins.cell_id,
-            warn_attr,
-            html_escape(&ins.display)
+            inputs_html
         ));
         prior_dh += ins.dh;
     }
@@ -7502,6 +7675,17 @@ pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> 
             .collect();
         out.insert((*name).to_string(), (boxes, None));
     }
+    let mut continuation_cells: std::collections::BTreeSet<String> =
+        std::collections::BTreeSet::new();
+    let mut scan = 0usize;
+    while let Some(rel) = document[scan..].find("data-rule6-of=\"") {
+        let at = scan + rel + "data-rule6-of=\"".len();
+        let Some(e) = document[at..].find('"') else {
+            break;
+        };
+        continuation_cells.insert(document[at..at + e].to_string());
+        scan = at + e;
+    }
     let needle = " data-overflow-of=\"";
     let mut from = 0;
     while let Some(at) = document[from..].find(needle) {
@@ -7524,6 +7708,19 @@ pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> 
         };
         let entry = out.entry(cell.to_string()).or_default();
         if !entry.0.trim().is_empty() {
+            // A Rule 6 continuation prints one input per added line: they are
+            // consecutive in the document; their values join with the rest.
+            if continuation_cells.contains(cell) {
+                let more = if tag.starts_with("<span") {
+                    String::new()
+                } else {
+                    attr(tag, "value").unwrap_or("").to_string()
+                };
+                if !more.is_empty() {
+                    entry.0.push(char::from(10));
+                    entry.0.push_str(&more);
+                }
+            }
             continue;
         }
         let mut raw_text = if tag.starts_with("<span") {
@@ -7535,7 +7732,7 @@ pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> 
         } else {
             attr(tag, "value").unwrap_or("").to_string()
         };
-        if tag.starts_with("<span") {
+        if continuation_cells.contains(cell) {
             // A Rule 6 continuation holds only the rest; the printed value
             // is the whole: the original field's first part, then the rest.
             let inp_needle = format!("id=\"{}-i\"", cell);
@@ -11795,11 +11992,15 @@ mod tests {
             }) else {
                 continue;
             };
-            let inside = band.left >= cell.left - 1.0
-                && band.left + band.width <= cell.left + cell.width + 1.0;
+            // The strip IS the row now: it starts at the row's left edge
+            // (at or left of its own cell) and runs the full row width,
+            // ending at or right of its cell. A sideways move off the row
+            // still fails this check.
+            let inside = band.left <= cell.left + 1.0
+                && band.left + band.width >= cell.left + cell.width - 1.0;
             if !inside {
                 wrong.push(format!(
-                    "{of}: band left {:.2} width {:.2} not inside its cell's span {:.2}..{:.2}",
+                    "{of}: band left {:.2} width {:.2} does not cover its cell's span {:.2}..{:.2}",
                     band.left,
                     band.width,
                     cell.left,
@@ -11820,6 +12021,13 @@ mod tests {
         let mut wrong = Vec::new();
         for band in divs.iter().filter(|d| d.band_of.is_some()) {
             let of = band.band_of.as_deref().unwrap();
+            // The strip IS its row: it may cross the row's own companion
+            // cells (the greyed amount columns) but never a value cell of
+            // another row. Companions are the cells sharing the row's
+            // vertical span with the band's own cell.
+            let own = divs.iter().find(|d| {
+                d.band_of.is_none() && d.id.as_deref() == Some(of) && d.page == band.page
+            });
             for cell in divs.iter().filter(|d| d.value_cell && d.page == band.page) {
                 if cell.id.as_deref() == Some(of) {
                     continue;
@@ -11829,10 +12037,15 @@ mod tests {
                 let y =
                     (band.top + band.height).min(cell.top + cell.height) - band.top.max(cell.top);
                 if x > 0.05 && y > 0.05 {
-                    wrong.push(format!(
-                        "{of}: band covers value cell {} by {x:.2} pt sideways, {y:.2} pt down",
-                        cell.id.as_deref().unwrap_or("?")
-                    ));
+                    let same_row = own.is_some_and(|o| {
+                        (cell.top + cell.height).min(o.top + o.height) - cell.top.max(o.top) > 1.0
+                    });
+                    if !same_row {
+                        wrong.push(format!(
+                            "{of}: band covers value cell {} by {x:.2} pt sideways, {y:.2} pt down",
+                            cell.id.as_deref().unwrap_or("?")
+                        ));
+                    }
                 }
             }
         }
@@ -11914,7 +12127,7 @@ mod tests {
                 || key.contains("Desc")
                 || key.contains("Others")
             {
-                fields.insert(key.clone(), words_of(200));
+                fields.insert(key.clone(), "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA".to_string());
             } else {
                 fields.insert(key.clone(), "1000".to_string());
             }
@@ -11968,6 +12181,122 @@ mod tests {
                 "no frame line at x~{divider_x} bridges the strip (band {band_top}..{band_bottom})"
             );
         }
+    }
+
+    /// The owner's correction (2026-11-28): the added strip IS the row —
+    /// continuation lines span the row's full width, the amount columns on
+    /// the added lines grey out, and there is no white inner box inside the
+    /// strip (one transparent input per line). On 1701 item 9 the row runs
+    /// far wider than the specify column.
+    #[test]
+    fn rule6_band_lines_span_the_row_with_greyed_amount_columns() {
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "frm1701:txtPg4IPart7_9Specify".to_string(),
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO".to_string(),
+        );
+        let doc = filled_document("1701-2018", &fields).unwrap();
+        let band_marker = "data-rule6-band=\"true\"";
+        let at = doc.find(band_marker).expect("a band inserts");
+        let style_at = doc[at..at + 260].find("style=\"").unwrap() + at + "style=\"".len();
+        let style = &doc[style_at..style_at + 140];
+        let pt = |name: &str| -> f64 {
+            let key = format!("{name}:");
+            let from = style.find(&key).unwrap() + key.len();
+            style[from..].split("pt").next().unwrap().parse().unwrap()
+        };
+        let band_left = pt("left");
+        let band_width = pt("width");
+        assert!(
+            band_width >= 400.0,
+            "(a) the strip spans the row's full width, not the narrow specify column: left {band_left} width {band_width}"
+        );
+        // (c) no inner white container: nothing inside the band paints white.
+        let band_end = doc[at..].find("</div>").unwrap() + at;
+        let band_html = &doc[at..band_end];
+        assert!(
+            !band_html.contains("background:#fff"),
+            "(c) the strip is the row: no white inner box inside it"
+        );
+        // (b) the amount columns on the added lines grey out: a grey fill at
+        // the amount columns' x-range overlaps the strip.
+        let band_top = pt("top");
+        let band_bottom = band_top + pt("height");
+        let mut greys = 0usize;
+        let mut cur = 0;
+        while let Some(rel) = doc[cur..].find("fill=\"#d9d9d9\"") {
+            let start = cur + rel;
+            let Some(rs) = doc[..start].rfind("<rect ") else {
+                break;
+            };
+            let tag = &doc[rs..start + 30];
+            let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+            if let (Some(x), Some(y), Some(h)) = (num("x"), num("y"), num("height")) {
+                if x > band_left + band_width / 2.0 && y < band_bottom && y + h > band_top {
+                    greys += 1;
+                }
+            }
+            cur = start + 10;
+        }
+        assert!(
+            greys >= 1,
+            "(b) the amount columns on the added lines grey out"
+        );
+    }
+
+    /// (d) beyond capacity the text never cuts mid-word without an ellipsis:
+    /// `wrap_one_line_at` prefers a word boundary and only hard-breaks a word
+    /// that alone is wider than the line.
+    #[test]
+    fn rule6_wrap_never_cuts_a_word_without_ellipsis() {
+        let sheet = SheetType::plain();
+        let letter = sheet.letter;
+        let text =
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA";
+        for room in [60.0, 95.0, 140.0, 233.0] {
+            let consumed = super::wrap_one_line_at(&sheet, letter, room, text, 8.5);
+            assert!(consumed > 0, "room {room}: something fits");
+            if consumed >= text.len() {
+                continue;
+            }
+            // A word-boundary split ends after a space or exactly at a word's
+            // start: only a split with a word character on BOTH sides is a
+            // mid-word cut.
+            let before_ok = text[..consumed].ends_with(char::is_whitespace);
+            let midword = !before_ok
+                && text[..consumed]
+                    .chars()
+                    .last()
+                    .is_some_and(|c| c.is_alphanumeric())
+                && text[consumed..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_alphanumeric());
+            if !midword {
+                continue;
+            }
+            // A mid-consumption split is allowed only inside a word that
+            // alone is wider than the line.
+            let word_start = text[..consumed]
+                .rfind(char::is_whitespace)
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            let word_end = text[consumed..]
+                .find(char::is_whitespace)
+                .map(|p| consumed + p)
+                .unwrap_or(text.len());
+            let word = &text[word_start..word_end];
+            assert!(
+                sheet.width(letter, word, 8.5) > room,
+                "room {room}: only an over-wide word may split mid-word, split inside {word:?}"
+            );
+        }
+        // "TWELFTH FLOOR" never prints as "TWELFTH F": a text that fits whole
+        // on the line is never split at all.
+        let piece = "TWELFTH FLOOR";
+        let room = sheet.width(letter, piece, 8.5) + 2.0;
+        let consumed = super::wrap_one_line_at(&sheet, letter, room, piece, 8.5);
+        assert_eq!(consumed, piece.len(), "a fitting text is never split");
     }
 
     /// D1's negative: 1700's band for p2c153 moved sideways under the
@@ -12102,22 +12431,21 @@ mod tests {
     /// fragment cut mid-word would print as if it were a word of its own.
     #[test]
     fn a_truncated_rule6_band_ends_on_a_whole_word() {
-        let text = "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG";
+        let piece =
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA";
+        let text = format!("{piece} {piece} {piece} {piece} {piece} {piece}");
         let mut fields = BTreeMap::new();
-        fields.insert(
-            "frm1701:txtPg4IPart7_9Specify".to_string(),
-            text.to_string(),
-        );
+        fields.insert("frm1701:txtPg4IPart7_9Specify".to_string(), text.clone());
         let html = filled_document("1701-2018", &fields).unwrap();
-        let band_at = html
-            .find("data-rule6-of=\"p4c213\"")
-            .expect("1701 item 9 Rule 6 band");
-        let band_end = html[band_at..].find("</div>").unwrap() + band_at;
-        let band = &html[band_at..band_end];
-        let span_at = band.find("<span").expect("band continuation span");
-        let text_start = band[span_at..].find('>').unwrap() + span_at + 1;
-        let text_end = band.find("</span>").unwrap();
-        let value = band[text_start..text_end].replace("&#10;", "\n");
+        let tags = super::input_tags(&html);
+        let value = tags
+            .iter()
+            .filter(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
+            .filter_map(|t| super::attr(t.tag, "value"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .replace("&#10;", "\n");
+        assert!(!value.is_empty(), "1701 item 9 Rule 6 band");
         assert!(
             value.contains("..."),
             "the narrowed band must truncate this fill: {value:?}"
@@ -14376,13 +14704,15 @@ mod donor_estate_print_tests {
             .expect("1601c Rule 6 band");
         let band_end = html[band_at..].find("</div>").unwrap() + band_at;
         let band = &html[band_at..band_end];
-        let continuation = if let Some(span_at) = band.find("<span") {
-            let s = band[span_at..].find('>').unwrap() + span_at + 1;
-            let e = band.find("</span>").unwrap();
-            band[s..e].to_string()
-        } else {
-            String::new()
-        };
+        let continuation = band
+            .split("<input")
+            .skip(1)
+            .filter_map(|frag| {
+                let end = frag.find('>').unwrap_or(frag.len());
+                super::attr(&frag[..end], "value")
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
         let recombined = format!("{inline_value} {continuation}")
             .replace("&#10;", " ")
             .split_whitespace()
@@ -14443,13 +14773,15 @@ mod donor_estate_print_tests {
             let band_at = long_html.find(&marker).unwrap();
             let band_end = long_html[band_at..].find("</div>").unwrap() + band_at;
             let band = &long_html[band_at..band_end];
-            let continuation = if let Some(span_at) = band.find("<span") {
-                let s = band[span_at..].find('>').unwrap() + span_at + 1;
-                let e = band.find("</span>").unwrap();
-                band[s..e].to_string()
-            } else {
-                String::new()
-            };
+            let continuation = band
+                .split("<input")
+                .skip(1)
+                .filter_map(|frag| {
+                    let end = frag.find('>').unwrap_or(frag.len());
+                    super::attr(&frag[..end], "value")
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
             let recombined = format!("{prefix} {continuation}")
                 .replace("&#10;", " ")
                 .split_whitespace()
@@ -14468,8 +14800,10 @@ mod donor_estate_print_tests {
                 "{slug} {cell_id}: the original field must hold the first part"
             );
 
-            let extreme =
-                format!("{long_specify} {long_specify} {long_specify} {long_specify} EXTRA TAIL");
+            let extreme = format!(
+                "{} EXTRA TAIL",
+                (0..12).map(|_| long_specify).collect::<Vec<_>>().join(" ")
+            );
             let mut ext_fields = BTreeMap::new();
             ext_fields.insert(key.to_string(), extreme.clone());
             let ext_html = filled_document(slug, &ext_fields).unwrap();
@@ -14879,18 +15213,24 @@ mod donor_estate_print_tests {
         let tag_end = html[input_at..].find('>').unwrap() + input_at;
         let input_tag = &html[tag_start..=tag_end];
         let prefix = attr(input_tag, "value").unwrap_or("").to_string();
-        // visible continuation text: inside the band's span (after its '>',
-        // up to '</span>'); an input-based band yields nothing.
-        let inner = if let Some(span_at) = band.find("<span") {
-            let open_end = band[span_at..].find('>').map(|i| span_at + i + 1);
-            let close = band.find("</span>");
-            match (open_end, close) {
-                (Some(s), Some(e)) if s < e => band[s..e].replace("&#10;", " "),
-                _ => String::new(),
+        // visible continuation text: the band prints one readonly transparent
+        // input per added line — join their values in order.
+        let mut inner_parts: Vec<String> = Vec::new();
+        let mut scan = band;
+        while let Some(rel) = scan.find("<input") {
+            let s = rel;
+            let Some(e) = scan[s..].find('>') else {
+                break;
+            };
+            let tag = &scan[s..s + e + 1];
+            if let Some(v) = attr(tag, "value") {
+                if !v.is_empty() {
+                    inner_parts.push(v.to_string());
+                }
             }
-        } else {
-            String::new()
-        };
+            scan = &scan[s + e + 1..];
+        }
+        let inner = inner_parts.join(" ");
         let full = rule6_proof_fill("1701ms-2024");
         let full_val = full["derived:foreign_tax_credits_description"]
             .trim()
@@ -14930,7 +15270,10 @@ mod donor_estate_print_tests {
         }
     }
 
-    /// (c1) No input in the grey area: the band holds no input element.
+    /// (b/c) Nothing is rendered or entered in the greyed amount columns of
+    /// the added lines: no input element overlaps a grey column rect, and no
+    /// input in the band carries a white background (the strip is the row —
+    /// one transparent input per line, never an inner box).
     #[test]
     fn rule6_band_has_no_input() {
         let html = filled_document("1701ms-2024", &rule6_proof_fill("1701ms-2024")).unwrap();
@@ -14938,9 +15281,52 @@ mod donor_estate_print_tests {
         let band_end = html[band_at..].find("</div>").unwrap() + band_at;
         let band = &html[band_at..band_end];
         assert!(
-            !band.contains("<input"),
-            "the grey continuation area must not contain an input element"
+            !band.contains("background:#fff"),
+            "no white inner box inside the strip"
         );
+        // every line input ends before the first greyed amount column, so the
+        // grey columns hold nothing at all.
+        let div_start = html[..band_at].rfind("<div ").unwrap();
+        let div_end = html[div_start..].find('>').unwrap() + div_start;
+        let div_tag = &html[div_start..=div_end];
+        let band_left = super::style_pt_prop(div_tag, "left").unwrap();
+        let band_top = super::style_pt_prop(div_tag, "top").unwrap();
+        let band_bottom = band_top + super::style_pt_prop(div_tag, "height").unwrap();
+        let mut grey_left = f64::MAX;
+        let mut cur = 0;
+        while let Some(rel) = html[cur..].find("fill=\"#d9d9d9\"") {
+            let at = cur + rel;
+            let Some(rs) = html[..at].rfind("<rect ") else {
+                break;
+            };
+            let tag = &html[rs..at + 20];
+            let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+            if let (Some(x), Some(y), Some(h)) = (num("x"), num("y"), num("height")) {
+                if (y - band_top).abs() < 2.0 && h >= 8.0 && (y + h - band_bottom).abs() < 2.0 {
+                    grey_left = grey_left.min(x);
+                }
+            }
+            cur = at + 10;
+        }
+        assert!(
+            grey_left < f64::MAX,
+            "the amount columns on the added lines grey out"
+        );
+        let mut scan = band;
+        while let Some(rel) = scan.find("<input") {
+            let s = rel;
+            let Some(e) = scan[s..].find('>') else {
+                break;
+            };
+            let tag = &scan[s..s + e + 1];
+            scan = &scan[s + e + 1..];
+            if let Some(w) = super::style_pt_prop(tag, "width") {
+                assert!(
+                    band_left + w <= grey_left + 1.0,
+                    "nothing may print inside the greyed amount columns"
+                );
+            }
+        }
     }
 
     /// (c2) The grey strip is drawn UNDER the sheet's frame/divider lines:
@@ -14985,28 +15371,69 @@ mod donor_estate_print_tests {
         Some(&html[at..end])
     }
 
-    /// (1) No vertical frame segment's x falls inside any added-line text
-    /// box: on 1701MS item 7 the text wraps inside the original field's own
-    /// column (x about 236.4..321.9) and the amount-column dividers at
-    /// x=327.45 and x=461.58 never cross it.
+    /// The owner's rule over the full-row strip: the continuation text never
+    /// reaches the greyed amount columns — every line input's box ends before
+    /// the first grey column, so no divider ever crosses the words.
     #[test]
     fn rule6_text_stays_inside_its_own_column() {
         let html = filled_document("1701ms-2024", &rule6_proof_fill("1701ms-2024")).unwrap();
-        let band = rule6_band_span(&html, "p2c177").expect("band");
-        let div_start = html[..html.find("data-rule6-of=\"p2c177\"").unwrap()]
-            .rfind("<div ")
-            .unwrap();
+        let band_at = html.find("data-rule6-of=\"p2c177\"").expect("band present");
+        let band_end = html[band_at..].find("</div>").unwrap() + band_at;
+        let band = &html[band_at..band_end];
+        let div_start = html[..band_at].rfind("<div ").unwrap();
         let div_end = html[div_start..].find('>').unwrap() + div_start;
         let div_tag = &html[div_start..=div_end];
-        let left = super::style_pt_prop(div_tag, "left").unwrap();
-        let width = super::style_pt_prop(div_tag, "width").unwrap();
-        // the original input's column: cell 14.85 + inset left 221.57 = 236.42
-        // wide, to cell width 312.95 less right inset 5.89: ends at 321.91.
+        let band_left = super::style_pt_prop(div_tag, "left").unwrap();
+        let band_width = super::style_pt_prop(div_tag, "width").unwrap();
+        let band_top = super::style_pt_prop(div_tag, "top").unwrap();
+        let band_bottom = band_top + super::style_pt_prop(div_tag, "height").unwrap();
+        // the first greyed amount column's left edge: a #d9d9d9 fill inside
+        // the strip's own y-range and x-span (not the sheet's caption fills).
+        let mut grey_left = f64::MAX;
+        let mut cur = 0;
+        while let Some(rel) = html[cur..].find("fill=\"#d9d9d9\"") {
+            let at = cur + rel;
+            let Some(rs) = html[..at].rfind("<rect ") else {
+                break;
+            };
+            let tag = &html[rs..at + 20];
+            let num = |a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+            if let (Some(x), Some(y), Some(h)) = (num("x"), num("y"), num("height")) {
+                if (y - band_top).abs() < 2.0
+                    && h >= 8.0
+                    && (y + h - band_bottom).abs() < 2.0
+                    && x > band_left + band_width / 2.0
+                {
+                    grey_left = grey_left.min(x);
+                }
+            }
+            cur = at + 10;
+        }
         assert!(
-            left >= 236.42 - 1.0 && left + width <= 321.91 + 1.0 && width > 40.0,
-            "the added line's text box must sit inside the original field's column (236.42..321.91), got left {left} width {width}"
+            band_width >= 400.0,
+            "the strip spans the row's full width: left {band_left} width {band_width}"
         );
-        let _ = band;
+        let mut scan = band;
+        let mut checked = 0usize;
+        while let Some(rel) = scan.find("<input") {
+            let s = rel;
+            let Some(e) = scan[s..].find('>') else {
+                break;
+            };
+            let tag = &scan[s..s + e + 1];
+            scan = &scan[s + e + 1..];
+            let Some(w) = super::style_pt_prop(tag, "width") else {
+                continue;
+            };
+            checked += 1;
+            if grey_left < f64::MAX {
+                assert!(
+                    band_left + w <= grey_left + 1.0,
+                    "a continuation line must end before the greyed amount column at {grey_left}: width {w}"
+                );
+            }
+        }
+        assert!(checked > 0, "the band prints line inputs");
     }
 
     /// (2) Comb ticks end at the cell's original bottom on 1701 item 9 and
@@ -15117,19 +15544,20 @@ mod donor_estate_print_tests {
     fn rule6_first_part_hard_splits_a_wide_first_word() {
         let sheet =
             super::SheetType::of_sheet("1701ms-2024", super::bundle("1701ms-2024").unwrap().css);
-        let part = super::rule6_first_part(
+        let consumed = super::wrap_one_line_at(
             &sheet,
             sheet.letter,
             40.0,
             "SUPERCALIFRAGILISTICEXPIALIDOCIOUS SHORT",
             7.5,
         );
+        let part = &"SUPERCALIFRAGILISTICEXPIALIDOCIOUS SHORT"[..consumed];
         assert!(
             !part.is_empty() && !part.contains(' '),
             "an over-wide first word must be hard-split, not dropped: {part:?}"
         );
         assert!(
-            "SUPERCALIFRAGILISTICEXPIALIDOCIOUS".starts_with(part.as_str()),
+            "SUPERCALIFRAGILISTICEXPIALIDOCIOUS".starts_with(part),
             "the split must be a prefix of the word: {part:?}"
         );
     }
@@ -15144,8 +15572,12 @@ mod donor_estate_print_tests {
             "DOUBLED  SPACES  HERE",
             "MOTHER-IN-LAW'S HOUSE-LOT",
         ] {
-            let part = super::rule6_first_part(&sheet, sheet.letter, 400.0, text, 7.5);
-            assert_eq!(part, text, "{text:?} must fit whole in a wide box");
+            let consumed = super::wrap_one_line_at(&sheet, sheet.letter, 400.0, text, 7.5);
+            assert_eq!(
+                consumed,
+                text.len(),
+                "{text:?} must fit whole in a wide box"
+            );
         }
     }
 
