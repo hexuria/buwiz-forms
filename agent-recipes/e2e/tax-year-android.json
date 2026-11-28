@@ -1,0 +1,108 @@
+{
+ "v": 1,
+ "name": "e2e-tax-year-android",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "nb-search"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "palette-input",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s3",
+   "op": "set_value",
+   "target": "palette-input",
+   "value": "E2E"
+  },
+  {
+   "id": "s4",
+   "op": "key",
+   "target": "palette-input",
+   "key": "Enter"
+  },
+  {
+   "id": "s5",
+   "op": "system",
+   "action": "keyboard_hide"
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "tp-tabs-forms",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s7",
+   "op": "click",
+   "target": "tp-tabs-forms"
+  },
+  {
+   "id": "s8",
+   "op": "wait_until",
+   "target": "tp-add-year-add",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "tp-add-year-add"
+  },
+  {
+   "id": "s10",
+   "op": "wait_until",
+   "target": "tp-forms-edit",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s11",
+   "op": "click",
+   "target": "tp-forms-edit"
+  },
+  {
+   "id": "s12",
+   "op": "wait_until",
+   "target": "tp-forms-search",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s13",
+   "op": "set_value",
+   "target": "tp-forms-search",
+   "value": "2551"
+  },
+  {
+   "id": "s14",
+   "op": "system",
+   "action": "keyboard_hide"
+  },
+  {
+   "id": "s15",
+   "op": "wait_until",
+   "target": "tp-form-2551Q",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s16",
+   "op": "click",
+   "target": "tp-form-2551Q"
+  },
+  {
+   "id": "s17",
+   "op": "click",
+   "target": "tp-forms-save"
+  },
+  {
+   "id": "s18",
+   "op": "wait_until",
+   "target": "tp-forms-save",
+   "timeout_ms": 5000,
+   "exists": false,
+   "screenshot": true
+  }
+ ]
+}

@@ -1,0 +1,131 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261128-051153",
+ "out": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153",
+ "cli_version": "0.5.0",
+ "app_commit": "b3bddd4d",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3116,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 14631,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 11706,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/03-tax-year/recording.mp4"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 5384,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/04-navigate/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 5099,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/05-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 25490,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced-phone.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/06-money-boxes/recording.mp4",
+   "scrolled": {
+    "s14": 1
+   }
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "pass",
+   "ms": 17196,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/08-delete-row/recording.mp4"
+  },
+  {
+   "name": "queue",
+   "status": "refused",
+   "ms": 0,
+   "note": "presses a send control: run with --allow-send",
+   "file": null
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 17391,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/10-birth-date/recording.mp4"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 14166,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/11-sign-out/recording.mp4",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed but locked-screen never appears",
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/11-sign-out/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/android-20261128-051153/11-sign-out/failure-tree.json"
+  }
+ ]
+}

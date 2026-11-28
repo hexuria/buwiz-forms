@@ -27,7 +27,7 @@
    "desktop": "sign-up.wants",
    "linux": "sign-up-linux.wants",
    "phone": "sign-up-phone.json",
-   "android": "sign-up-android.wants",
+   "android": "sign-up-android.json",
    "resolve": {
     "tin_field": {
      "role": [
@@ -43,7 +43,7 @@
    "name": "tax-year",
    "file": "tax-year.wants",
    "linux": "tax-year-narrow.wants",
-   "android": "tax-year-narrow.wants",
+   "android": "tax-year-android.json",
    "required": true
   },
   {
@@ -70,18 +70,11 @@
     "phone": "software_keyboard"
    },
    "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
-   "may_scroll": {
-    "phone": [
-     "s14"
-    ]
-   },
    "fallback": {
     "phone": "money-boxes-phone.json",
     "file": "money-boxes.wants"
    },
-   "known_gap": {
-    "phone": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have"
-   }
+   "known_gap": {}
   },
   {
    "name": "sheet-press",
@@ -90,13 +83,7 @@
   },
   {
    "name": "delete-row",
-   "file": "delete-row.wants",
-   "resolve": {
-    "table": {
-     "id_regex": "^(fp-table-.+)-add$",
-     "group": 1
-    }
-   },
+   "file": "delete-row.json",
    "known_gap": {
     "phone": "gap 1: the row drawer is a sheet on a phone",
     "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
@@ -125,8 +112,8 @@
    "linux": "sign-out-phone.wants",
    "phone": "sign-out-phone.wants",
    "known_gap": {
-    "phone": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
-    "linux": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
+    "phone": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed but locked-screen never appears",
+    "linux": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed but locked-screen never appears",
     "windows": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
     "macos": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed (nb-menu-logout) but no locked-screen ever appears, so the wait can never pass in this environment"
    }
