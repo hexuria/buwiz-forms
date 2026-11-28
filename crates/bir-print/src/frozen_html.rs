@@ -16371,7 +16371,9 @@ mod donor_estate_print_tests {
         assert!(!super::is_amount_typed_key("frm1706:txtTotalN"));
         // gross receipts and real money keys keep their money typing
         assert!(super::is_amount_typed_key("frm2551Qv2018:txtGrossReceipts"));
-        assert!(super::is_amount_typed_key("frm1800v2018:TotalAmountPayable"));
+        assert!(super::is_amount_typed_key(
+            "frm1800v2018:TotalAmountPayable"
+        ));
     }
 
     #[test]
@@ -16380,7 +16382,9 @@ mod donor_estate_print_tests {
         // joins; the identifier lookalikes stay excluded.
         assert!(super::is_amount_typed_key("frm1800v2018:txtTaxPayable"));
         assert!(super::is_amount_typed_key("frm1801v2018:txtTaxDue_A"));
-        assert!(!super::is_amount_typed_key("frm1702RT:txtPg1Pt3I25TaxDebitC2"));
+        assert!(!super::is_amount_typed_key(
+            "frm1702RT:txtPg1Pt3I25TaxDebitC2"
+        ));
         assert!(!super::is_amount_typed_key("frm1801v2018:txtTaxRate"));
     }
 
