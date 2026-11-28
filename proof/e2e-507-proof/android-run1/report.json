@@ -1,0 +1,143 @@
+{
+ "suite": "smoke",
+ "target": "android",
+ "started": "20261128-055515",
+ "out": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515",
+ "cli_version": "0.5.0",
+ "app_commit": "16dd1a30",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3675,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 14105,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 12091,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/03-tax-year/recording.mp4"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 5298,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/04-navigate/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 5032,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/05-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 25984,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced-phone.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/recording.mp4"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no phone variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 94,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.json",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 31732,
+   "note": "precondition: Stops before the Queue control after Check reports no problems. The send rehearsal is the following queue-send entry, refused unless --allow-send is explicitly passed.",
+   "file": "agent-recipes/e2e/queue-phone.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/recording.mp4",
+   "step": "s24",
+   "error": "occluded_by: software keyboard (a press on `node 10964` at (205.7143, 710.4762) lands on a key; hide the keyboard or scroll the target above it first)",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/failure-tree.json"
+  },
+  {
+   "name": "queue-send",
+   "status": "skipped (needs --allow-send)",
+   "ms": 0,
+   "note": "needs --allow-send",
+   "file": null
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 17524,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/11-birth-date/recording.mp4"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 14289,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "video": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/12-sign-out/recording.mp4",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "issue #450: BIR_AUTH_BYPASS=1 leaves no lock screen after Log out",
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/12-sign-out/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/12-sign-out/failure-tree.json"
+  }
+ ]
+}

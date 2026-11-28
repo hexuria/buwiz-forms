@@ -1,0 +1,162 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "sign-up-linux",
+  "fingerprint": "fnv1a64:9cc1a1b149e788d5",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 398
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 7
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 370
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1007
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 903
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 705
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 676
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 17
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 435
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1319,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1115
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 17
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 414
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1324,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 612,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 17
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 370
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 92
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 30,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/021-s21.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/02-sign-up/021-s21.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9857
+}

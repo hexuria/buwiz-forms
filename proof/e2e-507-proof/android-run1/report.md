@@ -1,0 +1,18 @@
+# e2e smoke on android
+
+App 16dd1a30, gpui-agent-cli 0.5.0, host mobile (phone), features: press, scroll, drag, swipe, long_press, system.back, software_keyboard, paste, system.rotate, system.keyboard_show, system.keyboard_hide, press_within, assert_states, snapshot_since, snapshot_compact, expect_fingerprint, secret_redaction, screenshot_inline.
+
+| # | recipe | result | ms | failing step | error / note |
+|---|---|---|---|---|---|
+| 1 | setup-start | pass | 3675 |  |  |
+| 2 | sign-up | pass | 14105 |  |  |
+| 3 | tax-year | pass | 12091 |  |  |
+| 4 | navigate | pass | 5298 |  |  |
+| 5 | open-2551q | pass | 5032 |  |  |
+| 6 | money-boxes | pass | 25984 |  |  |
+| 7 | sheet-press | skipped | 0 |  | no phone variant |
+| 8 | delete-row | setup | 94 |  | $table: no node matches {"id_regex": "^(fp-table-.+)-add$", "group": 1} |
+| 9 | queue | fail | 31732 | s24 | occluded_by: software keyboard (a press on `node 10964` at (205.7143, 710.4762) lands on a key; hide the keyboard or scroll the target above it first) [screenshot](09-queue/failure.png) |
+| 10 | queue-send | skipped (needs --allow-send) | 0 |  | needs --allow-send |
+| 11 | birth-date | pass | 17524 |  |  |
+| 12 | sign-out | known gap | 14289 | s4 `wait_until locked-screen --timeout-ms 10000 --screenshot` | wait_until timed out: node `locked-screen` not found (known gap: issue #450: BIR_AUTH_BYPASS=1 leaves no lock screen after Log out) [screenshot](12-sign-out/failure.png) |

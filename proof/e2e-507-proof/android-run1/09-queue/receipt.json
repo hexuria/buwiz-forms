@@ -1,0 +1,181 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-queue-phone",
+  "fingerprint": "fnv1a64:115b4996c60ccc7c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 95
+    },
+    {
+      "id": "s0scroll",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 824
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2198
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 1577
+    },
+    {
+      "id": "s5a",
+      "ok": true,
+      "elapsed_ms": 1196
+    },
+    {
+      "id": "s5b",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4607
+    },
+    {
+      "id": "s5c",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1875
+    },
+    {
+      "id": "s5d",
+      "ok": true,
+      "elapsed_ms": 374
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 837
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 53
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 474
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 84
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 811
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2096
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 49
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 943
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1284,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/017-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1366
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2026
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1680
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 929
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 834
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1966
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 753,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/024-s23.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s24",
+      "ok": false,
+      "error": "occluded_by: software keyboard (a press on `node 10964` at (205.7143, 710.4762) lands on a key; hide the keyboard or scroll the target above it first)",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 637,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/025-s24.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/017-s16.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/024-s23.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/09-queue/025-s24.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 29581
+}

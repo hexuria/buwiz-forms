@@ -1,0 +1,189 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-money-boxes-paced-phone",
+  "fingerprint": "fnv1a64:219cff839a21a0b6",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1791,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s1a",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1041
+    },
+    {
+      "id": "s1b",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 853
+    },
+    {
+      "id": "s1c",
+      "ok": true,
+      "elapsed_ms": 367
+    },
+    {
+      "id": "s1d",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1037
+    },
+    {
+      "id": "s1e",
+      "ok": true,
+      "elapsed_ms": 104
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 795
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 1047
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2762
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 224,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/010-s5.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 404
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 91
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3596
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 238,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/014-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 664
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 460,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/016-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 441
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 346,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/018-s13.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 328
+    },
+    {
+      "id": "s13r",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3716
+    },
+    {
+      "id": "s13p",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1400
+    },
+    {
+      "id": "s13w",
+      "ok": true,
+      "elapsed_ms": 75
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2100,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/023-s14.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/010-s5.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/014-s9.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/016-s11.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/018-s13.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/06-money-boxes/023-s14.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 23893
+}

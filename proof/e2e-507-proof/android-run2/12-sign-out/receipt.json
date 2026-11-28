@@ -1,0 +1,44 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "sign-out-phone",
+  "fingerprint": "fnv1a64:4314f8fb843043cc",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 859
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 67
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1119
+    },
+    {
+      "id": "s4",
+      "ok": false,
+      "error": "wait_until timed out: node `locked-screen` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 10236,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-060508/12-sign-out/004-s4.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-060508/12-sign-out/004-s4.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 12282
+}

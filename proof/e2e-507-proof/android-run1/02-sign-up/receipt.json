@@ -1,0 +1,124 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-sign-up-android",
+  "fingerprint": "fnv1a64:1c798c8accb8799d",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 33
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 756
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 47
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 692
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 30
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1581
+    },
+    {
+      "id": "s6h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 512
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2004
+    },
+    {
+      "id": "s7h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 575
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1040
+    },
+    {
+      "id": "s8h",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 660
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 118
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2514,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/02-sign-up/013-s10.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 513
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 298
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 190,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/02-sign-up/017-s14.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/02-sign-up/013-s10.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/02-sign-up/017-s14.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 11591
+}

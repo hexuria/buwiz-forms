@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-birth-date-phone",
+  "fingerprint": "fnv1a64:4e782350b8988d3a",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1257
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 1260
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 550
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 730
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 366
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 381
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 57
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1015
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 72
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1387
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 470,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/11-birth-date/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 3
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 4694
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1667
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 378
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 883
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 258,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/11-birth-date/017-s17.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/11-birth-date/011-s11.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/11-birth-date/017-s17.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 15437
+}

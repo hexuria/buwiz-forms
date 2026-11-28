@@ -1,0 +1,68 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-queue-send-phone",
+  "fingerprint": "fnv1a64:9bfa5498fe59bc25",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 622,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 36,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2319,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/003-s3.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s4",
+      "ok": false,
+      "error": "wait_until timed out: node `fp-status` not found",
+      "error_code": "timeout",
+      "elapsed_ms": 20043,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/004-s4.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/003-s3.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/004-s4.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 23022
+}

@@ -1,0 +1,121 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-tax-year-android",
+  "fingerprint": "fnv1a64:0665b867a5ccc82e",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1248
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 357
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 925
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1011
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 264
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 353
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 443
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 20
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 755
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 21
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 616
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 544
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 971
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 374
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 138
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 467
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1337
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 164,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/03-tax-year/018-s18.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/android-20261128-055515/03-tax-year/018-s18.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 10016
+}

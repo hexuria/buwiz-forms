@@ -1,0 +1,144 @@
+{
+ "suite": "smoke",
+ "target": "linux",
+ "started": "20261128-055126",
+ "out": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126",
+ "cli_version": "0.5.0",
+ "app_commit": "16dd1a30",
+ "platform": "desktop",
+ "os": "linux",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 567,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": null
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 9885,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-linux.wants",
+   "video": null
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6284,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants",
+   "video": null
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 1974,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants",
+   "video": null
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1779,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": null
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 13633,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-phone.json",
+   "video": null
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 35,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 17140,
+   "note": "precondition: Stops before the Queue control after Check reports no problems. The send rehearsal is the following queue-send entry, refused unless --allow-send is explicitly passed.",
+   "file": "agent-recipes/e2e/queue-phone.json",
+   "video": null,
+   "step": "s27a",
+   "error": "wait_until timed out: node `fp-pill-count` exists but should be absent",
+   "error_code": "timeout",
+   "line": null,
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/failure-tree.json"
+  },
+  {
+   "name": "queue-send",
+   "status": "fail",
+   "ms": 23027,
+   "note": "precondition: Explicit dry-run send rehearsal. Without --allow-send the runner reports this entry skipped (needs --allow-send); with it the runner requires EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE and a test database.",
+   "file": "agent-recipes/e2e/queue-send-phone.json",
+   "video": null,
+   "step": "s4",
+   "error": "wait_until timed out: node `fp-status` not found",
+   "error_code": "timeout",
+   "line": null,
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/10-queue-send/failure-tree.json"
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 5946,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json",
+   "video": null
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 11797,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "video": null,
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/12-sign-out/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/12-sign-out/failure-tree.json"
+  }
+ ]
+}

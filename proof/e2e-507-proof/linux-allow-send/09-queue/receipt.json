@@ -1,0 +1,200 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "e2e-queue-phone",
+  "fingerprint": "fnv1a64:115b4996c60ccc7c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 17
+    },
+    {
+      "id": "s0scroll",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 685
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1801
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 37
+    },
+    {
+      "id": "s5a",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s5b",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1276
+    },
+    {
+      "id": "s5c",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 586
+    },
+    {
+      "id": "s5d",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 520
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 482
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 25
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 788
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1418
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 14
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 661
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 650,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/017-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 797
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1376
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 876
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 538
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 499
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 622
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 518,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/024-s23.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 644,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/025-s24.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1221,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/026-s26.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s27a",
+      "ok": false,
+      "error": "wait_until timed out: node `fp-pill-count` exists but should be absent",
+      "error_code": "timeout",
+      "elapsed_ms": 1012
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/017-s16.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/024-s23.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/025-s24.png",
+      "ok": true
+    },
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-055126/09-queue/026-s26.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 17130
+}

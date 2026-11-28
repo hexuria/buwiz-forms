@@ -1,0 +1,109 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tax-year-narrow",
+  "fingerprint": "fnv1a64:4955a89e633a1553",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 576
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 11
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 430
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 547
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "elapsed_ms": 12
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 410
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 5
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1359
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 5
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 455
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 21
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 683
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 9
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 379
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1364
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 28,
+      "screenshot": {
+        "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-054910/03-tax-year/016-s16.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-054910/03-tax-year/016-s16.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 6299
+}
