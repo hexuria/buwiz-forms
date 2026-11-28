@@ -1064,6 +1064,7 @@ export class FormSession {
     this.reopening = keep;
     if (!keep) {
       this.st = freshState(target);
+      this.typeBase.clear();
       this.bumpGuessed();
       if (target.mode === "filed_original") this.st.back = back;
       this.publish();
@@ -1844,6 +1845,7 @@ export class FormSession {
     if (Object.keys(s.pending).length) this.flush();
     else this.publish();
     if (kind === "money" || kind === "num") this.noteRefusedAmount(k, raw);
+    this.typeBase.delete(k);
     this.syncHostCase(k);
     // Q1 P1b: leaving a profile-backed box with a new complete value asks "Save to profile?" once.
     this.maybeProfileAskKeys([baseKey]);
@@ -1976,12 +1978,17 @@ export class FormSession {
       (k) => k in edits && String(edits[k] ?? "").trim() !== "" && this.typeBase.has(k) && NUMBER_KINDS.has(this.kindOf.get(k) ?? "") && !sameNumber(String(this.typeBase.get(k) ?? ""), String((r.values || {})[k] ?? "")),
     );
     if (!back.length) return r;
-    const code = this.st.target.formCode;
+    // The corrective goes through fillOnce like any edit: a blank base (the box held nothing when focus began) is the
+    // blank chain's own case, cleared to the host's zero where the host holds no blank.
     const corrective = Object.fromEntries(back.map((k) => [k, this.typeBase.get(k) ?? ""]));
-    const z: Filled = bir.screen_form_fill(code, r.draft, corrective, this.unlockedFor(corrective));
+    const z: Filled = this.fillOnce(r.draft, corrective);
     if (z.removes || Object.keys(z.rejected || {}).some((k) => k in corrective)) return r;
-    // The first answer's refusals stay (the typing was refused), over the draft rolled back to the pre-typing amounts.
-    return { ...z, rejected: { ...r.rejected }, cleared: undefined };
+    // The rollback undoes the typing: nothing of it is re-applied when a sample's period is set.
+    if (this.st.sample) for (const k of back) delete this.st.typedEdits[k];
+    // The first answer's refusals stay (the typing was refused), over the draft rolled back to the pre-typing amounts;
+    // the rest is the corrective answer's own, its cleared list merged with the first fill's.
+    const cleared = [...(r.cleared || []), ...(z.cleared || [])];
+    return { ...z, rejected: { ...r.rejected }, cleared: cleared.length ? cleared : undefined };
   }
 
   private fillOnce(draft: object, edits: Record<string, string>): Filled {

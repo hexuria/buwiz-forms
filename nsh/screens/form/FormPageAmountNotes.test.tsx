@@ -2,6 +2,7 @@
 // the return holds, and when that is not what was typed a note under it says so. Nothing is held: Save, autosave and leaving go
 // on; Queue stops on a note on an open part, the way it stops on any message under a box.
 import { expect, open, test } from "nsh/test";
+import { VALIDATE_DELAY } from "./session";
 
 const ENTRY = "./FormPageAny.tsx";
 const DESKTOP = { width: 1440, height: 900, platform: "macos" as const };
@@ -232,23 +233,87 @@ for (const [period, typed, shown] of [[1, "12345678901234567890", "12,345,678,90
   }, 40_000);
 }
 
-// The same typing at a slow filer's cadence: keystrokes over 300 ms apart let the session's flush fire mid-typing. On the
-// slow CI runner every keystroke is that slow. The typing is still one gesture: its refusal rolls back to what the cell held,
-// never to a shorter prefix of the same typing that a mid-typing flush committed while it still fit.
-test("refused amount in a schedule cell typed slowly: keystrokes apart enough to flush mid-typing still roll back to the held amount", async () => {
-  const app = await scheduleCell(2022, 3);
-  await app.clear(CELL);
-  for (const ch of "1234567890123") {
-    await app.type(CELL, ch);
-    await app.wait(450);
+// The same typing at a slow filer's cadence: keystrokes wider apart than the flush delay let the session's flush fire
+// mid-typing. On the slow CI runner every keystroke is that slow. The typing is still one gesture: its refusal rolls back
+// to what the cell held, never to a shorter prefix of the same typing that a mid-typing flush committed while it still fit.
+const SLOW_KEY = VALIDATE_DELAY + 150;
+
+async function typeSlowlyAndTab(app: Awaited<ReturnType<typeof scheduleCell>>, target: string, text: string) {
+  await app.clear(target);
+  for (const ch of text) {
+    await app.type(target, ch);
+    await app.wait(SLOW_KEY);
   }
   await app.wait(400);
   await app.keyboard.press("tab");
   await app.wait(800);
+}
+
+test("refused amount in a schedule cell typed slowly: keystrokes apart enough to flush mid-typing still roll back to the held amount", async () => {
+  const app = await scheduleCell(2022, 3);
+  await typeSlowlyAndTab(app, CELL, "1234567890123");
+  await app.waitFor("text:✓ Saved", { timeout: 8000 });
   const said = "Taxable Amount: you typed 1,234,567,890,123.00; the return holds 1,234.56.";
   expect(app.value(CELL)).toBe("1,234.56");
   expect(probe(app)).toBe("1,234.56");
   expect(app.texts().some((t) => t.startsWith(said))).toBe(true);
+}, 40_000);
+
+// The schedule cell's 12-character limit counts the decimal point (form_2551q.rs), so a slow "1234567890.12" is over it.
+test("refused amount with a decimal point typed slowly in a schedule cell: the rollback covers the pointed digits too", async () => {
+  const app = await scheduleCell(2022, 2);
+  await typeSlowlyAndTab(app, CELL, "1234567890.12");
+  await app.waitFor("text:✓ Saved", { timeout: 8000 });
+  expect(app.value(CELL)).toBe("1,234.56");
+  expect(probe(app)).toBe("1,234.56");
+  expect(app.texts().some((t) => t.startsWith("Taxable Amount: you typed ") && t.includes("the return holds 1,234.56."))).toBe(true);
+}, 40_000);
+
+// A top-level box, blank when the focus began: the blank chain's zero is the base the rollback restores.
+test("refused amount typed slowly in a blank top-level box: the box and the return end blank, the note names the typing", async () => {
+  const app = await page(2023, 1);
+  await typeSlowlyAndTab(app, BOX, "1234567890123");
+  await app.waitFor("text:✓ Saved", { timeout: 8000 });
+  expect(probe(app)).toBe("0.00");
+  expect(app.value(BOX)).toBe("");
+  expect(app.texts().some((t) => t.startsWith("Item 15: you typed 1,234,567,890,123.00"))).toBe(true);
+}, 40_000);
+
+// Queue pressed in the middle of the slow typing: the leave and the rollback are the same gesture's.
+test("Queue pressed while a refused amount is still being typed slowly: the cell rolls back and the note stops Queue once", async () => {
+  const app = await scheduleCell(2022, 1);
+  await app.clear(CELL);
+  const digits = "1234567890123";
+  for (const ch of digits.slice(0, 8)) {
+    await app.type(CELL, ch);
+    await app.wait(SLOW_KEY);
+  }
+  for (const ch of digits.slice(8)) {
+    await app.type(CELL, ch);
+    await app.wait(SLOW_KEY);
+  }
+  await app.press("id:fp-queue");
+  await app.waitUntil(() => app.texts().some((t) => t.includes("you typed")), { timeout: 8000 });
+  expect(app.value(CELL)).toBe("1,234.56");
+  expect(probe(app)).toBe("1,234.56");
+}, 40_000);
+
+// Sample mode: the rollback also drops the typing from typedEdits, so setting the period does not bring the prefix back.
+test("sample mode: a refused amount typed slowly stays rolled back after the period is set", async () => {
+  const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 0, period: 0, mode: "sample", probeKey: PROBE } } });
+  await app.waitFor("text:BIR Form 2551Q");
+  await app.press("id:fp-nav-2");
+  await app.waitFor(BOX);
+  await typeSlowlyAndTab(app, BOX, "1234567890123");
+  expect(app.value(BOX)).toBe("");
+  await app.type("id:fp-frm2551Qv2018:rtnMonth#period", "12/2025");
+  await app.waitUntil(() => app.enabled("id:fp-frm2551Qv2018:qtr_1") === true, { timeout: 10000 });
+  await app.press("id:fp-frm2551Qv2018:qtr_1");
+  await app.wait(2500);
+  await app.press("id:fp-nav-2");
+  await app.waitFor(BOX);
+  expect(app.value(BOX)).toBe("");
+  expect(app.texts().some((t) => t.includes("1,234,567,890,122") || t.includes("1,234,567,890,123.0") && !t.includes("you typed"))).toBe(false);
 }, 40_000);
 
 test("note in a row drawer: with the drawer closed and its part folded, Queue opens both, the cell and its sentence are on screen, and the next press goes on", async () => {
