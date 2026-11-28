@@ -6014,7 +6014,12 @@ mod tests {
 
     /// `draft` sent for real by the worker's own path (queued, claimed, Submitted now): only a Draft may use the generic
     /// save, so a sent return is made the way the worker makes one.
-    fn sent_lab_1601c(db: &Database, mut draft: Form1601CDraft) {
+    fn sent_lab_1601c(db: &Database, draft: Form1601CDraft) {
+        sent_lab_1601c_via(db, draft, false);
+    }
+
+    /// As `sent_lab_1601c`; `mock_relay` marks the send as one to the local mock relay, as the worker does.
+    fn sent_lab_1601c_via(db: &Database, mut draft: Form1601CDraft, mock_relay: bool) {
         draft.transition_to_queued().expect("the lab return queues");
         db.save_queued_1601c_draft(&draft)
             .expect("the queued return is saved");
@@ -6036,6 +6041,7 @@ mod tests {
             panic!("expected a claim");
         };
         claimed.transition_to_submitted(draft.default_submission_filename(), false);
+        claimed.submitted_via_relay = mock_relay;
         db.finish_claimed_1601c_submission(&claimed, &token)
             .expect("the send is finished");
     }
@@ -6083,6 +6089,37 @@ mod tests {
 
         reschedule_email_polls_for_inbox(&db, "filer@example.com");
         assert_eq!(polls(&db).len(), 1, "still one job per return");
+    }
+
+    /// #504 review: a send to the local mock relay never had a poll (the worker skips it), so a change of the inbox's
+    /// way in queues none for it either; a real send beside it still gets its poll.
+    #[test]
+    fn a_mock_relay_send_gets_no_poll_back() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c_via(&db, crate::filing_queue::mandatory_lab_1601c_draft(), true);
+        let tin = crate::filing_queue::mandatory_lab_1601c_draft().tin;
+        assert!(
+            db.returns_awaiting_bir_email(&tin)
+                .expect("the waiting returns are listed")
+                .is_empty(),
+            "a mock relay send is not waiting for the BIR's email"
+        );
+        sent_lab_1601c(
+            &db,
+            crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10),
+        );
+        assert_eq!(
+            db.returns_awaiting_bir_email(&tin)
+                .expect("the waiting returns are listed")
+                .len(),
+            1,
+            "the real send is"
+        );
     }
 
     /// With tracking off the inbox is not watched, so nothing is queued however it changes.

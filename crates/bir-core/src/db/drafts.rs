@@ -3388,7 +3388,10 @@ impl Database {
         let mut stmt = self.conn.prepare(&format!(
             "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at
              FROM form_drafts
-             WHERE tin = ?1 AND status IN ('Submitted', 'Filed') AND NOT {}",
+             WHERE tin = ?1 AND status IN ('Submitted', 'Filed') AND NOT {}
+               AND NOT (json_valid(data_json) AND
+                    COALESCE(NULLIF(json_type(data_json, '$.submitted_via_relay'), 'null'),
+                             json_type(data_json, '$.lifecycle.submitted_via_relay'), 'false') = 'true')",
             crate::forms::dry_run::STORED_DRY_RUN_SQL
         ))?;
         let rows = stmt.query_map(params![tin], draft_summary_from_row)?;
