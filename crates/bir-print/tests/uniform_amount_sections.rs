@@ -763,3 +763,43 @@ fn whole_peso_and_bracketed_amounts_are_money() {
         "the column converts uniform with it"
     );
 }
+
+/// Round 4 #2: 2550Q Part IV input-tax section is ONE column across its rows:
+/// with the comb's real width the row-label tails no longer split it (before,
+/// Part IV A item 11 fell apart 4+7). An overflow of the carried-over input
+/// tax converts the whole section group; the output-tax section above keeps
+/// its combs.
+#[test]
+fn f2550q_part4_input_tax_section_is_one_group() {
+    let fields = std::collections::BTreeMap::from([
+        (
+            "frm2550qv2024:inputTaxCarried".to_string(),
+            "12,345,678,901,234.56".to_string(),
+        ),
+        (
+            "frm2550qv2024:inputTaxDeferred".to_string(),
+            "1,000.00".to_string(),
+        ),
+        (
+            "frm2550qv2024:outputTaxDue".to_string(),
+            "2,000.00".to_string(),
+        ),
+    ]);
+    let doc = filled_document("2550q-2024", &fields).expect("filled");
+    assert!(
+        line_not_comb(&doc, "p2c49"),
+        "the overflowing carried-over input tax prints as a line"
+    );
+    assert!(
+        line_not_comb(&doc, "p2c53"),
+        "the input-tax section converts uniform with it"
+    );
+    assert!(
+        line_not_comb(&doc, "p2c69"),
+        "the section total converts with it"
+    );
+    assert!(
+        !line_not_comb(&doc, "p2c31"),
+        "the output-tax section above is its own group: combs stay"
+    );
+}
