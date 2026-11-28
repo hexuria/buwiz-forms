@@ -89,7 +89,7 @@ test("zero placeholder desktop: a 2551Q zero amount types 5, saves 5.00, and cle
   await app.waitUntil(() => app.value(box) === "" && app.texts().includes("probe 0.00"), { timeout: 8000 });
 }, 30_000);
 
-test("money round trip desktop: focus on a filled amount keeps its grouped text and a digit with separators saves the right amount", async () => {
+test("money round trip desktop: focus on a filled amount keeps its grouped text and a refocused digit extends the integer", async () => {
   const box = "id:fp-frm2551Qv2018:txt15";
   const app = await open(ENTRY, {
     ...DESKTOP,
@@ -104,11 +104,11 @@ test("money round trip desktop: focus on a filled amount keeps its grouped text 
   expect(app.value(box)).toBe("1,234.56");
   await app.type(box, "9");
   await app.wait(300); // the host round trip may answer before the assertion
-  expect(app.value(box)).toBe("1,234.569");
+  expect(app.value(box)).toBe("1,2349.56");
   await app.submit(box);
   await app.waitFor("text:✓ Saved", { timeout: 8000 });
-  await app.waitUntil(() => app.texts().includes("probe 1,234.57"), { timeout: 5000 });
-  expect(app.value(box)).toBe("1,234.57");
+  await app.waitUntil(() => app.texts().includes("probe 12,349.56"), { timeout: 5000 });
+  expect(app.value(box)).toBe("12,349.56");
 }, 30_000);
 
 
