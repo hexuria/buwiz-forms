@@ -56,7 +56,7 @@ use super::gated_rows;
 use super::AgentFormKind;
 
 /// Lay the draft-dependent locks over `locks`, the base map
-/// ([`super::locks`]), the way the page's open does: the ten layers of this
+/// ([`super::locks`]), the way the page's open does: the eleven layers of this
 /// module's note, in that order, with their own reasons. A layer may replace
 /// a base reason with an exact one (2000's 15B, which the probe calls
 /// derived, is computed), and the last one takes 1701Q's spouse penalty
