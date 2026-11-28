@@ -3,6 +3,50 @@
  "name": "e2e-delete-row",
  "steps": [
   {
+   "id": "s0a",
+   "op": "click",
+   "target": "nb-new"
+  },
+  {
+   "id": "s0b",
+   "op": "wait_until",
+   "target": "new-return-2551Q",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0c",
+   "op": "click",
+   "target": "new-return-2551Q"
+  },
+  {
+   "id": "s0d",
+   "op": "click",
+   "target": "new-return-period-trigger"
+  },
+  {
+   "id": "s0e",
+   "op": "wait_until",
+   "target": "new-return-period-opt-1",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0f",
+   "op": "click",
+   "target": "new-return-period-opt-1"
+  },
+  {
+   "id": "s0g",
+   "op": "click",
+   "target": "new-return-open"
+  },
+  {
+   "id": "s0h",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000,
+   "screenshot": true
+  },
+  {
    "op": "scroll",
    "target": "form-scroll",
    "dy": 2400,
@@ -27,12 +71,12 @@
   },
   {
    "op": "click",
-   "target": "fp-table-drpATC1-add",
+   "target": "$table-add",
    "id": "s5"
   },
   {
    "op": "wait_until",
-   "target": "fp-table-drpATC1-drawer",
+   "target": "$table-drawer",
    "timeout_ms": 5000,
    "screenshot": true,
    "id": "s6"
@@ -57,7 +101,7 @@
   },
   {
    "op": "click",
-   "target": "fp-table-drpATC1-delete",
+   "target": "$table-delete",
    "id": "s10"
   },
   {

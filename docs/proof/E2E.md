@@ -56,7 +56,7 @@ them again after its own read of `.env`. An account server that is not on this m
    - `run.log`: one line per action (time, verb, target, result, ms), for a proof README to include;
    - `app.log`: the app's own output;
    - one folder per recipe, with `receipt.json` (gpui-agent's receipt), the screenshots and, with `--record`, the
-     recording.
+     recording. `--record` records only iOS and Android; a desktop video is the machine recorder's, not the runner's.
 
 Results:
 - `pass`;
@@ -151,14 +151,14 @@ into the run's evidence folder (never the repository), runs the steps through th
 resolves, then runs the rest in the same app session. `.wants` slicing assumes one step per non-comment line, the same
 shape gpui-agent parses; that is what maps a slice line number back to the original step id. The report and the merged
 receipt are still one recipe with the original step ids. A node not found there is `setup` at that step, with the
-screenshot and tree kept. A parameter used at or before its `after` step is refused by `just e2e check <suite>`.
+screenshot and tree kept; the run's summary calls it `setup failure`, and the exit status is nonzero. A parameter used at or before its `after` step is refused by `just e2e check <suite>`.
 
-The delete-row case: 2551Q's Schedule 1 is the collapsed part 3 (`fp-part-3-toggle`), and its Add row can be culled
-until that part is expanded or scrolled to. If `delete-row.wants` first takes a step that makes the table visible (that
-step must not use `$table`) and only then clicks `$table-add`, the entry's spec becomes:
+The delete-row case: 2551Q's Schedule 1 is the collapsed part 4 (`fp-part-4-toggle`), and its Add row can be culled
+until that part is expanded or scrolled to. `delete-row*.json` first opens its own fresh Q1 return, scrolls to and opens
+that part without using `$table`, and only then clicks `$table-add`; the entry's spec is:
 
 ```json
-{"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "s1"}
+{"id_regex": "^(fp-table-.+)-add$", "group": 1, "after": "s3"}
 ```
 
 **Requirements and fallbacks.**
@@ -201,10 +201,11 @@ a Windows file is named.
 | 4 | `navigate` | every screen | `../ui/ui-navigate-app.wants` | `navigate-phone.wants` | `navigate-phone.wants` |
 | 5 | `open-2551q` | New return > 2551Q | `open-2551q.wants`; Windows `open-2551q-windows.wants` (also the facts 2551Q validates) | `open-2551q-phone.wants` | `open-2551q-phone.wants` |
 | 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | `money-boxes-paced-phone.json` (awaits the software keyboard), fallback `money-boxes-phone.json` |
-| 7 | `queue` | Queue in the dry-run test build (send) | `queue.wants`; Windows `queue-windows.wants` (answers Part I) | `queue.wants` | `queue.wants` |
-| 8 | `delete-row` | a schedule row added, filled and deleted | `delete-row.wants` | same | same; Android `delete-row.json` opens Schedule 1 first |
-| 9 | `birth-date` | the birth date, typed in the date box / the date sheet, read back, saved | `birth-date.wants` | `birth-date-phone.json` | `birth-date-phone.json` |
-| 10 | `sign-out` | Log out; the lock screen | `sign-out.wants` | `sign-out-phone.wants` | `sign-out-phone.wants` |
+| 7 | `delete-row` | in its own fresh Q1 return, a schedule row added, filled and deleted | `delete-row-desktop.json` | `delete-row.json` | `delete-row.json` |
+| 8 | `queue` | a fresh Q2 return validated; Queue visible but not pressed | `queue-desktop.json`; Windows `queue-windows.wants` | `queue-phone.json` | `queue-phone.json` |
+| 9 | `queue-send` | a fresh Q3 return validated, then the explicit dry-run Queue/Continue rehearsal | `queue-send-desktop.json`; Windows `queue-send-windows.wants` | `queue-send-phone.json` | `queue-send-phone.json` |
+| 10 | `birth-date` | the birth date, typed in the date box / the date sheet, read back, saved | `birth-date.wants` | `birth-date-phone.json` | `birth-date-phone.json` |
+| 11 | `sign-out` | Log out; the lock screen | `sign-out.wants` | `sign-out-phone.wants` | `sign-out-phone.wants` |
 
 Why the recipes look as they do (each from a machine's run on the real app, `proof/e2e-fixes-*/README.md`):
 - After Create the app is on the taxpayer's own page (Forms tab, Add year band open), not Home. Home tiles are
@@ -215,7 +216,8 @@ Why the recipes look as they do (each from a machine's run on the real app, `pro
 - The form is an accordion on every platform: Items 15 and 16 are not in the tree until Part II
   (`fp-part-2-toggle`) is expanded; the JSON money-box recipes scroll `form-scroll` first (the floating pill can cover
   a toggle). The money boxes type the amounts as written (`500.25`): since #403 a money box keeps its text while
-  focused and formats only on leaving, so the box reads `$amount` while focused and `$amount_shown` after it.
+  focused and formats only on leaving, so the box reads `$amount` while focused and `$amount_shown` after it. They do
+  not promise to leave Items 15 and 16 at zero; the queue recipes never reuse that return.
 - On the macOS strict adapter a bare `type` does not move focus out of the segmented TIN control: the desktop
   recipes click a box before typing into it (sign-up's name, the birth date, delete-row's amount).
 - 2551Q's Schedule 1 pre-holds row 1, and Delete row is disabled on an empty row: delete-row fills the new row's
@@ -253,8 +255,7 @@ In gpui-agent and the plug (nsh-gpui-agent):
   drawer (Windows), Android's picker sheets. `set_value` into a sheet's box lands. Modal dialogs hit-test fine.
 - **Scrolling** (hexuria/gpui-agent#121): `.wants` has no scroll verb (JSON recipes have `op: scroll`), and the tree
   culls nodes outside the viewport with no "scroll until it exists" step. The runner can now resolve after a recipe
-  step, but delete-row still needs a leading step that brings Schedule 1 into the tree before `$table` can be found
-  below the fold.
+  step; delete-row uses that: it opens a fresh return, scrolls to Schedule 1 and resolves `$table` only after step s3.
 - **macOS focus** (hexuria/nsh-gpui-agent#14): bare `type` does not move focus out of the segmented TIN control;
   focus flags read false everywhere; every step reports `delivered_unverified`, landed or not.
 - **Money boxes under injected text** (hexuria/nsh-gpui-agent#15): paced `500.25` lands as `0.25` on macOS and as

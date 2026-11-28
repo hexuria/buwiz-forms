@@ -292,7 +292,79 @@ class SuiteTests(unittest.TestCase):
         delete_row = next(entry for entry in suite["recipes"] if entry["name"] == "delete-row")
         self.assertEqual(sign_up["android"], "sign-up-android.json")
         self.assertEqual(tax_year["android"], "tax-year-android.json")
-        self.assertEqual(delete_row["android"], "delete-row.json")
+        self.assertEqual(delete_row["phone"], "delete-row.json")
+
+    def test_queue_recipes_open_their_own_fresh_period_before_setup(self):
+        def json_open(path, opener, period):
+            steps = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / path)
+            opening = [(step.get("op"), step.get("target")) for step in steps[:8]]
+            self.assertEqual(opening, [
+                ("click", opener),
+                ("wait_until", "new-return-2551Q"),
+                ("click", "new-return-2551Q"),
+                ("click", "new-return-period-trigger"),
+                ("wait_until", f"new-return-period-opt-{period}"),
+                ("click", f"new-return-period-opt-{period}"),
+                ("click", "new-return-open"),
+                ("wait_until", "form-page"),
+            ], path)
+            return steps
+
+        for path, opener in (("queue-desktop.json", "sb-new"), ("queue-phone.json", "nb-new")):
+            steps = json_open(path, opener, 2)
+            check = next(i for i, step in enumerate(steps) if step.get("target") == "fp-check")
+            precondition = steps[check + 1]
+            self.assertEqual((precondition.get("op"), precondition.get("target"), precondition.get("exists")),
+                             ("wait_until", "fp-pill-count", False), path)
+            self.assertLess(check, next(i for i, step in enumerate(steps) if step.get("target") == "fp-queue"), path)
+
+        for path, opener in (("queue-send-desktop.json", "sb-new"), ("queue-send-phone.json", "nb-new")):
+            steps = json_open(path, opener, 3)
+            self.assertIn(("wait_until", "fp-pill-count"), [(step.get("op"), step.get("target")) for step in steps], path)
+
+        windows = (ROOT / "agent-recipes" / "e2e" / "queue-windows.wants").read_text(encoding="utf-8")
+        self.assertLess(windows.index("click sb-new"), windows.index("click new-return-period-opt-2"))
+        self.assertLess(windows.index("click new-return-period-opt-2"), windows.index("wait_until form-page"))
+        self.assertLess(windows.index("click fp-check"), windows.index("wait_until fp-pill-count"))
+        self.assertLess(windows.index("wait_until fp-pill-count"), windows.index("wait_until fp-queue"))
+        send_windows = (ROOT / "agent-recipes" / "e2e" / "queue-send-windows.wants").read_text(encoding="utf-8")
+        self.assertLess(send_windows.index("click sb-new"), send_windows.index("click new-return-period-opt-3"))
+        self.assertLess(send_windows.index("click new-return-period-opt-3"), send_windows.index("wait_until form-page"))
+
+    def test_android_queue_hides_the_keyboard_after_typing_and_money_boxes_waits_ready(self):
+        steps = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / "queue-phone.json")
+        email_type = next(i for i, step in enumerate(steps) if step.get("id") == "s22")
+        self.assertEqual((steps[email_type + 1].get("op"), steps[email_type + 1].get("action")),
+                         ("system", "keyboard_hide"))
+        money = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / "money-boxes-paced-phone.json")
+        self.assertEqual((money[0].get("op"), money[0].get("target"), money[0].get("timeout_ms")),
+                         ("wait_until", "fp-frm2551Qv2018:amendedRtn_1", 8000))
+        self.assertEqual((money[1].get("op"), money[1].get("target")),
+                         ("click", "fp-frm2551Qv2018:amendedRtn_1"))
+
+    def test_delete_row_navigates_to_schedule_one_before_resolving_its_table(self):
+        suite = E2E.load_suite("smoke")
+        entry = next(entry for entry in suite["recipes"] if entry["name"] == "delete-row")
+        self.assertEqual((entry["desktop"], entry["linux"], entry["phone"]),
+                         ("delete-row-desktop.json", "delete-row.json", "delete-row.json"))
+        spec = entry["resolve"]["table"]
+        self.assertEqual(spec.get("after"), "s3")
+        for file, opener in (("delete-row-desktop.json", "sb-new"), ("delete-row.json", "nb-new")):
+            steps = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / file)
+            self.assertEqual((steps[0].get("op"), steps[0].get("target")), ("click", opener), file)
+            self.assertIn(("click", "new-return-period-opt-1"),
+                          [(step.get("op"), step.get("target")) for step in steps[:8]], file)
+            exposed = next(i for i, step in enumerate(steps) if step.get("id") == "s1")
+            self.assertEqual([(step.get("id"), step.get("op"), step.get("target"))
+                              for step in steps[exposed:exposed + 3]], [
+                ("s1", "scroll", "form-scroll"),
+                ("s2", "click", "fp-part-4-toggle"),
+                ("s3", "scroll", "form-scroll"),
+            ], file)
+            for step in steps[:exposed + 3]:
+                self.assertNotIn("$table", json.dumps(step), file)
+            self.assertEqual((steps[exposed + 4].get("op"), steps[exposed + 4].get("target")),
+                             ("click", "$table-add"), file)
 
     def test_problems_are_named(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -436,6 +508,11 @@ class ReportTests(unittest.TestCase):
                           text)
             self.assertIn("| 2 | b | needs | 0 |  | needs gpui-agent-cli 0.4.1 |", text)
             self.assertEqual(json.loads((out / "report.json").read_text())["recipes"][1]["status"], "needs")
+
+    def test_a_setup_that_never_runs_is_a_failure_in_the_summary_and_exit_rule(self):
+        results = [{"status": "setup"}, {"status": "pass"}]
+        self.assertEqual(E2E.summary(results), "1 pass, 1 setup failure")
+        self.assertNotIn("setup", E2E.SUCCESS_STATUSES)
 
 
 LATE_FAKE_CLI = r'''
@@ -618,6 +695,15 @@ class RunEntryTests(unittest.TestCase):
             recipes = [call for call in calls if call[2] == "recipe"]
             self.assertEqual(str(recipe_call_path(recipes[0])), str((folder / "late.wants").resolve()))
             self.assertIn("table=fp-table-x", recipes[0])
+
+    def test_a_resolve_the_variant_never_uses_is_not_resolved(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            fake = install_late_cli(folder, EMPTY_TREE, EMPTY_TREE)
+            entry = self.late_entry(after=None)
+            result, suite, out, log = self.run_late_entry(folder, fake, entry, "click expose-table\n")
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual([call[2] for call in cli_calls(fake)], ["recipe"])
 
     def test_nothing_found_after_the_step_is_setup_with_evidence(self):
         with tempfile.TemporaryDirectory() as folder:

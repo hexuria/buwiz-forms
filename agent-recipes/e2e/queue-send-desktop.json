@@ -4,26 +4,146 @@
  "app": "bir-shell",
  "steps": [
   {
-   "id": "s1",
+   "id": "s0a",
+   "op": "click",
+   "target": "sb-new"
+  },
+  {
+   "id": "s0b",
+   "op": "wait_until",
+   "target": "new-return-2551Q",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0c",
+   "op": "click",
+   "target": "new-return-2551Q"
+  },
+  {
+   "id": "s0d",
+   "op": "click",
+   "target": "new-return-period-trigger"
+  },
+  {
+   "id": "s0e",
+   "op": "wait_until",
+   "target": "new-return-period-opt-3",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0f",
+   "op": "click",
+   "target": "new-return-period-opt-3"
+  },
+  {
+   "id": "s0g",
+   "op": "click",
+   "target": "new-return-open"
+  },
+  {
+   "id": "s0h",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000,
+   "screenshot": true
+  },
+  {
+   "id": "s14",
+   "op": "wait_until",
+   "target": "fp-pill-list",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s15",
+   "op": "click",
+   "target": "fp-pill-list"
+  },
+  {
+   "id": "s16",
+   "op": "click",
+   "target": "fp-nav-attention",
+   "screenshot": true
+  },
+  {
+   "id": "s17",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 500
+  },
+  {
+   "id": "s19",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:telNo"
+  },
+  {
+   "id": "s20",
+   "op": "type",
+   "target": "fp-frm2551Qv2018:telNo",
+   "text": "09170000000"
+  },
+  {
+   "id": "s21",
+   "op": "click",
+   "target": "fp-txtEmail#occurrence-1"
+  },
+  {
+   "id": "s22",
+   "op": "type",
+   "target": "fp-txtEmail#occurrence-1",
+   "text": "e2e@example.com"
+  },
+  {
+   "id": "s23",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:taxTreaty_2",
+   "screenshot": true
+  },
+  {
+   "id": "s24",
+   "op": "click",
+   "target": "fp-frm2551Qv2018:taxRateNA",
+   "screenshot": true
+  },
+  {
+   "id": "s25",
+   "op": "click",
+   "target": "fp-nav-0",
+   "screenshot": true
+  },
+  {
+   "id": "s26",
+   "op": "press",
+   "target": "fp-check",
+   "screenshot": true
+  },
+  {
+   "id": "s27a",
+   "op": "wait_until",
+   "target": "fp-pill-count",
+   "timeout_ms": 1000,
+   "exists": false
+  },
+  {
+   "id": "s30",
    "op": "click",
    "target": "fp-queue",
    "screenshot": true
   },
   {
-   "id": "s2",
+   "id": "s31",
    "op": "wait_until",
    "target": "queue-continue",
    "timeout_ms": 10000,
    "screenshot": true
   },
   {
-   "id": "s3",
+   "id": "s32",
    "op": "click",
    "target": "queue-continue",
    "screenshot": true
   },
   {
-   "id": "s4",
+   "id": "s33",
    "op": "wait_until",
    "target": "fp-status",
    "name": "Dry run · read-only",

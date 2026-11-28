@@ -1,5 +1,24 @@
-# Smoke 10, SEND, windows: the explicit dry-run send rehearsal. It runs after the pre-send queue recipe has validated
-# the same open return, so it only presses Queue and Continue. The runner refuses it without --allow-send.
+# Smoke 10, SEND, windows: the explicit dry-run send rehearsal. It opens its own fresh 2551Q for Q3 and repeats the
+# per-return answers before pressing Queue and Continue, so it does not use the pre-send recipe's end state. The
+# taxpayer/profile facts are already set by the suite; the income-type card is not repeated because queue saves it there.
+# The runner refuses this recipe without --allow-send.
+click sb-new
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-period-trigger
+wait_until new-return-period-opt-3 --timeout-ms 5000
+click new-return-period-opt-3
+click new-return-open
+wait_until form-page --timeout-ms 20000 --screenshot
+click fp-pill-list --screenshot
+click fp-nav-attention --screenshot
+type fp-frm2551Qv2018:telNo 09170000000
+type fp-txtEmail#occurrence-1 e2e@example.com
+click fp-frm2551Qv2018:taxTreaty_2 --screenshot
+click fp-frm2551Qv2018:taxRateNA --screenshot
+click fp-nav-0 --screenshot
+click fp-check
+wait_until fp-pill-count --timeout-ms 1000 --absent
 click fp-queue --screenshot
 wait_until queue-continue --timeout-ms 10000 --screenshot
 click queue-continue --screenshot

@@ -1,0 +1,123 @@
+{
+ "v": 1,
+ "name": "e2e-delete-row-desktop",
+ "steps": [
+  {
+   "id": "s0a",
+   "op": "click",
+   "target": "sb-new"
+  },
+  {
+   "id": "s0b",
+   "op": "wait_until",
+   "target": "new-return-2551Q",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0c",
+   "op": "click",
+   "target": "new-return-2551Q"
+  },
+  {
+   "id": "s0d",
+   "op": "click",
+   "target": "new-return-period-trigger"
+  },
+  {
+   "id": "s0e",
+   "op": "wait_until",
+   "target": "new-return-period-opt-1",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0f",
+   "op": "click",
+   "target": "new-return-period-opt-1"
+  },
+  {
+   "id": "s0g",
+   "op": "click",
+   "target": "new-return-open"
+  },
+  {
+   "id": "s0h",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000,
+   "screenshot": true
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 2400,
+   "id": "s1"
+  },
+  {
+   "op": "click",
+   "target": "fp-part-4-toggle",
+   "id": "s2"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 600,
+   "id": "s3"
+  },
+  {
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-0",
+   "timeout_ms": 5000,
+   "id": "s4"
+  },
+  {
+   "op": "click",
+   "target": "$table-add",
+   "id": "s5"
+  },
+  {
+   "op": "wait_until",
+   "target": "$table-drawer",
+   "timeout_ms": 5000,
+   "screenshot": true,
+   "id": "s6"
+  },
+  {
+   "op": "wait_until",
+   "target": "fp-txtATCAmt2",
+   "timeout_ms": 5000,
+   "visible": true,
+   "id": "s7"
+  },
+  {
+   "op": "click",
+   "target": "fp-txtATCAmt2",
+   "id": "s8"
+  },
+  {
+   "op": "type",
+   "target": "fp-txtATCAmt2",
+   "text": "1000",
+   "id": "s9"
+  },
+  {
+   "op": "click",
+   "target": "$table-delete",
+   "id": "s10"
+  },
+  {
+   "op": "wait_until",
+   "target": "fp-txtATCAmt2",
+   "timeout_ms": 5000,
+   "exists": false,
+   "id": "s11"
+  },
+  {
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-1",
+   "timeout_ms": 5000,
+   "exists": false,
+   "screenshot": true,
+   "id": "s12"
+  }
+ ]
+}

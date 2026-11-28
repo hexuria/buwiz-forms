@@ -1,6 +1,6 @@
 {
  "v": 1,
- "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, a tax year with 2551Q, every screen, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), Queue in the dry-run test build, a schedule row deleted, the birth date, Log out. Variants per target where a platform needs its own steps (the Linux window shows the narrow layout). Run with `just e2e <target> smoke` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
+ "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, a tax year with 2551Q, every screen, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), a schedule row deleted, Queue in the dry-run test build, the birth date, Log out. Variants per target where a platform needs its own steps (the Linux window shows the narrow layout). Run with `just e2e <target> smoke` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
  "params": {
   "tin": "12345678800000",
   "name": "E2E SMOKE TAXPAYER",
@@ -89,18 +89,20 @@
   },
   {
    "name": "delete-row",
-   "file": "delete-row.wants",
-   "android": "delete-row.json",
    "resolve": {
     "table": {
      "id_regex": "^(fp-table-.+)-add$",
-     "group": 1
+     "group": 1,
+     "after": "s3"
     }
    },
    "known_gap": {
     "phone": "gap 1: the row drawer is a sheet on a phone",
     "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
-   }
+   },
+   "desktop": "delete-row-desktop.json",
+   "linux": "delete-row.json",
+   "phone": "delete-row.json"
   },
   {
    "name": "queue",

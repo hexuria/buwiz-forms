@@ -898,9 +898,12 @@ def run_entry(index, entry, suite, context, agent, log, out):
     names = {}
     steps = recipe_steps(path)
     ids = step_ids(path)
+    used_params = set().union(*recipe_step_params(path))
     early = []
     late = {}
     for param, spec in (entry.get("resolve") or {}).items():
+        if param not in used_params:
+            continue
         after = spec.get("after") if isinstance(spec, dict) else None
         if after is None:
             early.append((param, spec))
@@ -1127,7 +1130,7 @@ def summary(results):
     counts = {}
     for r in results:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
-    return ", ".join(f"{n} {status}" for status, n in sorted(counts.items()))
+    return ", ".join(f"{n} {'setup failure' if status == 'setup' else status}" for status, n in sorted(counts.items()))
 
 
 # --- Commands -----------------------------------------------------------------------------------------------------

@@ -7,6 +7,50 @@
  ],
  "steps": [
   {
+   "id": "s0a",
+   "op": "click",
+   "target": "sb-new"
+  },
+  {
+   "id": "s0b",
+   "op": "wait_until",
+   "target": "new-return-2551Q",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0c",
+   "op": "click",
+   "target": "new-return-2551Q"
+  },
+  {
+   "id": "s0d",
+   "op": "click",
+   "target": "new-return-period-trigger"
+  },
+  {
+   "id": "s0e",
+   "op": "wait_until",
+   "target": "new-return-period-opt-2",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s0f",
+   "op": "click",
+   "target": "new-return-period-opt-2"
+  },
+  {
+   "id": "s0g",
+   "op": "click",
+   "target": "new-return-open"
+  },
+  {
+   "id": "s0h",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 20000,
+   "screenshot": true
+  },
+  {
    "id": "s2",
    "op": "wait_until",
    "target": "fp-set-profile-business_start_date",
