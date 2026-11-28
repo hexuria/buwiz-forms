@@ -1,0 +1,55 @@
+{
+ "suite": "rdo-row-press",
+ "target": "windows",
+ "started": "20261128-001304",
+ "out": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-001304",
+ "cli_version": "0.4.1",
+ "app_commit": "2281b5ea",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 683,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "rdo-row-press",
+   "status": "pass",
+   "ms": 35713,
+   "note": null,
+   "file": "agent-recipes\\e2e\\rdo-row-press.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 8861,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "profile-pick-press",
+   "status": "pass",
+   "ms": 103412,
+   "note": null,
+   "file": "agent-recipes\\e2e\\profile-pick-press.wants"
+  }
+ ]
+}
