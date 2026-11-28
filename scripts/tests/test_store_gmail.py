@@ -196,6 +196,35 @@ class RecipeTests(unittest.TestCase):
                 self.assertEqual(gated_count.get(name, 0) % 2, 0)
                 self.assertGreaterEqual(gated_count.get(name, 0), 2)
                 self.assertNotIn("store_gmail.py", (ROOT / ".github/workflows" / name).read_text(encoding="utf-8"))
+        # bir-core reads the ENV names, so whatever reaches GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET is checked too, not
+        # only the secrets' names: every assignment is the same-named secret behind the switch (or a key with no value,
+        # as in workflow_call's list of accepted secrets), never another secret, env.X or a literal; no step writes them
+        # into a shell or $GITHUB_ENV; and no workflow reaches the secrets in a way these patterns cannot see.
+        assignment = re.compile(r"^\s*(GOOGLE_CLIENT_(?:ID|SECRET))\s*:\s*(.*?)\s*$")
+        hidden = (
+            re.compile(r"toJSON\(\s*secrets\s*\)", re.IGNORECASE),
+            re.compile(r"secrets\s*\[\s*(?!['\"])"),
+        )
+        assignments = 0
+        for path in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                with self.subTest(workflow=path.name, line=number):
+                    for pattern in hidden:
+                        self.assertIsNone(pattern.search(line), line)
+                    self.assertNotRegex(line, r"GOOGLE_CLIENT_(ID|SECRET)\s*=")
+                    match = assignment.match(line)
+                    if not match or match.group(2) == "":
+                        continue
+                    name, value = match.groups()
+                    allowed = {
+                        f"${{{{ vars.STORE_GMAIL == '1' && secrets.{name} || '' }}}}",
+                        f"${{{{ inputs.release && vars.STORE_GMAIL == '1' && secrets.{name} || '' }}}}",
+                        "''",
+                    }
+                    self.assertIn(value, allowed)
+                    assignments += 1
+        # The detector's positive control: it saw the assignments the release workflows make.
+        self.assertGreaterEqual(assignments, 10)
         # The Store job keeps its shape: named secrets, never inherit, no signing certificate.
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         store = release.split("  build-windows-store:", 1)[1].split("\n  build-linux:", 1)[0]
