@@ -1,0 +1,7 @@
+# two-accounts: sign out of the account in Settings; the gate comes back.
+click nav-settings
+wait_until settings-account-sign-out --timeout-ms 10000
+click settings-account-sign-out
+wait_until settings-sign-out-yes --timeout-ms 5000
+click settings-sign-out-yes
+wait_until gate-start --timeout-ms 20000 --screenshot

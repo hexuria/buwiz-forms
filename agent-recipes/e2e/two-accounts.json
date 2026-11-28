@@ -1,0 +1,70 @@
+{
+ "v": 1,
+ "description": "The two-accounts proof of #613, four-recipe shape: a sign_in recipe never waits for or asserts Home \u2014 arrival is proven by the first step of the next plain recipe. WRITE-ONLY until the runner's BIR_DEVICE_DIR rooms layout lands: under EBIR_TEST_ENV today the app is single-room, so a run would share one database. The restart pair (relaunch into B's stored sign-in: 'Opening your account\u2026' then B's only) and the L1 move scenario are TODO until the runner supports a restart and L1 lands in #613. Run, when unblocked: `just e2e macos two-accounts --accounts mock`.",
+ "params": {
+  "tin_a": "12345678800000",
+  "name_a": "ALICE TWOACCOUNTS",
+  "address_a": "1 ALPHA ST",
+  "tin_b": "98765432900000",
+  "name_b": "BENITO TWOACCOUNTS",
+  "address_b": "2 BRAVO ST",
+  "tin_root_a": "123456788",
+  "tin_root_b": "987654329",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none"
+ },
+ "recipes": [
+  {
+   "name": "a-sign-in",
+   "file": "two-accounts/a-sign-in.wants",
+   "sign_in": true,
+   "required": true
+  },
+  {
+   "name": "a-home-profile-draft-out",
+   "file": "two-accounts/a-home-profile-draft-out.wants",
+   "required": true,
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "b-sign-in",
+   "file": "two-accounts/b-sign-in.wants",
+   "sign_in": true,
+   "required": true
+  },
+  {
+   "name": "b-home-neither-own-out",
+   "file": "two-accounts/b-home-neither-own-out.wants",
+   "required": true,
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "a-sign-in-again",
+   "file": "two-accounts/a-sign-in-again.wants",
+   "sign_in": true,
+   "required": true
+  },
+  {
+   "name": "a-home-sees-own",
+   "file": "two-accounts/a-home-sees-own.wants",
+   "required": true
+  }
+ ]
+}

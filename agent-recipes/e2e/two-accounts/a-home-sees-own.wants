@@ -1,0 +1,14 @@
+# two-accounts, plain after A signs back in: the arrival at Home is proven HERE;
+# A sees its own again and none of B's.
+wait_until home --timeout-ms 30000 --screenshot
+wait_until home --timeout-ms 15000
+wait_until home-tp-$tin_root_a --timeout-ms 10000 --screenshot
+wait_until home-tp-$tin_root_b --absent --timeout-ms 5000
+key frame mod+k
+wait_until palette-input --timeout-ms 5000
+type palette-input $name_a
+wait_until palette-item-0 --timeout-ms 5000 --screenshot
+type palette-input $name_b
+wait_until palette-empty --timeout-ms 5000 --screenshot
+key palette-input escape
+wait_until palette --absent --timeout-ms 5000

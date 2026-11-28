@@ -1,0 +1,8 @@
+# two-accounts 5: B signs in (the mock, second code).
+wait_until gate-start --timeout-ms 20000
+click gate-start-continue
+wait_until gate-email-page --timeout-ms 10000
+type gate-email $account_b
+click gate-continue
+wait_until gate-code-page --timeout-ms 15000
+type gate-code-boxes $code_2

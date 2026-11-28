@@ -1,0 +1,48 @@
+# two-accounts, plain after B's sign-in: the arrival at Home is proven HERE; Home shows
+# none of A's (the positive half is a-home-sees-own: the same nodes DO show A when A is in);
+# B makes its own profile and draft and signs out.
+wait_until home --timeout-ms 30000 --screenshot
+wait_until home --timeout-ms 15000
+wait_until home-tp-$tin_root_a --absent --timeout-ms 5000 --screenshot
+key frame mod+k
+wait_until palette-input --timeout-ms 5000
+type palette-input $name_a
+wait_until palette-empty --timeout-ms 5000 --screenshot
+key palette-input escape
+wait_until palette --absent --timeout-ms 5000
+click nav-filings
+wait_until filings --timeout-ms 10000 --screenshot
+wait_until setup-solo --timeout-ms 30000
+click setup-solo
+wait_until new-tp-name --timeout-ms 5000
+click new-tp-start-trigger
+wait_until $start_option --timeout-ms 5000
+click $start_option
+type $tin_field $tin_b
+click new-tp-name
+type new-tp-name $name_b
+type new-tp-registered_address $address_b
+click new-tp-zip_code-trigger
+wait_until new-tp-zip_code-search --timeout-ms 5000
+type new-tp-zip_code-search $zip
+wait_until new-tp-zip_code-opt-$zip --timeout-ms 5000
+click new-tp-zip_code-opt-$zip
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-search --timeout-ms 5000
+type new-tp-rdo_code-search $rdo
+wait_until new-tp-rdo_code-opt-$rdo --timeout-ms 5000
+click new-tp-rdo_code-opt-$rdo
+click new-tp-save --screenshot
+wait_until nav-home --timeout-ms 10000
+assert context-pill name="Tax profile: $name_b" --screenshot
+click sb-new
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-open
+wait_until form-page --timeout-ms 20000 --screenshot
+click nav-settings
+wait_until settings-account-sign-out --timeout-ms 10000
+click settings-account-sign-out
+wait_until settings-sign-out-yes --timeout-ms 5000
+click settings-sign-out-yes
+wait_until gate-start --timeout-ms 20000 --screenshot
