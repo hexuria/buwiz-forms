@@ -763,3 +763,34 @@ test("PR8: typed TIN digits survive a save and a reopen, box for box", async () 
   expect(draft?.administrator_branch_code).toBe("00042");
   again.dispose();
 });
+
+test("PRRT BCMK: correcting a reversed date range autosaves the correction, no explicit save", async () => {
+  // The correction is staged, then the range order lifts and marks the return unsaved itself: that unsaved marking
+  // must not kill the flush the correction waits on. No saveNow anywhere — the autosave is the proof.
+  const target = at("1702EX", 2024, 0);
+  const s = await opened(target);
+  s.pickRadio("frm1702EX:rdoPg1I1Calendar");
+  await s.idle();
+  if (s.overlay()?.kind === "removal") {
+    s.confirmRemoval();
+    await s.idle();
+  }
+  const from = "frm1702EX:txtPg1Pt1I17EffectivityFrom";
+  const to = "frm1702EX:txtPg1Pt1I17EffectivityTo";
+  s.edit(from, "11/01/2024");
+  s.edit(to, "12/15/2024");
+  await s.idle();
+  s.edit(from, "12/20/2024");
+  await s.idle();
+  expect(s.boxMessageOf(to)).toContain("the end date is before the start date");
+  s.edit(from, "12/01/2024");
+  await s.idle();
+  // No dispose, no saveNow: the autosave after the correction's own flush is the only thing that can save it.
+  // dispose() flushes what is pending and would hide a stranded correction exactly as saveNow would.
+  expect(s.saveState().state).toBe("saved");
+  s.dispose();
+  const again = await opened(target);
+  expect(again.valueOf(from)).toBe("12/01/2024");
+  expect(again.valueOf(to)).toBe("12/15/2024");
+  again.dispose();
+});

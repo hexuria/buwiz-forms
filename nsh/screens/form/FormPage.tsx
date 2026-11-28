@@ -20,7 +20,8 @@
 // its rows' last measured height as an empty box, and its list is made again as it comes near.
 // The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
-import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, View, windowSize } from "nsh";
+import { cleanup, computed, effect, keymap, List, openUrl, Scroll, signal, untracked, View, windowSize } from "nsh";
+import { markAccountSiteOpened } from "../taxpayer/tins";
 import type { SendState } from "../../bir";
 import { BREAK, SIZE } from "../../theme/tokens";
 import {
@@ -431,7 +432,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
               }
               onPress={() => s.check()}
             />
-            <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
+            <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading || s.queueBusy()} onPress={() => s.queue()} />
           </If>
           <If when={h().status === "Queued" && !h().sample && !h().canResolve && !h().checkingSend}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
@@ -498,6 +499,9 @@ function Notes(props: { s: FormSession }) {
       </If>
       <If when={h().submittedLine}>
         <Text testID="fp-send-line" variant="meta" tone="fg2">{h().submittedLine}</Text>
+      </If>
+      <If when={h().queueDropNote}>
+        <Text testID="fp-queue-drop" variant="meta" tone="fg2">{h().queueDropNote}</Text>
       </If>
       <If when={h().canResolve}>
         <View class="flex-row flex-wrap items-center gap-2">
@@ -939,6 +943,10 @@ function Dialogs(props: { s: FormSession }) {
     const v = o();
     return v?.kind === "queue-confirm" ? v.warns : [];
   };
+  const blocked = () => {
+    const v = o();
+    return v?.kind === "tin-blocked" ? v.row : null;
+  };
   const resolving = () => {
     const v = o();
     return v?.kind === "resolve-confirm" ? v : null;
@@ -1013,6 +1021,64 @@ function Dialogs(props: { s: FormSession }) {
           )}
         </If>
       </Dialog>
+      <Dialog testID="tin-queue-blocked" width={420} open={kind("tin-blocked") && !phone()} onOpenChange={(open) => !open && s.dismissTinBlocked()}>
+        <If when={blocked()}>
+          {(row) => (
+            <View class="gap-3 p-5">
+              <Text variant="title">{row().state === "pending" ? "This TIN is waiting to be verified" : row().state === "fix" ? "This TIN needs a step on your account" : "This TIN is not activated"}</Text>
+              <If when={row().message}>
+                <Text testID="tin-blocked-message" variant="control">{row().message}</Text>
+              </If>
+              <If when={row().test_only}>
+                <Text variant="meta" tone="fg2">A test TIN sends nothing to the BIR.</Text>
+              </If>
+              <If when={row().state === "fix" && row().action_url}>
+                <AppButton
+                  testID="tin-blocked-action"
+                  variant="primary"
+                  block
+                  label="Fix on your account"
+                  onPress={() => {
+                    // The list is asked fresh when the app becomes active on the filer's return, not at open.
+                    markAccountSiteOpened();
+                    void openUrl(row().action_url!);
+                  }}
+                />
+              </If>
+              <AppButton testID="tin-blocked-close" block label="Close" onPress={() => s.dismissTinBlocked()} />
+            </View>
+          )}
+        </If>
+      </Dialog>
+      <Sheet testID="tin-queue-blocked-sheet" open={kind("tin-blocked") && phone()} onOpenChange={(open) => !open && s.dismissTinBlocked()}>
+        <If when={blocked()}>
+          {(row) => (
+            <View class="gap-3">
+              <Text variant="title">{row().state === "pending" ? "This TIN is waiting to be verified" : row().state === "fix" ? "This TIN needs a step on your account" : "This TIN is not activated"}</Text>
+              <If when={row().message}>
+                <Text testID="tin-blocked-message" variant="control">{row().message}</Text>
+              </If>
+              <If when={row().test_only}>
+                <Text variant="meta" tone="fg2">A test TIN sends nothing to the BIR.</Text>
+              </If>
+              <If when={row().state === "fix" && row().action_url}>
+                <AppButton
+                  testID="tin-blocked-action"
+                  variant="primary"
+                  block
+                  label="Fix on your account"
+                  onPress={() => {
+                    // The list is asked fresh when the app becomes active on the filer's return, not at open.
+                    markAccountSiteOpened();
+                    void openUrl(row().action_url!);
+                  }}
+                />
+              </If>
+              <AppButton testID="tin-blocked-close" block label="Close" onPress={() => s.dismissTinBlocked()} />
+            </View>
+          )}
+        </If>
+      </Sheet>
       <Dialog testID="queue-confirm" width={420} open={kind("queue-confirm")} onOpenChange={(open) => !open && s.cancelQueueConfirm()}>
         <View class="gap-3 p-5">
           <Text variant="title">Queue this return?</Text>

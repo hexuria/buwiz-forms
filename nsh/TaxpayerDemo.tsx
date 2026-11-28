@@ -13,7 +13,7 @@
 import { host, mount, signal, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
-import { createDemoTaxpayer, DEMO, warmForms } from "./bir/testing";
+import { createDemoTaxpayer, DEMO, installFakeTins, warmForms, type FakeActivateKind, type FakeTinsKind } from "./bir/testing";
 import { ProfileExportCard } from "./screens/taxpayer";
 import { Shell } from "./shell/Shell";
 import { store } from "./shell/store";
@@ -37,6 +37,20 @@ interface Params {
   selfEmployed?: boolean;
   savedReturn?: { formCode: string; year: number; period: number };
   elections?: Record<number, "GraduatedUnspecified" | "EightPercent" | null>;
+  /** The account's TIN list the fixture fakes: one state for the demo TIN, "multi" adds the peer, "stale" a stale list, "incomplete" a list without the not_activated rows, "error" a list that cannot be read (signed out). */
+  tins?: "activated" | "pending" | "fix" | "not_activated" | "test" | "stale" | "multi" | "incomplete" | "error";
+  /** The refusal activate_tin throws (the host's own sentence), or "ok" for the added row. */
+  activate?: FakeActivateKind;
+  /** After this many account_tins reads the fake throws (the good-list-then-error tests). */
+  tinsErrorAfter?: number;
+  /** After this many reads the fake's sign-in becomes owner B (the account-switch test). */
+  tinsOwnerFlipAfter?: number;
+  /** The fake account_tins answer is delayed this long. */
+  tinsDelayMs?: number;
+  /** After the first activate_tin call the list comes from this kind (the refusal-persistence test). */
+  tinsFlipAfterActivate?: FakeTinsKind;
+  /** An arbitrary refusal sentence activate_tin throws verbatim (the pass-through test). */
+  refusalText?: string;
 }
 
 if (/form=/.test(String((host.params as Params)?.start ?? ""))) warmForms();
@@ -77,11 +91,21 @@ function fixGoogle(available: boolean) {
   table.inbox_state = (tin: string) => ({ ...real(tin), google_available: available });
 }
 
+function fakeTins(kind: NonNullable<Params["tins"]>, p: Params, readout: (line: string) => void): void {
+  installFakeTins(bir as unknown as Record<string, unknown>, kind, p.activate, readout, {
+    errorAfter: p.tinsErrorAfter,
+    ownerFlipAfter: p.tinsOwnerFlipAfter, delayMs: p.tinsDelayMs, flipToAfterActivate: p.tinsFlipAfterActivate,
+    refusalText: p.refusalText,
+  });
+}
+
 function Demo() {
   const p = host.params as Params;
   if (p.demo !== false) seed(p);
   if (p.sent) show1601CAsSent(p.sent === "dry");
   if (typeof p.google === "boolean") fixGoogle(p.google);
+  const tinsCalls = signal<string[]>([]);
+  if (p.tins) fakeTins(p.tins, p, (line) => tinsCalls.set([...tinsCalls(), line]));
   const ready = signal(!p.savedReturn);
   if (p.savedReturn) {
     const target = p.savedReturn;
@@ -125,6 +149,7 @@ function Demo() {
     <View class="flex-1">
       <If when={ready()}><Shell start={p.start} polling={false} /></If>
       <View class="absolute top-0 left-0" style={{ pointerEvents: "none", opacity: 0 }}>
+        <Each of={tinsCalls()}>{(t) => <Text>{`tins ${t()}`}</Text>}</Each>
         <Each of={Object.keys(p.elections ?? {})} key={(y) => y}>
           {(y) => <Text>{`Election ${y()}: ${store.yearFacts(DEMO.tin, Number(y()))?.facts.income_tax_election ?? "Not set"}`}</Text>}
         </Each>

@@ -35,6 +35,7 @@ import {
   type ScreenFormStatus,
   type SendState,
 } from "../../bir";
+import { refreshTins, tinKeyParts } from "../taxpayer/tins";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
 import { statusWord } from "../../lib/statusWord";
@@ -237,6 +238,8 @@ export interface HeaderInfo {
   submittedLine: string;
   /** A Draft the worker put back (`send` refused): the reason, shown as a notice on opening, or "". */
   sendNotice: string;
+  /** A Queue press dropped because the return changed during the account read: the persistent line, or "". */
+  queueDropNote: string;
   /** The refusal is fixed on the person's Buwiz account (its code is one of ACCOUNT_FIX_CODES). */
   accountFix: boolean;
   /** The send's outcome is unknown: the page offers "The email came" and "It did not arrive". */
@@ -273,6 +276,7 @@ export type Overlay =
   | { kind: "removal"; message: string }
   | { kind: "existing"; existing: ScreenFormExisting }
   | { kind: "queue-confirm"; warns: string[] }
+  | { kind: "tin-blocked"; row: { state: string; message: string | null; action_url: string | null; test_only: boolean; stale: boolean; fetched_at: number } }
   | { kind: "resolve-confirm"; answer: "received" | "not_received"; question: string; button: string }
   | { kind: "profile-ask"; ask: ProfileAsk }
   | { kind: "sample-period"; parts: { key: string; part: ScreenFormPeriodPart["part"]; quarter: number | null; value: string }[]; error: string };
@@ -420,6 +424,8 @@ interface St {
   chosenFrom: Record<string, string>;
   dirty: boolean;
   editSeq: number;
+  /** Set when a Queue press was dropped because the return changed during the account read; cleared at the next press. */
+  queueDropNote: string | null;
   validateSeq: number;
   checking: boolean;
   removal: RemovalHeld | null;
@@ -451,7 +457,7 @@ function freshState(target: FormTarget): St {
     askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
     messageKeys: {}, messageCounts: {}, rejected: {}, amountNotes: {}, notesShown: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, boxNotes: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, rangeHeld: {}, forget: [], chosenFrom: {}, dirty: false,
-    editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
+    editSeq: 0, queueDropNote: null, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
     electionReady: undefined, moreOpen: new Set(),
   };
@@ -881,7 +887,7 @@ export class FormSession {
   async idle(): Promise<void> {
     for (let i = 0; i < 600; i++) {
       const s = this.st;
-      if (!s.loading && !s.checking && !this.flushTimer && !this.saveTimer && s.saveState.state !== "saving" && !s.periodInFlight && !this.periodWaiting && !this.settling) return;
+      if (!s.loading && !s.checking && !this.flushTimer && !this.saveTimer && s.saveState.state !== "saving" && !s.periodInFlight && !this.periodWaiting && !this.settling && !this.queueGateBusySig()) return;
       await new Promise((r) => setTimeout(r, 25));
     }
   }
@@ -1656,16 +1662,18 @@ export class FormSession {
     this.unquiet(Object.keys(edits));
     this.cancelAutosave();
     this.markUnsaved();
-    const seq = ++s.editSeq;
     const token = this.token;
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.flushTimer = this.later(VALIDATE_DELAY, () => {
       this.flushTimer = null;
-      if (token !== this.token || seq !== this.st.editSeq) return;
+      // No editSeq guard: a mutation that is not itself a stage (a range order lifting, a row delete) moves the generation
+      // without arming a timer, and the flush drains whatever is pending when it fires, so a newer edit never loses anything —
+      // but a dropped guard loses the save. The token still bars a page that was switched or closed.
+      if (token !== this.token) return;
       this.flush();
     });
     this.later(LIVE_PREVIEW_DELAY, () => {
-      if (token !== this.token || seq !== this.st.editSeq) return;
+      if (token !== this.token) return;
       this.livePreview();
     });
   }
@@ -1757,6 +1765,9 @@ export class FormSession {
   /** The save line says "Unsaved changes" the moment something is staged (an explicit-save return keeps its reason). */
   private markUnsaved() {
     const s = this.st;
+    // Every mutation of the return reaches here (stage, choose, a row delete, the clear paths), so the edit
+    // generation moves for them all: a press of Queue checked against the generation sees any change, typed or picked.
+    s.editSeq += 1;
     if (s.sample && s.periodIncomplete) {
       s.saveState = this.restingSaveState();
       this.sSave.set(s.saveState);
@@ -3898,6 +3909,12 @@ export class FormSession {
    */
   queue(accepted: string[] | null = null) {
     const s = this.st;
+    // The drop note names the LAST stop: every press clears it, wherever this one ends — a press stopped by the page's own
+    // validation before the account read must not keep "Press Queue again" showing for a stop that was not the edit one.
+    if (s.queueDropNote) {
+      s.queueDropNote = null;
+      this.publish();
+    }
     // `accepted`: the warnings the filer just accepted with Continue, when Queue runs again after a settle (B8-2): the same warnings
     // again are not asked a second time.
     // Queue cannot be taken back: an amount box that still has the keys is left first, so the amount it puts back and the note it
@@ -4049,8 +4066,78 @@ export class FormSession {
     this.publish();
   }
 
+  /** True while the account read on the way to Queue runs: the Queue button shows busy and a second press is not a second queue.
+   * A SIGNAL read, so the button re-renders as it changes (a plain field would freeze the header's first answer). */
+  queueBusy(): boolean {
+    return this.queueGateBusySig();
+  }
+
+  /** Closes the TIN-status sheet Queue stopped on; nothing was queued. */
+  dismissTinBlocked() {
+    if (this.st.overlay?.kind !== "tin-blocked") return;
+    this.st.overlay = null;
+    this.publish();
+  }
+
+  /** One account read on the way to Queue at a time: a second press inside the round trip is not a second queue. */
+  private queueGateBusySig = signal(false);
+
   private queueNow() {
-    const s = this.st;
+    // D2: Queue asks the account first (max_age 0). A fresh, complete list naming this TIN and branch as not activated
+    // stops Queue on a sheet and queues nothing; a stale, incomplete or unreadable list (the read threw included) goes
+    // ahead as today. The read is this call's own answer, never a kept one.
+    if (this.queueGateBusySig() || this.disposed) return;
+    this.queueGateBusySig.set(true);
+    if (this.st.queueDropNote) {
+      this.st.queueDropNote = null;
+      this.publish();
+    }
+    const pressed = this.st.target;
+    // Which return it is: the mode names draft versus filed original versus amendment, and each mode's own identity
+    // — the snapshot of a filed original, the key of an amendment. A plain return's storage key is NOT in it: a
+    // reopen of the same draft is the same return, key or none, filled in or not yet.
+    const targetKey = (t: typeof pressed) => `${t.tin}|${t.formCode}|${t.year}|${t.period}|${t.mode ?? "return"}|${t.mode === "amend" ? (t.key ?? "") : ""}|${t.mode === "filed_original" ? (t.snapshotId ?? "") : ""}`;
+    const pressedKey = targetKey(pressed);
+    const [tinRoot, branch] = tinKeyParts(pressed.tin);
+    // What the press checked is the draft as it then was; an edit during the account read is not in it.
+    const pressedSeq = this.st.editSeq;
+    void (async () => {
+      let blocked: { state: string; message: string | null; action_url: string | null; test_only: boolean; stale: boolean; fetched_at: number } | null = null;
+      try {
+        const answer = await refreshTins(0);
+        if (answer && !answer.stale && answer.complete) {
+          const row = answer.rows.find((r) => r.tin_root === tinRoot && r.branch === branch);
+          if (row && row.state !== "activated") blocked = row;
+        }
+      } finally {
+        this.queueGateBusySig.set(false);
+      }
+      // After the wait the page may be gone, or the filer may have typed on or switched return: nothing stale decides.
+      // The queue itself reads the draft as it NOW is, but only for the SAME target the press checked — a switch to
+      // another return during the wait means the TIN read answered for a target this page no longer shows.
+      if (this.disposed) return;
+      if (targetKey(this.st.target) !== pressedKey) return;
+      // An edit typed during the read is not what the read checked, and the stored row it never reached is what the
+      // period-path forms would file for real: the press is dropped with its reason, never queued half-seen. (Rather
+      // than locking the page for a network-length wait, which freezes typing with no visible cause.)
+      if (this.st.editSeq !== pressedSeq) {
+        // The toast can be missed on a phone: the send line keeps the reason until the next press.
+        this.st.queueDropNote = "Not queued: the return changed. Press Queue again.";
+        this.toast("Queue was stopped: the return changed while the account answered. Press Queue again.", "info");
+        this.publish();
+        return;
+      }
+      const now = this.st;
+      if (blocked) {
+        now.overlay = { kind: "tin-blocked", row: blocked };
+        this.publish();
+        return;
+      }
+      this.queueNowHost(now);
+    })();
+  }
+
+  private queueNowHost(s: St) {
     try {
       if (this.usesPeriodPath()) bir.queue_form_draft(s.target.tin, s.target.formCode, s.target.year, s.target.period || null);
       else bir.screen_form_queue(s.target.formCode, s.draft!);
@@ -4775,6 +4862,7 @@ export class FormSession {
       filedOriginal: Boolean(s.filedOriginal && !s.filedOriginalView),
       filedOriginalView: s.filedOriginalView,
       submittedLine: !s.editable && !s.filedOriginalView ? sendLine || sentLine : "",
+      queueDropNote: s.queueDropNote ?? "",
       sendNotice: send?.stage === "refused" && s.editable ? send.line : "",
       accountFix: send?.stage === "refused" && s.editable && ACCOUNT_FIX_CODES.includes(send.code ?? ""),
       canResolve: Boolean(send?.can_resolve) && s.status === "Queued" && !s.editable,
