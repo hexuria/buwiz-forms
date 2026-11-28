@@ -155,6 +155,16 @@ jobs:
         run: |
           ./scripts/package_nsh_windows.ps1 -PackageRoot "$env:RUNNER_TEMP/nsh-windows" -OutDir target/release-artifacts -SmokeMsix:$${{ !inputs.release }} -MsixOnly:$${{ inputs.store }} -NoMsix:$${{ inputs.release && !inputs.store }}
 
+      - name: Check the audit finds the client in the direct downloads
+        # The real-package positive control for the Store check below: on a release the direct build is given the
+        # client, so the audit must find both the id and the secret in the updater ZIP's files. It proves the bytes
+        # the audit reads are where the client lands.
+        if: ${{ inputs.release && !inputs.store }}
+        run: |
+          $zip = @(Get-ChildItem target/release-artifacts -Filter *-windows-x86_64.zip -File)
+          if ($zip.Count -ne 1) { throw "Expected one updater ZIP, found $($zip.Count)" }
+          python scripts/audit_google_client.py --present $zip[0].FullName
+
       - name: Check the Store package against STORE_GMAIL
         # The detector's positive control first (it finds a planted id and secret). Then the package: with the switch
         # off it holds neither; on a release with STORE_GMAIL=1 (the build above was given both) it holds both.

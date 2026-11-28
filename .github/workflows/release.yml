@@ -140,6 +140,8 @@ jobs:
   # only when the repository variable STORE_GMAIL is 1: Gmail Connect asks for Gmail's restricted scope, which
   # needs Google's verification for a public app. It is given no signing certificate: the Store signs it. Off,
   # its job checks that the package holds no client id. Setup.exe, the .msi and the ZIP keep the client as 0.2.x did.
+  # Its `windows-store` artifact is what Partner Center takes; the public release below never lists the unsigned .msix
+  # (it cannot be sideloaded) or its sums.
   build-windows-store:
     needs: preflight
     uses: ./.github/workflows/release-windows.yml
@@ -190,11 +192,10 @@ jobs:
             artifacts/**/*.pkg.tar.zst
             artifacts/**/*.PKGBUILD
             artifacts/**/SHA256SUMS-linux-*.txt
-            artifacts/**/SHA256SUMS-windows-*.txt
+            artifacts/**/SHA256SUMS-windows-x64.txt
             artifacts/**/install-linux.sh
             artifacts/**/*-Setup.exe
             artifacts/**/*.msi
-            artifacts/**/*.msix
             artifacts/**/*-windows-x86_64.zip
 
       - name: Check out the manifest script

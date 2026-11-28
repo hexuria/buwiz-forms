@@ -298,8 +298,14 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("needs: preflight", public_windows_job)
 
         public_release = self.job("release")
-        for artifact in ("*-Setup.exe", "*.msi", "*.msix", "*-windows-x86_64.zip", "SHA256SUMS-windows-*.txt"):
+        for artifact in ("*-Setup.exe", "*.msi", "*-windows-x86_64.zip", "SHA256SUMS-windows-x64.txt"):
             self.assertIn(f"artifacts/**/{artifact}", public_release)
+        # The Store's .msix is unsigned and cannot be sideloaded: never on the public release, nor its sums
+        # (windows_candidate_certification.py: public_release_allows_msix is False).
+        files = public_release.split("files: |", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
+        self.assertNotIn(".msix", files)
+        self.assertNotIn("SHA256SUMS-windows-*", files)
+        self.assertNotIn("windows-store", files)
 
     def test_the_store_msix_gets_the_google_client_only_with_store_gmail(self) -> None:
         store = self.job("build-windows-store")
@@ -341,7 +347,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("name: windows-store", store_upload)
         self.assertIn("SHA256SUMS-windows-store-x64.txt", store_upload)
         self.assertIn("SHA256SUMS-windows-store-x64.txt", self.nsh_windows_package)
-        self.assertIn("artifacts/**/SHA256SUMS-windows-*.txt", self.job("release"))
+        control = windows.split("- name: Check the audit finds the client in the direct downloads", maxsplit=1)[1]
+        control = control.split("- name:", maxsplit=1)[0]
+        self.assertIn("if: ${{ inputs.release && !inputs.store }}", control)
+        self.assertIn("audit_google_client.py --present", control)
+        self.assertIn("*-windows-x86_64.zip", control)
 
     def test_msix_packaging_and_smoke_scripts_enforce_runtime_and_registration_policies(
         self,

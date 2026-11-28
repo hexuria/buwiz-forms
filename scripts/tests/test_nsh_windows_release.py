@@ -27,7 +27,7 @@ class NshWindowsReleaseTests(unittest.TestCase):
         release = (ROOT / '.github/workflows/release.yml').read_text()
         for workflow in (ci, release):
             self.assertIn('uses: ./.github/workflows/release-windows.yml', workflow)
-        self.assertIn('artifacts/**/*.msix', release)
+        self.assertNotIn('.msix', release.split('files: |', 1)[1].split('\n\n', 1)[0])
         self.assertIn('artifacts/**/*-windows-x86_64.zip', release)
 
     def test_setup_and_updater_zip_do_not_require_a_vc_redistributable(self):
