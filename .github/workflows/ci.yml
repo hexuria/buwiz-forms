@@ -676,6 +676,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.scripts_windows == 'true'
     runs-on: windows-latest
+    # A script test has hung on Windows before; without a limit a hung job holds a runner for six hours.
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v4
 
