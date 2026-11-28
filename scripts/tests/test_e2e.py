@@ -14,6 +14,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,23 @@ def write(folder, name, text):
 def suite_of(folder, recipes, params=None):
     path = write(folder, "s.json", json.dumps({"v": 1, "params": params or {}, "recipes": recipes}))
     return E2E.load_suite(str(path))
+
+
+def without_keyboard_hide(data):
+    data = dict(data)
+    data["steps"] = [step for step in data["steps"]
+                     if not (step.get("op") == "system" and step.get("action") == "keyboard_hide")]
+    return data
+
+
+def assert_minus_keyboard_hide_equals(testcase, phone_file, copy_file):
+    folder = ROOT / "agent-recipes" / "e2e"
+    phone = json.loads((folder / phone_file).read_text(encoding="utf-8"))
+    copy = json.loads((folder / copy_file).read_text(encoding="utf-8"))
+    expected = without_keyboard_hide(phone)
+    testcase.assertEqual(expected["steps"], copy["steps"], copy_file)
+    testcase.assertEqual({key: value for key, value in expected.items() if key != "name"},
+                         {key: value for key, value in copy.items() if key != "name"}, copy_file)
 
 
 class VersionTests(unittest.TestCase):
@@ -88,13 +106,55 @@ class RecipeReadingTests(unittest.TestCase):
         self.assertEqual(E2E.placeholders(ROOT / "agent-recipes" / "e2e" / "money-boxes-paced.json"),
                          {"prior", "amount", "amount_shown"})
 
+    def test_json_placeholders_scan_only_where_the_cli_substitutes(self):
+        recipe = {
+            "v": 1,
+            "name": "$recipe_name",
+            "description": "$recipe_description",
+            "params": [
+                {"name": "used", "description": "$param_description", "pattern": "$param_pattern",
+                 "default": "$param_default"},
+                "dy", "max_steps",
+            ],
+            "steps": [
+                {"id": "$step_id", "needs": ["$need"], "op": "click", "target": "$used",
+                 "screenshot": "$flag"},
+                {"id": "node", "op": "click", "target": "$table.node"},
+                {"id": "invoke", "op": "invoke", "name": "$invoke_name",
+                 "args": {"outer": ["$invoke_arg"]}},
+                {"id": "system", "op": "system", "action": "keyboard_hide", "value": "$system_value"},
+                {"id": "scroll", "op": "scroll_until", "target": "$scroll_target", "until": "$until_text",
+                 "dy": "$dy", "max_steps": "$max_steps"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            path = write(folder, "params.json", json.dumps(recipe))
+            self.assertEqual(E2E.placeholders(path), {
+                "used", "invoke_name", "invoke_arg", "system_value", "scroll_target", "until_text", "dy",
+                "max_steps",
+            })
+
+    def test_json_slices_keep_a_typed_param_only_where_the_slice_uses_it(self):
+        typed = {"name": "table", "type": "string", "pattern": "^fp-table-"}
+        recipe = {"v": 1, "name": "late-json", "params": [typed, "unused"], "steps": [
+            {"id": "expand", "op": "click", "target": "expose-table"},
+            {"id": "add", "op": "click", "target": "$table-add"},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            path = write(folder, "late.json", json.dumps(recipe))
+            parts = E2E.write_recipe_slices(path, [1], folder)
+            first = json.loads(parts[0]["path"].read_text(encoding="utf-8"))
+            second = json.loads(parts[1]["path"].read_text(encoding="utf-8"))
+            self.assertEqual(first["params"], [])
+            self.assertEqual(second["params"], [typed])
+
     def test_a_step_node_reference_is_no_param_and_keeps_its_step_in_the_same_slice(self):
         # gpui-agent 0.5.0: `$<step>.node` names the node a scroll_until step matched; the runner neither asks for
         # it as a param nor cuts a recipe between the step and its user.
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "find.json"
             path.write_text(json.dumps({"name": "find", "params": ["row"], "steps": [
-                {"id": "find", "op": "scroll_until", "target": "list", "pattern": "$row", "dy": 200},
+                {"id": "find", "op": "scroll_until", "target": "list", "until": "$row", "dy": 200},
                 {"id": "hold", "op": "long_press", "target": "${find}.node"},
                 {"id": "press", "op": "click", "target": "$find.node"},
             ]}), encoding="utf-8")
@@ -279,6 +339,12 @@ class FileTests(unittest.TestCase):
 
 
 class SuiteTests(unittest.TestCase):
+    def test_desktop_host_features_match_the_pinned_plug(self):
+        self.assertEqual(E2E.DESKTOP_HOST_FEATURES, {
+            "press", "scroll", "hover", "drag", "viewport", "press_within", "assert_states",
+        })
+        self.assertNotIn("screenshot_inline", E2E.DESKTOP_HOST_FEATURES)
+
     def test_the_smoke_suite_can_run(self):
         suite = E2E.load_suite("smoke")
         self.assertEqual(E2E.check_suite(suite), [])
@@ -396,6 +462,28 @@ class SuiteTests(unittest.TestCase):
         self.assertEqual((money[1].get("op"), money[1].get("target")),
                          ("click", "fp-frm2551Qv2018:amendedRtn_1"))
 
+    def test_linux_queue_files_are_the_phone_files_minus_keyboard_hide(self):
+        for phone_file, linux_file in (("queue-phone.json", "queue-linux.json"),
+                                       ("queue-send-phone.json", "queue-send-linux.json")):
+            with self.subTest(linux=linux_file):
+                assert_minus_keyboard_hide_equals(self, phone_file, linux_file)
+
+    def test_ios_keyboard_hide_is_a_needs_or_removed_per_recipe(self):
+        suite = E2E.load_suite("smoke")
+        for name in ("queue", "queue-send"):
+            entry = next(entry for entry in suite["recipes"] if entry["name"] == name)
+            self.assertEqual((entry.get("needs_feature") or {}).get("ios"), "system.keyboard_hide", name)
+        money = next(entry for entry in suite["recipes"] if entry["name"] == "money-boxes")
+        self.assertEqual(money.get("ios"), "money-boxes-paced-ios.json")
+        ios_path = ROOT / "agent-recipes" / "e2e" / "money-boxes-paced-ios.json"
+        if not ios_path.is_file():
+            self.fail("money-boxes-paced-ios.json does not exist")
+        assert_minus_keyboard_hide_equals(self, "money-boxes-paced-phone.json", "money-boxes-paced-ios.json")
+        ios_steps = E2E.recipe_steps(ios_path)
+        self.assertNotIn(("system", "keyboard_hide"),
+                         [(step.get("op"), step.get("action")) for step in ios_steps])
+        self.assertEqual(E2E.check_suite(suite), [])
+
     def test_delete_row_navigates_to_schedule_one_before_resolving_its_table(self):
         suite = E2E.load_suite("smoke")
         entry = next(entry for entry in suite["recipes"] if entry["name"] == "delete-row")
@@ -462,6 +550,30 @@ class SuiteTests(unittest.TestCase):
                     "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1}}}])
                 self.assertNotIn("not declared in recipe.params", "\n".join(E2E.check_suite(suite)), params)
 
+            unused = {**recipe, "params": ["table", "unused"]}
+            write(folder, "late.json", json.dumps(unused))
+            suite = suite_of(folder, [{"name": "late", "file": "late.json", "resolve": {
+                "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1}}}])
+            self.assertIn("param `unused` is declared but no step uses $unused", "\n".join(E2E.check_suite(suite)))
+
+    def test_state_assertions_and_press_within_pass_the_desktop_feature_check(self):
+        recipe = {"v": 1, "name": "features", "steps": [
+            {"id": "w", "op": "wait_until", "target": "x", "state": "checked", "timeout_ms": 1000},
+            {"id": "p", "op": "press", "target": "x", "within": {"x": 1, "y": 1}},
+            {"id": "l", "op": "long_press", "target": "x", "within": {"x": 1, "y": 1}},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "features.json", json.dumps(recipe))
+            suite = suite_of(folder, [{"name": "features", "desktop": "features.json"}])
+            self.assertEqual(E2E.check_suite(suite), [])
+
+            inline = {"v": 1, "name": "inline", "steps": [
+                {"id": "shot", "op": "screenshot", "inline": True},
+            ]}
+            write(folder, "inline.json", json.dumps(inline))
+            suite = suite_of(folder, [{"name": "inline", "desktop": "inline.json"}])
+            self.assertIn("screenshot_inline", "\n".join(E2E.check_suite(suite)))
+
     def test_a_feature_step_is_not_mapped_to_a_host_that_lacks_it(self):
         recipe = {"v": 1, "name": "narrow-queue", "steps": [
             {"id": "s22", "op": "type", "target": "fp-txtEmail#occurrence-1", "text": "e2e@example.com"},
@@ -474,7 +586,18 @@ class SuiteTests(unittest.TestCase):
             self.assertIn("narrow.json: step s22h needs system.keyboard_hide", problems)
             self.assertIn("linux", problems)
 
+            suite = suite_of(folder, [{"name": "queue", "ios": "narrow.json", "phone": "narrow.json"}])
+            problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn("narrow.json: step s22h needs system.keyboard_hide", problems)
+            self.assertIn("ios", problems)
+
             suite = suite_of(folder, [{"name": "queue", "android": "narrow.json", "phone": "narrow.json"}])
+            problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn("which ios phone hosts do not list", problems)
+            self.assertNotIn("which android phone hosts do not list", problems)
+
+            suite = suite_of(folder, [{"name": "queue", "android": "narrow.json", "phone": "narrow.json",
+                                       "needs_feature": {"ios": "system.keyboard_hide"}}])
             self.assertNotIn("system.keyboard_hide", "\n".join(E2E.check_suite(suite)))
 
             gated = {"name": "queue", "linux": "narrow.json", "needs_feature": {"linux": "system.keyboard_hide"},
@@ -482,6 +605,16 @@ class SuiteTests(unittest.TestCase):
             write(folder, "plain.wants", "click fp-check\n")
             suite = suite_of(folder, [gated])
             self.assertNotIn("system.keyboard_hide", "\n".join(E2E.check_suite(suite)))
+
+            bad_fallback = {"v": 1, "name": "bad-fallback", "steps": [
+                {"id": "hide", "op": "system", "action": "keyboard_hide"},
+            ]}
+            write(folder, "bad-fallback.json", json.dumps(bad_fallback))
+            gated = {"name": "queue", "linux": "narrow.json", "needs_feature": {"linux": "system.keyboard_hide"},
+                     "fallback": "bad-fallback.json"}
+            suite = suite_of(folder, [gated])
+            problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn("bad-fallback.json: step hide needs system.keyboard_hide", problems)
 
     def test_a_parameter_used_at_or_before_its_after_step_is_refused_by_check(self):
         cases = [
@@ -539,6 +672,13 @@ class SuiteTests(unittest.TestCase):
         self.assertIn("needs gpui-agent-cli 0.4.1", note)
         self.assertEqual(E2E.plan_entry({"name": "x", "desktop": "d"}, {}, {**base, "target": "ios",
                                                                          "form_factor": "phone"})[2], "skipped")
+        multi = {"name": "multi", "file": "x.wants", "needs_feature": ["software_keyboard", "press_within"]}
+        phone = {"target": "ios", "form_factor": "phone", "cli_version": "0.4.1"}
+        self.assertEqual(E2E.plan_entry(multi, {}, {**base, **phone, "features": []})[2], "needs")
+        self.assertEqual(E2E.plan_entry(multi, {}, {**base, **phone, "features": ["software_keyboard"]})[2], "needs")
+        self.assertEqual(E2E.plan_entry(multi, {}, {**base, **phone,
+                                                    "features": ["software_keyboard", "press_within"]}),
+                         ("x.wants", None, None))
         # Any target may have its own file (Android's sign-up has no picker sheets), and a fallback may differ by form factor.
         own = {"name": "s", "desktop": "d.wants", "phone": "p.json", "android": "a.wants"}
         self.assertEqual(E2E.plan_entry(own, {}, {**base, "target": "android", "form_factor": "phone"})[0], "a.wants")
@@ -548,6 +688,34 @@ class SuiteTests(unittest.TestCase):
             self.assertEqual(E2E.plan_entry(split, {}, {**base, "target": target, "form_factor": factor,
                                                         "cli_version": "0.4.0"})[0], file, target)
         self.assertEqual(sorted(E2E.entry_files(own)), ["a.wants", "d.wants", "p.json"])
+
+    def test_a_run_checks_features_from_the_window_hello(self):
+        recipe = {"v": 1, "name": "within", "steps": [
+            {"id": "p", "op": "press", "target": "x", "within": {"x": 1, "y": 1}},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            write(folder, "within.json", json.dumps(recipe))
+            suite_path = write(folder, "s.json", json.dumps({
+                "v": 1, "recipes": [{"name": "within", "file": "within.json"}],
+            }))
+            args = SimpleNamespace(
+                suite=str(suite_path), target="macos", db=str(folder / "run.db"), out=str(folder / "out"),
+                addr="127.0.0.1:1", no_launch=False, keep_data=False, allow_send=False, only=[], record=False,
+                form_factor=None, launch_timeout=1, reply_timeout_ms=None, cli="gpui-agent", just="just",
+            )
+            hello = {"ready": True, "platform": "macos", "os": "macos",
+                     "features": ["press", "scroll", "hover", "drag", "viewport"]}
+            with mock.patch.object(E2E, "launch", return_value=None), \
+                    mock.patch.object(E2E, "wait_for", side_effect=[hello, True]), \
+                    mock.patch.object(E2E, "app_database", return_value="test"), \
+                    mock.patch.object(E2E, "installed_cli_version", return_value="0.5.0"), \
+                    mock.patch.object(E2E, "git_head", return_value="test"), \
+                    mock.patch.object(E2E, "run_entry") as run_entry:
+                with self.assertRaises(E2E.SuiteError) as raised:
+                    E2E.run(args)
+            self.assertIn("press_within", str(raised.exception))
+            run_entry.assert_not_called()
 
 
 class SnapshotTests(unittest.TestCase):

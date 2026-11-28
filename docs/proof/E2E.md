@@ -168,8 +168,8 @@ that part without using `$table`, and only then clicks `$table-add`; the entry's
 ```
 
 **Requirements and fallbacks.**
-- `needs_cli` / `needs_feature`: the installed gpui-agent-cli version, or a `hello.features` entry. Either can be a
-  map per target or form factor.
+- `needs_cli` / `needs_feature`: the installed gpui-agent-cli version, or one `hello.features` entry (a list means
+  every entry is required). Either can be a map per target or form factor.
 - `fallback`: the file to run while those are missing, or a map per form factor (`phone`, then `file`). Without one,
   the recipe is reported as `needs`.
 
@@ -192,9 +192,11 @@ that part without using `$table`, and only then clicks `$table-add`; the entry's
 - send steps are marked;
 - no secret box is typed into;
 - `key_delay_ms` appears only on `type`, and only in entries with `needs_cli`;
-- a step whose op needs a `hello.features` entry is not in the variant a desktop target (`macos`, `linux` or
-  `windows`) would run when that host does not list the feature, unless the entry's own `needs_feature` sends that
-  host to a fallback or `needs` first (mobile hosts differ, so check does not infer them);
+- a step whose op needs a `hello.features` entry is not in the variant a target would run when the pinned plug does
+  not list that feature there (the desktop list and the iOS/Android lists differ), unless the entry's own
+  `needs_feature` sends that host to a fallback or `needs` first. These static lists are only the no-app check: a run
+  checks the live window's `hello.features`, so a host can use features it actually lists and is refused before any
+  recipe starts when it does not;
 - then `gpui-agent recipe validate` on each file the installed client can read.
 
 ## The smoke suite (`agent-recipes/e2e/smoke.json`)
@@ -210,10 +212,10 @@ a Windows file is named.
 | 3 | `tax-year` | the year and 2551Q in Edit forms (New return is refused without them) | `tax-year.wants` | `tax-year-narrow.wants` | `tax-year.wants` / `tax-year-narrow.wants`; Android `tax-year-android.json` |
 | 4 | `navigate` | every screen | `../ui/ui-navigate-app.wants` | `navigate-phone.wants` | `navigate-phone.wants` |
 | 5 | `open-2551q` | New return > 2551Q | `open-2551q.wants`; Windows `open-2551q-windows.wants` (also the facts 2551Q validates) | `open-2551q-phone.wants` | `open-2551q-phone.wants` |
-| 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | `money-boxes-paced-phone.json` (awaits the software keyboard), fallback `money-boxes-phone.json` |
+| 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | iOS `money-boxes-paced-ios.json` / Android `money-boxes-paced-phone.json` (await the software keyboard), fallback `money-boxes-phone.json` |
 | 7 | `delete-row` | in its own fresh Q1 return, a schedule row added, filled and deleted | `delete-row-desktop.json` | `delete-row.json` | `delete-row.json` |
-| 8 | `queue` | a fresh Q2 return validated; Queue visible but not pressed | `queue-desktop.json`; Windows `queue-windows.wants` | `queue-linux.json` | `queue-phone.json` |
-| 9 | `queue-send` | a fresh Q3 return validated, then the explicit dry-run Queue/Continue rehearsal | `queue-send-desktop.json`; Windows `queue-send-windows.wants` | `queue-send-linux.json` | `queue-send-phone.json` |
+| 8 | `queue` | a fresh Q2 return validated; Queue visible but not pressed | `queue-desktop.json`; Windows `queue-windows.wants` | `queue-linux.json` | `queue-phone.json`; on iOS it is `needs system.keyboard_hide` because the plug does not list that action there |
+| 9 | `queue-send` | a fresh Q3 return validated, then the explicit dry-run Queue/Continue rehearsal | `queue-send-desktop.json`; Windows `queue-send-windows.wants` | `queue-send-linux.json` | `queue-send-phone.json`; on iOS it is `needs system.keyboard_hide` because the plug does not list that action there |
 | 10 | `birth-date` | the birth date, typed in the date box / the date sheet, read back, saved | `birth-date.wants` | `birth-date-phone.json` | `birth-date-phone.json` |
 | 11 | `sign-out` | Log out; the lock screen | `sign-out.wants` | `sign-out-phone.wants` | `sign-out-phone.wants` |
 

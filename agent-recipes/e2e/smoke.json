@@ -70,6 +70,7 @@
    "desktop": "money-boxes-paced.json",
    "linux": "money-boxes-phone.json",
    "phone": "money-boxes-paced-phone.json",
+   "ios": "money-boxes-paced-ios.json",
    "needs_cli": "0.4.1",
    "needs_feature": {
     "phone": "software_keyboard"
@@ -111,7 +112,10 @@
    "precondition": "Stops before the Queue control after Check reports no problems. The send rehearsal is the following queue-send entry, refused unless --allow-send is explicitly passed.",
    "desktop": "queue-desktop.json",
    "phone": "queue-phone.json",
-   "linux": "queue-linux.json"
+   "linux": "queue-linux.json",
+   "needs_feature": {
+    "ios": "system.keyboard_hide"
+   }
   },
   {
    "name": "queue-send",
@@ -119,6 +123,9 @@
    "windows": "queue-send-windows.wants",
    "linux": "queue-send-linux.json",
    "phone": "queue-send-phone.json",
+   "needs_feature": {
+    "ios": "system.keyboard_hide"
+   },
    "send": true,
    "precondition": "Explicit dry-run send rehearsal. Without --allow-send the runner reports this entry skipped (needs --allow-send); with it the runner requires EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE and a test database."
   },
