@@ -2749,7 +2749,7 @@ mod tests {
     #[test]
     fn n1_sign_out_during_the_claim_opens_nothing() {
         let _turn = test_turn();
-        let scratch = scratch();
+        let _scratch = scratch();
         permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
         let claim_gate = hooks::pause("claim.after_claim");
@@ -3093,7 +3093,7 @@ mod tests {
     #[test]
     fn n1_b_signs_in_during_as_claim_and_keeps_b() {
         let _turn = test_turn();
-        let scratch = scratch();
+        let _scratch = scratch();
         permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
         let claim_gate = hooks::pause("claim.after_claim");
@@ -3146,7 +3146,7 @@ mod tests {
     #[test]
     fn n1b_try_again_starts_the_worker() {
         let _turn = test_turn();
-        let scratch = scratch();
+        let _scratch = scratch();
         permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
         PANIC_CLAIM.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -4655,7 +4655,7 @@ mod tests {
     #[test]
     fn a_sign_in_change_at_the_current_epoch_blocks_not_opens() {
         let _turn = test_turn();
-        let scratch = scratch();
+        let _scratch = scratch();
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch = snapshot().epoch;
