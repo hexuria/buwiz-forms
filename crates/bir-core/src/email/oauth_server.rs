@@ -5,6 +5,10 @@
 //! else on the port (a browser's `/favicon.ico`, another method or path, a callback with some other state) gets an
 //! error page and the wait goes on, so a stray or hostile local request cannot end the sign-in. The receiver always
 //! gets exactly one answer, so the sign-in never waits forever.
+//!
+//! Liveness, the boundary this module owns (no system model covers it; these rules are its tests): one thread serves
+//! one connection at a time; a connection gets at most [`CONNECTION_TIMEOUT`] and never past the sign-in's deadline;
+//! the thread ends at that deadline and sends exactly one result, so `recv()` on the receiver always returns.
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -504,6 +508,21 @@ mod tests {
             "{waited:?}"
         );
         drip.join().unwrap();
+    }
+
+    #[test]
+    fn the_deadline_ends_the_wait_even_while_a_slow_sender_is_connected() {
+        let deadline = Duration::from_millis(1500);
+        let (port, rx) = start_callback_server_until(STATE.into(), deadline).unwrap();
+        let started = Instant::now();
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream.set_nodelay(true).unwrap();
+        stream.write_all(b"GET /?co").unwrap();
+        // The connection stays open and silent past the deadline.
+        assert_eq!(outcome(&rx), Err(CALLBACK_TIMED_OUT.into()));
+        let waited = started.elapsed();
+        assert!(waited < deadline + Duration::from_secs(2), "{waited:?}");
+        drop(stream);
     }
 
     #[test]
