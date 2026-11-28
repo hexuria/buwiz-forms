@@ -21,6 +21,8 @@ function row(over: Partial<ReturnRow>): ReturnRow {
   };
 }
 
+const sendState = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
+
 const ALL: FilterValues = { query: "", tps: null, forms: null, periods: null, statuses: null, updatedMonth: null };
 const R = [
   row({ id: 1 }),
@@ -215,7 +217,7 @@ test("a card's send chip: Checking, Held, Retrying, Needs attention and Not sent
   expect(sendChip(row({ status: "Queued", send: send("checking") }))).toEqual({ label: "Checking", tone: "neutral", line: "line of checking" });
   expect(sendChip(row({ status: "Draft", send: send("refused") }))).toEqual({ label: "Not sent", tone: "danger", line: "line of refused" });
   for (const stage of ["queued", "sending", "sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
-  expect(sendChip(row({ status: "Submitted", send: send("test_sent") }))).toBe(null);
+  expect(sendChip(row({ status: "Submitted", send: sendState("test_sent") }))).toBe(null);
   expect(sendChip(row({}))).toBe(null);
 });
 
@@ -229,7 +231,7 @@ test("a screen reader hears a test send's word and a real send's Submitted", () 
 
 test("the test-sends column shows only while a test send exists; a real filer never reads the words", () => {
   const real = row({ status: "Submitted" });
-  const test1 = row({ status: "Submitted", submitted_dry_run: true });
+  const test1 = row({ status: "Submitted", send: sendState("test_sent") });
   // None: the column is out even though the filter would let it through.
   expect(shownColumns([real], null).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "confirmed"]);
   expect(shownColumns([real], new Set(["Test sends"])).map((c) => c.id)).toEqual([]);
@@ -240,7 +242,7 @@ test("the test-sends column shows only while a test send exists; a real filer ne
 
 test("a test-sends tab or filter with no test send left falls back to all, never an empty list for ever", () => {
   const real = row({ status: "Submitted" });
-  const test1 = row({ status: "Submitted", submitted_dry_run: true });
+  const test1 = row({ status: "Submitted", send: sendState("test_sent") });
   expect(effectiveTab([real], "test-sends")).toBe("all");
   expect(effectiveTab([real, test1], "test-sends")).toBe("test-sends");
   expect(effectiveTab([real], "submitted")).toBe("submitted");
@@ -249,5 +251,5 @@ test("a test-sends tab or filter with no test send left falls back to all, never
   expect(filterRows([real], INDEX, onlyTests).length).toBe(1);
   // One exists: the filter keeps it alone.
   expect(filterRows([real, test1], INDEX, onlyTests).length).toBe(1);
-  expect(filterRows([real, test1], INDEX, onlyTests)[0].submitted_dry_run).toBe(true);
+  expect(filterRows([real, test1], INDEX, onlyTests)[0]).toBe(test1);
 });

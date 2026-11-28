@@ -16,7 +16,7 @@ export interface BoardProps {
   onCancel: (row: ReturnRow) => void;
 }
 
-function BoardColumn(props: BoardProps & { column: Column }) {
+function BoardColumn(props: Omit<BoardProps, "columns"> & { column: Column }) {
   const list = computed(() => columnRows(props.rows, props.column));
   return (
     <View

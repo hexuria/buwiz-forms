@@ -9,7 +9,7 @@ test("a simulated send says Test send: not filed, from either fact", () => {
   expect(statusWord({ status: "Submitted", submitted_dry_run: true })).toBe("Test send: not filed");
   expect(statusWord({ status: "Submitted", send: send("test_sent") })).toBe("Test send: not filed");
   expect(statusChipName({ status: "Submitted", send: send("test_sent") })).toBe("dry_run");
-  expect(isDryRun({ status: "Submitted", submitted_dry_run: true, send: null })).toBe(true));
+  expect(isDryRun({ status: "Submitted", submitted_dry_run: true, send: null })).toBe(true);
 });
 
 test("the legacy stored word Filed reads as Submitted does: a dry run is a test send, a real one is filed", () => {
