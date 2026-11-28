@@ -1,0 +1,7 @@
+ISOLATED
+shell/agent/bridge.test.tsx passes 10 of 10 wall_ms 8681,13666,12476,11828,8192,8459,8237,8283,8116,8465 target_ms 2100,3700,2500,4500,1900,2100,2000,2000,1900,2200 max_target_ms 4500.0
+screens/form/session.fixes.test.ts passes 10 of 10 wall_ms 110149,110148,112843,110006,110668,109694,109901,109894,109886,109669 target_ms 135,129,136,127,131,128,134,127,131,128 max_target_ms 136.0
+SHARD 0 files 74 failures 0
+SHARD_TARGET screens/form/session.fixes.test.ts exit 0 wall_ms 109682 lines ['? screens\\form\\session.fixes.test.ts � [F1] dispose with an amount box still focused leaves it first, in the same turn: the save holds what the box reads (128ms)']
+SHARD 1 files 74 failures 0
+SHARD_TARGET shell/agent/bridge.test.tsx exit 0 wall_ms 8137 lines ['? shell\\agent\\bridge.test.tsx � desktop: go, open, choose and review reach the frame in order (2.1s)']
