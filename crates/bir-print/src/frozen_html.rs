@@ -5787,7 +5787,7 @@ fn apply_rule6_specify_bands(
                 greys = spans;
             }
             let text_right = greys.first().map(|(l, _)| l - 4.0).unwrap_or(row_x1);
-            let room = shrunk_room(((text_right - row_x0) - 6.0).max(20.0));
+            let room = shrunk_room(((row_x1 - row_x0) - 6.0).max(20.0));
             let cell_room =
                 cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
             let composed = compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val);
@@ -5812,7 +5812,7 @@ fn apply_rule6_specify_bands(
                     insertions.push(Rule6Insertion {
                         cell_id: r6.cell_id.clone(),
                         cut_y,
-                        dh: if band_lines >= 2 { 25.0 } else { 14.0 },
+                        dh: (11.0 * band_lines as f64 + 1.0).max(14.0),
                         x0: row_x0,
                         x1: row_x1,
                         display: band_display,
@@ -5834,7 +5834,7 @@ fn apply_rule6_specify_bands(
                 } else if let Some((l1, l2, sz)) =
                     fit_two_lines(sheet, letter, room, full_val, 8.5, PLAIN_TEXT_MIN_PT)
                 {
-                    (25.0, format!("{l1}\n{l2}"), sz, true, false)
+                    (23.0, format!("{l1}\n{l2}"), sz, true, false)
                 } else if let Some((l1, l2)) = wrap_and_truncate_two_lines_mode(
                     sheet,
                     letter,
@@ -5843,7 +5843,7 @@ fn apply_rule6_specify_bands(
                     PLAIN_TEXT_MIN_PT,
                     true,
                 ) {
-                    (25.0, format!("{l1}\n{l2}"), PLAIN_TEXT_MIN_PT, true, true)
+                    (23.0, format!("{l1}\n{l2}"), PLAIN_TEXT_MIN_PT, true, true)
                 } else {
                     (
                         14.0,
@@ -6302,7 +6302,7 @@ fn shift_page_and_insert_rule6(
     for ins in insertions {
         let y = ins.cut_y + prior_dh;
         let text_right = ins.greys.first().map(|(l, _)| l - 4.0).unwrap_or(ins.x1);
-        let w = rule6_band_width(ins.x0, text_right);
+        let w = rule6_band_width(ins.x0, ins.x1);
         let h = (ins.dh - 1.0).max(8.0);
         let lh_css = if ins.two_lines {
             format!("line-height:{PLAIN_TWO_LINE_CSS_HEIGHT};")
@@ -6318,20 +6318,17 @@ fn shift_page_and_insert_rule6(
             String::new()
         };
         let band_lines: Vec<&str> = ins.display.split('\n').collect();
-        let pitch = if band_lines.len() > 1 {
-            ((h - 2.0) / band_lines.len() as f64).max(7.0)
-        } else {
-            h
-        };
+        let pitch = 11.0f64;
+        let full_w = (ins.x1 - ins.x0 - 3.0).max(w);
         let mut inputs_html = String::new();
         for (line_idx, line) in band_lines.iter().enumerate() {
             inputs_html.push_str(&format!(
-                "<input type=\"text\" class=\"{}\" name=\"{}\" readonly value=\"{}\" style=\"position:absolute;left:0pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt;padding:1pt 0 0 3pt;font-size:{:.2}pt;{}text-align:left\" data-overflow-of=\"{}\"{}>",
+                "<input type=\"text\" class=\"{}\" name=\"{}\" readonly value=\"{}\" style=\"position:absolute;left:0pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt;padding:1pt 0 0 3pt;font-size:{:.2}pt;{}text-align:left;background:transparent\" data-overflow-of=\"{}\"{}>",
                 ins.input_classes,
                 ins.cell_id,
                 html_escape(line),
                 line_idx as f64 * pitch,
-                w,
+                full_w,
                 pitch,
                 ins.font_size_pt,
                 lh_css,
