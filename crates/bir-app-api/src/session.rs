@@ -483,6 +483,13 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
         tracing::info!("a stale same-owner Opening is replaced: its claim thread is gone");
     }
     let (spawn, outcome) = begin_open_locked(&mut session, owner.clone(), engine, why);
+    if let Some(epoch) = spawn {
+        // The epoch reads as a LIVE claim from inside the SESSION section: finish_open spawns
+        // the thread only after the lock is released, and a second engine's begin_open in that
+        // window would read this Opening as stale — claim thread nowhere — and replace it
+        // (the two-engines race). The spawn itself does not re-push.
+        lock(&LIVE_CLAIMS).push(epoch);
+    }
     drop(session);
     finish_open(spawn, outcome, owner, engine, why);
 }
@@ -629,7 +636,7 @@ impl Drop for ClaimGuard {
 }
 
 fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
-    lock(&LIVE_CLAIMS).push(epoch);
+    // The epoch is already a live claim — begin_open pushed it inside the SESSION section.
     #[cfg(test)]
     if CLAIM_SPAWN_SUPPRESSED.load(std::sync::atomic::Ordering::SeqCst) {
         // Item 10's seam: the hand-driven tests drive commit() themselves. The epoch still reads
