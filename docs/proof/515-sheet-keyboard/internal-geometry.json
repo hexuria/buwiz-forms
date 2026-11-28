@@ -1,13 +1,13 @@
 {
   "threebutton": {
     "keyboard_up": {
-      "list": {
-        "id": "new-tp-rdo_code-list",
+      "sheet_root": {
+        "id": "n33",
         "bounds": {
-          "x": 17.142857,
-          "y": 229.71428,
-          "w": 377.14285,
-          "h": 285.33334
+          "x": 0.0,
+          "y": 75.809525,
+          "w": 411.42856,
+          "h": 502.09525
         }
       },
       "sheet_body": {
@@ -16,7 +16,7 @@
           "x": 1.1428572,
           "y": 153.90475,
           "w": 409.14285,
-          "h": 376.0
+          "h": 424.0
         }
       },
       "sheet_inner_content": {
@@ -25,44 +25,143 @@
           "x": 17.142857,
           "y": 169.90475,
           "w": 377.14285,
-          "h": 345.14285
+          "h": 393.14285
         }
       },
-      "last_visible_row": {
-        "id": "new-tp-rdo_code-opt-006",
+      "list": {
+        "id": "new-tp-rdo_code-list",
         "bounds": {
           "x": 17.142857,
-          "y": 490.66666,
+          "y": 229.71428,
+          "w": 377.14285,
+          "h": 333.33334
+        }
+      },
+      "keyboard": {
+        "id": "system-keyboard",
+        "bounds": {
+          "x": 0.0,
+          "y": 577.9048,
+          "w": 411.42856,
+          "h": 336.38095
+        }
+      },
+      "sheet_top_dp": 75.809525,
+      "sheet_bottom_dp": 577.904775,
+      "keyboard_top_dp": 577.9048,
+      "sheet_bottom_padding_dp": 2.4999999936881068e-05,
+      "sheet_bottom_padding_px": 6.56249998343128e-05,
+      "list_bottom_dp": 563.04762,
+      "gap_listbottom_to_keyboardtop_dp": 14.857179999999971,
+      "gap_listbottom_to_keyboardtop_px": 39.000097499999924,
+      "row_spacing_dp": 52.190469999999976,
+      "row_height_dp": 52.190475,
+      "row_gap_dp": -5.00000002290335e-06,
+      "last_visible_row": {
+        "id": "new-tp-rdo_code-opt-007",
+        "bounds": {
+          "x": 17.142857,
+          "y": 542.8571,
           "w": 377.14285,
           "h": 52.190475
         },
-        "visible_height_dp": 24.380960000000073,
-        "clipped_height_dp": 27.809514999999926
+        "visible_height_dp": 20.190520000000106,
+        "clipped_height_dp": 31.999954999999893
       },
-      "gap_listbottom_to_keyboardtop_dp": 62.85717999999997,
-      "gap_listbottom_to_keyboardtop_px": 165.00009749999992,
-      "keyboard_top_dp": 577.9048,
-      "sheet_bottom_padding_dp": 48.00002499999994,
-      "sheet_bottom_padding_px": 126.00006562499983
+      "status_bar_bottom_px": 63,
+      "status_bar_bottom_dp": 24.0,
+      "screen_height_px": 2400,
+      "density": 2.625,
+      "assertions": {
+        "a_sheet_top_min": true,
+        "b_sheet_bottom_keyboard_top": true,
+        "c_gap_within_row_spacing": true,
+        "d_last_row_not_clipped": false
+      }
+    },
+    "keyboard_down": {
+      "sheet_root": {
+        "id": "n33",
+        "bounds": {
+          "x": 0.0,
+          "y": 91.42857,
+          "w": 411.42856,
+          "h": 822.8571
+        }
+      },
+      "sheet_body": {
+        "id": "n466",
+        "bounds": {
+          "x": 1.1428572,
+          "y": 169.5238,
+          "w": 409.14285,
+          "h": 696.7619
+        }
+      },
+      "sheet_inner_content": {
+        "id": "n468",
+        "bounds": {
+          "x": 17.142857,
+          "y": 185.5238,
+          "w": 377.14285,
+          "h": 665.9048
+        }
+      },
+      "list": {
+        "id": "new-tp-rdo_code-list",
+        "bounds": {
+          "x": 17.142857,
+          "y": 245.33333,
+          "w": 377.14285,
+          "h": 606.0952
+        }
+      },
+      "keyboard": null,
+      "sheet_top_dp": 91.42857,
+      "sheet_bottom_dp": 914.28567,
+      "keyboard_top_dp": null,
+      "sheet_bottom_padding_dp": 47.999970000000076,
+      "sheet_bottom_padding_px": 125.9999212500002,
+      "list_bottom_dp": 851.4285299999999,
+      "gap_listbottom_to_keyboardtop_dp": null,
+      "gap_listbottom_to_keyboardtop_px": null,
+      "row_spacing_dp": 52.190470000000005,
+      "row_height_dp": 52.190475,
+      "row_gap_dp": -4.999999994481641e-06,
+      "last_visible_row": {
+        "id": "new-tp-rdo_code-opt-012",
+        "bounds": {
+          "x": 17.142857,
+          "y": 819.4286,
+          "w": 377.14285,
+          "h": 52.190475
+        },
+        "visible_height_dp": 31.99992999999995,
+        "clipped_height_dp": 20.19054500000005
+      },
+      "status_bar_bottom_px": 63,
+      "status_bar_bottom_dp": 24.0,
+      "screen_height_px": 2400,
+      "density": 2.625
     },
     "insets": {
-      "keyboard_down_navigation_bottom_px": 126,
-      "keyboard_down_navigation_bottom_dp": 48,
-      "keyboard_up_sheet_bottom_inset_px": 126,
-      "keyboard_up_sheet_bottom_inset_dp": 48,
-      "driver_keyboard_height_px": 882.9999937499999,
-      "driver_keyboard_height_dp": 336.38095
+      "keyboard_down_sheet_bottom_padding_dp": 47.999970000000076,
+      "keyboard_down_sheet_bottom_padding_px": 125.9999212500002,
+      "keyboard_up_sheet_bottom_padding_dp": 2.4999999936881068e-05,
+      "keyboard_up_sheet_bottom_padding_px": 6.56249998343128e-05,
+      "driver_keyboard_height_dp": 336.38095,
+      "driver_keyboard_height_px": 882.9999937499999
     }
   },
   "gesture": {
     "keyboard_up": {
-      "list": {
-        "id": "new-tp-rdo_code-list",
+      "sheet_root": {
+        "id": "n33",
         "bounds": {
-          "x": 17.142857,
-          "y": 229.71428,
-          "w": 377.14285,
-          "h": 309.33334
+          "x": 0.0,
+          "y": 75.809525,
+          "w": 411.42856,
+          "h": 502.09525
         }
       },
       "sheet_body": {
@@ -71,7 +170,7 @@
           "x": 1.1428572,
           "y": 153.90475,
           "w": 409.14285,
-          "h": 400.0
+          "h": 424.0
         }
       },
       "sheet_inner_content": {
@@ -80,33 +179,132 @@
           "x": 17.142857,
           "y": 169.90475,
           "w": 377.14285,
-          "h": 369.14285
+          "h": 393.14285
         }
       },
-      "last_visible_row": {
-        "id": "new-tp-rdo_code-opt-006",
+      "list": {
+        "id": "new-tp-rdo_code-list",
         "bounds": {
           "x": 17.142857,
-          "y": 490.66666,
+          "y": 229.71428,
+          "w": 377.14285,
+          "h": 333.33334
+        }
+      },
+      "keyboard": {
+        "id": "system-keyboard",
+        "bounds": {
+          "x": 0.0,
+          "y": 577.9048,
+          "w": 411.42856,
+          "h": 336.38095
+        }
+      },
+      "sheet_top_dp": 75.809525,
+      "sheet_bottom_dp": 577.904775,
+      "keyboard_top_dp": 577.9048,
+      "sheet_bottom_padding_dp": 2.4999999936881068e-05,
+      "sheet_bottom_padding_px": 6.56249998343128e-05,
+      "list_bottom_dp": 563.04762,
+      "gap_listbottom_to_keyboardtop_dp": 14.857179999999971,
+      "gap_listbottom_to_keyboardtop_px": 39.000097499999924,
+      "row_spacing_dp": 52.190469999999976,
+      "row_height_dp": 52.190475,
+      "row_gap_dp": -5.00000002290335e-06,
+      "last_visible_row": {
+        "id": "new-tp-rdo_code-opt-007",
+        "bounds": {
+          "x": 17.142857,
+          "y": 542.8571,
           "w": 377.14285,
           "h": 52.190475
         },
-        "visible_height_dp": 48.38096000000007,
-        "clipped_height_dp": 3.8095149999999265
+        "visible_height_dp": 20.190520000000106,
+        "clipped_height_dp": 31.999954999999893
       },
-      "gap_listbottom_to_keyboardtop_dp": 38.85717999999997,
-      "gap_listbottom_to_keyboardtop_px": 102.00009749999992,
-      "keyboard_top_dp": 577.9048,
-      "sheet_bottom_padding_dp": 24.000024999999937,
-      "sheet_bottom_padding_px": 63.000065624999834
+      "status_bar_bottom_px": 63,
+      "status_bar_bottom_dp": 24.0,
+      "screen_height_px": 2400,
+      "density": 2.625,
+      "assertions": {
+        "a_sheet_top_min": true,
+        "b_sheet_bottom_keyboard_top": true,
+        "c_gap_within_row_spacing": true,
+        "d_last_row_not_clipped": false
+      }
+    },
+    "keyboard_down": {
+      "sheet_root": {
+        "id": "n33",
+        "bounds": {
+          "x": 0.0,
+          "y": 91.42857,
+          "w": 411.42856,
+          "h": 822.8571
+        }
+      },
+      "sheet_body": {
+        "id": "n466",
+        "bounds": {
+          "x": 1.1428572,
+          "y": 169.5238,
+          "w": 409.14285,
+          "h": 720.7619
+        }
+      },
+      "sheet_inner_content": {
+        "id": "n468",
+        "bounds": {
+          "x": 17.142857,
+          "y": 185.5238,
+          "w": 377.14285,
+          "h": 689.9048
+        }
+      },
+      "list": {
+        "id": "new-tp-rdo_code-list",
+        "bounds": {
+          "x": 17.142857,
+          "y": 245.33333,
+          "w": 377.14285,
+          "h": 630.0952
+        }
+      },
+      "keyboard": null,
+      "sheet_top_dp": 91.42857,
+      "sheet_bottom_dp": 914.28567,
+      "keyboard_top_dp": null,
+      "sheet_bottom_padding_dp": 23.999970000000076,
+      "sheet_bottom_padding_px": 62.9999212500002,
+      "list_bottom_dp": 875.4285299999999,
+      "gap_listbottom_to_keyboardtop_dp": null,
+      "gap_listbottom_to_keyboardtop_px": null,
+      "row_spacing_dp": 52.190470000000005,
+      "row_height_dp": 52.190475,
+      "row_gap_dp": -4.999999994481641e-06,
+      "last_visible_row": {
+        "id": "new-tp-rdo_code-opt-013",
+        "bounds": {
+          "x": 17.142857,
+          "y": 871.619,
+          "w": 377.14285,
+          "h": 52.190475
+        },
+        "visible_height_dp": 3.8095299999998815,
+        "clipped_height_dp": 48.38094500000012
+      },
+      "status_bar_bottom_px": 63,
+      "status_bar_bottom_dp": 24.0,
+      "screen_height_px": 2400,
+      "density": 2.625
     },
     "insets": {
-      "keyboard_down_navigation_bottom_px": 63,
-      "keyboard_down_navigation_bottom_dp": 24,
-      "keyboard_up_sheet_bottom_inset_px": 63,
-      "keyboard_up_sheet_bottom_inset_dp": 24,
-      "driver_keyboard_height_px": 882.9999937499999,
-      "driver_keyboard_height_dp": 336.38095
+      "keyboard_down_sheet_bottom_padding_dp": 23.999970000000076,
+      "keyboard_down_sheet_bottom_padding_px": 62.9999212500002,
+      "keyboard_up_sheet_bottom_padding_dp": 2.4999999936881068e-05,
+      "keyboard_up_sheet_bottom_padding_px": 6.56249998343128e-05,
+      "driver_keyboard_height_dp": 336.38095,
+      "driver_keyboard_height_px": 882.9999937499999
     }
   }
 }

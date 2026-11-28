@@ -14,9 +14,15 @@
     "keyboard_top_px": 1517.0001,
     "sheet_root_node": "n33",
     "keyboard_id": "system-keyboard",
-    "required_top_min_px": 87,
-    "bottom_minus_keyboard_px": -6.562500016116246e-05,
-    "pass": true
+    "required_top_min_px": 126.0,
+    "bottom_minus_keyboard_px": -6.562500013274075e-05,
+    "assertions": {
+      "a_sheet_top_min": true,
+      "b_sheet_bottom_keyboard_top": true,
+      "c_gap_within_row_spacing": true,
+      "d_last_row_not_clipped": false
+    },
+    "pass": false
   },
   "gesture": {
     "mode": "gesture",
@@ -33,8 +39,14 @@
     "keyboard_top_px": 1517.0001,
     "sheet_root_node": "n33",
     "keyboard_id": "system-keyboard",
-    "required_top_min_px": 87,
-    "bottom_minus_keyboard_px": -6.562500016116246e-05,
-    "pass": true
+    "required_top_min_px": 126.0,
+    "bottom_minus_keyboard_px": -6.562500013274075e-05,
+    "assertions": {
+      "a_sheet_top_min": true,
+      "b_sheet_bottom_keyboard_top": true,
+      "c_gap_within_row_spacing": true,
+      "d_last_row_not_clipped": false
+    },
+    "pass": false
   }
 }

@@ -263,7 +263,7 @@
                                                                   {
                                                                     "id": "n100",
                                                                     "role": "note",
-                                                                    "name": "New taxpayer",
+                                                                    "name": "New tax profile",
                                                                     "enabled": true,
                                                                     "focused": false,
                                                                     "visible": false,
@@ -1121,7 +1121,7 @@
                                                                                           {
                                                                                             "id": "n336",
                                                                                             "role": "note",
-                                                                                            "name": "Choose\u2026",
+                                                                                            "name": "Choose…",
                                                                                             "enabled": true,
                                                                                             "focused": false,
                                                                                             "bounds": {
@@ -1281,7 +1281,7 @@
                                                                                           {
                                                                                             "id": "n378",
                                                                                             "role": "note",
-                                                                                            "name": "Choose\u2026",
+                                                                                            "name": "Choose…",
                                                                                             "enabled": true,
                                                                                             "focused": false,
                                                                                             "bounds": {
@@ -1441,7 +1441,7 @@
                                                                                               "x": 1.1428572,
                                                                                               "y": 153.90475,
                                                                                               "w": 409.14285,
-                                                                                              "h": 376.0
+                                                                                              "h": 424.0
                                                                                             },
                                                                                             "children": [
                                                                                               {
@@ -1454,7 +1454,7 @@
                                                                                                   "x": 17.142857,
                                                                                                   "y": 169.90475,
                                                                                                   "w": 377.14285,
-                                                                                                  "h": 345.14285
+                                                                                                  "h": 393.14285
                                                                                                 },
                                                                                                 "children": [
                                                                                                   {
@@ -1527,7 +1527,7 @@
                                                                                                       "x": 17.142857,
                                                                                                       "y": 229.71428,
                                                                                                       "w": 377.14285,
-                                                                                                      "h": 285.33334
+                                                                                                      "h": 333.33334
                                                                                                     },
                                                                                                     "children": [
                                                                                                       {
@@ -1560,7 +1560,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-001",
                                                                                                             "role": "option",
-                                                                                                            "name": "001 \u2014 Laoag City",
+                                                                                                            "name": "001 — Laoag City",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "bounds": {
@@ -1586,7 +1586,7 @@
                                                                                                                   {
                                                                                                                     "id": "n488",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "001 \u2014 Laoag City",
+                                                                                                                    "name": "001 — Laoag City",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "bounds": {
@@ -1618,7 +1618,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-002",
                                                                                                             "role": "option",
-                                                                                                            "name": "002 \u2014 Vigan City",
+                                                                                                            "name": "002 — Vigan City",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "bounds": {
@@ -1644,7 +1644,7 @@
                                                                                                                   {
                                                                                                                     "id": "n498",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "002 \u2014 Vigan City",
+                                                                                                                    "name": "002 — Vigan City",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "bounds": {
@@ -1676,7 +1676,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-003",
                                                                                                             "role": "option",
-                                                                                                            "name": "003 \u2014 San Fernando, La Union",
+                                                                                                            "name": "003 — San Fernando, La Union",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "bounds": {
@@ -1702,7 +1702,7 @@
                                                                                                                   {
                                                                                                                     "id": "n508",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "003 \u2014 San Fernando, La Union",
+                                                                                                                    "name": "003 — San Fernando, La Union",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "bounds": {
@@ -1734,7 +1734,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-004",
                                                                                                             "role": "option",
-                                                                                                            "name": "004 \u2014 Calasiao, Pangasinan",
+                                                                                                            "name": "004 — Calasiao, Pangasinan",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "bounds": {
@@ -1760,7 +1760,7 @@
                                                                                                                   {
                                                                                                                     "id": "n518",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "004 \u2014 Calasiao, Pangasinan",
+                                                                                                                    "name": "004 — Calasiao, Pangasinan",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "bounds": {
@@ -1792,7 +1792,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-005",
                                                                                                             "role": "option",
-                                                                                                            "name": "005 \u2014 Alaminos City",
+                                                                                                            "name": "005 — Alaminos City",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "bounds": {
@@ -1818,7 +1818,7 @@
                                                                                                                   {
                                                                                                                     "id": "n528",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "005 \u2014 Alaminos City",
+                                                                                                                    "name": "005 — Alaminos City",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "bounds": {
@@ -1850,7 +1850,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-006",
                                                                                                             "role": "option",
-                                                                                                            "name": "006 \u2014 Urdaneta City",
+                                                                                                            "name": "006 — Urdaneta City",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "bounds": {
@@ -1876,7 +1876,7 @@
                                                                                                                   {
                                                                                                                     "id": "n538",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "006 \u2014 Urdaneta City",
+                                                                                                                    "name": "006 — Urdaneta City",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "bounds": {
@@ -1898,7 +1898,6 @@
                                                                                                         "name": "",
                                                                                                         "enabled": true,
                                                                                                         "focused": false,
-                                                                                                        "visible": false,
                                                                                                         "bounds": {
                                                                                                           "x": 17.142857,
                                                                                                           "y": 542.8571,
@@ -1909,10 +1908,9 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-007",
                                                                                                             "role": "option",
-                                                                                                            "name": "007 \u2014 Bangued, Abra",
+                                                                                                            "name": "007 — Bangued, Abra",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
-                                                                                                            "visible": false,
                                                                                                             "bounds": {
                                                                                                               "x": 17.142857,
                                                                                                               "y": 542.8571,
@@ -1926,7 +1924,6 @@
                                                                                                                 "name": "",
                                                                                                                 "enabled": true,
                                                                                                                 "focused": false,
-                                                                                                                "visible": false,
                                                                                                                 "bounds": {
                                                                                                                   "x": 21.333334,
                                                                                                                   "y": 557.7143,
@@ -1937,10 +1934,9 @@
                                                                                                                   {
                                                                                                                     "id": "n548",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "007 \u2014 Bangued, Abra",
+                                                                                                                    "name": "007 — Bangued, Abra",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
-                                                                                                                    "visible": false,
                                                                                                                     "bounds": {
                                                                                                                       "x": 21.333334,
                                                                                                                       "y": 557.7143,
@@ -1971,7 +1967,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-008",
                                                                                                             "role": "option",
-                                                                                                            "name": "008 \u2014 Baguio City",
+                                                                                                            "name": "008 — Baguio City",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "visible": false,
@@ -1999,7 +1995,7 @@
                                                                                                                   {
                                                                                                                     "id": "n558",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "008 \u2014 Baguio City",
+                                                                                                                    "name": "008 — Baguio City",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "visible": false,
@@ -2033,7 +2029,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-009",
                                                                                                             "role": "option",
-                                                                                                            "name": "009 \u2014 La Trinidad, Benguet",
+                                                                                                            "name": "009 — La Trinidad, Benguet",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "visible": false,
@@ -2061,7 +2057,7 @@
                                                                                                                   {
                                                                                                                     "id": "n568",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "009 \u2014 La Trinidad, Benguet",
+                                                                                                                    "name": "009 — La Trinidad, Benguet",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "visible": false,
@@ -2095,7 +2091,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-010",
                                                                                                             "role": "option",
-                                                                                                            "name": "010 \u2014 Lagawe, Ifugao",
+                                                                                                            "name": "010 — Lagawe, Ifugao",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "visible": false,
@@ -2123,7 +2119,7 @@
                                                                                                                   {
                                                                                                                     "id": "n578",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "010 \u2014 Lagawe, Ifugao",
+                                                                                                                    "name": "010 — Lagawe, Ifugao",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "visible": false,
@@ -2157,7 +2153,7 @@
                                                                                                           {
                                                                                                             "id": "new-tp-rdo_code-opt-011",
                                                                                                             "role": "option",
-                                                                                                            "name": "011 \u2014 Tabuk City, Kalinga",
+                                                                                                            "name": "011 — Tabuk City, Kalinga",
                                                                                                             "enabled": true,
                                                                                                             "focused": false,
                                                                                                             "visible": false,
@@ -2185,13 +2181,137 @@
                                                                                                                   {
                                                                                                                     "id": "n588",
                                                                                                                     "role": "note",
-                                                                                                                    "name": "011 \u2014 Tabuk City, Kalinga",
+                                                                                                                    "name": "011 — Tabuk City, Kalinga",
                                                                                                                     "enabled": true,
                                                                                                                     "focused": false,
                                                                                                                     "visible": false,
                                                                                                                     "bounds": {
                                                                                                                       "x": 21.333334,
                                                                                                                       "y": 766.4762,
+                                                                                                                      "w": 369.14285,
+                                                                                                                      "h": 20.952381
+                                                                                                                    }
+                                                                                                                  }
+                                                                                                                ]
+                                                                                                              }
+                                                                                                            ]
+                                                                                                          }
+                                                                                                        ]
+                                                                                                      },
+                                                                                                      {
+                                                                                                        "id": "n592",
+                                                                                                        "role": "generic",
+                                                                                                        "name": "",
+                                                                                                        "enabled": true,
+                                                                                                        "focused": false,
+                                                                                                        "visible": false,
+                                                                                                        "bounds": {
+                                                                                                          "x": 17.142857,
+                                                                                                          "y": 803.8095,
+                                                                                                          "w": 377.14285,
+                                                                                                          "h": 52.190475
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                          {
+                                                                                                            "id": "new-tp-rdo_code-opt-012",
+                                                                                                            "role": "option",
+                                                                                                            "name": "012 — Lagawe, Ifugao",
+                                                                                                            "enabled": true,
+                                                                                                            "focused": false,
+                                                                                                            "visible": false,
+                                                                                                            "bounds": {
+                                                                                                              "x": 17.142857,
+                                                                                                              "y": 803.8095,
+                                                                                                              "w": 377.14285,
+                                                                                                              "h": 52.190475
+                                                                                                            },
+                                                                                                            "children": [
+                                                                                                              {
+                                                                                                                "id": "n596",
+                                                                                                                "role": "generic",
+                                                                                                                "name": "",
+                                                                                                                "enabled": true,
+                                                                                                                "focused": false,
+                                                                                                                "visible": false,
+                                                                                                                "bounds": {
+                                                                                                                  "x": 21.333334,
+                                                                                                                  "y": 818.6667,
+                                                                                                                  "w": 369.14285,
+                                                                                                                  "h": 20.952381
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                  {
+                                                                                                                    "id": "n598",
+                                                                                                                    "role": "note",
+                                                                                                                    "name": "012 — Lagawe, Ifugao",
+                                                                                                                    "enabled": true,
+                                                                                                                    "focused": false,
+                                                                                                                    "visible": false,
+                                                                                                                    "bounds": {
+                                                                                                                      "x": 21.333334,
+                                                                                                                      "y": 818.6667,
+                                                                                                                      "w": 369.14285,
+                                                                                                                      "h": 20.952381
+                                                                                                                    }
+                                                                                                                  }
+                                                                                                                ]
+                                                                                                              }
+                                                                                                            ]
+                                                                                                          }
+                                                                                                        ]
+                                                                                                      },
+                                                                                                      {
+                                                                                                        "id": "n602",
+                                                                                                        "role": "generic",
+                                                                                                        "name": "",
+                                                                                                        "enabled": true,
+                                                                                                        "focused": false,
+                                                                                                        "visible": false,
+                                                                                                        "bounds": {
+                                                                                                          "x": 17.142857,
+                                                                                                          "y": 856.0,
+                                                                                                          "w": 377.14285,
+                                                                                                          "h": 52.190475
+                                                                                                        },
+                                                                                                        "children": [
+                                                                                                          {
+                                                                                                            "id": "new-tp-rdo_code-opt-013",
+                                                                                                            "role": "option",
+                                                                                                            "name": "013 — Tuguegarao City",
+                                                                                                            "enabled": true,
+                                                                                                            "focused": false,
+                                                                                                            "visible": false,
+                                                                                                            "bounds": {
+                                                                                                              "x": 17.142857,
+                                                                                                              "y": 856.0,
+                                                                                                              "w": 377.14285,
+                                                                                                              "h": 52.190475
+                                                                                                            },
+                                                                                                            "children": [
+                                                                                                              {
+                                                                                                                "id": "n606",
+                                                                                                                "role": "generic",
+                                                                                                                "name": "",
+                                                                                                                "enabled": true,
+                                                                                                                "focused": false,
+                                                                                                                "visible": false,
+                                                                                                                "bounds": {
+                                                                                                                  "x": 21.333334,
+                                                                                                                  "y": 870.8571,
+                                                                                                                  "w": 369.14285,
+                                                                                                                  "h": 20.952381
+                                                                                                                },
+                                                                                                                "children": [
+                                                                                                                  {
+                                                                                                                    "id": "n608",
+                                                                                                                    "role": "note",
+                                                                                                                    "name": "013 — Tuguegarao City",
+                                                                                                                    "enabled": true,
+                                                                                                                    "focused": false,
+                                                                                                                    "visible": false,
+                                                                                                                    "bounds": {
+                                                                                                                      "x": 21.333334,
+                                                                                                                      "y": 870.8571,
                                                                                                                       "w": 369.14285,
                                                                                                                       "h": 20.952381
                                                                                                                     }
