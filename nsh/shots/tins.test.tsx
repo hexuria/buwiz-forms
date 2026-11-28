@@ -44,11 +44,11 @@ for (const look of TIN_LOOKS) {
     await app.press("id:fp-queue");
     // Wide shows the blocker as a dialog, narrow as the phone sheet: either answers the press.
     const blockedShown = () => app.shows("id:tin-queue-blocked") || app.shows("id:tin-queue-blocked-sheet");
-    for (let i = 0; i < 6; i++) {
-      if (blockedShown()) break;
+    // Press past the page's own stops, waiting on the transitions rather than counting a fixed beat.
+    for (let i = 0; i < 8 && !blockedShown(); i++) {
       if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
       else await app.press("id:fp-queue");
-      await app.wait(700);
+      await app.waitUntil(() => blockedShown() || app.shows("id:queue-continue"), { timeout: 2000 }).catch(() => {});
     }
     await app.waitUntil(blockedShown, { timeout: 10000 });
     await app.wait(400);

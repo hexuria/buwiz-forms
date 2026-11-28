@@ -39,17 +39,11 @@ interface Params {
   tinsOwnerFlipAfter?: number;
   /** The fake's account_tins answer is delayed this long (a slow read a test can act during). */
   tinsDelayMs?: number;
-  /** This many ms after mount the fixture opens ANOTHER return in the same session (a switch during a slow Queue read). */
-  swapTargetAfterMs?: number;
-  /** This many ms after mount the fixture reopens the SAME return (a reopen during a slow Queue read must not drop the press). */
-  reopenAfterMs?: number;
-  /** This many ms after mount the fixture opens the filed original of the same form/period/tin (a switch the queue key must catch). */
-  swapFiledOriginalAfterMs?: number;
   /** Reopen the same return the moment the first account_tins(0) read starts (a guaranteed overlap, not a guessed one). */
   reopenOnTinsRead?: boolean;
   /** Open the filed original of the same form/period/tin the moment the first account_tins(0) read starts. */
   swapFiledOriginalOnTinsRead?: boolean;
-  /** Open the OTHER return (1601C) the moment the first account_tins(0) read starts. */
+  /** Open ANOTHER return (another period of the same form: 1601C does not open in the scratch world) the moment the first account_tins(0) read starts. */
   swapTargetOnTinsRead?: boolean;
   /** The refusal activate_tin throws. */
   activate?: FakeActivateKind;
@@ -108,21 +102,6 @@ function Fixture() {
           }}
           dismissToast={(id) => toasts.set([...toasts(), `dismissed ${id}`])}
           onSession={(s) => {
-            if (p.swapTargetAfterMs) {
-              setTimeout(() => {
-                void s.open({ tin, formCode: "1601C", year: 2026, period: 9 } as never, true);
-              }, p.swapTargetAfterMs);
-            }
-            if (p.reopenAfterMs) {
-              setTimeout(() => {
-                void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1 } as never, true);
-              }, p.reopenAfterMs);
-            }
-            if (p.swapFiledOriginalAfterMs) {
-              setTimeout(() => {
-                void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1, mode: "filed_original", snapshotId: 1 } as never);
-              }, p.swapFiledOriginalAfterMs);
-            }
             if (p.reopenOnTinsRead || p.swapFiledOriginalOnTinsRead || p.swapTargetOnTinsRead) {
               let done = false;
               const timer = setInterval(() => {

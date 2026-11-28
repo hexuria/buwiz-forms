@@ -48,7 +48,7 @@ function RefusalRow(props: { tinFull: string; testID: string }) {
   const refusal = () => tinRefusal(props.tinFull);
   return (
     <If when={refusal()}>
-      <View class="flex-row items-center gap-2">
+      <View class="flex-row flex-wrap items-center gap-2">
         <Text testID={`${props.testID}-refusal`} variant="meta" tone="danger">{refusal()}</Text>
         <AppButton testID={`${props.testID}-refusal-dismiss`} label="Dismiss" size="sm" onPress={() => clearTinRefusal(props.tinFull)} />
       </View>
