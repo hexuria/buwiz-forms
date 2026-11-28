@@ -16,6 +16,7 @@ interface App {
   shows: (sel: string) => boolean;
   enabled: (sel: string) => boolean;
   press: (sel: string) => Promise<void>;
+  type: (sel: string, text: string) => Promise<void>;
   waitFor: (sel: string, opts?: object) => Promise<void>;
   waitUntil: (fn: () => boolean, opts?: object) => Promise<void>;
 }
