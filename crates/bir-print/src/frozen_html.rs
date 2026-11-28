@@ -1313,7 +1313,8 @@ fn fit_plain_text(
             tight_inset_v: None,
         });
     }
-    if let Some(truncated) = truncate_with_ellipsis(sheet, letter, shrunk, text, min_pt) {
+    if let Some(truncated) = truncate_with_ellipsis_mode(sheet, letter, shrunk, text, min_pt, true)
+    {
         return Some(PlainTextFit {
             text: truncated,
             font_size_pt: min_pt,
@@ -3032,7 +3033,7 @@ fn fill_text_input(
                 || name.starts_with("derived:p3_")
                 || name.starts_with("derived:Sched")
                 || name.starts_with("derived:amount:")
-                || name.starts_with("refund_amount")
+                || name.starts_with("derived:refund_amount")
                 || name.rsplit(':').next().is_some_and(|tail| {
                     tail.to_ascii_lowercase().starts_with("txttax") && is_amount_typed_key(name)
                 })
@@ -6493,10 +6494,26 @@ fn shift_page_and_insert_rule6(
         let mut prior_dh = 0.0;
         for ins in insertions {
             let y = ins.cut_y + prior_dh;
-            let w = (ins.x1 - ins.x0).max(10.0);
+            // The strip's edge x comes from the row's VALUE cells, a hair off
+            // the sheet's frame dividers (0.48 pt on 1706, 0.36 on 2000-OT):
+            // where a divider rect stands within a hair of the edge, the edge
+            // takes the divider's x, so no jog shows where they meet (F9).
+            let snap = |edge: f64| -> f64 {
+                verticals
+                    .iter()
+                    .filter(|&(vx, _, vh)| {
+                        *vh >= 8.0 && (vx - edge).abs() > 1e-4 && (vx - edge).abs() <= 1.2
+                    })
+                    .map(|&(vx, _, _)| vx)
+                    .min_by(|a, b| (a - edge).abs().partial_cmp(&(b - edge).abs()).unwrap())
+                    .unwrap_or(edge)
+            };
+            let x0 = snap(ins.x0);
+            let x1 = snap(ins.x1);
+            let w = (x1 - x0).max(10.0);
             fills.push_str(&format!(
                 "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#e3e3e3\"/>",
-                ins.x0, y, w, ins.dh
+                x0, y, w, ins.dh
             ));
             // The strip keeps its side edges — without them a strip with no
             // grey columns prints edgeless — drawn at the sheet's own
@@ -6504,11 +6521,11 @@ fn shift_page_and_insert_rule6(
             let ft = ins.frame_pt;
             fills.push_str(&format!(
                 "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#000000\"/>",
-                ins.x0, y, ft, ins.dh
+                x0, y, ft, ins.dh
             ));
             fills.push_str(&format!(
                 "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#000000\"/>",
-                ins.x1 - ft,
+                x1 - ft,
                 y,
                 ft,
                 ins.dh
@@ -7778,18 +7795,27 @@ fn overflow_input_with_fit(
                         use_tight_inset,
                     )
                 } else {
-                    let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
-                        .unwrap_or_else(|| "...".to_string());
+                    let cut = truncate_with_ellipsis_mode(
+                        sheet,
+                        letter,
+                        room,
+                        text,
+                        PLAIN_TEXT_MIN_PT,
+                        true,
+                    )
+                    .unwrap_or_else(|| "...".to_string());
                     (cut, PLAIN_TEXT_MIN_PT, false, true, false)
                 }
             } else {
-                let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
-                    .unwrap_or_else(|| "...".to_string());
+                let cut =
+                    truncate_with_ellipsis_mode(sheet, letter, room, text, PLAIN_TEXT_MIN_PT, true)
+                        .unwrap_or_else(|| "...".to_string());
                 (cut, PLAIN_TEXT_MIN_PT, false, true, false)
             }
         } else {
-            let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
-                .unwrap_or_else(|| "...".to_string());
+            let cut =
+                truncate_with_ellipsis_mode(sheet, letter, room, text, PLAIN_TEXT_MIN_PT, true)
+                    .unwrap_or_else(|| "...".to_string());
             (cut, PLAIN_TEXT_MIN_PT, false, true, false)
         }
     } else {
@@ -15766,9 +15792,9 @@ mod donor_estate_print_tests {
 
     /// (b) The comb-tick exclusion fixture: on 1701MS page 2 the item-9 row's
     /// amount combs end exactly at the strip's cut. K1: every vertical ending
-    /// near the cut must stay tick-sized, and no vertical at a tick's x may
-    /// cross into the strip interior — a wrongly stretched tick fails the
-    /// crossing check, because it grows past the row boundary it should end at.
+    /// near the cut must stay tick-sized (the detector), and no vertical at a
+    /// tick's x may cross into the strip interior (the production rule — the
+    /// clip keeps ticks out of the strip; the size check is what can fail).
     #[test]
     fn rule6_comb_ticks_abutting_the_cut_stay_in_their_row() {
         let slug = "1701ms-2024";
@@ -15819,9 +15845,9 @@ mod donor_estate_print_tests {
             !ticks_at_cut.is_empty(),
             "fixture vacuous: no comb tick ends at item 9's row boundary above the strip"
         );
-        // each stays tick-sized: a stretched tick grows by the strip's height
-        // (20 pt a line) and can no longer end there, so it is caught by the
-        // crossing check below, never by a height filter alone.
+        // each stays tick-sized: a tick wrongly stretched through the strip
+        // would grow well past 10 pt, so this height check fails first — the
+        // crossing scan below is the second, independent detector.
         for &(x, y, h) in &ticks_at_cut {
             assert!(
                 h <= 10.0,
@@ -16043,21 +16069,25 @@ mod donor_estate_print_tests {
                 if w > 1.6 {
                     continue;
                 }
-                // in or across the strip at all, horizontally as well:
-                // a narrowed band never reaches the amount columns, so only
-                // a full-width strip can carry ticks at all.
-                if y + h <= strip.0 + 0.5 || y >= strip.1 - 0.5 {
-                    continue;
-                }
                 if x <= strip_x.0 + 0.5 || x >= strip_x.1 - 0.5 {
                     continue;
                 }
-                examined += 1;
+                // the positive control counts TICKS — short uprights ending
+                // in the row just above the strip — never the repaired
+                // dividers, which are the only verticals inside the strip.
+                if (3.0..=10.0).contains(&h) && y + h <= strip.0 + 0.5 && y + h >= strip.0 - 14.0 {
+                    examined += 1;
+                }
+                // in or across the strip at all: a narrowed band never
+                // reaches the amount columns, so only a full-width strip can
+                // carry ticks at all.
+                if y + h <= strip.0 + 0.5 || y >= strip.1 - 0.5 {
+                    continue;
+                }
                 // strictly inside a comb cell's span, overlapping it
                 // vertically: a digit tick — at ANY height: a wrongly
                 // stretched tick outgrows one comb row, so a height filter
                 // here would make this test unable to fail (F2).
-                // vertically: a digit tick
                 let interior = combs.iter().any(|&(left, width, ctop, ch)| {
                     x > left + 3.0
                         && x < left + width - 3.0
@@ -16486,16 +16516,134 @@ mod donor_estate_print_tests {
             }
             n
         };
+        // row-above control, like #510's: the detector must find ticks in
+        // the row above item 9 too, so a vacuous window can never pass.
+        assert!(
+            ticks_in(band_top - 20.0, band_top - 12.0) >= 8,
+            "the detector finds the ticks of the row above item 9"
+        );
         assert!(
             ticks_in(band_top - 8.0, band_top) >= 8,
             "row 9's ticks stay whole above the strip (top {band_top:.2})"
         );
+        let band_bottom = band_top + band_h;
         assert_eq!(
-            ticks_in(band_top, band_top + band_h),
+            ticks_in(band_top, band_bottom + 3.0),
             0,
-            "no tick of the row prints inside the strip {band_top:.2}..{:.2}",
-            band_top + band_h
+            "no tick of the row prints inside the strip or its lower edge {band_top:.2}..{:.2}",
+            band_bottom + 3.0
         );
+    }
+
+    /// The owner's truncation rule: an in-cell truncation ends on a whole
+    /// word before the three dots — never mid-word ("…DESCRIPTIO..." reads
+    /// as if the fragment were a word of its own). 1701 p2c134 truncates
+    /// in-cell because the page has no room for even one strip.
+    #[test]
+    fn rule6_cell_truncation_ends_on_a_whole_word() {
+        let mut fields = BTreeMap::new();
+        let full = "SPECIMEN OTHER NON-OPERATING INCOME LONG DESCRIPTION WRAPPING OVER SEVERAL LINES OF PRINT";
+        fields.insert("frm1701:txtPg2IShed3_19Desc".to_string(), full.to_string());
+        let doc = filled_document("1701-2018", &fields).unwrap();
+        let at = doc.find("id=\"p2c134-i\"").expect("the cell input");
+        let end = at + doc[at..].find('>').unwrap();
+        let val = attr(&doc[at..=end], "value").unwrap_or("").to_string();
+        let Some(prefix) = val.strip_suffix("...") else {
+            panic!("the cell truncates with three dots, got {val:?}");
+        };
+        assert!(
+            !prefix.is_empty() && full.len() > prefix.len(),
+            "a truncation happened: {val:?}"
+        );
+        assert!(
+            full[prefix.len()..].starts_with(char::is_whitespace),
+            "the cut ends on a whole word, never mid-word: {val:?}"
+        );
+    }
+
+    /// derived:refund_amount is a money join: a refund value shorter than its
+    /// comb keeps its last digit in the rightmost box (L1 — the prefix used
+    /// to be dead because the key keeps its `derived:` prefix).
+    #[test]
+    fn refund_amount_joins_right_align_in_their_comb() {
+        let mut fields = BTreeMap::new();
+        fields.insert("derived:refund_amount".to_string(), "1000".to_string());
+        let doc = filled_document("1701ms-2024", &fields).unwrap();
+        let mut values: Vec<String> = Vec::new();
+        let mut cursor = 0usize;
+        while let Some(rel) = doc[cursor..].find("name=\"p1c147\"") {
+            let at = cursor + rel;
+            let start = doc[..at].rfind("<input").unwrap_or(0);
+            let end = at + doc[at..].find('>').unwrap_or(0);
+            values.push(attr(&doc[start..=end], "value").unwrap_or("").to_string());
+            cursor = end + 1;
+        }
+        assert!(values.len() >= 7, "p1c147 is a peso comb: {values:?}");
+        let digits: String = values.iter().filter(|v| !v.is_empty()).cloned().collect();
+        let first_digit = values.iter().position(|v| !v.is_empty());
+        let last_digit = values.iter().rposition(|v| !v.is_empty());
+        assert!(
+            digits == "1000" && first_digit == Some(6) && last_digit == Some(values.len() - 1),
+            "the refund keeps its last digit rightmost, leading boxes blank: {values:?}"
+        );
+    }
+
+    /// F9: the strip's edges take the frame divider's x — no jog where the
+    /// edge meets the divider. On 1706 and 2000-OT the unsnapped edges jogged
+    /// 0.48/0.36 pt off the divider rects.
+    #[test]
+    fn rule6_strip_edges_sit_on_the_frame_dividers() {
+        for slug in ["1706-2018", "2000-ot-2018"] {
+            let fields = rule6_proof_fill(slug);
+            let doc = filled_document(slug, &fields).unwrap();
+            if !doc.contains("data-rule6-band") {
+                continue;
+            }
+            // every grey strip edge must equal some vertical divider's x
+            let mut verticals: Vec<f64> = Vec::new();
+            for m in doc.match_indices("<rect ") {
+                let start = m.0;
+                let Some(e) = doc[start..].find('>') else {
+                    break;
+                };
+                let tag = &doc[start..start + e + 1];
+                let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(w), Some(h)) = (num("x"), num("width"), num("height")) {
+                    if w <= 1.6 && h >= 8.0 && !tag.contains("#e3e3e3") {
+                        verticals.push(x);
+                    }
+                }
+            }
+            let mut checked = 0usize;
+            for m in doc.match_indices("fill=\"#e3e3e3\"") {
+                let at = m.0;
+                let start = doc[..at].rfind("<rect ").unwrap();
+                let end = at + doc[at..].find('>').unwrap() + 1;
+                let tag = &doc[start..end];
+                let x = attr(tag, "x").unwrap().parse::<f64>().unwrap();
+                let w = attr(tag, "width").unwrap().parse::<f64>().unwrap();
+                for edge in [x, x + w] {
+                    assert!(
+                        verticals.iter().any(|vx| (vx - edge).abs() <= 0.01),
+                        "{slug}: strip edge {edge:.2} sits on no divider x (nearest {:?})",
+                        verticals
+                            .iter()
+                            .cloned()
+                            .fold((f64::INFINITY, 0.0f64), |(bd, bx), vx| {
+                                let d = (vx - edge).abs();
+                                if d < bd {
+                                    (d, vx)
+                                } else {
+                                    (bd, bx)
+                                }
+                            })
+                            .1
+                    );
+                    checked += 1;
+                }
+            }
+            assert!(checked > 0, "{slug}: strips examined");
+        }
     }
 
     #[test]
@@ -16562,7 +16710,7 @@ mod donor_estate_print_tests {
             // whole value exactly, the cell's first part is the whole value's
             // beginning, and no line repeats text another line already printed.
             assert!(
-                !lines.iter().any(|l| l.trim_end().ends_with('\u{2026}')),
+                !lines.iter().any(|l| l.trim_end().ends_with("...")),
                 "a fill that fits under the cap never ends on the ellipsis"
             );
             assert!(
