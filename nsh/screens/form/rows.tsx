@@ -177,10 +177,7 @@ export function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow
       if (r === null) s.touch(id);
       openRow.set(r);
     },
-    onClearRow: (r) => {
-      const edits = Object.fromEntries(keys[r].filter((k, c) => cols[c]?.t !== "hidden" && !untracked(() => s.box(k).locked())).map((k) => [k, ""]));
-      s.choose(edits);
-    },
+    onDeleteRow: (r) => s.deleteRow(keys[r] ?? []),
     locked: () => !s.header().editable,
   };
 }

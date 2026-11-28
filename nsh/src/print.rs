@@ -624,7 +624,7 @@ fn uninstall(id: u64) {
 // What the hooks call. ---------------------------------------------------------------------------------------------
 
 /// `print_preview_request`: open the preview of the sheet at `path`, or refresh the one open for `key`. The file at `path`
-/// (bir-app-api's `$TMP/bir-<form>-<year>-<ts>-preview.html`, a filled return) is this host's to dispose of: it is read once
+/// (bir-app-api's `data_dir()/previews/bir-<form>-<year>-<ts>-preview.html`, a filled return) is this host's to dispose of: it is read once
 /// and deleted at once, whatever comes next (the old shell's own hook keeps its file; this one is only the NSH app's).
 pub(crate) fn request(path: PathBuf, title: String, key: String) {
     let read = std::fs::read_to_string(&path);
@@ -2683,7 +2683,7 @@ mod tests {
         let key = key();
         let source = sheet_file(folder.path(), &["Juana", ""]);
         request(source.clone(), "BIR Form".to_owned(), key.clone());
-        assert!(!source.exists(), "the filled return is not left in the temp folder");
+        assert!(!source.exists(), "the filled return is not left in the previews folder");
         assert_eq!(kinds(&recorder), vec![PrintEventKind::Open]);
         // With no host listening the file is not kept either.
         STATE.with(|state| state.borrow_mut().backend = None);

@@ -102,33 +102,57 @@ export interface IconButtonProps {
   dot?: boolean;
   testID?: string;
   onPress?: () => void;
-  /** A press went down on it, and that press ended (released, moved away or cancelled): SearchPick's chevron. */
-  onPressDown?: () => void;
-  onPressUp?: () => void;
+  /**
+   * A press leaves the keyboard focus where it is: no focus stop, so pressing it never blurs the box it sits in (SearchPick's
+   * chevron, as a native combobox's button). Tab passes it by.
+   */
+  keepsFocus?: boolean;
 }
 
 /** A 28-point icon-only button (44 on touch): 16-point icon in fg2, the selected fill while pressed. */
 export function IconButton(props: IconButtonProps) {
+  const look = () =>
+    cx(
+      "items-center justify-center rounded-(--radius-ctl) enabled:hover:bg-hover active:bg-selected selected:bg-selected disabled:opacity-50",
+      FOCUS_RING,
+      TOUCH ? T_SIZE : "size-7",
+    );
+  const content = () => (
+    <>
+      <Icon name={props.icon} tone={props.pressed ? "fg" : props.disabled ? "fg3" : "fg2"} />
+      <If when={props.dot}>
+        <View class={cx("absolute size-1.5 rounded-full bg-accent-blue", TOUCH ? "top-2.5 right-2.5" : "top-1 right-1")} />
+      </If>
+    </>
+  );
+  // A Button is always a focus stop; a view that takes presses is not one with focusable={false}.
+  if (props.keepsFocus)
+    return (
+      <View
+        testID={props.testID}
+        role="button"
+        class={cx(look(), props.pressed && "bg-selected")}
+        accessibilityState={{ selected: props.pressed === true, disabled: props.disabled === true }}
+        focusable={false}
+        disabled={props.disabled}
+        accessibilityLabel={props.tooltip}
+        tooltip={<Tooltip label={props.tooltip} shortcut={props.shortcut} />}
+        onPress={props.onPress ? () => props.onPress?.() : undefined}
+      >
+        {content()}
+      </View>
+    );
   return (
     <Button
       testID={props.testID}
-      class={cx(
-        "items-center justify-center rounded-(--radius-ctl) enabled:hover:bg-hover active:bg-selected selected:bg-selected disabled:opacity-50",
-        FOCUS_RING,
-        TOUCH ? T_SIZE : "size-7",
-      )}
+      class={look()}
       selected={props.pressed}
       disabled={props.disabled}
       accessibilityLabel={props.tooltip}
       tooltip={<Tooltip label={props.tooltip} shortcut={props.shortcut} />}
       onPress={props.onPress}
-      onPressDown={props.onPressDown}
-      onPressUp={props.onPressUp}
     >
-      <Icon name={props.icon} tone={props.pressed ? "fg" : props.disabled ? "fg3" : "fg2"} />
-      <If when={props.dot}>
-        <View class={cx("absolute size-1.5 rounded-full bg-accent-blue", TOUCH ? "top-2.5 right-2.5" : "top-1 right-1")} />
-      </If>
+      {content()}
     </Button>
   );
 }

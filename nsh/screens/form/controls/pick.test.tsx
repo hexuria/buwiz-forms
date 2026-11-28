@@ -221,6 +221,24 @@ test("desktop: the chevron opens the whole list and closes it again; nothing mat
   await app.waitFor("id:pp-rdo-list", { state: "gone" });
   await app.type("id:pp-rdo-search", "zzz");
   await app.waitFor("text:Nothing matches. Try a code or other words.");
+  // The sentence has an id of its own (the list is not drawn when nothing matches), for recipes that wait on it.
+  await app.waitFor("id:pp-rdo-nothing");
+  expect(app.shows("id:pp-rdo-list")).toBe(false);
+});
+
+test("desktop: the focus leaves the RDO box and the ZIP chevron is pressed at once: the press reaches ZIP, not the RDO list", async () => {
+  // The cause of a batch's flake (KNOWN-FLAKES.md, setup.test.tsx): a leaving that kept the list open for a moment (#425's 250 ms
+  // grace) left it over the next box, so a press there right after landed on the RDO list. The blur now settles at once.
+  const app = await probe({ rdo: "050" }, DESKTOP);
+  await app.clear("id:pp-rdo-search");
+  await app.type("id:pp-rdo-search", "makati");
+  await app.waitFor("id:pp-rdo-opt-047");
+  await app.keyboard.press("tab");
+  await app.press("id:pp-zip-trigger");
+  await app.waitFor("id:pp-zip-list");
+  expect(app.shows("id:pp-rdo-list")).toBe(false);
+  expect(line(app, "zip")).toBe("zip:  | picks: 0 | opens: 1");
+  expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");
 });
 
 test("desktop: Up and Down move the highlight, Enter picks the lit row", async () => {
@@ -325,7 +343,7 @@ test("desktop: the focus moved away with no press (the form's focus()) closes th
   expect(app.shows("id:pp-rdo-note")).toBe(true);
 });
 
-test("desktop: a row pressed while the list is open picks it; the settling of the box's leaving does not undo it", async () => {
+test("desktop: a row pressed while the list is open picks it, and the keys stay in the box", async () => {
   const app = await probe({ rdo: "050" }, DESKTOP);
   await app.clear("id:pp-rdo-search");
   await app.type("id:pp-rdo-search", "makati");
@@ -333,19 +351,25 @@ test("desktop: a row pressed while the list is open picks it; the settling of th
   // "makati" alone names no one choice: had the leaving been settled, the box would go back to 050 with a sentence.
   await app.press("id:pp-rdo-opt-047");
   await app.waitFor("id:pp-rdo-list", { state: "gone" });
-  // Past the turn the deferred settling runs on.
   await app.wait(50);
   expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 1");
   expect(app.value("id:pp-rdo-search")).toBe("047 — East Makati");
   expect(app.shows("id:pp-rdo-note")).toBe(false);
-  // The chevron still closes the list it opened (its press takes the focus too).
+  // The row took no focus (keepsFocus): Down goes to the box, which opens its list again.
+  await app.keyboard.press("down");
+  await app.waitFor("id:pp-rdo-list");
+  await app.keyboard.press("escape");
+  await app.waitFor("id:pp-rdo-list", { state: "gone" });
+  // The chevron closes the list it opened, and takes no focus either.
   await app.press("id:pp-rdo-trigger");
   await app.waitFor("id:pp-rdo-list");
   await app.press("id:pp-rdo-trigger");
   await app.waitFor("id:pp-rdo-list", { state: "gone" });
   await app.wait(50);
   expect(app.shows("id:pp-rdo-list")).toBe(false);
-  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 2");
+  expect(line(app, "rdo")).toBe("rdo: 047 | picks: 1 | opens: 3");
+  await app.keyboard.press("down");
+  await app.waitFor("id:pp-rdo-list");
 });
 
 test("desktop: a press whose row goes away under it never keeps a later leaving from settling", async () => {
@@ -353,13 +377,13 @@ test("desktop: a press whose row goes away under it never keeps a later leaving 
   await app.clear("id:pp-rdo-search");
   await app.type("id:pp-rdo-search", "makati");
   await app.waitFor("id:pp-rdo-opt-047");
-  // A finger goes down on a row and stays down: the press holds off the settling, as it should while it lasts.
+  // A finger goes down on a row and stays down.
   await app.dragAndHold("id:pp-rdo-opt-047", { y: 1 });
   // The keys come back to the box and change the words: the row the finger is on goes away, so its press-up never comes.
   await app.type("id:pp-rdo-search", "zzz");
   await app.waitFor("id:pp-rdo-opt-047", { state: "gone" });
   await app.drop();
-  // A later leaving with the list open (the form's focus(), no press): the box settles at once, not after the lost press.
+  // A later leaving with the list open (the form's focus(), no press): the box settles at once.
   await app.clear("id:pp-rdo-search");
   await app.type("id:pp-rdo-search", "makati");
   await app.waitFor("id:pp-rdo-opt-047");
@@ -376,12 +400,10 @@ test("desktop: a box that goes away under a press picks and settles nothing afte
   await app.type("id:pp-rdo-search", "047");
   await app.waitFor("id:pp-rdo-opt-047");
   await app.dragAndHold("id:pp-rdo-opt-047", { y: 1 });
-  // The focus leaves with the list open while the press is down: the settling waits for the press.
-  await app.host.send("focus-other");
   // The pick goes away (its page, the lock) before the press ends.
   await app.host.send("hide-rdo");
   await app.waitFor("id:pp-rdo-search", { state: "gone" });
-  await app.wait(31_000);
+  await app.wait(1_000);
   await app.drop();
   await app.wait(100);
   expect(line(app, "rdo")).toBe("rdo: 050 | picks: 0 | opens: 1");

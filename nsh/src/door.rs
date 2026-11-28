@@ -49,6 +49,12 @@ pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
             .clone()?;
     }
     install_logging();
+    // An unnamed scratch test database is chosen only when its engine boots;
+    // the sweep then runs inside that scratch room, never the installed app's folder.
+    if !scratch_database_wanted() {
+        bir_core::platform::prepare_print_previews();
+    }
+    bir_core::platform::log_app_storage();
     Ok(())
 }
 
@@ -82,8 +88,9 @@ pub(crate) fn install_logging() {
 fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
     #[cfg(not(target_os = "android"))]
     switch_off_keychain(cfg!(debug_assertions));
-    // iOS: the data folder out of backups and protected, and the old build's Keychain items removed once, after the
-    // keychain switch and before the database is opened. Nothing elsewhere. Its outcome is logged once logging starts.
+    // iOS takes the data folder out of backups, protects it, and removes the
+    // old build's Keychain items once. Print previews are swept separately,
+    // after the desktop one-copy guard; Android sweeps in prepare_android.
     bir_core::platform::prepare_app_storage();
     let _ = bir_app_api::install_hooks(NshHooks);
     // Phones: the browser for the sign-in, and the phone kept awake while a send is in flight. Desktops register
@@ -163,6 +170,7 @@ fn choose_database() -> Result<(), String> {
     }
     if let Some(named) = NAMED.with(|slot| slot.borrow().clone()) {
         bir_core::db::set_database_path_override(Some(named));
+        bir_core::platform::prepare_print_previews();
         return Ok(());
     }
     if !scratch_database_wanted() {
@@ -176,6 +184,7 @@ fn choose_database() -> Result<(), String> {
     let folder = fresh_scratch_folder(&root, std::process::id(), SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst))
         .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
     bir_core::db::set_database_path_override(Some(folder.join("bir_data.db")));
+    bir_core::platform::prepare_print_previews();
     Ok(())
 }
 
@@ -1163,6 +1172,20 @@ mod tests {
                 "{relative}: no folder either"
             );
         }
+    }
+
+    #[test]
+    fn the_registration_print_sweep_is_deferred_only_until_a_scratch_database_is_named() {
+        dev_env(None, None, || {
+            assert!(scratch_database_wanted(), "no database named: registration must not sweep the real folder");
+        });
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            assert!(!scratch_database_wanted(), "a database named in the environment is known at registration");
+        });
+        temp_env::with_var("EBIR_TEST_ENV", None::<&str>, || {
+            assert!(!scratch_database_wanted());
+        });
     }
 
     #[test]

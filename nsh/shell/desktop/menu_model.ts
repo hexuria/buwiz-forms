@@ -6,7 +6,7 @@
 //   * the locked menus (first-run setup, the sign-in screens, the account gate): only About and Quit, the editing items
 //     (so a PIN box can paste), and on Windows and Linux a Help menu with About. Filing commands are absent, as before.
 // New here: with no taxpayer the items that need one are present but disabled (New Return…, Toggle Tax Profile).
-// Added for the eBIRForms app menu design: File's "New Tax Profile…" (above New Return…, no shortcut: Ctrl/Cmd+N stays New
+// Added for the eBIRForms app menu design: File's "New tax profile…" (above New Return…, no shortcut: Ctrl/Cmd+N stays New
 // Return…), a last "Profiles" menu while signed in (the taxpayers as a switcher, the current one checked, then New Tax
 // Profile…), and on Windows and Linux an "eBIRForms" app menu first, as on macOS. There Hide and Quit carry the user's keys (their
 // copies in File carry none) and Settings… none (File or Edit keeps Ctrl+,), so an accelerator is never bound twice. The in-window
@@ -66,7 +66,7 @@ export interface MenuState {
   taxpayers?: readonly MenuTaxpayer[];
   /** The tin_root of the taxpayer the frame is on (checked in Profiles), or null. */
   currentTaxpayer?: string | null;
-  /** New Tax Profile… can be chosen (app.canAddTaxpayer(): the first taxpayer, or the admin in helpdesk mode). Default true. */
+  /** New tax profile… can be chosen (app.canAddTaxpayer(): always the owner and the help desk admin; a client only for the first). Default true. */
   canAddTaxpayer?: boolean;
   /** Another taxpayer can be switched to (app.isAdmin(), as the profile panel's switcher). Default true. */
   canSwitchTaxpayer?: boolean;
@@ -372,12 +372,12 @@ function fileMenu(state: MenuState, run: Run): MenuItem {
   ]);
 }
 
-/** New Tax Profile…: no shortcut (Ctrl/Cmd+N is New Return…). Disabled where the profile panel offers no New taxpayer. */
+/** New tax profile…: no shortcut (Ctrl/Cmd+N is New Return…). Disabled where the profile panel offers no New tax profile. */
 function newTaxProfileItem(state: MenuState, run: Run): MenuItem {
-  return item(run, "New Tax Profile…", "new-tax-profile", { disabled: state.canAddTaxpayer === false });
+  return item(run, "New tax profile…", "new-tax-profile", { disabled: state.canAddTaxpayer === false });
 }
 
-/** Profiles (signed in only): the taxpayers as a switcher, the current one checked, then New Tax Profile…. */
+/** Profiles (signed in only): the taxpayers as a switcher, the current one checked, then New tax profile…. */
 function profilesMenu(state: MenuState, run: Run): MenuItem {
   const list = state.taxpayers ?? [];
   const current = state.currentTaxpayer ?? null;

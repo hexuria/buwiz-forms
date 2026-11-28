@@ -26,6 +26,7 @@ interface Params {
   poll?: boolean;
   filed?: boolean;
   show?: "setting" | "update";
+  firstRun?: boolean;
 }
 
 // A start route that opens the library, a form or the palette builds every form's schema in the frame's first render (the host does it lazily,
@@ -74,7 +75,7 @@ function Demo() {
   if (p.theme) bir.set_setting("theme_preference", p.theme);
   return (
     <View class="flex-1">
-      <Shell start={p.start} polling={p.poll === true} />
+      <Shell start={p.start} polling={p.poll === true} firstRun={p.firstRun === true} />
       <If when={p.show === "setting"}>
         <View class="absolute bottom-0 left-0">
           <Text testID="demo-readout">{`theme setting: ${store.setting("theme_preference")}`}</Text>

@@ -8,12 +8,18 @@ use serde::{Deserialize, Serialize};
 /// The latest eBIRForms uses a 14-digit format where the branch code
 /// is 5 digits. Older 12-digit TINs (3-digit branch) are still accepted
 /// for backward compatibility.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Tin {
     pub segment1: String,
     pub segment2: String,
     pub segment3: String,
     pub branch: String,
+}
+
+impl std::fmt::Debug for Tin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "***-***-{}-{}", self.segment3, self.branch)
+    }
 }
 
 impl Tin {
@@ -106,6 +112,20 @@ mod tests {
         );
         assert_eq!(Tin::dashed_display("123456789000"), "123-456-789-000");
         assert_eq!(Tin::dashed_display("not-a-tin"), "not-a-tin");
+    }
+
+    #[test]
+    fn tin_debug_is_masked() {
+        let tin = Tin {
+            segment1: "010".into(),
+            segment2: "558".into(),
+            segment3: "054".into(),
+            branch: "00000".into(),
+        };
+        let shown = format!("{tin:?}");
+        assert_eq!(shown, "***-***-054-00000");
+        assert!(!shown.contains("010"), "{shown}");
+        assert!(!shown.contains("558"), "{shown}");
     }
 
     #[test]

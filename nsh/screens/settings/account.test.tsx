@@ -75,12 +75,12 @@ for (const { name, size } of SIZES) {
     expect(real.shows("id:settings-account-practice")).toBe(false);
   }, 60_000);
 
-  test(`${name}: who is signed in, the registered name and email with a pencil each, Sign out and Add account`, async () => {
+  test(`${name}: who is signed in, the registered name and email with a pencil each, Sign out and New tax profile`, async () => {
     const app = await openSettings(size, { solo: true }, "account");
     await app.waitFor(ready);
     expectTexts(app, ["Juana Santos", "juana@example.com", name === "phone" ? "Admin · this device" : "Admin · this computer", "Registered name", "TIN 000-123-453", "Email", "Printed on this profile's returns"]);
-    // "Just me" with a taxpayer already: no Add account.
-    expect(app.shows("id:settings-add-account")).toBe(false);
+    // "Just me" with a taxpayer already: the owner always starts a new tax profile, so the add control stays.
+    expect(app.shows("id:settings-add-account")).toBe(true);
     await app.press("id:settings-profile-email-edit");
     await app.waitFor("text:/view=profile/");
     expect(state(app)).toContain('view=profile {"edit":"address"}');
@@ -145,6 +145,20 @@ for (const { name, size } of SIZES) {
       expectTexts(app, ["Gmail", "Google sign-in is not available in this version. Use an app password.", "Receipt tracking"]);
       expect(app.shows("id:settings-google-connect")).toBe(false);
       expect(app.texts()).not.toContain("OAuth failed: GOOGLE_CLIENT_ID must be set in .env");
+    }, 60_000);
+
+    test("desktop: a Gmail connection from an earlier build, in a build with no Google client id, says to disconnect and keeps Disconnect", async () => {
+      const app = await openSettings(size, { google: "unavailable-connected", solo: true }, "account");
+      await app.waitFor("id:settings-google");
+      expectTexts(app, ["Gmail", "Google sign-in is not available in this version. Disconnect and use an app password."]);
+      expect(app.texts()).not.toContain("Connected as juana.inbox@example.com");
+      expect(app.shows("id:settings-google-connect")).toBe(false);
+      expect(app.texts()).not.toContain("Reconnect");
+      expect(app.texts().some((t) => t.includes("GOOGLE_CLIENT_ID"))).toBe(false);
+      await app.press("id:settings-google-disconnect");
+      await app.waitFor("text:Google sign-in is not available in this version. Use an app password.");
+      expect(calls(app)).toContain("disconnect_inbox_oauth");
+      expect(app.shows("id:settings-google-disconnect")).toBe(false);
     }, 60_000);
   }
 }

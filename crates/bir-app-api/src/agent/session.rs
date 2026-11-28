@@ -1,7 +1,7 @@
 //! UI-thread host ops. Each one calls bir-core through the shell's database
 //! and, when the screen should move, pushes a command the script applies.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
@@ -520,7 +520,22 @@ impl Session {
             crate::screen_form_module::load_draft(&db, kind, &profile, year, period, false, None)?;
         let status = agent::identity(kind, &draft)?.status;
         if status == FilingStatus::Draft {
-            agent::save_draft(kind, &db, &mut draft)?;
+            // Loading some stored queueable drafts recomputes them for their
+            // penalty context before this open save. Use the still-stored row
+            // as the incoming image so a dormant value the open itself clears
+            // is not mistaken for one the filer cleared by hand.
+            let incoming = draft["id"]
+                .as_i64()
+                .and_then(|id| db.draft_summary_and_json(id).ok().flatten())
+                .and_then(|(_, data_json)| serde_json::from_str::<Value>(&data_json).ok())
+                .unwrap_or_else(|| draft.clone());
+            agent::save_draft_with_clearance_context(
+                kind,
+                &db,
+                &mut draft,
+                incoming,
+                BTreeSet::new(),
+            )?;
         }
         let facts = stored_send_facts(&db, draft.get("id").and_then(Value::as_i64))?;
         let status = facts.status.unwrap_or(status);
@@ -720,7 +735,13 @@ impl Session {
         };
         if !filled.is_empty() || !forgot.is_empty() {
             if asks.is_none() {
-                agent::save_draft(kind, &db, &mut draft)?;
+                agent::save_draft_with_clearance_context(
+                    kind,
+                    &db,
+                    &mut draft,
+                    before.clone(),
+                    BTreeSet::new(),
+                )?;
             }
             for key in &filled {
                 if not_shown.iter().any(|hidden| hidden == key) {
@@ -3975,6 +3996,146 @@ mod tests {
     }
 
     #[test]
+    fn form_fill_lets_the_assistant_write_1601fq_schedule1_only_at_item_13_yes() {
+        use bir_core::forms::agent::draft_locks::schedule1_1601fq as gate;
+        use bir_core::forms::form_1601fq::{Form1601FqDraft, Form1601FqTaxRelief};
+
+        let mut no_session = session();
+        save_scratch(&mut no_session);
+        call(
+            &mut no_session,
+            "form.open",
+            json!({"code": "1601FQ", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let refused = call(
+            &mut no_session,
+            "form.fill",
+            json!({"fields": {"txtAmtIncomePay0": "42"}}),
+        )
+        .unwrap();
+        assert_eq!(
+            refused["refused"]["txtAmtIncomePay0"],
+            gate::LOCK,
+            "{refused}"
+        );
+
+        // Item 13's own radio is the host's editor, so the Yes draft the
+        // assistant writes into is one the page already holds at Yes.
+        let mut yes_session = session();
+        call(
+            &mut yes_session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        {
+            let db = yes_session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form1601FqDraft::new_from_profile(&profile, 2026, 1);
+            draft.set_tax_relief(Some(Form1601FqTaxRelief::SpecialRate));
+            db.save_queueable_draft(&draft).unwrap();
+        }
+        call(
+            &mut yes_session,
+            "form.open",
+            json!({"code": "1601FQ", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let typed = call(
+            &mut yes_session,
+            "form.fill",
+            json!({"fields": {"txtAmtIncomePay0": "42", "txtRate0": "10"}}),
+        )
+        .unwrap();
+        assert!(typed.get("refused").is_none(), "{typed}");
+        let row = &yes_session.open.as_ref().unwrap().draft["schedule1"][0];
+        assert_eq!(row["income_payment"], 42.0);
+        assert_eq!(row["tax_rate"], 10.0);
+    }
+
+    #[test]
+    fn form_open_records_a_dormant_1601fq_schedule1_clearing_by_stable_row() {
+        use bir_core::forms::form_1601fq::{Form1601FqDraft, Form1601FqTaxRelief};
+
+        let mut session = session();
+        call(
+            &mut session,
+            "profile.save",
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040", "birth_date": "1990-01-15",
+                   "address": "1 TEST STREET", "zip": "1100", "phone": "09170000000",
+                   "email": "test@example.com"}),
+        )
+        .unwrap();
+        let id;
+        {
+            let db = session.lock_db().unwrap();
+            let profile = db.get_profile_for_year(TIN, 2026).unwrap().unwrap();
+            let mut draft = Form1601FqDraft::new_from_profile(&profile, 2026, 1);
+            draft.set_tax_relief(Some(Form1601FqTaxRelief::SpecialRate));
+            draft.schedule1[0].income_payment = 42.0;
+            draft.schedule1[0].tax_rate = 10.0;
+            draft.schedule1[1].income_payment = 24.0;
+            draft.schedule1[1].tax_rate = 10.0;
+            draft.recompute();
+            id = db.save_queueable_draft(&draft).unwrap();
+
+            // A pre-gate row: Item 13 is shut while its typed Schedule 1 row
+            // is still in the stored bytes. The save path itself would clear
+            // it, so this legacy state is written as bytes.
+            let stored: String = db
+                .conn_for_tests()
+                .query_row(
+                    "SELECT data_json FROM form_drafts WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            let mut legacy: Value = serde_json::from_str(&stored).unwrap();
+            legacy["tax_relief"] = Value::Null;
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+                    (serde_json::to_string(&legacy).unwrap(), id),
+                )
+                .unwrap();
+        }
+
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1601FQ", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        assert_eq!(session.open.as_ref().unwrap().draft["schedule1"], json!([]));
+        let db = session.lock_db().unwrap();
+        let pending = db
+            .settings_with_prefix("notice_pending:1601fq_schedule1:")
+            .unwrap();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        assert!(
+            pending[0].0.starts_with(
+                "notice_pending:1601fq_schedule1:row-00000000000000000001,row-00000000000000000002:"
+            ),
+            "{pending:?}"
+        );
+        assert!(
+            pending[0]
+                .1
+                .contains("Schedule 1's rows were cleared: they apply only when item 13 is Yes."),
+            "{pending:?}"
+        );
+        assert!(
+            !pending[0]
+                .1
+                .contains("Schedule 1 row row-00000000000000000001"),
+            "{pending:?}"
+        );
+    }
+
+    #[test]
     fn form_fill_records_an_assistant_recompute_clearing_from_the_stored_row() {
         let mut session = session();
         call(
@@ -4025,6 +4186,141 @@ mod tests {
             .unwrap();
         assert_eq!(pending.len(), 1, "{pending:?}");
         assert!(pending[0].1.contains("Item 16 was cleared"), "{pending:?}");
+    }
+
+    fn open_1600pt(session: &mut Session) {
+        save_scratch(session);
+        call(
+            session,
+            "form.open",
+            json!({"code": "1600PT", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn form_fill_holds_the_previous_payment_gate_and_accepts_zero_spellings() {
+        let mut session = session();
+        open_1600pt(&mut session);
+        let kind = AgentFormKind::Queueable(bir_core::forms::queueable::QueueableKind::Form1600PT);
+        let spec = bir_core::forms::agent::draft_locks::previous_payment::spec(kind).unwrap();
+
+        let refused = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {spec.key: "42"}}),
+        )
+        .unwrap();
+        assert_eq!(refused["refused"][spec.key], spec.lock, "{refused}");
+        for value in [json!("0"), json!("₱0.00"), json!("(0.00)"), json!(0)] {
+            let zero = call(
+                &mut session,
+                "form.fill",
+                json!({"fields": {spec.key: value}}),
+            )
+            .unwrap();
+            assert!(
+                zero.get("refused").is_none(),
+                "zero spelling {value}: {zero}"
+            );
+            assert_eq!(
+                session.open.as_ref().unwrap().draft[spec.path]
+                    .as_f64()
+                    .unwrap_or(0.0),
+                0.0
+            );
+        }
+    }
+
+    #[test]
+    fn form_fill_holds_the_three_new_previous_payment_gates() {
+        for (code, key, path, lock) in [
+            (
+                "0619E",
+                "frm0619E:txtTax15",
+                "item_15_amount_remitted_previously",
+                "Item 15 applies only to an amended return.",
+            ),
+            (
+                "0619F",
+                "frm0619F:txtTax16",
+                "item_16_remitted_previously",
+                "Item 16 applies only to an amended return.",
+            ),
+            (
+                "2550M",
+                "frm2550m:txtTax23D",
+                "vat_paid_previous",
+                "Item 23D applies only to an amended return.",
+            ),
+        ] {
+            let mut session = session();
+            save_scratch(&mut session);
+            call(
+                &mut session,
+                "form.open",
+                json!({"code": code, "year": 2026, "period": 1, "tin": TIN}),
+            )
+            .unwrap_or_else(|error| panic!("{code} opens: {error}"));
+
+            let refused = call(&mut session, "form.fill", json!({"fields": {key: "42"}})).unwrap();
+            assert_eq!(refused["refused"][key], lock, "{code}: {refused}");
+            let zero = call(&mut session, "form.fill", json!({"fields": {key: "0"}})).unwrap();
+            assert!(zero.get("refused").is_none(), "{code} zero: {zero}");
+            assert_eq!(
+                session.open.as_ref().unwrap().draft[path]
+                    .as_f64()
+                    .unwrap_or(0.0),
+                0.0,
+                "{code}: zero leaves the model empty"
+            );
+        }
+    }
+
+    #[test]
+    fn form_fill_previous_payment_yes_to_no_records_the_pending_notice() {
+        let mut session = session();
+        open_1600pt(&mut session);
+        let kind = AgentFormKind::Queueable(bir_core::forms::queueable::QueueableKind::Form1600PT);
+        let spec = bir_core::forms::agent::draft_locks::previous_payment::spec(kind).unwrap();
+
+        let opened = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {spec.yes_key: "true", spec.key: "42"}}),
+        )
+        .unwrap();
+        assert!(opened.get("refused").is_none(), "{opened}");
+        assert_eq!(
+            session.open.as_ref().unwrap().draft[spec.path]
+                .as_f64()
+                .unwrap_or(0.0),
+            42.0
+        );
+        let closed = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {spec.no_key: "true"}}),
+        )
+        .unwrap();
+        assert!(closed.get("refused").is_none(), "{closed}");
+        assert_eq!(
+            session.open.as_ref().unwrap().draft[spec.path]
+                .as_f64()
+                .unwrap_or(0.0),
+            0.0
+        );
+        let db = session.lock_db().unwrap();
+        let gate = format!(
+            "{}_item{}",
+            spec.form_code.to_lowercase(),
+            spec.item.to_lowercase()
+        );
+        let pending = db
+            .settings_with_prefix(&format!("notice_pending:{gate}:"))
+            .unwrap();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        assert!(pending[0].1.contains(spec.cleared), "{pending:?}");
     }
 
     #[test]

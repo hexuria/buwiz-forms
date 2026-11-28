@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -46,19 +47,55 @@ class VersionTests(unittest.TestCase):
         self.assertFalse(E2E.version_at_least(None, "0.4.1"))
         self.assertFalse(E2E.version_at_least("main", "0.4.1"))
 
-    def test_installed_version_comes_from_the_override_then_cargo_then_the_lock(self):
-        self.assertEqual(E2E.installed_cli_version({"E2E_GPUI_AGENT_CLI_VERSION": "v0.4.1"}), "0.4.1")
+    def test_installed_version_comes_from_the_override_without_running_the_cli(self):
+        calls = []
 
-        class Listed:
-            stdout = "gpui-agent-cli v0.4.0:\n    gpui-agent\nripgrep v14.1.0:\n    rg\n"
+        def run(*args, **kwargs):
+            calls.append(args)
+            raise AssertionError("the override must answer first")
 
-        self.assertEqual(E2E.installed_cli_version({}, run=lambda *a, **k: Listed()), "0.4.0")
+        self.assertEqual(
+            E2E.installed_cli_version(
+                "missing-gpui-agent",
+                env={"E2E_GPUI_AGENT_CLI_VERSION": "v0.4.1"},
+                run=run,
+            ),
+            "0.4.1",
+        )
+        self.assertEqual(calls, [])
 
-        def no_cargo(*a, **k):
-            raise OSError("no cargo")
+    @unittest.skipUnless(os.name == "posix", "the stand-in CLI is a POSIX script")
+    def test_installed_version_comes_from_the_binary_not_cargos_list(self):
+        with tempfile.TemporaryDirectory() as folder:
+            fake = Path(folder) / "gpui-agent"
+            fake.write_text(
+                f"#!{sys.executable}\n"
+                "import sys\n"
+                "if sys.argv[1:] == ['--version']:\n"
+                "    print('gpui-agent-cli 0.5.0')\n",
+                encoding="utf-8",
+            )
+            fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+            calls = []
 
-        self.assertEqual(E2E.installed_cli_version({}, run=no_cargo), E2E.pinned_gpui_agent_version())
-        self.assertRegex(E2E.pinned_gpui_agent_version() or "", r"^\d+\.\d+\.\d+$")
+            def run(args, **kwargs):
+                calls.append(args)
+                if args[:3] == ["cargo", "install", "--list"]:
+                    class Listed:
+                        stdout = "gpui-agent-cli v0.4.1:\n    gpui-agent\n"
+                        returncode = 0
+                    return Listed()
+                return subprocess.run(args, **kwargs)
+
+            self.assertEqual(E2E.installed_cli_version(str(fake), env={}, run=run), "0.5.0")
+            self.assertEqual(calls, [[str(fake), "--version"]])
+
+    def test_a_missing_binary_is_unknown_and_refuses_needs_cli(self):
+        with tempfile.TemporaryDirectory() as folder:
+            missing = str(Path(folder) / "gpui-agent")
+            version = E2E.installed_cli_version(missing, env={})
+        self.assertEqual(version, "unknown")
+        self.assertFalse(E2E.version_at_least(version, "0.5.0"))
 
 
 class RecipeReadingTests(unittest.TestCase):
@@ -87,6 +124,22 @@ class RecipeReadingTests(unittest.TestCase):
         self.assertTrue(typed and all(s["key_delay_ms"] == 80 for s in typed))
         self.assertEqual(E2E.placeholders(ROOT / "agent-recipes" / "e2e" / "money-boxes-paced.json"),
                          {"prior", "amount", "amount_shown"})
+
+    def test_a_step_node_reference_is_no_param_and_keeps_its_step_in_the_same_slice(self):
+        # gpui-agent 0.5.0: `$<step>.node` names the node a scroll_until step matched; the runner neither asks for
+        # it as a param nor cuts a recipe between the step and its user.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "find.json"
+            path.write_text(json.dumps({"name": "find", "params": ["row"], "steps": [
+                {"id": "find", "op": "scroll_until", "target": "list", "pattern": "$row", "dy": 200},
+                {"id": "hold", "op": "long_press", "target": "${find}.node"},
+                {"id": "press", "op": "click", "target": "$find.node"},
+            ]}), encoding="utf-8")
+            self.assertEqual(E2E.placeholders(path), {"row"})
+            self.assertEqual(E2E.recipe_step_params(path), [{"row"}, set(), set()])
+            steps, ids = E2E.recipe_steps(path), E2E.step_ids(path)
+            self.assertEqual(E2E.needs_edges_cut(steps, ids, 1), [("find", "hold"), ("find", "press")])
+            self.assertEqual(E2E.needs_edges_cut(steps, ids, 2), [("find", "press")])
 
     def test_bind_keeps_a_doubled_dollar_literal(self):
         self.assertEqual(E2E.bind("$table-add", {"table": "fp-table-x"}), "fp-table-x-add")

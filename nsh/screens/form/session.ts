@@ -2000,12 +2000,16 @@ export class FormSession {
     const always = (r as { notes_always?: string[] }).notes_always;
     if (Array.isArray(always)) s.notesAlways = new Set(always);
     for (const [k, lock] of Object.entries(r.relocks || {})) {
+      const note = r.relock_notes?.[k];
       if (lock == null) {
         delete s.locks[k];
-        delete s.lockNotes[k];
+        // An owner switch can clear a schedule row while its one shared box
+        // stays open for the new owner. That clearing is still reported on
+        // the open box; an ordinary open box has no note and drops it here.
+        if (note) s.lockNotes[k] = note;
+        else delete s.lockNotes[k];
       } else {
         s.locks[k] = lock;
-        const note = r.relock_notes?.[k];
         if (note) s.lockNotes[k] = note;
       }
     }
@@ -2133,6 +2137,143 @@ export class FormSession {
       const asked = Number(String(chosen).slice(0, 2));
       if (asked >= 1 && asked <= 12 && asked !== Number(String(s.values[k] ?? "").slice(0, 2))) return void this.toast(CALENDAR_YEAR_ENDS, "triangle-alert");
     }
+  }
+
+  /**
+   * Move row-keyed page state down with the rows below a real delete. The host
+   * compaction changes every later row's key suffix; a refusal or typed-amount
+   * marker left on the old suffix would otherwise sit under the survivor that
+   * moved into it. Keys outside this row family are never touched.
+   */
+  private rekeyDeletedRowState(rowKeys: string[]) {
+    // The schema knows the row family's full key matrix, including control
+    // numbering schemes whose row digits are not a simple final digit (1601EQ
+    // reaches multi-digit control numbers). Prefer that exact mapping; the
+    // suffix walk below is only a fallback for a synthetic direct call.
+    let matrix: string[][] | null = null;
+    let deletedRow = -1;
+    for (const part of this.schema?.parts ?? []) {
+      for (const item of part.items) {
+        const rows = item.keys ?? [];
+        const found = rows.findIndex((row) => rowKeys.every((key) => row.includes(key)));
+        if (found >= 0) {
+          matrix = rows;
+          deletedRow = found;
+          break;
+        }
+      }
+      if (matrix) break;
+    }
+    let rekey: (key: string) => string | null | false;
+    if (matrix && deletedRow >= 0) {
+      const moves = new Map<string, string>();
+      const deleted = new Set(matrix[deletedRow]);
+      for (let row = deletedRow + 1; row < matrix.length; row++) {
+        for (let col = 0; col < matrix[row].length; col++) {
+          const from = matrix[row][col];
+          const to = matrix[row - 1]?.[col];
+          if (from && to) moves.set(from, to);
+        }
+      }
+      rekey = (key) => (deleted.has(key) ? false : (moves.get(key) ?? null));
+    } else {
+      // One row's controls need not share one numeric base: 2550Q Schedule 3's
+      // first row is txtIncomePayment30 but txtDateCovered3To0. Row keys in
+      // the simple schedules end in one row digit; digits before it can belong
+      // to the control or schedule name (the 3 in txtIncomePayment30).
+      const bases = new Map<string, number>();
+      for (const key of rowKeys) {
+        const match = key.match(/^(.*)(\d)$/);
+        if (!match) return;
+        bases.set(match[1], Number(match[2]));
+      }
+      rekey = (key) => {
+        const match = key.match(/^(.*)(\d)$/);
+        if (!match) return null;
+        const base = bases.get(match[1]);
+        if (base === undefined) return null;
+        const ordinal = Number(match[2]) - base;
+        if (ordinal === 0) return false;
+        if (ordinal > 0) return `${match[1]}${base + ordinal - 1}`;
+        return null;
+      };
+    }
+    const shiftRecord = (record: Record<string, unknown>) => {
+      const moves: [string, string, unknown][] = [];
+      for (const [key, value] of Object.entries(record)) {
+        const next = rekey(key);
+        if (next === false) delete record[key];
+        else if (typeof next === "string") moves.push([key, next, value]);
+      }
+      for (const [from] of moves) delete record[from];
+      for (const [, to, value] of moves) record[to] = value;
+    };
+    const shiftSet = (set: Set<string>) => {
+      const moves: [string, string][] = [];
+      for (const key of [...set]) {
+        const next = rekey(key);
+        if (next === false) set.delete(key);
+        else if (typeof next === "string") moves.push([key, next]);
+      }
+      for (const [from] of moves) set.delete(from);
+      for (const [, to] of moves) set.add(to);
+    };
+    const s = this.st;
+    shiftRecord(s.rejected);
+    shiftRecord(s.boxMessages);
+    shiftRecord(s.kept);
+    shiftSet(s.unfixable);
+    shiftSet(this.amountEdited);
+  }
+
+  /** Delete one schedule row at once (no confirmation); Undo restores the draft exactly. */
+  deleteRow(rowKeys: string[]) {
+    const s = this.st;
+    if (!s.editable || !s.draft || !rowKeys.length) return;
+    // A focused amount is stored on the row it was typed for before the rows move. Typing still
+    // pending is committed first for the same reason; a refusal or side-effect removal question
+    // stops the explicit delete rather than letting it write over a shifted row.
+    if (!this.reopening && this.settleFocused(() => this.deleteRow(rowKeys), "deleteRow")) return;
+    if (Object.keys(s.pending).length && !this.reopening) {
+      this.flush();
+      if (s.removal || Object.keys(s.pending).length) return;
+    }
+    const draft = s.draft;
+    this.retireRemovalUndo();
+    let removedRow = true;
+    try {
+      const r = bir.screen_form_remove_row(s.target.formCode, draft, rowKeys);
+      removedRow = r.row_removed !== false;
+      const before = { ...s.values };
+      if (removedRow) this.rekeyDeletedRowState(rowKeys);
+      // A tentative row is only refused input. Treating the blanks as this batch's edits clears
+      // its refusal and forces its boxes back to blank; a real removal has no blank-cell edits.
+      this.applyFill(r, {});
+      for (const k of this.allKeys) if (before[k] !== s.values[k]) this.sValue.get(k).set(this.shownText(k));
+      if (!removedRow) {
+        // The drawer held only refused input. Discard it through the page's ordinary clear
+        // batch (no stored row exists, so nothing can shift underneath it) and offer no Undo.
+        this.choose(Object.fromEntries(rowKeys.map((k) => [k, ""])));
+        return;
+      }
+    } catch (e) {
+      return void this.toast(errorText(e), "triangle-alert");
+    }
+    s.dirty = true;
+    this.markUnsaved();
+    this.validate();
+    const state = s;
+    const undo = () => this.undoRemoval(draft, state, undo);
+    this.removalUndo = undo;
+    this.undoToast = this.toast("Row deleted.", "trash", { label: "Undo", onPress: undo });
+    // Any save retires Undo (it would restore a draft older than the stored one), so autosave waits it out.
+    this.scheduleAutosave();
+    const token = this.token;
+    this.later(UNDO_WINDOW, () => {
+      if (token !== this.token || this.removalUndo !== undo) return;
+      this.retireRemovalUndo();
+      this.scheduleAutosave();
+    });
   }
 
   /** An answer that removes typed rows asks first: the old answer shows until Continue. */
@@ -2661,7 +2802,11 @@ export class FormSession {
       (it.keys || []).forEach((row) =>
         row.forEach((k, c) => {
           const col = (it.cols || [])[c];
-          if (!col || col.t === "hidden" || !shut(k, col.c) || waits(k)) return;
+          if (!col || col.t === "hidden" || waits(k)) return;
+          if (!shut(k, col.c)) {
+            if (s.lockNotes[k]) note(k);
+            return;
+          }
           if (always(k) || (col.t === "radio" || col.t === "chk" ? !ticked(s.values[k]) : blankText(k, col.t))) note(k);
         }),
       );
@@ -4050,6 +4195,11 @@ export class FormSession {
   queuedShown(): boolean {
     const h = this.header();
     return h.status === "Queued" && !h.loading && !h.error && !h.sample && !h.editable;
+  }
+
+  /** The send state this Queued page is drawn from, for comparison with the frame's freshly read rows. */
+  queuedSend(): SendState | null {
+    return this.st.send;
   }
 
   /** Whether id (a row of the frame's returns lists, bir.list_returns) is this page's return: both name the same stored draft. */

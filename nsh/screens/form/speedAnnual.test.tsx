@@ -23,6 +23,11 @@ for (const formCode of ["1701", "1702RT"]) {
     }
     report(`${formCode} headless scroll API (gesture, not frame)`, scroll);
     const input = formCode === "1701" ? "id:fp-frm1701:txtPg1I14ForeignTaxNumber" : "id:fp-frm1702RT:txtPg2Pt4I27Sales";
+    if (formCode === "1701") {
+      const yes = "id:fp-frm1701:rdoPg1I13ForeignTaxCreditsYes";
+      for (let i = 0; i < 30 && !app.shows(yes); i++) await app.scroll("id:form-scroll", -800);
+      await app.press(yes);
+    }
     for (let i = 0; i < 30 && !app.shows(input); i++) await app.scroll("id:form-scroll", 800);
     expect(app.count(input)).toBe(1);
     const typing: number[] = [];
