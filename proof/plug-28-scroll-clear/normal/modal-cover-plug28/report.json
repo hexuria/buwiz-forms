@@ -1,0 +1,69 @@
+{
+ "suite": "plug28-modal",
+ "target": "android",
+ "started": "20261128-022422",
+ "out": "/home/ubuntu/j62/work/e2e-android-modal",
+ "cli_version": "0.5.0",
+ "app_commit": "f030fbfd",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1235,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 11177,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 9279,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json"
+  },
+  {
+   "name": "modal-cover-plug28",
+   "status": "fail",
+   "ms": 5974,
+   "note": null,
+   "file": "/home/ubuntu/j62/work/birth-cover-plug28-phone.json",
+   "step": "s13",
+   "error": "occluded_by: n395",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "/home/ubuntu/j62/work/e2e-android-modal/04-modal-cover-plug28/failure.png",
+   "tree": "/home/ubuntu/j62/work/e2e-android-modal/04-modal-cover-plug28/failure-tree.json"
+  }
+ ]
+}

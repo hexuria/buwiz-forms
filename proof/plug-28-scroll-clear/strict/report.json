@@ -1,0 +1,76 @@
+{
+ "suite": "plug28-money",
+ "target": "android",
+ "started": "20261128-022556",
+ "out": "/home/ubuntu/j62/work/e2e-android-strict",
+ "cli_version": "0.5.0",
+ "app_commit": "f030fbfd",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 1013,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 11420,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 9398,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 2422,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes-plug28",
+   "status": "fail",
+   "ms": 19809,
+   "note": null,
+   "file": "/home/ubuntu/j62/work/money-boxes-plug28-phone.json",
+   "step": "s14",
+   "error": "occluded_by: fp-pill-list (its n4120)",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "/home/ubuntu/j62/work/e2e-android-strict/05-money-boxes-plug28/failure.png",
+   "tree": "/home/ubuntu/j62/work/e2e-android-strict/05-money-boxes-plug28/failure-tree.json"
+  }
+ ]
+}

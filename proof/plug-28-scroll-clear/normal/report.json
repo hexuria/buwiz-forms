@@ -1,0 +1,83 @@
+{
+ "suite": "plug28",
+ "target": "android",
+ "started": "20261128-020222",
+ "out": "/home/ubuntu/j62/work/e2e-android-normal",
+ "cli_version": "0.5.0",
+ "app_commit": "f030fbfd",
+ "platform": "mobile",
+ "os": "android",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "system.rotate",
+  "system.keyboard_show",
+  "system.keyboard_hide",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 3315,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants",
+   "video": "/home/ubuntu/j62/work/e2e-android-normal/01-setup-start/recording.mp4"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 14135,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-android.json",
+   "video": "/home/ubuntu/j62/work/e2e-android-normal/02-sign-up/recording.mp4"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 11414,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-android.json",
+   "video": "/home/ubuntu/j62/work/e2e-android-normal/03-tax-year/recording.mp4"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 5008,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants",
+   "video": "/home/ubuntu/j62/work/e2e-android-normal/04-open-2551q/recording.mp4"
+  },
+  {
+   "name": "money-boxes-plug28",
+   "status": "pass",
+   "ms": 23076,
+   "note": null,
+   "file": "/home/ubuntu/j62/work/money-boxes-plug28-phone.json",
+   "video": "/home/ubuntu/j62/work/e2e-android-normal/05-money-boxes-plug28/recording.mp4"
+  },
+  {
+   "name": "modal-cover-plug28",
+   "status": "pass",
+   "ms": 11610,
+   "note": null,
+   "file": "/home/ubuntu/j62/work/birth-cover-plug28-phone.json",
+   "video": "/home/ubuntu/j62/work/e2e-android-normal/06-modal-cover-plug28/recording.mp4"
+  }
+ ]
+}
