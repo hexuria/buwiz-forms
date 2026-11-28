@@ -146,6 +146,20 @@ for (const { name, size } of SIZES) {
       expect(app.shows("id:settings-google-connect")).toBe(false);
       expect(app.texts()).not.toContain("OAuth failed: GOOGLE_CLIENT_ID must be set in .env");
     }, 60_000);
+
+    test("desktop: a Gmail connection from an earlier build, in a build with no Google client id, says to disconnect and keeps Disconnect", async () => {
+      const app = await openSettings(size, { google: "unavailable-connected", solo: true }, "account");
+      await app.waitFor("id:settings-google");
+      expectTexts(app, ["Gmail", "Google sign-in is not available in this version. Disconnect and use an app password."]);
+      expect(app.texts()).not.toContain("Connected as juana.inbox@example.com");
+      expect(app.shows("id:settings-google-connect")).toBe(false);
+      expect(app.texts()).not.toContain("Reconnect");
+      expect(app.texts().some((t) => t.includes("GOOGLE_CLIENT_ID"))).toBe(false);
+      await app.press("id:settings-google-disconnect");
+      await app.waitFor("text:Google sign-in is not available in this version. Use an app password.");
+      expect(calls(app)).toContain("disconnect_inbox_oauth");
+      expect(app.shows("id:settings-google-disconnect")).toBe(false);
+    }, 60_000);
   }
 }
 

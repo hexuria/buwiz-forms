@@ -49,6 +49,11 @@ class SwitchTests(unittest.TestCase):
                 self.assertEqual(store_gmail.gmail_on({"STORE_GMAIL": value}), on)
         self.assertFalse(store_gmail.gmail_on({}))
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "the recipes that eval this line run only on macOS (Mac App Store and iPhone packages); on Windows bash would "
+        "also get print's \\r\\n line endings",
+    )
     def test_off_drops_both_variables_in_the_shell(self):
         env = {**os.environ, "GOOGLE_CLIENT_ID": "x", "GOOGLE_CLIENT_SECRET": "y", "STORE_GMAIL": ""}
         script = f'eval "$({sys.executable} {ROOT / "scripts/store_gmail.py"} env)"; echo "id=${{GOOGLE_CLIENT_ID-unset}} secret=${{GOOGLE_CLIENT_SECRET-unset}}"'
@@ -56,6 +61,11 @@ class SwitchTests(unittest.TestCase):
         self.assertEqual(out.stdout.strip(), "id=unset secret=unset")
         self.assertIn("without Gmail Connect", out.stderr)
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "the recipes that eval this line run only on macOS (Mac App Store and iPhone packages); on Windows bash would "
+        "also get print's \\r\\n line endings",
+    )
     def test_on_keeps_both_variables(self):
         env = {**os.environ, "GOOGLE_CLIENT_ID": "x", "GOOGLE_CLIENT_SECRET": "y", "STORE_GMAIL": "1"}
         script = f'eval "$({sys.executable} {ROOT / "scripts/store_gmail.py"} env)"; echo "id=${{GOOGLE_CLIENT_ID-unset}} secret=${{GOOGLE_CLIENT_SECRET-unset}}"'

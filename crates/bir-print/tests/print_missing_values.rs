@@ -166,8 +166,11 @@ fn form_1701_prints_schedule1_employer_names_and_tins() {
     d.spouse.name = "SANTOS, JUANITO".into();
     d.spouse.tin = "00045678900000".into();
     d.spouse_rdo_code = "044".into();
-    d.joint_filing_status = Some(Form1701JointFilingStatus::Joint);
+    // Schedule 1 exists for a compensation-income column. The spouse column
+    // exists only on a joint return; without these answers the official
+    // disable handlers correctly clear a spouse employer row.
     d.atc = Some(Form1701Atc::Ii011);
+    d.joint_filing_status = Some(Form1701JointFilingStatus::Joint);
     d.spouse.atc = Some(Form1701Atc::Ii011);
     d.employers[0] = Form1701EmployerRow {
         owner: Some(Form1701Party::Taxpayer),
