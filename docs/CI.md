@@ -113,11 +113,14 @@ Two things that surprise people:
   no update for that. A label starts nothing in two cases: the pull request conflicts with `main` (GitHub has no merge
   to run, so no `pull_request` run starts at all), or the label does not exist in the repository (it is then never
   added). A check can also run on an older merge than current `main`; marking the pull request draft and ready again
-  asks GitHub for a fresh one without changing the commit.
+  asks GitHub for a fresh run of the quick checks on a current merge without changing the commit. That does not run
+  the suites again: to refresh a suite-label run, remove the label and add it again.
 - A run started by hand (`workflow_dispatch`, or `gh workflow run`) is NOT among a pull request's checks, even at the
-  same commit, and it is not suite proof for the batch gate, which accepts only a suite-label run or a `test/**` push.
-  Nothing that waits on "the pull request's checks" waits for it. If such a run matters to a merge, name it and read
-  its result by its id; it adds to the suite proof and never replaces it.
+  same commit. Nothing that waits on "the pull request's checks" waits for it. The batch gate reads the two workflows
+  differently: for `ci.yml` it accepts only a suite-label run or a `test/**` push as proof of `tests-ok`; for the NSH
+  app suite it also accepts a complete hand-started run or the nightly run at the pull request's head. So a
+  hand-started run can stand for the app suite and never for the workspace tests. If such a run matters to a merge,
+  name it and read its result by its id.
 
 ## Asking for tests on a branch
 
