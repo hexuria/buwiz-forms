@@ -140,7 +140,7 @@ test("section summaries", () => {
 
 test("the inbox check never says confirmed without having looked, and a return past the window stays Submitted in words", () => {
   expect(checkText({ ok: true, still_pending: false, looked: false, error: null })).toBe(
-    "Every return sent is confirmed or was a dry run, so the inbox was not searched.",
+    "Every return sent is confirmed or was a test send, so the inbox was not searched.",
   );
   expect(checkText({ ok: true, still_pending: false, looked: true, error: null })).toBe("Checked. Everything submitted is confirmed.");
   expect(checkText({ ok: true, still_pending: true, looked: true, error: null })).toBe("Checked. A submitted return is still waiting for its confirmation.");

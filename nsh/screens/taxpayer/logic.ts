@@ -355,7 +355,7 @@ export function hiddenFactsText(hidden: number): string | null {
 /** The result of a "check now", in words. It says "confirmed" only after the inbox was really searched (`looked`). */
 export function checkText(r: { ok: boolean; still_pending: boolean; looked: boolean; error: string | null }): string {
   if (!r.ok) return r.error || "The check failed.";
-  if (!r.looked) return "Every return sent is confirmed or was a dry run, so the inbox was not searched.";
+  if (!r.looked) return "Every return sent is confirmed or was a test send, so the inbox was not searched.";
   return r.still_pending ? "Checked. A submitted return is still waiting for its confirmation." : "Checked. Everything submitted is confirmed.";
 }
 
