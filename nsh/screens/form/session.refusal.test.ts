@@ -35,6 +35,7 @@ test("2551Q Queue refusal marks Item 13 like validation and offers a jump into i
     f.s.jumpTo(0);
     expect(f.s.part(pi)().open).toBe(false);
     f.s.queue();
+    await f.s.idle();
     expect(f.s.row(row)().message).toContain("Choose the applicable Item 13");
     expect(f.s.box(key).invalid()).toBe(true);
     expect(f.s.part(pi)().errors).toBeGreaterThan(0);
@@ -50,6 +51,7 @@ test("profile Queue refusals link to the relevant profile editor and form year",
     const f = await refusing(`${field}: Set this in the tax profile before filing.`);
     try {
       f.s.queue();
+      await f.s.idle();
       expect(f.said[0].message).toContain("Set this in the tax profile before filing.");
       expect(f.said[0].action?.label).toBe("Open tax profile");
       f.said[0].action!.onPress();
@@ -76,6 +78,7 @@ test("a blank Item 8 name edited on the return offers Show item, not the unchang
     f.s.jumpTo(0);
     f.said.length = 0;
     f.s.queue();
+    await f.s.idle();
     expect(f.s.box(key).invalid()).toBe(true);
     expect(f.said[0].action?.label).toBe("Show item");
     f.said[0].action!.onPress();
@@ -91,6 +94,7 @@ test("unknown keys and unstructured Queue failures keep their full reason, witho
     try {
       const before = f.s.reveal();
       f.s.queue();
+      await f.s.idle();
       expect(f.said[0].message).toBe(message);
       expect(f.said[0].action).toBe(undefined);
       expect(f.s.reveal()).toBe(before);
