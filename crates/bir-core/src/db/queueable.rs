@@ -59,9 +59,10 @@ fn sent_payload<F: QueueableForm>(draft: &F) -> (Option<String>, SnapshotPayload
     if let Some(payload) = &draft.lifecycle().submitted_payload {
         return (Some(payload.clone()), SnapshotPayloadSource::Stored);
     }
-    let rebuilt = crate::official_xml::layout(F::LAYOUT_ID)
+    let rebuilt = draft
+        .official_layout()
         .ok()
-        .and_then(|layout| crate::official_xml::write(layout, &draft.field_map()).ok());
+        .and_then(|layout| crate::official_xml::write(&layout, &draft.field_map()).ok());
     match rebuilt {
         Some(xml) => (Some(xml), SnapshotPayloadSource::Regenerated),
         None => (None, SnapshotPayloadSource::Unavailable),
@@ -1813,6 +1814,36 @@ mod tests {
                 .contains("txtTax14=12.00")
         );
         assert_eq!(rows(&db).len(), 1);
+    }
+
+    #[test]
+    fn a_2200a_snapshot_rebuild_uses_the_dynamic_others_layout() {
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null, "full_name": "Sample Distillery Corp", "tin": {"segment1": "123",
+            "segment2": "456", "segment3": "788", "branch": "00000"}, "rdo_code": "039",
+            "line_of_business": "Distilling", "registered_address": "123 Sample St Quezon City",
+            "zip_code": "1100", "phone": "0281234567", "email": "sample.taxpayer@example.com",
+            "default_form_type": "2200A", "taxpayer_type": "Corporation"
+        }))
+        .unwrap();
+        let mut draft =
+            crate::forms::form_2200a::Form2200ADraft::new_from_profile(&profile, 2025, 3);
+        for index in 0..4 {
+            let row = draft.other_mut(index).expect("Others row");
+            row.atc_digits = format!("99{index}");
+            row.description = format!("Added product {index}");
+            row.bracket = "Per liter".to_string();
+            row.rate = "10".to_string();
+        }
+        draft.lifecycle.submitted_payload = None;
+
+        let (xml, source) = sent_payload(&draft);
+        assert_eq!(source, SnapshotPayloadSource::Regenerated);
+        assert!(
+            xml.as_deref()
+                .expect("the dynamic layout rebuilds")
+                .contains("frm2200Av2020:txtSched1_xa_others4_Atc")
+        );
     }
 
     #[test]

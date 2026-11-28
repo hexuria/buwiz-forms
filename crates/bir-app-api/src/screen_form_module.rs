@@ -567,6 +567,44 @@ fn build_form(form: &mut Value, fixes: Option<&Value>) {
     rows_annual_individual::mark_pools(form, code);
     // 1701 Part VIII item 6's hint from Part VII item 8 (P4-10).
     rows_annual_individual::mark_from(form, code);
+    extend_dynamic_schedule_rows(form, code);
+}
+
+/// 2200A's official runtime appends Others rows without a source cap. This
+/// version accepts twelve rows. The extracted schema knows only the three
+/// printed rows; row 13 stays visible only so a write there is refused with
+/// the cap sentence instead of silently doing nothing.
+fn extend_dynamic_schedule_rows(form: &mut Value, code: &str) {
+    if code != "2200A" {
+        return;
+    }
+    for item in form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten())
+    {
+        if item["keys"][0][0] != "frm2200Av2020:txtSched1_xa_others1_Atc" {
+            continue;
+        }
+        let first: Vec<String> = item["keys"][0]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect();
+        let keys = item["keys"].as_array_mut().unwrap();
+        for row in 4..=13 {
+            keys.push(Value::Array(
+                first
+                    .iter()
+                    .map(|key| Value::from(key.replace("others1_", &format!("others{row}_"))))
+                    .collect(),
+            ));
+        }
+        item["rows"] = Value::from(13);
+    }
 }
 
 /// What a number box holds, from the draft field it writes and its label:
@@ -11079,8 +11117,8 @@ mod tests {
         assert_eq!(codes(&refused["draft"]), ["VB010", "VS010"]);
     }
 
-    /// N04: 1601C Schedule I is one table of its three printed rows, and
-    /// Previous Month/s (which the probe left unbound) saves.
+    /// N04: 1601C Schedule I shows the three printed rows plus this version's
+    /// runtime rows through 12; row 13 remains only to carry the cap refusal.
     #[test]
     fn rows_1601c_schedule_i_table_saves() {
         setup();
@@ -11095,7 +11133,7 @@ mod tests {
             .iter()
             .find(|it| it["keys"][0][0] == "frm1601c:sched1:txtMonthYear0")
             .expect("Schedule I table");
-        assert_eq!(table["rows"], 3);
+        assert_eq!(table["rows"], 13);
         assert_eq!(table["cols"][0]["l"], "1 Previous Month/s (MM/YYYY)");
         assert_eq!(table["cols"][4]["t"], "money");
         assert!(table["cols"][6].get("c").is_some());
@@ -11155,12 +11193,210 @@ mod tests {
         );
         assert_eq!(blank["draft"]["schedule_1"].as_array().unwrap().len(), 1);
 
-        save("1601C", &filled["draft"]);
+        let fourth = fill(
+            "1601C",
+            &blank["draft"],
+            json!({
+                "frm1601c:sched1:txtMonthYear3": "07/2026",
+                "frm1601c:sched1:txtDatePaid3": "08/10/2026",
+                "frm1601c:sched1:txtTaxPaid3": "2000",
+                "frm1601c:sched1:txtShouldTaxDue3": "2500",
+            }),
+        );
+        assert_eq!(fourth["rejected"], json!({}));
+        assert_eq!(
+            fourth["draft"]["schedule_1"][3]["previous_month"],
+            "07/2026"
+        );
+
+        let capped = fill(
+            "1601C",
+            &fourth["draft"],
+            json!({"frm1601c:sched1:txtMonthYear12": "09/2026"}),
+        );
+        assert_eq!(
+            capped["rejected"]["frm1601c:sched1:txtMonthYear12"],
+            "This schedule takes up to 12 rows in this version."
+        );
+        let huge = fill(
+            "1601C",
+            &fourth["draft"],
+            json!({"frm1601c:sched1:txtMonthYear999999999": "09/2026"}),
+        );
+        assert_eq!(
+            huge["rejected"]["frm1601c:sched1:txtMonthYear999999999"],
+            "This schedule takes up to 12 rows in this version."
+        );
+
+        save("1601C", &fourth["draft"]);
         let reopened = open("1601C", 7);
         assert_eq!(
             reopened["values"]["frm1601c:sched1:txtMonthYear0"],
             "05/2026"
         );
+        assert_eq!(
+            reopened["values"]["frm1601c:sched1:txtMonthYear3"],
+            "07/2026"
+        );
+    }
+
+    #[test]
+    fn month_year_1601c_cap_is_enforced_before_resize() {
+        setup();
+        let mut draft = open("1601C", 7)["draft"].clone();
+        let error = super::catalogs::fill_1601c_month_year(&mut draft, 1000, &json!("09/2026"))
+            .expect_err("the direct fill refuses out-of-cap rows before resizing");
+        assert_eq!(error, "This schedule takes up to 12 rows in this version.");
+        assert!(draft["schedule_1"].as_array().unwrap().len() < 1001);
+    }
+
+    /// The assistant writes the same runtime rows the page exposes, and the
+    /// computed field map carries them to the upload writers.
+    #[test]
+    fn dynamic_schedule_rows_are_assistant_writable() {
+        use bir_core::forms::agent::{self, AgentFormKind};
+        setup();
+
+        let kind = AgentFormKind::from_code("1601C").unwrap();
+        let mut draft = open("1601C", 7)["draft"].clone();
+        for (row, month) in [(3, "04/2026"), (4, "03/2026")] {
+            agent::fill(
+                kind,
+                &mut draft,
+                &format!("frm1601c:sched1:txtMonthYear{row}"),
+                &json!(month),
+                None,
+            )
+            .unwrap();
+            agent::fill(
+                kind,
+                &mut draft,
+                &format!("frm1601c:sched1:txtTaxPaid{row}"),
+                &json!("100.00"),
+                None,
+            )
+            .unwrap();
+        }
+        agent::compute(kind, &mut draft).unwrap();
+        let map = agent::field_map(kind, &draft).unwrap();
+        assert_eq!(map["frm1601c:sched1:txtMonthYear3"], "04/2026");
+        assert_eq!(map["frm1601c:sched1:txtMonthYear4"], "03/2026");
+
+        let kind = AgentFormKind::from_code("2200A").unwrap();
+        let mut draft = open("2200A", 1)["draft"].clone();
+        for row in 1..=5 {
+            for (column, value) in [
+                ("Atc", "997"),
+                ("Desc", "ASSISTANT PRODUCT"),
+                ("Bracket", "PER LITER"),
+                ("Rate", "10"),
+                ("Taxable", "440.00"),
+                ("Due", "44.00"),
+            ] {
+                agent::fill(
+                    kind,
+                    &mut draft,
+                    &format!("frm2200Av2020:txtSched1_xa_others{row}_{column}"),
+                    &json!(value),
+                    None,
+                )
+                .unwrap();
+            }
+        }
+        agent::compute(kind, &mut draft).unwrap();
+        let map = agent::field_map(kind, &draft).unwrap();
+        assert_eq!(
+            map["frm2200Av2020:txtSched1_xa_others4_Desc"],
+            "ASSISTANT PRODUCT"
+        );
+        assert_eq!(map["frm2200Av2020:txtSched1_xa_others5_Due"], "44.00");
+
+        let mut sparse = open("2200A", 1)["draft"].clone();
+        let error = agent::fill(
+            kind,
+            &mut sparse,
+            "frm2200Av2020:txtSched1_xa_others4_Atc",
+            &json!("997"),
+            None,
+        )
+        .expect_err("a new Others row needs the earlier rows complete");
+        assert_eq!(error, "ATC is required in row #1");
+
+        let mut partial = sparse.clone();
+        for (column, value, sentence) in [
+            ("Atc", "997", "Description is required in row #1"),
+            (
+                "Desc",
+                "X",
+                "Tax Bracket/Unit of Measure is required in row #1",
+            ),
+            (
+                "Bracket",
+                "PER LITER",
+                "Applicable Tax Rate is required in row #1",
+            ),
+        ] {
+            agent::fill(
+                kind,
+                &mut partial,
+                &format!("frm2200Av2020:txtSched1_xa_others1_{column}"),
+                &json!(value),
+                None,
+            )
+            .unwrap();
+            let error = agent::fill(
+                kind,
+                &mut partial,
+                "frm2200Av2020:txtSched1_xa_others4_Atc",
+                &json!("997"),
+                None,
+            )
+            .expect_err("row four still needs row one complete");
+            assert_eq!(error, sentence);
+        }
+
+        let mut invalid = open("2200A", 1)["draft"].clone();
+        invalid["others"] = json!([{"atc_digits":"99"}]);
+        assert_eq!(
+            agent::dynamic_schedule_write_refusal(
+                kind,
+                &invalid,
+                "frm2200Av2020:txtSched1_xa_others4_Atc",
+                &json!("997"),
+            ),
+            Some("Please supply valid ATC Code for row #1".to_string())
+        );
+
+        let mut row_two_positive = open("2200A", 1)["draft"].clone();
+        agent::fill(
+            kind,
+            &mut row_two_positive,
+            "frm2200Av2020:txtSched1_xa_others2_Desc",
+            &json!("ROW TWO"),
+            None,
+        )
+        .expect("a printed row stays writable while row one is incomplete");
+
+        let mut existing_row_four = row_two_positive.clone();
+        existing_row_four["others"] = json!([{}, {}, {}, {"description":"LEGACY ROW"}]);
+        agent::fill(
+            kind,
+            &mut existing_row_four,
+            "frm2200Av2020:txtSched1_xa_others4_Bracket",
+            &json!("PER LITER"),
+            None,
+        )
+        .expect("an already-started runtime row stays editable");
+
+        let error = agent::fill(
+            kind,
+            &mut sparse,
+            "frm2200Av2020:txtSched1_xa_others13_Atc",
+            &json!("997"),
+            None,
+        )
+        .expect_err("row thirteen is past this version's cap");
+        assert_eq!(error, "This schedule takes up to 12 rows in this version.");
     }
 
     /// N04: 2200P rows added past the 27 official ones save. The page

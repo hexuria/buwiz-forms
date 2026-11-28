@@ -116,6 +116,9 @@ pub(super) fn fill(
     value: &Value,
     lift: Lift,
 ) -> Result<(), String> {
+    if let Some(error) = agent::dynamic_schedule_write_refusal(kind, draft, key, value) {
+        return Err(error);
+    }
     if inactive_schedule(kind, key, draft) {
         return Err(
             "Item 11 (Kind of Transaction) uses another Part V schedule; choose it there first."
@@ -392,7 +395,8 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
         || rows_annual_corporate::host_writes(kind, key)
         || sales_2550m_row(kind, key).is_some()
         || rows_2550m::cell(kind, key).is_some()
-        || month_year_1601c_row(kind, key).is_some()
+        || month_year_1601c_row(kind, key)
+            .is_some_and(|row| row < form_1601c::PRINTED_SCHEDULE_1_ROWS)
         || rate_2200s_row(kind, key).is_some()
         || atc_1600wp_row(kind, key).is_some()
         || atc_1601eq_row(kind, key).is_some()
@@ -635,13 +639,20 @@ fn month_year_1601c_row(kind: AgentFormKind, key: &str) -> Option<usize> {
         .strip_prefix("frm1601c:sched1:txtMonthYear")?
         .parse()
         .ok()?;
-    (row < form_1601c::MAX_SCHEDULE_1_ROWS).then_some(row)
+    Some(row)
 }
 
 /// Previous Month/s (`MM/YYYY`, `maxlength="7"`). Like the row's other
 /// boxes it starts the row (and any before it); validation checks the
 /// month the way `validateMonthYear` does.
-fn fill_1601c_month_year(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
+pub(super) fn fill_1601c_month_year(
+    draft: &mut Value,
+    row: usize,
+    value: &Value,
+) -> Result<(), String> {
+    if row >= agent::DYNAMIC_SCHEDULE_ROW_LIMIT {
+        return Err(agent::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE.to_string());
+    }
     let text = value.as_str().unwrap_or_default().trim().to_string();
     if text.chars().count() > 7 {
         return Err("Enter the month as MM/YYYY.".to_string());

@@ -364,6 +364,15 @@ const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over 
      normal income tax at zero, so probing saw the box echo the MCIT and bound \
      it to /schedule_4/rows/N/mcit";
 
+/// Runtime row families whose generated rows are filer-typed although the
+/// family's static corpus entry is marked computed. The official 2200A
+/// `computeOthers` never writes a dynamically added row's Due cell, and
+/// `sched1Fields` leaves it editable (`BIR-Form2200Av2020.hta` lines 7582-7589).
+const FILER_TYPED_FAMILIES: &[(&str, &str)] = &[(
+    "frm2200Av2020:txtSched1_xa_others{N>=4}_Due",
+    "2200A runtime Others rows: Due stays editable as on printed rows 1-3",
+)];
+
 /// Profile boxes the rules corpus marks computed: the official page fills
 /// them from the taxpayer's profile and shuts them at load, exactly as it
 /// does the profile boxes beside them that the corpus leaves uncomputed, so
@@ -3085,8 +3094,18 @@ pub fn supplement_row_families(
                 } else {
                     "checkbox".to_string()
                 },
-                computed: family.computed,
-                required: family.required.clone(),
+                computed: family.computed
+                    && !FILER_TYPED_FAMILIES
+                        .iter()
+                        .any(|(key, _)| *key == family.key),
+                required: if FILER_TYPED_FAMILIES
+                    .iter()
+                    .any(|(key, _)| *key == family.key)
+                {
+                    "optional".to_string()
+                } else {
+                    family.required.clone()
+                },
                 options: family.options.clone(),
                 layout_only: false,
                 group: None,

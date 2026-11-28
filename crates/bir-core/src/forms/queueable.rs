@@ -501,6 +501,15 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
     /// Official control ids and values (see [`crate::official_xml::write`]).
     fn field_map(&self) -> BTreeMap<String, String>;
 
+    /// The official layout this draft writes. Forms whose runtime adds rows
+    /// override it so every production payload path, including an amendment
+    /// snapshot rebuild, uses the same extended layout.
+    fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        crate::official_xml::layout(Self::LAYOUT_ID)
+            .cloned()
+            .map_err(|error| error.to_string())
+    }
+
     /// The field map the form's Print preview fills its frozen sheet with —
     /// `to_print_field_map` where the draft has print-only `derived:` keys,
     /// otherwise `to_bir_field_map` (the same map each desktop view's
@@ -606,9 +615,10 @@ pub trait QueueableForm: Clone + Serialize + DeserializeOwned + Send + Sync + 's
         if !errors.is_empty() {
             return Err(errors);
         }
-        let layout = crate::official_xml::layout(Self::LAYOUT_ID)
-            .map_err(|error| vec![("xml".to_string(), error.to_string())])?;
-        crate::official_xml::write(layout, &self.field_map())
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
             .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 
