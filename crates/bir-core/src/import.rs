@@ -592,30 +592,28 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                         // row — a device row is never duplicated over a key it
                         // simply never had, and a legacy insert reads back in
                         // the same period it wrote.
-                        let key_to_write = period_key
-                            .map(str::to_string)
-                            .unwrap_or_else(|| {
-                                // An open-ended row carries its entry number
-                                // in the key: number after the largest O key
-                                // already stored — two entries of one archive
-                                // must never both land on O1, or the next
-                                // save overwrites the first.
-                                if matches!(
-                                    crate::db::drafts::period_from_legacy_slot(form_code, None, 1),
-                                    crate::forms::FilingPeriod::OpenEnded(_)
+                        let key_to_write = period_key.map(str::to_string).unwrap_or_else(|| {
+                            // An open-ended row carries its entry number
+                            // in the key: number after the largest O key
+                            // already stored — two entries of one archive
+                            // must never both land on O1, or the next
+                            // save overwrites the first.
+                            if matches!(
+                                crate::db::drafts::period_from_legacy_slot(form_code, None, 1),
+                                crate::forms::FilingPeriod::OpenEnded(_)
+                            ) {
+                                match db.next_open_ended_period_number(
+                                    &tin,
+                                    form_code,
+                                    taxable_year as u16,
                                 ) {
-                                    match db.next_open_ended_period_number(
-                                        &tin,
-                                        form_code,
-                                        taxable_year as u16,
-                                    ) {
-                                        Ok(next) => format!("O{next}"),
-                                        Err(_) => derive_period_key(form_code, raw_quarter),
-                                    }
-                                } else {
-                                    derive_period_key(form_code, raw_quarter)
+                                    Ok(next) => format!("O{next}"),
+                                    Err(_) => derive_period_key(form_code, raw_quarter),
                                 }
-                            });
+                            } else {
+                                derive_period_key(form_code, raw_quarter)
+                            }
+                        });
                         match existing {
                             None => {
                                 // A unique violation here is a key conflict on
@@ -697,21 +695,23 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                 // must be dated for that: an undated filed
                                 // row (every v0.2.0 archive) carries no time
                                 // that could lose, so the rank still decides.
-                                let device_dated_strictly_newer = match (
-                                    existing_updated_at.as_deref(),
-                                    incoming_updated_at,
-                                ) {
-                                    (Some(existing_stamp), Some(incoming_stamp)) => match (
-                                        crate::db::taxpayers::parse_stored_timestamp(existing_stamp),
-                                        crate::db::taxpayers::parse_stored_timestamp(incoming_stamp),
-                                    ) {
-                                        (Some(existing_time), Some(incoming_time)) => {
-                                            existing_time > incoming_time
-                                        }
+                                let device_dated_strictly_newer =
+                                    match (existing_updated_at.as_deref(), incoming_updated_at) {
+                                        (Some(existing_stamp), Some(incoming_stamp)) => match (
+                                            crate::db::taxpayers::parse_stored_timestamp(
+                                                existing_stamp,
+                                            ),
+                                            crate::db::taxpayers::parse_stored_timestamp(
+                                                incoming_stamp,
+                                            ),
+                                        ) {
+                                            (Some(existing_time), Some(incoming_time)) => {
+                                                existing_time > incoming_time
+                                            }
+                                            _ => false,
+                                        },
                                         _ => false,
-                                    },
-                                    _ => false,
-                                };
+                                    };
                                 let may = !mid_send
                                     && if cross_amendment {
                                         incoming_rank >= existing_rank && newer
@@ -3812,7 +3812,8 @@ mod tests {
     #[test]
     fn restore_year_facts_no_seed_when_nothing_filled() {
         let db = Database::open_ephemeral().unwrap();
-        db.save_profile(branch_profile("Head Office", TIN_X)).unwrap();
+        db.save_profile(branch_profile("Head Office", TIN_X))
+            .unwrap();
         let branch_tin = "44455566600001";
         db.save_profile(branch_profile("Branch One", branch_tin))
             .unwrap();
