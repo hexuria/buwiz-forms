@@ -980,18 +980,18 @@ export function verify_owner_pin(pin: string): Promise<boolean>;
 export function lock_now(): boolean;
 
 /** The migration state the sign-in flow shows a page for after session_opened. */
-declare function migration_state(): {
-    kind: "none" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
+export function migration_state(): {
+    kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
     copy_saved: boolean;
     detail: string;
 };
 /** The transient page's Try again: the claim and the room open run again for the saved sign-in. */
-declare function migration_try_again(): void;
+export function migration_try_again(): void;
 /** The offer page's answer: `add` runs the whole-profile export of the found file and imports it into
  *  the room, then the file is renamed aside; `false` leaves it for the next launch. */
-declare function migration_offer_answer(add: boolean): void;
+export function migration_offer_answer(add: boolean): void;
 /** How many returns of the open room are Queued or sending now — the sign-out confirm's count, no names. */
-declare function returns_waiting_count(): number;
+export function returns_waiting_count(): number;
 /** The pre-rooms safety copy of the open room's claim, for Settings › Import / Export: kept-until
  *  date (unix), or the reason it is kept, or none when there is no copy. */
-declare function safety_copy_status(): { kind: "none" } | { kind: "until"; stamp: number } | { kind: "kept"; reason: string };
+export function safety_copy_status(): { kind: "none" } | { kind: "until"; stamp: number } | { kind: "kept"; reason: string };

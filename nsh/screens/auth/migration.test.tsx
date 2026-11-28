@@ -7,14 +7,13 @@ const DEMO = "../../MigrationDemo.tsx";
 test("moving: the progress page shows, phone", async () => {
   const app = await open(DEMO, { host: { params: { page: "moving" } } });
   await app.waitFor("id:migration-moving");
-  expect(app.texts()).toContain("Moving your tax profiles");
-  await app.waitFor("id:migration-moving-spinner");
+  expect(app.texts()).toContain("Moving your returns…");
 });
 
 test("moving: the progress page shows, desktop", async () => {
   const app = await open(DEMO, { width: 1440, height: 900, platform: "macos", host: { params: { page: "moving" } } });
   await app.waitFor("id:migration-moving");
-  expect(app.texts()).toContain("Moving your tax profiles");
+  expect(app.texts()).toContain("Moving your returns…");
 });
 
 test("transient before step 3: nothing was changed, no copy line, phone", async () => {

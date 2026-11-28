@@ -52,6 +52,11 @@ interface Params extends EmailParams {
   polls?: boolean;
   drop?: boolean;
   signOut?: boolean;
+  claim?: "opening" | "moving";
+  signInClaim?: "opening" | "moving";
+  commitAfter?: number;
+  flip?: "opening" | "moving";
+  migrationBlocked?: "transient" | "moved_not_opened" | "permanent";
   start?: string;
   firstRun?: boolean;
 }
@@ -64,6 +69,8 @@ const calls = signal<string[]>([]);
 const called = (name: string) => calls.set([...calls(), name]);
 /** How often the kept email request was read (cloud_account_email_pending). */
 const pendingReads = signal(0);
+/** How often the migration state was read. */
+const migrationReads = signal(0);
 /** The help desk's recovery key, as setup_helpdesk answered it (the readout shows it). */
 let recoveryKey = "";
 
@@ -99,20 +106,54 @@ let gateOpen = false;
 
 function fakeAccount(p: Params): void {
   const h = bir as unknown as Record<string, unknown>;
+  type MigrationKind = "opening" | "moving" | "transient" | "moved_not_opened" | "permanent";
+  let migrationKind = (p.migrationBlocked ?? p.claim ?? null) as MigrationKind | null;
   if (p.gate) {
+    const active = (kind: MigrationKind | null) => kind === "opening" || kind === "moving";
+    let gateReads = 0;
+    let migrationReadCount = 0;
+    const commitAfter = () => p.commitAfter ?? 3;
     const realOpened = bir.cloud_account_session_opened;
-    h.cloud_account_gate = () => ({ unlocked: gateOpen, offline: false, server_url: "http://localhost:3008", email: null, detail: "" });
+    const realClosed = bir.cloud_account_session_closed;
+    h.cloud_account_gate = () => {
+      gateReads += 1;
+      if (active(migrationKind) && gateReads >= commitAfter()) {
+        gateOpen = true;
+        migrationKind = null;
+      }
+      return { unlocked: gateOpen, offline: false, server_url: "http://localhost:3008", email: null, detail: "" };
+    };
+    h.migration_state = () => {
+      migrationReadCount += 1;
+      migrationReads.set(migrationReadCount);
+      if (active(migrationKind) && p.flip && migrationReadCount > 1) return { kind: p.flip, copy_saved: false, detail: "" };
+      return { kind: migrationKind ?? "none", copy_saved: migrationKind === "transient", detail: migrationKind === "transient" || migrationKind === "moved_not_opened" || migrationKind === "permanent" ? "The move stopped here." : "" };
+    };
+    h.migration_try_again = () => {
+      called("migration_try_again");
+      gateReads = 0;
+      migrationKind = "moving";
+      return null;
+    };
     h.cloud_account_session_opened = () => {
       called("cloud_account_session_opened");
-      gateOpen = true;
+      gateReads = 0;
+      if (p.signInClaim) migrationKind = p.signInClaim;
+      else gateOpen = true;
       return realOpened();
+    };
+    h.cloud_account_session_closed = () => {
+      called("cloud_account_session_closed");
+      return realClosed();
     };
   }
   if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
   if (p.gate && p.signOut) {
     // Signed out at once, no network: the gate's answer is closed again.
     h.cloud_account_sign_out = async () => {
+      called("cloud_account_sign_out");
       gateOpen = false;
+      migrationKind = null;
       return { ...SIGNED_IN, signed_in: false, email: null, user_id: null };
     };
   }
@@ -134,6 +175,7 @@ function Readout() {
       <Text testID="demo-visible">{`returns: ${roots(store.savedReturns())} | deadlines: ${roots(store.deadlines(`${year}-01-01`, `${year + 1}-12-31`))} | taxpayers: ${roots(store.taxpayers())}`}</Text>
       <Text testID="demo-calls">{`calls: ${calls().join(",") || "none"}`}</Text>
       <Text testID="demo-pending-reads">{`pending reads: ${pendingReads()}`}</Text>
+      <Text testID="demo-migration-reads">{`migration reads: ${migrationReads()}`}</Text>
       <Text testID="demo-fit">{fitLine()}</Text>
       <Text testID="demo-key">{`key: ${recoveryKey}`}</Text>
     </View>

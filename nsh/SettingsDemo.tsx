@@ -64,6 +64,7 @@ interface Params {
   status?: "refused" | "invalid";
   update?: boolean;
   noise?: boolean;
+  waiting?: number;
   start?: string;
   theme?: string;
 }

@@ -1,6 +1,6 @@
 // The migration pages (A3a, sign-in look B: OpenPage, PageHeading, PageButton, BackControl, the whole BrandLogo,
 // never the emblem alone): what stands between the account gate and the frame while the legacy claim decides —
-// Moving your tax profiles (progress), Could not be moved yet (transient: Try again / Sign out), Moved, not opened
+// Opening/Moving (progress), Could not be moved yet (transient: Try again / Sign out), Moved, not opened
 // (support, Sign out), and the offer (Add them to this account / Not now). Could not be moved (permanent) does not
 // block the frame: the account opens its empty room, and the note shows on Home once per account, then under
 // Settings › Account (migrationNote.tsx). Every control carries a stable test id.
@@ -13,7 +13,7 @@ import { OpenPage, PageButton, PageHeading, SoftLine, TextLink } from "./parts";
 
 /** The migration state the host answered after the last session open or answer (migration_state()). `kind` "none" is no page. */
 export interface MigrationPage {
-  kind: "none" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
+  kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
   copySaved: boolean;
   detail: string;
 }
@@ -22,35 +22,72 @@ const state = signal<MigrationPage>({ kind: "none", copySaved: false, detail: ""
 /** The migration page now up, if one is: the frame waits behind it. Permanent is not a page — the empty room opens. */
 export const migrationPage = () => {
   const kind = state().kind;
-  return kind === "moving" || kind === "transient" || kind === "moved_not_opened" || kind === "offered" ? state() : null;
+  return kind === "opening" || kind === "moving" || kind === "transient" || kind === "permanent" || kind === "moved_not_opened" || kind === "offered" ? state() : null;
 };
 
 /** The permanent failure's detail for the Home note and the Settings › Account row, or null. */
 export const migrationPermanent = () => (state().kind === "permanent" ? state().detail : null);
 
+let activeSince: number | null = null;
+let activeKind: "opening" | "moving" | null = null;
+const progress = signal<string | null>(null);
+
+/** The one Opening/Moving sentence, or null during its first second. It never flips between the two while the claim runs. */
+export const migrationProgress = () => progress();
+
+function noteProgress(kind: MigrationPage["kind"]): void {
+  const active = kind === "opening" || kind === "moving";
+  if (!active) {
+    activeSince = null;
+    activeKind = null;
+    progress.set(null);
+    return;
+  }
+  if (activeSince === null || activeKind === null) {
+    activeSince = Date.now();
+    activeKind = kind;
+    progress.set(null);
+    return;
+  }
+  if (progress() === null && Date.now() - activeSince >= 1000) {
+    progress.set(activeKind === "opening" ? "Opening your account…" : "Moving your returns…");
+  }
+}
+
 /** Ask the host what the migration state is now (after a session open, a Try again, an offer answer). */
 export function rereadMigration(): void {
   try {
     const answer = bir.migration_state() as { kind: MigrationPage["kind"]; copy_saved: boolean; detail: string };
-    state.set({ kind: answer.kind ?? "none", copySaved: answer.copy_saved === true, detail: answer.detail ?? "" });
+    const kind = answer.kind ?? "none";
+    state.set({ kind, copySaved: answer.copy_saved === true, detail: answer.detail ?? "" });
+    noteProgress(kind);
   } catch {
     state.set({ kind: "none", copySaved: false, detail: "" });
+    noteProgress("none");
   }
 }
 
-/** Sign out of the migration pages: the account gate comes back. */
+/** Sign out of the migration pages: the real sign-out removes the stored account first, then the gate comes back. */
 function signOut(): void {
-  app.lockCloud();
+  void (async () => {
+    try {
+      await bir.cloud_account_sign_out();
+      app.lockCloud();
+    } catch {
+      // Settings shows the host's sentence; the migration page stays up here so the person can try again.
+    }
+  })();
 }
 
-/** "Moving your tax profiles": the progress page while the claim runs (a spinner, no buttons). */
+/** Opening/Moving: the progress page while the claim runs (a spinner, no buttons). */
 export function MovingPage() {
   return (
     <OpenPage testID="migration-moving">
       <View class="items-center gap-4">
-        <PageHeading testID="migration-moving-title">Moving your tax profiles</PageHeading>
-        <SoftLine testID="migration-moving-line">They are being moved to this account. This takes a moment.</SoftLine>
-        <Spinner size={20} label="Moving your tax profiles…" />
+        <If when={(migrationProgress() ?? (migrationPage() === null ? "Moving your returns…" : null)) !== null}>
+          <PageHeading testID="migration-moving-title">{migrationProgress() ?? "Moving your returns…"}</PageHeading>
+        </If>
+        <Spinner size={20} label="Opening your account…" />
       </View>
     </OpenPage>
   );
@@ -66,6 +103,7 @@ export function TransientPage(props: { copySaved: boolean; detail: string }) {
     try {
       await bir.migration_try_again();
       rereadMigration();
+      await app.watchAccountOpen();
     } catch (e) {
       error.set(errorText(e));
     } finally {
@@ -112,7 +150,35 @@ export function MovedNotOpenedPage(props: { detail: string }) {
         </If>
       </View>
       <View class="w-full gap-2.5">
+        <PageButton testID="migration-try-again" label="Try again" onPress={() => {
+          bir.migration_try_again();
+          rereadMigration();
+          void app.watchAccountOpen();
+        }} />
         <PageButton testID="migration-moved-sign-out" label="Sign out" onPress={signOut} />
+      </View>
+    </OpenPage>
+  );
+}
+
+/** "Could not be moved" (permanent): Try again / Sign out. */
+export function PermanentPage(props: { detail: string }) {
+  return (
+    <OpenPage testID="migration-permanent">
+      <View class="items-center gap-3">
+        <PageHeading testID="migration-permanent-title">Your tax profiles could not be moved to this account.</PageHeading>
+        <SoftLine testID="migration-permanent-line">Nothing was changed: they are still where they were.</SoftLine>
+        <If when={props.detail.length > 0}>
+          <SoftLine testID="migration-permanent-detail" size={12}>{props.detail}</SoftLine>
+        </If>
+      </View>
+      <View class="w-full gap-2.5">
+        <PageButton testID="migration-try-again" label="Try again" onPress={() => {
+          bir.migration_try_again();
+          rereadMigration();
+          void app.watchAccountOpen();
+        }} />
+        <PageButton testID="migration-permanent-sign-out" label="Sign out" onPress={signOut} />
       </View>
     </OpenPage>
   );
@@ -157,8 +223,9 @@ export function OfferPage() {
 export function MigrationPages() {
   const page = migrationPage();
   if (page === null) return null;
-  if (page.kind === "moving") return <MovingPage />;
+  if (page.kind === "opening" || page.kind === "moving") return <MovingPage />;
   if (page.kind === "transient") return <TransientPage copySaved={page.copySaved} detail={page.detail} />;
   if (page.kind === "moved_not_opened") return <MovedNotOpenedPage detail={page.detail} />;
+  if (page.kind === "permanent") return <PermanentPage detail={page.detail} />;
   return <OfferPage />;
 }
