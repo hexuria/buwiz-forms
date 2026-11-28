@@ -35,3 +35,25 @@ Assertions: sheet top at least status-bar bottom + 24 px (minimum 87 px), and sh
 ±1 px. Both modes pass. The exact floating-point bottom difference was −0.000066 px in each mode.
 
 Files: `threebutton.png`, `gesture.png`, `measurements.json`, `threebutton-snapshot.json`, `gesture-snapshot.json`.
+
+## Follow-up: inner list geometry and bottom insets
+
+Node ids below are those in the saved snapshots; numeric ids are unstable across openings. All bounds are dp unless px is named.
+
+| navigation | list scroll node/bounds | sheet body below search (`n466`) | inner content (`n468`) | row 006 bounds | row 006 visible/clipped | list-bottom → keyboard-top gap |
+|---|---|---|---|---|---:|---:|
+| three-button | `new-tp-rdo_code-list`, x 17.143 y 229.714 w 377.143 h 285.333 | x 1.143 y 153.905 w 409.143 h 376.000 | x 17.143 y 169.905 w 377.143 h 345.143 | x 17.143 y 490.667 w 377.143 h 52.190 | 24.381 / 27.810 | 62.857 dp = 165.000 px |
+| gesture | `new-tp-rdo_code-list`, x 17.143 y 229.714 w 377.143 h 309.333 | x 1.143 y 153.905 w 409.143 h 400.000 | x 17.143 y 169.905 w 377.143 h 369.143 | x 17.143 y 490.667 w 377.143 h 52.190 | 48.381 / 3.810 | 38.857 dp = 102.000 px |
+
+The semantic rows are laid out beyond the scroll viewport; row 006's visible height above is clipped at the scroll container bottom. This reproduces the screenshot difference: the text is half-hidden in three-button and effectively full in gesture.
+
+Bottom inset measurements:
+
+| navigation | keyboard down, window navigation bar bottom | keyboard up, sheet bottom inset from driver bounds | driver's keyboard frame height |
+|---|---:|---:|---:|
+| three-button | 126 px = 48 dp | 126 px = 48 dp | 883 px = 336.381 dp |
+| gesture | 63 px = 24 dp | 63 px = 24 dp | 883 px = 336.381 dp |
+
+The keyboard-down values are read-only window-inset state (`navigationBars` frame/mInsetsHint). The keyboard-up values are measured directly in the saved driver snapshots as panel bottom minus sheet-body bottom, the padding produced by `pb-[env(safe-area-inset-bottom)]`. They are unchanged. The driver's keyboard frame reaches the screen bottom in both modes, so the navigation area is already inside that bottom keyboard frame; the sheet body then subtracts the same bottom safe-area inset again when sizing the list. The double count is 48 dp in three-button and 24 dp in gesture, and the 24 dp difference is exactly the list-height difference (309.333 − 285.333).
+
+Machine-readable numbers are in `internal-geometry.json`.
