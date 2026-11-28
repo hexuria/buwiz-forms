@@ -676,19 +676,10 @@ fn employer_row(draft: &Value, index: usize) -> Option<&Value> {
     draft.get("employers")?.as_array()?.get(index)
 }
 
-fn employer_row_detail_content(row: &Value) -> bool {
+fn employer_row_name_content(row: &Value) -> bool {
     row.get("employer_name")
         .and_then(Value::as_str)
         .is_some_and(|text| !text.trim().is_empty())
-        || row
-            .get("employer_tin")
-            .and_then(Value::as_str)
-            .is_some_and(|text| !text.trim().is_empty())
-        || ["compensation_income", "tax_withheld"].iter().any(|field| {
-            row.get(field)
-                .and_then(Value::as_f64)
-                .is_some_and(|amount| amount != 0.0)
-        })
 }
 
 fn employer_row_owner(draft: &Value, index: usize) -> Option<Form1701Party> {
@@ -742,13 +733,12 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
                 {
                     let switched = employer_owner_switched(before, after, index);
                     let held = if switched {
-                        employer_row(before, index).is_some_and(employer_row_detail_content)
+                        employer_row(before, index).is_some_and(employer_row_name_content)
                     } else {
                         employer_row(before, index).is_some_and(employer_row_content)
                     };
                     let gone = if switched {
-                        employer_row(after, index)
-                            .is_none_or(|row| !employer_row_detail_content(row))
+                        employer_row(after, index).is_none_or(|row| !employer_row_name_content(row))
                     } else {
                         employer_row(after, index).is_none_or(|row| !employer_row_content(row))
                     };
@@ -781,7 +771,7 @@ pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<Cle
                             Some(Form1701Party::Taxpayer) => "taxpayer",
                             _ => "spouse",
                         };
-                        format!("Employer row {printed_line} was cleared when the row was marked for the {owner}.")
+                        format!("Employer row {printed_line}'s employer name was cleared when the row was marked for the {owner}.")
                     } else {
                         let owner = index.and_then(|index| employer_row_owner(before, index));
                         row_cleared_text(gate, printed_line, owner)

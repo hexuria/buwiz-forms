@@ -394,7 +394,7 @@ fn form_1701_employer_amounts_typed_before_the_owner_tick_survive() {
 }
 
 #[test]
-fn form_1701_employer_owner_switch_clears_the_row_and_says_so() {
+fn form_1701_employer_owner_switch_clears_only_the_name_and_says_so() {
     setup();
     let taxpayer_name = "frm1701:txtPg2IShed1a_1TPName";
     let spouse_name = "frm1701:txtPg2IShed1a_1SName";
@@ -453,21 +453,30 @@ fn form_1701_employer_owner_switch_clears_the_row_and_says_so() {
         let row = &switched["draft"]["employers"][0];
         assert_ne!(row["owner"], first_owner);
         assert_eq!(row["employer_name"], "");
-        assert_eq!(row["employer_tin"], "");
-        assert_eq!(row["compensation_income"], serde_json::Value::Null);
-        assert_eq!(row["tax_withheld"], serde_json::Value::Null);
+        assert_eq!(row["employer_tin"], "12345678900000");
+        assert_eq!(row["compensation_income"], 1000.0);
+        assert_eq!(row["tax_withheld"], 100.0);
         let payload = payload_map("1701", &switched["draft"]);
         assert_eq!(
             payload.get(other_name).map(String::as_str).unwrap_or(""),
             "",
             "the old owner's employer must not file under the {new_owner}"
         );
+        for (tin_key, part) in [
+            ("frm1701:txtPg2IShed1a_TIN1", "123"),
+            ("frm1701:txtPg2IShed1a_TIN2", "456"),
+            ("frm1701:txtPg2IShed1a_TIN3", "789"),
+        ] {
+            assert_eq!(payload[tin_key], part, "the switch keeps the TIN");
+        }
+        assert_eq!(payload["frm1701:txtPg2IShed1c_1CI"], "1,000.00");
+        assert_eq!(payload["frm1701:txtPg2IShed1c_1TW"], "100.00");
         assert_eq!(
             switched["relock_notes"][notice_key],
             json!(format!(
-                "Employer row 1 was cleared when the row was marked for the {new_owner}."
+                "Employer row 1's employer name was cleared when the row was marked for the {new_owner}."
             )),
-            "the owner switch says once that the row was cleared"
+            "the owner switch says once that the employer name was cleared"
         );
     }
 }

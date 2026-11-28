@@ -1691,21 +1691,18 @@ fn write_bound_box(
             && matches!(after_owner.as_deref(), Some("Taxpayer" | "Spouse"))
             && before_owner != after_owner;
         if switched {
-            // emplyrDetails('TP'/'SPS') is a switch, never a move of the
-            // other column's details: the official handler blanks the losing
-            // name box and TP/SPdisableP5Sched1Fields clears the row's TIN,
-            // compensation income and tax withheld (BIR-Form1701.hta
-            // L11135-11177, L10595-10669). The app stores those boxes as one
-            // row, so the switch must clear that row instead of re-filing the
-            // old owner's employer under the new owner.
+            // The owner radios' only onclick is emplyrDetails(row, 'TP'/'SPS')
+            // (BIR-Form1701v2018.hta :1347/:1358/:1396/:1407 -> :11135-11177):
+            // that runtime handler blanks the losing NAME box, enables the
+            // TIN boxes without clearing them, and leaves the row's own CI/TW
+            // amounts untouched. TPName and SName bind the same stored name,
+            // so clearing that one draft field is exactly the losing name box;
+            // the TIN, compensation income and tax withheld stay with the row.
             if let Some(row) = draft
                 .pointer_mut(&format!("/employers/{index}"))
                 .and_then(Value::as_object_mut)
             {
                 row.insert("employer_name".to_string(), Value::String(String::new()));
-                row.insert("employer_tin".to_string(), Value::String(String::new()));
-                row.insert("compensation_income".to_string(), Value::Null);
-                row.insert("tax_withheld".to_string(), Value::Null);
             }
         }
     }
