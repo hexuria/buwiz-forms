@@ -4978,6 +4978,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_queue_tick_does_not_panic() {
         let _queue_turn = queue_transport_test_turn().await;
+        let _epoch_turn = crate::session_epoch::test_turn();
         let db_file = NamedTempFile::new().unwrap();
         // Since we are just testing the runner, if keyring fails we can't test.
         let db = match Database::open(db_file.path()) {

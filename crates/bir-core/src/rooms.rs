@@ -273,8 +273,10 @@ impl Layout {
             Err(_) => return true,
             _ => {}
         }
-        // Before step 5 writes the room row the claim record is the evidence that a real
-        // account's room exists. A lookup-created empty practice room writes neither it nor a row.
+        // When no room row is there — before the row write, or because that write or a later
+        // close failed — the claim record is the evidence that a real account's room exists. The
+        // side effect is deliberate: even a Closed or pre-move record with `room` counts here.
+        // A lookup-created empty practice room writes neither it nor a row.
         match store
             .conn()
             .query_row(
@@ -1118,21 +1120,38 @@ mod tests {
         let layout = Layout::at(folder.path().to_path_buf());
         std::fs::create_dir_all(layout.device_dir()).unwrap();
         let store = DeviceStore::open(&layout).unwrap();
+        assert!(
+            !layout.non_practice_rooms_exist(),
+            "negative control: no claim record and no room row is not a room"
+        );
         store
             .conn()
             .execute(
                 "INSERT INTO migration (key, value) VALUES (?1, ?2)",
-                params![
-                    crate::legacy_claim::RECORD_KEY,
-                    r#"{"room":"room-a","step":"Closed"}"#
-                ],
+                params![crate::legacy_claim::RECORD_KEY, r#"{"step":"Closed"}"#],
             )
             .unwrap();
-        drop(store);
         assert!(
-            layout.non_practice_rooms_exist(),
-            "a Closed or pre-move claim record with room counts as a room"
+            !layout.non_practice_rooms_exist(),
+            "negative control: a claim record without room is not a room"
         );
+        for step in ["Closed", "Copied"] {
+            store
+                .conn()
+                .execute(
+                    "UPDATE migration SET value = ?2 WHERE key = ?1",
+                    params![
+                        crate::legacy_claim::RECORD_KEY,
+                        format!(r#"{{"room":"room-a","step":"{step}"}}"#)
+                    ],
+                )
+                .unwrap();
+            assert!(
+                layout.non_practice_rooms_exist(),
+                "a {step} or pre-move claim record with room counts as a room"
+            );
+        }
+        drop(store);
     }
 
     #[test]

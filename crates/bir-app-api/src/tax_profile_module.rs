@@ -1671,6 +1671,12 @@ thread_local! {
         const { std::cell::Cell::new(false) };
 }
 
+#[cfg(test)]
+thread_local! {
+    static ROOM_SNAPSHOT_TEST_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// The account verb's one session snapshot and the room that snapshot opened. A test's
 /// thread-local ephemeral slot wins; otherwise this reads the snapshot's own Arc, never a room
 /// re-opened after the snapshot.
@@ -1692,6 +1698,10 @@ fn account_room_snapshot() -> Result<
             return Ok((snap, handle));
         }
     }
+    #[cfg(test)]
+    ROOM_SNAPSHOT_TEST_HOOK.with(|slot| {
+        slot.borrow_mut().take().map(|hook| hook());
+    });
     let Some((handle, _generation, _room_id, _path)) = snap.room.clone() else {
         return Err(HostError::new(
             "no room is open: the filing UI is behind a migration page or the gate",
@@ -3741,8 +3751,8 @@ mod tests {
                 crate::session::reset_for_tests();
             }
         }
-        let _reset = Reset;
         let _turn = crate::session::test_turn();
+        let _reset = Reset;
         let folder = tempfile::tempdir().unwrap();
         bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
         let layout = bir_core::rooms::Layout::at(folder.path().to_path_buf());
@@ -3776,6 +3786,23 @@ mod tests {
                 "the setup did not land in the session room"
             );
         }
+        let replacement_folder = tempfile::tempdir().unwrap();
+        let replacement_path = replacement_folder.path().join("replacement.db");
+        struct HookReset;
+        impl Drop for HookReset {
+            fn drop(&mut self) {
+                ROOM_SNAPSHOT_TEST_HOOK.with(|slot| slot.borrow_mut().take());
+            }
+        }
+        let _hook_reset = HookReset;
+        ROOM_SNAPSHOT_TEST_HOOK.with(|slot| {
+            slot.borrow_mut().replace(Box::new(move || {
+                let replacement = std::sync::Arc::new(std::sync::Mutex::new(
+                    Database::open(&replacement_path).unwrap(),
+                ));
+                crate::session::swap_room_for_test(replacement, replacement_path, 99);
+            }));
+        });
         against_the_account(|mock| {
             let row = call_verb("activate_tin", vec![json!("12345678800001")]).unwrap();
             assert_eq!(row["state"], "fix");

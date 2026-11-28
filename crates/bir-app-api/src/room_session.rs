@@ -83,6 +83,16 @@ fn migration_try_again() -> HostResult {
 
 /// §A.3.6: the offer's answer. Add is out of reach in this version; Not now leaves the file
 /// where it is, and No marks it not this account's without opening or moving it.
+fn claim_read_error(error: bir_core::rooms::DeviceStoreError) -> HostError {
+    tracing::warn!("migration offer record not read: {error}");
+    HostError::new("the migration offer cannot be read")
+}
+
+fn offer_answer_error(error: bir_core::rooms::DeviceStoreError) -> HostError {
+    tracing::warn!("migration offer answer not saved: {error}");
+    HostError::new("the offer answer cannot be saved")
+}
+
 fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
     let answer = arguments.string(0)?;
     match answer {
@@ -120,7 +130,7 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
             "the signed-in account changed; the offer is the account's it was made to",
         ));
     }
-    let claim = LegacyClaim::at(layout).map_err(|error| HostError::new(error.to_string()))?;
+    let claim = LegacyClaim::at(layout).map_err(claim_read_error)?;
     let claimant = bir_core::legacy_claim::Claimant {
         server_url: stored.server_url,
         user_id: stored.user_id,
@@ -133,14 +143,10 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
     };
     match claim.start(&claimant) {
         bir_core::legacy_claim::Start::Offer(bir_core::legacy_claim::OfferStart::Open(offer)) => {
-            offer
-                .not_mine(&claim)
-                .map_err(|error| HostError::new(error.to_string()))?;
+            offer.not_mine(&claim).map_err(offer_answer_error)?;
         }
         bir_core::legacy_claim::Start::Offer(bir_core::legacy_claim::OfferStart::Locked(offer)) => {
-            offer
-                .not_mine(&claim)
-                .map_err(|error| HostError::new(error.to_string()))?;
+            offer.not_mine(&claim).map_err(offer_answer_error)?;
         }
         bir_core::legacy_claim::Start::Failed(failure) => {
             return Err(HostError::new(failure_detail(failure)));
@@ -237,7 +243,7 @@ mod tests {
     use bir_core::tax_profile::{BranchFacts, NewTaxpayer};
     use gpui_shell::{HostArguments, HostModule, HostResult, HostValue};
 
-    use super::register;
+    use super::{claim_read_error, offer_answer_error, register};
 
     fn add_taxpayer(db: &Database, root: &str, name: &str) {
         db.create_taxpayer(NewTaxpayer {
@@ -502,6 +508,39 @@ mod tests {
         assert_ne!(b_room.expect("B's room id"), scratch.room_id);
         let b_db = b_handle.lock().unwrap();
         assert!(b_db.get_profile_by_tin("72345678800000").unwrap().is_none());
+    }
+
+    /// The offer page never receives the machine user's path from the claim store; the raw
+    /// store error proves the path exists and stays only in the log.
+    #[test]
+    fn offer_errors_never_carry_os_paths() {
+        let path = std::path::PathBuf::from("/Users/os-user/private/device.db");
+        let raw = path.to_string_lossy().to_string();
+        let errors = [
+            bir_core::rooms::DeviceStoreError::Unreadable {
+                path: path.clone(),
+                reason: "not sqlite".into(),
+            },
+            bir_core::rooms::DeviceStoreError::Newer {
+                path: path.clone(),
+                version: 99,
+            },
+            bir_core::rooms::DeviceStoreError::Lost(path.clone()),
+        ];
+        for error in errors {
+            assert!(
+                error.to_string().contains(&raw),
+                "positive control: the raw store error has a path"
+            );
+            let page = claim_read_error(error);
+            assert!(!page.message().contains(&raw), "{}", page.message());
+        }
+        let error = bir_core::rooms::DeviceStoreError::Unreadable {
+            path,
+            reason: "not sqlite".into(),
+        };
+        let page = offer_answer_error(error);
+        assert!(!page.message().contains(&raw), "{}", page.message());
     }
 
     /// The content-keyed consumed mark protects B even when the consumed file returns with a new inode.

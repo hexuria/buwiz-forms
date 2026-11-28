@@ -1791,6 +1791,21 @@ fn stored_owner_key() -> Option<(String, String)> {
 /// need a machine room without driving a whole claim. The open is the machine's in everything
 /// after: snapshot reads it, close ends it, the generation is the machine's own.
 #[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
+pub fn swap_room_for_test(handle: Arc<Mutex<Database>>, path: std::path::PathBuf, generation: u64) {
+    let mut session = locked();
+    match &mut session.phase {
+        Phase::Open { room, .. } | Phase::Legacy { room, .. } => {
+            room.handle = handle;
+            room.path = path.clone();
+            room.generation = generation;
+            room.room_id = None;
+        }
+        _ => panic!("no open room to swap"),
+    }
+    bir_core::db::set_open_room_database(Some(path));
+}
+
 pub fn open_legacy_in_place_for_test(
     layout: &bir_core::rooms::Layout,
     user_id: String,

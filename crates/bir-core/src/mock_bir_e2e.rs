@@ -226,6 +226,7 @@ fn events_contain(mock: &MockServer, needle: &str) -> bool {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn queued_return_ends_submitted_with_the_exact_file_in_the_mock() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     let h = Harness::new(Behaviour::default(), 1).await;
     h.run_worker().await;
 
@@ -267,6 +268,7 @@ async fn queued_return_ends_submitted_with_the_exact_file_in_the_mock() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mock_confirmation_moves_submitted_to_confirmed_through_the_real_receipt_rules() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     let h = Harness::new(Behaviour::default(), 2).await;
     h.run_worker().await;
     assert_eq!(h.stored().status, FilingStatus::Submitted);
@@ -282,6 +284,7 @@ async fn mock_confirmation_moves_submitted_to_confirmed_through_the_real_receipt
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn refused_login_stays_unclaimed_and_backs_off_before_the_claim() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     let h = Harness::new(
         Behaviour {
             failure: Failure::RefuseLogin,
@@ -318,6 +321,7 @@ async fn refused_login_stays_unclaimed_and_backs_off_before_the_claim() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn upload_refused_before_storing_keeps_the_claim_as_an_unknown_outcome() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     let h = Harness::new(
         Behaviour {
             failure: Failure::FailBeforeStore,
@@ -350,6 +354,7 @@ async fn upload_refused_before_storing_keeps_the_claim_as_an_unknown_outcome() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn failure_after_storing_keeps_the_claim_and_its_receipt_is_ignored() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     let h = Harness::new(
         Behaviour {
             failure: Failure::FailAfterStore,
@@ -378,6 +383,7 @@ async fn failure_after_storing_keeps_the_claim_and_its_receipt_is_ignored() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn slow_login_still_ends_submitted() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     let h = Harness::new(
         Behaviour {
             delay: Duration::from_secs(2),
@@ -403,6 +409,7 @@ async fn slow_login_still_ends_submitted() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn close_answered_after_the_client_timeout_is_an_unknown_outcome_with_the_file_stored() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     let h = Harness::new(
         Behaviour {
             delay: Duration::from_secs(11),
@@ -423,6 +430,7 @@ async fn close_answered_after_the_client_timeout_is_an_unknown_outcome_with_the_
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn queued_2551q_ends_submitted_with_the_file_in_the_mock() {
     let _queue_turn = crate::background_cron::queue_transport_test_turn().await;
+    let _epoch_turn = crate::session_epoch::test_turn();
     use crate::forms::form_2551q::{Form2551QDraft, Item13Election};
 
     let root = tempfile::tempdir().expect("temp dir");

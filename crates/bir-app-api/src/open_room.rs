@@ -37,8 +37,10 @@ pub(crate) fn hold_device_guard(device_dir: &std::path::Path) -> Result<(), Stri
     if guards.contains_key(&key) {
         return Ok(());
     }
-    let guard = bir_core::db::take_device_instance_lock(device_dir)
-        .map_err(|error| format!("another copy of the app has this device's data open: {error}"))?;
+    let guard = bir_core::db::take_device_instance_lock(device_dir).map_err(|error| {
+        tracing::warn!(path = %device_dir.display(), "device instance lock not taken: {error}");
+        "another copy of the app has this device's data open".to_string()
+    })?;
     guards.insert(key, guard);
     Ok(())
 }
@@ -55,6 +57,11 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 /// begin_open hold it (§12.2 item 4). Migrations and the checkpoint run inside `Database::open`,
 /// outside SESSION, serialised against other opens on OPEN_SERIAL so the check-insert race stays
 /// closed without holding the registry.
+fn owner_lock_error(path: &std::path::Path, error: bir_core::db::DbError) -> String {
+    tracing::warn!(path = %path.display(), "room owner lock not taken: {error}");
+    "the room database is open elsewhere".to_string()
+}
+
 pub(crate) fn open_path(
     path: &std::path::Path,
     room_id: Option<&bir_core::rooms::RoomId>,
@@ -102,8 +109,8 @@ pub(crate) fn open_path(
     match reuse {
         Some(live) => Ok(live),
         None => {
-            let owner_lock =
-                bir_core::db::hold_owner_lock(path).map_err(|error| error.to_string())?;
+            let owner_lock = bir_core::db::hold_owner_lock(path)
+                .map_err(|error| owner_lock_error(path, error))?;
             let database = Database::open(path).map_err(|error| {
                 tracing::warn!(path = %path.display(), "room database not opened: {error}");
                 "the room database cannot be opened".to_string()
@@ -231,5 +238,33 @@ mod tests {
             !error.contains(&legacy.to_string_lossy().as_ref()),
             "{error}"
         );
+
+        let live = folder.path().join("live.db");
+        let raw_error = bir_core::db::DbError::LiveDatabaseInUse(live.clone()).to_string();
+        assert!(
+            raw_error.contains(&live.to_string_lossy().as_ref()),
+            "positive control: the raw owner-lock error has a path"
+        );
+        let error = owner_lock_error(
+            &live,
+            bir_core::db::DbError::LiveDatabaseInUse(live.clone()),
+        );
+        assert!(!error.contains(&live.to_string_lossy().as_ref()), "{error}");
+    }
+
+    #[test]
+    fn device_guard_errors_never_carry_os_paths() {
+        let folder = tempfile::tempdir().unwrap();
+        let device = folder.path().join("device");
+        std::fs::create_dir_all(&device).unwrap();
+        let raw = device.to_string_lossy().to_string();
+        let raw_error = bir_core::db::DbError::LiveDatabaseInUse(device.clone()).to_string();
+        assert!(
+            raw_error.contains(&raw),
+            "positive control: the raw device-lock error has a path"
+        );
+        let _held = bir_core::db::take_device_instance_lock(&device).unwrap();
+        let error = hold_device_guard(&device).unwrap_err();
+        assert!(!error.contains(&raw), "{error}");
     }
 }
