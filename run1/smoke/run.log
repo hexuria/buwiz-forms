@@ -1,0 +1,18 @@
+2026-11-28T05:31:37.228Z	launch	nsh-run-agent macos /Users/devin/BuwizNsh/agents/e2e-macos-20261127-213137.db	started	0ms
+2026-11-28T05:38:01.053Z	wait	window plane	ready	383824ms
+2026-11-28T05:38:01.093Z	wait	data plane	ready	34ms
+2026-11-28T05:38:01.137Z	app.info	database	test	44ms
+2026-11-28T05:38:02.006Z	recipe	setup-start	pass	868ms
+2026-11-28T05:38:02.087Z	resolve	$tin_field	n11	77ms
+2026-11-28T05:38:10.858Z	recipe	sign-up	pass	8851ms
+2026-11-28T05:38:17.460Z	recipe	tax-year	pass	6602ms
+2026-11-28T05:38:27.840Z	recipe	navigate	pass	10380ms
+2026-11-28T05:38:29.714Z	recipe	open-2551q	pass	1874ms
+2026-11-28T05:38:50.494Z	recipe	money-boxes	pass	20780ms
+2026-11-28T05:38:50.495Z	recipe	sheet-press	skipped: no desktop variant	0ms
+2026-11-28T05:38:50.898Z	resolve	$table	no node matches {"id_regex": "^(fp-table-.+)-add$", "group": 1}	400ms
+2026-11-28T05:39:30.688Z	recipe	queue	fail at s18: wait_until timed out: node `fp-send-line` not found	39321ms
+2026-11-28T05:39:35.201Z	recipe	birth-date	pass	4513ms
+2026-11-28T05:39:47.882Z	recipe	sign-out	known gap at s4: wait_until timed out: node `locked-screen` not found	12377ms
+2026-11-28T05:39:48.256Z	stop	app	stopped	373ms
+2026-11-28T05:39:48.277Z	clean	/Users/devin/BuwizNsh/agents/e2e-macos-20261127-213137.db	scratch database removed	0ms
