@@ -469,9 +469,12 @@ mod tests {
     fn the_profile_names_the_mailbox() {
         let mut http = Scripted::new(&[(
             200,
-            r#"{"emailAddress":"juan@buwiz.com","messagesTotal":3}"#,
+            r#"{"emailAddress":"someone@example.com","messagesTotal":3}"#,
         )]);
-        assert_eq!(profile_email(&mut http, TOKEN).unwrap(), "juan@buwiz.com");
+        assert_eq!(
+            profile_email(&mut http, TOKEN).unwrap(),
+            "someone@example.com"
+        );
         assert_eq!(
             http.seen[0].url,
             "https://gmail.googleapis.com/gmail/v1/users/me/profile"
