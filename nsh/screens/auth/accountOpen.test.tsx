@@ -91,6 +91,11 @@ for (const [kind, page, button] of [
     const closeAt = calls.indexOf("cloud_account_session_closed");
     expect(signOutAt >= 0).toBe(true);
     expect(closeAt > signOutAt).toBe(true);
+    // The relaunch shape the successful sign-out leaves: no stored sign-in, no migration page, the gate's first page.
+    const relaunch = await open(ENTRY, { ...WIDE, host: { params: { ...BASE } } });
+    await run(relaunch, 100);
+    expect(relaunch.shows("id:gate-start")).toBe(true);
+    expect(relaunch.shows("id:frame")).toBe(false);
   }, 30_000);
 }
 
