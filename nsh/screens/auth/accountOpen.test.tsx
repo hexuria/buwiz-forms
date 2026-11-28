@@ -57,6 +57,15 @@ test("desktop: a blocked move shows its page and Try again starts the polling ag
   expect(app.shows("id:frame")).toBe(true);
 }, 30_000);
 
+test("desktop: permanent is a Home note, never a blocking migration page", async () => {
+  const app = await open(ENTRY, { ...WIDE, host: { params: { ...BASE, migrationBlocked: "permanent", unlocked: true } } });
+  await app.waitFor("id:frame", { timeout: 5000 });
+  expect(app.shows("id:migration-permanent")).toBe(false);
+  expect(app.shows("id:migration-moving")).toBe(false);
+  await app.waitFor("id:home-migration-note", { timeout: 5000 });
+  expect(app.texts().some((t) => t.includes("Tax profiles from an earlier version of eBIRForms could not be moved"))).toBe(true);
+}, 30_000);
+
 test("desktop: opening and moving do not flash between their two sentences when the host flips once", async () => {
   const app = await open(ENTRY, { ...WIDE, host: { params: { ...BASE, claim: "opening", flip: "moving", commitAfter: 6 } } });
   await run(app, 1200);
@@ -69,7 +78,6 @@ test("desktop: opening and moving do not flash between their two sentences when 
 for (const [kind, page, button] of [
   ["transient", "migration-transient", "migration-transient-sign-out"],
   ["moved_not_opened", "migration-moved-not-opened", "migration-moved-sign-out"],
-  ["permanent", "migration-permanent", "migration-permanent-sign-out"],
 ] as const) {
   test(`desktop: ${kind} Sign out really signs out before the gate locks`, async () => {
     const app = await open(ENTRY, { ...WIDE, host: { params: { ...BASE, migrationBlocked: kind, signOut: true } } });
@@ -85,3 +93,16 @@ for (const [kind, page, button] of [
     expect(closeAt > signOutAt).toBe(true);
   }, 30_000);
 }
+
+test("desktop: a refused migration Sign out shows the host sentence and keeps the sign-in", async () => {
+  const app = await open(ENTRY, { ...WIDE, host: { params: { ...BASE, migrationBlocked: "transient", signOutError: "The account could not be signed out." } } });
+  await run(app, 100);
+  expect(app.shows("id:migration-transient")).toBe(true);
+  await app.press("id:migration-transient-sign-out");
+  await app.waitFor("text:The account could not be signed out.", { timeout: 5000 });
+  expect(app.shows("id:migration-transient")).toBe(true);
+  expect(app.shows("id:gate-start")).toBe(false);
+  const calls = app.texts().find((t) => t.startsWith("calls:")) ?? "";
+  expect(calls).toContain("cloud_account_sign_out");
+  expect(calls).not.toContain("cloud_account_session_closed");
+}, 30_000);

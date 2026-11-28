@@ -14,7 +14,7 @@ for (const look of AUTH_LOOKS) {
   test(`migration pages, ${look.name}`, async () => {
     let app = await at("moving");
     await app.waitFor("id:migration-moving");
-    await app.wait(400);
+    await app.wait(1200);
     await shoot(app, `migration-${look.name}-moving`);
 
 

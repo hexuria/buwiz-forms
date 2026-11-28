@@ -52,6 +52,8 @@ interface Params extends EmailParams {
   polls?: boolean;
   drop?: boolean;
   signOut?: boolean;
+  signOutError?: string;
+  unlocked?: boolean;
   claim?: "opening" | "moving";
   signInClaim?: "opening" | "moving";
   commitAfter?: number;
@@ -107,6 +109,7 @@ let gateOpen = false;
 function fakeAccount(p: Params): void {
   const h = bir as unknown as Record<string, unknown>;
   type MigrationKind = "opening" | "moving" | "transient" | "moved_not_opened" | "permanent";
+  gateOpen = p.unlocked === true;
   let migrationKind = (p.migrationBlocked ?? p.claim ?? null) as MigrationKind | null;
   if (p.gate) {
     const active = (kind: MigrationKind | null) => kind === "opening" || kind === "moving";
@@ -148,10 +151,11 @@ function fakeAccount(p: Params): void {
     };
   }
   if (p.gate) fakeEmail(h, p, called, undefined, () => pendingReads.set(pendingReads() + 1));
-  if (p.gate && p.signOut) {
-    // Signed out at once, no network: the gate's answer is closed again.
+  if (p.gate && (p.signOut || p.signOutError)) {
+    // Signed out at once, no network: the gate's answer is closed again. A refusal keeps it.
     h.cloud_account_sign_out = async () => {
       called("cloud_account_sign_out");
+      if (p.signOutError) throw new Error(p.signOutError);
       gateOpen = false;
       migrationKind = null;
       return { ...SIGNED_IN, signed_in: false, email: null, user_id: null };
