@@ -2919,6 +2919,7 @@ fn fill_text_input(
                     .chars()
                     .all(|ch| ch.is_ascii_digit() || matches!(ch, ',' | '.' | '-' | '(' | ')'));
             if amount_like
+                && print.starts_with(' ')
                 && trimmed.len() != print.len()
                 && trimmed.chars().count() <= ordered.len()
             {
