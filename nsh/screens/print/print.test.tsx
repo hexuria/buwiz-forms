@@ -27,8 +27,8 @@ test("desktop: Print preview opens one window, again focuses it, edits follow, l
   await app.waitFor("text:preview 2551Q: revision 1", { timeout: 20_000 });
   const first = app.window(WINDOW).state();
   expect(first).not.toBeNull();
-  // The window's title says the form code, the period and the taxpayer.
-  await app.waitFor("text:title: BIR Form 2551Q · Q3 2026 — Juana Santos");
+  // The window's title says the form code and period, never the taxpayer.
+  await app.waitFor("text:title: BIR Form 2551Q · Q3 2026");
   // The window's own content: the toolbar over the sheet, with the page rule said (A4, the Folio sheet scaled to fit).
   await app.waitFor("id:print-window");
   expect(app.shows("id:print-print")).toBe(true);
@@ -130,7 +130,7 @@ test("F8-10 desktop: a quick switch to another return of the same form gets its 
   await app.waitFor("text:BIR Form 2551Q");
   await app.waitUntil(() => app.enabled("id:fp-print") && !app.shows("text:Opening…"));
   await app.press("id:fp-print");
-  await app.waitFor("text:title: BIR Form 2551Q · Q2 2026 — Juana Santos", { timeout: 20_000 });
+  await app.waitFor("text:title: BIR Form 2551Q · Q2 2026", { timeout: 20_000 });
   await app.waitUntil(() => app.window(WINDOW).state() === null, { timeout: 5000 });
   expect(app.window(WINDOW_Q2).state()).not.toBeNull();
   // The first window is long gone: the new preview is still the one Rust holds, and still follows an edit.

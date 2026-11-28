@@ -44,6 +44,14 @@ use nsh_core::prelude::*;
 /// The crate's UI set (`nsh.json` `"rust"`): everything TSX can import from `ebirforms/native`.
 #[native_module("ebirforms/native")]
 fn native(registry: &mut Registry) {
+    // Desktop runners install NSH's own log facade logger only after native
+    // modules register (the pin says so in nsh-linux-app/src/lib.rs): take the
+    // facade first so kit log records become tracing events and pass through
+    // bir-core's redacting file writer. Android's JNI_OnLoad installs its
+    // logger before this crate can run, so this cannot replace that one at
+    // the pin; those OS-log lines never enter the app's daily file.
+    #[cfg(not(target_os = "android"))]
+    door::install_log_facade_bridge();
     // The plug's window control plane: `native()` runs before the host opens any surface, so this is
     // where the platform crate's surface hook is installed (see agent.rs, "Agent remote control").
     agent::install_window_plane();

@@ -14,13 +14,13 @@ export function windowId(key: string, identity?: string | null): string {
 }
 
 /**
- * The window title: the host function's "BIR Form 2551Q — Juana Santos" with the period after the code
- * ("BIR Form 2551Q · Q1 2026 — Juana Santos"). A title without a name, or no period, keeps what it has.
+ * The window title: the form number and the period only ("BIR Form 2551Q · Q1 2026"). A host title from an older
+ * host function may still carry "— Juana Santos"; that suffix is dropped here too, so the window title, the print
+ * UI and anything they log never carry a taxpayer's name or TIN. The name stays inside the printed sheet itself.
  */
 export function previewTitle(hostTitle: string, period?: string | null): string {
-  if (!period) return hostTitle;
-  const parts = /^(.*?)\s+—\s+(.*)$/.exec(hostTitle);
-  return parts ? `${parts[1]} · ${period} — ${parts[2]}` : `${hostTitle} · ${period}`;
+  const form = hostTitle.replace(/\s+—\s+.*$/, "");
+  return period ? `${form} · ${period}` : form;
 }
 
 /** What the toolbar says: "A4 · 4 pages · Folio sheet at 88%". */

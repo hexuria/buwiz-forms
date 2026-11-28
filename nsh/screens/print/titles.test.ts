@@ -2,13 +2,14 @@ import { describe, expect, test } from "nsh/test";
 import { baseName, chromeScript, formIdentity, pageSummary, previewTitle, windowId } from "./titles";
 
 describe("window title", () => {
-  test("the period goes after the form code", () => {
-    expect(previewTitle("BIR Form 2551Q — Juana Santos", "Q1 2026")).toBe("BIR Form 2551Q · Q1 2026 — Juana Santos");
+  test("the title is the form number and period, never a taxpayer name or TIN", () => {
+    expect(previewTitle("BIR Form 2551Q — Juana Santos", "Q1 2026")).toBe("BIR Form 2551Q · Q1 2026");
+    expect(previewTitle("BIR Form 2551Q — Juana Santos 00012345300000", "Q1 2026")).toBe("BIR Form 2551Q · Q1 2026");
   });
-  test("a title with no name, or no period, keeps what it has", () => {
+  test("a title with no period is the form number only, still without a name", () => {
     expect(previewTitle("BIR Form 2551Q", "Q1 2026")).toBe("BIR Form 2551Q · Q1 2026");
-    expect(previewTitle("BIR Form 2551Q — Juana Santos", null)).toBe("BIR Form 2551Q — Juana Santos");
-    expect(previewTitle("BIR Form 2551Q — Juana Santos", "")).toBe("BIR Form 2551Q — Juana Santos");
+    expect(previewTitle("BIR Form 2551Q — Juana Santos", null)).toBe("BIR Form 2551Q");
+    expect(previewTitle("BIR Form 2551Q — Juana Santos", "")).toBe("BIR Form 2551Q");
   });
   test("one window id per form code off a form page, per return on one", () => {
     expect(windowId("2551Q")).toBe("print:2551Q");

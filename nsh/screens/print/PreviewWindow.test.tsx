@@ -22,7 +22,7 @@ test("desktop: the toolbar says the page rule; Print and Save as PDF ask for the
   expect(app.texts()).toContain("calls: print 2551Q");
 
   await app.press("id:print-save-pdf");
-  await app.waitFor("text:Saved BIR Form 2551Q - Juana Santos.pdf");
+  await app.waitFor("text:Saved BIR Form 2551Q.pdf");
   expect(app.texts()).toContain("calls: print 2551Q, save 2551Q");
   expect(app.enabled("id:print-print")).toBe(true);
 });

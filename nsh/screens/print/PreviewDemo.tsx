@@ -19,7 +19,7 @@ function Demo() {
     kind: "open",
     key: "2551Q",
     requestId: "preview-demo-1",
-    title: "BIR Form 2551Q — Juana Santos",
+    title: "BIR Form 2551Q · Q1 2026",
     url: "",
     script: "",
     revision: 1,
@@ -40,7 +40,7 @@ function Demo() {
       if (mode === "hang") return new Promise<string | null>(() => {});
       await wait(250);
       if (mode === "fail") throw new Error("Could not save the PDF: the disk is full.");
-      return mode === "cancel" ? null : "/Users/someone/Documents/BIR Form 2551Q - Juana Santos.pdf";
+      return mode === "cancel" ? null : "/Users/someone/Documents/BIR Form 2551Q.pdf";
     },
     stoppedWaiting(what) {
       calls.update((all) => [...all, `stopped ${what}`]);

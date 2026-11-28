@@ -7668,18 +7668,12 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let year = identity.taxable_year;
     with_database(|db| {
         let (fields, receipt) = print_map(db, kind, &draft)?;
-        let profile = db
-            .get_profile_by_tin(&identity.tin)
-            .ok()
-            .flatten()
-            .map(|p| p.full_name.clone());
         crate::bir_module::open_print_preview(
             slug,
             kind.form_code(),
             year,
             &fields,
             receipt.as_ref(),
-            profile,
         )
     })
 }
@@ -7754,18 +7748,12 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
     let identity = agent::identity(kind, &draft).map_err(host_error)?;
     with_database(|db| {
         let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
-        let profile = db
-            .get_profile_by_tin(&identity.tin)
-            .ok()
-            .flatten()
-            .map(|p| p.full_name.clone());
         crate::bir_module::open_print_preview(
             slug,
             kind.form_code(),
             identity.taxable_year,
             &fields,
             receipt.as_ref(),
-            profile,
         )
     })
 }

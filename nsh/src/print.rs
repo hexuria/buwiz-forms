@@ -74,7 +74,7 @@ pub struct PrintEvent {
     pub key: String,
     /// The session generation and request that own this document, never reused for a replacement.
     pub request_id: String,
-    /// The window title the host function chose ("BIR Form 2551Q - Juana Santos").
+    /// The window title the host function chose ("BIR Form 2551Q").
     pub title: String,
     /// The file URL of the sheet: what the window's web view loads.
     pub url: String,
@@ -412,7 +412,7 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
 }
 
 /// Writes the print PDF of a preview into its private folder, named by form
-/// plus a random id rather than the taxpayer-bearing window title.
+/// plus a random id rather than any window or sheet title.
 // Windows and Linux print the sheet themselves (`windows_print::print_document`, `linux_print::print_document`), so
 // only the tests write a PDF there.
 #[cfg_attr(all(any(all(windows, target_env = "msvc"), target_os = "linux"), not(test)), allow(dead_code))]
@@ -1091,7 +1091,7 @@ mod engine_print {
 
     /// The document with the print style and the form-only document title last
     /// in its head. Browser-based print pipelines use that title as the spooler
-    /// job name, so it must never be the taxpayer-bearing window title.
+    /// job name, so it is the form number only.
     pub(super) fn for_print(form: &str, html: &str) -> String {
         let html = without_html_titles(html);
         let injection = format!("{}<title>{}</title>", PRINT_CSS, super::print_job_name(form));
@@ -2300,7 +2300,7 @@ impl Print {
             let (_, _, sheet) = snapshot(&key).ok_or("The print preview is no longer available.")?;
             let request = STATE.with(|state| state.borrow().previews[&key].request.clone());
             // PrintManager.print's job name is this string. It must be the
-            // form number only; the taxpayer-bearing window title is not a print name.
+            // form number only; no window or sheet title is a print name.
             let _ = title;
             crate::print_android::preview(url_for(&sheet), print_job_name(&key), generation, request).await
         }
@@ -2776,7 +2776,7 @@ mod tests {
         assert!(pdf_name.ends_with(".pdf"), "{pdf_name}");
         assert!(!pdf_name.contains("Juana"), "{pdf_name}");
         assert!(!pdf_name.contains("Santos"), "{pdf_name}");
-        assert_eq!(print_job_name("2551Q"), "2551Q", "the OS print job name carries no taxpayer text");
+        assert_eq!(print_job_name("2551Q"), "2551Q", "the OS print job name carries no taxpayer text or TIN");
     }
 
     #[cfg(any(all(windows, target_env = "msvc"), target_os = "linux"))]
@@ -2785,7 +2785,7 @@ mod tests {
         assert_eq!(print_work_dir().parent().and_then(|path| path.file_name()).unwrap(), "previews");
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("previews").join("print");
-        let titled = sheet_doc(&["Juana Santos"]).replace("<head>", "<head><title>BIR Form 2551Q — Juana Santos</title>");
+        let titled = sheet_doc(&["Juana Santos"]).replace("<head>", "<head><title>BIR Form 2551Q — Juana Santos 00012345300000</title>");
         let (folder, sheet) = engine_print::job_folder_in(&root, "2551Q", &titled).unwrap();
         let folder_name = folder.file_name().unwrap().to_string_lossy();
         assert!(folder_name.starts_with("job-2551Q-"), "{folder_name}");

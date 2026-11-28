@@ -59,22 +59,39 @@ pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
+/// Take the `log` facade for the app before NSH's desktop runner can. The
+/// bridge turns kit records into tracing events; the daily file's writer then
+/// applies `redact_secrets` like it does to the app's own events. At the NSH
+/// pin this is possible on desktop because native modules run before the
+/// runner's `install_logger`; Android's `JNI_OnLoad` has already taken the
+/// facade, and the `log` API offers no replacement.
+pub(crate) fn install_log_facade_bridge() {
+    static BRIDGE: Once = Once::new();
+    BRIDGE.call_once(|| {
+        let _ = tracing_log::LogTracer::init();
+    });
+}
+
+fn logging_options() -> bir_core::logging::InstallOptions {
+    let developer_mode = bir_core::logging::developer_mode_enabled();
+    let default_filter = if developer_mode {
+        "nsh=debug,bir_app_api=debug,bir_core=info,bir_submit::ios_storage=info,bir_print=debug,panic=error"
+    } else {
+        "nsh=info,bir_app_api=info,bir_core=info,bir_submit::ios_storage=info,bir_print=error,panic=error"
+    };
+    bir_core::logging::InstallOptions {
+        developer_mode,
+        default_filter,
+    }
+}
+
 pub(crate) fn install_logging() {
     static LOGGING: Once = Once::new();
     LOGGING.call_once(|| {
         if test_environment() {
             bir_core::log_files::set_default_log_dir(bir_core::log_files::fresh_test_log_dir());
         }
-        let developer_mode = bir_core::logging::developer_mode_enabled();
-        let default_filter = if developer_mode {
-            "nsh_app_ebirforms=debug,bir_app_api=debug,bir_core=info,bir_submit::ios_storage=info,bir_print=debug,panic=error"
-        } else {
-            "nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,bir_submit::ios_storage=info,bir_print=error,panic=error"
-        };
-        if bir_core::logging::install(bir_core::logging::InstallOptions {
-            developer_mode,
-            default_filter,
-        }) {
+        if bir_core::logging::install(logging_options()) {
             tracing::info!("eBIRForms started");
         }
         // The launch storage step ran at registration, before there was a log: its outcome goes out now.
@@ -1179,6 +1196,94 @@ mod tests {
         }
     }
 
+    struct UnroutedControlLogger;
+
+    impl log::Log for UnroutedControlLogger {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.level() <= log::Level::Info
+        }
+
+        fn log(&self, record: &log::Record<'_>) {
+            use std::io::Write as _;
+
+            if !self.enabled(record.metadata()) {
+                return;
+            }
+            let path = std::env::var_os("NSH_KIT_LOG_CONTROL_PATH").expect("control log path");
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .expect("open control log");
+            writeln!(file, "{}: {}", record.target(), record.args()).expect("write control log");
+        }
+
+        fn flush(&self) {}
+    }
+
+    static UNROUTED_CONTROL_LOGGER: UnroutedControlLogger = UnroutedControlLogger;
+
+    #[test]
+    fn a_kit_log_line_through_the_facade_bridge_is_masked_in_the_daily_log() {
+        const CHILD: &str = "NSH_KIT_LOG_BRIDGE_CHILD";
+        const CONTROL: &str = "NSH_KIT_LOG_CONTROL";
+        const LINE: &str = "kit line tin=12345678800000 email payroll.team@example.com";
+
+        if std::env::var_os(CONTROL).is_some() {
+            log::set_logger(&UNROUTED_CONTROL_LOGGER).expect("control logger");
+            log::set_max_level(log::LevelFilter::Info);
+            log::info!(target: "nsh_engine", "{LINE}");
+            return;
+        }
+
+        if std::env::var_os(CHILD).is_none() {
+            // Both modes need the process-wide `log` facade in a different end
+            // state, so each runs as an exact child process. The control has no
+            // bridge and writes the same facade record plainly; the test child
+            // takes the bridge and writes through the app's tracing file.
+            let folder = tempfile::tempdir().expect("log folder");
+            let control_path = folder.path().join("unrouted-control.log");
+            let child = |mode: &str| {
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", "door::tests::a_kit_log_line_through_the_facade_bridge_is_masked_in_the_daily_log", "--nocapture"])
+                    .env(mode, "1")
+                    .env("BIR_LOG_DIR", folder.path())
+                    .env("NSH_KIT_LOG_CONTROL_PATH", &control_path)
+                    .env("EBIR_TEST_ENV", "1")
+                    .env("BIR_AUTH_BYPASS", "1")
+                    .env("BUWIZ_NO_KEYCHAIN", "1")
+                    .env("BIR_SFTP_DRY_RUN", "1")
+                    .env_remove("BIR_SFTP_LIVE")
+                    .env_remove("RUST_LOG")
+                    .status()
+                    .expect("child test process")
+            };
+            assert!(child(CONTROL).success(), "the unrouted control child failed");
+            assert!(child(CHILD).success(), "the routed child failed");
+
+            let control = std::fs::read_to_string(&control_path).expect("control log");
+            assert!(control.contains("12345678800000"), "{control}");
+            assert!(control.contains("payroll.team@example.com"), "{control}");
+
+            let text = std::fs::read_to_string(bir_core::log_files::today_log_path(folder.path()))
+                .expect("daily log");
+            let line = text
+                .lines()
+                .find(|line| line.contains("kit line"))
+                .unwrap_or_else(|| panic!("kit line not in {text}"));
+            assert!(line.contains("***-***-788-00000"), "{line}");
+            assert!(line.contains("pa•••@example.com"), "{line}");
+            assert!(!line.contains("12345678800000"), "{line}");
+            assert!(!line.contains("payroll.team@example.com"), "{line}");
+            return;
+        }
+
+        install_log_facade_bridge();
+        bir_core::logging::with_thread_subscriber(logging_options(), || {
+            log::info!(target: "nsh_engine", "{LINE}");
+        });
+    }
+
     #[test]
     fn the_registration_print_sweep_is_deferred_only_until_a_scratch_database_is_named() {
         dev_env(None, None, || {
@@ -1215,6 +1320,24 @@ mod tests {
 
     #[test]
     fn use_database_names_the_file_before_the_first_call_only() {
+        // The launch sweep is process-once, so the sweep assertion is meaningful
+        // only when this test is the process's first door use. Run the test body
+        // in an exact child process; the in-process parent only launches it.
+        const CHILD: &str = "NSH_DOOR_USE_DATABASE_FIRST_SWEEP";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "door::tests::use_database_names_the_file_before_the_first_call_only", "--nocapture"])
+                .env(CHILD, "1")
+                .env("EBIR_TEST_ENV", "1")
+                .env("BIR_AUTH_BYPASS", "1")
+                .env("BUWIZ_NO_KEYCHAIN", "1")
+                .env("BIR_SFTP_DRY_RUN", "1")
+                .env_remove("BIR_SFTP_LIVE")
+                .status()
+                .expect("child test process");
+            assert!(status.success(), "the child process failed");
+            return;
+        }
         let (folder, database) = empty();
         dev_env(None, Some(folder.path()), || {
             assert!(use_database("").is_err());
@@ -1222,6 +1345,14 @@ mod tests {
             let error = use_database(&protected.display().to_string()).unwrap_err();
             assert!(error.starts_with("Refusing to open"), "{error}");
             assert!(!protected.exists());
+            let stale = database
+                .parent()
+                .expect("database folder")
+                .join("previews")
+                .join("print")
+                .join("2551Q-stale-sheet.html");
+            std::fs::create_dir_all(stale.parent().expect("preview folder")).expect("make stale preview");
+            std::fs::write(&stale, "filled return").expect("write stale preview");
             assert_eq!(
                 use_database(&database.display().to_string()).expect("named"),
                 database.display().to_string()
@@ -1231,14 +1362,6 @@ mod tests {
                 None,
                 "the named database is given to bir-core in-process, the environment is not changed"
             );
-            let stale = database
-                .parent()
-                .expect("database folder")
-                .join("previews")
-                .join("print")
-                .join("2551Q-stale-sheet.html");
-            std::fs::create_dir_all(stale.parent().expect("preview folder")).expect("make stale preview");
-            std::fs::write(&stale, "filled return").expect("write stale preview");
             let info = call("system_info", vec![]).expect("system_info");
             assert_eq!(info["database_path"], database.display().to_string());
             assert!(!stale.exists(), "the first boot's launch sweep clears the named test room's print previews");

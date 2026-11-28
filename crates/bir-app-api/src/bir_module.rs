@@ -2801,12 +2801,7 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
         .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
     with_database(|db| {
         let (fields, receipt) = print_fields(db, &tin, &form_code, year, quarter)?;
-        let profile = db
-            .get_profile_by_tin(&tin)
-            .ok()
-            .flatten()
-            .map(|p| p.full_name.clone());
-        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref(), profile)
+        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref())
     })
 }
 
@@ -2820,7 +2815,6 @@ pub(crate) fn open_print_preview(
     year: u16,
     fields: &std::collections::BTreeMap<String, String>,
     receipt: Option<&bir_print::frozen_html::ReceiptPage>,
-    profile_name: Option<String>,
 ) -> HostResult {
     let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
         .map_err(HostError::new)?;
@@ -2837,11 +2831,10 @@ pub(crate) fn open_print_preview(
     let path = root.join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
     std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
     // In-app preview window (Blitz view + hidden WebKit PDF for Print/Share);
-    // one window per form, re-opening refreshes it in place.
-    let title = match profile_name.filter(|n| !n.trim().is_empty()) {
-        Some(name) => format!("BIR Form {form_code} \u{2014} {name}"),
-        None => format!("BIR Form {form_code}"),
-    };
+    // one window per form, re-opening refreshes it in place. The title is the
+    // form number only: a taxpayer's name stays inside the sheet, never in a
+    // window or print string that can reach a log.
+    let title = format!("BIR Form {form_code}");
     crate::hooks::hooks().print_preview_request(path.clone(), title, form_code.to_string());
     if let Err(error) = std::fs::remove_file(&path)
         && error.kind() != std::io::ErrorKind::NotFound
@@ -3765,7 +3758,6 @@ mod tests {
             "2551Q",
             2026,
             &std::collections::BTreeMap::new(),
-            None,
             None,
         )
         .expect("preview");

@@ -192,7 +192,7 @@ pub fn report_panic(info: &std::panic::PanicHookInfo<'_>) {
     if !entered {
         return;
     }
-    let payload = panic_payload(info);
+    let payload = redact_secrets(&panic_payload(info));
     let location = match info.location() {
         Some(location) => {
             format!(
@@ -1017,7 +1017,7 @@ mod tests {
                         report_panic(info);
                     }));
                     let panicked = std::panic::catch_unwind(|| {
-                        panic!("probe-panic-9f3a password=panic-secret");
+                        panic!("probe-panic-9f3a password=panic-secret tin=12345678800000");
                     });
                     std::panic::set_hook(previous);
                     assert!(panicked.is_err());
@@ -1029,7 +1029,12 @@ mod tests {
                 assert!(text.contains("screen: render failed"), "{text}");
                 assert!(!text.contains("12345678800000"), "{text}");
                 assert!(text.contains("***-***-788-00000"), "{text}");
-                assert!(text.contains("probe-panic-9f3a"), "{text}");
+                let panic_line = text
+                    .lines()
+                    .find(|line| line.contains("probe-panic-9f3a"))
+                    .expect("panic line");
+                assert!(panic_line.contains("***-***-788-00000"), "{panic_line}");
+                assert!(!panic_line.contains("12345678800000"), "{panic_line}");
                 assert!(!text.contains("s3cret-token"), "{text}");
                 assert!(!text.contains("ya29.SUPERSECRET"), "{text}");
                 assert!(!text.contains("panic-secret"), "{text}");
