@@ -1168,17 +1168,8 @@ fn fit_two_lines(
     best.map(|(l1, l2, sz, _)| (l1, l2, sz))
 }
 
-/// Wrap `text` greedily onto line 1 at `size` pt and fit line 2 with `"..."`.
-fn wrap_and_truncate_two_lines(
-    sheet: &SheetType,
-    letter: Spacing,
-    room: f64,
-    text: &str,
-    size: f64,
-) -> Option<(String, String)> {
-    wrap_and_truncate_two_lines_mode(sheet, letter, room, text, size, false)
-}
-
+/// Wrap `text` greedily onto line 1 at `size` pt and fit line 2 with `"..."`,
+/// the cut ending on a whole word.
 fn wrap_and_truncate_two_lines_mode(
     sheet: &SheetType,
     letter: Spacing,
@@ -1281,7 +1272,9 @@ fn fit_plain_text(
                 tight_inset_v,
             });
         }
-        if let Some((l1, l2)) = wrap_and_truncate_two_lines(sheet, letter, shrunk, text, min_pt) {
+        if let Some((l1, l2)) =
+            wrap_and_truncate_two_lines_mode(sheet, letter, shrunk, text, min_pt, true)
+        {
             return Some(PlainTextFit {
                 text: format!("{l1}\n{l2}"),
                 font_size_pt: min_pt,
@@ -6337,7 +6330,7 @@ fn shift_page_and_insert_rule6(
         // inserted at that boundary opens a gap in the line unless the upper
         // segment is stretched through the strip. Comb ticks abut nothing
         // below the boundary, so the same-x pairing keeps them out.
-        let mut verticals: Vec<(f64, f64, f64)> = Vec::new();
+        let mut verticals: Vec<(f64, f64, f64, f64)> = Vec::new();
         for m in svg_part.match_indices("<rect ") {
             let start = m.0;
             let Some(end_rel) = svg_part[start..].find('>') else {
@@ -6351,14 +6344,14 @@ fn shift_page_and_insert_rule6(
                 attr(tag, "height").and_then(|s| s.parse::<f64>().ok()),
             ) {
                 if w <= 1.6 && h >= 3.0 {
-                    verticals.push((x, y, h));
+                    verticals.push((x, y, w, h));
                 }
             }
         }
         let continues_below = |x: f64, cut: f64| {
             verticals
                 .iter()
-                .any(|&(vx, vy, _vh)| (vx - x).abs() <= 1.0 && (vy - cut).abs() <= 0.75)
+                .any(|&(vx, vy, _w, _vh)| (vx - x).abs() <= 1.0 && (vy - cut).abs() <= 0.75)
         };
         let mut cursor = 0;
         while let Some(rel) = svg_part[cursor..].find("<rect ") {
@@ -6485,20 +6478,25 @@ fn shift_page_and_insert_rule6(
             let y = ins.cut_y + prior_dh;
             // The strip's edge x comes from the row's VALUE cells, a hair off
             // the sheet's frame dividers (0.48 pt on 1706, 0.36 on 2000-OT):
-            // where a divider rect stands within a hair of the edge, the edge
-            // takes the divider's x, so no jog shows where they meet (F9).
-            let snap = |edge: f64| -> f64 {
+            // where a divider rect overlapping the strip's own y range stands
+            // within a hair of the edge, the edge takes the divider's x, so no
+            // jog shows where they meet (F9). The left edge reads the divider's
+            // left x, the right edge its right x (vx + vw); an edge already
+            // exact stays exactly where it is. A divider anywhere else on the
+            // page — one that does not pass the strip — is never a target.
+            let snap = |edge: f64, right: bool| -> f64 {
                 verticals
                     .iter()
-                    .filter(|&(vx, _, vh)| {
-                        *vh >= 8.0 && (vx - edge).abs() > 1e-4 && (vx - edge).abs() <= 1.2
+                    .filter(|&(_, vy, _, vh)| {
+                        *vh >= 8.0 && vy < &(ins.cut_y + ins.dh) && vy + vh > ins.cut_y
                     })
-                    .map(|&(vx, _, _)| vx)
+                    .map(|&(vx, _, vw, _)| if right { vx + vw } else { vx })
+                    .filter(|cand| (cand - edge).abs() <= 1.2)
                     .min_by(|a, b| (a - edge).abs().partial_cmp(&(b - edge).abs()).unwrap())
                     .unwrap_or(edge)
             };
-            let x0 = snap(ins.x0);
-            let x1 = snap(ins.x1);
+            let x0 = snap(ins.x0, false);
+            let x1 = snap(ins.x1, true);
             let w = (x1 - x0).max(10.0);
             fills.push_str(&format!(
                 "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#e3e3e3\"/>",
@@ -7773,9 +7771,14 @@ fn overflow_input_with_fit(
                     fit_two_lines(sheet, letter, room, text, max_two_line, PLAIN_TEXT_MIN_PT)
                 {
                     (format!("{l1}\n{l2}"), sz, true, false, use_tight_inset)
-                } else if let Some((l1, l2)) =
-                    wrap_and_truncate_two_lines(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
-                {
+                } else if let Some((l1, l2)) = wrap_and_truncate_two_lines_mode(
+                    sheet,
+                    letter,
+                    room,
+                    text,
+                    PLAIN_TEXT_MIN_PT,
+                    true,
+                ) {
                     (
                         format!("{l1}\n{l2}"),
                         PLAIN_TEXT_MIN_PT,
@@ -15780,10 +15783,14 @@ mod donor_estate_print_tests {
     }
 
     /// (b) The comb-tick exclusion fixture: on 1701MS page 2 the item-9 row's
-    /// amount combs end exactly at the strip's cut. K1: every vertical ending
-    /// near the cut must stay tick-sized (the detector), and no vertical at a
+    /// amount combs end exactly at the strip's cut. K1: no vertical at a
     /// tick's x may cross into the strip interior (the production rule — the
-    /// clip keeps ticks out of the strip; the size check is what can fail).
+    /// clip keeps ticks out of the strip). The height check below cannot
+    /// catch stretching: a wrongly stretched tick ends about band_bottom +
+    /// 0.5, outside the window the ticks are sampled in, so it leaves the
+    /// sample before the check sees it. rule6_comb_ticks_end_at_the_cell_bottom
+    /// is the real catcher for stretched ticks; this test's height line is a
+    /// consistency check on the ticks that DO end in the row, no more.
     #[test]
     fn rule6_comb_ticks_abutting_the_cut_stay_in_their_row() {
         let slug = "1701ms-2024";
@@ -15834,9 +15841,12 @@ mod donor_estate_print_tests {
             !ticks_at_cut.is_empty(),
             "fixture vacuous: no comb tick ends at item 9's row boundary above the strip"
         );
-        // each stays tick-sized: a tick wrongly stretched through the strip
-        // would grow well past 10 pt, so this height check fails first — the
-        // crossing scan below is the second, independent detector.
+        // each tick in the sample stays tick-sized. Note what this cannot
+        // catch: a tick stretched through the strip ends near band_bottom +
+        // 0.5, outside the sampling window above, so a stretched tick never
+        // reaches this check — rule6_comb_ticks_end_at_the_cell_bottom is the
+        // real catcher for that; the crossing scan below is what this test
+        // proves.
         for &(x, y, h) in &ticks_at_cut {
             assert!(
                 h <= 10.0,
@@ -16092,7 +16102,7 @@ mod donor_estate_print_tests {
                 "{slug}: fixture vacuous — the strip's grey rect was not found"
             );
             assert!(
-                examined > 0,
+                !combs.is_empty() && examined > 0,
                 "{slug}: fixture vacuous — no comb tick lies in the strip's horizontal span"
             );
             assert!(
@@ -16550,6 +16560,39 @@ mod donor_estate_print_tests {
         );
     }
 
+    /// The two-line path wraps tall boxes (long names and addresses): when
+    /// line 2 truncates, its cut ends on a whole word too, never mid-word.
+    #[test]
+    fn two_line_truncation_in_a_tall_cell_ends_on_a_whole_word() {
+        let mut fields = BTreeMap::new();
+        let full = "SPECIMEN TAXPAYER NAME WITH MANY MANY WORDS WRAPPING OVER TWO LINES AND STILL GOING FURTHER PAST THE END OF THE SECOND LINE INTO TERITORY THAT CANNOT FIT AT ALL";
+        fields.insert("frm0605:txtTaxPayerName".to_string(), full.to_string());
+        let doc = filled_document("0605-1999", &fields).unwrap();
+        let at = doc.find("id=\"p1c35-i\"").expect("the cell input");
+        let end = at + doc[at..].find('>').unwrap();
+        let val = attr(&doc[at..=end], "value")
+            .unwrap_or("")
+            .replace("&#10;", " ");
+        let Some(printed) = val.strip_suffix("...") else {
+            panic!("the tall cell truncates with three dots, got {val:?}");
+        };
+        let collapse = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+        let cf = collapse(full);
+        let cp = collapse(printed);
+        assert!(
+            !cp.is_empty() && cf.len() > cp.len(),
+            "a truncation happened: {val:?}"
+        );
+        assert!(
+            cf.starts_with(&cp),
+            "the print is a prefix of the fill: {cp:?} vs {cf:?}"
+        );
+        assert!(
+            cf.chars().nth(cp.len()) == Some(' '),
+            "the two-line cut ends on a whole word, never mid-word: {val:?}"
+        );
+    }
+
     /// derived:refund_amount is a money join: a refund value shorter than its
     /// comb keeps its last digit in the rightmost box (L1 — the prefix used
     /// to be dead because the key keeps its `derived:` prefix).
@@ -16582,14 +16625,29 @@ mod donor_estate_print_tests {
     /// 0.48/0.36 pt off the divider rects.
     #[test]
     fn rule6_strip_edges_sit_on_the_frame_dividers() {
-        for slug in ["1706-2018", "2000-ot-2018"] {
+        for slug in [
+            "1706-2018",
+            "2000-ot-2018",
+            "1700-2018",
+            "1701-2018",
+            "1701a-2018",
+            "1701q-2018",
+            "2550q-2024",
+            "1606-2018",
+            "2551q-2018",
+        ] {
             let fields = rule6_proof_fill(slug);
             let doc = filled_document(slug, &fields).unwrap();
             if !doc.contains("data-rule6-band") {
                 continue;
             }
-            // every grey strip edge must equal some vertical divider's x
-            let mut verticals: Vec<f64> = Vec::new();
+            // Every grey strip edge must equal the x of a frame divider that
+            // OVERLAPS the strip's own y range: the left edge a divider's left
+            // x, the right edge a divider's right x (vx + vw). Dividers
+            // elsewhere on the page never count, and neither does the strip's
+            // own side rect (drawn at the sheet's frame-line thickness, well
+            // under the 8 pt a real frame divider spans).
+            let mut dividers: Vec<(f64, f64, f64, f64)> = Vec::new();
             for m in doc.match_indices("<rect ") {
                 let start = m.0;
                 let Some(e) = doc[start..].find('>') else {
@@ -16597,9 +16655,11 @@ mod donor_estate_print_tests {
                 };
                 let tag = &doc[start..start + e + 1];
                 let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
-                if let (Some(x), Some(w), Some(h)) = (num("x"), num("width"), num("height")) {
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
                     if w <= 1.6 && h >= 8.0 && !tag.contains("#e3e3e3") {
-                        verticals.push(x);
+                        dividers.push((x, y, w, h));
                     }
                 }
             }
@@ -16610,23 +16670,28 @@ mod donor_estate_print_tests {
                 let end = at + doc[at..].find('>').unwrap() + 1;
                 let tag = &doc[start..end];
                 let x = attr(tag, "x").unwrap().parse::<f64>().unwrap();
+                let y = attr(tag, "y").unwrap().parse::<f64>().unwrap();
                 let w = attr(tag, "width").unwrap().parse::<f64>().unwrap();
-                for edge in [x, x + w] {
+                let h = attr(tag, "height").unwrap().parse::<f64>().unwrap();
+                let overlapping: Vec<(f64, f64)> = dividers
+                    .iter()
+                    .filter(|&&(_, dy, _, dh)| dy < y + h && dy + dh > y)
+                    .map(|&(dx, _, dw, _)| (dx, dx + dw))
+                    .collect();
+                assert!(
+                    !overlapping.is_empty(),
+                    "{slug}: strip at y {y:.2} overlaps no frame divider"
+                );
+                for (edge, use_right) in [(x, false), (x + w, true)] {
+                    let hit = overlapping.iter().any(|&(dx, dr)| {
+                        let cand = if use_right { dr } else { dx };
+                        (cand - edge).abs() <= 0.01
+                    });
                     assert!(
-                        verticals.iter().any(|vx| (vx - edge).abs() <= 0.01),
-                        "{slug}: strip edge {edge:.2} sits on no divider x (nearest {:?})",
-                        verticals
-                            .iter()
-                            .cloned()
-                            .fold((f64::INFINITY, 0.0f64), |(bd, bx), vx| {
-                                let d = (vx - edge).abs();
-                                if d < bd {
-                                    (d, vx)
-                                } else {
-                                    (bd, bx)
-                                }
-                            })
-                            .1
+                        hit,
+                        "{slug}: strip edge {edge:.2} ({} edge) sits on no y-overlapping divider {}",
+                        if use_right { "right" } else { "left" },
+                        if use_right { "right x" } else { "left x" },
                     );
                     checked += 1;
                 }
