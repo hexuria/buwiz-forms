@@ -1,0 +1,396 @@
+{
+ "v": 1,
+ "name": "e2e-0605-print-android",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "form",
+   "op": "wait_until",
+   "target": "form-page",
+   "timeout_ms": 30000,
+   "screenshot": true
+  },
+  {
+   "id": "button",
+   "op": "wait_until",
+   "target": "fp-print",
+   "timeout_ms": 10000
+  },
+  {
+   "id": "profile_prompt_wait",
+   "op": "wait_until",
+   "target": "profile-ask-only",
+   "timeout_ms": 15000
+  },
+  {
+   "id": "profile_prompt",
+   "op": "press",
+   "target": "profile-ask-only"
+  },
+  {
+   "id": "print",
+   "op": "click",
+   "target": "fp-print"
+  },
+  {
+   "id": "settle01",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle02",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle03",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle04",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle05",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle06",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle07",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle08",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle09",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle10",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle11",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle12",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle13",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle14",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle15",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle16",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle17",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle18",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle19",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle20",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle21",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle22",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle23",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle24",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle25",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle26",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle27",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle28",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle29",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle30",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle31",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle32",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle33",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle34",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle35",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle36",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle37",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle38",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle39",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle40",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle41",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle42",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle43",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle44",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle45",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle46",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle47",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle48",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle49",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle50",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle51",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle52",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle53",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle54",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle55",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle56",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle57",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle58",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle59",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": false
+  },
+  {
+   "id": "settle60",
+   "op": "wait",
+   "timeout_ms": 1000,
+   "screenshot": true
+  }
+ ]
+}

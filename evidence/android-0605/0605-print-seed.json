@@ -1,0 +1,112 @@
+{
+ "v": 1,
+ "name": "e2e-0605-print-seed",
+ "app": "bir-shell",
+ "params": [
+  "tin",
+  "name",
+  "address",
+  "line",
+  "rdo",
+  "zip",
+  "year"
+ ],
+ "steps": [
+  {
+   "id": "before",
+   "op": "invoke",
+   "name": "app.info"
+  },
+  {
+   "id": "save",
+   "op": "invoke",
+   "name": "profile.save",
+   "args": {
+    "tin": "$tin",
+    "name": "$name",
+    "rdo_code": "$rdo",
+    "registered_address": "$address",
+    "zip_code": "$zip"
+   },
+   "needs": [
+    "before"
+   ]
+  },
+  {
+   "id": "select",
+   "op": "invoke",
+   "name": "profile.set",
+   "args": {
+    "tin": "$tin",
+    "view": "dashboard"
+   },
+   "needs": [
+    "save"
+   ]
+  },
+  {
+   "id": "open",
+   "op": "invoke",
+   "name": "form.open",
+   "args": {
+    "code": "0605",
+    "year": "$year",
+    "period": 1,
+    "tin": "$tin"
+   },
+   "needs": [
+    "select"
+   ]
+  },
+  {
+   "id": "fill",
+   "op": "invoke",
+   "name": "form.fill",
+   "args": {
+    "fields": {
+     "frm0605:txtTaxPayerName": "$name",
+     "frm0605:txtAddress": "$address",
+     "frm0605:txtLineBus": "$line",
+     "frm0605:itemFiscalStartMonth:_1": true,
+     "frm0605:itemYearEndMonth": "12",
+     "frm0605:txtYearEnded": "$year",
+     "itemQuarter_4": true,
+     "frm0605:txtDueDateMonth": "01",
+     "frm0605:txtDueDateDay": "25",
+     "frm0605:txtDueDateYear": "2027",
+     "frm0605:txtNoOfSheets": "2",
+     "txtATCCode": "II011",
+     "frm0605:txtReturnPeriodMonth": "12",
+     "frm0605:txtReturnPeriodDay": "31",
+     "frm0605:txtReturnPeriodYear": "$year",
+     "txtTaxTypeCode": "IT",
+     "frm0605:txtClassification:_1": true,
+     "frm0605:txtTelNum": "09170000000",
+     "frm0605:txtTax19": "500",
+     "txtEmail": "sample.taxpayer@example.com",
+     "frm0605:itemMannerOfPayment:_1": true,
+     "frm0605:itemModeOfPayment:_3": true
+    }
+   },
+   "needs": [
+    "open"
+   ]
+  },
+  {
+   "id": "draft",
+   "op": "invoke",
+   "name": "form.save_draft",
+   "needs": [
+    "fill"
+   ]
+  },
+  {
+   "id": "validate",
+   "op": "invoke",
+   "name": "form.validate",
+   "needs": [
+    "draft"
+   ]
+  }
+ ]
+}

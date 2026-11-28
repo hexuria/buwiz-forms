@@ -1,0 +1,29 @@
+{
+ "v": 1,
+ "description": "0605 print proof seed/open/print for 137-character registered address; Android system print preview is outside the app tree.",
+ "params": {
+  "tin": "00012345300000",
+  "rdo": "040",
+  "zip": "1000",
+  "year": "2026",
+  "name": "E2E ANDROID PRINT TAXPAYER",
+  "address": "UNIT 1234 TOWER B, THE VERY LONG BUILDING NAME RESIDENCES, 5678 BARANGAY SAN ISIDRO LABRADOR EXTENSION ROAD, QUEZON CITY, METRO MANILA PH",
+  "line": "E2E PRINT LINE OF BUSINESS"
+ },
+ "recipes": [
+  {
+   "name": "seed-0605",
+   "file": "0605-print-seed.json",
+   "plane": "data",
+   "required": true
+  },
+  {
+   "name": "print-0605",
+   "android": "0605-print-android.json",
+   "linux": "0605-print-desktop.json",
+   "desktop": "0605-print-desktop.json",
+   "phone": "0605-print-android.json",
+   "required": true
+  }
+ ]
+}
