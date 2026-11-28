@@ -1,0 +1,132 @@
+{
+ "rows": [
+  {
+   "press": 1,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 1442462,
+   "panel_owner": 983934,
+   "foreground": "Containers - Docker Desktop",
+   "foreground_hwnd": 66108
+  },
+  {
+   "press": 2,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 1835676,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 1835676
+  },
+  {
+   "press": 3,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 1639062,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 1639062
+  },
+  {
+   "press": 4,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 1114582,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 1114582
+  },
+  {
+   "press": 5,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 2097376,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 2097376
+  },
+  {
+   "press": 6,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 1311186,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 1311186
+  },
+  {
+   "press": 7,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 1901220,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 1901220
+  },
+  {
+   "press": 8,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 2032264,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 2032264
+  },
+  {
+   "press": 9,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 1376706,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 1376706
+  },
+  {
+   "press": 10,
+   "window": "preview",
+   "changed": true,
+   "panel": true,
+   "panel_hwnd": 3408536,
+   "panel_owner": 983934,
+   "foreground": "Save as PDF",
+   "foreground_hwnd": 3408536
+  },
+  {
+   "press": 11,
+   "window": "main",
+   "target": "sb-new",
+   "changed": false,
+   "panel": false,
+   "foreground": "eBIRForms",
+   "foreground_hwnd": 983934
+  }
+ ],
+ "app_windows": [
+  {
+   "hwnd": 983934,
+   "class": "NshWindow",
+   "title": "eBIRForms",
+   "pid": 7420,
+   "owner": 0,
+   "foreground": true
+  },
+  {
+   "hwnd": 2818678,
+   "class": "NshWindow",
+   "title": "BIR Form 2551Q \u00b7 Q4 2026 \u2014 JUANA SANTOS",
+   "pid": 7420,
+   "owner": 0,
+   "foreground": false
+  }
+ ],
+ "app_pid": 7420
+}

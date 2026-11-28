@@ -1,0 +1,12 @@
+{
+ "v": 2,
+ "id": "3",
+ "ok": true,
+ "delivery_status": "delivered_verified",
+ "after": {
+  "exists": true,
+  "focused": false,
+  "enabled": false,
+  "changed": true
+ }
+}

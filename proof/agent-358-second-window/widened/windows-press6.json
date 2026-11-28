@@ -1,0 +1,109 @@
+{
+ "foreground_hwnd": 1311186,
+ "foreground": {
+  "hwnd": 1311186,
+  "class": "#32770",
+  "title": "Save as PDF",
+  "pid": 7420,
+  "owner": 983934,
+  "foreground": true
+ },
+ "windows": [
+  {
+   "hwnd": 131118,
+   "class": "Shell_TrayWnd",
+   "title": "",
+   "pid": 4568,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 1311186,
+   "class": "#32770",
+   "title": "Save as PDF",
+   "pid": 7420,
+   "owner": 983934,
+   "foreground": true
+  },
+  {
+   "hwnd": 983934,
+   "class": "NshWindow",
+   "title": "eBIRForms",
+   "pid": 7420,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 2818678,
+   "class": "NshWindow",
+   "title": "BIR Form 2551Q \u00b7 Q4 2026 \u2014 JUANA SANTOS",
+   "pid": 7420,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 66108,
+   "class": "Chrome_WidgetWin_1",
+   "title": "Containers - Docker Desktop",
+   "pid": 2588,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 66306,
+   "class": "Chrome_WidgetWin_1",
+   "title": "New Tab - Google Chrome for Testing",
+   "pid": 2468,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 65842,
+   "class": "DummyDWMListenerWindow",
+   "title": "",
+   "pid": 4568,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 65836,
+   "class": "EdgeUiInputTopWndClass",
+   "title": "",
+   "pid": 4568,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 65812,
+   "class": "DummyDWMListenerWindow",
+   "title": "",
+   "pid": 4568,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 65810,
+   "class": "DummyDWMListenerWindow",
+   "title": "",
+   "pid": 4568,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 65884,
+   "class": "Windows.UI.Core.CoreWindow",
+   "title": "Windows Input Experience",
+   "pid": 5004,
+   "owner": 0,
+   "foreground": false
+  },
+  {
+   "hwnd": 65736,
+   "class": "Progman",
+   "title": "Program Manager",
+   "pid": 4568,
+   "owner": 0,
+   "foreground": false
+  }
+ ]
+}
