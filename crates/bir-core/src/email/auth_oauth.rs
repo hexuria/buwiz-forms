@@ -231,10 +231,7 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
     // 4. Open the browser
     info!("Opening browser for Google OAuth2 consent...");
     if let Err(e) = open::that(&auth_url) {
-        warn!(
-            "Failed to open browser: {}. Please open this URL manually:\n{}",
-            e, auth_url
-        );
+        warn!("{}", super::google_error::browser_not_opened(&e));
     }
 
     // 5. Wait for the callback (blocks until user approves or timeout)
@@ -258,9 +255,12 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
         let userinfo_text = userinfo_resp.text()?;
         if !userinfo_status.is_success() {
             return Err(anyhow::anyhow!(
-                "Failed to fetch user email ({}): {}",
-                userinfo_status,
-                userinfo_text
+                "{}",
+                super::google_error::failed_request(
+                    "Failed to fetch the Google account's email",
+                    userinfo_status,
+                    &userinfo_text
+                )
             ));
         }
 
@@ -311,17 +311,10 @@ pub fn get_oauth_email(access_token: &str) -> Result<String, anyhow::Error> {
 /// non-existent bug in the refresh logic, which fires correctly; it is the token
 /// that was dead.
 fn describe_token_endpoint_failure(status: u16, body: &str) -> String {
-    let parsed: Option<serde_json::Value> = serde_json::from_str(body).ok();
-    let code = parsed
-        .as_ref()
-        .and_then(|v| v.get("error"))
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    let description = parsed
-        .as_ref()
-        .and_then(|v| v.get("error_description"))
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
+    // Only the status and Google's short code: the description and a non-JSON body are free text nobody has looked
+    // at, and this message reaches logs and the screen.
+    let code = super::google_error::error_code(body).unwrap_or_default();
+    let code = code.as_str();
 
     // Guidance per documented Google error code. `invalid_grant` is by far the
     // most common and has a cause worth naming: an OAuth app left in "Testing"
@@ -346,28 +339,12 @@ fn describe_token_endpoint_failure(status: u16, body: &str) -> String {
         _ => "Reconnect your Google account in Profile > Email Settings if this persists.",
     };
 
-    let reported = match (code.is_empty(), description.is_empty()) {
-        (false, false) => format!("{code}: {description}"),
-        (false, true) => code.to_string(),
-        // No parseable error object; include a bounded slice of the raw body so
-        // the cause is not lost entirely.
-        (true, _) => {
-            let raw = body.trim();
-            if raw.is_empty() {
-                format!("HTTP {status} with an empty body")
-            } else {
-                // Truncate on a char boundary. Slicing by byte index panics when
-                // it lands mid-character, and a proxy or captive portal can
-                // return a multi-byte HTML error page here.
-                let end = raw
-                    .char_indices()
-                    .map(|(i, c)| i + c.len_utf8())
-                    .take_while(|&i| i <= 200)
-                    .last()
-                    .unwrap_or(0);
-                format!("HTTP {status}: {}", &raw[..end])
-            }
-        }
+    let reported = if !code.is_empty() {
+        format!("HTTP {status}, {code}")
+    } else if body.trim().is_empty() {
+        format!("HTTP {status} with an empty body")
+    } else {
+        format!("HTTP {status}, no error code in Google's answer")
     };
 
     format!("Google rejected the token refresh - {reported}. {guidance}")
