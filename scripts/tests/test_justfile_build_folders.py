@@ -33,7 +33,9 @@ class BuildFolderTests(unittest.TestCase):
         # nsh2404.sh runs every Linux NSH command; it used to pin the shared folder whatever the caller set.
         wrapper = (ROOT / "scripts/setup-linux-nsh.sh").read_text(encoding="utf-8")
         self.assertIn('-e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"', wrapper)
-        self.assertIn('-e PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:', wrapper)
+        # The caller's NSH_TOOLS, else the folder setup installed into (written into the wrapper as `tools`).
+        self.assertIn('-e PATH="${NSH_TOOLS:-$tools}/bin:', wrapper)
+        self.assertIn("tools=%q", wrapper)
         self.assertIn("-e NSH_RUNTIME \\\n", wrapper)
         self.assertNotIn('-e CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"', wrapper)
 

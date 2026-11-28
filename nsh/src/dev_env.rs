@@ -45,12 +45,27 @@ const fn enabled(debug_build: bool, android_dev: Option<&str>) -> bool {
 
 const BAKED: Option<&str> = honoured(ENABLED, option_env!("BUWIZ_ANDROID_DEV_ENV"));
 
+/// A text compiled into the library exactly when the development list is honoured, and named nowhere else in the app:
+/// `scripts/android_bundle.py check` refuses a store bundle whose library carries it. A release built with
+/// `BUWIZ_ANDROID_DEV=1` has the production addresses and no development server, so only this tells it apart.
+/// (`SENTINEL_TEXT` and `sentinel` are used only in constant evaluation and tests, so a release library holds neither.)
+const SENTINEL_TEXT: &str = "nsh-dev-env:development-list-compiled-in";
+
+/// [`SENTINEL_TEXT`] when the development list is honoured; nothing otherwise.
+pub(crate) const SENTINEL: Option<&str> = sentinel(ENABLED);
+
+const fn sentinel(enabled: bool) -> Option<&'static str> {
+    if enabled { Some(SENTINEL_TEXT) } else { None }
+}
+
 /// The baked list when the development list is honoured; nothing at all otherwise.
 const fn honoured(enabled: bool, baked: Option<&'static str>) -> Option<&'static str> {
     if enabled { baked } else { None }
 }
 
 pub(crate) fn load(path: &Path) -> Result<(), String> {
+    // Keeps the sentinel in a library that honours the development list (the only one that calls this).
+    std::hint::black_box(SENTINEL);
     let values = read(path)?;
     let data_dir = path.parent().unwrap_or(Path::new("."));
     let values = under_data_dir(values, data_dir);
@@ -270,6 +285,13 @@ mod tests {
         if !ENABLED {
             assert_eq!(BAKED, None);
         }
+    }
+
+    #[test]
+    fn the_sentinel_exists_only_where_the_development_list_is_honoured() {
+        assert_eq!(sentinel(false), None);
+        assert_eq!(sentinel(true), Some(SENTINEL_TEXT));
+        assert_eq!(SENTINEL.is_some(), ENABLED);
     }
 
     #[test]
