@@ -153,7 +153,7 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     // 3. Drafts JSON
     let mut drafts_stmt = db
         .conn
-        .prepare("SELECT form_code, taxable_year, quarter, status, data_json FROM form_drafts WHERE tin = ?1")?;
+        .prepare("SELECT form_code, taxable_year, quarter, status, data_json, updated_at FROM form_drafts WHERE tin = ?1")?;
     let drafts_iter = drafts_stmt.query_map([tin], |row| {
         Ok(serde_json::json!({
             "form_code": row.get::<_, String>(0)?,
@@ -161,6 +161,7 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
             "quarter": row.get::<_, Option<i64>>(2)?,
             "status": row.get::<_, String>(3)?,
             "data_json": row.get::<_, String>(4)?,
+            "updated_at": row.get::<_, String>(5)?,
         }))
     })?;
     let mut drafts = Vec::new();

@@ -7,8 +7,8 @@ use rusqlite::{Connection, OpenFlags};
 use sha2::{Digest, Sha256};
 
 use super::{
-    Added, Cut, Failure, Permanent, PermanentReason, SCRATCH_DIR, Transient, TransientCause,
-    ZIP_PREFIX, cut,
+    Added, ClaimRoom, Cut, Failure, OfferConsumptionMatch, OfferConsumptionState, Permanent,
+    PermanentReason, SCRATCH_DIR, Step, Transient, TransientCause, UnlockedBy, ZIP_PREFIX, cut,
 };
 use crate::rooms::{Layout, ROOM_DB_FILE, RoomId};
 use crate::safe_fs::{FileId, Placed};
@@ -604,12 +604,25 @@ pub fn fail_next_offer_rename_for_test() {
     FAIL_NEXT_OFFER_RENAME.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
+#[cfg(any(test, debug_assertions))]
+static CUT_AFTER_IMPORTING_MARK: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Test seam, debug builds only: the next offer answers as though the process was cut immediately
+/// after its `importing` mark and before the import could commit.
+#[cfg(any(test, debug_assertions))]
+#[doc(hidden)]
+pub fn cut_next_offer_after_importing_mark_for_test() {
+    CUT_AFTER_IMPORTING_MARK.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 /// The offer's "Add" (§A.3.6): the whole-profile export of the legacy file, taken from a scratch copy this build
 /// opened, imported into `room`; then the legacy file is renamed `bir_data.offered-<stamp>.db`, never replacing. The
 /// file's `-wal` is folded in first, so the renamed file alone holds every commit.
 pub(super) fn add_offered(
     claim: &super::LegacyClaim,
     room: &crate::db::Database,
+    claim_room: &ClaimRoom,
     probed: Option<FileId>,
 ) -> Result<Added, Failure> {
     let layout = &claim.layout;
@@ -634,6 +647,8 @@ pub(super) fn add_offered(
     let result = (|| -> Result<Added, Failure> {
         let copy = scratch.join(ROOM_DB_FILE);
         std::fs::copy(&legacy, &copy).map_err(io("copy"))?;
+        // The mark keys these exact bytes. Opening the copy may migrate it, so hash before the open.
+        let content_sha256 = sha256_file(&copy).map_err(io("hash"))?;
         let source = crate::db::Database::open(&copy).map_err(|error| {
             Failure::Permanent(Permanent {
                 reason: PermanentReason::CannotOpen,
@@ -654,22 +669,73 @@ pub(super) fn add_offered(
         })?;
         drop(source);
         let probed = probed.expect("the identity was checked above");
-        let already_consumed = claim.offer_consumed(probed).map_err(super::store_failure)?;
         let mut imported = false;
-        if !already_consumed {
-            claim
-                .record_offer_consumed(probed)
-                .map_err(super::store_failure)?;
-            if let Err(error) = crate::import::import_profile_data(room, &archive) {
-                let _ = claim.clear_offer_consumed(probed);
+        match claim
+            .offer_consumption_match(&claim_room.room_id, &content_sha256)
+            .map_err(super::store_failure)?
+        {
+            OfferConsumptionMatch::OtherRoom => {
                 return Err(fail(transient(
-                    TransientCause::Io,
+                    TransientCause::FileChanged,
                     false,
-                    format!("import: {error}"),
+                    "the file offered was already added to another account's room",
                 )));
             }
-            imported = true;
+            OfferConsumptionMatch::Own(OfferConsumptionState::Imported) => {}
+            OfferConsumptionMatch::None
+            | OfferConsumptionMatch::Own(OfferConsumptionState::Importing) => {
+                claim
+                    .write_offer_consumption(
+                        &claim_room.room_id,
+                        &content_sha256,
+                        OfferConsumptionState::Importing,
+                    )
+                    .map_err(super::store_failure)?;
+                #[cfg(any(test, debug_assertions))]
+                if CUT_AFTER_IMPORTING_MARK.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                    return Err(fail(transient(
+                        TransientCause::Io,
+                        false,
+                        "injected offer-import cut after the importing mark",
+                    )));
+                }
+                crate::import::import_profile_data(room, &archive).map_err(|error| {
+                    fail(transient(
+                        TransientCause::Io,
+                        false,
+                        format!("import: {error}"),
+                    ))
+                })?;
+                claim
+                    .write_offer_consumption(
+                        &claim_room.room_id,
+                        &content_sha256,
+                        OfferConsumptionState::Imported,
+                    )
+                    .map_err(super::store_failure)?;
+                imported = true;
+            }
         }
+
+        // B2b: the consumed offer leaves a real claim record. Even when the rename is refused, a
+        // later sign-in can see which room the file belongs to; the content mark is what stops the
+        // offer for every other room.
+        let mut record = claim
+            .record()
+            .map_err(super::store_failure)?
+            .unwrap_or_default();
+        record.room = Some(claim_room.room_id.as_str().to_owned());
+        record.origin = Some(claim_room.origin.clone());
+        record.user_id = Some(claim_room.user_id.clone());
+        record.email = claim_room.email.clone();
+        record.unlocked_by = record.unlocked_by.or(Some(UnlockedBy::NoLock));
+        record.legacy_file = Some(probed);
+        record.raw_sha256 = Some(content_sha256.clone());
+        record.failure = None;
+        record.step = Step::Done;
+        record.done_at = Some(chrono::Utc::now().to_rfc3339());
+        claim.write_record(&record).map_err(super::store_failure)?;
+
         let offered = layout
             .device_dir()
             .join(format!("bir_data.offered-{stamp}.db"));

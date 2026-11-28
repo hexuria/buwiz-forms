@@ -261,10 +261,72 @@ mod tests {
         .unwrap();
     }
 
+    fn save_return_at(
+        path: &std::path::Path,
+        root: &str,
+        status: bir_core::forms::FilingStatus,
+        marker: &str,
+    ) {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+             VALUES (?1, '2551Q', 2026, 1, ?2, ?3)",
+            rusqlite::params![
+                format!("{root}00000"),
+                match status {
+                    bir_core::forms::FilingStatus::Draft => "Draft",
+                    bir_core::forms::FilingStatus::Queued => "Queued",
+                    bir_core::forms::FilingStatus::Submitted => "Submitted",
+                    bir_core::forms::FilingStatus::Confirmed => "Confirmed",
+                    bir_core::forms::FilingStatus::Paid => "Paid",
+                },
+                serde_json::to_string(&serde_json::json!({ "marker": marker })).unwrap()
+            ],
+        )
+        .unwrap();
+    }
+
+    fn save_submission_row(db: &Database, root: &str, status: &str, marker: &str) {
+        db.save_submission(bir_core::db::Submission {
+            id: None,
+            tin: format!("{root}00000"),
+            form_type: "2551Q".into(),
+            period: "2026Q1".into(),
+            status: status.into(),
+            form_data: [("marker".to_owned(), marker.to_owned())]
+                .into_iter()
+                .collect(),
+            submitted_at: Some("2026-04-25T10:00:00Z".into()),
+            filename: Some("shared-file".into()),
+            created_at: None,
+            updated_at: None,
+        })
+        .unwrap();
+    }
+
+    fn write_stored(user_id: &str) -> bir_core::cloud_account::StoredAccount {
+        let stored = bir_core::cloud_account::StoredAccount {
+            server_url: "https://buwiz.example.test".into(),
+            access_token: format!("access-{user_id}"),
+            refresh_token: format!("refresh-{user_id}"),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: user_id.into(),
+            email: Some(format!("{user_id}@example.test")),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        bir_core::account_session::save_stored(&stored).unwrap();
+        bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(&stored));
+        stored
+    }
+
     struct OfferScratch {
         _turn: std::sync::MutexGuard<'static, ()>,
         layout: Layout,
         room: Arc<Mutex<Database>>,
+        room_id: bir_core::rooms::RoomId,
+        room_path: std::path::PathBuf,
         _folder: tempfile::TempDir,
     }
 
@@ -341,7 +403,7 @@ mod tests {
                 },
                 count_opened: false,
             },
-            Some((room.clone(), room_path)),
+            Some((room.clone(), room_path.clone())),
         );
         assert_eq!(
             crate::session::snapshot().phase_kind,
@@ -351,6 +413,8 @@ mod tests {
             _turn,
             layout,
             room,
+            room_id,
+            room_path,
             _folder: folder,
         }
     }
@@ -416,5 +480,231 @@ mod tests {
         );
         drop(room);
         drop(scratch);
+    }
+
+    fn add_shared_legacy_return(
+        layout: &Layout,
+        root: &str,
+        status: bir_core::forms::FilingStatus,
+        marker: &str,
+    ) {
+        let legacy = Database::open(layout.legacy_database()).unwrap();
+        if legacy
+            .get_profile_by_tin(&format!("{root}00000"))
+            .unwrap()
+            .is_none()
+        {
+            add_taxpayer(&legacy, root, "Legacy Shared");
+        }
+        legacy.close().unwrap();
+        save_return_at(&layout.legacy_database(), root, status, marker);
+        let legacy = Database::open(layout.legacy_database()).unwrap();
+        save_submission_row(&legacy, root, "Queued", marker);
+        legacy.close().unwrap();
+    }
+
+    /// B2b #1 through the real sign-in entry: an offer whose import committed but whose rename
+    /// failed is never ready or offered to another account. B opens an empty room with no offer,
+    /// and the shared Queued return exists in A's room only.
+    #[test]
+    fn b2b_a_consumed_offer_is_never_claimed_or_offered_to_another_account() {
+        let scratch = offer_scratch();
+        save_return_at(
+            &scratch.room_path,
+            "123456788",
+            bir_core::forms::FilingStatus::Queued,
+            "a-room",
+        );
+        add_shared_legacy_return(
+            &scratch.layout,
+            "123456788",
+            bir_core::forms::FilingStatus::Queued,
+            "legacy-copy",
+        );
+        bir_core::legacy_claim::fail_next_offer_rename_for_test();
+        offer_answer(true).expect_err("the injected rename failure");
+        let record = bir_core::legacy_claim::LegacyClaim::at(scratch.layout.clone())
+            .unwrap()
+            .record()
+            .unwrap()
+            .expect("the consumed offer wrote its record");
+        assert_eq!(record.room.as_deref(), Some(scratch.room_id.as_str()));
+        assert_eq!(record.step, Step::Done);
+        let before_copy = bir_core::safe_fs::file_id(&scratch.layout.legacy_database()).unwrap();
+        let bytes = std::fs::read(scratch.layout.legacy_database()).unwrap();
+        std::fs::remove_file(scratch.layout.legacy_database()).unwrap();
+        std::fs::write(scratch.layout.legacy_database(), bytes).unwrap();
+        assert_ne!(
+            bir_core::safe_fs::file_id(&scratch.layout.legacy_database()).unwrap(),
+            before_copy,
+            "positive control: the reappeared copy has a new file identity"
+        );
+        assert!(
+            matches!(
+                crate::session::migration_state(),
+                Some(crate::session::MigrationState::Offered)
+            ),
+            "positive control: the failed rename leaves A's offer visible"
+        );
+
+        crate::session::sign_out();
+        crate::session::permit_claim_threads();
+        let stored_b = write_stored("user-b");
+        let owner_b = crate::session::Owner::of_stored(&stored_b).unwrap();
+        crate::session::begin_open(owner_b, 1, crate::session::OpenWhy::SignIn);
+        crate::session::join_claim_threads();
+        assert_eq!(
+            crate::session::snapshot().phase_kind,
+            crate::session::PhaseKind::Open
+        );
+        assert!(
+            crate::session::migration_state().is_none(),
+            "B was offered A's consumed file: {:?}",
+            crate::session::migration_state()
+        );
+        let (b_handle, _, b_room, b_path) = crate::session::snapshot().room.expect("B's room");
+        let b_room = b_room.expect("B's room id");
+        assert_ne!(b_room, scratch.room_id, "B opened A's room");
+        assert_eq!(b_path, scratch.layout.room_database(&b_room));
+        {
+            let b_db = b_handle.lock().unwrap();
+            assert!(
+                b_db.get_profile_by_tin("12345678800000").unwrap().is_none(),
+                "B's room received the shared profile"
+            );
+            assert_eq!(
+                b_db.count_queued_drafts().unwrap(),
+                0,
+                "B's room received the shared Queued return"
+            );
+        }
+        let a_db = scratch.room.lock().unwrap();
+        assert!(
+            a_db.get_profile_by_tin("12345678800000").unwrap().is_some(),
+            "positive control: A's shared profile is present"
+        );
+        assert_eq!(
+            a_db.count_queued_drafts().unwrap(),
+            1,
+            "exactly one copy of the shared Queued return exists in A's room"
+        );
+    }
+
+    /// B2b #2 through the real offer verb: an older copy never lowers a draft or submission
+    /// status, never overwrites a newer row, and never replaces an existing profile.
+    #[test]
+    fn b2b_an_offer_import_never_lowers_statuses_or_overwrites_newer_rows() {
+        let scratch = offer_scratch();
+        {
+            let room = scratch.room.lock().unwrap();
+            drop(room);
+            save_return_at(
+                &scratch.room_path,
+                "123456788",
+                bir_core::forms::FilingStatus::Submitted,
+                "room-new-draft",
+            );
+            let room = scratch.room.lock().unwrap();
+            save_submission_row(&room, "123456788", "Submitted", "room-new-submission");
+        }
+        add_shared_legacy_return(
+            &scratch.layout,
+            "123456788",
+            bir_core::forms::FilingStatus::Queued,
+            "legacy-old",
+        );
+        let direct = rusqlite::Connection::open(&scratch.room_path).unwrap();
+        direct
+            .execute(
+                "UPDATE form_drafts SET updated_at = '2999-01-01 00:00:00' WHERE tin = '12345678800000'",
+                [],
+            )
+            .unwrap();
+        direct
+            .execute(
+                "UPDATE submissions SET updated_at = '2999-01-01 00:00:00' WHERE tin = '12345678800000'",
+                [],
+            )
+            .unwrap();
+        drop(direct);
+        let legacy_direct = rusqlite::Connection::open(scratch.layout.legacy_database()).unwrap();
+        legacy_direct
+            .execute(
+                "UPDATE form_drafts SET updated_at = '2000-01-01 00:00:00' WHERE tin = '12345678800000'",
+                [],
+            )
+            .unwrap();
+        legacy_direct
+            .execute(
+                "UPDATE submissions SET updated_at = '2000-01-01 00:00:00' WHERE tin = '12345678800000'",
+                [],
+            )
+            .unwrap();
+        drop(legacy_direct);
+
+        offer_answer(true).expect("the offer import finishes");
+        let room = scratch.room.lock().unwrap();
+        let summaries = room
+            .list_draft_summaries_all_years("12345678800000")
+            .unwrap();
+        let summary = summaries
+            .iter()
+            .find(|summary| summary.form_code == "2551Q")
+            .expect("the shared draft");
+        assert_eq!(summary.status, bir_core::forms::FilingStatus::Submitted);
+        let draft: serde_json::Value = room
+            .get_form_draft("12345678800000", "2551Q", 2026, Some(1))
+            .unwrap()
+            .expect("the shared draft json");
+        assert_eq!(draft["marker"], "room-new-draft");
+        assert_eq!(
+            room.count_queued_drafts().unwrap(),
+            0,
+            "a return is queued again"
+        );
+        let submissions = room.list_submissions_for_tin("12345678800000").unwrap();
+        let submission = submissions
+            .iter()
+            .find(|submission| submission.form_type == "2551Q" && submission.period == "2026Q1")
+            .expect("the shared submission");
+        assert_eq!(submission.status, "Submitted");
+        assert_eq!(submission.form_data["marker"], "room-new-submission");
+        assert_eq!(
+            room.get_profile_by_tin("12345678800000")
+                .unwrap()
+                .unwrap()
+                .full_name,
+            "Room Owner",
+            "the older copy overwrote the room's profile"
+        );
+    }
+
+    /// B2b #3: a cut after the importing mark is not a silently consumed half-import. The next
+    /// Add resumes the import instead of skipping it and renaming the only copy away.
+    #[test]
+    fn b2b_a_cut_after_the_importing_mark_resumes_the_import() {
+        let scratch = offer_scratch();
+        bir_core::legacy_claim::cut_next_offer_after_importing_mark_for_test();
+        let first = offer_answer(true).expect_err("the injected cut after the importing mark");
+        assert!(
+            first.message().contains("injected offer-import cut"),
+            "{}",
+            first.message()
+        );
+        {
+            let room = scratch.room.lock().unwrap();
+            assert!(
+                room.get_profile_by_tin("72345678800000").unwrap().is_none(),
+                "positive control: the first cut committed no import"
+            );
+        }
+
+        offer_answer(true).expect("the next Add resumes the importing state");
+        let room = scratch.room.lock().unwrap();
+        assert!(
+            room.get_profile_by_tin("72345678800000").unwrap().is_some(),
+            "the resumed Add never imported the offered profiles"
+        );
+        assert!(!scratch.layout.legacy_database().exists());
     }
 }

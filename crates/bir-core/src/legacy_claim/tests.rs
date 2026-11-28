@@ -386,9 +386,16 @@ fn what_the_offer_carries() {
     let room = Database::open(room_dir.path().join("bir_data.db")).unwrap();
     // Through the offer's own code path (a client PIN is not an admin lock, so no unlock comes first).
     let lock = crate::db::hold_owner_lock(&install.legacy()).unwrap();
+    let claim_room = super::ClaimRoom {
+        room_id: crate::rooms::room_id_for("https://buwiz.example.test", "user-a"),
+        origin: "https://buwiz.example.test".into(),
+        user_id: "user-a".into(),
+        email: Some("user-a@example.test".into()),
+    };
     let added = files::add_offered(
         &install.claim(),
         &room,
+        &claim_room,
         crate::safe_fs::file_id(&install.legacy()).ok(),
     )
     .unwrap();

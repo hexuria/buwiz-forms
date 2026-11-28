@@ -51,9 +51,35 @@ pub use probe::{CredentialKinds, LegacyProbe, probe_legacy};
 pub const RECORD_KEY: &str = "legacy";
 /// The `migration` row listing the rooms whose account said "Not mine" (a JSON array of room ids).
 pub const NOT_MINE_KEY: &str = "legacy.not_mine";
-/// The `migration` row naming the offered file whose import already committed (B2). It is written
-/// before the import, so a crash or a failed rename never imports the same file again.
+/// The `migration` row naming the offered file consumed into a room (B2/B2b). The value keys the
+/// consumption by room and content hash, never by inode: a copy or a reappeared inode of the same
+/// bytes is the same offer. `importing` resumes; `imported` skips only the import itself.
 pub const OFFER_CONSUMED_KEY: &str = "legacy.offer_consumed";
+
+/// Whether the offered file's import has not yet been witnessed as committed or has been.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum OfferConsumptionState {
+    Importing,
+    Imported,
+}
+
+/// The offer-consumption mark. The hash is of the exact scratch copy exported; the room is the one
+/// account room the import belongs to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct OfferConsumption {
+    pub room: String,
+    pub sha256: String,
+    pub state: OfferConsumptionState,
+}
+
+/// How the file now at the legacy path matches the consumption mark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OfferConsumptionMatch {
+    None,
+    Own(OfferConsumptionState),
+    OtherRoom,
+}
 /// The `migration` row that says "Use this computer's login" was used once for the claim (PLAN §A.3.1). Once per
 /// claim, never once forever: the row is deleted whenever the claim ends — at Done, at Closed, in
 /// [`LegacyClaim::clear_permanent`], and on any transient or permanent failure before the move (a pre-move resume
@@ -694,30 +720,51 @@ impl LegacyClaim {
         Ok(())
     }
 
-    /// Whether `file` is the offered file whose import was already committed.
-    fn offer_consumed(&self, file: crate::safe_fs::FileId) -> Result<bool, DeviceStoreError> {
-        Ok(self
-            .migration_value(OFFER_CONSUMED_KEY)?
-            .and_then(|raw| serde_json::from_str::<crate::safe_fs::FileId>(&raw).ok())
-            == Some(file))
+    /// The stored offer-consumption mark. A malformed mark fails closed: it cannot be used to
+    /// prove that another account may take the file.
+    fn offer_consumption(&self) -> Result<Option<OfferConsumption>, DeviceStoreError> {
+        let Some(raw) = self.migration_value(OFFER_CONSUMED_KEY)? else {
+            return Ok(None);
+        };
+        serde_json::from_str(&raw).map(Some).map_err(|error| {
+            DeviceStoreError::Io(std::io::Error::other(format!(
+                "the offer-consumption mark cannot be read: {error}"
+            )))
+        })
     }
 
-    /// Record the offered file as consumed before its import commits.
-    fn record_offer_consumed(&self, file: crate::safe_fs::FileId) -> Result<(), DeviceStoreError> {
-        let value = serde_json::to_string(&file)
-            .map_err(|error| DeviceStoreError::Io(std::io::Error::other(error)))?;
-        self.set_migration_value(OFFER_CONSUMED_KEY, &value)
-    }
-
-    /// A refused import commits nothing, so its consumption mark goes and the offer can be tried again.
-    fn clear_offer_consumed(&self, file: crate::safe_fs::FileId) -> Result<(), DeviceStoreError> {
-        if self.offer_consumed(file)? {
-            self.store.conn().execute(
-                "DELETE FROM migration WHERE key = ?1",
-                params![OFFER_CONSUMED_KEY],
-            )?;
+    /// How `sha256` at the legacy path relates to the consumption mark for `room_id`.
+    pub(crate) fn offer_consumption_match(
+        &self,
+        room_id: &RoomId,
+        sha256: &str,
+    ) -> Result<OfferConsumptionMatch, DeviceStoreError> {
+        let Some(mark) = self.offer_consumption()? else {
+            return Ok(OfferConsumptionMatch::None);
+        };
+        if mark.sha256 != sha256 {
+            return Ok(OfferConsumptionMatch::None);
         }
-        Ok(())
+        if mark.room == room_id.as_str() {
+            Ok(OfferConsumptionMatch::Own(mark.state))
+        } else {
+            Ok(OfferConsumptionMatch::OtherRoom)
+        }
+    }
+
+    pub(crate) fn write_offer_consumption(
+        &self,
+        room_id: &RoomId,
+        sha256: &str,
+        state: OfferConsumptionState,
+    ) -> Result<(), DeviceStoreError> {
+        let value = serde_json::to_string(&OfferConsumption {
+            room: room_id.as_str().to_owned(),
+            sha256: sha256.to_owned(),
+            state,
+        })
+        .map_err(|error| DeviceStoreError::Io(std::io::Error::other(error)))?;
+        self.set_migration_value(OFFER_CONSUMED_KEY, &value)
     }
 
     fn not_mine_rooms(&self) -> Result<Vec<String>, DeviceStoreError> {
@@ -1000,6 +1047,20 @@ impl LegacyClaim {
             } else {
                 offer = true;
             }
+        }
+
+        // B2b: consumption is keyed by content and room, never inode. A file already consumed into
+        // another room is nobody else's claim or offer; consumed into this room it stays this
+        // room's offer so the cut-off rename can finish. This also closes the race in which an
+        // import commits after Ready was returned but before ReadyClaim::claim moves the file.
+        let content_sha256 = files::sha256_file(&legacy).map_err(io_failure)?;
+        match self
+            .offer_consumption_match(&room.room_id, &content_sha256)
+            .map_err(store_failure)?
+        {
+            OfferConsumptionMatch::OtherRoom => return Ok(Start::Nothing),
+            OfferConsumptionMatch::Own(_) => offer = true,
+            OfferConsumptionMatch::None => {}
         }
 
         let lock = hold_legacy_lock(&legacy)?;
@@ -1845,6 +1906,31 @@ impl ReadyClaim {
             }
         }
 
+        // B2b: the file may have been consumed by the offer path after this Ready was decided.
+        // Recheck the content-keyed mark before the record or the move begins; the next start then
+        // shows this room the offer that finishes the rename.
+        let content_sha256 = match files::sha256_file(&legacy) {
+            Ok(sha256) => sha256,
+            Err(error) => {
+                return Outcome::Transient(Transient {
+                    cause: TransientCause::Io,
+                    copy_saved: false,
+                    detail: format!("the legacy file could not be read: {error}"),
+                });
+            }
+        };
+        match claim.offer_consumption_match(&room.room_id, &content_sha256) {
+            Ok(OfferConsumptionMatch::None) => {}
+            Ok(_) => {
+                return Outcome::Transient(Transient {
+                    cause: TransientCause::FileChanged,
+                    copy_saved: false,
+                    detail: "the legacy file was already added to a room; start again".into(),
+                });
+            }
+            Err(error) => return claim.failed(store_transient(error, false), Step::Started),
+        }
+
         // End of step 2: the record names this account's room, and only now (N3).
         let mut record = match claim.record() {
             // A claim that already moved its file owns its record (and its zip's lifetime): a new file is offered,
@@ -1990,7 +2076,7 @@ impl Offer {
     /// "Add them to this account": the whole-profile export of the file (from a scratch copy) imported into `room`, the
     /// open room's database; then the file is renamed `bir_data.offered-<stamp>.db`, never replacing.
     pub fn add(self, claim: &LegacyClaim, room: &Database) -> Result<Added, Failure> {
-        let added = files::add_offered(claim, room, self.gate.probe.identity());
+        let added = files::add_offered(claim, room, &self.gate.room, self.gate.probe.identity());
         drop(self.gate.lock);
         added
     }
@@ -1998,7 +2084,7 @@ impl Offer {
 
 #[cfg(any(test, debug_assertions))]
 #[doc(hidden)]
-pub use files::fail_next_offer_rename_for_test;
+pub use files::{cut_next_offer_after_importing_mark_for_test, fail_next_offer_rename_for_test};
 
 // ------------------------------------------------------------------------------------------------ helpers
 
