@@ -883,32 +883,43 @@ pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
 /// (no file) is never cache-shaped, so those reads always go through.
 pub fn load_stored_account_shared() -> Result<Option<StoredAccount>, CloudError> {
     use std::sync::Mutex;
-    static CACHE: Mutex<
-        Option<(
-            std::path::PathBuf,
-            Option<std::time::SystemTime>,
-            Option<StoredAccount>,
-        )>,
-    > = Mutex::new(None);
+    type Stamp = (Option<std::time::SystemTime>, u64, String);
+    static CACHE: Mutex<Option<(std::path::PathBuf, Stamp, Option<StoredAccount>)>> =
+        Mutex::new(None);
     let _account = crate::account_session::lock();
     let path = account_file_path();
-    let mtime = std::fs::metadata(&path)
-        .and_then(|meta| meta.modified())
-        .ok();
+    // N6: not the modification time alone — the length too, and the inode where the platform
+    // has one: a rewrite that lands inside one mtime tick still changes one of them.
+    let stamp = std::fs::metadata(&path).ok().map(|meta| {
+        let mtime = meta.modified().ok();
+        #[cfg(unix)]
+        let extra = {
+            use std::os::unix::fs::MetadataExt;
+            meta.ino().to_string()
+        };
+        #[cfg(not(unix))]
+        let extra = meta
+            .created()
+            .ok()
+            .map(|at| format!("{at:?}"))
+            .unwrap_or_default();
+        (mtime, meta.len(), extra)
+    });
     // A file exists but its mtime cannot be read: never cache-shaped. No file at all: the
     // keychain alone decides, again never cache-shaped — either way read through.
-    if path.exists() && mtime.is_some() {
+    if path.exists() && stamp.as_ref().and_then(|(mtime, _, _)| *mtime).is_some() {
+        let stamp = stamp.expect("checked above");
         let mut cache = CACHE
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some((seen_path, seen_mtime, cached)) = cache.as_ref()
+        if let Some((seen_path, seen_stamp, cached)) = cache.as_ref()
             && *seen_path == path
-            && *seen_mtime == mtime
+            && *seen_stamp == stamp
         {
             return Ok(cached.clone());
         }
         let fresh = load_stored_account()?;
-        *cache = Some((path.clone(), mtime, fresh.clone()));
+        *cache = Some((path.clone(), stamp, fresh.clone()));
         return Ok(fresh);
     }
     let fresh = load_stored_account()?;
@@ -933,7 +944,33 @@ pub(crate) fn save_stored_account(stored: &StoredAccount) -> Result<(), CloudErr
 /// Remove the keychain entry and the private file.
 pub(crate) fn clear_stored_account() {
     keyring_delete();
+    // N10: the atomic save's own temporary files hold the same refresh token while they
+    // lie around — a write cut off mid-save leaves one — so sign-out removes them too.
+    sweep_write_temps(&account_file_path());
     let _ = std::fs::remove_file(account_file_path());
+}
+
+/// The save's sibling temporary files (`<file>.write-*`), swept at the start of every save
+/// (a crashed earlier write leaves one behind) and on sign-out (N10).
+fn sweep_write_temps(path: &std::path::Path) {
+    let Some(folder) = path.parent() else {
+        return;
+    };
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return;
+    };
+    let prefix = format!("{name}.write-");
+    if let Ok(entries) = std::fs::read_dir(folder) {
+        for entry in entries.flatten() {
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|file| file.starts_with(&prefix))
+            {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
 }
 
 /// Remove the saved sign-in for a sign-out, and make sure it is gone: read back, removed once more, then
@@ -974,6 +1011,10 @@ pub(crate) fn account_file_path() -> PathBuf {
     crate::platform::device_dir().join(ACCOUNT_FILE_NAME)
 }
 
+#[cfg(test)]
+static FAIL_ATOMIC_FOR_TEST: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 fn write_secret_file(raw: &str) -> Result<(), CloudError> {
     let path = account_file_path();
     if let Some(parent) = path.parent()
@@ -986,16 +1027,24 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
     // Atomic (#4): the content lands in a sibling temporary file first and one rename puts it
     // over the live one — a reader (the headless daemon's per-batch check) sees the old sign-in
     // whole or the new one whole, never the empty or torn window of a truncate-then-write.
+    sweep_write_temps(&path);
     let mut temp_name = path.as_os_str().to_os_string();
     temp_name.push(format!(".write-{}", std::process::id()));
     let temp = std::path::PathBuf::from(temp_name);
+    let mut permission_denied = false;
     let written = (|| -> Result<(), CloudError> {
+        let mut deny = |error: &std::io::Error| {
+            if error.kind() == std::io::ErrorKind::PermissionDenied {
+                permission_denied = true;
+            }
+        };
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
             .open(&temp)
             .map_err(|error| {
+                deny(&error);
                 CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
             })?;
         #[cfg(unix)]
@@ -1008,14 +1057,20 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
         })?;
         let _ = file.sync_all();
         drop(file);
-        // Windows refuses a rename over an existing target; the remove-then-rename gap there is
-        // still far smaller than a truncate-then-write window, and POSIX — the daemon's home —
-        // replaces atomically.
-        #[cfg(windows)]
-        if path.exists() {
-            let _ = std::fs::remove_file(&path);
+        // std::fs::rename replaces an existing target on Windows too (MoveFileExW with
+        // REPLACE_EXISTING in std since 1.55): no remove-then-rename, so no window where the
+        // file is simply gone (N4 — a daemon reading in that window saw nobody signed in and
+        // exited on a same-owner refresh).
+        #[cfg(test)]
+        if FAIL_ATOMIC_FOR_TEST.load(std::sync::atomic::Ordering::SeqCst) {
+            let _ = std::fs::remove_file(&temp);
+            // a full disk: neither a permission refusal nor a read-only folder
+            return Err(CloudError::Unexpected(
+                "could not store the Buwiz account (No space left on device (os error 28))".into(),
+            ));
         }
         std::fs::rename(&temp, &path).map_err(|error| {
+            deny(&error);
             CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
         })?;
         #[cfg(unix)]
@@ -1030,23 +1085,30 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
         let _ = std::fs::remove_file(&temp);
     }
     if let Err(atomic_error) = written {
-        // A read-only folder refuses the temp file and the rename though the file itself is
-        // writable — the overwrite a sign-out falls back on there. In-place is the only write
-        // that can land at all in that folder, so it is the fallback (the daemon's home
-        // folders are never read-only: the atomic rename is the path that matters).
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(&path)
-            .map_err(|error| {
-                CloudError::Unexpected(format!(
-                    "could not store the Buwiz account ({atomic_error}; {error})"
-                ))
+        // N5: the in-place fallback is for the two cases that mean "the folder, not the
+        // disk": the sign-out's own empty overwrite (it must land even in a read-only
+        // folder, and an empty write destroys nothing a truncation could lose) and a
+        // permission refusal (a read-only folder: the temp or the rename is refused though
+        // the file itself is writable). ANY other error — a full disk above all — leaves
+        // the live file UNTOUCHED: truncating it first and then failing would destroy the
+        // sign-in the atomic write exists to protect.
+        if raw.is_empty() || permission_denied {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(&path)
+                .map_err(|error| {
+                    CloudError::Unexpected(format!(
+                        "could not store the Buwiz account ({atomic_error}; {error})"
+                    ))
+                })?;
+            file.write_all(raw.as_bytes()).map_err(|error| {
+                CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
             })?;
-        file.write_all(raw.as_bytes()).map_err(|error| {
-            CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
-        })?;
-        let _ = file.sync_all();
+            let _ = file.sync_all();
+        } else {
+            return Err(atomic_error);
+        }
     }
     bir_submit::ios_storage::protect_file(&path);
     Ok(())
@@ -2127,8 +2189,16 @@ mod tests {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
             while std::time::Instant::now() < deadline {
                 reads += 1;
-                let Ok(raw) = std::fs::read(&path) else {
-                    continue;
+                // N4: a missing file is a failure too, never a skip — with the
+                // remove-then-rename save this read found no file at all, and a daemon
+                // reading in that window saw nobody signed in and exited on a same-owner
+                // refresh.
+                let raw = match std::fs::read(&path) {
+                    Ok(raw) => raw,
+                    Err(_) => {
+                        partial += 1;
+                        continue;
+                    }
                 };
                 // No erase happens in this test — only saves. An EMPTY file is already the torn
                 // state of a truncate-then-write save (the window #4's same-owner refresh hits:
@@ -2144,5 +2214,59 @@ mod tests {
             assert!(reads > 100, "the reader really read: {reads}");
             assert_eq!(partial, 0, "partial reads seen: positive control failed");
         });
+    }
+
+    /// N5: the atomic write failing with anything but a permission refusal — a FULL DISK,
+    /// simulated through the test hook — must leave the live file UNTOUCHED. On the base
+    /// behavior the in-place fallback ran on any error: it truncated the live file and then
+    /// failed, destroying the sign-in.
+    #[test]
+    fn a_failed_atomic_save_leaves_the_live_file_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_var(ENV_ACCOUNT_FILE, Some(path.to_str().unwrap()), || {
+            let stored = StoredAccount::from_secrets(&secrets());
+            save_stored_account(&stored).unwrap();
+            let before = std::fs::read(&path).unwrap();
+            assert!(!before.is_empty(), "positive control: the sign-in exists");
+            FAIL_ATOMIC_FOR_TEST.store(true, std::sync::atomic::Ordering::SeqCst);
+            let result = save_stored_account(&stored);
+            FAIL_ATOMIC_FOR_TEST.store(false, std::sync::atomic::Ordering::SeqCst);
+            assert!(result.is_err(), "the full disk is reported");
+            let after = std::fs::read(&path).unwrap();
+            assert_eq!(
+                before, after,
+                "the live file is UNTOUCHED — the base behavior truncated it and then failed"
+            );
+        });
+    }
+
+    /// N10: sign-out removes the atomic save's temporary files with the sign-in — they hold
+    /// the same refresh token — and a save sweeps whatever an earlier crashed write left.
+    #[test]
+    fn sign_out_removes_the_write_temporary_files_and_a_save_sweeps_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                (ENV_ACCOUNT_FILE, Some(path.to_str().unwrap())),
+            ],
+            || {
+                let stored = StoredAccount::from_secrets(&secrets());
+                save_stored_account(&stored).unwrap();
+                // a crashed write's leftover, refresh token and all
+                let leftover = dir.path().join("account.json.write-99999");
+                std::fs::write(&leftover, b"refresh-secret").unwrap();
+                clear_stored_account();
+                assert!(!leftover.exists(), "sign-out removes the write temp");
+                assert!(!path.exists(), "positive control: the sign-in is gone");
+                // and the next save sweeps whatever appears again
+                std::fs::write(&leftover, b"refresh-secret").unwrap();
+                save_stored_account(&stored).unwrap();
+                assert!(!leftover.exists(), "a save sweeps the write temp first");
+                assert!(path.is_file(), "positive control: the save itself landed");
+            },
+        );
     }
 }
