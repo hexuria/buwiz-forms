@@ -106,7 +106,7 @@ fn answer(mut stream: TcpStream, expected_state: &str) -> Option<Result<String, 
             );
             Some(Err(CALLBACK_MISMATCH.to_string()))
         }
-        Callback::NotACallback => {
+        Callback::Other => {
             respond(
                 &mut stream,
                 "404 Not Found",
@@ -132,7 +132,8 @@ enum Callback {
     Code(String),
     Cancelled,
     Mismatch,
-    NotACallback,
+    /// Not a callback (a browser's /favicon.ico): answered 404, and the wait goes on.
+    Other,
 }
 
 /// What one request is: Google's redirect with our state (a code, or Cancel), one with another state, or something
@@ -149,7 +150,7 @@ fn classify(request: &str, expected_state: &str) -> Callback {
         .map(|(_, value)| value);
     let error = params.iter().any(|(key, _)| key == "error");
     if state.is_none() && code.is_none() && !error {
-        return Callback::NotACallback;
+        return Callback::Other;
     }
     if state.map(String::as_str) != Some(expected_state) {
         return Callback::Mismatch;
@@ -323,13 +324,13 @@ mod tests {
     fn other_requests_are_not_callbacks() {
         assert_eq!(
             classify("GET /favicon.ico HTTP/1.1\r\n", STATE),
-            Callback::NotACallback
+            Callback::Other
         );
         assert_eq!(
             classify("GET /?foo=bar HTTP/1.1\r\n", STATE),
-            Callback::NotACallback
+            Callback::Other
         );
-        assert_eq!(classify("", STATE), Callback::NotACallback);
+        assert_eq!(classify("", STATE), Callback::Other);
     }
 
     fn get(port: u16, path: &str) -> String {
