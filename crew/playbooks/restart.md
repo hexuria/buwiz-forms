@@ -56,7 +56,7 @@ python3 crew/bin/crew git -C <state> log -1 --format=%cI%x20%H%x20%s
 python3 crew/bin/crew git -C <state> status --short
 ```
 
-Use the same read verbs for the other repositories and branches. `crew api GET` is the only GitHub API route in this sweep: it fixes `gh api --method GET`, so no other method, no field or input argument, and no graphql path reaches `gh`. Git reads go through `python3 crew/bin/crew git`, which adds `--no-textconv --no-ext-diff` to `log`, `show` and `diff` and refuses output and write-tree arguments; the verbs stay to `log`, `show`, `diff`, `status`, `ls-remote`, `rev-parse` and `merge-tree` in the worktree or the state folder.
+Use the same read verbs for the other repositories and branches. `crew api GET` is the only GitHub API route in this sweep: it fixes `gh api --method GET`, so no other method, no field or input argument, and no graphql path reaches `gh`. Git reads go through `python3 crew/bin/crew git`, which adds `--no-textconv --no-ext-diff` to `log`, `show` and `diff`, runs every read with `--no-pager`, `GIT_PAGER=cat` and `GIT_OPTIONAL_LOCKS=0`, and refuses output and write-tree arguments; the verbs stay to `log`, `show`, `diff`, `status`, `ls-remote` and `rev-parse` in the worktree or the state folder.
 
 ## 4. Sweep the fleet, if there is one
 
