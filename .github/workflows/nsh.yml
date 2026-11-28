@@ -73,10 +73,10 @@ env:
   # repository's cache storage is full); panics still name their file and line.
   CARGO_PROFILE_DEV_DEBUG: "0"
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # 8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf = hexuria/nsh, branch buwiz-next: upstream v0.6.1, the doors the window's
+  # bc417406b63479bf137b8327374265a62a2c0f6a = hexuria/nsh, branch buwiz-next: upstream v0.6.1, the doors the window's
   # control plane plugs into (branch gpui-agent, SOCKET.md there), and the app's own changes. The control plane itself
   # is hexuria/nsh-gpui-agent, pinned in nsh/Cargo.toml. The release workflows and their policy test name this commit too.
-  NSH_PINNED_REF: 8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf
+  NSH_PINNED_REF: bc417406b63479bf137b8327374265a62a2c0f6a
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.
   BUWIZ_NO_KEYCHAIN: "1"

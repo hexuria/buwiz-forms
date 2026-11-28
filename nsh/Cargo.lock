@@ -784,7 +784,7 @@ dependencies = [
  "stylo_taffy",
  "stylo_traits",
  "svgtypes",
- "taffy",
+ "taffy 0.15.1",
  "thin-vec",
  "thread_local",
  "url",
@@ -825,7 +825,7 @@ dependencies = [
  "skrifa",
  "smallvec",
  "stylo",
- "taffy",
+ "taffy 0.15.1",
  "usvg 0.48.1",
 ]
 
@@ -4943,7 +4943,7 @@ dependencies = [
  "sha2 0.10.9",
  "simplecss",
  "slab",
- "taffy",
+ "taffy 0.16.0",
  "tokio",
  "tokio-tungstenite",
  "ttf-parser",
@@ -8527,7 +8527,7 @@ dependencies = [
  "bitflags 2.13.2",
  "stylo",
  "stylo_atoms",
- "taffy",
+ "taffy 0.15.1",
 ]
 
 [[package]]
@@ -8701,6 +8701,17 @@ name = "taffy"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31f7bd2d97198df05186f93a3a3c306845f40e8b3c22bf9279cdd7e5cf5fea7d"
+dependencies = [
+ "serde",
+ "slotmap",
+ "smallvec",
+]
+
+[[package]]
+name = "taffy"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cae92eb1b204bfd239b5c463e1bd2c3ce4913d2d3abfb5c64f5cfee9d65e5c68"
 dependencies = [
  "serde",
  "slotmap",

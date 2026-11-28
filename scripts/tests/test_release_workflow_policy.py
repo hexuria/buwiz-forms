@@ -100,7 +100,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
             publish = self.job(job, workflow)
             self.assertIn("secrets.NSH_UPDATE_KEY", publish)
             self.assertIn("hexuria/nsh", publish)
-            self.assertIn("8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf", publish)
+            self.assertIn("bc417406b63479bf137b8327374265a62a2c0f6a", publish)
             self.assertIn("cargo install --locked --path", publish)
         # The NSH app reads forms/: a change there runs its type check and tests (scripts/ci_plan.py decides for
         # both ci.yml and nsh.yml).
