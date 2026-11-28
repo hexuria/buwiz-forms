@@ -184,9 +184,8 @@ test("desktop: an amount typed during the account read drops the press with its 
   await pressToRead(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
   await app.type("id:fp-frm2551Qv2018:txt15", "100");
-  await new Promise((r) => setTimeout(r, 3500));
+  await app.waitUntil(() => app.texts().some((t) => t.includes("Queue was stopped")), { timeout: 12000 });
   expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
-  await app.waitUntil(() => app.texts().some((t) => t.includes("Queue was stopped")), { timeout: 8000 });
 }, 40_000);
 
 test("desktop: a switch to the filed original during the account read queues nothing", async () => {
@@ -236,4 +235,42 @@ test("desktop: a reopen of the same return during the account read still queues"
   const app = await pageAndQueue("activated", { tinsDelayMs: 1000, reopenOnTinsRead: true });
   await pressToRead(app);
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 12000 });
+}, 40_000);
+
+test("desktop: a radio pick during the account read drops the press, nothing queued", async () => {
+  // A choose-path edit (a select, checkbox or radio) commits at once, so the stored row or the draft already holds it:
+  // queueing anyway would file a return the press's checks never saw. editSeq moves for it as for typed text.
+  const app = await pageAndQueue("activated", { tinsDelayMs: 2500, pickOnTinsRead: "frm2551Qv2018:amendedRtn_1" });
+  await pressToRead(app);
+  await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
+  await app.waitUntil(() => app.texts().some((t) => t.includes("Queue was stopped")), { timeout: 12000 });
+  expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
+}, 40_000);
+
+test("desktop: a draft-path form with an amount typed during the read drops the press too", async () => {
+  // 1601FQ is not a period-path form: it queues s.draft. A typed amount during the read is in the draft the host
+  // would file, but the press's checks and the account read were for the return without it: the press drops.
+  const app = (await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "1601FQ", year: 2025, period: 1, tins: "activated", tinsDelayMs: 2500, typeOnTinsRead: { "frm1601FQv2018:txt14": "100" }, facts: { eopt_tier: "Micro", tax_classification: "SelfEmployed" } } } })) as unknown as App;
+  await app.waitFor("text:BIR Form 1601FQ");
+  await app.press("id:fp-queue");
+  await pressToRead(app);
+  await app.waitUntil(() => tinsCalls(app).some((c) => c === "account_tins(0)"), { timeout: 10000 });
+  await app.waitUntil(() => app.texts().some((t) => t.includes("Queue was stopped")), { timeout: 12000 });
+  expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
+}, 40_000);
+
+test("desktop: the send line keeps the drop reason until the next press", async () => {
+  // The toast is transient and can be missed on a phone: the line stays until Queue is pressed again.
+  const app = await pageAndQueue("activated", { tinsDelayMs: 2500, typeOnTinsRead: { "frm2551Qv2018:txt15": "100" } });
+  await pressToRead(app);
+  await app.waitUntil(() => app.shows("id:fp-queue-drop"), { timeout: 15000 });
+  expect(app.texts().some((t) => t.includes("Not queued: the return changed. Press Queue again."))).toBe(true);
+  // The next press clears the line (and reads the account again, the note gone whether it ends queued or blocked):
+  // press past the page's own confirm until it goes.
+  for (let i = 0; i < 8 && app.shows("id:fp-queue-drop"); i++) {
+    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
+    else await app.press("id:fp-queue");
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  expect(app.shows("id:fp-queue-drop")).toBe(false);
 }, 40_000);

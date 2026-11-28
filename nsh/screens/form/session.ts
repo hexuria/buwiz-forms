@@ -238,6 +238,8 @@ export interface HeaderInfo {
   submittedLine: string;
   /** A Draft the worker put back (`send` refused): the reason, shown as a notice on opening, or "". */
   sendNotice: string;
+  /** A Queue press dropped because the return changed during the account read: the persistent line, or "". */
+  queueDropNote: string;
   /** The refusal is fixed on the person's Buwiz account (its code is one of ACCOUNT_FIX_CODES). */
   accountFix: boolean;
   /** The send's outcome is unknown: the page offers "The email came" and "It did not arrive". */
@@ -422,6 +424,8 @@ interface St {
   chosenFrom: Record<string, string>;
   dirty: boolean;
   editSeq: number;
+  /** Set when a Queue press was dropped because the return changed during the account read; cleared at the next press. */
+  queueDropNote: string | null;
   validateSeq: number;
   checking: boolean;
   removal: RemovalHeld | null;
@@ -453,7 +457,7 @@ function freshState(target: FormTarget): St {
     askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
     messageKeys: {}, messageCounts: {}, rejected: {}, amountNotes: {}, notesShown: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, boxNotes: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, rangeHeld: {}, forget: [], chosenFrom: {}, dirty: false,
-    editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
+    editSeq: 0, queueDropNote: null, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
     electionReady: undefined, moreOpen: new Set(),
   };
@@ -1658,7 +1662,7 @@ export class FormSession {
     this.unquiet(Object.keys(edits));
     this.cancelAutosave();
     this.markUnsaved();
-    const seq = ++s.editSeq;
+    const seq = s.editSeq;
     const token = this.token;
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.flushTimer = this.later(VALIDATE_DELAY, () => {
@@ -1759,6 +1763,9 @@ export class FormSession {
   /** The save line says "Unsaved changes" the moment something is staged (an explicit-save return keeps its reason). */
   private markUnsaved() {
     const s = this.st;
+    // Every mutation of the return reaches here (stage, choose, a row delete, the clear paths), so the edit
+    // generation moves for them all: a press of Queue checked against the generation sees any change, typed or picked.
+    s.editSeq += 1;
     if (s.sample && s.periodIncomplete) {
       s.saveState = this.restingSaveState();
       this.sSave.set(s.saveState);
@@ -4073,6 +4080,10 @@ export class FormSession {
     // ahead as today. The read is this call's own answer, never a kept one.
     if (this.queueGateBusySig() || this.disposed) return;
     this.queueGateBusySig.set(true);
+    if (this.st.queueDropNote) {
+      this.st.queueDropNote = null;
+      this.publish();
+    }
     const pressed = this.st.target;
     // Which return it is: the mode names draft versus filed original versus amendment, and each mode's own identity
     // — the snapshot of a filed original, the key of an amendment. A plain return's storage key is NOT in it: a
@@ -4102,6 +4113,8 @@ export class FormSession {
       // period-path forms would file for real: the press is dropped with its reason, never queued half-seen. (Rather
       // than locking the page for a network-length wait, which freezes typing with no visible cause.)
       if (this.st.editSeq !== pressedSeq) {
+        // The toast can be missed on a phone: the send line keeps the reason until the next press.
+        this.st.queueDropNote = "Not queued: the return changed. Press Queue again.";
         this.toast("Queue was stopped: the return changed while the account answered. Press Queue again.", "info");
         this.publish();
         return;
@@ -4841,6 +4854,7 @@ export class FormSession {
       filedOriginal: Boolean(s.filedOriginal && !s.filedOriginalView),
       filedOriginalView: s.filedOriginalView,
       submittedLine: !s.editable && !s.filedOriginalView ? sendLine || sentLine : "",
+      queueDropNote: s.queueDropNote ?? "",
       sendNotice: send?.stage === "refused" && s.editable ? send.line : "",
       accountFix: send?.stage === "refused" && s.editable && ACCOUNT_FIX_CODES.includes(send.code ?? ""),
       canResolve: Boolean(send?.can_resolve) && s.status === "Queued" && !s.editable,

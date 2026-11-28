@@ -500,6 +500,9 @@ function Notes(props: { s: FormSession }) {
       <If when={h().submittedLine}>
         <Text testID="fp-send-line" variant="meta" tone="fg2">{h().submittedLine}</Text>
       </If>
+      <If when={h().queueDropNote}>
+        <Text testID="fp-queue-drop" variant="meta" tone="fg2">{h().queueDropNote}</Text>
+      </If>
       <If when={h().canResolve}>
         <View class="flex-row flex-wrap items-center gap-2">
           <AppButton testID="fp-email-came" size="sm" label="The email came" onPress={() => s.askResolve("received")} />

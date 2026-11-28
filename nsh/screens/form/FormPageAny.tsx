@@ -45,6 +45,10 @@ interface Params {
   swapFiledOriginalOnTinsRead?: boolean;
   /** Open ANOTHER return (another period of the same form: 1601C does not open in the scratch world) the moment the first account_tins(0) read starts. */
   swapTargetOnTinsRead?: boolean;
+  /** Pick this radio the moment the first account_tins(0) read starts (a choose-path edit during the read, guaranteed overlap). */
+  pickOnTinsRead?: string;
+  /** Type these edits the moment the first account_tins(0) read starts. */
+  typeOnTinsRead?: Record<string, string>;
   /** The refusal activate_tin throws. */
   activate?: FakeActivateKind;
   /** Year facts set for the demo taxpayer before the page opens (e.g. the EOPT tier a queue needs answered). */
@@ -102,18 +106,20 @@ function Fixture() {
           }}
           dismissToast={(id) => toasts.set([...toasts(), `dismissed ${id}`])}
           onSession={(s) => {
-            if (p.reopenOnTinsRead || p.swapFiledOriginalOnTinsRead || p.swapTargetOnTinsRead) {
+            if (p.reopenOnTinsRead || p.swapFiledOriginalOnTinsRead || p.swapTargetOnTinsRead || p.pickOnTinsRead || p.typeOnTinsRead) {
               let done = false;
               const timer = setInterval(() => {
                 if (done) { clearInterval(timer); return; }
                 if (tinsCalls().some((line) => line.startsWith("account_tins(0)"))) {
                   done = true;
                   clearInterval(timer);
+                  if (p.pickOnTinsRead) { try { s.pickRadio(p.pickOnTinsRead); tinsCalls.set([...tinsCalls(), `pick-fired value=${s.valueOf(p.pickOnTinsRead) ?? "none"}`]); } catch (e) { tinsCalls.set([...tinsCalls(), `pick-error ${e}`]); } }
+                  for (const [k, v] of Object.entries(p.typeOnTinsRead || {})) { s.edit(k, v); tinsCalls.set([...tinsCalls(), `edit-fired value=${s.valueOf(k) ?? "none"}`]); }
                   if (p.swapFiledOriginalOnTinsRead) {
                     void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1, mode: "filed_original", snapshotId: 1 } as never);
                   } else if (p.swapTargetOnTinsRead) {
                     void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: 2 } as never).then((err) => tinsCalls.set([...tinsCalls(), err ? `swap-target-error ${err}` : "swap-target-opened"]));
-                  } else {
+                  } else if (p.reopenOnTinsRead) {
                     void s.open({ tin, formCode: p.formCode ?? "2551Q", year: p.year ?? 2025, period: p.period ?? 1 } as never, true);
                   }
                 }
