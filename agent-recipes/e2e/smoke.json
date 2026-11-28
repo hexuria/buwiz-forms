@@ -18,17 +18,17 @@
   },
   "recipes": [
     {
-      "name": "setup-start",
-      "file": "setup-start.wants",
-      "required": true,
-      "ios": "setup-start-seeded.wants"
-    },
-    {
       "name": "sign-up-seed",
       "ios": "seed-tax-profile.json",
       "plane": "data",
       "required": true,
       "precondition": "Seeds the same taxpayer through the app's allow-listed data-plane profile.save because the phone picker trigger cannot yet be opened by gpui-agent."
+    },
+    {
+      "name": "setup-start",
+      "file": "setup-start.wants",
+      "required": true,
+      "ios": "setup-start-seeded.wants"
     },
     {
       "name": "sign-up",
