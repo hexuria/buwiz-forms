@@ -34,6 +34,6 @@ test("nothing restored, kept and skipped", () => {
     "Nothing was restored. 3 were left as they are, because this device has newer versions. 2 couldn't be matched or read and were skipped.",
   );
   expect(importSentence(0, 1, 1)).toBe(
-    "Nothing was restored. 1 was left as they are, because this device has newer versions. 1 couldn't be matched or read and was skipped.",
+    "Nothing was restored. 1 was left as it is, because this device has a newer version. 1 couldn't be matched or read and was skipped.",
   );
 });

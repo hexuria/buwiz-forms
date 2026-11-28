@@ -3011,6 +3011,7 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
                 .field("restored", counts.restored as i64)
                 .field("kept_newer", counts.kept_newer as i64)
                 .field("unmatched", counts.unmatched as i64)
+                .field("skipped_mid_send", counts.skipped_mid_send as i64)
                 .into()),
             Err(error) => Err(HostError::new(error.to_string())),
         });
@@ -8033,8 +8034,8 @@ mod tests {
             "submitted_payload": "payload",
             "queued_submission_fingerprint": "fp",
             "queue_authorization": {"pin": true},
-            "submission_claim_token": "claim-1",
-            "submission_claimed_at": "2026-05-01 00:00:00",
+            "submission_claim_lease_until": "2026-05-01 00:30:00",
+            "submission_put_started_at": "2026-05-01 00:05:00",
             "submission_attempts": 2,
             "submission_error": "boom",
             "next_retry_at": "2026-05-01 01:00:00"
@@ -8167,8 +8168,10 @@ mod tests {
             ),
         );
         let json = to_json(&import_archive_from(&archive).unwrap());
-        // The draft and the base archive's submission both come in.
-        assert_eq!(json["restored"], serde_json::json!(2), "{json}");
+        // The draft and the base archive's submission both come in, and the
+        // profile counts too: a restore that wrote the profile must never
+        // say nothing was restored.
+        assert_eq!(json["restored"], serde_json::json!(3), "{json}");
         assert_eq!(json["kept_newer"], serde_json::json!(0), "{json}");
     }
 

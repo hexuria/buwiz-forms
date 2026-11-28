@@ -20,7 +20,9 @@ export function importSentence(restored: number, keptNewer: number, unmatched: n
   if (restored > 0) parts.push(`Restored ${restored} ${items(restored)} from the backup.`);
   if (keptNewer > 0)
     parts.push(
-      `${keptNewer} ${keptNewer === 1 ? "was" : "were"} left as they are, because this device has newer versions.`,
+      keptNewer === 1
+        ? "1 was left as it is, because this device has a newer version."
+        : `${keptNewer} were left as they are, because this device has newer versions.`,
     );
   if (unmatched > 0)
     parts.push(
@@ -45,7 +47,11 @@ export async function runImport(): Promise<void> {
     }
     else if (result.kind === "profile")
       toast(
-        importSentence(Number(result.restored ?? 0), Number(result.kept_newer ?? 0), Number(result.unmatched ?? 0)),
+        importSentence(
+          Number(result.restored ?? 0),
+          Number(result.kept_newer ?? 0),
+          Number(result.unmatched ?? 0) + Number(result.skipped_mid_send ?? 0),
+        ),
         "upload",
       );
     else if (result.kind === "invalid") toast("That zip has no taxpayer or database export in it.", "triangle-alert");

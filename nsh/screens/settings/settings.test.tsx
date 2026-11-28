@@ -176,7 +176,7 @@ for (const { name, size } of SIZES) {
       ["database", "Database imported."],
       [
         "profile",
-        "Restored 2 items from the backup. 1 was left as they are, because this device has newer versions. 1 couldn't be matched or read and was skipped.",
+        "Restored 2 items from the backup. 1 was left as it is, because this device has a newer version. 1 couldn't be matched or read and was skipped.",
       ],
       ["invalid", "That zip has no taxpayer or database export in it."],
       ["fail", "Import failed: The backup's database could not be restored. The current database was left as it is."],

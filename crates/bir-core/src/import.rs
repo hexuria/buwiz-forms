@@ -56,16 +56,68 @@ fn migrate_submission_json(
     Ok(())
 }
 
+/// The period key the v5 backfill derives for a row that has none: monthly
+/// forms their M{month}, annual forms their A, open-ended forms their O{n},
+/// everything else its quarter.
+fn derive_period_key(form_code: &str, quarter: Option<i64>) -> String {
+    let monthly = [
+        "1601C", "1601E", "1601F", "0619E", "0619F", "1600", "1600WP", "1602", "2550M", "2551M",
+        "2200A", "2200AN", "2200M", "2200P", "2200T",
+    ];
+    let annual = [
+        "1604CF", "1604E", "1700", "1701", "1701A", "1701MS", "1702", "1702RT", "1702EX", "1702MX",
+    ];
+    let open_ended = ["0605", "2000"];
+    match quarter {
+        Some(q) => {
+            if open_ended.contains(&form_code) {
+                format!("O{}", q.max(1))
+            } else if annual.contains(&form_code) {
+                "A".to_string()
+            } else if monthly.contains(&form_code) {
+                format!("M{q:02}")
+            } else {
+                format!("Q{}", q.clamp(1, 4))
+            }
+        }
+        None => {
+            if open_ended.contains(&form_code) {
+                "O1".to_string()
+            } else {
+                "A".to_string()
+            }
+        }
+    }
+}
+
 /// Monotonic filing status rank. Unknown legacy text is weakest: it may never
 /// displace a known state, while any known state may displace it.
 fn filing_status_rank(status: &str) -> u8 {
     match status.to_ascii_lowercase().as_str() {
-        "paid" => 5,
-        "confirmed" => 4,
-        "submitted" | "filed" => 3,
-        "queued" => 2,
-        "draft" => 1,
+        "paid" => 10,
+        "confirmed" => 8,
+        "submitted" | "filed" => 6,
+        "queued" => 4,
+        "draft" => 2,
         _ => 0,
+    }
+}
+
+/// The rank a row competes with, dry runs one notch under a real send: a
+/// dry-run Submitted never displaces a real submission, and a real one
+/// displaces a dry run by rank. The flag lives in the row's data, not its
+/// status.
+fn filing_status_rank_with_data(status: &str, data_json: &str) -> u8 {
+    let rank = filing_status_rank(status);
+    if rank == 6
+        && serde_json::from_str::<serde_json::Value>(data_json)
+            .ok()
+            .and_then(|value| value.get("submitted_dry_run").and_then(|v| v.as_bool()))
+            .unwrap_or(false)
+    {
+        5
+    } else {
+        rank
     }
 }
 
@@ -112,7 +164,10 @@ fn import_may_replace(
         // and no newer work is overwritten. Where there is no row yet, or the
         // row is undated too, the import still applies.
         (Some(_), None) => false,
-        (None, _) => true,
+        // The device row undated: a dated file row is newer than anything
+        // legacy, but both undated is a tie, and a tie keeps the device row.
+        (None, Some(_)) => true,
+        (None, None) => false,
     }
 }
 
@@ -125,6 +180,10 @@ pub struct ImportCounts {
     pub restored: u32,
     pub kept_newer: u32,
     pub unmatched: u32,
+    /// File rows kept out because they were in the middle of a send where
+    /// they were exported: never inserted, never matched, the claim never
+    /// cleared. Counted into the page's skipped part with this reason.
+    pub skipped_mid_send: u32,
 }
 
 /// The lifecycle rewrite the app's own revert performs
@@ -152,6 +211,9 @@ fn revert_json_to_draft(data_json: &str) -> String {
         "queue_authorization",
         "submission_claim_token",
         "submission_claimed_at",
+        "submission_claim_lease_until",
+        "submission_put_started_at",
+        "relay_pending",
         "submission_error",
         "next_retry_at",
     ] {
@@ -178,7 +240,8 @@ fn import_timestamp_allows_draft(
             _ => false,
         },
         (Some(_), None) => false,
-        (None, _) => true,
+        (None, Some(_)) => true,
+        (None, None) => false,
     }
 }
 
@@ -271,11 +334,17 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                 Some(mut stored) => (stored.id, stored.take_credentials()),
                 None => (None, ProfileCredentials::default()),
             };
+            let new_taxpayer = id.is_none();
             profile.id = id;
             profile.put_credentials(credentials);
             // A restore: versions confirmed where the export was made come in
             // as recorded when this database does not have the taxpayer yet.
             db.save_restored_profile(profile)?;
+            if new_taxpayer {
+                // The profile itself is a restored item: a brand-new
+                // taxpayer's archive never reads "nothing was restored".
+                counts.restored += 1;
+            }
 
             // 2. Read submissions.json — deduplicate via (tin, form_type, period, submitted_at)
             if let Ok(submissions_json) = read_from_zip("submissions.json") {
@@ -367,13 +436,36 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                         draft.get("status").and_then(|v| v.as_str()),
                         draft.get("data_json").and_then(|v| v.as_str()),
                     ) {
-                        // Quarter 0 is no quarter: it matches and is stored
-                        // as NULL, never as a second row beside the NULL one.
-                        let quarter = draft
-                            .get("quarter")
-                            .and_then(|v| v.as_i64())
-                            .filter(|quarter| *quarter != 0);
+                        // The file's own quarter is kept for the insert:
+                        // queueable annual forms (1700, 1701, 1702…) live and
+                        // are read at quarter 0, open-ended forms at NULL.
+                        // Quarter 0 and NULL are the same period only in the
+                        // match, never a second row beside the other.
+                        let raw_quarter = draft.get("quarter").and_then(|v| v.as_i64());
+                        let quarter = raw_quarter;
                         let incoming_updated_at = draft.get("updated_at").and_then(|v| v.as_str());
+                        // N8: a file row in the middle of its send where it
+                        // was exported — any of the five claim fields in its
+                        // data — is kept out entirely: never inserted, never
+                        // matched, its claim never cleared. The origin
+                        // device's send may still be in flight, and a cleared
+                        // editable copy invites a re-queue that files twice.
+                        let file_data: serde_json::Value =
+                            serde_json::from_str(data_json).unwrap_or_default();
+                        // Mid-send is the claim itself: the lifecycle clears
+                        // the token, the claim time, the lease, the PUT start
+                        // and the relay bookkeeping in one `clear_claim`, so a
+                        // genuinely in-flight row always carries the token.
+                        // Lease, PUT or relay fields WITHOUT it are remnants
+                        // of a settled or dead send — the Queued revert clears
+                        // them like any other, they are not a send in flight.
+                        let file_mid_send = ["submission_claim_token", "submission_claimed_at"]
+                            .into_iter()
+                            .any(|key| file_data.get(key).is_some_and(|v| !v.is_null()));
+                        if file_mid_send && status.eq_ignore_ascii_case("queued") {
+                            counts.skipped_mid_send += 1;
+                            continue;
+                        }
                         // An import is never a send: the file's Queued comes
                         // in as a Draft, and its data is put back the way the
                         // app's own revert puts a send back — the lifecycle
@@ -393,17 +485,20 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                         // the form, the year and the period key — a NULL
                         // quarter normalized — never the quarter alone.
                         let period_key = draft.get("period_key").and_then(|v| v.as_str());
-                        // The file's period key scopes the match; a legacy row
-                        // without one can mean any period of the year, so the
-                        // candidates are all of them and a plurality is never
-                        // guessed.
+                        // The file's period key scopes the match. A device row
+                        // with a NULL key (written before keys existed) is a
+                        // candidate too — adopted, never duplicated — but an
+                        // exact key always outranks it. A legacy file row
+                        // without a key can mean any period of the year, so
+                        // the candidates are all of them and a plurality is
+                        // never guessed.
                         let key_clause = if period_key.is_some() {
-                            "AND COALESCE(period_key, '') = COALESCE(?5, '')"
+                            "AND (period_key IS NULL OR period_key = ?5)"
                         } else {
                             ""
                         };
                         let mut statement = db.conn.prepare(&format!(
-                            "SELECT id, status, updated_at, data_json FROM form_drafts
+                            "SELECT id, status, updated_at, data_json, period_key FROM form_drafts
                              WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
                                AND COALESCE(NULLIF(quarter, 0), -1) = COALESCE(NULLIF(?4, 0), -1)
                                {key_clause}
@@ -415,9 +510,11 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                 row.get::<_, String>(1)?,
                                 row.get::<_, Option<String>>(2)?,
                                 row.get::<_, String>(3)?,
+                                row.get::<_, Option<String>>(4)?,
                             ))
                         };
-                        let candidates: Vec<(i64, String, Option<String>, String)> =
+                        type Candidate = (i64, String, Option<String>, String, Option<String>);
+                        let candidates: Vec<Candidate> =
                             if period_key.is_some() {
                                 statement
                                     .query_map(
@@ -439,19 +536,53 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                     )?
                                     .collect::<Result<Vec<_>, _>>()?
                             };
-                        // An old archive carries no period_key. Over one
-                        // candidate it is the match; over more than one —
-                        // the open-ended periods of one year — guessing wrong
-                        // loses a return, so nothing is inserted or replaced
-                        // and the row counts as unmatched.
-                        if period_key.is_none() && candidates.len() > 1 {
-                            counts.unmatched += 1;
-                            continue;
-                        }
-                        let existing = candidates.into_iter().next();
+                        // Exact keys first; a NULL-keyed row only where no
+                        // exact candidate exists. Several of either can never
+                        // be told apart: nothing is written, the row counts
+                        // as unmatched — the first id is never fallen through
+                        // to.
+                        let existing = if period_key.is_some() {
+                            let exact: Vec<_> = candidates
+                                .iter()
+                                .filter(|row| row.4.as_deref() == period_key)
+                                .collect();
+                            if exact.len() > 1 {
+                                counts.unmatched += 1;
+                                continue;
+                            } else if exact.len() == 1 {
+                                Some(exact[0].clone())
+                            } else {
+                                let nulls: Vec<_> =
+                                    candidates.iter().filter(|row| row.4.is_none()).collect();
+                                if nulls.len() > 1 {
+                                    counts.unmatched += 1;
+                                    continue;
+                                }
+                                nulls.first().map(|row| (*row).clone())
+                            }
+                        } else {
+                            if candidates.len() > 1 {
+                                counts.unmatched += 1;
+                                continue;
+                            }
+                            candidates.into_iter().next()
+                        };
+                        // The key written on insert or update: the file's own,
+                        // or the one the v5 backfill would derive for a legacy
+                        // row — a device row is never duplicated over a key it
+                        // simply never had, and a legacy insert reads back in
+                        // the same period it wrote.
+                        let key_to_write = period_key
+                            .map(str::to_string)
+                            .unwrap_or_else(|| derive_period_key(form_code, raw_quarter));
                         match existing {
                             None => {
-                                db.conn.execute(
+                                // A unique violation here is a key conflict on
+                                // one period — corruption in one of the two
+                                // copies, never a guess to make: the row counts
+                                // as unmatched and the rest of the archive
+                                // still imports.
+                                let inserted = db.conn.execute(
                                     "INSERT INTO form_drafts
                                         (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
                                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, COALESCE(?8, datetime('now')))",
@@ -460,58 +591,88 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                         form_code,
                                         taxable_year,
                                         quarter,
-                                        period_key,
+                                        key_to_write,
                                         status,
                                         data_json,
                                         incoming_updated_at
                                     ],
-                                )?;
-                                counts.restored += 1;
+                                );
+                                match inserted {
+                                    Ok(_) => counts.restored += 1,
+                                    Err(rusqlite::Error::SqliteFailure(error, _))
+                                        if error.code
+                                            == rusqlite::ErrorCode::ConstraintViolation =>
+                                    {
+                                        counts.unmatched += 1;
+                                    }
+                                    Err(error) => return Err(error.into()),
+                                }
                             }
-                            Some((id, existing_status, existing_updated_at, existing_data)) => {
-                                // A row in the middle of being sent — its
-                                // draft carries a claim token — is never
-                                // replaced.
+                            Some((
+                                id,
+                                existing_status,
+                                existing_updated_at,
+                                existing_data,
+                                existing_key,
+                            )) => {
+                                // A row in the middle of being sent — any of
+                                // the five claim fields in its data — is never
+                                // replaced, whatever the file carries.
                                 let stored: serde_json::Value =
                                     serde_json::from_str(&existing_data).unwrap_or_default();
-                                let mid_send = stored
-                                    .get("submission_claim_token")
-                                    .is_some_and(|v| !v.is_null())
-                                    || stored
-                                        .get("submission_claimed_at")
-                                        .is_some_and(|v| !v.is_null());
-                                // Across an amendment rank does not beat time:
-                                // the file's Submitted original never replaces
-                                // a newer in-place amendment of the same
-                                // return, whatever its status. Only the same
-                                // filing generation compares by rank.
+                                let mid_send = [
+                                    "submission_claim_token",
+                                    "submission_claimed_at",
+                                    "submission_claim_lease_until",
+                                    "submission_put_started_at",
+                                    "relay_pending",
+                                ]
+                                .into_iter()
+                                .any(|key| stored.get(key).is_some_and(|v| !v.is_null()));
+                                // Across an amendment rank must not beat time:
+                                // the file's row needs rank at least the
+                                // device's AND a strictly newer stamp, so a
+                                // re-stamped old original never displaces a
+                                // newer in-place amendment, whatever its
+                                // status. Only the same filing generation
+                                // compares by rank alone.
                                 let cross_amendment =
-                                    json_is_amended(&existing_data) && !json_is_amended(data_json);
+                                    json_is_amended(&existing_data) != json_is_amended(data_json);
+                                let existing_rank =
+                                    filing_status_rank_with_data(&existing_status, &existing_data);
+                                let incoming_rank =
+                                    filing_status_rank_with_data(&status, data_json);
+                                let newer = import_timestamp_allows_draft(
+                                    existing_updated_at.as_deref(),
+                                    incoming_updated_at,
+                                );
                                 let may = !mid_send
                                     && if cross_amendment {
-                                        import_timestamp_allows_draft(
-                                            existing_updated_at.as_deref(),
-                                            incoming_updated_at,
-                                        )
+                                        incoming_rank >= existing_rank && newer
+                                    } else if incoming_rank < existing_rank {
+                                        false
+                                    } else if incoming_rank > existing_rank {
+                                        true
                                     } else {
-                                        import_may_replace(
-                                            &existing_status,
-                                            existing_updated_at.as_deref(),
-                                            &status,
-                                            incoming_updated_at,
-                                        )
+                                        newer
                                     };
                                 if may {
                                     db.conn.execute(
                                         "UPDATE form_drafts
                                          SET status = ?1, data_json = ?2,
+                                             period_key = COALESCE(?5, period_key),
                                              updated_at = COALESCE(?3, datetime('now'))
                                          WHERE id = ?4",
                                         rusqlite::params![
                                             status,
                                             data_json,
                                             incoming_updated_at,
-                                            id
+                                            id,
+                                            if existing_key.is_none() {
+                                                Some(&key_to_write)
+                                            } else {
+                                                None
+                                            },
                                         ],
                                     )?;
                                     counts.restored += 1;
@@ -2610,5 +2771,932 @@ mod tests {
             Some("encrypted".to_string())
         );
         assert_eq!(db.get_setting("kept").unwrap(), None);
+    }
+
+    // ---------- Round 3: the matching rule, one test per table row ----------
+
+    /// A drafts.json row for a hand-written archive.
+    fn file_draft(
+        form_code: &str,
+        year: i64,
+        quarter: Option<i64>,
+        status: &str,
+        data: serde_json::Value,
+        updated_at: Option<&str>,
+        period_key: Option<&str>,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "form_code": form_code,
+            "taxable_year": year,
+            "quarter": quarter,
+            "status": status,
+            "data_json": serde_json::to_string(&data).unwrap(),
+            "updated_at": updated_at,
+            "period_key": period_key,
+        })
+    }
+
+    /// An archive carrying `drafts` for `tin` (and its profile).
+    fn archive_with_drafts(path: &Path, tin: &str, drafts: &[serde_json::Value]) {
+        let profile = serde_json::to_value(branch_profile("Archivist", tin)).unwrap();
+        write_archive(
+            path,
+            &[
+                ("profile.json", profile.to_string()),
+                ("drafts.json", serde_json::to_string(drafts).unwrap()),
+            ],
+        );
+    }
+
+    /// The raw rows of one form/year, every quarter and key, oldest id first.
+    fn rows_of(
+        db: &Database,
+        tin: &str,
+        form_code: &str,
+        year: i64,
+    ) -> Vec<(i64, Option<i64>, Option<String>, String, String)> {
+        let mut stmt = db
+            .conn
+            .prepare(
+                "SELECT id, quarter, period_key, status, data_json FROM form_drafts
+                 WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 ORDER BY id",
+            )
+            .unwrap();
+        stmt.query_map(rusqlite::params![tin, form_code, year], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+    }
+
+    /// N1: a 1701 exported and imported onto a fresh database opens with its
+    /// data in the real editor read path — the queueable read at quarter 0.
+    #[test]
+    fn import_insert_preserves_quarter_zero() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        let draft = crate::forms::form_1701::Form1701Draft::new_from_profile(
+            &branch_profile("Juana", TIN_X),
+            2024,
+            0,
+        );
+        // Written as the queueable write path writes it: quarter 0, key "A".
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '1701', 2024, 0, 'A', 'Draft', ?2, '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X, serde_json::to_string(&serde_json::to_value(&draft).unwrap()).unwrap()],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        crate::export::export_profile_data(&db, TIN_X, &archive, None).unwrap();
+
+        let fresh = Database::open_ephemeral().unwrap();
+        import_profile_data(&fresh, &archive).unwrap();
+        let read: Option<crate::forms::form_1701::Form1701Draft> =
+            fresh.get_queueable_draft(TIN_X, 2024, 0).unwrap();
+        assert!(
+            read.is_some(),
+            "an imported 1701 opens in the editor read path at quarter 0"
+        );
+        let rows = rows_of(&fresh, TIN_X, "1701", 2024);
+        assert_eq!(rows.len(), 1, "exactly one row, never a duplicate");
+        assert_eq!(rows[0].1, Some(0), "the file's own quarter is preserved");
+    }
+
+    /// N2: a legacy archive row without a period key is inserted with the
+    /// key the v5 backfill would derive (a monthly form: M{month:02}).
+    #[test]
+    fn import_legacy_insert_derives_period_key() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let archive = dir.path().join("legacy.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "1601C",
+                2024,
+                Some(5),
+                "Draft",
+                serde_json::json!({"status": "Draft"}),
+                Some("2024-06-01T00:00:00Z"),
+                None,
+            )],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "1601C", 2024);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].2.as_deref(),
+            Some("M05"),
+            "the insert writes the derived period key"
+        );
+    }
+
+    /// N1: a file row at quarter 0 matches a device row at NULL without a
+    /// second row, and the update keeps the device's storage.
+    #[test]
+    fn import_quarter_zero_matches_null_without_duplicate() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json, updated_at)
+                 VALUES (?1, '1701', 2024, NULL, 'Draft', '{\"status\":\"Draft\",\"mine\":true}', '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "1701",
+                2024,
+                Some(0),
+                "Draft",
+                serde_json::json!({"status": "Draft", "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                Some("A"),
+            )],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "1701", 2024);
+        assert_eq!(rows.len(), 1, "quarter 0 matches NULL: never a second row");
+    }
+
+    /// N2: a device row with a NULL key is adopted by the file's single
+    /// dated candidate — matched, updated and stamped with the key.
+    #[test]
+    fn import_null_device_key_adopts_single_dated_candidate() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '1601C', 2024, 5, NULL, 'Draft', '{\"status\":\"Draft\",\"mine\":true}', '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "1601C",
+                2024,
+                Some(5),
+                "Draft",
+                serde_json::json!({"status": "Draft", "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                Some("M05"),
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "1601C", 2024);
+        assert_eq!(rows.len(), 1, "adopted, never duplicated");
+        assert_eq!(
+            rows[0].2.as_deref(),
+            Some("M05"),
+            "the update writes the key"
+        );
+        assert_eq!(counts.restored, 1);
+    }
+
+    /// N2: several NULL-keyed candidates can never be told apart — nothing
+    /// is written and the row counts as unmatched. (Several candidates at one
+    /// quarter exist only where the unique index cannot forbid them:
+    /// open-ended rows at NULL quarters.)
+    #[test]
+    fn import_null_device_key_plural_candidates_unmatched() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        for marker in ["first", "second"] {
+            db.conn
+                .execute(
+                    "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                     VALUES (?1, '0605', 2024, NULL, NULL, 'Draft', ?2, '2024-01-01T00:00:00Z')",
+                    rusqlite::params![TIN_X, format!("{{\"status\":\"Draft\",\"mine\":\"{marker}\"}}")],
+                )
+                .unwrap();
+        }
+        let archive = dir.path().join("a.zip");
+        // A legacy file row: no key, so it can mean any period of the year.
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "0605",
+                2024,
+                None,
+                "Draft",
+                serde_json::json!({"status": "Draft", "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                None,
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "0605", 2024);
+        assert_eq!(rows.len(), 2, "nothing inserted, nothing overwritten");
+        assert!(
+            rows.iter()
+                .all(|row| row.4.contains("first") || row.4.contains("second")),
+            "both rows keep their own data"
+        );
+        assert_eq!(counts.restored, 0);
+        assert_eq!(counts.unmatched, 1, "the plurality counts as unmatched");
+    }
+
+    /// A dated device row meeting a legacy file row over exactly one
+    /// candidate: the match is made and the derived key is written.
+    #[test]
+    fn import_dated_device_legacy_file_single_candidate_writes_key() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '1601C', 2024, 5, NULL, 'Draft', '{\"status\":\"Draft\",\"mine\":true}', '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "1601C",
+                2024,
+                Some(5),
+                "Draft",
+                serde_json::json!({"status": "Draft", "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                None,
+            )],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "1601C", 2024);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].2.as_deref(),
+            Some("M05"),
+            "the derived key is written on update"
+        );
+        assert!(
+            !rows[0].4.contains("\"mine\":true"),
+            "the newer file row replaced the data"
+        );
+    }
+
+    /// Several exact-key candidates (pre-existing duplicates) are never
+    /// fallen through to the first id.
+    #[test]
+    fn import_multiple_exact_candidates_never_picks_first() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        // Pre-existing duplicates: the unique index is over quarter, so use
+        // a quarterly form's quarters… the index makes true duplicates of
+        // (tin, form, year, quarter) impossible — except rows written before
+        // the index or by other versions. Craft them with a direct insert,
+        // dropping the index's protection the way old rows exist.
+        for marker in ["first", "second"] {
+            db.conn
+                .execute(
+                    "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                     VALUES (?1, '0605', 2024, NULL, 'O1', 'Draft', ?2, '2024-01-01T00:00:00Z')",
+                    rusqlite::params![TIN_X, format!("{{\"status\":\"Draft\",\"mine\":\"{marker}\"}}")],
+                )
+                .unwrap();
+        }
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "0605",
+                2024,
+                None,
+                "Draft",
+                serde_json::json!({"status": "Draft", "mine": "file"}),
+                Some("2024-06-01T00:00:00Z"),
+                Some("O1"),
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "0605", 2024);
+        assert_eq!(rows.len(), 2, "nothing inserted");
+        assert!(
+            rows.iter()
+                .all(|row| row.4.contains("first") || row.4.contains("second")),
+            "neither candidate is overwritten by a guess"
+        );
+        assert_eq!(counts.unmatched, 1);
+        assert_eq!(counts.restored, 0);
+    }
+
+    /// Keys in conflict on one quarter are never a second row and never
+    /// roll the import back.
+    #[test]
+    fn import_conflicting_period_key_never_duplicates_return() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '1601C', 2024, 5, 'M05', 'Draft', '{\"status\":\"Draft\",\"mine\":true}', '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[
+                file_draft(
+                    "1601C",
+                    2024,
+                    Some(5),
+                    "Draft",
+                    serde_json::json!({"status": "Draft", "mine": false}),
+                    Some("2024-06-01T00:00:00Z"),
+                    Some("M06"),
+                ),
+                // A second, independent row proves the import is not rolled back.
+                file_draft(
+                    "2551Q",
+                    2024,
+                    Some(1),
+                    "Draft",
+                    serde_json::json!({"status": "Draft"}),
+                    Some("2024-06-01T00:00:00Z"),
+                    Some("Q1"),
+                ),
+            ],
+        );
+        let result = import_profile_data(&db, &archive);
+        assert!(
+            result.is_ok(),
+            "the import is never rolled back: {result:?}"
+        );
+        let rows = rows_of(&db, TIN_X, "1601C", 2024);
+        assert_eq!(rows.len(), 1, "never a second row for one period");
+        let quarterly = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert_eq!(quarterly.len(), 1, "the rest of the archive still imports");
+    }
+
+    /// The file's Queued becomes a Draft before any comparison: a newer
+    /// Queued in the file never displaces the device's Submitted.
+    #[test]
+    fn import_file_queued_becomes_draft_before_compare() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '2551Q', 2024, 1, 'Q1', 'Submitted', '{\"status\":\"Submitted\",\"mine\":true}', '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                "Queued",
+                serde_json::json!({"status": "Queued", "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                Some("Q1"),
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].3, "Submitted", "never lowered by a file's Queued");
+        assert_eq!(counts.kept_newer, 1);
+    }
+
+    /// Rank with dry runs: a newer dry-run Submitted never displaces the
+    /// device's real submission.
+    #[test]
+    fn import_dry_run_never_displaces_real_submission() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '2551Q', 2024, 1, 'Q1', 'Submitted', '{\"status\":\"Submitted\",\"submitted_dry_run\":false,\"mine\":true}', '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                "Submitted",
+                serde_json::json!({"status": "Submitted", "submitted_dry_run": true, "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                Some("Q1"),
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert!(
+            rows[0].4.contains("\"mine\":true"),
+            "the real submission is never displaced by a dry run"
+        );
+        assert_eq!(counts.kept_newer, 1);
+    }
+
+    /// And the reverse: the device's dry run is displaced by the file's
+    /// real submission, by rank.
+    #[test]
+    fn import_real_submission_displaces_dry_run() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '2551Q', 2024, 1, 'Q1', 'Submitted', '{\"status\":\"Submitted\",\"submitted_dry_run\":true,\"mine\":true}', '2024-06-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                "Submitted",
+                serde_json::json!({"status": "Submitted", "submitted_dry_run": false, "mine": false}),
+                Some("2024-01-01T00:00:00Z"),
+                Some("Q1"),
+            )],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert!(
+            rows[0].4.contains("\"mine\":false"),
+            "the real submission displaces the dry run by rank"
+        );
+    }
+
+    /// Confirmed and Paid are never lowered, however new the file's row.
+    #[test]
+    fn import_never_lowers_confirmed() {
+        never_lowers("Confirmed", "Submitted");
+    }
+
+    #[test]
+    fn import_never_lowers_paid() {
+        never_lowers("Paid", "Submitted");
+    }
+
+    fn never_lowers(device_status: &str, file_status: &str) {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '2551Q', 2024, 1, 'Q1', ?2, ?3, '2024-01-01T00:00:00Z')",
+                rusqlite::params![
+                    TIN_X,
+                    device_status,
+                    format!("{{\"status\":\"{device_status}\",\"mine\":true}}")
+                ],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                file_status,
+                serde_json::json!({"status": file_status, "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                Some("Q1"),
+            )],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert_eq!(rows[0].3, device_status, "the status is never lowered");
+    }
+
+    /// An unparseable timestamp never wins at the same rank.
+    #[test]
+    fn import_unparseable_timestamp_never_wins_same_rank() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '2551Q', 2024, 1, 'Q1', 'Draft', '{\"status\":\"Draft\",\"mine\":true}', '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                "Draft",
+                serde_json::json!({"status": "Draft", "mine": false}),
+                Some("not a timestamp"),
+                Some("Q1"),
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert!(rows[0].4.contains("\"mine\":true"));
+        assert_eq!(counts.kept_newer, 1);
+    }
+
+    /// Across an amendment the file's row needs rank ≥ AND a strictly newer
+    /// stamp: a re-stamped old original never displaces the device's newer
+    /// amendment, whatever the amendment's status.
+    #[test]
+    fn import_cross_amendment_requires_rank_and_newer() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        // The device's in-place amendment, Draft, stamped now-ish.
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '2551Q', 2024, 1, 'Q1', 'Submitted', '{\"status\":\"Submitted\",\"is_amended\":true,\"mine\":true}', '2024-06-01T00:00:00Z')",
+                rusqlite::params![TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        // An old backup's Submitted original — but re-stamped newer, as an
+        // open of the stale copy would stamp it.
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                "Draft",
+                serde_json::json!({"status": "Draft", "is_amended": false, "mine": false}),
+                Some("2024-07-01T00:00:00Z"),
+                Some("Q1"),
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert!(
+            rows[0].4.contains("\"mine\":true"),
+            "the newer amendment stays: rank alone never beats time across an amendment"
+        );
+        assert_eq!(counts.kept_newer, 1);
+    }
+
+    /// A device row in the middle of a send — any of the five claim fields —
+    /// is never replaced, whatever the file carries.
+    #[test]
+    fn import_never_replaces_any_mid_send_device_row() {
+        for (field, value) in [
+            ("submission_claim_token", serde_json::json!("tok")),
+            (
+                "submission_claimed_at",
+                serde_json::json!("2024-05-01T00:00:00Z"),
+            ),
+            (
+                "submission_claim_lease_until",
+                serde_json::json!("2024-05-01T00:05:00Z"),
+            ),
+            (
+                "submission_put_started_at",
+                serde_json::json!("2024-05-01T00:01:00Z"),
+            ),
+            ("relay_pending", serde_json::json!("receipt")),
+        ] {
+            let dir = tempdir().unwrap();
+            let db = Database::open_ephemeral().unwrap();
+            db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+            let mut data = serde_json::json!({"status": "Queued", "mine": true});
+            data[field] = value;
+            db.conn
+                .execute(
+                    "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                     VALUES (?1, '2551Q', 2024, 1, 'Q1', 'Queued', ?2, '2024-01-01T00:00:00Z')",
+                    rusqlite::params![TIN_X, serde_json::to_string(&data).unwrap()],
+                )
+                .unwrap();
+            let archive = dir.path().join("a.zip");
+            archive_with_drafts(
+                &archive,
+                TIN_X,
+                &[file_draft(
+                    "2551Q",
+                    2024,
+                    Some(1),
+                    "Submitted",
+                    serde_json::json!({"status": "Submitted", "mine": false}),
+                    Some("2024-06-01T00:00:00Z"),
+                    Some("Q1"),
+                )],
+            );
+            import_profile_data(&db, &archive).unwrap();
+            let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+            assert!(
+                rows[0].4.contains("\"mine\":true"),
+                "a device row mid-send ({field}) is never replaced"
+            );
+        }
+    }
+
+    /// N8: a file row Queued in the middle of its send (claim fields in its
+    /// data) is kept out entirely — never inserted, never matched — and
+    /// counted with its own reason.
+    #[test]
+    fn import_file_mid_send_skipped_with_reason() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let archive = dir.path().join("a.zip");
+        let mut mid_send = serde_json::json!({"status": "Queued"});
+        mid_send["submission_claim_token"] = serde_json::json!("tok");
+        mid_send["submission_claimed_at"] = serde_json::json!("2024-05-01T00:00:00Z");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                "Queued",
+                mid_send,
+                Some("2024-06-01T00:00:00Z"),
+                Some("Q1"),
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert_eq!(rows.len(), 0, "a mid-send file row is never inserted");
+        assert_eq!(counts.skipped_mid_send, 1, "counted with its own reason");
+    }
+
+    /// N1, through the room migration itself: a 1701 written at quarter 0
+    /// (the queueable write path's storage) in a legacy database survives
+    /// export_all_profiles_data -> import_profile_data and opens in the
+    /// editor read path on the fresh room — the migration every user takes
+    /// at the first sign-in after the room layout.
+    #[test]
+    fn import_room_migration_preserves_quarter_zero() {
+        let dir = tempdir().unwrap();
+        let legacy = Database::open_ephemeral().unwrap();
+        legacy
+            .save_profile(branch_profile("Migrant", TIN_X))
+            .unwrap();
+        let draft = crate::forms::form_1701::Form1701Draft::new_from_profile(
+            &branch_profile("Migrant", TIN_X),
+            2024,
+            0,
+        );
+        legacy
+            .conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '1701', 2024, 0, 'A', 'Draft', ?2, '2024-01-01T00:00:00Z')",
+                rusqlite::params![TIN_X, serde_json::to_string(&serde_json::to_value(&draft).unwrap()).unwrap()],
+            )
+            .unwrap();
+        let archive = dir.path().join("profiles.zip");
+        crate::export::export_all_profiles_data(&legacy, &archive).unwrap();
+        let room = Database::open_ephemeral().unwrap();
+        import_profile_data(&room, &archive).unwrap();
+        let opened: Option<crate::forms::form_1701::Form1701Draft> =
+            room.get_queueable_draft(TIN_X, 2024, 0).unwrap();
+        assert!(
+            opened.is_some(),
+            "a migrated 1701 opens in the editor read path at quarter 0"
+        );
+    }
+
+    /// F6: the year facts keep the FILE's stamp, not the import time — a
+    /// later import from another device must compare against when the facts
+    /// were really written.
+    #[test]
+    fn import_year_facts_keep_the_file_stamp() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let profile = serde_json::to_value(branch_profile("Stamped", TIN_X)).unwrap();
+        let archive = dir.path().join("a.zip");
+        write_archive(
+            &archive,
+            &[
+                ("profile.json", profile.to_string()),
+                (
+                    "year_facts.json",
+                    serde_json::json!({
+                        "2024": {"updated_at": "2020-03-01T10:00:00Z"}
+                    })
+                    .to_string(),
+                ),
+            ],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let stamp: String = db
+            .conn
+            .query_row(
+                "SELECT updated_at FROM year_facts WHERE tin = ?1 AND taxable_year = 2024",
+                [TIN_X],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            stamp, "2020-03-01T10:00:00Z",
+            "the stored stamp is the file's, not the import time"
+        );
+    }
+
+    /// F6, the branch path: a branch's archive carries the head office's
+    /// effective facts; the head merge keeps the file's stamp too.
+    #[test]
+    fn import_branch_restore_keeps_the_file_stamp() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        // The head office already exists on this device.
+        db.save_profile(branch_profile("Head Office", TIN_X))
+            .unwrap();
+        let branch_tin = "44455566600001";
+        let profile = serde_json::to_value(branch_profile("Branch One", branch_tin)).unwrap();
+        let archive = dir.path().join("a.zip");
+        write_archive(
+            &archive,
+            &[
+                ("profile.json", profile.to_string()),
+                (
+                    "year_facts.json",
+                    serde_json::json!({
+                        "2024": {"updated_at": "2020-03-01T10:00:00Z"}
+                    })
+                    .to_string(),
+                ),
+            ],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let head_stamp: Option<String> = db
+            .conn
+            .query_row(
+                "SELECT updated_at FROM year_facts WHERE tin = ?1 AND taxable_year = 2024",
+                [TIN_X],
+                |row| row.get(0),
+            )
+            .ok();
+        assert_eq!(
+            head_stamp.as_deref(),
+            Some("2020-03-01T10:00:00Z"),
+            "the head row written by the branch merge keeps the file's stamp"
+        );
+    }
+
+    /// F2: the Queued revert clears the COMPLETE lifecycle claim at the raw
+    /// JSON level — lease_until, put_started_at and relay_pending too — for
+    /// a 1601C and a generic form.
+    #[test]
+    fn import_queued_revert_clears_complete_lifecycle_claim() {
+        for form in ["1601C", "2551Q"] {
+            let dir = tempdir().unwrap();
+            let db = Database::open_ephemeral().unwrap();
+            let archive = dir.path().join("a.zip");
+            let mut data = serde_json::json!({"status": "Queued"});
+            // A finished send's remnants: no live claim, but the lease and
+            // relay bookkeeping of one that completed or expired.
+            data["submission_claim_lease_until"] = serde_json::json!("2024-05-01T00:05:00Z");
+            data["submission_put_started_at"] = serde_json::json!("2024-05-01T00:01:00Z");
+            data["relay_pending"] = serde_json::json!("receipt");
+            archive_with_drafts(
+                &archive,
+                TIN_X,
+                &[file_draft(
+                    form,
+                    2024,
+                    Some(if form == "1601C" { 5 } else { 1 }),
+                    "Queued",
+                    data,
+                    Some("2024-06-01T00:00:00Z"),
+                    Some(if form == "1601C" { "M05" } else { "Q1" }),
+                )],
+            );
+            import_profile_data(&db, &archive).unwrap();
+            let rows = rows_of(&db, TIN_X, form, 2024);
+            assert_eq!(rows.len(), 1);
+            let parsed: serde_json::Value = serde_json::from_str(&rows[0].4).unwrap();
+            for key in [
+                "submission_claim_token",
+                "submission_claimed_at",
+                "submission_claim_lease_until",
+                "submission_put_started_at",
+                "relay_pending",
+            ] {
+                assert!(
+                    parsed.get(key).is_none_or(|v| v.is_null()),
+                    "{form}: the revert clears {key}"
+                );
+            }
+            assert_eq!(parsed["status"], "Draft");
+        }
+    }
+
+    /// A legacy submission inserted from the file never enters as Queued.
+    #[test]
+    fn import_legacy_submission_insert_never_queues() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let profile = serde_json::to_value(branch_profile("Juana", TIN_X)).unwrap();
+        let submissions = [serde_json::json!({
+            "tin": TIN_X,
+            "form_type": "2551Q",
+            "period": "2024Q1",
+            "status": "Queued",
+            "form_data": {},
+            "submitted_at": null,
+            "filename": null,
+            "created_at": null,
+            "updated_at": "2024-01-01T00:00:00Z"
+        })];
+        let archive = dir.path().join("a.zip");
+        write_archive(
+            &archive,
+            &[
+                ("profile.json", profile.to_string()),
+                (
+                    "submissions.json",
+                    serde_json::to_string(&submissions).unwrap(),
+                ),
+            ],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let subs = db.list_submissions_for_tin(TIN_X).unwrap();
+        assert_eq!(subs.len(), 1);
+        assert_eq!(subs[0].status, "Draft", "an import is never a send");
+    }
+
+    /// Both sides undated at the same rank is a tie: the device keeps its row.
+    /// (The schema's updated_at is NOT NULL, so the case is reachable only in
+    /// rows written before the constraint — the comparator is tested directly.)
+    #[test]
+    fn import_both_undated_same_rank_keeps_device() {
+        assert!(!import_may_replace("Draft", None, "Draft", None));
+        assert!(!import_timestamp_allows_draft(None, None));
+        assert!(import_may_replace(
+            "Draft",
+            None,
+            "Draft",
+            Some("2024-01-01T00:00:00Z")
+        ));
+    }
+
+    /// N5: a brand-new taxpayer's archive — profile, facts, forms lists and
+    /// all — never says nothing was restored.
+    #[test]
+    fn import_new_taxpayer_counts_the_profile() {
+        let dir = tempdir().unwrap();
+        let source = Database::open_ephemeral().unwrap();
+        source.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        let archive = dir.path().join("a.zip");
+        crate::export::export_profile_data(&source, TIN_X, &archive, None).unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let counts = import_profile_data(&db, &archive).unwrap();
+        assert!(
+            counts.restored >= 1,
+            "a new taxpayer's profile counts as restored: {counts:?}"
+        );
     }
 }

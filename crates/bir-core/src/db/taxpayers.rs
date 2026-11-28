@@ -1095,12 +1095,26 @@ pub(crate) fn write_year_facts(
     year: u16,
     facts: &YearFacts,
 ) -> std::result::Result<(), DbError> {
+    write_year_facts_stamped(conn, tin, year, facts, None)
+}
+
+/// `write_year_facts` keeping the stamp it is given: an import writes the
+/// file's time, so a later import from another device compares against when
+/// the facts were really written, not when they were imported.
+pub(crate) fn write_year_facts_stamped(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+    stamp: Option<&str>,
+) -> std::result::Result<(), DbError> {
     conn.execute(
         "INSERT INTO year_facts (tin, taxable_year, facts_json, updated_at)
-         VALUES (?1, ?2, ?3, datetime('now'))
+         VALUES (?1, ?2, ?3, COALESCE(?4, datetime('now')))
          ON CONFLICT(tin, taxable_year)
-         DO UPDATE SET facts_json = excluded.facts_json, updated_at = datetime('now')",
-        params![tin, i64::from(year), serde_json::to_string(facts)?],
+         DO UPDATE SET facts_json = excluded.facts_json,
+                       updated_at = COALESCE(?4, datetime('now'))",
+        params![tin, i64::from(year), serde_json::to_string(facts)?, stamp],
     )?;
     Ok(())
 }
@@ -1198,7 +1212,7 @@ pub(crate) fn restore_year_facts(
     if head.eopt_tier.is_none() {
         head.eopt_tier = facts.eopt_tier.clone();
     }
-    write_year_facts(conn, &head_tin, year, &head)
+    write_year_facts_stamped(conn, &head_tin, year, &head, incoming_updated_at)
 }
 
 pub(crate) fn list_year_facts(
