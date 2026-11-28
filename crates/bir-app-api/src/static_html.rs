@@ -99,7 +99,13 @@ fn page_starts(html: &str) -> Vec<(usize, bool)> {
             let cls = &rest[..cls_end];
             v.push((
                 at,
-                cls.contains("page-receipt") || cls.contains("page-continuation"),
+                // A plain continuation table may flow onto the next paper sheet;
+                // a cloned-band continuation is already paginated as a fixed
+                // paper grid, so `page-continuation-band` must not match here.
+                cls.contains("page-receipt")
+                    || cls
+                        .split_whitespace()
+                        .any(|part| part == "page-continuation"),
             ));
         }
         from = at + 4;
@@ -240,5 +246,13 @@ mod tests {
         let out = super::staticize(doc);
         assert_eq!(out.matches(r#"<div class="sheet"#).count(), 2);
         assert!(out.contains(r#"<div class="sheet sheet-flow" data-preview-label="Page 2 of 2">"#));
+    }
+
+    #[test]
+    fn band_continuation_page_stays_on_one_fixed_sheet() {
+        let doc = r##"<html><head></head><body><div class="page page-1"><input type="text" class="fi" id="p1c1" value="X"></div><div class="page page-continuation-band" id="page-continuation-s0-p0"><input type="text" class="fi" id="c1" value="Row 6"></div></body></html>"##;
+        let out = super::staticize(doc);
+        assert!(out.contains(r#"<div class="sheet" data-preview-label="Page 2 of 2"><div class="page page-continuation-band"#));
+        assert!(!out.contains(r#"<div class="sheet sheet-flow" data-preview-label="Page 2 of 2"><div class="page page-continuation-band"#));
     }
 }

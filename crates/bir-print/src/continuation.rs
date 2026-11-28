@@ -524,25 +524,42 @@ pub fn continuation_pages_html_with_truncated(
                 sched.printed_capacity,
             ));
 
-            out.push_str(
-                "<table style=\"width:100%;border-collapse:collapse;table-layout:auto;font-size:8.6pt\"><thead><tr>",
-            );
-            out.push_str(
-                "<th style=\"width:22pt;border:0.75pt solid #000;background:#f2f2f2;padding:3pt 3pt;text-align:center;font-weight:700;vertical-align:bottom\">#</th>",
-            );
+            // Very wide plain continuation tables (notably 2200M Schedule 1)
+            // otherwise size to their unwrapped amount columns and run past the
+            // paper edge. Fixed layout plus a compact cell size keeps every
+            // wide-table column inside the additional sheet; narrower tables
+            // keep the roomier default typography.
+            let wide_table = sched.columns.len() >= 10;
+            let (table_layout, font_size, cell_padding) = if wide_table {
+                ("fixed", "6.8pt", "2pt 2pt")
+            } else {
+                ("auto", "8.6pt", "3pt 4pt")
+            };
+            out.push_str(&format!(
+                "<table style=\"width:100%;border-collapse:collapse;table-layout:{table_layout};font-size:{font_size}\"><thead><tr>",
+            ));
+            out.push_str(&format!(
+                "<th style=\"width:22pt;border:0.75pt solid #000;background:#f2f2f2;padding:{cell_padding};text-align:center;font-weight:700;vertical-align:bottom\">#</th>",
+            ));
             for col in &sched.columns {
                 let align = if col.is_amount { "right" } else { "left" };
                 out.push_str(&format!(
-                    "<th style=\"border:0.75pt solid #000;background:#f2f2f2;padding:3pt 4pt;text-align:{align};font-weight:700;vertical-align:bottom;overflow-wrap:break-word\">{}</th>",
+                    "<th style=\"border:0.75pt solid #000;background:#f2f2f2;padding:{cell_padding};text-align:{align};font-weight:700;vertical-align:bottom;overflow-wrap:break-word\">{}</th>",
                     escape_html(&col.heading),
                 ));
             }
             out.push_str("</tr></thead><tbody>");
+            let amount_cell_style = format!(
+                "border:0.75pt solid #000;padding:{cell_padding};text-align:right;vertical-align:top;white-space:nowrap;font-variant-numeric:tabular-nums"
+            );
+            let text_cell_style = format!(
+                "border:0.75pt solid #000;padding:{cell_padding};text-align:left;vertical-align:top;overflow-wrap:break-word"
+            );
 
             for row in rows {
                 out.push_str("<tr>");
                 out.push_str(&format!(
-                    "<td style=\"border:0.75pt solid #000;padding:3pt 3pt;text-align:center;vertical-align:top;color:#333\">{}</td>",
+                    "<td style=\"border:0.75pt solid #000;padding:{cell_padding};text-align:center;vertical-align:top;color:#333\">{}</td>",
                     row.row_number,
                 ));
                 for (col, val) in sched.columns.iter().zip(row.values.iter()) {
@@ -554,9 +571,9 @@ pub fn continuation_pages_html_with_truncated(
                         val.clone()
                     };
                     let style = if col.is_amount {
-                        "border:0.75pt solid #000;padding:3pt 4pt;text-align:right;vertical-align:top;white-space:nowrap;font-variant-numeric:tabular-nums"
+                        &amount_cell_style
                     } else {
-                        "border:0.75pt solid #000;padding:3pt 4pt;text-align:left;vertical-align:top;overflow-wrap:break-word"
+                        &text_cell_style
                     };
                     out.push_str(&format!(
                         "<td style=\"{style}\">{}</td>",
@@ -3463,6 +3480,41 @@ mod tests {
             failures.len(),
             failures.join("\n  - ")
         );
+    }
+
+    #[test]
+    fn form_2200m_wide_schedule_table_stays_inside_the_paper_width() {
+        let mut fields = BTreeMap::new();
+        fields.insert("derived:tin".into(), "00012345300000".into());
+        fields.insert(
+            "frm2200M:txtPg1Pt1I6RegisteredName".into(),
+            "MINERAL PRODUCTS FILING CORPORATION".into(),
+        );
+        for (key, value) in [
+            ("frm2200M:txtSched1_description11", "OTHER MINERAL ROW 11"),
+            ("frm2200M:txtSched1_PlaceOfRemoval11", "PROVINCE 11"),
+            ("frm2200M:txtSched1_VOMRITaxableA11", "10000.00"),
+            ("frm2200M:txtSched1_VOMRIExemptB11", "1000.00"),
+            ("frm2200M:txtSched1_LocallyExtractedRateC11", "2.00"),
+            ("frm2200M:txtSched1_LocallyExtractedRateD11", "3.00"),
+            ("frm2200M:txtSched1_LocallyExtractedTaxRateE11", "4.00"),
+            ("frm2200M:txtSched1_LocallyExtractedTaxDueF11", "500.00"),
+        ] {
+            fields.insert(key.into(), value.into());
+        }
+
+        let report = detect_overflow("2200m-2018", &fields).unwrap();
+        assert_eq!(report.schedules.len(), 1);
+        assert!(
+            report.schedules[0].columns.len() >= 10,
+            "2200M Schedule 1 is the wide plain continuation table"
+        );
+        let html = continuation_pages_html("2200m-2018", &fields, &report, "612pt", "936pt");
+        assert!(
+            html.contains("table-layout:fixed;font-size:6.8pt"),
+            "the wide table must use the compact fixed layout that keeps it inside the paper: {html}"
+        );
+        assert!(html.contains("OTHER MINERAL ROW 11"));
     }
 
     #[test]
