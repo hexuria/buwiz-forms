@@ -5787,7 +5787,7 @@ fn apply_rule6_specify_bands(
                 greys = spans;
             }
             let text_right = greys.first().map(|(l, _)| l - 4.0).unwrap_or(row_x1);
-            let room = shrunk_room(((row_x1 - row_x0) - 6.0).max(20.0));
+            let room = shrunk_room(((text_right - row_x0) - 6.0).max(20.0));
             let cell_room =
                 cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
             let composed = compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val);
@@ -5812,7 +5812,7 @@ fn apply_rule6_specify_bands(
                     insertions.push(Rule6Insertion {
                         cell_id: r6.cell_id.clone(),
                         cut_y,
-                        dh: (11.0 * band_lines as f64 + 1.0).max(14.0),
+                        dh: 11.0 * band_lines as f64 + 1.0,
                         x0: row_x0,
                         x1: row_x1,
                         display: band_display,
@@ -6309,7 +6309,8 @@ fn shift_page_and_insert_rule6(
         };
         let band_lines: Vec<&str> = ins.display.split('\n').collect();
         let pitch = 11.0f64;
-        let full_w = (ins.x1 - ins.x0 - 3.0).max(w);
+        let text_right = ins.greys.first().map(|(l, _)| l - 4.0).unwrap_or(ins.x1);
+        let full_w = (text_right - ins.x0 - 3.0).max(20.0);
         let mut inputs_html = String::new();
         for (line_idx, line) in band_lines.iter().enumerate() {
             inputs_html.push_str(&format!(
