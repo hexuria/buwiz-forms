@@ -616,7 +616,9 @@ _package-mac-appstore args="": build-frozen-html-identity
     root="$(pwd)"
     CERT="${CODESIGN_IDENTITY:--}"
     # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
-    eval "$({{PYTHON}} scripts/store_gmail.py env)"
+    # An assignment, not eval "$(...)": a failing script then stops the build (set -e) instead of evaluating nothing.
+    drop="$({{PYTHON}} scripts/store_gmail.py env)"
+    eval "$drop"
     # nsh package has no flag for a feature of the app crate: nsh/mas/cargo-with-mas.sh, set as $CARGO, adds `mas_build`
     # (and `agent` for --agent) to the build of the generated macOS host.
     export NSH_MAS_AGENT=0
@@ -876,7 +878,9 @@ ios-appstore: build-frozen-html-identity
     fi
     set -a && source .env && set +a
     # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
-    eval "$({{PYTHON}} scripts/store_gmail.py env)"
+    # An assignment, not eval "$(...)": a failing script then stops the build (set -e) instead of evaluating nothing.
+    drop="$({{PYTHON}} scripts/store_gmail.py env)"
+    eval "$drop"
     BUILD="$(uv run scripts/bump_build.py --print-next)"
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid App Store build number: $BUILD" >&2; exit 1 ;; esac
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two

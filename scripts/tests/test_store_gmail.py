@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -135,7 +136,8 @@ class RecipeTests(unittest.TestCase):
         for name in ("ios-appstore", "_package-mac-appstore"):
             with self.subTest(recipe=name):
                 body = recipe(name)
-                self.assertIn('eval "$({{PYTHON}} scripts/store_gmail.py env)"', body)
+                self.assertIn('drop="$({{PYTHON}} scripts/store_gmail.py env)"\n    eval "$drop"', body)
+                self.assertNotIn('eval "$({{PYTHON}}', body)
                 self.assertIn('{{PYTHON}} scripts/store_gmail.py check "$APP"', body)
                 # The check runs on the finished bundle, before it is signed for the last time.
                 self.assertLess(body.index("store_gmail.py check"), body.rindex("codesign --force"))
@@ -152,13 +154,71 @@ class RecipeTests(unittest.TestCase):
         self.assertNotIn('cp "$root/entitlements.plist"', body)
         self.assertLess(body.index("store_gmail.py env"), body.index("nsh package"))
 
-    def test_the_direct_downloads_are_untouched(self):
-        # Only the store artifacts follow the switch; the direct downloads keep what they ship.
-        for name in ("package-macos-release", "package-windows-release", "package-linux-release"):
-            match = re.search(rf"^{re.escape(name)}[ :]", JUSTFILE, re.M)
-            if match:
-                self.assertNotIn("store_gmail", recipe(name))
+    def test_a_failing_switch_stops_the_build(self):
+        # The recipes' two lines, with the script failing: set -e must stop before anything after them runs. (eval "$(...)"
+        # would evaluate nothing, return 0 and go on with both GOOGLE_ values still set.)
+        body = recipe("ios-appstore")
+        lines = [line.strip() for line in body.splitlines() if "store_gmail.py env" in line or line.strip() == 'eval "$drop"']
+        self.assertEqual(len(lines), 2, lines)
+        script = "set -euo pipefail\nGOOGLE_CLIENT_ID=x\n" + "\n".join(lines).replace("{{PYTHON}}", "false &&") + "\necho went-on\n"
+        out = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertNotIn("went-on", out.stdout)
 
+    def test_the_direct_downloads_are_untouched(self):
+        # Only the store artifacts follow the switch; the direct downloads keep shipping Gmail Connect.
+        package = (ROOT / "scripts/package_macos_release.sh").read_text(encoding="utf-8")
+        self.assertNotIn("store_gmail", package)
+        self.assertNotIn("STORE_GMAIL", package)
+        workflows = ROOT / ".github/workflows"
+        for name in ("release.yml", "release-macos.yml", "release-windows.yml", "release-linux.yml"):
+            text = (workflows / name).read_text(encoding="utf-8")
+            with self.subTest(workflow=name):
+                self.assertNotIn("store_gmail", text)
+                self.assertNotIn("STORE_GMAIL", text)
+                self.assertIn("GOOGLE_CLIENT_ID: ${{", text)
+        top = (workflows / "release.yml").read_text(encoding="utf-8").split("\njobs:", 1)[0]
+        self.assertIn("  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}", top)
+        self.assertIn("  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}", top)
+
+
+class ArchiveTests(unittest.TestCase):
+    def test_a_zip_archive_is_read_member_by_member(self):
+        for suffix in (".ipa", ".aab", ".msix"):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as tmp:
+                archive = Path(tmp) / f"eBIRForms{suffix}"
+                with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+                    z.writestr("Payload/eBIRForms.app/eBIRForms", b"\x00" + FAKE_ID + b"\x00" + FAKE_SECRET)
+                ok, message = store_gmail.check(archive, {})
+                self.assertFalse(ok)
+                self.assertIn("!Payload/eBIRForms.app/eBIRForms", message)
+                ok, _ = store_gmail.check(archive, {"STORE_GMAIL": "1"})
+                self.assertTrue(ok)
+
+    def test_a_clean_zip_archive_passes_with_the_switch_off(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "eBIRForms.ipa"
+            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("Payload/eBIRForms.app/eBIRForms", b"nothing here")
+            self.assertTrue(store_gmail.check(archive, {})[0])
+
+    def test_an_archive_it_cannot_read_is_refused_not_passed(self):
+        for suffix in (".pkg", ".dmg", ".msixbundle"):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as tmp:
+                archive = Path(tmp) / f"eBIRForms{suffix}"
+                archive.write_bytes(b"xar!compressed")
+                for env in ({}, {"STORE_GMAIL": "1"}):
+                    ok, message = store_gmail.check(archive, env)
+                    self.assertFalse(ok)
+                    self.assertIn("cannot read inside", message)
+
+    def test_the_command_line_prints_plain_ascii(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = subprocess.run([sys.executable, str(ROOT / "scripts/store_gmail.py"), "check", str(fake_app(Path(tmp)))],
+                                 capture_output=True, env={**os.environ, "STORE_GMAIL": ""})
+            self.assertEqual(out.returncode, 0)
+            out.stderr.decode("ascii")
+            self.assertTrue(out.stderr.startswith(b"OK "))
 
 if __name__ == "__main__":
     unittest.main()
