@@ -1178,9 +1178,10 @@ mod tests {
             .expect("normalized editable replay must re-import");
         assert_eq!(plain_reimport.to_bir_field_map(), plain_replay);
 
-        let encrypted =
-            std::fs::read(directory.join("00000000000000-0619F-042026WB#codeitlikemiley@gmail.com#.xml"))
-                .expect("reviewed encrypted companion must be readable");
+        let encrypted = std::fs::read(
+            directory.join("00000000000000-0619F-042026WB#codeitlikemiley@gmail.com#.xml"),
+        )
+        .expect("reviewed encrypted companion must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),
             super::super::form_0619f::REVIEWED_ENCRYPTED_XML_SHA256
