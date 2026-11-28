@@ -1,10 +1,10 @@
 {
  "suite": "tin-status",
  "target": "macos",
- "started": "20261127-145055",
- "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-145055",
+ "started": "20261127-155654",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155654",
  "cli_version": "0.4.0",
- "app_commit": "29af9d5d",
+ "app_commit": "2db32ac5",
  "platform": "desktop",
  "os": "macos",
  "features": [
@@ -26,7 +26,7 @@
   {
    "name": "setup-start",
    "status": "pass",
-   "ms": 684,
+   "ms": 727,
    "note": null,
    "file": "agent-recipes/e2e/setup-start.wants",
    "video": null
@@ -34,7 +34,7 @@
   {
    "name": "sign-up",
    "status": "pass",
-   "ms": 7508,
+   "ms": 7660,
    "note": null,
    "file": "agent-recipes/e2e/tin-sign-up.wants",
    "video": null
@@ -42,16 +42,16 @@
   {
    "name": "buwiz-sign-in",
    "status": "fail",
-   "ms": 10885,
+   "ms": 4886,
    "note": null,
    "file": "agent-recipes/e2e/buwiz-sign-in.wants",
    "video": null,
-   "step": "s4",
-   "error": "wait_until timed out: node `settings-account` not found",
-   "error_code": "timeout",
-   "line": "wait_until settings-account --timeout-ms 10000",
-   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-145055/03-buwiz-sign-in/failure.png",
-   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-145055/03-buwiz-sign-in/failure-tree.json"
+   "step": "s15",
+   "error": "node 2954 cannot receive native focus",
+   "error_code": "host_error",
+   "line": "key gate-code-page 246810",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155654/03-buwiz-sign-in/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155654/03-buwiz-sign-in/failure-tree.json"
   },
   {
    "name": "tin-chips",

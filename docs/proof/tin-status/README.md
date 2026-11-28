@@ -16,5 +16,12 @@ Status of this branch: the macOS run at the first head proved setup-start and si
 (01-setup-start/, 02-sign-up/ screenshots; report.json/report-macos.md here); the sign-in recipe then failed on a
 recipe-ordering fault (the account card is drawn only after the account settings tab is picked — fixed in
 buwiz-sign-in.wants: navigate first, then the card). The full-suite rerun at the final head and the iPhone run
-land here as they finish. known_gap: the iPhone simulator proof moves to another machine (the only simulator
-runtime on the build machine is the in-use iOS 27.0 and may not be deleted); issue number to be filed by the owner.
+land here as they finish. known_gaps:
+1. gpui-agent-cli 0.4.0 cannot key the sign-in code: `key` needs native focus on a target node, the OTP textbox
+   ("Sign-in code, 6 digits", role textbox) is not targetable by id, and the boxes wrapper (gate-code-boxes) is a
+   non-focusable generic. Every recipe verb combination was tried (click boxes: not pressable; click the textbox
+   name: not a target form; key the page: cannot receive native focus). The email step before it passes end to end.
+   buwiz-sign-in stops at s15, so tin-chips and tin-queue-sheet cannot run in the suite — they need the signed-in
+   account. Issue number: to be filed host-side by the owner (not in this PR).
+2. The iPhone simulator proof moves to another machine: the only simulator runtime on the build machine is the
+   in-use iOS 27.0 and may not be deleted.

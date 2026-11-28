@@ -1,0 +1,477 @@
+{
+ "v": 2,
+ "id": "1",
+ "ok": true,
+ "tree": {
+  "app": "Native Shell",
+  "platform": "desktop",
+  "ready": true,
+  "nodes": [
+   {
+    "id": "n1",
+    "role": "generic",
+    "name": "",
+    "enabled": true,
+    "focused": false,
+    "bounds": {
+     "x": 0.0,
+     "y": 0.0,
+     "w": 1200.0,
+     "h": 800.0
+    },
+    "children": [
+     {
+      "id": "n2",
+      "role": "generic",
+      "name": "",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 0.0,
+       "y": 0.0,
+       "w": 1200.0,
+       "h": 800.0
+      },
+      "children": [
+       {
+        "id": "shell",
+        "role": "generic",
+        "name": "shell",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 0.0,
+         "y": 0.0,
+         "w": 1200.0,
+         "h": 800.0
+        },
+        "children": [
+         {
+          "id": "locked-frame",
+          "role": "generic",
+          "name": "locked-frame",
+          "enabled": true,
+          "focused": false,
+          "bounds": {
+           "x": 0.0,
+           "y": 0.0,
+           "w": 1200.0,
+           "h": 800.0
+          },
+          "children": [
+           {
+            "id": "title-bar",
+            "role": "generic",
+            "name": "title-bar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 0.0,
+             "w": 1200.0,
+             "h": 40.0
+            }
+           },
+           {
+            "id": "locked-screen",
+            "role": "generic",
+            "name": "locked-screen",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 40.0,
+             "w": 1200.0,
+             "h": 760.0
+            },
+            "children": [
+             {
+              "id": "gate-root",
+              "role": "generic",
+              "name": "gate-root",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 0.0,
+               "y": 40.0,
+               "w": 1200.0,
+               "h": 760.0
+              },
+              "children": [
+               {
+                "id": "open-page",
+                "role": "generic",
+                "name": "open-page",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 0.0,
+                 "y": 40.0,
+                 "w": 1200.0,
+                 "h": 760.0
+                },
+                "children": [
+                 {
+                  "id": "open-back-row",
+                  "role": "generic",
+                  "name": "open-back-row",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 0.0,
+                   "y": 40.0,
+                   "w": 1200.0,
+                   "h": 40.0
+                  },
+                  "children": [
+                   {
+                    "id": "gate-change-email",
+                    "role": "button",
+                    "name": "Change email",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 12.0,
+                     "y": 40.0,
+                     "w": 128.0,
+                     "h": 40.0
+                    },
+                    "children": [
+                     {
+                      "id": "n2942",
+                      "role": "generic",
+                      "name": "",
+                      "enabled": true,
+                      "focused": false,
+                      "bounds": {
+                       "x": 12.0,
+                       "y": 51.0,
+                       "w": 18.0,
+                       "h": 18.0
+                      }
+                     },
+                     {
+                      "id": "n2944",
+                      "role": "note",
+                      "name": "Change email",
+                      "enabled": true,
+                      "focused": false,
+                      "bounds": {
+                       "x": 34.0,
+                       "y": 51.0,
+                       "w": 98.0,
+                       "h": 19.0
+                      }
+                     }
+                    ]
+                   }
+                  ]
+                 },
+                 {
+                  "id": "n2948",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 0.0,
+                   "y": 80.0,
+                   "w": 1200.0,
+                   "h": 720.0
+                  },
+                  "children": [
+                   {
+                    "id": "auth-scroll",
+                    "role": "scroll",
+                    "name": "auth-scroll",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 0.0,
+                     "y": 80.0,
+                     "w": 1200.0,
+                     "h": 720.0
+                    },
+                    "children": [
+                     {
+                      "id": "n2952",
+                      "role": "generic",
+                      "name": "",
+                      "enabled": true,
+                      "focused": false,
+                      "bounds": {
+                       "x": 0.0,
+                       "y": 80.0,
+                       "w": 1200.0,
+                       "h": 720.0
+                      },
+                      "children": [
+                       {
+                        "id": "gate-code-page",
+                        "role": "generic",
+                        "name": "gate-code-page",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                         "x": 406.0,
+                         "y": 213.0,
+                         "w": 388.0,
+                         "h": 455.0
+                        },
+                        "children": [
+                         {
+                          "id": "n2986",
+                          "role": "generic",
+                          "name": "",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 430.0,
+                           "y": 229.0,
+                           "w": 340.0,
+                           "h": 180.0
+                          },
+                          "children": [
+                           {
+                            "id": "brand-logo",
+                            "role": "generic",
+                            "name": "Buwiz Forms",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 517.0,
+                             "y": 229.0,
+                             "w": 166.0,
+                             "h": 180.0
+                            }
+                           }
+                          ]
+                         },
+                         {
+                          "id": "n2956",
+                          "role": "generic",
+                          "name": "",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 430.0,
+                           "y": 409.0,
+                           "w": 340.0,
+                           "h": 243.0
+                          },
+                          "children": [
+                           {
+                            "id": "n2958",
+                            "role": "generic",
+                            "name": "",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 430.0,
+                             "y": 433.0,
+                             "w": 340.0,
+                             "h": 219.0
+                            },
+                            "children": [
+                             {
+                              "id": "gate-code-title",
+                              "role": "note",
+                              "name": "Check your email",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 430.0,
+                               "y": 433.0,
+                               "w": 340.0,
+                               "h": 27.0
+                              }
+                             },
+                             {
+                              "id": "gate-code-sentence",
+                              "role": "generic",
+                              "name": "gate-code-sentence",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 430.0,
+                               "y": 472.0,
+                               "w": 340.0,
+                               "h": 36.0
+                              },
+                              "children": [
+                               {
+                                "id": "n2970",
+                                "role": "note",
+                                "name": "We sent a 6-digit code to",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 517.0,
+                                 "y": 472.0,
+                                 "w": 167.0,
+                                 "h": 18.0
+                                }
+                               },
+                               {
+                                "id": "gate-code-address",
+                                "role": "note",
+                                "name": "juana@example.com",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 529.0,
+                                 "y": 490.0,
+                                 "w": 142.0,
+                                 "h": 18.0
+                                }
+                               }
+                              ]
+                             },
+                             {
+                              "id": "n2974",
+                              "role": "generic",
+                              "name": "",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 430.0,
+                               "y": 524.0,
+                               "w": 340.0,
+                               "h": 84.0
+                              },
+                              "children": [
+                               {
+                                "id": "gate-code-boxes",
+                                "role": "generic",
+                                "name": "gate-code-boxes",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 443.0,
+                                 "y": 524.0,
+                                 "w": 314.0,
+                                 "h": 56.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n345",
+                                  "role": "textbox",
+                                  "name": "Sign-in code, 6 digits",
+                                  "value": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 443.0,
+                                   "y": 524.0,
+                                   "w": 314.0,
+                                   "h": 56.0
+                                  }
+                                 }
+                                ]
+                               },
+                               {
+                                "id": "gate-code-slot",
+                                "role": "generic",
+                                "name": "gate-code-slot",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 430.0,
+                                 "y": 588.0,
+                                 "w": 340.0,
+                                 "h": 20.0
+                                }
+                               }
+                              ]
+                             },
+                             {
+                              "id": "gate-resend",
+                              "role": "button",
+                              "name": "Send a new code in 4:59",
+                              "enabled": false,
+                              "focused": false,
+                              "bounds": {
+                               "x": 510.0,
+                               "y": 620.0,
+                               "w": 181.0,
+                               "h": 32.0
+                              },
+                              "states": [
+                               "disabled"
+                              ],
+                              "children": [
+                               {
+                                "id": "n2982",
+                                "role": "note",
+                                "name": "Send a new code in 4:59",
+                                "enabled": false,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 518.0,
+                                 "y": 627.0,
+                                 "w": 165.0,
+                                 "h": 18.0
+                                },
+                                "states": [
+                                 "disabled"
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "toaster",
+      "role": "generic",
+      "name": "toaster",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 0.0,
+       "y": 780.0,
+       "w": 1200.0,
+       "h": 20.0
+      },
+      "children": [
+       {
+        "id": "n8",
+        "role": "generic",
+        "name": "",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 380.0,
+         "y": 780.0,
+         "w": 440.0,
+         "h": 0.0
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}
