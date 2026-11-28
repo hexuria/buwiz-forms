@@ -115,3 +115,36 @@ pre-existing known gap at each. Nothing fails at AFTER.
 A real dialog or printout a person produced; any scale but 100 %; the print preview window's own
 pixels (gap 3); a schedule table with three rows; the pixel-exact end of the form's scroll (gap 2 —
 same depth both states).
+
+## The three gaps closed: the print preview window itself, the schedule table with three rows, the form's very end
+
+Same two states, same machine, same window sizes. BEFORE: app b983b2a4 + kit 8c78cfd6 (taffy 0.15); AFTER: app 8f825621 + kit bc417406 (taffy 0.16).
+
+### How the pictures were taken
+
+- **The print preview is a second native window and gpui-agent cannot capture it**: `screenshot --target print-sheet` captures the main window, `--mode scrolled` is `screenshot_unavailable` on Windows, and CLI 0.5.0 has no window subcommand reaching the kit's `window_screenshot`. So the preview pictures are **observe-only operating-system captures** of the preview window's screen region (no clicks, no keys through the OS — pixels only), window 956×1139 at the same position in both states. Scrolling inside the preview was driven by gpui-agent (`scroll print-sheet`), and the end capture is provably the end: two consecutive captures after further scrolls are pixel-identical.
+- **The schedule table** (in-driver screenshot, wide 1440×900): three rows in both states — the default row plus two rows added through the app's own drawer (add, fill amount 1,000.00 / 2,000.00, done).
+- **The form's very end** (in-driver screenshot): `fp-pager-clearance` exists **only in the narrow layout** (`<If when={narrow()}>`, FormPage.tsx — narrow is width under 600 points or touch), so the driver's `viewport` op resized the content area to 500×800 points for this capture in both states. The end is proven: the clearance node's screen position does not move across an extra 1,600-point scroll.
+
+### Comparison table (differing pixels = any channel delta over 8)
+
+| picture | size | result |
+|---|---|---|
+| print preview, top | 956×1139 | identical outside the masks below |
+| print preview, end | 956×1139 | identical outside the masks below |
+| schedule table, three rows | 1440×900 | identical outside the masks below |
+| form end, narrow 500×800 | 500×800 | pixel-identical, every pixel |
+
+The masks, and why they are not layout: the only differing pixels anywhere were (a) **hover-state fills** — exact theme hover color `#ebebee` on the control the mouse happened to rest over in one state and not the other (the preview's *Save as PDF* button, the preview's zoom control, the expanded *Return details* part-toggle row; proven by hovering the same row at BEFORE, which turns it exactly `#ebebee`), (b) the **OS-drawn window frame edges** of the preview (x<10, x>945 — shadow pixels vary with focus), and (c) the rows of the preview capture beyond the screen's bottom edge or under the taskbar (the window is taller than the screen; same geometry both sides). One apparent content difference — the preview end showing the filled amounts 1,000/2,000 at AFTER but zeros at BEFORE — was a **data-state artifact of capture order**, not a layout difference: the preview updates live, and the BEFORE end capture was first taken before its rows existed; recaptured with the same data present, the pair is pixel-identical outside the masks (`zoom-preview-end-rows.png` shows the before/after of that artifact).
+
+### Measured geometry (identical in both states)
+
+| measurement | BEFORE | AFTER |
+|---|---|---|
+| preview sheet centring: left margin / sheet width / window width | 24 px / 932 px / 956 px | 24 px / 932 px / 956 px |
+| end padding below the last content row of the preview end capture | identical (pixel-identical captures) | identical |
+| `fp-pager-clearance` spacer height, narrow | 92 px (60 + 16 + 16) | 92 px |
+| empty space between the last form content and the floating pager, narrow, at the end | 144 px | 144 px |
+| slack below the clearance spacer to the viewport bottom | 128 px | 128 px |
+
+**Verdict: nothing moved.** The preview's centring, end padding and scroll range, the schedule table with three rows, and the form's very end are the same before and after the taffy 0.16 move; every difference found was a hover or capture artifact and is proven as such above.
