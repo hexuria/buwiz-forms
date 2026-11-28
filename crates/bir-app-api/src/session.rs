@@ -483,13 +483,6 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
         tracing::info!("a stale same-owner Opening is replaced: its claim thread is gone");
     }
     let (spawn, outcome) = begin_open_locked(&mut session, owner.clone(), engine, why);
-    if let Some(epoch) = spawn {
-        // The epoch reads as a LIVE claim from inside the SESSION section: finish_open spawns
-        // the thread only after the lock is released, and a second engine's begin_open in that
-        // window would read this Opening as stale — claim thread nowhere — and replace it
-        // (the two-engines race). The spawn itself does not re-push.
-        lock(&LIVE_CLAIMS).push(epoch);
-    }
     drop(session);
     finish_open(spawn, outcome, owner, engine, why);
 }
@@ -529,6 +522,10 @@ fn begin_open_locked(
     match ensure_device_guard() {
         Ok(()) => {
             session.phase = Phase::Opening { owner, engine, why };
+            // K1: the epoch reads as a LIVE claim from the moment it is made, INSIDE the lock —
+            // the spawn happens only after SESSION is released, and any same-owner begin_open or
+            // signed_in in that window would read this Opening as stale and replace it.
+            lock(&LIVE_CLAIMS).push(session.epoch);
             (Some(session.epoch), outcome)
         }
         Err(detail) => {
@@ -648,11 +645,18 @@ fn spawn_claim_thread(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
     CLAIM_THREAD_SPAWNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let database = bir_core::db::capture_database_path_override();
     let device = bir_core::platform::capture_device_dir_override();
+    // The drop guard is built HERE and moved into the closure: a panic in the override
+    // scaffolding before claim_thread_work runs — or in finish_close before the spawn —
+    // still commits Blocked instead of leaving the epoch live forever.
+    let guard = ClaimGuard {
+        epoch,
+        disarmed: false,
+    };
     let spawn = std::thread::Builder::new()
         .name("buwiz-room-open".to_string())
         .spawn(move || {
             database.run(move || {
-                device.run(move || claim_thread_work(owner, engine, why, epoch));
+                device.run(move || claim_thread_work(owner, engine, why, epoch, guard));
             });
         });
     #[cfg(test)]
@@ -1062,9 +1066,10 @@ pub fn signed_in(
         }
         Begun::Close(outcome) => {
             post_menu_notice();
-            crate::open_room::sweep_registry();
             finish_close(&outcome, ForgetMode::Backgrounded);
+            // F14, the sixth site: the room Arc drops BEFORE the sweep.
             drop(outcome.dropped);
+            crate::open_room::sweep_registry();
             report_invariants();
         }
         Begun::Nothing => report_invariants(),
@@ -1102,12 +1107,8 @@ fn claimant_of(stored: &StoredAccount) -> Claimant {
 
 /// The claim thread's work (§3 step 2): the claim, the target, the open — all outside SESSION —
 /// ending in the compare-and-swap commit. Only the commit writes anything visible (§5.9).
-fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64) {
+fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64, guard: ClaimGuard) {
     let _ = (engine, why);
-    let guard = ClaimGuard {
-        epoch,
-        disarmed: false,
-    };
     #[cfg(test)]
     if PANIC_CLAIM.swap(false, std::sync::atomic::Ordering::SeqCst) {
         panic!("the test's injected claim panic");
@@ -2741,6 +2742,46 @@ mod tests {
     /// commit 6 wires quit's release order: worker, holders, checkpoint, registry, guards.
     fn commit6_quit_releases() {
         panic!("commit 6 wires this")
+    }
+
+    /// K1: two engines' signed_in of the same owner race — one epoch bump, one session. The
+    /// push inside begin_open_locked is what the second one's stale check reads.
+    #[test]
+    fn two_engines_signed_in_boot_one_session() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        permit_claim_threads();
+        let owner_a = seed_stored("user-a", false);
+        let before_epoch = snapshot().epoch;
+        let stored = bir_core::cloud_account::load_stored_account()
+            .unwrap()
+            .expect("a sign-in");
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let mut threads = Vec::new();
+        for engine in 1..=2u64 {
+            let stored = stored.clone();
+            let barrier = barrier.clone();
+            let device = bir_core::platform::capture_device_dir_override();
+            let database = bir_core::db::capture_database_path_override();
+            threads.push(std::thread::spawn(move || {
+                database.run(move || {
+                    device.run(move || {
+                        barrier.wait();
+                        signed_in(&stored, engine).unwrap();
+                    });
+                });
+            }));
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(
+            snapshot().epoch,
+            before_epoch + 1,
+            "one epoch bump for the one session, not one per engine"
+        );
+        join_claim_threads();
+        let _ = scratch;
     }
 
     /// n1: a sign-out while the claim runs — the close bumps the epoch, the opener's commit
@@ -4675,14 +4716,18 @@ mod tests {
         assert_invariants();
     }
 
-    /// Finding 13: the disk changes to B mid-Opening(A) — the real claim acts for A or abandons,
-    /// never for B, and no B room record or folder exists afterwards.
+    /// Finding 13, in the shape where it matters: a legacy file present, so the claimant reaches
+    /// the device-store records. The disk changes to B mid-Opening(A) — the claim acts for A or
+    /// abandons, never for B: no B claimant in the claim record, no B room folder.
     #[test]
     fn a_disk_change_mid_opening_never_claims_for_the_new_owner() {
         let _turn = test_turn();
         let scratch = scratch();
         permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
+        // A REAL legacy database — the probe must pass, or claim.start never runs and the
+        // test proves nothing.
+        Database::open(&scratch.layout.legacy_database()).unwrap();
         let gate = hooks::pause("claim.before_start");
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         gate.reached();
@@ -4691,6 +4736,13 @@ mod tests {
         let owner_b = seed_stored("user-b", false);
         gate.release();
         join_claim_threads();
+        let record = bir_core::legacy_claim::LegacyClaim::here()
+            .ok()
+            .and_then(|claim| claim.record().ok().flatten());
+        assert!(
+            record.as_ref().and_then(|record| record.user_id.as_deref()) != Some("user-b"),
+            "the device-store record names B — the claim acted for the disk's new owner: {record:?}"
+        );
         let b_room = scratch
             .layout
             .rooms_dir()
@@ -4739,10 +4791,11 @@ mod tests {
         assert_invariants();
     }
 
-    /// Finding 14: after a sign-out the room file's owner lock is free — the dropped Arc and the
-    /// sweep together mean a second open of the same file succeeds.
+    /// Finding 14: at the sweep's start the close's room Arc is already dead — the probe at the
+    /// sweep's door records the room's strong count. Alive there, the sweep retains the entry and
+    /// the owner lock survives the sign-out. Reverted, this goes red.
     #[test]
-    fn a_sign_out_frees_the_room_files_lock() {
+    fn the_room_arc_is_dead_before_the_sweep() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_a = seed_stored("user-a", false);
@@ -4750,17 +4803,27 @@ mod tests {
         let epoch = snapshot().epoch;
         open_hand(&scratch, &owner_a, epoch, "a-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        let path = scratch.layout.device_dir().join("a-room.db");
+        let (handle, _, _, _) = snapshot().room.expect("a room is open");
+        let weak = std::sync::Arc::downgrade(&handle);
+        drop(handle);
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let seen_in_probe = seen.clone();
+        *crate::open_room::SWEEP_PROBE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(move || {
+            *seen_in_probe
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(weak.strong_count());
+        }));
         sign_out();
         join_device_forget_threads();
-        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
-        // The second open takes the file's owner lock: held connections or a surviving Arc
-        // would keep it busy.
-        let reopened = Database::open(&path);
-        assert!(
-            reopened.is_ok(),
-            "the room file is still locked after the sign-out: {:?}",
-            reopened.err()
+        let count = seen
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expect("the probe never ran — the sweep never happened");
+        assert_eq!(
+            count, 0,
+            "the room Arc was alive at sweep time ({count} strong) — the entry is retained and the owner lock survives the sign-out"
         );
         assert_invariants();
     }

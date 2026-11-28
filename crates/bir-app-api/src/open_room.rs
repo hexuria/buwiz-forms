@@ -113,8 +113,21 @@ pub(crate) fn live_entry_for(path: &std::path::Path) -> bool {
 /// the next open: the file's owner lock releases when the last strong handle is gone, so a
 /// sign-out frees the file for whatever comes next.
 pub(crate) fn sweep_registry() {
+    #[cfg(test)]
+    if let Some(probe) = SWEEP_PROBE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+    {
+        probe();
+    }
     lock(&REGISTRY).retain(|_, (weak, _)| weak.upgrade().is_some());
 }
+
+/// F14's test seam: a probe run at the sweep's start, before any retain — the test observes
+/// whether the close's room Arc is already dead at sweep time. One-shot, test-only.
+#[cfg(test)]
+pub static SWEEP_PROBE: Mutex<Option<Box<dyn Fn() + Send>>> = Mutex::new(None);
 
 /// The key this room's worker jobs file under (F6): the room's id in rooms mode, the fixed
 /// key in single-room mode, "legacy" for the legacy file in place. Reads the machine's snapshot —
