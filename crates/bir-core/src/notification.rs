@@ -82,14 +82,11 @@ pub fn set_open_room_check(check: Option<OpenRoomCheck>) {
 /// Whether a banner for `room_id` may post: the room is the open one, or no
 /// session machine is in play. The unit of the seam's tests.
 fn may_post(room_id: &str) -> bool {
-    match OPEN_ROOM_CHECK
+    OPEN_ROOM_CHECK
         .read()
         .ok()
         .and_then(|slot| slot.as_ref().map(|check| check(room_id)))
-    {
-        Some(open) => open,
-        None => true,
-    }
+        .unwrap_or(true)
 }
 
 /// Post the banner of an event that happened in `room_id` — only while that
@@ -351,8 +348,11 @@ mod tests {
 
     /// I1 through the seam: a banner of the open room posts, a closed room's is suppressed,
     /// and with no machine registered everything posts (the single-room processes).
+    static GATE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn the_open_room_gate_decides_what_posts() {
+        let _serial = GATE_TEST_LOCK.lock().unwrap();
         // No machine registered: the single-room behavior.
         set_open_room_check(None);
         assert!(may_post("any-room"));
@@ -368,6 +368,7 @@ mod tests {
     /// The withdrawal runs the platform path and the seam's hook together.
     #[test]
     fn withdraw_delivered_runs_the_hook() {
+        let _serial = GATE_TEST_LOCK.lock().unwrap();
         static HIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         HIT.store(false, Ordering::SeqCst);
         *WITHDRAW_TEST_HOOK.write().unwrap() = Some(Box::new(|| {
