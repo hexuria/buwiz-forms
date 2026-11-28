@@ -5493,6 +5493,10 @@ struct Rule6Insertion {
     truncated: bool,
     input_classes: String,
     greys: Vec<(f64, f64)>,
+    /// The amount columns' edge positions on the row (each value cell's left,
+    /// plus the last one's right): the only verticals the strip redraws —
+    /// the columns' dividers and the right border, never the comb ticks.
+    grey_edges: Vec<f64>,
     /// The lowest bottom (pt, before shifting) of the value cells in the
     /// specify row the strip spans: where a thick closing rule has them
     /// ending below the cut, the band's text starts under them so it never
@@ -5864,6 +5868,7 @@ fn apply_rule6_specify_bands(
             // the words; the dividers run over the grey.
             let (mut row_x0, mut row_x1) = (r6.x0, x1);
             let mut greys: Vec<(f64, f64)> = Vec::new();
+            let mut grey_edges: Vec<f64> = Vec::new();
             let mut row_cells_bottom = f64::NEG_INFINITY;
             if let Some((cl, ct, cw)) = cell_div_geometry(&page_html, &r6.cell_id) {
                 let same_row = |tt: f64| (tt - ct).abs() < 4.0;
@@ -5892,6 +5897,10 @@ fn apply_rule6_specify_bands(
                 // (1601C item 20, 2551Q item 17 — white there reads as a hole).
                 if let Some((first_left, _)) = spans.first().copied() {
                     greys = vec![(first_left, (row_x1 - first_left).max(1.0))];
+                }
+                grey_edges = spans.iter().map(|(l, _)| *l).collect();
+                if let Some((l, w)) = spans.last() {
+                    grey_edges.push(l + w);
                 }
                 row_cells_bottom = value_cells
                     .iter()
@@ -5954,6 +5963,7 @@ fn apply_rule6_specify_bands(
                 truncated: band_truncated,
                 input_classes,
                 greys,
+                grey_edges,
                 row_cells_bottom,
             });
         }
@@ -6499,14 +6509,17 @@ fn shift_page_and_insert_rule6(
                 ));
             }
             // The grey columns' dividers and right border run through the
-            // strip at the sheet's own position and weight: every vertical
-            // rule inside the grey span touching the cut.
-            for &(vx, vy, vw, vh) in &verticals {
-                let in_grey = ins
-                    .greys
-                    .iter()
-                    .any(|&(gx, gw)| vx + vw > gx + 0.25 && vx < gx + gw - 0.25);
-                if in_grey && vy <= ins.cut_y + 1.0 && vy + vh >= ins.cut_y - 1.0 {
+            // strip at the sheet's own position and weight: the vertical rule
+            // at each column edge touching the cut — never the comb ticks,
+            // the strip holds no numbers.
+            for ex in &ins.grey_edges {
+                let found = verticals.iter().find(|&&(vx, vy, vw, vh)| {
+                    *ex >= vx - 1.0
+                        && *ex <= vx + vw + 1.0
+                        && vy <= ins.cut_y + 1.0
+                        && vy + vh >= ins.cut_y - 1.0
+                });
+                if let Some(&(vx, _, vw, _)) = found {
                     fills.push_str(&format!(
                         "<rect x=\"{vx:.2}\" y=\"{y:.2}\" width=\"{vw:.2}\" height=\"{h:.2}\" fill=\"#000000\"/>"
                     ));
@@ -15761,6 +15774,127 @@ mod donor_estate_print_tests {
             }
             assert!(checked, "{slug} {cell}: a greyed strip row was examined");
         }
+    }
+
+    /// The strip holds no numbers, so it must not look like a comb: inside
+    /// the strip the only black verticals are the two amount columns'
+    /// divider, their right border and the side edges — never the row's comb
+    /// ticks. Positive control: the row above the strip HAS ticks.
+    #[test]
+    fn rule6_strip_shows_no_comb_ticks() {
+        let html = filled_document("1701-2018", &rule6_proof_fill("1701-2018")).unwrap();
+        let strips = rule6_strip_frames(&html);
+        assert!(!strips.is_empty(), "strips present");
+        let mut layer = String::new();
+        let mut scan = 0usize;
+        while let Some(rel) = html[scan..].find("<g class=\"layer-rule6\">") {
+            let gstart = scan + rel;
+            let Some(gend_rel) = html[gstart..].find("</g>") else {
+                break;
+            };
+            layer.push_str(&html[gstart..gstart + gend_rel]);
+            scan = gstart + gend_rel;
+        }
+        let num_in = |tag: &str, a: &str| super::attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+        let mut layer_rects: Vec<(f64, f64, f64, f64)> = Vec::new();
+        for m in layer.match_indices("<rect ") {
+            let rs = m.0;
+            let win = &layer[rs..layer.len().min(rs + 200)];
+            let Some(e) = win.find('>') else {
+                continue;
+            };
+            let tag = &win[..e + 1];
+            if !tag.contains("fill=\"#000000\"") {
+                continue;
+            }
+            if let (Some(x), Some(y), Some(w), Some(h)) = (
+                num_in(tag, "x"),
+                num_in(tag, "y"),
+                num_in(tag, "width"),
+                num_in(tag, "height"),
+            ) {
+                layer_rects.push((x, y, w, h));
+            }
+        }
+        let mut checked = 0usize;
+        for &(x0, x1, sy, sh) in &strips {
+            let _ = (x0, x1);
+            let mut grey: Option<(f64, f64)> = None;
+            for m in layer.match_indices("fill=\"#d9d9d9\"") {
+                let at = m.0;
+                let Some(rs) = layer[..at].rfind("<rect ") else {
+                    continue;
+                };
+                let win = &layer[rs..layer.len().min(rs + 200)];
+                let Some(e) = win.find('>') else {
+                    continue;
+                };
+                let tag = &win[..e + 1];
+                if let (Some(x), Some(y), Some(w)) =
+                    (num_in(tag, "x"), num_in(tag, "y"), num_in(tag, "width"))
+                {
+                    if (y - sy - 0.25).abs() < 1.0 {
+                        grey = Some((x, x + w));
+                    }
+                }
+            }
+            let Some((gl, gr)) = grey else {
+                continue;
+            };
+            // A tick is a thin upright strictly inside the grey span, away
+            // from the edges where the columns' divider and border live.
+            let mut ticks = Vec::new();
+            for &(x, y, w, h) in &layer_rects {
+                if (y - sy).abs() < 0.75
+                    && (h - sh).abs() < 0.75
+                    && x > gl + 2.0
+                    && x + w < gr - 2.0
+                    && w < 0.5
+                {
+                    ticks.push(x);
+                }
+            }
+            assert!(
+                ticks.is_empty(),
+                "comb ticks show inside the strip at x {ticks:?} — the strip holds no numbers, it must not look like a comb"
+            );
+            // positive control: the row just above the strip HAS ticks
+            let mut above = 0usize;
+            let mut cur = 0;
+            while let Some(rel) = html[cur..].find("<rect ") {
+                let start = cur + rel;
+                let Some(e) = html[start..].find('>') else {
+                    break;
+                };
+                let tag = &html[start..start + e + 1];
+                cur = start + e + 1;
+                if !tag.contains("fill=\"#000000\"") {
+                    continue;
+                }
+                if let (Some(x), Some(y), Some(w), Some(h)) = (
+                    num_in(tag, "x"),
+                    num_in(tag, "y"),
+                    num_in(tag, "width"),
+                    num_in(tag, "height"),
+                ) {
+                    if w < 0.5
+                        && h < 11.0
+                        && x > gl + 2.0
+                        && x + w < gr - 2.0
+                        && y + h <= sy + 0.75
+                        && y + h >= sy - 14.0
+                    {
+                        above += 1;
+                    }
+                }
+            }
+            assert!(
+                above >= 4,
+                "the row above the strip has comb ticks, got {above}"
+            );
+            checked += 1;
+        }
+        assert!(checked >= 1, "at least one strip's grey span examined");
     }
 
     /// The owner's page composition on 1701 page 2 with the 200-word fill:
