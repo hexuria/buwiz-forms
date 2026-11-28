@@ -1853,9 +1853,12 @@ fn connect_inbox_oauth(
     // would write this thread's result into the wrong room as "not stale".
     let snap = crate::session::snapshot();
     let slot_generation = snap.room.as_ref().map(|(_, generation, _, _)| *generation);
-    let (db, generation) = match snap.room {
-        Some((handle, generation, _, _)) => (handle, Some(generation)),
-        None => (database_handle()?, slot_generation),
+    let (db, generation) = match crate::bir_module::thread_slot_handle()? {
+        Some(handle) => (handle, None),
+        None => match snap.room {
+            Some((handle, generation, _, _)) => (handle, Some(generation)),
+            None => (database_handle()?, slot_generation),
+        },
     };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
@@ -1875,9 +1878,12 @@ fn test_inbox_connection(
     // would write this thread's result into the wrong room as "not stale".
     let snap = crate::session::snapshot();
     let slot_generation = snap.room.as_ref().map(|(_, generation, _, _)| *generation);
-    let (db, generation) = match snap.room {
-        Some((handle, generation, _, _)) => (handle, Some(generation)),
-        None => (database_handle()?, slot_generation),
+    let (db, generation) = match crate::bir_module::thread_slot_handle()? {
+        Some(handle) => (handle, None),
+        None => match snap.room {
+            Some((handle, generation, _, _)) => (handle, Some(generation)),
+            None => (database_handle()?, slot_generation),
+        },
     };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()
@@ -1897,9 +1903,12 @@ fn check_inbox_now(
     // would write this thread's result into the wrong room as "not stale".
     let snap = crate::session::snapshot();
     let slot_generation = snap.room.as_ref().map(|(_, generation, _, _)| *generation);
-    let (db, generation) = match snap.room {
-        Some((handle, generation, _, _)) => (handle, Some(generation)),
-        None => (database_handle()?, slot_generation),
+    let (db, generation) = match crate::bir_module::thread_slot_handle()? {
+        Some(handle) => (handle, None),
+        None => match snap.room {
+            Some((handle, generation, _, _)) => (handle, Some(generation)),
+            None => (database_handle()?, slot_generation),
+        },
     };
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
     std::thread::Builder::new()

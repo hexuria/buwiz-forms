@@ -150,6 +150,21 @@ pub fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, H
     open_database_slot()
 }
 
+/// The calling thread's own slot when one is filled — a test's ephemeral
+/// database, or single-room mode's handle — re-opened through
+/// [`open_database_slot`] when the worker's end released it. Rooms mode never
+/// fills the thread-local slot, so a filled one is never a room's stale twin
+/// and verb resolution must prefer it over the process-wide room: a test's
+/// ephemeral database has to win off the room even while another test's
+/// session holds one open.
+pub(crate) fn thread_slot_handle()
+-> Result<Option<std::sync::Arc<std::sync::Mutex<Database>>>, HostError> {
+    if DATABASE.with(|slot| slot.borrow().is_some()) {
+        return open_database_slot().map(Some);
+    }
+    Ok(None)
+}
+
 /// The submission worker that runs now: at most one per process, owned by
 /// the engine (the thread with the database slot) that started it. Its
 /// engine's end ([`shutdown_for_quit`]) stops it and empties the slot, so the

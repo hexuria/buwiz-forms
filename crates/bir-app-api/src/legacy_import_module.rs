@@ -486,8 +486,17 @@ mod tests {
         copy
     }
 
+    /// The scan under review is process-wide (X3): parallel tests in this
+    /// module share it, so they take turns.
+    fn scan_turn() -> std::sync::MutexGuard<'static, ()> {
+        // The session tests scan too (cloud_account's sign-out ends the
+        // review), so the turn is the machine's one turn, not a local one.
+        crate::session::test_turn()
+    }
+
     #[test]
     fn a_scan_of_the_fixture_counts_what_is_there_and_shows_no_values() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let summary = scan(&fixture());
         assert_eq!(summary["kind"], "scanned");
@@ -511,6 +520,7 @@ mod tests {
     /// file name carries.
     #[test]
     fn a_skipped_e_mailed_copy_is_named_without_its_address() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let copy = fixture_copy();
         std::fs::write(
@@ -535,6 +545,7 @@ mod tests {
     /// what was reviewed against one database is not imported into another.
     #[test]
     fn a_scan_does_not_outlive_the_database_it_was_reviewed_against() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let summary = scan(&fixture());
         crate::bir_module::reset_database().unwrap();
@@ -546,6 +557,7 @@ mod tests {
 
     #[test]
     fn the_import_brings_in_the_reviewed_scan_once_and_a_second_import_adds_nothing() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let first = scan(&fixture());
         let report = to_json(&import(&first["scan"]).unwrap());
@@ -585,6 +597,7 @@ mod tests {
 
     #[test]
     fn an_import_with_no_scan_another_scan_or_after_cancel_is_refused() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         legacy_scan_cancel().unwrap();
         assert_eq!(
@@ -612,6 +625,7 @@ mod tests {
 
     #[test]
     fn a_folder_changed_since_the_scan_is_scanned_again_first() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let copy = fixture_copy();
         let summary = scan(copy.path());
@@ -633,6 +647,7 @@ mod tests {
 
     #[test]
     fn an_empty_or_wrong_folder_says_so_and_holds_nothing() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let wrong = tempfile::tempdir().unwrap();
         std::fs::create_dir(wrong.path().join("Documents")).unwrap();
@@ -655,6 +670,7 @@ mod tests {
     /// taken, is refused before anything opens or is read.
     #[test]
     fn the_verbs_refuse_a_path() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let module = crate::bir_module::module();
         for verb in [
@@ -716,6 +732,7 @@ mod tests {
     /// running app there is nothing to open it on, so the call refuses.
     #[test]
     fn the_folder_dialog_needs_a_running_app() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let module = crate::bir_module::module();
         assert!(module.is_async("legacy_scan_folder"));
@@ -732,6 +749,7 @@ mod tests {
 
     #[test]
     fn a_locked_gate_refuses_the_scan_and_the_import() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         crate::account_gate::force_locked(|| {
             let locked = crate::account_gate::LOCKED_MESSAGE;
@@ -788,6 +806,7 @@ mod tests {
 
     #[test]
     fn the_imported_returns_are_listed_for_their_taxpayer_and_no_other() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         assert_eq!(listed(FIXTURE_TIN), json!([]), "nothing before the import");
         import_fixture();
@@ -849,6 +868,7 @@ mod tests {
     /// A form this app has no code for is named as the old program named it.
     #[test]
     fn a_form_the_app_does_not_know_is_listed_under_its_stored_identity() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let demo = "00012345300000";
         insert(demo, "9999Xv2000", None, "2025", None);
@@ -868,6 +888,7 @@ mod tests {
     /// Records only: the answer has these keys and nothing the stored file holds.
     #[test]
     fn the_list_holds_no_file_bytes_and_no_field_values() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         import_fixture();
         insert("00012345300000", "1601Cv2018", None, "062025", None);
@@ -925,6 +946,7 @@ mod tests {
 
     #[test]
     fn the_list_is_a_verb_that_takes_a_tin() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         let module = crate::bir_module::module();
         assert!(module.has("list_legacy_filed_returns"));
@@ -954,6 +976,7 @@ mod tests {
 
     #[test]
     fn a_locked_gate_refuses_the_list() {
+        let _turn = scan_turn();
         use_ephemeral_database();
         import_fixture();
         crate::account_gate::force_locked(|| {

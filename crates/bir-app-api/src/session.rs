@@ -4739,7 +4739,7 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         // A REAL legacy database — the probe must pass, or claim.start never runs and the
         // test proves nothing.
-        Database::open(&scratch.layout.legacy_database()).unwrap();
+        Database::open(scratch.layout.legacy_database()).unwrap();
         let gate = hooks::pause("claim.before_start");
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         gate.reached();
