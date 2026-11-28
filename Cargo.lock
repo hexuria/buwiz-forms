@@ -432,6 +432,7 @@ dependencies = [
  "tokio",
  "totp-rs",
  "tracing",
+ "tracing-subscriber",
  "zip",
 ]
 

@@ -120,7 +120,7 @@ def scan(app: Path) -> tuple[list[str], list[str], dict]:
     for path in sorted(app.rglob("*")) if app.is_dir() else [app]:
         if path.is_symlink() or not path.is_file():
             continue
-        base = str(path.relative_to(app)) if app.is_dir() else path.name
+        base = path.relative_to(app).as_posix() if app.is_dir() else path.name  # bundle paths, / on every system
         for name, data in _from_bytes(path.read_bytes(), base, seen):
             if CLIENT_ID.search(data):
                 ids.append(name)
