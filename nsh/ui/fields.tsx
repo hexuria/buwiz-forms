@@ -990,30 +990,124 @@ export interface PinCellsProps {
 
 /** PIN and one-time-code cells: 32-point boxes (44 on touch), radius 8, the accent on the cell that takes the next digit. */
 export function PinCells(props: PinCellsProps) {
+  // PinCells draws OtpInput's composition itself instead of using nsh/base's OtpInput, so the testID sits on the text
+  // field itself. OtpInput's testID lands on its root, a plain view: the field that takes the keys is the transparent
+  // input inside it, whose id is generated, and a driver that types only into an input node (gpui-agent's
+  // `type gate-code-boxes …`, hexuria/gpui-agent#135) finds no input at the testID. Here the Input over the cells is
+  // the node the testID names; as in OtpInput it is transparent and owns the keyboard (digits only, the length, paste
+  // and the one-time-code autofill), and the cells drawn under it show the code.
+  const focused = signal(false);
+  const caretOn = signal(true);
+  const text = signal(digitsOnly(props.value ?? "").slice(0, props.length));
+  let input: InputRef | undefined;
+  let blink: ReturnType<typeof setInterval> | undefined;
+  cleanup(() => {
+    if (blink) clearInterval(blink);
+  });
+  // A value set from outside (a screen emptying the boxes) shows; the field's own edits come back equal and change nothing.
+  effect(() => {
+    const value = digitsOnly(props.value ?? "").slice(0, props.length);
+    if (value !== untracked(text)) text.set(value);
+  });
+  const change = (raw: string) => {
+    let digits = "";
+    for (const ch of raw) {
+      if (ch >= "0" && ch <= "9") digits += ch;
+      else {
+        // A full-width digit (an East Asian input method's) is its ASCII one, as gpui-base's to_digit_char maps it.
+        const full = (ch.codePointAt(0) ?? 0) - 0xff10;
+        if (full >= 0 && full <= 9) digits += String(full);
+      }
+    }
+    if (digits.length > props.length) digits = digits.slice(0, props.length);
+    const prev = untracked(text);
+    if (raw !== digits) {
+      // The edit took a non-digit or a digit past the length: the native box holds `raw`, so write it first —
+      // a signal that already holds the answer would send nothing (the masked fields' trick, above).
+      text.set(raw);
+    }
+    text.set(digits);
+    if (digits !== prev) {
+      props.onChange(digits);
+      if (digits.length === props.length) props.onComplete?.(digits);
+    }
+  };
+  const groups: number[][] = [];
+  {
+    const count = props.length === 6 ? 2 : 1;
+    const per = Math.ceil(props.length / count);
+    for (let g = 0; g < count; g++) {
+      const row: number[] = [];
+      for (let ix = g * per; ix < Math.min((g + 1) * per, props.length); ix++) row.push(ix);
+      if (row.length) groups.push(row);
+    }
+  }
+  const code = () => digitsOnly(props.value ?? "").slice(0, props.length);
+  const active = () => Math.min(code().length, props.length - 1);
+  const cellClass = (ix: number) =>
+    cx(
+      "items-center justify-center rounded-(--radius-row) border bg-card font-semibold tabular-nums text-foreground",
+      focused() && active() === ix ? "border-accent-blue" : props.error ? "border-danger" : "border-border-strong",
+      props.large ? undefined : cx("text-emph", TOUCH ? "h-12 w-11" : "size-8"),
+    );
   return (
-    <OtpInput
-      testID={props.testID}
-      ref={(r: OtpInputRef) => props.focusRef?.(() => r.focus())}
-      onFocus={() => props.onFocus?.()}
-      onBlur={() => props.onBlur?.()}
-      length={props.length}
-      value={props.value}
-      onChange={(e) => props.onChange(digitsOnly(e.value))}
-      onComplete={(e) => props.onComplete?.(digitsOnly(e.value))}
-      masked={props.masked}
-      disabled={props.disabled}
-      groups={props.length === 6 ? 2 : 1}
-      accessibilityLabel={`${props.label}, ${props.length} digits`}
-      class={cx("flex-row disabled:opacity-50", props.large ? "gap-3.5" : "gap-3")}
-      groupClass="flex-row gap-1.5"
-      cellClass={cx(
-        "items-center justify-center rounded-(--radius-row) border bg-card font-semibold tabular-nums text-foreground focus:border-accent-blue",
-        props.error ? "border-danger" : "border-border-strong",
-        props.large ? undefined : cx("text-emph", TOUCH ? "h-12 w-11" : "size-8"),
-      )}
-      cellStyle={props.large ? { width: props.large.width, height: 56, fontSize: 23 } : undefined}
-      caretClass={props.large ? "h-6 w-0.5 rounded-full bg-foreground" : "h-4 w-0.5 rounded-full bg-foreground"}
-    />
+    <View class={cx("relative flex-row", props.large ? "gap-3.5" : "gap-3", props.disabled && "opacity-50")}>
+      <Each of={groups} key={(row) => row[0]}>
+        {(row) => (
+          <View class="flex-row gap-1.5" accessibilityElementsHidden>
+            <Each of={row()} key={(ix) => ix}>
+              {(ix) => (
+                <View class={cellClass(ix())} style={props.large ? { width: props.large.width, height: 56 } : undefined}>
+                  <Text class={props.large ? "text-[23px]" : undefined}>{code().charAt(ix()) ? (props.masked ? "\u{2022}" : code().charAt(ix())) : ""}</Text>
+                  <If when={focused() && !code().charAt(ix()) && active() === ix()}>
+                    <View
+                      class={props.large ? "h-6 w-0.5 rounded-full bg-foreground" : "h-4 w-0.5 rounded-full bg-foreground"}
+                      style={{ opacity: caretOn() ? 1 : 0 }}
+                    />
+                  </If>
+                </View>
+              )}
+            </Each>
+          </View>
+        )}
+      </Each>
+      <Input
+        ref={(r: InputRef) => {
+          input = r;
+          props.focusRef?.(() => r.focus());
+        }}
+        testID={props.testID}
+        value={text()}
+        onChange={(e) => change(e.value)}
+        onSelectionChange={(e) => {
+          // The caret stays at the end: nothing is edited in the middle.
+          const end = untracked(text).length;
+          if (e.start !== end || e.end !== end) input?.setSelection(end, end);
+        }}
+        onFocus={() => {
+          focused.set(true);
+          caretOn.set(true);
+          if (blink) clearInterval(blink);
+          blink = setInterval(() => caretOn.set(!caretOn()), 500);
+          props.onFocus?.();
+        }}
+        onBlur={() => {
+          focused.set(false);
+          if (blink) clearInterval(blink);
+          blink = undefined;
+          props.onBlur?.();
+        }}
+        masked={props.masked}
+        disabled={props.disabled}
+        keyboardType="number-pad"
+        autoComplete={"one-time-code" as never}
+        autoCorrect={false}
+        autoCapitalize="none"
+        caret={false}
+        accessibilityLabel={`${props.label}, ${props.length} digits`}
+        class="absolute inset-0 border-0 bg-transparent p-0 text-transparent selection:bg-transparent"
+      />
+    </View>
   );
 }
 
