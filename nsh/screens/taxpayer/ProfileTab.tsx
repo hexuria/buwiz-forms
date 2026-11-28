@@ -17,6 +17,7 @@ import {
 import { SearchPick } from "../form/controls";
 import { canRemove, deleteTaxpayer, setGrant, setSectionOpen, shared, toggleArchive } from "./actions";
 import { ReplaceBanner } from "./Banners";
+import { TinChip } from "./TinChip";
 import { FactsBody, factsSummary } from "./Facts";
 import { InboxBody } from "./Inbox";
 import {
@@ -87,14 +88,19 @@ function TaxpayerRead(props: { s: PageState }) {
   const flag = useFlag(props.s);
   const t = () => app.taxpayer();
   return (
-    <FieldGrid>
-      <ReadCell full label="Registered name" value={t()?.name} testID="tp-taxpayer-name-value" />
-      <ReadCell label="TIN" value={formatTin(t()?.tin_root)} />
-      <ReadCell label="Taxpayer type" value={t()?.taxpayer_type} />
-      <If when={t()?.taxpayer_type === "Individual"}>
-        <ReadCell label="Birth date" value={t()?.birth_date ? shownDate(t()?.birth_date) : null} flag={flag("birth_date")} />
+    <View class="w-full gap-2">
+      <FieldGrid>
+        <ReadCell full label="Registered name" value={t()?.name} testID="tp-taxpayer-name-value" />
+        <ReadCell label="TIN" value={formatTin(t()?.tin_root)} />
+        <ReadCell label="Taxpayer type" value={t()?.taxpayer_type} />
+        <If when={t()?.taxpayer_type === "Individual"}>
+          <ReadCell label="Birth date" value={t()?.birth_date ? shownDate(t()?.birth_date) : null} flag={flag("birth_date")} />
+        </If>
+      </FieldGrid>
+      <If when={t() && app.branch()}>
+        <TinChip testID="tp-tin-status" tinRoot={t()!.tin_root} branch={app.branch()!.code} tinFull={`${t()!.tin_root}${app.branch()!.code}`} />
       </If>
-    </FieldGrid>
+    </View>
   );
 }
 

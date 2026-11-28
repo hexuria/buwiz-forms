@@ -336,4 +336,115 @@ mod tests {
         assert_eq!(super::overrides_dir_from(None, Some(exe)), expected);
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    fn assert_band_rows_stay_on_fixed_print_sheets(slug: &str, keys: &[&str]) {
+        let fields: std::collections::BTreeMap<String, String> = keys
+            .iter()
+            .enumerate()
+            .map(|(i, key)| ((*key).to_string(), format!("ROW{}X", i + 1)))
+            .collect();
+        let doc = bir_print::frozen_html::filled_document_with_report(slug, &fields, None)
+            .unwrap_or_else(|err| panic!("{slug}: fill failed: {err}"));
+        assert!(
+            doc.html.contains("page-continuation-band"),
+            "{slug}: the overflow fill must produce a cloned-band continuation page"
+        );
+
+        // Exercise the same wrapper path the app's print preview and PDF print use.
+        let html = crate::static_html::staticize(&super::prepare_html_for(slug, &doc.html, true));
+        let marker = "class=\"page page-continuation-band\"";
+        let mut from = 0usize;
+        let mut count = 0usize;
+        while let Some(rel) = html[from..].find(marker) {
+            let at = from + rel;
+            let sheet_at = html[..at]
+                .rfind("<div class=\"sheet")
+                .unwrap_or_else(|| panic!("{slug}: band page without a sheet wrapper"));
+            let tag_end = html[sheet_at..]
+                .find('>')
+                .unwrap_or_else(|| panic!("{slug}: unterminated sheet tag"));
+            let sheet_tag = &html[sheet_at..sheet_at + tag_end + 1];
+            assert!(
+                sheet_tag.starts_with("<div class=\"sheet\" "),
+                "{slug}: cloned-band pages are fixed paper grids and must not use the flow wrapper: {sheet_tag}"
+            );
+            count += 1;
+            from = at + marker.len();
+        }
+        assert!(count > 0, "{slug}: no band page in the static print html");
+    }
+
+    macro_rules! band_rows_stay_inside_page {
+        ($name:ident, $slug:literal, $keys:expr) => {
+            #[test]
+            fn $name() {
+                assert_band_rows_stay_on_fixed_print_sheets($slug, $keys);
+            }
+        };
+    }
+
+    band_rows_stay_inside_page!(
+        form_1601eq_band_rows_stay_inside_page,
+        "1601eq-2019",
+        &["frm1601EQ:txtAtcCd7", "frm1601EQ:txtAtcCd8"]
+    );
+    band_rows_stay_inside_page!(
+        form_1602q_band_rows_stay_inside_page,
+        "1602q-2019",
+        &["frm1602Q:txtSched2Interest3", "frm1602Q:txtSched2Interest4",]
+    );
+    band_rows_stay_inside_page!(
+        form_1701a_band_rows_stay_inside_page,
+        "1701a-2018",
+        &[
+            "frm1701A:txtmodalPartIVADesc_1C1",
+            "frm1701A:txtmodalPartIVADesc_2C1",
+        ]
+    );
+    band_rows_stay_inside_page!(
+        form_1702rt_band_rows_stay_inside_page,
+        "1702rt-2018c",
+        &["frm1702RT:txtPg3Sc2I4.1C1", "frm1702RT:txtPg3Sc2I4.2C1",]
+    );
+    band_rows_stay_inside_page!(
+        form_1707_band_rows_stay_inside_page,
+        "1707-2021",
+        &["frm1707:txtPg2Pt4S3_1Col1", "frm1707:txtPg2Pt4S3_2Col1"]
+    );
+    band_rows_stay_inside_page!(
+        form_1800_band_rows_stay_inside_page,
+        "1800-2018",
+        &[
+            "frm1800v2018:schedA:txtParticulars5",
+            "frm1800v2018:schedA:txtParticulars6",
+        ]
+    );
+    band_rows_stay_inside_page!(
+        form_1801_band_rows_stay_inside_page,
+        "1801-2018",
+        &["frm1801v2018:sched1Oct_3", "frm1801v2018:sched1Oct_4"]
+    );
+    band_rows_stay_inside_page!(
+        form_2000dst_band_rows_stay_inside_page,
+        "2000-dst-2018",
+        &["frm2000:sched2:txtReceipt3", "frm2000:sched2:txtReceipt4"]
+    );
+    band_rows_stay_inside_page!(
+        form_2000ot_band_rows_stay_inside_page,
+        "2000-ot-2018",
+        &["frm2000OT:sched1A:txtOCTNo5", "frm2000OT:sched1A:txtOCTNo6"]
+    );
+    band_rows_stay_inside_page!(
+        form_2551q_band_rows_stay_inside_page,
+        "2551q-2018",
+        &["txtATCAmt7", "txtATCAmt8"]
+    );
+    band_rows_stay_inside_page!(
+        form_2552_band_rows_stay_inside_page,
+        "2552-2018",
+        &[
+            "frm2552:txtPg2Pt5Sch1Seller6",
+            "frm2552:txtPg2Pt5Sch1Seller7",
+        ]
+    );
 }

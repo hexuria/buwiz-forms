@@ -166,6 +166,14 @@ step must not use `$table`) and only then clicks `$table-add`, the entry's spec 
 - `fallback`: the file to run while those are missing, or a map per form factor (`phone`, then `file`). Without one,
   the recipe is reported as `needs`.
 
+**Scrolling to reach a target.**
+- The plug scrolls a press's target clear of a cover that floats over it and retries (hexuria/nsh-gpui-agent#28). The
+  step's result says `scrolled: n`, and the report records it per recipe.
+- A step that scrolled FAILS unless the entry lists its id in `may_scroll`. A recipe written to fail when a layout moves
+  its target under something must not pass by scrolling.
+- `may_scroll`: step ids, or a map of them per target or form factor (`{"phone": ["s14"]}`, the money-boxes press
+  under the form's floating section bar). Set it only where a floating cover is expected.
+
 **Labels.**
 - `known_gap`: a failure there is reported as `known gap` with that text. It can be a map per target or form factor.
 - `precondition`: said alongside a failure.

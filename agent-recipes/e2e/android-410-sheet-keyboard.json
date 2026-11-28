@@ -1,0 +1,13 @@
+{
+ "v": 1,
+ "name": "android-410-sheet-keyboard",
+ "app": "bir-shell",
+ "steps": [
+  {"id":"s1","op":"wait_until","target":"setup-solo","timeout_ms":30000,"screenshot":true},
+  {"id":"s2","op":"click","target":"setup-solo","needs":["s1"]},
+  {"id":"s3","op":"wait_until","target":"new-tp-rdo_code-trigger","timeout_ms":5000,"needs":["s2"]},
+  {"id":"s4","op":"click","target":"new-tp-rdo_code-trigger","needs":["s3"]},
+  {"id":"s5","op":"wait_until","target":"system-keyboard","timeout_ms":8000,"screenshot":true,"needs":["s4"]},
+  {"id":"s6","op":"wait","screenshot":true,"needs":["s5"]}
+ ]
+}
