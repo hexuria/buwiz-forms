@@ -453,9 +453,11 @@ pub fn close(reason: Reason) {
         close_locked(&mut session, &CloseKind::OwnerEnds, None)
     };
     tracing::info!("session closed: {reason:?}");
-    crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Now);
+    // F14: the room Arc drops BEFORE the sweep — the file lock and the reader
+    // connections must not survive a sign-out into it.
     drop(outcome.dropped);
+    crate::open_room::sweep_registry();
     report_invariants();
 }
 
@@ -746,9 +748,11 @@ pub fn close_if_owner(owner: &Owner, reason: Reason) -> bool {
     };
     tracing::info!("session closed: {reason:?}");
     post_menu_notice();
-    crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
+    // F14: the room Arc drops BEFORE the sweep — the file lock and the reader
+    // connections must not survive a sign-out into it.
     drop(outcome.dropped);
+    crate::open_room::sweep_registry();
     report_invariants();
     true
 }
@@ -822,9 +826,11 @@ pub(crate) fn sign_out_inner(
     // old slot: a real sign-out closes it here, exactly as main did — never left open behind a
     // sign-out, the standing rule — and the menu shows the gate.
     post_menu_notice();
-    crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
+    // F14: the room Arc drops BEFORE the sweep — the file lock and the reader
+    // connections must not survive a sign-out into it.
     drop(outcome.dropped);
+    crate::open_room::sweep_registry();
     report_invariants();
     if let Some((server_url, access_token)) = logout {
         crate::cloud_account::logout_soon(logout_http, server_url, access_token);
@@ -885,9 +891,11 @@ pub fn end_changed_server(server_url: &str, refresh_token: &str) {
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
     post_menu_notice();
-    crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
+    // F14: the room Arc drops BEFORE the sweep — the file lock and the reader
+    // connections must not survive a sign-out into it.
     drop(outcome.dropped);
+    crate::open_room::sweep_registry();
     report_invariants();
 }
 
@@ -913,9 +921,11 @@ pub fn close_signed_in_elsewhere(disk_owner: &bir_core::account_session::OwnerKe
         close_locked(&mut session, &CloseKind::OwnerEnds, cache_key)
     };
     post_menu_notice();
-    crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
+    // F14: the room Arc drops BEFORE the sweep — the file lock and the reader
+    // connections must not survive a sign-out into it.
     drop(outcome.dropped);
+    crate::open_room::sweep_registry();
     report_invariants();
     true
 }
@@ -993,9 +1003,11 @@ pub fn server_ended(
     };
     // The real path's close, as in sign_out (F2): the old slot's room goes and the menu shows it.
     post_menu_notice();
-    crate::open_room::sweep_registry();
     finish_close(&outcome, ForgetMode::Backgrounded);
+    // F14: the room Arc drops BEFORE the sweep — the file lock and the reader
+    // connections must not survive a sign-out into it.
     drop(outcome.dropped);
+    crate::open_room::sweep_registry();
     report_invariants();
     true
 }
@@ -1013,30 +1025,43 @@ pub fn signed_in(
     }
     // §4: ONE SESSION section — the cache write AND the open's beginning together, so no reader
     // can ever see the cache name an owner whose open has not started.
-    let spawned = {
+    enum Begun {
+        Nothing,
+        Close(CloseOutcome),
+        Open(Option<u64>, CloseOutcome, Owner),
+    }
+    let begun = {
         let mut session = locked();
         bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(stored));
         match Owner::of_stored(stored) {
-            // A server URL that does not normalise is not a room owner's sign-in: the cache is
-            // still the machine's picture, and nothing opens (§9's single-room mode opens its
-            // own way).
-            None => None,
+            // A server URL that does not normalise is not a room owner's sign-in. F11: the
+            // cache names nobody and nothing can open — an Open of the previous owner left
+            // standing would be unlocked for no one, the I1 breach. Close instead.
+            None => Begun::Close(close_locked(&mut session, &CloseKind::OwnerEnds, None)),
             Some(owner) => {
                 if session.phase.kind() == PhaseKind::Quitting || same_owner_open(&session, &owner)
                 {
-                    None
+                    Begun::Nothing
                 } else {
                     let (spawn, outcome) =
                         begin_open_locked(&mut session, owner.clone(), engine, OpenWhy::SignIn);
-                    Some((spawn, outcome, owner))
+                    Begun::Open(spawn, outcome, owner)
                 }
             }
         }
     };
-    if let Some((spawn, outcome, owner)) = spawned {
-        finish_open(spawn, outcome, owner, engine, OpenWhy::SignIn);
-    } else {
-        report_invariants();
+    match begun {
+        Begun::Open(spawn, outcome, owner) => {
+            finish_open(spawn, outcome, owner, engine, OpenWhy::SignIn);
+        }
+        Begun::Close(outcome) => {
+            post_menu_notice();
+            crate::open_room::sweep_registry();
+            finish_close(&outcome, ForgetMode::Backgrounded);
+            drop(outcome.dropped);
+            report_invariants();
+        }
+        Begun::Nothing => report_invariants(),
     }
     Ok(())
 }
@@ -1255,6 +1280,22 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
             None,
         );
     };
+    // Finding 13: the claim acts for the PHASE owner, never for whoever the disk holds now —
+    // a disk that changed A→B mid-Opening(A) must not write B's room records or a room folder.
+    // The claimant comes from the disk ONLY while the disk still IS the phase owner (its email
+    // rides the room record); a mismatch is not acted on at all.
+    if bir_core::account_session::OwnerKey::of(&stored).map(|key| (key.origin, key.user_id))
+        != Some((owner.origin.clone(), owner.user_id.clone()))
+    {
+        tracing::info!("the stored sign-in changed before the claim ran — nothing is claimed");
+        return (
+            Target::Blocked(Blocked::Transient {
+                copy_saved: false,
+                detail: "the sign-in changed before the open finished".to_string(),
+            }),
+            None,
+        );
+    }
     let who = claimant_of(&stored);
     let claim = match LegacyClaim::here() {
         Ok(claim) => claim,
@@ -1376,8 +1417,18 @@ pub(crate) fn commit(epoch: u64, target: Target, handle: Option<(Arc<Mutex<Datab
                 Outcome::Abandon(handle)
             }
             Some(owner) if !stored_is(&owner) => {
-                tracing::info!("commit abandoned: the stored sign-in is no longer this owner");
-                Outcome::Abandon(handle)
+                // F12/F9: the epoch IS current — abandoning would leave Opening standing and the
+                // page polling forever with no button. The open cannot complete for a sign-in
+                // that is gone, so the phase is Blocked::Transient: a Try again can leave it.
+                tracing::info!("commit blocked: the stored sign-in is no longer this owner");
+                session.phase = Phase::Blocked {
+                    owner,
+                    reason: Blocked::Transient {
+                        copy_saved: false,
+                        detail: "the stored sign-in changed before the open committed".to_string(),
+                    },
+                };
+                Outcome::Blocked(handle)
             }
             Some(owner) => match (target, handle) {
                 (Target::Blocked(reason), handle) => {
@@ -2155,9 +2206,9 @@ mod tests {
     }
 
     /// (3b): I2 alone. The epoch is current, so only the stored-owner re-read catches A's commit
-    /// while the stored sign-in is B.
+    /// while the stored sign-in is B — and F12/F9: the phase is Blocked, never Opening forever.
     #[test]
-    fn a_stored_owner_mismatch_alone_abandons() {
+    fn a_stored_owner_mismatch_alone_blocks() {
         let _turn = test_turn();
         let scratch = scratch();
         let owner_b = seed_stored("user-b", false);
@@ -2172,8 +2223,8 @@ mod tests {
         commit(epoch, room_target(&owner_a), Some((handle, path)));
         assert_eq!(
             snapshot().phase_kind,
-            PhaseKind::Opening,
-            "the mismatched commit moved nothing"
+            PhaseKind::Blocked,
+            "the mismatched commit at the current epoch is Blocked, never standing Opening"
         );
         assert!(
             snapshot().room.is_none(),
@@ -2688,40 +2739,27 @@ mod tests {
 
     /// n1: a sign-out while the claim runs — the close bumps the epoch, the opener's commit
     /// misses its compare-and-swap, and nothing was ever installed (F10's hole, closed).
+    /// The REAL claim thread drives it, the pause set before begin_open (F5's rule).
     #[test]
-    #[ignore = "commit 3"]
     fn n1_sign_out_during_the_claim_opens_nothing() {
         let _turn = test_turn();
         let scratch = scratch();
+        permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
-        // The pause is set BEFORE begin_open (F5's rule): the real claim thread spawns inside
-        // begin_open, and a pause set after could be slipped past.
         let claim_gate = hooks::pause("claim.after_claim");
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        assert_invariants();
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let opener = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir.clone()));
-            // The claim thread's path, driven by hand until commit 2 wires it.
-            hooks::at("claim.after_claim");
-            let db = scratch_dir.join("a-room.db");
-            let handle = Arc::new(Mutex::new(Database::open(&db).unwrap()));
-            commit(epoch, room_target(&owner), Some((handle, db)));
-        });
         claim_gate.reached();
-        // The sign-out lands while the claim is paused: the epoch bumps under the close.
+        // The sign-out lands while the real claim is paused: the epoch bumps under the close.
         sign_out();
         assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
         assert!(!gate_unlocked(), "the gate is locked");
         assert_invariants();
         claim_gate.release();
-        opener.join().unwrap();
+        join_claim_threads();
         assert_eq!(
             snapshot().phase_kind,
             PhaseKind::SignedOut,
-            "the stale opener's commit abandoned: nothing opened"
+            "the stale claim's commit abandoned: nothing opened"
         );
         assert!(snapshot().room.is_none(), "no room was ever installed");
         assert!(
@@ -3044,29 +3082,19 @@ mod tests {
     }
 
     /// n1 (second arm): B signs in while A's claim is still running; A's late commit abandons
-    /// and B keeps the session.
+    /// and B keeps the session — both claims the REAL threads, the pause set before begin_open.
+    /// Release order does not matter: A's epoch is stale whenever it commits, so it abandons.
     #[test]
-    #[ignore = "commit 3"]
     fn n1_b_signs_in_during_as_claim_and_keeps_b() {
         let _turn = test_turn();
         let scratch = scratch();
+        permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
-        // The pause is set BEFORE begin_open (F5's rule): the real claim thread spawns inside
-        // begin_open, and a pause set after could be slipped past.
         let claim_gate = hooks::pause("claim.after_claim");
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch_a = snapshot().epoch;
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let opener_a = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir.clone()));
-            hooks::at("claim.after_claim");
-            let db = scratch_dir.join("a-room.db");
-            let handle = Arc::new(Mutex::new(Database::open(&db).unwrap()));
-            commit(epoch_a, room_target(&owner), Some((handle, db)));
-        });
         claim_gate.reached();
-        // B's sign-in replaces A: the epoch bumps, B's open starts.
+        // B's sign-in replaces A while A's claim is paused: the close of A runs, B's open starts,
+        // and B's own real claim thread parks behind the same pause.
         bir_core::account_session::clear_stored();
         let owner_b = seed_stored("user-b", false);
         begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
@@ -3079,18 +3107,14 @@ mod tests {
             Some("user-b")
         );
         assert_invariants();
-        // B's own open commits first.
-        let epoch_b = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_b, epoch_b, "b-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        assert_invariants();
         claim_gate.release();
-        opener_a.join().unwrap();
+        join_claim_threads();
         // A's late commit abandons; B's room stands.
         assert_eq!(
             snapshot().phase_kind,
             PhaseKind::Open,
-            "B keeps the session"
+            "B keeps the session — the phase is {:?}",
+            snapshot().phase_kind
         );
         assert_eq!(
             snapshot()
@@ -3106,35 +3130,29 @@ mod tests {
             Some(bir_core::rooms::room_id_for(&owner_b.origin, "user-b")),
             "the room is B's"
         );
+        assert!(gate_unlocked());
         assert_invariants();
     }
 
     /// n1b: Try again from a blocked page is the same begin_open path, and its commit wakes the
-    /// worker (§3 step 3).
+    /// worker (§3 step 3). The Blocked premise is the real claim thread's own: a panicking claim
+    /// leaves Blocked::Transient through the drop guard; the try-again drives a fresh real claim.
     #[test]
-    #[ignore = "commit 3"]
     fn n1b_try_again_starts_the_worker() {
         let _turn = test_turn();
         let scratch = scratch();
+        permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
+        PANIC_CLAIM.store(true, std::sync::atomic::Ordering::SeqCst);
         begin_open(owner_a.clone(), 1, OpenWhy::Launch);
-        let epoch = snapshot().epoch;
-        // The claim classifies the device store as lost with rooms present: Blocked, gate locked.
-        commit(
-            epoch,
-            Target::Blocked(Blocked::DeviceStore {
-                detail: "the device store could not be read".to_string(),
-            }),
-            None,
-        );
+        join_claim_threads();
         assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
         assert!(!gate_unlocked());
         assert_invariants();
-        // Try again: the same begin_open, the same commit — the worker wakes at the commit.
+        // Try again: the same begin_open, the real claim — the worker wakes at the commit.
         begin_open(owner_a.clone(), 1, OpenWhy::TryAgain);
         assert_eq!(snapshot().phase_kind, PhaseKind::Opening);
-        let epoch = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
+        join_claim_threads();
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
         assert!(gate_unlocked());
         assert!(
@@ -4621,6 +4639,122 @@ mod tests {
                 .unwrap()
                 .is_none(),
             "the disk should be cleared"
+        );
+        assert_invariants();
+    }
+
+    /// Finding 12/F9: an I2 mismatch at the CURRENT epoch — the stored sign-in changed while the
+    /// claim ran — installs Blocked::Transient, never leaves Opening standing for the page to
+    /// poll forever.
+    #[test]
+    fn a_sign_in_change_at_the_current_epoch_blocks_not_opens() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        assert_eq!(snapshot().phase_kind, PhaseKind::Opening);
+        // The disk and the cache change hands mid-Opening — nobody closed the machine, so the
+        // epoch is still the opening's own.
+        bir_core::account_session::clear_stored();
+        let _owner_b = seed_stored("user-b", false);
+        commit(epoch, room_target(&owner_a), None);
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Blocked,
+            "the mismatch abandoned into standing Opening — the page polls forever: {:?}",
+            snapshot().phase_kind
+        );
+        assert!(!gate_unlocked());
+        assert_invariants();
+    }
+
+    /// Finding 13: the disk changes to B mid-Opening(A) — the real claim acts for A or abandons,
+    /// never for B, and no B room record or folder exists afterwards.
+    #[test]
+    fn a_disk_change_mid_opening_never_claims_for_the_new_owner() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        permit_claim_threads();
+        let owner_a = seed_stored("user-a", false);
+        let gate = hooks::pause("claim.before_start");
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        gate.reached();
+        // The disk changes hands while the claim is parked before its decision.
+        bir_core::account_session::clear_stored();
+        let owner_b = seed_stored("user-b", false);
+        gate.release();
+        join_claim_threads();
+        let b_room = scratch
+            .layout
+            .rooms_dir()
+            .join(bir_core::rooms::room_id_for(&owner_b.origin, "user-b").to_string());
+        assert!(
+            !b_room.exists(),
+            "a B room folder exists — the claim acted for the disk's new owner"
+        );
+        assert_ne!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the open committed for a sign-in that is gone"
+        );
+        assert_invariants();
+    }
+
+    /// Finding 11: signed_in with an un-normalisable server URL while Open(A) closes — never
+    /// leaves Open unlocked with the cache None (I1).
+    #[test]
+    fn an_unnormalisable_sign_in_closes_the_open_session() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        assert!(gate_unlocked());
+        let mut bad = bir_core::cloud_account::load_stored_account()
+            .unwrap()
+            .expect("a sign-in");
+        bad.server_url = "not a server url at all".to_string();
+        bad.user_id = "user-c".to_string();
+        assert!(
+            Owner::of_stored(&bad).is_none(),
+            "the test premise: this URL does not normalise"
+        );
+        signed_in(&bad, 1).expect("the write itself is fine");
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::SignedOut,
+            "the un-normalisable sign-in left the session {:?} — Open unlocked for no one",
+            snapshot().phase_kind
+        );
+        assert!(!gate_unlocked(), "the gate locked — I1");
+        assert_invariants();
+    }
+
+    /// Finding 14: after a sign-out the room file's owner lock is free — the dropped Arc and the
+    /// sweep together mean a second open of the same file succeeds.
+    #[test]
+    fn a_sign_out_frees_the_room_files_lock() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let path = scratch.layout.device_dir().join("a-room.db");
+        sign_out();
+        join_device_forget_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::SignedOut);
+        // The second open takes the file's owner lock: held connections or a surviving Arc
+        // would keep it busy.
+        let reopened = Database::open(&path);
+        assert!(
+            reopened.is_ok(),
+            "the room file is still locked after the sign-out: {:?}",
+            reopened.err()
         );
         assert_invariants();
     }
