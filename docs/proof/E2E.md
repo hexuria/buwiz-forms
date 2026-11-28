@@ -26,14 +26,20 @@ them again after its own read of `.env`. An account server that is not on this m
 A plain run keeps the old development bypass: the account gate is open and no account exists. `--accounts mock` is for
 recipes that must prove sign-in and per-account behavior in the real app. It starts `just mock-account --auto-approve`
 (the same loopback in-memory server the Android development scripts use, pinned to `127.0.0.1:3008`), stops it at the
-end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and leaves `BIR_AUTH_BYPASS`
-out so the app starts signed out. On Android it adds the same `adb reverse tcp:3008 tcp:3008` the Android script uses;
+end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and sets `BIR_AUTH_BYPASS`
+to the empty string: the gate reads only the exact value `1`, and the app's dotenv does not replace a variable that is
+already set. The saved and pending sign-in files are pinned beside the run's own database, removed before launch and
+afterwards, so no earlier sign-in or half-finished sign-in can carry into the run. After launch the runner requires
+the app's real sign-in-gate node before the first recipe.
+
+On Android it writes the same pinned set over the emulator's private `dev.env`, refuses `--keep-data`, and adds the
+same `adb reverse tcp:3008 tcp:3008` the Android script uses after first refusing an existing reverse on that port;
 a fresh run removes the test database and the saved sign-in beside it, never files outside `test-data`.
 
-The mode refuses to run when `BIR_AUTH_BYPASS=1` is already in the environment, when either account URL in the
-environment is not loopback (`127.0.0.1`, `[::1]` or `localhost`), or when port 3008 is already taken: the mock has no
-health or version route by which another listener can be identified. The dry-run release and database guards are the
-same as any other run. Recipes can use the runner-supplied `$account_a` and `$account_b` (both invented
+The mode refuses `--no-launch`, refuses when either account URL in the environment is not loopback (`127.0.0.1`,
+`[::1]` or `localhost`), and refuses when port 3008 is already taken: the mock has no health or version route by
+which another listener can be identified. The dry-run release and database guards are the same as any other run.
+Recipes can use the runner-supplied `$account_a` and `$account_b` (both invented
 `example.com` addresses) and `$code_1` through `$code_8` (`246810`, then counting up as the mock does). Today a recipe
 still cannot type that code until the sign-in page fix of #608 lands; that fix is not part of the runner change.
 
@@ -111,7 +117,7 @@ The checks read every word of a step (flag values included) and every string of 
 - **The token** stays in the environment of the processes that need it, and is masked in `run.log`, the receipts,
   the failure trees and `app.log`.
 - **Afterwards** the app is stopped, on the Simulator or emulator too (and the emulator's forwarded ports removed),
-  and the run's scratch database is deleted; the evidence folder stays.
+  and the run's scratch database and its pinned sign-in state are deleted; the evidence folder stays.
 
 ## Per machine type
 

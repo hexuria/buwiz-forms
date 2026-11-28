@@ -216,6 +216,18 @@ git_env=()
 if git config --global --get-regexp '^(url\..*\.insteadof|credential\..*helper)$' >/dev/null 2>&1; then
   git_env=(-e CARGO_NET_GIT_FETCH_WITH_CLI=true -e GIT_CONFIG_GLOBAL=/dev/null)
 fi
+# In a mock-account e2e the gate stays on: pass the mode and exact mock URL through, with the bypass present but
+# empty so the app's dotenv cannot restore it. Every other launch is exactly the old development bypass.
+accounts_env=()
+if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
+  [ "${E2E_MOCK_ACCOUNT_URL:-}" = "http://127.0.0.1:3008" ] || {
+    echo "nsh2404: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock" >&2
+    exit 1
+  }
+  accounts_env=(-e E2E_ACCOUNTS -e E2E_MOCK_ACCOUNT_URL -e BIR_AUTH_BYPASS=)
+else
+  accounts_env=(-e BIR_AUTH_BYPASS=1)
+fi
 NSH_EOF
     local mounts=("${MOUNTS[@]}") sdk
     # Kept on --no-android runs too, so they don't break an existing Android setup.
@@ -232,7 +244,8 @@ exec docker run --rm -i "${tty[@]}" "${android[@]}" "${git_env[@]}" --network ho
   -e RANLIB_x86_64_linux_android="$RANLIB" -e RANLIB_aarch64_linux_android="$RANLIB" -e RANLIB_armv7_linux_androideabi="$RANLIB" \
   -e DISPLAY="$display" -e XDG_RUNTIME_DIR="/run/user/$uid" \
   -e DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-  -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_AUTH_BYPASS=1 -e BIR_SFTP_DRY_RUN=1 \
+  -e BUWIZ_NO_KEYCHAIN=1 -e EBIR_TEST_ENV=1 -e BIR_SFTP_DRY_RUN=1 \
+  "${accounts_env[@]}" \
   -e GPUI_AGENT -e GPUI_AGENT_ADDR -e GPUI_AGENT_TOKEN -e BIR_DATABASE_PATH -e BUWIZ_ANDROID_DEV \
   -e CARGO -e NSH_REAL_CARGO \
   "${urls[@]}" -e BUWIZ_TRUST_KEYS \

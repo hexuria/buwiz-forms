@@ -267,12 +267,22 @@ class AccountsMockTests(unittest.TestCase):
         self.assertEqual(E2E.parse_args(["macos", "smoke", "--accounts", "mock"]).accounts, "mock")
         self.assertEqual(E2E.parse_args(["macos", "smoke"]).accounts, "bypass")
 
+    def test_accounts_mock_refuses_no_launch(self):
+        with self.assertRaises(E2E.SuiteError) as raised:
+            E2E.parse_args(["macos", "smoke", "--accounts", "mock", "--no-launch"])
+        self.assertIn("--no-launch", str(raised.exception))
+
+    def test_accounts_mock_on_android_refuses_keep_data(self):
+        with self.assertRaises(E2E.SuiteError) as raised:
+            E2E.parse_args(["android", "smoke", "--accounts", "mock", "--keep-data"])
+        self.assertIn("--keep-data", str(raised.exception))
+
     def test_the_mock_launch_environment_has_no_bypass_and_points_at_the_mock(self):
         env = E2E.launch_env({"PATH": "/bin", "BIR_AUTH_BYPASS": "0", "BIR_SFTP_LIVE": "1",
                               "BUWIZ_SERVER_URL": "http://localhost:9999",
                               "BUWIZ_ACCOUNT_URL": "http://[::1]:9998"},
                              "tok", "127.0.0.1:1", accounts="mock")
-        self.assertNotIn("BIR_AUTH_BYPASS", env)
+        self.assertEqual(env["BIR_AUTH_BYPASS"], "")
         self.assertEqual(env["BUWIZ_SERVER_URL"], E2E.MOCK_ACCOUNT_URL)
         self.assertEqual(env["BUWIZ_ACCOUNT_URL"], E2E.MOCK_ACCOUNT_URL)
         self.assertEqual((env["EBIR_TEST_ENV"], env["BIR_SFTP_DRY_RUN"], env["BUWIZ_NO_KEYCHAIN"]), ("1", "1", "1"))
@@ -297,6 +307,15 @@ class AccountsMockTests(unittest.TestCase):
             E2E.launch_env({"BIR_AUTH_BYPASS": "1"}, "tok", "127.0.0.1:1", accounts="mock")
         self.assertIn("BIR_AUTH_BYPASS=1", str(raised.exception))
         self.assertIn("--accounts mock", str(raised.exception))
+
+    def test_account_state_files_are_pinned_beside_the_runs_own_database(self):
+        env = {"BUWIZ_CLOUD_ACCOUNT_FILE": "elsewhere-account", "BUWIZ_PENDING_SIGN_IN_FILE": "elsewhere-pending"}
+        db = Path("scratch") / "e2e-macos-20261128-010203.db"
+        paths = E2E.pin_account_state(env, db)
+        self.assertEqual(paths, (Path("scratch/e2e-macos-20261128-010203.db.buwiz-cloud-account.json"),
+                                 Path("scratch/e2e-macos-20261128-010203.db.buwiz-pending-sign-in.json")))
+        self.assertEqual(env["BUWIZ_CLOUD_ACCOUNT_FILE"], str(paths[0]))
+        self.assertEqual(env["BUWIZ_PENDING_SIGN_IN_FILE"], str(paths[1]))
 
     def test_accounts_mock_refuses_every_non_loopback_account_url(self):
         for name in E2E.ACCOUNT_VARS:
@@ -346,7 +365,11 @@ class AccountsMockTests(unittest.TestCase):
 
         def answers(addr):
             answers_seen.append(addr)
-            return len(answers_seen) > 2
+            if len(answers_seen) > 2:
+                (Path(folder) / "mock-account.log").write_text(
+                    "[mock-account] listening on http://127.0.0.1:3008 (auto-approve: true)\n", encoding="utf-8")
+                return True
+            return False
 
         with tempfile.TemporaryDirectory() as folder:
             log = E2E.RunLog(None, echo=False)
@@ -379,6 +402,85 @@ class AccountsMockTests(unittest.TestCase):
                                        sleep=lambda seconds: None)
         self.assertIn("exit 2", str(raised.exception))
 
+    def test_a_dead_mock_is_not_identified_by_a_foreign_listener(self):
+        class Ended:
+            pid = 4321
+            returncode = 1
+
+            def poll(self):
+                return 1
+
+        answers_seen = []
+        with tempfile.TemporaryDirectory() as folder:
+            log = E2E.RunLog(None, echo=False)
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=5,
+                                       popen=lambda *args, **kwargs: Ended(),
+                                       answers=lambda addr: answers_seen.append(addr) or len(answers_seen) > 1,
+                                       sleep=lambda seconds: None)
+        self.assertIn("exit 1", str(raised.exception))
+
+    def test_a_listener_without_the_childs_own_listening_line_is_not_ready(self):
+        class Alive:
+            pid = 4321
+            returncode = None
+
+            def poll(self):
+                return None
+
+        answers_seen = []
+        with tempfile.TemporaryDirectory() as folder:
+            log = E2E.RunLog(None, echo=False)
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=0,
+                                       popen=lambda *args, **kwargs: Alive(),
+                                       answers=lambda addr: answers_seen.append(addr) or len(answers_seen) > 1,
+                                       sleep=lambda seconds: None)
+        self.assertIn("listening line", str(raised.exception))
+
+    def test_ctrl_c_during_mock_start_stops_the_child(self):
+        class Alive:
+            pid = 4321
+            returncode = None
+
+            def poll(self):
+                return None
+
+        proc = Alive()
+        stops = []
+
+        def sleep(seconds):
+            raise KeyboardInterrupt
+
+        with tempfile.TemporaryDirectory() as folder:
+            log = E2E.RunLog(None, echo=False)
+            with mock.patch.object(E2E, "stop_mock_account", side_effect=lambda p, log: stops.append(p)) as stop:
+                with self.assertRaises(KeyboardInterrupt):
+                    E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=5,
+                                           popen=lambda *args, **kwargs: proc, answers=lambda addr: False,
+                                           sleep=sleep)
+        self.assertEqual(stops, [proc])
+
+    def test_a_mock_start_timeout_stops_the_child(self):
+        class Alive:
+            pid = 4321
+            returncode = None
+
+            def poll(self):
+                return None
+
+        proc = Alive()
+        stops = []
+        with tempfile.TemporaryDirectory() as folder:
+            log = E2E.RunLog(None, echo=False)
+            with mock.patch.object(E2E, "stop_mock_account", side_effect=lambda p, log: stops.append(p)):
+                with self.assertRaises(E2E.SuiteError) as raised:
+                    E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=0,
+                                           popen=lambda *args, **kwargs: proc, answers=lambda addr: False,
+                                           sleep=lambda seconds: None)
+        self.assertIn("did not listen", str(raised.exception))
+        self.assertEqual(stops, [proc])
+
     def test_the_mock_is_stopped_in_its_own_process_group(self):
         proc = mock.Mock()
         proc.poll.return_value = None
@@ -394,11 +496,60 @@ class AccountsMockTests(unittest.TestCase):
 
     def test_nsh_run_agent_keeps_the_gate_on_for_accounts_mock(self):
         text = (E2E.ROOT / "justfile").read_text(encoding="utf-8")
-        self.assertIn('if [ "${E2E_ACCOUNTS:-bypass}" = mock ]', text)
-        self.assertIn('export BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL" BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"', text)
-        self.assertIn("if ($env:E2E_ACCOUNTS -eq 'mock')", text)
-        self.assertIn("$env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL", text)
-        self.assertIn("$authBypass", text)
+        unix_at = text.index("[unix]\nnsh-run-agent")
+        windows_at = text.index("[windows]\nnsh-run-agent")
+        unix = text[unix_at:windows_at]
+        windows = text[windows_at:]
+
+        def bash_branch(script, start=0):
+            marker = 'if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then'
+            at = script.index(marker, start)
+            else_at = script.index("else", at)
+            fi_at = script.index("fi", else_at)
+            return script[at:else_at], script[else_at:fi_at]
+
+        mock_branch, bypass_branch = bash_branch(unix)
+        self.assertIn("export BIR_AUTH_BYPASS=", mock_branch)
+        self.assertNotIn("unset BIR_AUTH_BYPASS", mock_branch)
+        self.assertIn('export BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL"', mock_branch)
+        self.assertIn('BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"', mock_branch)
+        self.assertIn("export BIR_AUTH_BYPASS=1", bypass_branch)
+        self.assertIn('export BUWIZ_CLOUD_ACCOUNT_FILE="$db.buwiz-cloud-account.json"', unix)
+        self.assertIn('export BUWIZ_PENDING_SIGN_IN_FILE="$db.buwiz-pending-sign-in.json"', unix)
+        self.assertLess(unix.index('export BIR_DATABASE_PATH="$db"'),
+                        unix.index('export BUWIZ_CLOUD_ACCOUNT_FILE="$db.buwiz-cloud-account.json"'))
+
+        android_at = unix.index('if [ "{{target}}" = android ]')
+        ios_at = unix.index('if [ "{{target}}" = ios ]')
+        android = unix[android_at:ios_at]
+        ios = unix[ios_at:]
+        self.assertIn("BUWIZ_SERVER_URL=$E2E_MOCK_ACCOUNT_URL;BUWIZ_ACCOUNT_URL=$E2E_MOCK_ACCOUNT_URL;", android)
+        self.assertIn("${account_settings}", android)
+        ios_mock, ios_bypass = bash_branch(ios)
+        self.assertIn("export SIMCTL_CHILD_BIR_AUTH_BYPASS=", ios_mock)
+        self.assertNotIn("unset SIMCTL_CHILD_BIR_AUTH_BYPASS", ios_mock)
+        self.assertIn('SIMCTL_CHILD_BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL"', ios_mock)
+        self.assertIn('SIMCTL_CHILD_BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"', ios_mock)
+        for name in ("BIR_RELAY_URL", "BUWIZ_RELAY_SEND", "BUWIZ_TRUST_KEYS"):
+            self.assertIn(f"SIMCTL_CHILD_{name}", ios_mock)
+        self.assertIn("export SIMCTL_CHILD_BIR_AUTH_BYPASS=1", ios_bypass)
+
+        ps_marker = "if ($env:E2E_ACCOUNTS -eq 'mock') {"
+        ps_at = windows.index(ps_marker)
+        ps_else = windows.index("} else {", ps_at)
+        ps_end = windows.index("}", ps_else + len("} else {"))
+        ps_mock, ps_bypass = windows[ps_at:ps_else], windows[ps_else:ps_end]
+        self.assertIn("$env:BIR_AUTH_BYPASS = ''", ps_mock)
+        self.assertNotIn("Remove-Item Env:BIR_AUTH_BYPASS", ps_mock)
+        self.assertIn("$env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL", ps_mock)
+        self.assertIn("$env:BUWIZ_ACCOUNT_URL = $env:E2E_MOCK_ACCOUNT_URL", ps_mock)
+        self.assertIn("$env:BIR_AUTH_BYPASS = '1'", ps_bypass)
+        self.assertIn("$env:BUWIZ_CLOUD_ACCOUNT_FILE = \"$($env:BIR_DATABASE_PATH).buwiz-cloud-account.json\"", windows)
+        self.assertIn("$env:BUWIZ_PENDING_SIGN_IN_FILE = \"$($env:BIR_DATABASE_PATH).buwiz-pending-sign-in.json\"",
+                      windows)
+        self.assertIn("BUWIZ_SERVER_URL=$($env:E2E_MOCK_ACCOUNT_URL);BUWIZ_ACCOUNT_URL=$($env:E2E_MOCK_ACCOUNT_URL);",
+                      windows)
+        self.assertIn("$($accountSettings)", windows)
 
     def test_android_first_run_removes_the_saved_mock_sign_in_too(self):
         calls = []
@@ -414,6 +565,127 @@ class AccountsMockTests(unittest.TestCase):
         self.assertEqual(calls[0][:5], ["adb", "-s", "emulator-5554", "shell", "run-as"])
         self.assertIn(E2E.ANDROID_TEST_DB, calls[0])
         self.assertIn("files/nsh/dev.goldcoders.bir/test-data/buwiz-cloud-account.json", calls[0])
+
+    def test_the_android_mock_dev_env_is_pinned_and_has_no_bypass(self):
+        text = E2E.android_mock_dev_env("127.0.0.1:17421")
+        lines = text.splitlines()
+        self.assertIn("BIR_AUTH_BYPASS=", lines)
+        self.assertNotIn("BIR_AUTH_BYPASS=1", lines)
+        self.assertIn("BUWIZ_SERVER_URL=http://127.0.0.1:3008", lines)
+        self.assertIn("BUWIZ_ACCOUNT_URL=http://127.0.0.1:3008", lines)
+        self.assertIn("GPUI_AGENT_ADDR=127.0.0.1:17421", lines)
+
+    def test_android_mock_mode_overwrites_dev_env_with_the_pinned_set(self):
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append((command, kwargs.get("input")))
+            stdout = "package:/data/app/nsh" if command[4:6] == ["pm", "path"] else ""
+            return subprocess.CompletedProcess(command, 0, stdout, "")
+
+        with mock.patch.object(E2E, "android_adb", return_value="adb"), \
+                mock.patch.object(E2E, "android_serial", return_value="emulator-5554"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=run):
+            E2E.fresh_android({}, mock.Mock(), dev_env="BIR_AUTH_BYPASS=\nBUWIZ_SERVER_URL=http://127.0.0.1:3008\n")
+        writes = [(command, text) for command, text in calls if text is not None]
+        self.assertEqual(len(writes), 1)
+        self.assertIn("dev.env", writes[0][0][-1])
+        self.assertEqual(writes[0][1], "BIR_AUTH_BYPASS=\nBUWIZ_SERVER_URL=http://127.0.0.1:3008\n")
+
+    def test_gate_preflight_requires_the_real_gate_node_and_names_bypass_sources(self):
+        class PastGate:
+            def snapshot(self):
+                return {"tree": {"nodes": [{"id": "home-root", "role": "group"}]}}
+
+        with self.assertRaises(E2E.SuiteError) as raised:
+            E2E.assert_sign_in_gate(PastGate())
+        message = str(raised.exception)
+        self.assertIn("the app started past the sign-in gate: a bypass reached it", message)
+        for source in (".env", "wrapper", "dev.env", "SIMCTL_CHILD"):
+            self.assertIn(source, message)
+
+    def test_gate_preflight_accepts_gate_root(self):
+        class AtGate:
+            def snapshot(self):
+                return {"tree": {"nodes": [{"id": "gate-root", "role": "group"}]}}
+
+        E2E.assert_sign_in_gate(AtGate())
+
+    def test_a_mock_run_refuses_a_past_gate_app_before_the_first_recipe(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            write(folder, "x.wants", "click x\n")
+            suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [{"name": "x", "file": "x.wants"}]}))
+            db = folder / "scratch.db"
+            out = folder / "out"
+            args = E2E.parse_args(["macos", str(suite), "--accounts", "mock", "--db", str(db), "--out", str(out)])
+            entries = []
+
+            class AliveProcess:
+                def poll(self):
+                    return None
+
+            class FakeAgent:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def hello(self):
+                    return {"ready": True, "platform": "desktop", "features": []}
+
+                def snapshot(self):
+                    return {"tree": {"nodes": [{"id": "home-root", "role": "group"}]}}
+
+            with mock.patch.object(E2E, "check_suite", return_value=[]), \
+                    mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "launch", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "Agent", FakeAgent), \
+                    mock.patch.object(E2E, "installed_cli_version", return_value="test"), \
+                    mock.patch.object(E2E, "git_head", return_value="test"), \
+                    mock.patch.object(E2E, "app_database", return_value="test"), \
+                    mock.patch.object(E2E, "run_entry", side_effect=lambda *a: entries.append(a) or {"status": "pass"}), \
+                    mock.patch.object(E2E, "stop"), mock.patch.object(E2E, "stop_mock_account"):
+                with self.assertRaises(E2E.SuiteError) as raised:
+                    E2E.run(args)
+            self.assertIn("the app started past the sign-in gate", str(raised.exception))
+            self.assertEqual(entries, [])
+
+    def test_a_recipe_failure_still_stops_the_mock(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            write(folder, "x.wants", "click x\n")
+            suite = write(folder, "s.json", json.dumps({"v": 1, "recipes": [{"name": "x", "file": "x.wants"}]}))
+            args = E2E.parse_args(["macos", str(suite), "--accounts", "mock", "--db", str(folder / "scratch.db"),
+                                   "--out", str(folder / "out")])
+
+            class AliveProcess:
+                def poll(self):
+                    return None
+
+            class FakeAgent:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def hello(self):
+                    return {"ready": True, "platform": "desktop", "features": []}
+
+                def snapshot(self):
+                    return {"tree": {"nodes": [{"id": "gate-root", "role": "group"}]}}
+
+            with mock.patch.object(E2E, "check_suite", return_value=[]), \
+                    mock.patch.object(E2E, "port_answers", return_value=False), \
+                    mock.patch.object(E2E, "start_mock_account", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "launch", return_value=AliveProcess()), \
+                    mock.patch.object(E2E, "Agent", FakeAgent), \
+                    mock.patch.object(E2E, "installed_cli_version", return_value="test"), \
+                    mock.patch.object(E2E, "git_head", return_value="test"), \
+                    mock.patch.object(E2E, "app_database", return_value="test"), \
+                    mock.patch.object(E2E, "run_entry", return_value={"name": "x", "status": "fail", "ms": 0,
+                                                                       "steps": []}), \
+                    mock.patch.object(E2E, "stop"), \
+                    mock.patch.object(E2E, "stop_mock_account") as stop_mock:
+                self.assertEqual(E2E.run(args), 1)
+            stop_mock.assert_called_once()
 
     def test_the_fixture_addresses_and_code_sequence_are_invented(self):
         params = E2E.mock_account_params()
@@ -445,6 +717,7 @@ class AccountsMockTests(unittest.TestCase):
     def test_android_points_at_the_mock_the_scripts_way_and_cleans_up(self):
         class Done:
             returncode = 0
+            stdout = ""
             stderr = ""
 
         calls = []
@@ -460,9 +733,30 @@ class AccountsMockTests(unittest.TestCase):
                              ("adb", "emulator-5554"))
             E2E.remove_android_mock_reverse(("adb", "emulator-5554"), log)
         self.assertEqual(calls, [
+            ["adb", "-s", "emulator-5554", "reverse", "--list"],
             ["adb", "-s", "emulator-5554", "reverse", "tcp:3008", "tcp:3008"],
             ["adb", "-s", "emulator-5554", "reverse", "--remove", "tcp:3008"],
         ])
+
+    def test_an_existing_android_reverse_is_refused_not_clobbered(self):
+        class Done:
+            returncode = 0
+            stdout = "List of all reverse connections:\n    tcp:3008 tcp:3008\n"
+            stderr = ""
+
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append(command)
+            return Done()
+
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E, "android_adb", return_value="adb"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=run), \
+                self.assertRaises(E2E.SuiteError) as raised:
+            E2E.android_mock_reverse({"ANDROID_SERIAL": "emulator-5554"}, log)
+        self.assertIn("already exists", str(raised.exception))
+        self.assertEqual(calls, [["adb", "-s", "emulator-5554", "reverse", "--list"]])
 
     def test_an_android_reverse_failure_is_loud(self):
         class Done:
@@ -477,6 +771,39 @@ class AccountsMockTests(unittest.TestCase):
         self.assertIn("adb reverse", str(raised.exception))
 
 
+class ProcessControlTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "SIGHUP is POSIX-only")
+    def test_sigterm_and_sighup_are_converted_to_keyboard_interrupts(self):
+        before = {name: E2E.signal.getsignal(getattr(E2E.signal, name)) for name in ("SIGTERM", "SIGHUP")}
+        with E2E.termination_as_keyboard_interrupt():
+            for name in ("SIGTERM", "SIGHUP"):
+                handler = E2E.signal.getsignal(getattr(E2E.signal, name))
+                self.assertTrue(callable(handler), name)
+                self.assertNotEqual(handler, before[name], name)
+        for name, handler in before.items():
+            self.assertEqual(E2E.signal.getsignal(getattr(E2E.signal, name)), handler)
+
+    def test_windows_stop_uses_taskkill_for_the_whole_process_tree(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.pid = 4321
+        proc.wait.side_effect = [subprocess.TimeoutExpired("cmd", 30), None]
+        runs = []
+
+        def run(command, **kwargs):
+            runs.append(command)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E.os, "name", "nt"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=run):
+            E2E.stop(proc, log)
+        self.assertEqual(runs[0][:2], ["taskkill", "/PID"])
+        self.assertIn("4321", runs[0])
+        self.assertIn("/T", runs[0])
+        self.assertIn("/F", runs[0])
+
+
 class FileTests(unittest.TestCase):
     def test_files_other_programs_wrote_are_masked_and_the_scratch_database_removed(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -486,7 +813,9 @@ class FileTests(unittest.TestCase):
             E2E.redact_file(receipt, log)
             self.assertNotIn("s3cret", receipt.read_text())
             db = folder / "e2e.db"
-            for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm")):
+            state_files = [Path(f"{db}.buwiz-cloud-account.json"), Path(f"{db}.buwiz-pending-sign-in.json"),
+                           folder / "buwiz-cloud-account.json", folder / "buwiz-pending-sign-in.json"]
+            for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm"), *state_files):
                 path.write_text("x")
             E2E.remove_scratch(db, log)
             self.assertEqual(sorted(p.name for p in folder.iterdir()), ["receipt.json"])

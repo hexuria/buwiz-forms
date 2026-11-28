@@ -1354,7 +1354,7 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     scripts/build-line.sh --strict
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1
     if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
-        unset BIR_AUTH_BYPASS
+        export BIR_AUTH_BYPASS=
         [ "${E2E_MOCK_ACCOUNT_URL:-}" = "http://127.0.0.1:3008" ] || { echo "nsh-run-agent: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock" >&2; exit 1; }
         export BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL" BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"
     else
@@ -1373,6 +1373,10 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     if [ -n "$db" ]; then
         case "$db" in /*) ;; *) db="$root/$db" ;; esac
         export BIR_DATABASE_PATH="$db"
+        if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
+            export BUWIZ_CLOUD_ACCOUNT_FILE="$db.buwiz-cloud-account.json"
+            export BUWIZ_PENDING_SIGN_IN_FILE="$db.buwiz-pending-sign-in.json"
+        fi
     else
         unset BIR_DATABASE_PATH
     fi
@@ -1402,8 +1406,12 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         # second background job relaunches the host with them once the first launch is up (android-handoff.sh plug).
         export BUWIZ_ANDROID_DEV=1
         auth_bypass="BIR_AUTH_BYPASS=1;"
-        if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then auth_bypass=""; fi
-        export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;${auth_bypass}BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
+        account_settings=""
+        if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
+            auth_bypass=""
+            account_settings="BUWIZ_SERVER_URL=$E2E_MOCK_ACCOUNT_URL;BUWIZ_ACCOUNT_URL=$E2E_MOCK_ACCOUNT_URL;"
+        fi
+        export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;${auth_bypass}BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;${account_settings}GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # One adb and one device for the whole launch: the SDK's adb and the device nsh starts the app on, checked before
         # anything is built (nsh/agent/android-handoff.sh). The writer ends with this launcher: a failed or cancelled launch
         # writes no token afterwards.
@@ -1429,7 +1437,16 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         # the window's (src/agent.rs choose() adds one).
         unset SIMCTL_CHILD_BIR_SFTP_LIVE SIMCTL_CHILD_BIR_DATABASE_PATH
         export SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1
-        if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then unset SIMCTL_CHILD_BIR_AUTH_BYPASS; else export SIMCTL_CHILD_BIR_AUTH_BYPASS=1; fi
+        if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
+            export SIMCTL_CHILD_BIR_AUTH_BYPASS=
+            export SIMCTL_CHILD_BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL" SIMCTL_CHILD_BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"
+            unset SIMCTL_CHILD_BIR_RELAY_URL SIMCTL_CHILD_BUWIZ_RELAY_SEND SIMCTL_CHILD_BUWIZ_TRUST_KEYS
+            if [ -n "$db" ]; then
+                export SIMCTL_CHILD_BUWIZ_CLOUD_ACCOUNT_FILE="$db.buwiz-cloud-account.json" SIMCTL_CHILD_BUWIZ_PENDING_SIGN_IN_FILE="$db.buwiz-pending-sign-in.json"
+            fi
+        else
+            export SIMCTL_CHILD_BIR_AUTH_BYPASS=1
+        fi
         export SIMCTL_CHILD_BIR_AGENT_TOKEN="$GPUI_AGENT_TOKEN"
         export SIMCTL_CHILD_GPUI_AGENT=1 SIMCTL_CHILD_GPUI_AGENT_ADDR="127.0.0.1:$port"
         if [ -n "$db" ]; then export SIMCTL_CHILD_BIR_DATABASE_PATH="$db"; fi
@@ -1474,7 +1491,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $root = (Get-Location).ProviderPath
     $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_SFTP_DRY_RUN = '1'
     if ($env:E2E_ACCOUNTS -eq 'mock') {
-        Remove-Item Env:BIR_AUTH_BYPASS -ErrorAction SilentlyContinue
+        $env:BIR_AUTH_BYPASS = ''
         if ($env:E2E_MOCK_ACCOUNT_URL -ne 'http://127.0.0.1:3008') { [Console]::Error.WriteLine('nsh-run-agent: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock'); exit 1 }
         $env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL; $env:BUWIZ_ACCOUNT_URL = $env:E2E_MOCK_ACCOUNT_URL
     } else {
@@ -1527,6 +1544,10 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     # path is the one the guard checked, from here, not from nsh/.
     $db = $env:db
     if ($db) { $env:BIR_DATABASE_PATH = [IO.Path]::GetFullPath($db, $root) } else { Remove-Item Env:BIR_DATABASE_PATH -ErrorAction SilentlyContinue }
+    if ($env:E2E_ACCOUNTS -eq 'mock' -and $db) {
+        $env:BUWIZ_CLOUD_ACCOUNT_FILE = "$($env:BIR_DATABASE_PATH).buwiz-cloud-account.json"
+        $env:BUWIZ_PENDING_SIGN_IN_FILE = "$($env:BIR_DATABASE_PATH).buwiz-pending-sign-in.json"
+    }
     if ('{{target}}' -eq 'android') {
         # Same Android hand-off as the Unix recipe: the dry-run switches and the data plane's switch and address are baked
         # into the development build (nsh/src/dev_env.rs); the token is not — it goes into the host's private files with
@@ -1534,7 +1555,8 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         $port = [int](($env:GPUI_AGENT_ADDR -split ':')[-1])
         $env:BUWIZ_ANDROID_DEV = '1'
         $authBypass = if ($env:E2E_ACCOUNTS -eq 'mock') { '' } else { 'BIR_AUTH_BYPASS=1;' }
-        $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;$($authBypass)BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
+        $accountSettings = if ($env:E2E_ACCOUNTS -eq 'mock') { "BUWIZ_SERVER_URL=$($env:E2E_MOCK_ACCOUNT_URL);BUWIZ_ACCOUNT_URL=$($env:E2E_MOCK_ACCOUNT_URL);" } else { '' }
+        $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;$($authBypass)BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;$($accountSettings)GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # adb is the one nsh itself runs: in the SDK it finds (ANDROID_HOME, ANDROID_SDK_ROOT, then Android Studio's
         # default place), not whichever is on PATH. Checked here, before anything is built or launched.
         $sdkRoot = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT) | Where-Object { $_ } | Select-Object -First 1

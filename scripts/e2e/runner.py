@@ -34,6 +34,7 @@ Safety, enforced here (on every word of a step, camelCase split, and again on id
 """
 import argparse
 import datetime as dt
+from contextlib import contextmanager
 import json
 import os
 import re
@@ -58,6 +59,8 @@ ANDROID_HOST = "com.longbridge.nsh.host"
 # The Android development build's guarded test database (EBIR_TEST_ENV): a fresh run removes it.
 ANDROID_TEST_DB = "files/nsh/dev.goldcoders.bir/test-data/bir_data.db"
 ANDROID_TEST_ACCOUNT = "files/nsh/dev.goldcoders.bir/test-data/buwiz-cloud-account.json"
+ANDROID_DEV_ENV_DIR = "files/nsh/dev.goldcoders.bir"
+ANDROID_DEV_ENV = ANDROID_DEV_ENV_DIR + "/dev.env"
 
 SEND_WORDS = {"queue", "send", "submit", "file", "filing"}
 SECRET_WORDS = {"password", "passcode", "pin", "secret", "token", "otp", "totp", "recovery"}
@@ -72,6 +75,8 @@ CODE_BOX_WORDS = {"box", "boxes", "cell", "cells"}
 CODE_KIND_WORDS = {"authenticator", "verification", "security", "confirmation", "login", "email", "sign", "time",
                    "digit", "access", "one"}
 SIGN_IN_WORDS = {"gate", "signin", "login", "auth"}
+# The Buwiz account gate's own root testID (nsh/screens/auth/Gate.tsx). A mock-mode run must start there.
+SIGN_IN_GATE_NODE = "gate-root"
 # Ops that put text or keys into a box.
 TYPING_OPS = {"type", "set_value", "paste", "key"}
 # Step fields that are what is typed or expected, not what is acted on.
@@ -82,11 +87,19 @@ LIVE_SEND_VARS = ("BIR_SFTP_LIVE", "BIR_SFTP_HOST", "BIR_SFTP_PORT", "BIR_SFTP_U
                   "BIR_SFTP_ACCEPT_ANY_HOST_KEY", "BIR_RELAY_URL", "BUWIZ_RELAY_SEND")
 # The account server a debug build signs in to: unset, it is the local mock (http://localhost:3008).
 ACCOUNT_VARS = ("BUWIZ_SERVER_URL", "BUWIZ_ACCOUNT_URL")
+# The two files that can carry a sign-in or a half-finished sign-in between runs. In mock mode they are pinned beside
+# the run's own database, so the app's dotenv cannot restore a shared path from the repository's .env.
+ACCOUNT_FILE_VAR = "BUWIZ_CLOUD_ACCOUNT_FILE"
+PENDING_FILE_VAR = "BUWIZ_PENDING_SIGN_IN_FILE"
+ACCOUNT_STATE_VARS = (ACCOUNT_FILE_VAR, PENDING_FILE_VAR)
 # `--accounts mock` uses the mock's own fixed port, as the Android development scripts do. It has no health or
 # version route, so a listener already there cannot be identified as another mock and is never shared.
 MOCK_ACCOUNT_PORT = 3008
 MOCK_ACCOUNT_ADDR = f"127.0.0.1:{MOCK_ACCOUNT_PORT}"
 MOCK_ACCOUNT_URL = f"http://{MOCK_ACCOUNT_ADDR}"
+# The line mock_account prints after its own listener is bound (crates/bir-core/src/bin/mock_account.rs). The summary
+# in parentheses follows this prefix; it is the only identity the server has, because it serves no health route.
+MOCK_ACCOUNT_LISTENING = f"[mock-account] listening on {MOCK_ACCOUNT_URL}"
 MOCK_ACCOUNT_FIRST_CODE = 246810
 MOCK_ACCOUNT_CODE_COUNT = 8
 ACCOUNTS_ENV = "E2E_ACCOUNTS"
@@ -383,6 +396,27 @@ def mock_account_params(first=MOCK_ACCOUNT_FIRST_CODE, count=MOCK_ACCOUNT_CODE_C
     return params
 
 
+def account_state_paths(db):
+    """The per-database sign-in files a mock run owns: unique with the database name, so concurrent runs do not share
+    the fixed filenames the app otherwise uses in the database's folder."""
+    db = Path(db)
+    return (Path(f"{db}.buwiz-cloud-account.json"), Path(f"{db}.buwiz-pending-sign-in.json"))
+
+
+def default_account_state_paths(db):
+    """The fixed sign-in filenames the app would have used beside `db` without the per-run pin."""
+    parent = db.parent if str(db.parent) else Path(".")
+    return parent / "buwiz-cloud-account.json", parent / "buwiz-pending-sign-in.json"
+
+
+def pin_account_state(env, db):
+    """Pin the saved and pending sign-in files into this run's scratch data and answer their paths."""
+    paths = account_state_paths(db)
+    env[ACCOUNT_FILE_VAR] = str(paths[0])
+    env[PENDING_FILE_VAR] = str(paths[1])
+    return paths
+
+
 def launch_env(environ, token, addr, accounts="bypass"):
     """The environment the app is launched with: the dry-run test settings, the agent's address and token, none of
     the live SFTP or relay variables, and no account server that is not on this machine. `mock` leaves the account
@@ -404,7 +438,11 @@ def launch_env(environ, token, addr, accounts="bypass"):
     for name in LIVE_SEND_VARS:
         env.pop(name, None)
     if accounts == "mock":
-        env.pop("BIR_AUTH_BYPASS", None)
+        # Empty, not absent: dotenvy does not replace a variable that already exists, even when its value is empty,
+        # while BIR_AUTH_BYPASS must be exactly "1" to open the account gate.
+        env["BIR_AUTH_BYPASS"] = ""
+        for name in ACCOUNT_STATE_VARS:
+            env.pop(name, None)
         env[MOCK_ACCOUNT_URL_ENV] = MOCK_ACCOUNT_URL
         for name in ACCOUNT_VARS:
             env[name] = MOCK_ACCOUNT_URL
@@ -613,6 +651,15 @@ def tree_nodes(snapshot):
             stack.extend(reversed(list(item.values())))
         elif isinstance(item, list):
             stack.extend(reversed(item))
+
+
+def assert_sign_in_gate(agent):
+    """Require the freshly launched mock-mode app to be on the account gate, proved through the window driver."""
+    if any(node.get("id") == SIGN_IN_GATE_NODE for node in tree_nodes(agent.snapshot())):
+        return
+    raise SuiteError("the app started past the sign-in gate: a bypass reached it; one can come from the "
+                     "repository .env, a wrapper that passes BIR_AUTH_BYPASS, Android dev.env, or the "
+                     "Simulator's SIMCTL_CHILD_* environment")
 
 
 def for_host(value, context):
@@ -1036,6 +1083,15 @@ def data_plane(addr):
     return f"{host}:{int(port) + 1}"
 
 
+def mock_account_listening_line(path):
+    """Whether the child's own log has the listening line mock_account prints after binding its socket."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return any(line.startswith(MOCK_ACCOUNT_LISTENING) for line in text.splitlines())
+
+
 def start_mock_account(just, env, out, log, timeout_s, popen=None, answers=None, sleep=None):
     """Start the repository's own in-memory account mock on its fixed loopback port and wait for it.
 
@@ -1065,15 +1121,17 @@ def start_mock_account(just, env, out, log, timeout_s, popen=None, answers=None,
     log.line("mock-account", " ".join(command[1:]), "started", 0)
     t0 = time.monotonic()
     try:
-        while not answers(MOCK_ACCOUNT_ADDR):
+        while True:
             if proc.poll() is not None:
                 raise SuiteError(f"--accounts mock: mock_account ended (exit {proc.returncode}) before listening "
                                  f"on {MOCK_ACCOUNT_ADDR}; see {out / 'mock-account.log'}")
+            if answers(MOCK_ACCOUNT_ADDR) and mock_account_listening_line(out / "mock-account.log"):
+                break
             if time.monotonic() - t0 >= timeout_s:
-                raise SuiteError(f"--accounts mock: mock_account did not listen on {MOCK_ACCOUNT_ADDR} in "
-                                 f"{timeout_s} s; see {out / 'mock-account.log'}")
+                raise SuiteError(f"--accounts mock: mock_account did not listen on {MOCK_ACCOUNT_ADDR} and write its "
+                                 f"listening line in {timeout_s} s; see {out / 'mock-account.log'}")
             sleep(1)
-    except SuiteError:
+    except BaseException:
         stop_mock_account(proc, log)
         raise
     log.line("mock-account", MOCK_ACCOUNT_ADDR, "listening", (time.monotonic() - t0) * 1000)
@@ -1090,6 +1148,13 @@ def android_mock_reverse(env, log):
         raise SuiteError("--accounts mock on android: no Android emulator is online (adb devices)")
     t0 = time.monotonic()
     port = f"tcp:{MOCK_ACCOUNT_PORT}"
+    listed = subprocess.run([adb, "-s", serial, "reverse", "--list"], capture_output=True, text=True, timeout=30)
+    if listed.returncode:
+        raise SuiteError(f"--accounts mock on android: adb reverse --list failed: "
+                         f"{(listed.stderr or listed.stdout).strip() or 'no error text'}")
+    if any(re.search(rf"(?:^|\s){re.escape(port)}(?:\s|$)", line) for line in listed.stdout.splitlines()):
+        raise SuiteError(f"--accounts mock on android: adb reverse {port} already exists; it may belong to "
+                         "another run, so it is not replaced. Remove it explicitly when it is safe, then rerun")
     done = subprocess.run([adb, "-s", serial, "reverse", port, port], capture_output=True, text=True, timeout=30)
     if done.returncode:
         raise SuiteError(f"--accounts mock on android: adb reverse {port} failed: "
@@ -1181,17 +1246,23 @@ def stop(proc, log, what="app"):
     t0 = time.monotonic()
     try:
         if os.name == "nt":
-            proc.send_signal(signal.CTRL_BREAK_EVENT)
+            proc.send_signal(getattr(signal, "CTRL_BREAK_EVENT", signal.SIGTERM))
         else:
             os.killpg(proc.pid, signal.SIGINT)
         proc.wait(timeout=30)
     except (OSError, subprocess.TimeoutExpired):
         try:
             if os.name == "nt":
-                proc.kill()
+                # Ctrl-Break reaches only the group member that handles it. taskkill /T ends just, cargo, nsh and
+                # the app as one tree; proc.kill alone would leave the grandchildren behind.
+                subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, timeout=10)
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
             else:
                 os.killpg(proc.pid, signal.SIGKILL)
-        except OSError:
+        except (OSError, subprocess.SubprocessError):
             pass
     log.line("stop", what, "stopped", (time.monotonic() - t0) * 1000)
 
@@ -1298,7 +1369,33 @@ def parse_args(argv):
     parser.add_argument("--reply-timeout-ms", type=int, help="gpui-agent's wait for one reply (slow emulators)")
     parser.add_argument("--cli", default=os.environ.get("GPUI_AGENT_CLI", "gpui-agent"))
     parser.add_argument("--just", default=os.environ.get("JUST", "just"))
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.target != "check" and args.accounts == "mock" and args.no_launch:
+        raise SuiteError("--accounts mock cannot run with --no-launch: the app must be one this run launched "
+                         "against the loopback mock")
+    if args.target == "android" and args.accounts == "mock" and args.keep_data:
+        raise SuiteError("--accounts mock on android refuses --keep-data: a stale dev.env or sign-in could "
+                         "reach the app")
+    return args
+
+
+@contextmanager
+def termination_as_keyboard_interrupt():
+    """While the runner is up, make SIGTERM and SIGHUP take the same finally path as Ctrl-C."""
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt
+
+    installed = []
+    for name in ("SIGTERM", "SIGHUP"):
+        signum = getattr(signal, name, None)
+        if signum is None:
+            continue
+        installed.append((signum, signal.signal(signum, interrupt)))
+    try:
+        yield
+    finally:
+        for signum, previous in installed:
+            signal.signal(signum, previous)
 
 
 def main(argv=None):
@@ -1306,10 +1403,14 @@ def main(argv=None):
     try:
         if args.target == "check":
             return check(args.suite, args.cli, args.accounts)
-        return run(args)
+        with termination_as_keyboard_interrupt():
+            return run(args)
     except SuiteError as error:
         print(f"e2e: {error}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("e2e: interrupted", file=sys.stderr)
+        return 130
 
 
 def run(args):
@@ -1336,6 +1437,7 @@ def run(args):
     mock_reverse = None
     results = []
     made_db = None
+    account_state = ()
     try:
         if not args.no_launch and (port_answers(addr) or port_answers(data_plane(addr))):
             raise SuiteError(f"something already listens on {addr} or {data_plane(addr)}: stop it, or pass "
@@ -1348,13 +1450,20 @@ def run(args):
             db = Path(args.db) if args.db else Path.home() / "BuwizNsh" / "agents" / f"e2e-{args.target}-{stamp}.db"
             made_db = None if args.db else db
             db.parent.mkdir(parents=True, exist_ok=True)
+            if args.accounts == "mock":
+                account_state = pin_account_state(env, db)
+                if not remove_files(account_state, log):
+                    raise SuiteError("--accounts mock: stale sign-in state could not be removed")
             if args.target == "android" and not args.keep_data:
-                fresh_android(env, log)
+                dev_env = android_mock_dev_env(addr) if args.accounts == "mock" else None
+                fresh_android(env, log, dev_env=dev_env)
             proc = launch(args.target, db, env, out, log, args.just)
         window = Agent(args.cli, addr, env, log, args.reply_timeout_ms)
         hello = wait_for(window, proc, args.launch_timeout if proc else 30, log, "window plane")
         if not hello:
             raise SuiteError(f"the window's control plane on {addr} never answered (see {out / 'app.log'})")
+        if args.accounts == "mock":
+            assert_sign_in_gate(window)
         features = list(hello.get("features") or [])
         form_factor = args.form_factor or ("phone" if hello.get("platform") == "mobile" else "desktop")
         header.update(platform=hello.get("platform"), os=hello.get("os"), features=features, form_factor=form_factor)
@@ -1394,6 +1503,9 @@ def run(args):
         write_report(out, header, results)
         if made_db:
             remove_scratch(made_db, log)
+        elif account_state:
+            if remove_files(account_state, log):
+                log.line("clean", account_state[0], "mock sign-in state removed", 0)
     print(f"e2e {header['suite']} on {args.target}: {summary(results)}. Report: {out / 'report.md'}")
     return 0 if all(r["status"] in ("pass", "skipped") for r in results) else 1
 
@@ -1451,12 +1563,12 @@ def booted_simulator():
     return booted[0] if len(booted) == 1 else None
 
 
-def remove_scratch(db, log):
-    """The run's scratch database and its SQLite side files; the evidence stays. On Windows the app's grandchildren
-    can still hold the files for a moment after the group break (there is no process-tree kill): retry for a few
-    seconds before reporting a file as not removed."""
+def remove_files(paths, log):
+    """Remove every file in `paths`, retrying briefly on Windows where grandchildren can still hold them. False when
+    one remains; each failure is logged once its retry budget is spent (or at once elsewhere)."""
     removed = True
-    for path in (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal")):
+    for path in paths:
+        path = Path(path)
         deadline = time.monotonic() + 20
         while True:
             try:
@@ -1470,13 +1582,56 @@ def remove_scratch(db, log):
                     log.line("clean", path, f"not removed: {error}", 0)
                     break
                 time.sleep(0.5)
-    if removed:
-        log.line("clean", db, "scratch database removed", 0)
+    return removed
 
 
-def fresh_android(env, log):
+def remove_scratch(db, log):
+    """The run's scratch database, its SQLite side files, and the saved or pending sign-in files that can otherwise
+    start the next desktop run inside the gate; the evidence stays."""
+    paths = (db, Path(f"{db}-wal"), Path(f"{db}-shm"), Path(f"{db}-journal"),
+             *account_state_paths(db), *default_account_state_paths(db))
+    if remove_files(paths, log):
+        log.line("clean", db, "scratch database removed; sign-in state removed", 0)
+
+
+def android_mock_dev_env(addr):
+    """The private Android dev.env of a mock run: the same pinned settings baked into the development build, with an
+    explicitly empty bypass so an old file cannot re-open the account gate."""
+    return "\n".join((
+        "EBIR_TEST_ENV=1",
+        "BIR_AUTH_BYPASS=",
+        "BUWIZ_NO_KEYCHAIN=1",
+        "BIR_SFTP_DRY_RUN=1",
+        f"BUWIZ_SERVER_URL={MOCK_ACCOUNT_URL}",
+        f"BUWIZ_ACCOUNT_URL={MOCK_ACCOUNT_URL}",
+        "GPUI_AGENT=1",
+        f"GPUI_AGENT_ADDR={addr}",
+    )) + "\n"
+
+
+def write_android_dev_env(adb, serial, text, log):
+    """Overwrite the emulator's private dev.env with `text`. A not-yet-installed host has no stale file; an installed
+    host whose file cannot be overwritten makes the run refuse rather than trusting unknown contents."""
+    t0 = time.monotonic()
+    listed = subprocess.run([adb, "-s", serial, "shell", "pm", "path", ANDROID_HOST], capture_output=True, text=True,
+                            timeout=30)
+    installed = listed.returncode == 0 and listed.stdout.strip().startswith("package:")
+    if not installed:
+        log.line("fresh", f"{serial}:{ANDROID_DEV_ENV}", "host not installed; no stale dev.env", 0)
+        return
+    command = (f"run-as {ANDROID_HOST} sh -c 'umask 077 && mkdir -p {ANDROID_DEV_ENV_DIR} && "
+               f"cat > {ANDROID_DEV_ENV}'")
+    done = subprocess.run([adb, "-s", serial, "shell", command], input=text, capture_output=True, text=True,
+                          timeout=30)
+    if done.returncode:
+        raise SuiteError("--accounts mock on android: the private dev.env could not be pinned: "
+                         f"{(done.stderr or done.stdout).strip() or 'no error text'}")
+    log.line("fresh", f"{serial}:{ANDROID_DEV_ENV}", "pinned", (time.monotonic() - t0) * 1000)
+
+
+def fresh_android(env, log, dev_env=None):
     """A fresh first run on the emulator: the development build's guarded test database is removed (never real data:
-    the test-data folder exists only under EBIR_TEST_ENV)."""
+    the test-data folder exists only under EBIR_TEST_ENV). In mock mode its private dev.env is overwritten too."""
     adb = android_adb(env)
     if not adb:
         raise SuiteError("no adb: set ANDROID_HOME")
@@ -1489,6 +1644,8 @@ def fresh_android(env, log):
                   capture_output=True, text=True)
     log.line("fresh", f"{serial}:{ANDROID_TEST_DB}", "removed" if done.returncode == 0 else
              f"not removed ({done.stderr.strip() or 'host not installed yet'})", (time.monotonic() - t0) * 1000)
+    if dev_env is not None:
+        write_android_dev_env(adb, serial, dev_env, log)
 
 
 def git_head():
