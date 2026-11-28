@@ -1,7 +1,8 @@
 // The form page follows the submission worker (FormPageQueued.tsx stands the worker in). A page left open on a Queued return said "Queued ·
 // read-only" with Cancel queue long after the worker had sent it: nothing told the page. Now, while it says Queued, it looks at the frame's
-// returns lists (read again by the Queued watch, the polls and a queue action), and once they no longer list its return as Queued it reads
-// the return again. It never loops on a disagreement, never runs after the page is gone, and a Cancel queue on the page restarts the watch.
+// returns lists (read again by the Queued watch, the polls and a queue action), and once they no longer list its return as Queued, or hold
+// another send state, it reads the return again. It never loops on a disagreement, never runs after the page is gone, and a Cancel queue
+// on the page restarts the watch.
 import { expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { warmForms } from "../../bir/testing";
@@ -21,6 +22,22 @@ async function look(app: App): Promise<void> {
   await app.press("id:fx-look");
   await app.waitUntil(() => reads(app) > before, { timeout: 10_000 });
 }
+
+test("desktop: a still-Queued page reads again when the worker moves its next try", async () => {
+  const past = new Date(Date.now() - 60_000).toISOString();
+  const app = await open(ENTRY, DESK({ send: "waiting", nextTry: past }));
+  await app.waitFor("text:Not sent yet: BIR is not accepting returns right now. It tries again by itself. Trying again now.", { timeout: 15_000 });
+  await app.waitUntil(() => opens(app) === 1);
+
+  await app.press("id:fx-retry");
+  await look(app);
+  await app.waitUntil(() => opens(app) === 2, { timeout: 10_000 });
+  expect(app.texts().some((t) => t.includes("Next try"))).toBe(true);
+  expect(app.texts().some((t) => t.includes("Trying again now"))).toBe(false);
+
+  await look(app);
+  expect(opens(app)).toBe(2);
+});
 
 test("desktop: a Queued page moves on once the lists stop listing it as Queued, reads once, and stays quiet after", async () => {
   const app = await open(ENTRY, DESKTOP);
@@ -159,8 +176,7 @@ test("desktop: Cancel queue on the page restarts the frame's fast watch (the pag
 // The send's words (the host's `send`, send_state.rs): where the page says a return's status, it says what the send is. The host's open
 // is stood in for (FormPageQueued.tsx host.params { send, nextTry, refuse }), so each stage shows without a worker.
 const DESK = (params: Record<string, unknown>) => ({ ...DESKTOP, host: { params } });
-/** Today at 3:40 PM and tomorrow at 9:05 AM, local time, as the host writes a next try (RFC 3339, UTC). */
-const todayAt = () => new Date(new Date().setHours(15, 40, 0, 0));
+/** Tomorrow at 9:05 AM, local time, as the host writes a next try (RFC 3339, UTC). */
 const tomorrowAt = () => {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -178,7 +194,10 @@ test("desktop: a Queued return says what its send is: queued, sending, held with
   await sending.waitFor("text:Sending now. Keep eBIRForms open.", { timeout: 15_000 });
   expect(sending.shows("id:fp-email-came")).toBe(false);
 
-  const held = await open(ENTRY, DESK({ send: "held", nextTry: todayAt().toISOString() }));
+  const clock = new Date(new Date().getFullYear(), 10, 5, 9, 0);
+  const heldAt = new Date(clock);
+  heldAt.setHours(15, 40, 0, 0);
+  const held = await open(ENTRY, { ...DESK({ send: "held", nextTry: heldAt.toISOString() }), clock: { time: clock } });
   await held.waitFor("text:Buwiz is holding sends for now. It goes again at 3:40 PM.", { timeout: 15_000 });
 
   const at = tomorrowAt();

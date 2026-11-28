@@ -4052,6 +4052,11 @@ export class FormSession {
     return h.status === "Queued" && !h.loading && !h.error && !h.sample && !h.editable;
   }
 
+  /** The send state this Queued page is drawn from, for comparison with the frame's freshly read rows. */
+  queuedSend(): SendState | null {
+    return this.st.send;
+  }
+
   /** Whether id (a row of the frame's returns lists, bir.list_returns) is this page's return: both name the same stored draft. */
   isReturn(id: number): boolean {
     const s = this.st;
