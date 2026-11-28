@@ -16463,10 +16463,16 @@ mod tests {
             let inner = if test_send {
                 bir_print::frozen_html::filled_document_test_send(slug, &fields)
             } else {
-                bir_print::frozen_html::filled_document_with_receipt(slug, &fields, receipt.as_ref())
+                bir_print::frozen_html::filled_document_with_receipt(
+                    slug,
+                    &fields,
+                    receipt.as_ref(),
+                )
             }
             .unwrap();
-            Ok(crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &inner, true)))
+            Ok(crate::static_html::staticize(
+                &crate::print_sheet::prepare_html_for(slug, &inner, true),
+            ))
         })
         .unwrap()
     }
@@ -16637,7 +16643,11 @@ mod tests {
             "the synthetic draft has the generic lifecycle shape"
         );
         assert_eq!(sent["lifecycle"]["submitted_dry_run"], true);
-        let printed = call("screen_form_print", vec!["0619E".into(), json(sent.clone())]).unwrap();
+        let printed = call(
+            "screen_form_print",
+            vec!["0619E".into(), json(sent.clone())],
+        )
+        .unwrap();
         let _ = printed;
         let html = preview_html_for("0619E", &sent);
         assert!(html.contains("Test send: not filed. Nothing reached the BIR."));
@@ -16667,13 +16677,21 @@ mod tests {
             print_original["submitted_dry_run"], true,
             "a historical original keeps its own send facts"
         );
-        call("screen_form_print", vec!["1601C".into(), json(original.clone())]).unwrap();
+        call(
+            "screen_form_print",
+            vec!["1601C".into(), json(original.clone())],
+        )
+        .unwrap();
         let html = preview_html_for("1601C", &original);
         assert!(
             !html.contains("Test send: not filed"),
             "the original prints as the real filing it is"
         );
-        call("screen_form_print", vec!["1601C".into(), json(current.clone())]).unwrap();
+        call(
+            "screen_form_print",
+            vec!["1601C".into(), json(current.clone())],
+        )
+        .unwrap();
         let html = preview_html_for("1601C", &current);
         assert!(
             html.contains("Test send: not filed"),

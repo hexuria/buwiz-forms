@@ -3791,6 +3791,7 @@ mod tests {
             2026,
             &std::collections::BTreeMap::new(),
             None,
+            false,
             None,
         )
         .expect("preview");
