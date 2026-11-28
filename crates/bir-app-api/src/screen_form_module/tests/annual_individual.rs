@@ -70,6 +70,39 @@ fn printed(code: &str, draft: &Value) -> BTreeMap<String, String> {
     with_database(|db| print_map(db, kind, draft)).unwrap().0
 }
 
+fn html_cell(slug: &str, writer_key: &str) -> String {
+    let cells = repo_json(&format!("html-frozen/{slug}/writer-cells.json"));
+    for list in [
+        "joins",
+        "money_joins",
+        "xbox_joins",
+        "peso_joins",
+        "date_joins",
+    ] {
+        for join in cells[list].as_array().into_iter().flatten() {
+            if join["writer_key"] == writer_key {
+                for field in ["html_id", "decimal_html_id", "peso_html_id"] {
+                    if let Some(cell) = join[field].as_str() {
+                        return cell.to_string();
+                    }
+                }
+            }
+        }
+    }
+    panic!("{slug}: {writer_key} is joined")
+}
+
+/// The print document of `draft` (the in-app preview's own fill).
+fn document(slug: &str, code: &str, draft: &Value) -> String {
+    bir_print::frozen_html::filled_document(slug, &printed(code, draft)).unwrap()
+}
+
+/// `document` after the app's own print preparation and static field render.
+fn app_print_document(slug: &str, code: &str, draft: &Value) -> String {
+    let html = document(slug, code, draft);
+    crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true))
+}
+
 fn field_map(code: &str, draft: &Value) -> BTreeMap<String, String> {
     agent::field_map(kind_of(code).unwrap(), draft).unwrap()
 }
@@ -1332,6 +1365,257 @@ fn form_1701ms_items_2a_2b_are_editable_and_reproduce_official_sample() {
         "1701MS screen-path sample diffs:\n{}",
         diffs.join("\n")
     );
+}
+
+/// The official upload keeps a disabled but valued box. Through the screen
+/// path, 1701MS Part V Item 6 is typed while the short-period gate is open,
+/// the gate closes, and both the stored draft and the dependent totals keep
+/// the values.
+#[test]
+fn ms_short_period_item_6_is_kept_when_the_gate_closes() {
+    setup();
+    let fresh = open_for(TIN, "1701MS", 2025, 0);
+    let jointed = take(
+        "1701MS",
+        &fresh["draft"],
+        json!({
+            "frm1701MS:civilStatus": "Married",
+            "frm1701MS:txtIfMarriedJointlyNo5": "true",
+            "frm1701MS:txtTaxpayerNo11c": "true",
+            "frm1701MS:txtTaxpayerNo11d1": "true",
+            "frm1701MS:txtTaxpayerNo12b": "true",
+            "frm1701MS:txtTaxpayerNo12b1": "true",
+            "frm1701MS:txtTaxpayerNo17b": "true",
+        }),
+    );
+    let identified = take(
+        "1701MS",
+        &jointed["draft"],
+        json!({
+            "frm1701MS:txtPg2TIN1Spouse": "123",
+            "frm1701MS:txtPg2TIN2Spouse": "456",
+            "frm1701MS:txtPg2TIN3Spouse": "788",
+            "frm1701MS:txtPg2BranchCodeSpouse": "00000",
+            "frm1701MS:txtRDOCodeb": "039",
+            "frm1701MS:txtTaxpayerNo8b": "Sample Dummy Spouse",
+            "frm1701MS:txtEmailb": "sample.spouse@example.com",
+            "frm1701MS:txtTelNum10b": "09170000001",
+            "frm1701MS:txtPriorYearsNo1a": "999",
+            "frm1701MS:perjuryClause": "true",
+        }),
+    );
+    let short = take(
+        "1701MS",
+        &identified["draft"],
+        json!({"frm1701MS:txtReturnPeriodYesNo3": "true"}),
+    );
+    let typed = take(
+        "1701MS",
+        &short["draft"],
+        json!({
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6a": "444",
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6b": "555",
+        }),
+    );
+    let totals_open = [
+        typed["values"]["frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10a"].clone(),
+        typed["values"]["frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10b"].clone(),
+    ];
+    let closed = take(
+        "1701MS",
+        &typed["draft"],
+        json!({"frm1701MS:txtReturnPeriodNoNo3": "true"}),
+    );
+    assert_eq!(closed["draft"]["taxpayer"]["previously_filed"], 444.0);
+    assert_eq!(closed["draft"]["spouse"]["previously_filed"], 555.0);
+    for key in [
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6a",
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6b",
+    ] {
+        assert_eq!(
+            closed["relock_notes"][key],
+            json!("Part V Item 6 is for an amended or short-period return."),
+            "the kept value is locked, never announced as cleared"
+        );
+    }
+    assert_eq!(
+        [
+            closed["values"]["frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10a"].clone(),
+            closed["values"]["frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10b"].clone(),
+        ],
+        totals_open,
+        "the totals keep the disabled Item 6 values"
+    );
+    // Complete the same screen-edited draft for filing through the page.
+    // Item 31's refund is the retained 444 + 555 plus the 999 prior-year
+    // excess credit; these prerequisite values are invented.
+    let completed = take(
+        "1701MS",
+        &closed["draft"],
+        json!({
+            "frm1701MS:txtToBeRefunded": "true",
+            "frm1701MS:txtToBeRefunded1": "1998",
+        }),
+    );
+    let saved = save("1701MS", &completed["draft"]);
+    let reopened = open_for(TIN, "1701MS", 2025, 0);
+    assert_eq!(reopened["draft"], saved["draft"], "reopens as stored");
+    assert_eq!(
+        reopened["values"]["frm1701MS:txtTaxPaidPreviouslyFiledNo6a"],
+        "444"
+    );
+    assert_eq!(
+        reopened["values"]["frm1701MS:txtTaxPaidPreviouslyFiledNo6b"],
+        "555"
+    );
+    let html = app_print_document("1701ms-2024", "1701MS", &reopened["draft"]);
+    for (writer_key, expected) in [("derived:tp_p5_6", "444"), ("derived:sp_p5_6", "555")] {
+        let cell = html_cell("1701ms-2024", writer_key);
+        assert_eq!(
+            crate::static_html::cell_text(&html, &cell).trim(),
+            expected,
+            "print cell for {writer_key}"
+        );
+    }
+    let stored: bir_core::forms::form_1701ms::Form1701MsDraft =
+        serde_json::from_value(reopened["draft"].clone()).unwrap();
+    let payload = bir_core::official_xml::write(
+        bir_core::official_xml::layout(bir_core::forms::form_1701ms::FORM_1701MS_FORM_ID).unwrap(),
+        &stored.to_bir_field_map(),
+    )
+    .unwrap();
+    assert!(payload.contains(
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6a=444frm1701MS:txtTaxPaidPreviouslyFiledNo6a="
+    ));
+    assert!(payload.contains(
+        "frm1701MS:txtTaxPaidPreviouslyFiledNo6b=555frm1701MS:txtTaxPaidPreviouslyFiledNo6b="
+    ));
+    let filing = validated("1701MS", &reopened["draft"]);
+    assert_eq!(filing["errors"], json!([]), "the screen-edited draft files");
+}
+
+/// The short-period retention does not change 1701MS's other Item 6 gate:
+/// Amended Return No is the official handler that actively zeroes it.
+#[test]
+fn ms_amended_no_still_clears_item_6() {
+    setup();
+    let fresh = opened("1701MS");
+    let jointed = take("1701MS", &fresh["draft"], joint("1701MS"));
+    let amended = take(
+        "1701MS",
+        &jointed["draft"],
+        json!({"frm1701MS:txtAmendedYesNo2": "true"}),
+    );
+    let typed = take(
+        "1701MS",
+        &amended["draft"],
+        json!({
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6a": "444",
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6b": "555",
+        }),
+    );
+    let closed = take(
+        "1701MS",
+        &typed["draft"],
+        json!({"frm1701MS:txtAmendedNoNo2": "true"}),
+    );
+    assert_eq!(closed["draft"]["taxpayer"]["previously_filed"], 0.0);
+    assert_eq!(closed["draft"]["spouse"]["previously_filed"], 0.0);
+    assert_eq!(
+        closed["relock_notes"]["frm1701MS:txtTaxPaidPreviouslyFiledNo6a"],
+        json!("Part V Item 6 was cleared: the return is not amended or a short-period return.")
+    );
+    assert_eq!(
+        closed["relock_notes"]["frm1701MS:txtTaxPaidPreviouslyFiledNo6b"],
+        json!("Part V Item 6 was cleared: the return is not amended or a short-period return.")
+    );
+}
+
+/// The official edit handler opens Item 61B on Amended Yes without a joint
+/// condition. Through the screen path, it is typed on an amended joint return,
+/// joint filing closes, and the spouse column and its total keep it. Item 62B
+/// stays cleared.
+#[test]
+fn a_joint_off_item_61b_is_kept_and_62b_is_cleared() {
+    setup();
+    let fresh = opened("1701A");
+    let amended = take(
+        "1701A",
+        &fresh["draft"],
+        json!({"frm1701A:optAmendedReturn_1": "true"}),
+    );
+    let jointed = take("1701A", &amended["draft"], joint("1701A"));
+    let spouse_ftc = take(
+        "1701A",
+        &jointed["draft"],
+        json!({"frm1701A:optSpouseFTC_1": "true"}),
+    );
+    let typed = take(
+        "1701A",
+        &spouse_ftc["draft"],
+        json!({"frm1701A:txt61B": "666", "frm1701A:txt62B": "777"}),
+    );
+    let closed = take(
+        "1701A",
+        &typed["draft"],
+        json!({"frm1701A:optFilingStatus_2": "true"}),
+    );
+    assert_eq!(closed["draft"]["spouse_column"]["previously_filed"], 666.0);
+    assert_eq!(
+        closed["relocks"]["frm1701A:txt61B"],
+        Value::Null,
+        "joint-off does not shut Item 61B on an amended return"
+    );
+    assert_eq!(closed["draft"]["spouse_column"]["foreign_tax_credits"], 0.0);
+    assert_eq!(closed["draft"]["spouse_column"]["total_credits"], 666.0);
+    let completed = take(
+        "1701A",
+        &closed["draft"],
+        json!({
+            "frm1701A:optTaxType_2": "true",
+            "frm1701A:optATC_4": "true",
+            "frm1701A:optRefund_3": "true",
+        }),
+    );
+    assert_eq!(completed["rejected"], json!({}));
+    let saved = save("1701A", &completed["draft"]);
+    let reopened = opened("1701A");
+    assert_eq!(reopened["draft"], saved["draft"], "reopens as stored");
+    assert_eq!(reopened["values"]["frm1701A:txt61B"], "666.00");
+    assert_eq!(reopened["values"]["frm1701A:txt62B"], "0.00");
+    let html = app_print_document("1701a-2018", "1701A", &reopened["draft"]);
+    let cell = html_cell("1701a-2018", "derived:amount_61B");
+    assert_eq!(
+        crate::static_html::cell_text(&html, &cell).trim(),
+        "666",
+        "Item 61B prints in column B"
+    );
+    for (writer_key, expected) in [
+        ("derived:amount_21B", "666"),
+        ("derived:amount_64B", "666"),
+        ("derived:amount_65B", "-666"),
+        ("derived:amount_22B", "-666"),
+        ("derived:amount_24B", "-666"),
+        ("derived:amount_29B", "-666"),
+    ] {
+        let cell = html_cell("1701a-2018", writer_key);
+        assert_eq!(
+            crate::static_html::cell_text(&html, &cell).trim(),
+            expected,
+            "{writer_key} keeps Item 30 reconciled on paper"
+        );
+    }
+    let stored: bir_core::forms::form_1701a::Form1701ADraft =
+        serde_json::from_value(reopened["draft"].clone()).unwrap();
+    let payload = bir_core::official_xml::write(
+        bir_core::official_xml::layout(bir_core::forms::form_1701a::FORM_1701A_FORM_ID).unwrap(),
+        &stored.to_bir_field_map(),
+    )
+    .unwrap();
+    assert!(payload.contains("frm1701A:txt61B=666.00frm1701A:txt61B="));
+    assert!(payload.contains("frm1701A:txt62B=0.00frm1701A:txt62B="));
+    let filing = validated("1701A", &reopened["draft"]);
+    assert_eq!(filing["errors"], json!([]), "the screen-edited draft files");
 }
 
 // ------------------------------------------------------- stored drafts

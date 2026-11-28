@@ -2,7 +2,7 @@
  "v": 1,
  "description": "The flows this week's work touched, on a fresh scratch database: first-run sign-up with the ZIP and RDO pickers, a tax year with 2551Q, every screen, 2551Q money boxes (a zero box, a filled one, Item 16 with Amended Yes and No), Queue in the dry-run test build, a schedule row deleted, the birth date, Log out. Variants per target where a platform needs its own steps (the Linux window shows the narrow layout). Run with `just e2e <target> smoke --allow-send` under EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1; see docs/proof/E2E.md.",
  "params": {
-  "tin": "12345678800000",
+  "tin": "11111111400000",
   "name": "E2E SMOKE TAXPAYER",
   "address": "1 TEST ST",
   "zip": "1000",
@@ -12,7 +12,7 @@
   "prior": "500.25",
   "amount": "1234.56",
   "amount_shown": "1,234.56",
-  "tin_root": "123456788",
+  "tin_root": "111111114",
   "year": "2026",
   "bstart": "01/01/2020"
  },
@@ -70,6 +70,11 @@
     "phone": "software_keyboard"
    },
    "needs_host": "an app built with nsh-gpui-agent at hexuria/nsh-gpui-agent#11 (the software keyboard in the tree)",
+   "may_scroll": {
+    "phone": [
+     "s14"
+    ]
+   },
    "fallback": {
     "phone": "money-boxes-phone.json",
     "file": "money-boxes.wants"

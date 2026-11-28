@@ -573,14 +573,29 @@ fn token() -> String {
     Uuid::new_v4().to_string()
 }
 fn user(state: &mut State, email: &str) -> User {
-    state
-        .users
-        .entry(email.to_owned())
-        .or_insert_with(|| User {
+    if let Some(held) = state.users.get(email) {
+        return held.clone();
+    }
+    let made = User {
+        id: token(),
+        email: email.to_owned(),
+    };
+    state.users.insert(email.to_owned(), made.clone());
+    // Test TINs are added by Buwiz, never from the app: a new account carries both test roots already active,
+    // as production accounts do. Real roots are untouched.
+    for root in TEST_ROOTS {
+        state.claims.push(Claim {
             id: token(),
-            email: email.to_owned(),
-        })
-        .clone()
+            account: made.id.clone(),
+            kind: "personal".into(),
+            root: root.into(),
+            branch: "00000".into(),
+            registered_name: "TEST TIN".into(),
+            state: TinState::Approved,
+            activated_at: Some(unix_now()),
+        });
+    }
+    made
 }
 fn issue(
     state: &mut State,
@@ -2900,6 +2915,45 @@ mod tests {
     }
 
     #[test]
+    fn a_new_account_carries_the_test_roots_approved() {
+        // Test TINs are added by Buwiz, never from the app: every account the mock creates carries both test roots
+        // active and test_only (head office), as production accounts do. A real root is never seeded.
+        let state: Arc<Mutex<State>> = Arc::new(Mutex::new(State::default()));
+        {
+            let mut held = state.lock().unwrap_or_else(|e| e.into_inner());
+            user(&mut held, "fresh@example.test");
+        }
+        let held = state.lock().unwrap_or_else(|e| e.into_inner());
+        let account = held.users["fresh@example.test"].id.clone();
+        let rows: Vec<(&str, &str, &TinState)> = held
+            .claims
+            .iter()
+            .filter(|claim| claim.account == account)
+            .map(|claim| (claim.root.as_str(), claim.branch.as_str(), &claim.state))
+            .collect();
+        assert_eq!(
+            rows.len(),
+            2,
+            "exactly the two test roots, nothing else: {rows:?}"
+        );
+        for root in TEST_ROOTS {
+            let row = rows
+                .iter()
+                .find(|(r, _, _)| *r == root)
+                .expect("the test root is seeded");
+            assert!(
+                matches!(row.2, TinState::Approved),
+                "the test root is active: {row:?}"
+            );
+            assert_eq!(row.1, "00000", "the head office");
+        }
+        assert!(
+            !rows.iter().any(|(r, _, _)| *r == "123456788"),
+            "a real root is never seeded"
+        );
+    }
+
+    #[test]
     fn expiry_and_safe_browser_inputs() {
         let mut state = State::default();
         state.devices.insert(
@@ -3053,7 +3107,7 @@ mod tests {
             assert_eq!(status, 200);
             assert_eq!(body["include"], "all");
             let rows = body["profiles"].as_array().unwrap();
-            assert_eq!(rows.len(), 7);
+            assert_eq!(rows.len(), 8);
             for row in rows {
                 let next = row["next"].as_str().unwrap();
                 assert_eq!(next == "fix", !row["action"].is_null(), "{row}");
@@ -3073,6 +3127,7 @@ mod tests {
                 [
                     "approved",
                     "approved",
+                    "approved",
                     "paused",
                     "unverified",
                     "pending",
@@ -3083,7 +3138,7 @@ mod tests {
 
             let list = client(&server.url(), &token).account_tins(0).await.unwrap();
             assert!(list.complete && !list.stale);
-            assert_eq!(list.rows.len(), 7);
+            assert_eq!(list.rows.len(), 8);
             for row in &list.rows {
                 assert_eq!(row.next == Next::Fix, row.action_url.is_some(), "{row:?}");
                 assert_eq!(row.next == Next::Send, row.can_send, "{row:?}");
@@ -3196,6 +3251,18 @@ mod tests {
             assert_eq!(
                 server.tins_of(EMAIL),
                 [
+                    (
+                        "personal".to_owned(),
+                        "000-000-000-00000".to_owned(),
+                        "TEST TIN".to_owned(),
+                        TinState::Approved
+                    ),
+                    (
+                        "personal".to_owned(),
+                        "111-111-114-00000".to_owned(),
+                        "TEST TIN".to_owned(),
+                        TinState::Approved
+                    ),
                     (
                         "business".to_owned(),
                         "000-123-453-00002".to_owned(),
@@ -3351,7 +3418,10 @@ mod tests {
                 refused.to_string(),
                 "Too many tries. Try again in 60 minutes."
             );
-            assert!(server.tins_of(EMAIL).len() == 1, "nothing was added");
+            assert!(
+                server.tins_of(EMAIL).len() == 3,
+                "nothing was added past the two seeded test roots and the one add"
+            );
         }
     }
 }

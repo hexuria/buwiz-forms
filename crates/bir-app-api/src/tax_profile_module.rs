@@ -3708,6 +3708,7 @@ mod tests {
             assert_eq!(
                 states,
                 [
+                    ("000000000", "00000", "activated"),
                     ("123456788", "00000", "activated"),
                     ("111111114", "00000", "activated"),
                     ("000123453", "00000", "fix"),
@@ -3719,19 +3720,23 @@ mod tests {
                 assert_eq!(row["stale"], false);
                 assert_eq!(row["fetched_at"].as_f64().unwrap(), fetched_at);
                 assert_eq!(row["action_url"].is_null(), row["state"] != "fix", "{row}");
-                assert_eq!(row["test_only"], row["tin_root"] == "111111114", "{row}");
+                assert_eq!(
+                    row["test_only"],
+                    row["tin_root"] == "111111114" || row["tin_root"] == "000000000",
+                    "{row}"
+                );
             }
             assert!(
-                rows[2]["action_url"]
+                rows[3]["action_url"]
                     .as_str()
                     .unwrap()
                     .starts_with("https://account.buwiz.com/tins/claims/")
             );
             assert_eq!(
-                rows[2]["message"],
+                rows[3]["message"],
                 "Sent back for a fix: A photo is too blurry to read."
             );
-            assert!(rows[4]["message"].is_null());
+            assert!(rows[5]["message"].is_null());
             assert_eq!(mock.tax_profile_posts(), 0, "a read never adds");
         });
     }
@@ -3859,6 +3864,16 @@ mod tests {
                 held,
                 [
                     (
+                        "personal".into(),
+                        "000-000-000-00000".into(),
+                        "TEST TIN".into()
+                    ),
+                    (
+                        "personal".into(),
+                        "111-111-114-00000".into(),
+                        "TEST TIN".into()
+                    ),
+                    (
                         "business".into(),
                         "123-456-788-00001".into(),
                         "Example Trading Corp".into()
@@ -3881,7 +3896,10 @@ mod tests {
                 .iter()
                 .map(|row| row["state"].as_str().unwrap())
                 .collect();
-            assert_eq!(states, ["fix", "fix", "not_activated"]);
+            assert_eq!(
+                states,
+                ["activated", "activated", "fix", "fix", "not_activated"]
+            );
             // Only a tax profile on this device, by its 14 digits.
             assert_eq!(
                 call_verb("activate_tin", vec![json!("12345678800002")]),
@@ -4246,7 +4264,11 @@ mod tests {
             ok(list_taxpayers_fn, vec![]);
             call_verb("account_tins", vec![json!(0)]).unwrap();
             assert_eq!(mock.tax_profile_posts(), 0, "no profile change posts");
-            assert!(mock.tins_of("filer@example.test").is_empty());
+            assert_eq!(
+                mock.tins_of("filer@example.test").len(),
+                2,
+                "only the two seeded test roots: nothing was added"
+            );
             call_verb("activate_tin", vec![json!(HEAD)]).unwrap();
             assert_eq!(mock.tax_profile_posts(), 1);
         });

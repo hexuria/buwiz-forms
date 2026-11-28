@@ -25,12 +25,20 @@ import scripts.install_git_hooks as install_git_hooks  # noqa: E402
 from scripts.install_git_hooks import install_hook  # noqa: E402
 
 
-def git(repo: Path, hooks: Path, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess:
+def git(repo: Path, hooks: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "-c", f"core.hooksPath={hooks}", "-C", str(repo), *args],
-        input=input_text,
         capture_output=True,
         text=True,
+        check=True,
+    )
+
+
+def git_bytes(repo: Path, hooks: Path, *args: str, input_bytes: bytes | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-c", f"core.hooksPath={hooks}", "-C", str(repo), *args],
+        input=input_bytes,
+        capture_output=True,
         check=True,
     )
 
@@ -275,16 +283,25 @@ class CommitRangeTests(unittest.TestCase):
 
     def make_signed_commit(self, repo: Path, hooks: Path, message: str) -> str:
         unsigned = commit(repo, hooks, message)
-        raw = git(repo, hooks, "cat-file", "commit", unsigned).stdout
-        headers, body = raw.split("\n\n", 1)
+        raw = git_bytes(repo, hooks, "cat-file", "commit", unsigned).stdout
+        headers, body = raw.split(b"\n\n", 1)
         signature = (
-            "gpgsig -----BEGIN PGP SIGNATURE-----\n"
-            " \n"
-            " fake-signature\n"
-            " -----END PGP SIGNATURE-----"
+            b"gpgsig -----BEGIN PGP SIGNATURE-----\n"
+            b" \n"
+            b" fake-signature\n"
+            b" -----END PGP SIGNATURE-----"
         )
-        signed_object = headers + "\n" + signature + "\n\n" + body
-        signed = git(repo, hooks, "hash-object", "-t", "commit", "-w", "--stdin", input_text=signed_object).stdout.strip()
+        signed_object = headers + b"\n" + signature + b"\n\n" + body
+        signed = git_bytes(
+            repo,
+            hooks,
+            "hash-object",
+            "-t",
+            "commit",
+            "-w",
+            "--stdin",
+            input_bytes=signed_object,
+        ).stdout.decode("ascii").strip()
         git(repo, hooks, "update-ref", "refs/heads/topic", signed)
         return signed
 
@@ -479,18 +496,19 @@ class HookTests(unittest.TestCase):
         git(repo, empty_hooks, "config", "commit.gpgsign", "false")
         if comment_char is not None:
             git(repo, empty_hooks, "config", "core.commentChar", comment_char)
-        editor = root / "editor"
-        write_executable(
-            editor,
-            "#!/bin/sh\n"
-            "tmp=\"$1.tmp\"\n"
-            "{ printf 'subject\\n\\n'; cat \"$1\"; } >\"$tmp\" && mv \"$tmp\" \"$1\"\n",
+        editor = root / "editor.py"
+        editor.write_bytes(
+            b"import sys\n"
+            b"from pathlib import Path\n"
+            b"path = Path(sys.argv[1])\n"
+            b"path.write_bytes(b'subject\\n\\n' + path.read_bytes())\n"
         )
         return repo, editor
 
     def run_real_verbose_commit(self, repo: Path, editor: Path) -> subprocess.CompletedProcess:
         env = os.environ.copy()
-        env["GIT_EDITOR"] = str(editor)
+        command = (Path(sys.executable), editor)
+        env["GIT_EDITOR"] = " ".join(shlex.quote(path.as_posix()) for path in command)
         return subprocess.run(
             ["git", "-C", str(repo), "commit", "-v", "-q"],
             env=env,
@@ -1019,13 +1037,14 @@ class InstallerTests(unittest.TestCase):
             hooks = repo / ".git" / "hooks"
             install_hook(repo, hooks, "commit-msg")
             install_hook(repo, hooks, "commit-msg")
-            self.assertTrue(os.stat(hooks / "commit-msg").st_mode & stat.S_IXUSR)
+            if os.name != "nt":
+                self.assertTrue(os.stat(hooks / "commit-msg").st_mode & stat.S_IXUSR)
             bad_path = "/Users/alice/project"
             message = Path(directory) / "message"
             message.write_text(f"built in {bad_path}\n", encoding="utf-8")
 
             result = subprocess.run(
-                [sh, str(hooks / "commit-msg"), str(message)],
+                [sh, (hooks / "commit-msg").as_posix(), message.as_posix()],
                 cwd=repo,
                 capture_output=True,
                 text=True,
@@ -1046,18 +1065,19 @@ class InstallerTests(unittest.TestCase):
             hooks = repo / ".git" / "hooks"
             seen = hooks / "local-input"
             original = hooks / "pre-push"
-            original.write_text(f"#!/bin/sh\ncat >{shlex.quote(str(seen))}\n", encoding="utf-8")
+            original.write_bytes(f"#!/bin/sh\ncat >{shlex.quote(seen.as_posix())}\n".encode("utf-8"))
             original.chmod(original.stat().st_mode | stat.S_IXUSR)
             install_hook(repo, hooks, "pre-push")
             install_hook(repo, hooks, "pre-push")
-            self.assertTrue(os.stat(hooks / "pre-push").st_mode & stat.S_IXUSR)
+            if os.name != "nt":
+                self.assertTrue(os.stat(hooks / "pre-push").st_mode & stat.S_IXUSR)
 
             base = commit(repo, empty_hooks, "clean base")
             head = commit(repo, empty_hooks, "use $HOME/project")
             git(repo, empty_hooks, "branch", "main", base)
             input_line = f"refs/heads/topic {head} refs/heads/topic {'0' * 40}\n"
             result = subprocess.run(
-                [sh, str(hooks / "pre-push"), "origin", "unused"],
+                [sh, (hooks / "pre-push").as_posix(), "origin", "unused"],
                 cwd=repo,
                 input=input_line,
                 capture_output=True,

@@ -99,7 +99,13 @@ fn page_starts(html: &str) -> Vec<(usize, bool)> {
             let cls = &rest[..cls_end];
             v.push((
                 at,
-                cls.contains("page-receipt") || cls.contains("page-continuation"),
+                // A plain continuation table may flow onto the next paper sheet;
+                // a cloned-band continuation is already paginated as a fixed
+                // paper grid, so `page-continuation-band` must not match here.
+                cls.contains("page-receipt")
+                    || cls
+                        .split_whitespace()
+                        .any(|part| part == "page-continuation"),
             ));
         }
         from = at + 4;
@@ -172,6 +178,27 @@ pub fn field_map(html: &str) -> Vec<(String, String)> {
     out
 }
 
+/// The text of `cell` in a static print document: its one span, or its
+/// `<cell>-i` input span or `<cell>-s<slot>` comb spans in slot order.
+/// Test-only proof helper.
+#[cfg(test)]
+pub(crate) fn cell_text(html: &str, cell: &str) -> String {
+    let prefix = format!("{cell}-s");
+    let mut slots: Vec<(usize, String)> = field_map(html)
+        .into_iter()
+        .filter_map(|(id, text)| {
+            if id == cell || id == format!("{cell}-i") {
+                return Some((0, text));
+            }
+            id.strip_prefix(&prefix)
+                .and_then(|slot| slot.parse::<usize>().ok())
+                .map(|slot| (slot, text))
+        })
+        .collect();
+    slots.sort_by_key(|(slot, _)| *slot);
+    slots.into_iter().map(|(_, text)| text).collect()
+}
+
 #[cfg(test)]
 mod tests {
     const DOC: &str = r##"<html><head></head><body><a class="doc-link" href="guide.html">Guide</a><div class="page page-1"><input type="text" class="fi fh4 fc" id="p1c1-i" style="inset:1pt" value="X"></div><div class="page page-2 page-receipt"><input type="text" class="fi fh22" id="p2c3-s0" data-slot-index="0" value="A&amp;B"></div><script>alert(1)</script></body></html>"##;
@@ -219,5 +246,13 @@ mod tests {
         let out = super::staticize(doc);
         assert_eq!(out.matches(r#"<div class="sheet"#).count(), 2);
         assert!(out.contains(r#"<div class="sheet sheet-flow" data-preview-label="Page 2 of 2">"#));
+    }
+
+    #[test]
+    fn band_continuation_page_stays_on_one_fixed_sheet() {
+        let doc = r##"<html><head></head><body><div class="page page-1"><input type="text" class="fi" id="p1c1" value="X"></div><div class="page page-continuation-band" id="page-continuation-s0-p0"><input type="text" class="fi" id="c1" value="Row 6"></div></body></html>"##;
+        let out = super::staticize(doc);
+        assert!(out.contains(r#"<div class="sheet" data-preview-label="Page 2 of 2"><div class="page page-continuation-band"#));
+        assert!(!out.contains(r#"<div class="sheet sheet-flow" data-preview-label="Page 2 of 2"><div class="page page-continuation-band"#));
     }
 }

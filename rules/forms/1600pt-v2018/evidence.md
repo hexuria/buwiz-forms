@@ -6,6 +6,6 @@
 - Dummy representative save: `00000000000000-1600PTv2018-012025.xml`, 11,331 bytes, SHA-256 `da4301f5add3e4d3a870f5c28d7ed9cd851aed2e88e50375a7dfeb4e550beb77`.
 - ATC catalog: 31 records from the pinned package catalog—6 Private slots and 31 Government slots because six `PG` records appear in both lists.
 
-The observed save has 133 unique elements. The maximum ATC union adds selectors 7-31 and computation rows 6-31 for 262 unique field keys; ordered-key SHA-256 is `e9d2bb254555f57e5e851160cb7d3308221a4d23036802ed729487ea848cf743`. The HTA has 160 static controls and 316 maximum runtime controls.
+The observed save has 133 unique elements. The representative save's email value is redacted as `#email-redacted#` in captured field metadata. The maximum ATC union adds selectors 7-31 and computation rows 6-31 for 262 unique field keys; ordered-key SHA-256 is `e9d2bb254555f57e5e851160cb7d3308221a4d23036802ed729487ea848cf743`. The HTA has 160 static controls and 316 maximum runtime controls.
 
 `Help1600.hta` (SHA-256 `72425790b620970d00bd35ea9b22477d37742214dd2e5eb2198b1ca0e347d37d`) identifies legacy Form 1600, not 1600-PT, and is recorded only as a package mismatch.
