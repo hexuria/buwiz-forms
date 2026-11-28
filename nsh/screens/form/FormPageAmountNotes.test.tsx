@@ -232,6 +232,25 @@ for (const [period, typed, shown] of [[1, "12345678901234567890", "12,345,678,90
   }, 40_000);
 }
 
+// The same typing at a slow filer's cadence: keystrokes over 300 ms apart let the session's flush fire mid-typing. On the
+// slow CI runner every keystroke is that slow. The typing is still one gesture: its refusal rolls back to what the cell held,
+// never to a shorter prefix of the same typing that a mid-typing flush committed while it still fit.
+test("refused amount in a schedule cell typed slowly: keystrokes apart enough to flush mid-typing still roll back to the held amount", async () => {
+  const app = await scheduleCell(2022, 3);
+  await app.clear(CELL);
+  for (const ch of "1234567890123") {
+    await app.type(CELL, ch);
+    await app.wait(450);
+  }
+  await app.wait(400);
+  await app.keyboard.press("tab");
+  await app.wait(800);
+  const said = "Taxable Amount: you typed 1,234,567,890,123.00; the return holds 1,234.56.";
+  expect(app.value(CELL)).toBe("1,234.56");
+  expect(probe(app)).toBe("1,234.56");
+  expect(app.texts().some((t) => t.startsWith(said))).toBe(true);
+}, 40_000);
+
 test("note in a row drawer: with the drawer closed and its part folded, Queue opens both, the cell and its sentence are on screen, and the next press goes on", async () => {
   const app = await scheduleCell(2022, 3);
   await typeAndTab(app, "12345678901234567890");
