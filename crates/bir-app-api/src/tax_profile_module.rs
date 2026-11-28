@@ -1385,6 +1385,8 @@ fn persist_oauth_grant(
     guard
         .persist_google_oauth_for_inbox(email, access_token, refresh_token, Some(tin))
         .map_err(|error| HostError::new(error.to_string()))?;
+    // A return still waiting for the BIR's email is watched again through the new grant, as after Verify.
+    bir_core::background_cron::reschedule_email_polls_for_inbox(&guard, email);
     inbox_state_value(&guard, tin)
 }
 
@@ -1561,7 +1563,9 @@ fn check_inbox_now_run(tin: &str, db: &std::sync::Arc<std::sync::Mutex<Database>
                     .unwrap_or_else(|| "Email polling failed (unknown).".to_string()),
             );
             job.retries += 1;
-            job.status = "Queued".to_string();
+            // A failure that leaves nothing pending (a Google grant this build cannot renew) ends the job, as the
+            // scheduler does; anything else stays queued for the next try.
+            job.status = if still_pending { "Queued" } else { "Archived" }.to_string();
         }
         let _ = guard.save_job(job);
     }
@@ -2785,6 +2789,49 @@ mod tests {
                 job.output_log.as_deref(),
                 Some("IMAP authentication failed")
             );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// #504 review: a check whose error leaves nothing pending (a Google grant this build cannot renew) ends the job,
+    /// as the scheduler does, instead of queueing another try.
+    #[test]
+    fn check_inbox_now_archives_the_job_when_nothing_is_left_pending() {
+        setup();
+        ok(
+            set_inbox_app_password,
+            vec![
+                json!(HEAD),
+                json!({"imap_email": "receipts@example.com", "app_password": "abcdefghijklmnop"}),
+            ],
+        );
+        with_database(|db| {
+            db.save_job(poll_job("receipts@example.com")).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        TEST_INBOX_POLL.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(|_email, _db| {
+                (
+                    false,
+                    false,
+                    Some(bir_core::email::GOOGLE_NOT_IN_THIS_VERSION.to_string()),
+                )
+            }));
+        });
+        let db = database_handle().unwrap();
+        let result = to_json(&check_inbox_now_run(HEAD, &db).unwrap());
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["still_pending"], false);
+        with_database(|db| {
+            let job = db
+                .list_jobs()
+                .unwrap()
+                .into_iter()
+                .find(|job| job.command.as_deref() == Some("bir_poll_email receipts@example.com"))
+                .unwrap();
+            assert_eq!(job.status, "Archived");
             Ok(())
         })
         .unwrap();

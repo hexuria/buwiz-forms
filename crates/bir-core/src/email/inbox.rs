@@ -55,14 +55,27 @@ pub fn resolve_inbox_fetch_profile(
     inbox_email: &str,
 ) -> Result<Option<TaxpayerProfile>, crate::db::DbError> {
     let profiles = db.list_profiles()?;
-    resolve_inbox_fetch_profile_from(db, inbox_email, &profiles)
+    resolve_inbox_fetch_profile_from(
+        db,
+        inbox_email,
+        &profiles,
+        super::auth_oauth::google_sign_in_available(),
+    )
 }
 
+/// The profile whose credentials read `inbox_email`. With Google's sign-in available (`google`), a usable Google
+/// grant wins, as the inbox-keyed table is the source of truth after reconnect. Without it a grant cannot be renewed,
+/// so an app password the person chose for this inbox wins over it, and the grant is never overlaid: verification
+/// and the poll then use the same credential.
 fn resolve_inbox_fetch_profile_from(
     db: &Database,
     inbox_email: &str,
     profiles: &[TaxpayerProfile],
+    google: bool,
 ) -> Result<Option<TaxpayerProfile>, crate::db::DbError> {
+    if !google && let Some(chosen) = select_app_password_profile(profiles, inbox_email) {
+        return Ok(Some(chosen));
+    }
     let selected = select_imap_auth_profile(profiles, inbox_email);
     let table = db
         .inbox_oauth_tokens(inbox_email)?
@@ -77,6 +90,25 @@ fn resolve_inbox_fetch_profile_from(
     }
 
     Ok(Some(profile))
+}
+
+/// The latest profile on `inbox_email` set to read it with an app password, and holding one.
+fn select_app_password_profile(
+    profiles: &[TaxpayerProfile],
+    inbox_email: &str,
+) -> Option<TaxpayerProfile> {
+    profiles
+        .iter()
+        .filter(|profile| inbox_emails_match(profile.inbox_email(), inbox_email))
+        .filter(|profile| profile.email_auth_method == crate::profile::EmailAuthMethod::AppPassword)
+        .filter(|profile| {
+            profile
+                .imap_app_password
+                .as_deref()
+                .is_some_and(|password| !password.is_empty())
+        })
+        .max_by_key(|profile| profile.id)
+        .cloned()
 }
 
 fn overlay_inbox_oauth(profile: &mut TaxpayerProfile, tokens: &InboxOAuthTokens) {
@@ -116,9 +148,14 @@ pub fn plan_email_poll_for_address(
         matching_profiles.push(profile);
     }
 
-    let auth_profile = resolve_inbox_fetch_profile_from(db, email_address, &matching_profiles)
-        .ok()
-        .flatten();
+    let auth_profile = resolve_inbox_fetch_profile_from(
+        db,
+        email_address,
+        &matching_profiles,
+        super::auth_oauth::google_sign_in_available(),
+    )
+    .ok()
+    .flatten();
 
     EmailPollPlan {
         auth_profile,
@@ -163,6 +200,38 @@ mod tests {
 
     fn save(db: &Database, profile: TaxpayerProfile) -> TaxpayerProfile {
         db.save_profile(profile).expect("profile saves")
+    }
+
+    /// #504 review: a mailbox connected to Google in an earlier build, switched to an app password without pressing
+    /// Disconnect. In a build without Google's sign-in the grant cannot be renewed, so the app password the person
+    /// chose reads the inbox (the same credential Verify used); with Google available the grant still wins.
+    #[test]
+    fn a_chosen_app_password_wins_over_a_grant_this_build_cannot_renew() {
+        let db = Database::open_ephemeral().unwrap();
+        let mut juan = crate::filing_queue::mandatory_lab_1601c_profile();
+        juan.imap_email = Some(SHARED_INBOX.to_string());
+        let juan = save(&db, juan);
+        db.persist_google_oauth_for_inbox(SHARED_INBOX, "access-old", "refresh-old", None)
+            .unwrap();
+        let mut switched = db.get_profile(&juan.tin.full()).unwrap().unwrap();
+        switched.email_auth_method = EmailAuthMethod::AppPassword;
+        switched.imap_app_password = Some("abcdabcdabcdabcd".to_string());
+        save(&db, switched);
+        let profiles = db.list_profiles().unwrap();
+
+        let without = resolve_inbox_fetch_profile_from(&db, SHARED_INBOX, &profiles, false)
+            .unwrap()
+            .expect("a profile reads the inbox");
+        assert_eq!(without.email_auth_method, EmailAuthMethod::AppPassword);
+        assert_eq!(
+            without.imap_app_password.as_deref(),
+            Some("abcdabcdabcdabcd")
+        );
+
+        let with = resolve_inbox_fetch_profile_from(&db, SHARED_INBOX, &profiles, true)
+            .unwrap()
+            .expect("a profile reads the inbox");
+        assert_eq!(with.email_auth_method, EmailAuthMethod::GoogleOAuth);
     }
 
     #[test]

@@ -395,9 +395,9 @@ pub fn fetch_and_process_emails_for_address_until(
 
     if let Some(mut profile) = profile {
         // A Google grant in a build that cannot renew it: said once (one alert, one banner), and the poll stops rather
-        // than failing the same way every interval.
-        if profile.email_auth_method == EmailAuthMethod::GoogleOAuth && !google_sign_in_available()
-        {
+        // than failing the same way every interval. Only a grant that is really stored: after Disconnect the method
+        // may still read GoogleOAuth with no grant, and that is not a connection to warn about.
+        if google_grant_unusable(&profile, google_sign_in_available()) {
             return google_unavailable_poll(&db, &profile);
         }
         // Sibling Submitted drafts (Jane) must still be polled even when the
@@ -467,6 +467,13 @@ pub fn fetch_and_process_emails_for_address_until(
 }
 
 const POLL_FAILURE_TITLE: &str = "Email confirmation checking has stopped";
+
+/// A stored Google grant this build cannot renew (`available`: whether Google's sign-in is in the build).
+fn google_grant_unusable(profile: &TaxpayerProfile, available: bool) -> bool {
+    profile.email_auth_method == EmailAuthMethod::GoogleOAuth
+        && profile.has_usable_oauth_refresh()
+        && !available
+}
 
 /// The poll of an inbox connected to Google in a build that cannot renew the grant: one alert (with nothing to click:
 /// Reconnect cannot work here), its banner only the first time, and nothing left pending, so the job ends instead of
@@ -565,6 +572,29 @@ mod tests {
         assert_eq!(alerts[0].title, POLL_FAILURE_TITLE);
         assert_eq!(alerts[0].detail, "invalid_grant");
         assert_eq!(alerts[0].occurrences, 2);
+    }
+
+    /// #504 review: only a stored grant is "a Google grant this build cannot renew". After Disconnect the method can
+    /// still read GoogleOAuth with no grant; that profile gets no "disconnect" alert, and a build with Google gets none.
+    #[test]
+    fn only_a_stored_grant_is_unusable_without_google() {
+        let mut profile = juana();
+        profile.email_auth_method = EmailAuthMethod::GoogleOAuth;
+        assert!(
+            !google_grant_unusable(&profile, false),
+            "disconnected: no grant"
+        );
+        profile.oauth_refresh_token = Some("refresh".to_string());
+        assert!(google_grant_unusable(&profile, false));
+        assert!(
+            !google_grant_unusable(&profile, true),
+            "a build with Google renews it"
+        );
+        profile.email_auth_method = EmailAuthMethod::AppPassword;
+        assert!(
+            !google_grant_unusable(&profile, false),
+            "an app password is not a grant"
+        );
     }
 
     /// A Google grant in a build without Google: one alert in plain words with nothing to click, recorded again only as
