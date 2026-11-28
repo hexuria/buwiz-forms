@@ -38,7 +38,7 @@ const C1701_ITEMIZED_A: &str =
     "Item 7 ATC is II012, II013 or II014 and Item 21A is Itemized Deduction.";
 const C1701_ITEMIZED_B: &str = "A joint return (Items 16 to 18), Part IV Item 4 is II012, II013 or II014 and Part IV Item 12A is Itemized Deduction.";
 const C1701A_JOINT: &str = "A joint return: Item 16 Married, Item 17 Yes and Item 18 Joint Filing.";
-const C1701A_JOINT_AMENDED: &str = "A joint return (Items 16 to 18) and Amended Return Yes.";
+const C1701A_AMENDED: &str = "Amended Return Yes.";
 const C1701A_JOINT_FOREIGN: &str =
     "A joint return (Items 16 to 18) and the spouse's foreign-tax-credit answer Yes.";
 const C1701A_GRADUATED: &str = "The column's ATC is II012, II013 or II014 (graduated rates).";
@@ -98,11 +98,11 @@ const G1701A_JOINT: Gate = Gate {
     note: "Column B is for a joint return.",
     cleared: "Column B was cleared: it applies only to a joint return.",
 };
-const G1701A_JOINT_AMENDED: Gate = Gate {
-    gate: "1701a_joint_amended",
-    lock: C1701A_JOINT_AMENDED,
-    note: "This credit needs a joint amended return.",
-    cleared: "This credit was cleared: it needs a joint amended return.",
+const G1701A_AMENDED: Gate = Gate {
+    gate: "1701a_amended",
+    lock: C1701A_AMENDED,
+    note: "This credit is for an amended return.",
+    cleared: "This credit was cleared: this is not an amended return.",
 };
 const G1701A_JOINT_FOREIGN: Gate = Gate {
     gate: "1701a_joint_foreign",
@@ -266,7 +266,7 @@ fn gate_of(form: &str, key: &str) -> Option<Gate> {
                 return Some(G1701A_JOINT);
             }
             if rest == "61B" {
-                return Some(G1701A_JOINT_AMENDED);
+                return Some(G1701A_AMENDED);
             }
             if rest == "62B" {
                 return Some(G1701A_JOINT_FOREIGN);
@@ -493,9 +493,12 @@ fn explicit_closed(gate: Gate, draft: &Value, key: &str) -> Option<bool> {
                     !period_open
                 }
             }),
-        "1701a_joint_amended" => serde_json::from_value::<Form1701ADraft>(draft.clone())
+        // enableAllControl opens Items 61A/61B on Amended Return Yes without a
+        // joint-filing condition (BIR-Form1701A.hta :6061-6064); the spouse
+        // column's own joint gate governs the other column-B boxes.
+        "1701a_amended" => serde_json::from_value::<Form1701ADraft>(draft.clone())
             .ok()
-            .map(|form| !(form.is_amended && form.is_joint())),
+            .map(|form| !form.is_amended),
         _ => None,
     }
 }

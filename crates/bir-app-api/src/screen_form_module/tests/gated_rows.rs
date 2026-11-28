@@ -154,6 +154,25 @@ fn kept_gates_refuse_page_writes_while_shut() {
 }
 
 #[test]
+fn a_item61b_opens_on_an_amended_return_even_without_joint_filing() {
+    setup();
+    let kind = kind_of("1701A").unwrap();
+    let fresh = open("1701A", 0);
+    let mut draft = fresh["draft"].clone();
+    agent::fill(
+        kind,
+        &mut draft,
+        "frm1701A:optAmendedReturn_1",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    agent::fill(kind, &mut draft, "frm1701A:txt61B", &json!("666"), None)
+        .expect("enableAllControl opens 61B on Amended Yes even when joint filing is off");
+    assert_eq!(draft["spouse_column"]["previously_filed"], 666.0);
+}
+
+#[test]
 fn ms_item_6_transition_zeroing_is_host_wide() {
     setup();
     let kind = kind_of("1701MS").unwrap();
@@ -223,7 +242,7 @@ fn ms_item_6_transition_zeroing_is_host_wide() {
         None,
     )
     .unwrap();
-    assert_eq!(sibling["taxpayer"]["previously_filed"], 444.0);
+    assert_eq!(sibling["taxpayer"]["previously_filed"], 0.0);
 
     // The Item 11/12/17 handlers reset Part II through Part VI in the official
     // runtime; Item 6 is in that reset list independently of Amended.
@@ -322,6 +341,55 @@ fn ms_item_6_transition_zeroing_is_host_wide() {
         spouse_reset["spouse"]["previously_filed"], 0.0,
         "the spouse Item 17 handler uses the same official reset"
     );
+
+    // Group-choice writes are the member radio clicks in the official page.
+    let mut group_reset = fresh["draft"].clone();
+    group_reset["civil_status"] = json!("married");
+    group_reset["filing"] = json!("jointly");
+    agent::fill(
+        kind,
+        &mut group_reset,
+        "frm1701MS:txtAmendedYesNo2",
+        &json!("true"),
+        None,
+    )
+    .unwrap();
+    for (key, value, path) in [
+        (
+            "frm1701MS:txtTaxpayerNo17",
+            "a",
+            "/taxpayer/previously_filed",
+        ),
+        (
+            "frm1701MS:txtTaxpayerNo12",
+            "c",
+            "/taxpayer/previously_filed",
+        ),
+        (
+            "frm1701MS:txtTaxpayerNo12",
+            "b1",
+            "/spouse/previously_filed",
+        ),
+        (
+            "frm1701MS:txtTaxpayerNo11",
+            "a1",
+            "/spouse/previously_filed",
+        ),
+        ("frm1701MS:txtSpouseNo17", "b", "/spouse/previously_filed"),
+    ] {
+        let amount_key = if path.contains("taxpayer") {
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6a"
+        } else {
+            "frm1701MS:txtTaxPaidPreviouslyFiledNo6b"
+        };
+        agent::fill(kind, &mut group_reset, amount_key, &json!("444"), None).unwrap();
+        agent::fill(kind, &mut group_reset, key, &json!(value), None).unwrap();
+        assert_eq!(
+            group_reset.pointer(path).cloned().unwrap_or(Value::Null),
+            json!(0.0),
+            "{key}={value} uses the official member-radio reset"
+        );
+    }
 
     // marriedJointly itself ends in validateAmendedReturn. A filing-status
     // write on an unamended return therefore zeroes both columns too.

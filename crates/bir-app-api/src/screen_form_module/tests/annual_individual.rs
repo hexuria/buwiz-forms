@@ -1531,9 +1531,10 @@ fn ms_amended_no_still_clears_item_6() {
     );
 }
 
-/// The official upload keeps a disabled but valued box. Through the screen
-/// path, 1701A Item 61B is typed on an amended joint return, joint filing
-/// closes, and the spouse column and its total keep it. Item 62B stays cleared.
+/// The official edit handler opens Item 61B on Amended Yes without a joint
+/// condition. Through the screen path, it is typed on an amended joint return,
+/// joint filing closes, and the spouse column and its total keep it. Item 62B
+/// stays cleared.
 #[test]
 fn a_joint_off_item_61b_is_kept_and_62b_is_cleared() {
     setup();
@@ -1561,9 +1562,9 @@ fn a_joint_off_item_61b_is_kept_and_62b_is_cleared() {
     );
     assert_eq!(closed["draft"]["spouse_column"]["previously_filed"], 666.0);
     assert_eq!(
-        closed["relock_notes"]["frm1701A:txt61B"],
-        json!("This credit needs a joint amended return."),
-        "the kept value is locked, never announced as cleared"
+        closed["relocks"]["frm1701A:txt61B"],
+        Value::Null,
+        "joint-off does not shut Item 61B on an amended return"
     );
     assert_eq!(closed["draft"]["spouse_column"]["foreign_tax_credits"], 0.0);
     assert_eq!(closed["draft"]["spouse_column"]["total_credits"], 666.0);

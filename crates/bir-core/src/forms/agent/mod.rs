@@ -1657,6 +1657,69 @@ pub fn fill_host_owned(
     write_bound_box(kind, def, draft, key, value)
 }
 
+#[derive(Clone, Copy)]
+enum MsPartReset {
+    Taxpayer,
+    Spouse,
+}
+
+fn affirmative_write(value: &Value) -> bool {
+    value.as_bool() == Some(true)
+        || value
+            .as_str()
+            .is_some_and(|text| text != "false" && !text.trim().is_empty())
+}
+
+fn ms_part_reset(key: &str, value: &Value) -> Option<MsPartReset> {
+    if !affirmative_write(value) {
+        return None;
+    }
+    let party = match key {
+        "frm1701MS:txtTaxpayerNo11a"
+        | "frm1701MS:txtTaxpayerNo11b"
+        | "frm1701MS:txtTaxpayerNo11c"
+        | "frm1701MS:txtTaxpayerNo11group"
+        | "frm1701MS:txtTaxpayerNo12b"
+        | "frm1701MS:txtTaxpayerNo12c"
+        | "frm1701MS:txtTaxpayerNo12d"
+        | "frm1701MS:txtTaxpayerNo12e"
+        | "frm1701MS:txtTaxpayerNo17a"
+        | "frm1701MS:txtTaxpayerNo17b" => MsPartReset::Taxpayer,
+        "frm1701MS:txtTaxpayerNo11a1"
+        | "frm1701MS:txtTaxpayerNo11b1"
+        | "frm1701MS:txtTaxpayerNo11c1"
+        | "frm1701MS:txtTaxpayerNo11d1"
+        | "frm1701MS:txtTaxpayerNo12b1"
+        | "frm1701MS:txtTaxpayerNo12c1"
+        | "frm1701MS:txtTaxpayerNo12d1"
+        | "frm1701MS:txtTaxpayerNo12e1"
+        | "frm1701MS:txtSpouseNo17a"
+        | "frm1701MS:txtSpouseNo17b" => MsPartReset::Spouse,
+        // A group write is the member radio its option selects in the official
+        // page. Item 12 is split: the unsuffixed taxpayer options are c/d/e
+        // (graduated is the separate txtTaxpayerNo12b member); the suffixed
+        // options are the spouse's members.
+        "frm1701MS:txtTaxpayerNo11" => MsPartReset::Spouse,
+        "frm1701MS:txtTaxpayerNo12" => match value.as_str() {
+            Some(option) if option.ends_with('1') => MsPartReset::Spouse,
+            Some("c" | "d" | "e") => MsPartReset::Taxpayer,
+            _ => return None,
+        },
+        "frm1701MS:txtTaxpayerNo17" => MsPartReset::Taxpayer,
+        "frm1701MS:txtSpouseNo17" => MsPartReset::Spouse,
+        _ => return None,
+    };
+    Some(party)
+}
+
+/// True for a 1701MS source/rate/deduction write whose official click resets
+/// Part II through Part VI (including Part V Item 6). Session batch writers
+/// put these choices before dependent amounts so the batch's final answers,
+/// not JSON object order, decide the result.
+pub fn ms_part_reset_choice(key: &str, value: &Value) -> bool {
+    ms_part_reset(key, value).is_some()
+}
+
 fn write_bound_box(
     kind: AgentFormKind,
     def: &AgentFormDef,
@@ -1681,15 +1744,14 @@ fn write_bound_box(
             .and_then(Value::as_str)
             .map(str::to_string)
     });
+    let was_ms_amended = kind.form_code() == "1701MS" && draft["is_amended"] == true;
     write_bound_box_here(kind, def, draft, key, value)?;
-    // 1701MS's Amended Return No onclick is validateAmendedReturn
-    // (BIR-Form1701MS.hta :9658-9669): unlike the gates that only disable
-    // Item 6, that handler actively zeroes both columns. Do it in the host
-    // write itself so the page and the assistant follow the same transition;
-    // a sibling "false" write is not the No click and skips it.
-    let amended_no = (key == "frm1701MS:txtAmendedNoNo2"
-        && (value.as_bool() == Some(true) || value.as_str() == Some("true")))
-        || (key == "frm1701MS:txtAmended" && value.as_str() == Some("NoNo2"));
+    // In the official page a radio can only leave Yes through the click that
+    // answers No; validateAmendedReturn then zeroes both Item 6 columns
+    // (BIR-Form1701MS.hta :9658-9669). The host therefore keys the zeroing
+    // off the is_amended true-to-false transition itself, so every spelling
+    // of that transition (the No member, the group, or the Yes member's
+    // sibling false write) behaves as the click does.
     if kind.form_code() == "1701MS" {
         let zero_paths = |draft: &mut Value, paths: &[&str]| {
             for path in paths {
@@ -1698,53 +1760,29 @@ fn write_bound_box(
                 }
             }
         };
-        if amended_no {
+        if was_ms_amended && draft["is_amended"] != true {
             zero_paths(
                 draft,
                 &["/taxpayer/previously_filed", "/spouse/previously_filed"],
             );
         }
-        let affirmative = value.as_bool() == Some(true)
-            || value
-                .as_str()
-                .is_some_and(|text| text != "false" && !text.trim().is_empty());
-        if affirmative {
-            const TP_SOURCE_RATE: &[&str] = &[
-                "frm1701MS:txtTaxpayerNo11a",
-                "frm1701MS:txtTaxpayerNo11b",
-                "frm1701MS:txtTaxpayerNo11c",
-                "frm1701MS:txtTaxpayerNo11group",
-                "frm1701MS:txtTaxpayerNo12b",
-                "frm1701MS:txtTaxpayerNo12c",
-                "frm1701MS:txtTaxpayerNo12d",
-                "frm1701MS:txtTaxpayerNo12e",
-                "frm1701MS:txtTaxpayerNo17a",
-                "frm1701MS:txtTaxpayerNo17b",
-            ];
-            const SP_SOURCE_RATE: &[&str] = &[
-                "frm1701MS:txtTaxpayerNo11a1",
-                "frm1701MS:txtTaxpayerNo11b1",
-                "frm1701MS:txtTaxpayerNo11c1",
-                "frm1701MS:txtTaxpayerNo11d1",
-                "frm1701MS:txtTaxpayerNo12b1",
-                "frm1701MS:txtTaxpayerNo12c1",
-                "frm1701MS:txtTaxpayerNo12d1",
-                "frm1701MS:txtTaxpayerNo12e1",
-                "frm1701MS:txtSpouseNo17a",
-                "frm1701MS:txtSpouseNo17b",
-            ];
+        if affirmative_write(value) {
             // sourceOfIncomeTP/SP and the Item 12 handlers call
             // resetFieldsTP/SPPart2ToPart6 (BIR-Form1701MS.hta :8450/:8512,
             // :8539/:8601), whose lists include Part V Item 6; the Item 17
             // handlers call the same resets (:10771/:10798, :10824/:10851).
-            if TP_SOURCE_RATE.contains(&key) {
-                zero_paths(draft, &["/taxpayer/previously_filed"]);
-            }
-            if SP_SOURCE_RATE.contains(&key) {
-                zero_paths(draft, &["/spouse/previously_filed"]);
+            if let Some(party) = ms_part_reset(key, value) {
+                let path = match party {
+                    MsPartReset::Taxpayer => "/taxpayer/previously_filed",
+                    MsPartReset::Spouse => "/spouse/previously_filed",
+                };
+                zero_paths(draft, &[path]);
             }
             // marriedJointly calls validateAmendedReturn as it leaves
-            // (:9730 -> :9802), so Amended No zeroes Item 6 there too.
+            // (:9730 -> :9802). On Amended Yes its joint branch leaves 6b
+            // open, while the non-joint branch shuts and zeroes 6b at
+            // validateAmendedReturn :9643-9650; on Amended No it zeroes both
+            // columns at :9658-9669.
             if key.starts_with("frm1701MS:txtIfMarried") {
                 if draft["is_amended"] != true {
                     zero_paths(
