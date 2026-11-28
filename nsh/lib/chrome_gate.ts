@@ -19,9 +19,8 @@ export interface ChromeState {
 export function shellChromeVisible(state: ChromeState): boolean {
   if (!state.booted || state.cloudLocked || state.appLocked) return false;
   // No mode yet: the "who will use this computer" choice, including the first taxpayer typed for "Just me". The recovery
-  // key stays up after the help-desk mode is saved, until it has been written down; the PIN page does too when Back returns
-  // there from the key (before the mode is saved, `!state.mode` already hides the chrome).
+  // key stays up after the help-desk mode is saved, until it has been written down.
   if (!state.mode || state.setupPending) return false;
-  if (state.setupStep === "helpdesk-key" || state.setupStep === "helpdesk-pin") return false;
+  if (state.setupStep === "helpdesk-key") return false;
   return true;
 }
