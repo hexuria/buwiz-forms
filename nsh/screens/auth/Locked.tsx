@@ -7,10 +7,12 @@ import { AccessError } from "./AccessError";
 import { AccountGate } from "./Gate";
 import { Setup, SoloTaxpayer } from "./Setup";
 import { SignIn } from "./SignIn";
+import { auth } from "./state";
 import { WelcomeNote } from "./welcome";
 
-/** True while first launch (or its recovery key) is in front. */
-const setupShows = () => app.needsSetup() || app.setup().step === "helpdesk-key";
+/** True while first launch (or its recovery key, or the PIN page returned to from it) is in front. */
+const setupShows = () =>
+  app.needsSetup() || app.setup().step === "helpdesk-key" || (app.setup().step === "helpdesk-pin" && auth.setupKey() !== null);
 
 /**
  * "Just me" is half done: first launch chose it and the first taxpayer is not typed yet. It stands in front whatever the

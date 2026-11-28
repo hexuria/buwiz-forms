@@ -31,8 +31,9 @@ describe("shellChromeVisible", () => {
     expect(shellChromeVisible({ ...ready, setupPending: "solo" })).toBe(false);
     expect(shellChromeVisible({ ...ready, setupPending: "" })).toBe(true);
   });
-  test("the recovery key step hides it until the key is written down; other steps do not", () => {
+  test("the recovery key step, and the PIN step Back returns to from it, hide it until the key is written down", () => {
     expect(shellChromeVisible({ ...ready, mode: "helpdesk", setupStep: "helpdesk-key" })).toBe(false);
+    expect(shellChromeVisible({ ...ready, mode: "helpdesk", setupStep: "helpdesk-pin" })).toBe(false);
     expect(shellChromeVisible({ ...ready, mode: "helpdesk", setupStep: "choose" })).toBe(true);
   });
 });
