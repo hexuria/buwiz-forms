@@ -59,14 +59,14 @@ export function FilterCombos(props: FilterCombosProps) {
       .map((k) => ({ value: k, label: k, sub: plural(keys.filter((x) => x === k).length, "return") }));
   });
   const statuses = computed(() => {
-    const options = STATUSES.map((s) => ({
+    const options: { value: string; label: string; sub: string; lead: () => JSX.Element }[] = STATUSES.map((s) => ({
       value: s,
       label: s,
       sub: plural(props.all.filter((r) => r.status === s && !isDryRun(r)).length, "return"),
       lead: () => <View class={DOT[STATUS_TONE[s]]} />,
     }));
     const tests = props.all.filter((r) => isDryRun(r)).length;
-    if (tests) options.push({ value: "Test sends", label: "Test sends", sub: plural(tests, "return"), lead: () => <View class={DOT.quiet} /> } as (typeof options)[number]);
+    if (tests) options.push({ value: "Test sends", label: "Test sends", sub: plural(tests, "return"), lead: () => <View class={DOT.quiet} /> });
     return options;
   });
   const label = (text: string) => (props.stacked ? text : undefined);
