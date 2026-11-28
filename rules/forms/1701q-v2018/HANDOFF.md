@@ -45,15 +45,15 @@ The post-submission `txtFinalFlag`/reopen transition is deliberately unobserved.
 ## Computer-use resume procedure
 
 Read completely:
-C:\Users\uriah\.codex\plugins\cache\openai-bundled\computer-use\26.715.72028\skills\computer-use\SKILL.md
+%USERPROFILE%\.codex\plugins\cache\openai-bundled\computer-use\26.715.72028\skills\computer-use\SKILL.md
 
 Initialize through:
-C:/Users/uriah/.codex/plugins/cache/openai-bundled/computer-use/26.715.72028/scripts/computer-use-client.mjs
+%USERPROFILE%/.codex/plugins/cache/openai-bundled/computer-use/26.715.72028/scripts/computer-use-client.mjs
 
 Required initialization:
 
 if (!globalThis.sky) {
-  const { setupComputerUseRuntime } = await import("C:/Users/uriah/.codex/plugins/cache/openai-bundled/computer-use/26.715.72028/scripts/computer-use-client.mjs");
+  const { setupComputerUseRuntime } = await import("%USERPROFILE%/.codex/plugins/cache/openai-bundled/computer-use/26.715.72028/scripts/computer-use-client.mjs");
   await setupComputerUseRuntime({ globals: globalThis });
 }
 
