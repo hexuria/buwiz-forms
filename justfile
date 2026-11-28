@@ -1352,7 +1352,14 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
     # Evidence and packages are built by the pinned toolchain's own cargo, never one that shares a folder between checkouts.
     PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
     scripts/build-line.sh --strict
-    export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
+    export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1
+    if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then
+        unset BIR_AUTH_BYPASS
+        [ "${E2E_MOCK_ACCOUNT_URL:-}" = "http://127.0.0.1:3008" ] || { echo "nsh-run-agent: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock" >&2; exit 1; }
+        export BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL" BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"
+    else
+        export BIR_AUTH_BYPASS=1
+    fi
     export GPUI_AGENT=1 GPUI_AGENT_ADDR="${GPUI_AGENT_ADDR:-127.0.0.1:17421}"
     # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
     unset BIR_SFTP_LIVE BIR_SFTP_HOST BIR_SFTP_PORT BIR_SFTP_USERNAME BIR_SFTP_PASSWORD BIR_SFTP_ACCEPT_ANY_HOST_KEY \
@@ -1394,7 +1401,9 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         # adds one): forward both. The window plane reads its switch and address from the launch intent's extras, so a
         # second background job relaunches the host with them once the first launch is up (android-handoff.sh plug).
         export BUWIZ_ANDROID_DEV=1
-        export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
+        auth_bypass="BIR_AUTH_BYPASS=1;"
+        if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then auth_bypass=""; fi
+        export BUWIZ_ANDROID_DEV_ENV="EBIR_TEST_ENV=1;${auth_bypass}BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # One adb and one device for the whole launch: the SDK's adb and the device nsh starts the app on, checked before
         # anything is built (nsh/agent/android-handoff.sh). The writer ends with this launcher: a failed or cancelled launch
         # writes no token afterwards.
@@ -1419,7 +1428,8 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
         # (nsh/agent/ios-handoff.sh, in the background until this launcher dies). The data plane listens on the port after
         # the window's (src/agent.rs choose() adds one).
         unset SIMCTL_CHILD_BIR_SFTP_LIVE SIMCTL_CHILD_BIR_DATABASE_PATH
-        export SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1
+        export SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BIR_SFTP_DRY_RUN=1
+        if [ "${E2E_ACCOUNTS:-bypass}" = mock ]; then unset SIMCTL_CHILD_BIR_AUTH_BYPASS; else export SIMCTL_CHILD_BIR_AUTH_BYPASS=1; fi
         export SIMCTL_CHILD_BIR_AGENT_TOKEN="$GPUI_AGENT_TOKEN"
         export SIMCTL_CHILD_GPUI_AGENT=1 SIMCTL_CHILD_GPUI_AGENT_ADDR="127.0.0.1:$port"
         if [ -n "$db" ]; then export SIMCTL_CHILD_BIR_DATABASE_PATH="$db"; fi
@@ -1462,7 +1472,14 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
-    $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_AUTH_BYPASS = '1'; $env:BIR_SFTP_DRY_RUN = '1'
+    $env:BUWIZ_NO_KEYCHAIN = '1'; $env:EBIR_TEST_ENV = '1'; $env:BIR_SFTP_DRY_RUN = '1'
+    if ($env:E2E_ACCOUNTS -eq 'mock') {
+        Remove-Item Env:BIR_AUTH_BYPASS -ErrorAction SilentlyContinue
+        if ($env:E2E_MOCK_ACCOUNT_URL -ne 'http://127.0.0.1:3008') { [Console]::Error.WriteLine('nsh-run-agent: E2E_MOCK_ACCOUNT_URL must be http://127.0.0.1:3008 for --accounts mock'); exit 1 }
+        $env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL; $env:BUWIZ_ACCOUNT_URL = $env:E2E_MOCK_ACCOUNT_URL
+    } else {
+        $env:BIR_AUTH_BYPASS = '1'
+    }
     # .env (dotenv-load) may hold the live SFTP account and relay: none of it reaches an agent run, dry run or not.
     foreach ($name in 'BIR_SFTP_LIVE', 'BIR_SFTP_HOST', 'BIR_SFTP_PORT', 'BIR_SFTP_USERNAME', 'BIR_SFTP_PASSWORD', 'BIR_SFTP_ACCEPT_ANY_HOST_KEY', 'BIR_RELAY_URL', 'BUWIZ_RELAY_SEND') {
         Remove-Item "Env:$name" -ErrorAction SilentlyContinue
@@ -1516,7 +1533,8 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         # `run-as` once `nsh run` installs it, over stdin so it is in no process's arguments (src/agent.rs, take_token).
         $port = [int](($env:GPUI_AGENT_ADDR -split ':')[-1])
         $env:BUWIZ_ANDROID_DEV = '1'
-        $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
+        $authBypass = if ($env:E2E_ACCOUNTS -eq 'mock') { '' } else { 'BIR_AUTH_BYPASS=1;' }
+        $env:BUWIZ_ANDROID_DEV_ENV = "EBIR_TEST_ENV=1;$($authBypass)BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;GPUI_AGENT=1;GPUI_AGENT_ADDR=127.0.0.1:$port"
         # adb is the one nsh itself runs: in the SDK it finds (ANDROID_HOME, ANDROID_SDK_ROOT, then Android Studio's
         # default place), not whichever is on PATH. Checked here, before anything is built or launched.
         $sdkRoot = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT) | Where-Object { $_ } | Select-Object -First 1

@@ -262,6 +262,206 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual((env["GPUI_AGENT_TOKEN"], env["PATH"]), ("tok", "/bin"))
 
 
+class AccountsMockTests(unittest.TestCase):
+    def test_parse_args_accepts_accounts_mock_and_defaults_to_the_bypass(self):
+        self.assertEqual(E2E.parse_args(["macos", "smoke", "--accounts", "mock"]).accounts, "mock")
+        self.assertEqual(E2E.parse_args(["macos", "smoke"]).accounts, "bypass")
+
+    def test_the_mock_launch_environment_has_no_bypass_and_points_at_the_mock(self):
+        env = E2E.launch_env({"PATH": "/bin", "BIR_AUTH_BYPASS": "0", "BIR_SFTP_LIVE": "1",
+                              "BUWIZ_SERVER_URL": "http://localhost:9999",
+                              "BUWIZ_ACCOUNT_URL": "http://[::1]:9998"},
+                             "tok", "127.0.0.1:1", accounts="mock")
+        self.assertNotIn("BIR_AUTH_BYPASS", env)
+        self.assertEqual(env["BUWIZ_SERVER_URL"], E2E.MOCK_ACCOUNT_URL)
+        self.assertEqual(env["BUWIZ_ACCOUNT_URL"], E2E.MOCK_ACCOUNT_URL)
+        self.assertEqual((env["EBIR_TEST_ENV"], env["BIR_SFTP_DRY_RUN"], env["BUWIZ_NO_KEYCHAIN"]), ("1", "1", "1"))
+        self.assertNotIn("BIR_SFTP_LIVE", env)
+        self.assertEqual(env["E2E_ACCOUNTS"], "mock")
+        self.assertEqual(env["E2E_MOCK_ACCOUNT_URL"], E2E.MOCK_ACCOUNT_URL)
+        self.assertTrue(E2E.send_env_ok(env))
+        bypass = E2E.launch_env({}, "tok", "127.0.0.1:1")
+        self.assertEqual(bypass["BIR_AUTH_BYPASS"], "1")
+        self.assertNotIn("E2E_MOCK_ACCOUNT_URL", bypass)
+
+    def test_loopback_account_urls_are_accepted_and_replaced_by_the_mock_url(self):
+        for url in ("http://127.0.0.1:1", "http://[::1]:2", "http://localhost:3", "https://localhost"):
+            with self.subTest(url=url):
+                env = E2E.launch_env({"BUWIZ_SERVER_URL": url, "BUWIZ_ACCOUNT_URL": url},
+                                     "tok", "127.0.0.1:1", accounts="mock")
+                self.assertEqual(env["BUWIZ_SERVER_URL"], E2E.MOCK_ACCOUNT_URL)
+                self.assertEqual(env["BUWIZ_ACCOUNT_URL"], E2E.MOCK_ACCOUNT_URL)
+
+    def test_accounts_mock_refuses_an_environment_auth_bypass(self):
+        with self.assertRaises(E2E.SuiteError) as raised:
+            E2E.launch_env({"BIR_AUTH_BYPASS": "1"}, "tok", "127.0.0.1:1", accounts="mock")
+        self.assertIn("BIR_AUTH_BYPASS=1", str(raised.exception))
+        self.assertIn("--accounts mock", str(raised.exception))
+
+    def test_accounts_mock_refuses_every_non_loopback_account_url(self):
+        for name in E2E.ACCOUNT_VARS:
+            for url in ("https://api.buwiz.com", "http://localhost:80@evil.example"):
+                with self.subTest(name=name, url=url):
+                    with self.assertRaises(E2E.SuiteError) as raised:
+                        E2E.launch_env({name: url}, "tok", "127.0.0.1:1", accounts="mock")
+                    self.assertIn(name, str(raised.exception))
+                    self.assertIn("loopback", str(raised.exception))
+
+    def test_a_taken_mock_port_is_refused_outright(self):
+        calls = []
+
+        def answers(addr):
+            self.assertEqual(addr, E2E.MOCK_ACCOUNT_ADDR)
+            return True
+
+        def popen(*args, **kwargs):
+            calls.append((args, kwargs))
+            raise AssertionError("a taken port must not start another mock")
+
+        with tempfile.TemporaryDirectory() as folder:
+            log = E2E.RunLog(None, echo=False)
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=1,
+                                       popen=popen, answers=answers, sleep=lambda seconds: None)
+        self.assertEqual(calls, [])
+        self.assertIn("already listens", str(raised.exception))
+        self.assertIn("no health or version route", str(raised.exception))
+
+    def test_the_mock_starts_the_android_scripts_way(self):
+        class FakeProcess:
+            pid = 4321
+            returncode = None
+
+            def poll(self):
+                return None
+
+        fake = FakeProcess()
+        calls = []
+        answers_seen = []
+        sleeps = []
+
+        def popen(command, **kwargs):
+            calls.append((command, kwargs))
+            return fake
+
+        def answers(addr):
+            answers_seen.append(addr)
+            return len(answers_seen) > 2
+
+        with tempfile.TemporaryDirectory() as folder:
+            log = E2E.RunLog(None, echo=False)
+            proc = E2E.start_mock_account("just", {"PATH": "/bin"}, Path(folder), log, timeout_s=5,
+                                          popen=popen, answers=answers, sleep=sleeps.append)
+            log_exists = (Path(folder) / "mock-account.log").exists()
+        self.assertIs(proc, fake)
+        self.assertEqual(calls[0][0][:3], ["just", "mock-account", "--auto-approve"])
+        self.assertEqual(calls[0][0][3:], ["--bind", "127.0.0.1", "--port", "3008"])
+        self.assertEqual(calls[0][1]["cwd"], E2E.ROOT)
+        self.assertEqual(calls[0][1]["env"], {"PATH": "/bin"})
+        if os.name == "posix":
+            self.assertTrue(calls[0][1]["start_new_session"])
+        self.assertEqual(len(sleeps), 1)
+        self.assertTrue(log_exists)
+
+    def test_a_mock_that_ends_before_listening_is_loud(self):
+        class Ended:
+            pid = 4321
+            returncode = 2
+
+            def poll(self):
+                return 2
+
+        with tempfile.TemporaryDirectory() as folder:
+            log = E2E.RunLog(None, echo=False)
+            with self.assertRaises(E2E.SuiteError) as raised:
+                E2E.start_mock_account("just", {}, Path(folder), log, timeout_s=5,
+                                       popen=lambda *args, **kwargs: Ended(), answers=lambda addr: False,
+                                       sleep=lambda seconds: None)
+        self.assertIn("exit 2", str(raised.exception))
+
+    def test_the_mock_is_stopped_in_its_own_process_group(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.pid = 4321
+        log = E2E.RunLog(None, echo=False)
+        if os.name == "posix":
+            with mock.patch.object(E2E.os, "killpg") as killpg:
+                E2E.stop_mock_account(proc, log)
+            killpg.assert_called_once_with(4321, E2E.signal.SIGINT)
+        else:
+            E2E.stop_mock_account(proc, log)
+            proc.send_signal.assert_called_once_with(E2E.signal.CTRL_BREAK_EVENT)
+
+    def test_nsh_run_agent_keeps_the_gate_on_for_accounts_mock(self):
+        text = (E2E.ROOT / "justfile").read_text(encoding="utf-8")
+        self.assertIn('if [ "${E2E_ACCOUNTS:-bypass}" = mock ]', text)
+        self.assertIn('export BUWIZ_SERVER_URL="$E2E_MOCK_ACCOUNT_URL" BUWIZ_ACCOUNT_URL="$E2E_MOCK_ACCOUNT_URL"', text)
+        self.assertIn("if ($env:E2E_ACCOUNTS -eq 'mock')", text)
+        self.assertIn("$env:BUWIZ_SERVER_URL = $env:E2E_MOCK_ACCOUNT_URL", text)
+        self.assertIn("$authBypass", text)
+
+    def test_the_fixture_addresses_and_code_sequence_are_invented(self):
+        params = E2E.mock_account_params()
+        self.assertEqual(params["account_a"], "account-a@example.com")
+        self.assertEqual(params["account_b"], "account-b@example.com")
+        self.assertEqual(params["code_1"], "246810")
+        self.assertEqual(params["code_2"], "246811")
+        self.assertEqual(params["code_8"], "246817")
+        self.assertTrue(all(value.endswith("@example.com") for key, value in params.items()
+                            if key.startswith("account_")))
+
+    def test_check_suite_accepts_the_runner_account_params(self):
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "sign-in.wants", "type gate-email $account_a\nwait_until gate-code-boxes\n")
+            suite = suite_of(folder, [{"name": "sign-in", "file": "sign-in.wants", "sign_in": True}])
+            without = "\n".join(E2E.check_suite(suite))
+            self.assertIn("$account_a", without)
+            self.assertEqual(E2E.check_suite(suite, extra_params=E2E.mock_account_params()), [])
+
+    def test_runner_account_params_win_over_suite_and_entry_values(self):
+        context = {"params": E2E.mock_account_params()}
+        suite = {"params": {"account_a": "real@example.net", "tin": "12345678800000"}}
+        entry = {"set": {"account_b": "real@example.net"}}
+        params = E2E.recipe_params(suite, entry, context)
+        self.assertEqual(params["account_a"], "account-a@example.com")
+        self.assertEqual(params["account_b"], "account-b@example.com")
+        self.assertEqual(params["tin"], "12345678800000")
+
+    def test_android_points_at_the_mock_the_scripts_way_and_cleans_up(self):
+        class Done:
+            returncode = 0
+            stderr = ""
+
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append(command)
+            return Done()
+
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E, "android_adb", return_value="adb"), \
+                mock.patch.object(E2E.subprocess, "run", side_effect=run):
+            self.assertEqual(E2E.android_mock_reverse({"ANDROID_SERIAL": "emulator-5554"}, log),
+                             ("adb", "emulator-5554"))
+            E2E.remove_android_mock_reverse(("adb", "emulator-5554"), log)
+        self.assertEqual(calls, [
+            ["adb", "-s", "emulator-5554", "reverse", "tcp:3008", "tcp:3008"],
+            ["adb", "-s", "emulator-5554", "reverse", "--remove", "tcp:3008"],
+        ])
+
+    def test_an_android_reverse_failure_is_loud(self):
+        class Done:
+            returncode = 1
+            stderr = "closed"
+
+        log = E2E.RunLog(None, echo=False)
+        with mock.patch.object(E2E, "android_adb", return_value="adb"), \
+                mock.patch.object(E2E.subprocess, "run", return_value=Done()), \
+                self.assertRaises(E2E.SuiteError) as raised:
+            E2E.android_mock_reverse({"ANDROID_SERIAL": "emulator-5554"}, log)
+        self.assertIn("adb reverse", str(raised.exception))
+
+
 class FileTests(unittest.TestCase):
     def test_files_other_programs_wrote_are_masked_and_the_scratch_database_removed(self):
         with tempfile.TemporaryDirectory() as folder:

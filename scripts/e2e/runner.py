@@ -81,6 +81,15 @@ LIVE_SEND_VARS = ("BIR_SFTP_LIVE", "BIR_SFTP_HOST", "BIR_SFTP_PORT", "BIR_SFTP_U
                   "BIR_SFTP_ACCEPT_ANY_HOST_KEY", "BIR_RELAY_URL", "BUWIZ_RELAY_SEND")
 # The account server a debug build signs in to: unset, it is the local mock (http://localhost:3008).
 ACCOUNT_VARS = ("BUWIZ_SERVER_URL", "BUWIZ_ACCOUNT_URL")
+# `--accounts mock` uses the mock's own fixed port, as the Android development scripts do. It has no health or
+# version route, so a listener already there cannot be identified as another mock and is never shared.
+MOCK_ACCOUNT_PORT = 3008
+MOCK_ACCOUNT_ADDR = f"127.0.0.1:{MOCK_ACCOUNT_PORT}"
+MOCK_ACCOUNT_URL = f"http://{MOCK_ACCOUNT_ADDR}"
+MOCK_ACCOUNT_FIRST_CODE = 246810
+MOCK_ACCOUNT_CODE_COUNT = 8
+ACCOUNTS_ENV = "E2E_ACCOUNTS"
+MOCK_ACCOUNT_URL_ENV = "E2E_MOCK_ACCOUNT_URL"
 TARGET_OPS = {"click", "press", "type", "set_value", "key", "paste", "long_press", "assert", "wait_until", "scroll",
               "hover", "swipe"}
 PRESS_OPS = {"click", "press", "long_press", "key"}
@@ -364,17 +373,46 @@ def send_env_ok(env):
     return env.get("EBIR_TEST_ENV") == "1" and env.get("BIR_SFTP_DRY_RUN") == "1" and not env.get("BIR_SFTP_LIVE")
 
 
-def launch_env(environ, token, addr):
+def mock_account_params(first=MOCK_ACCOUNT_FIRST_CODE, count=MOCK_ACCOUNT_CODE_COUNT):
+    """The invented sign-in fixtures a mock run exposes to recipes: two example.com accounts and the mock's first
+    deterministic codes (`code_1` is the first request's code, counting up exactly as the mock does)."""
+    params = {"account_a": "account-a@example.com", "account_b": "account-b@example.com"}
+    for number in range(1, count + 1):
+        params[f"code_{number}"] = f"{first + number - 1:06d}"
+    return params
+
+
+def launch_env(environ, token, addr, accounts="bypass"):
     """The environment the app is launched with: the dry-run test settings, the agent's address and token, none of
-    the live SFTP or relay variables, and no account server that is not on this machine."""
+    the live SFTP or relay variables, and no account server that is not on this machine. `mock` leaves the account
+    gate on and pins both account URLs to this run's loopback mock."""
+    if accounts not in ("bypass", "mock"):
+        raise SuiteError(f"unknown accounts mode {accounts!r}")
+    if accounts == "mock":
+        if environ.get("BIR_AUTH_BYPASS") == "1":
+            raise SuiteError("--accounts mock refuses BIR_AUTH_BYPASS=1 in the environment: the app would open "
+                             "without the account gate")
+        for name in ACCOUNT_VARS:
+            value = environ.get(name)
+            if value and not is_loopback_url(value):
+                raise SuiteError(f"--accounts mock refuses {name}={value}: the account server must be loopback "
+                                 "(127.0.0.1, [::1] or localhost)")
     env = dict(environ)
-    env.update({"EBIR_TEST_ENV": "1", "BIR_SFTP_DRY_RUN": "1", "BUWIZ_NO_KEYCHAIN": "1", "BIR_AUTH_BYPASS": "1",
-                "GPUI_AGENT_TOKEN": token, "GPUI_AGENT_ADDR": addr})
+    env.update({"EBIR_TEST_ENV": "1", "BIR_SFTP_DRY_RUN": "1", "BUWIZ_NO_KEYCHAIN": "1",
+                "GPUI_AGENT_TOKEN": token, "GPUI_AGENT_ADDR": addr, ACCOUNTS_ENV: accounts})
     for name in LIVE_SEND_VARS:
         env.pop(name, None)
-    for name in ACCOUNT_VARS:
-        if not is_loopback_url(env.get(name)):
-            env.pop(name, None)
+    if accounts == "mock":
+        env.pop("BIR_AUTH_BYPASS", None)
+        env[MOCK_ACCOUNT_URL_ENV] = MOCK_ACCOUNT_URL
+        for name in ACCOUNT_VARS:
+            env[name] = MOCK_ACCOUNT_URL
+    else:
+        env.pop(MOCK_ACCOUNT_URL_ENV, None)
+        env["BIR_AUTH_BYPASS"] = "1"
+        for name in ACCOUNT_VARS:
+            if not is_loopback_url(env.get(name)):
+                env.pop(name, None)
     return env
 
 
@@ -419,10 +457,12 @@ def entry_files(entry):
     return names
 
 
-def check_suite(suite):
-    """Every problem of `suite` that would stop it before a host sees it, as sentences (empty: it can run)."""
+def check_suite(suite, extra_params=None):
+    """Every problem of `suite` that would stop it before a host sees it, as sentences (empty: it can run).
+    `extra_params` are supplied by the runner itself (the mock sign-in fixtures), not by the suite."""
     problems = []
     base = suite["_dir"]
+    runner_params = dict(extra_params or {})
     params = dict(suite.get("params") or {})
     seen = set()
     for index, entry in enumerate(suite["recipes"]):
@@ -434,7 +474,7 @@ def check_suite(suite):
         files = entry_files(entry)
         if not files:
             problems.append(f"{where}: names no recipe file (file, phone, desktop or a target)")
-        supplied = set(params) | set(entry.get("set") or {}) | set(entry.get("resolve") or {})
+        supplied = set(params) | set(entry.get("set") or {}) | set(entry.get("resolve") or {}) | set(runner_params)
         for file in files:
             path = (base / file).resolve()
             if not path.is_file():
@@ -448,7 +488,7 @@ def check_suite(suite):
             missing = sorted(placeholders(path) - supplied)
             if missing:
                 problems.append(f"{where}: {file} uses ${', $'.join(missing)}, which the suite does not supply")
-            bound = {**params, **(entry.get("set") or {})}
+            bound = {**params, **(entry.get("set") or {}), **runner_params}
             for step in steps:
                 if step.get("key_delay_ms") is not None and step.get("op") != "type":
                     problems.append(f"{where}: {file}: key_delay_ms on {step.get('op')} (only type is paced)")
@@ -831,6 +871,12 @@ def finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, star
 
 # --- One recipe -----------------------------------------------------------------------------------------------------
 
+def recipe_params(suite, entry, context):
+    """The params one recipe runs with. Runner-supplied fixtures come last: a suite may not replace the invented
+    example.com accounts or the mock's code sequence with a real address or another code."""
+    return {**(suite.get("params") or {}), **(entry.get("set") or {}), **(context.get("params") or {})}
+
+
 def plan_entry(entry, suite, context):
     """What to do with `entry` on this host: (file or None, note or None, status-if-not-run or None)."""
     form_factor, target = context["form_factor"], context["target"]
@@ -884,7 +930,7 @@ def run_entry(index, entry, suite, context, agent, log, out):
     result["file"] = str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
     folder = out / f"{index:02d}-{entry['name']}"
     folder.mkdir(parents=True, exist_ok=True)
-    params = {**(suite.get("params") or {}), **(entry.get("set") or {})}
+    params = recipe_params(suite, entry, context)
     names = {}
     steps = recipe_steps(path)
     ids = step_ids(path)
@@ -989,6 +1035,80 @@ def data_plane(addr):
     return f"{host}:{int(port) + 1}"
 
 
+def start_mock_account(just, env, out, log, timeout_s, popen=None, answers=None, sleep=None):
+    """Start the repository's own in-memory account mock on its fixed loopback port and wait for it.
+
+    The command is the same one the Android development scripts use (`just mock-account --auto-approve`), with the
+    loopback bind and port made explicit so `.env` cannot move it. The mock offers no health or version route, so a
+    port that is already taken is refused outright instead of trusting an unidentified listener.
+    """
+    popen = subprocess.Popen if popen is None else popen
+    answers = port_answers if answers is None else answers
+    sleep = time.sleep if sleep is None else sleep
+    if answers(MOCK_ACCOUNT_ADDR):
+        raise SuiteError(f"--accounts mock: {MOCK_ACCOUNT_ADDR} already listens, and mock_account has no health or "
+                         "version route by which the listener can be identified; stop it and rerun")
+    command = [just, "mock-account", "--auto-approve", "--bind", "127.0.0.1", "--port", str(MOCK_ACCOUNT_PORT)]
+    kwargs = {"cwd": ROOT, "env": env, "stderr": subprocess.STDOUT}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kwargs["start_new_session"] = True
+    out = Path(out)
+    try:
+        with (out / "mock-account.log").open("w", encoding="utf-8") as mock_log:
+            kwargs["stdout"] = mock_log
+            proc = popen(command, **kwargs)
+    except OSError as error:
+        raise SuiteError(f"--accounts mock: cannot start {' '.join(command)}: {error}") from None
+    log.line("mock-account", " ".join(command[1:]), "started", 0)
+    t0 = time.monotonic()
+    try:
+        while not answers(MOCK_ACCOUNT_ADDR):
+            if proc.poll() is not None:
+                raise SuiteError(f"--accounts mock: mock_account ended (exit {proc.returncode}) before listening "
+                                 f"on {MOCK_ACCOUNT_ADDR}; see {out / 'mock-account.log'}")
+            if time.monotonic() - t0 >= timeout_s:
+                raise SuiteError(f"--accounts mock: mock_account did not listen on {MOCK_ACCOUNT_ADDR} in "
+                                 f"{timeout_s} s; see {out / 'mock-account.log'}")
+            sleep(1)
+    except SuiteError:
+        stop_mock_account(proc, log)
+        raise
+    log.line("mock-account", MOCK_ACCOUNT_ADDR, "listening", (time.monotonic() - t0) * 1000)
+    return proc
+
+
+def android_mock_reverse(env, log):
+    """Point the emulator's loopback mock port at this machine's, the way scripts/run-android-windows.ps1 does."""
+    adb = android_adb(env)
+    if not adb:
+        raise SuiteError("--accounts mock on android: no adb: set ANDROID_HOME")
+    serial = env.get("ANDROID_SERIAL") or android_serial(adb)
+    if not serial:
+        raise SuiteError("--accounts mock on android: no Android emulator is online (adb devices)")
+    t0 = time.monotonic()
+    port = f"tcp:{MOCK_ACCOUNT_PORT}"
+    done = subprocess.run([adb, "-s", serial, "reverse", port, port], capture_output=True, text=True, timeout=30)
+    if done.returncode:
+        raise SuiteError(f"--accounts mock on android: adb reverse {port} failed: "
+                         f"{(done.stderr or done.stdout).strip() or 'no error text'}")
+    log.line("mock-account", f"{serial} reverse {port}", "added", (time.monotonic() - t0) * 1000)
+    return adb, serial
+
+
+def remove_android_mock_reverse(reverse, log):
+    """Remove only the reverse entry this run added."""
+    adb, serial = reverse
+    t0 = time.monotonic()
+    port = f"tcp:{MOCK_ACCOUNT_PORT}"
+    try:
+        subprocess.run([adb, "-s", serial, "reverse", "--remove", port], capture_output=True, timeout=30)
+        log.line("mock-account", f"{serial} reverse {port}", "removed", (time.monotonic() - t0) * 1000)
+    except (OSError, subprocess.SubprocessError) as error:
+        log.line("mock-account", f"{serial} reverse {port}", f"not removed: {error}", 0)
+
+
 def android_adb(env):
     sdk = env.get("ANDROID_HOME") or env.get("ANDROID_SDK_ROOT")
     if sdk:
@@ -1054,7 +1174,7 @@ def launch(target, db, env, out, log, just):
     return subprocess.Popen(command, **kwargs)
 
 
-def stop(proc, log):
+def stop(proc, log, what="app"):
     if proc is None or proc.poll() is not None:
         return
     t0 = time.monotonic()
@@ -1072,7 +1192,11 @@ def stop(proc, log):
                 os.killpg(proc.pid, signal.SIGKILL)
         except OSError:
             pass
-    log.line("stop", "app", "stopped", (time.monotonic() - t0) * 1000)
+    log.line("stop", what, "stopped", (time.monotonic() - t0) * 1000)
+
+
+def stop_mock_account(proc, log):
+    stop(proc, log, "mock-account")
 
 
 def wait_for(agent, proc, timeout_s, log, what):
@@ -1122,11 +1246,11 @@ def summary(results):
 
 # --- Commands -----------------------------------------------------------------------------------------------------
 
-def check(suite_name, cli):
+def check(suite_name, cli, accounts="bypass"):
     """Every recipe of the suite checked without an app: the suite's own rules, then `gpui-agent recipe validate` for
     each file the installed client can read. Exit 0 when nothing is wrong."""
     suite = load_suite(suite_name)
-    problems = check_suite(suite)
+    problems = check_suite(suite, extra_params=mock_account_params() if accounts == "mock" else None)
     cli_version = installed_cli_version(cli)
     validated = 0
     if shutil.which(cli) or Path(cli).exists():
@@ -1161,6 +1285,8 @@ def parse_args(argv):
     parser.add_argument("--out", help="report folder (default: ~/BuwizNsh/evidence/e2e/<target>-<time>)")
     parser.add_argument("--addr", help=f"window plane address (default GPUI_AGENT_ADDR, else {DEFAULT_ADDR})")
     parser.add_argument("--no-launch", action="store_true", help="drive an app already started with nsh-run-agent")
+    parser.add_argument("--accounts", choices=("bypass", "mock"), default="bypass",
+                        help="bypass the account gate (default), or run signed out against the loopback mock")
     parser.add_argument("--keep-data", action="store_true", help="Android: keep the emulator's test database")
     parser.add_argument("--allow-send", action="store_true",
                         help="run recipes marked send (Queue): also needs EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1")
@@ -1178,7 +1304,7 @@ def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
         if args.target == "check":
-            return check(args.suite, args.cli)
+            return check(args.suite, args.cli, args.accounts)
         return run(args)
     except SuiteError as error:
         print(f"e2e: {error}", file=sys.stderr)
@@ -1187,7 +1313,8 @@ def main(argv=None):
 
 def run(args):
     suite = load_suite(args.suite)
-    problems = check_suite(suite)
+    account_params = mock_account_params() if args.accounts == "mock" else {}
+    problems = check_suite(suite, extra_params=account_params)
     if problems:
         raise SuiteError("the suite cannot run:\n  " + "\n  ".join(problems))
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1197,20 +1324,26 @@ def run(args):
     addr = args.addr or os.environ.get("GPUI_AGENT_ADDR") or DEFAULT_ADDR
     # What the app (and every gpui-agent call) gets: a dry-run test build, no live SFTP or relay settings, no remote
     # account server. nsh-run-agent sets and unsets the same again after `just` reads .env.
-    env = launch_env(os.environ, token, addr)
+    env = launch_env(os.environ, token, addr, accounts=args.accounts)
     secret_values = [token] + [os.environ[name] for name in ("BIR_SFTP_PASSWORD", "BIR_SFTP_USERNAME")
                                if os.environ.get(name)]
     log = RunLog(out / "run.log", secrets_=secret_values)
     header = {"suite": suite["_path"].stem, "target": args.target, "started": stamp, "out": str(out),
               "cli_version": installed_cli_version(args.cli), "app_commit": git_head()}
     proc = None
+    mock_proc = None
+    mock_reverse = None
     results = []
     made_db = None
     try:
+        if not args.no_launch and (port_answers(addr) or port_answers(data_plane(addr))):
+            raise SuiteError(f"something already listens on {addr} or {data_plane(addr)}: stop it, or pass "
+                             "--no-launch to drive it")
+        if args.accounts == "mock":
+            mock_proc = start_mock_account(args.just, env, out, log, args.launch_timeout)
+            if args.target == "android":
+                mock_reverse = android_mock_reverse(env, log)
         if not args.no_launch:
-            if port_answers(addr) or port_answers(data_plane(addr)):
-                raise SuiteError(f"something already listens on {addr} or {data_plane(addr)}: stop it, or pass "
-                                 "--no-launch to drive it")
             db = Path(args.db) if args.db else Path.home() / "BuwizNsh" / "agents" / f"e2e-{args.target}-{stamp}.db"
             made_db = None if args.db else db
             db.parent.mkdir(parents=True, exist_ok=True)
@@ -1232,7 +1365,7 @@ def run(args):
                              f"({header['database'] or 'no answer'}): drive only a test build on a scratch database")
         context = {"target": args.target, "form_factor": form_factor, "features": features,
                    "env": os.environ if args.no_launch else env, "launched": not args.no_launch,
-                   "database": header["database"],
+                   "database": header["database"], "params": account_params,
                    "allow_send": args.allow_send, "cli_version": header["cli_version"],
                    "recorder": (lambda folder: Recorder(args.target, folder, env, log)) if args.record else None}
         stopped = None
@@ -1252,7 +1385,11 @@ def run(args):
         stop(proc, log)
         if proc is not None:
             close_device(args.target, addr, env, log)
+        if mock_reverse:
+            remove_android_mock_reverse(mock_reverse, log)
+        stop_mock_account(mock_proc, log)
         redact_file(out / "app.log", log)
+        redact_file(out / "mock-account.log", log)
         write_report(out, header, results)
         if made_db:
             remove_scratch(made_db, log)

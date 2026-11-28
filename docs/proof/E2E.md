@@ -21,6 +21,21 @@ the live SFTP and relay variables (`BIR_SFTP_HOST`, `_PORT`, `_USERNAME`, `_PASS
 them again after its own read of `.env`. An account server that is not on this machine (`BUWIZ_SERVER_URL`,
 `BUWIZ_ACCOUNT_URL`) is removed too, by both, so a debug build talks to the local mock.
 
+## `--accounts mock`
+
+A plain run keeps the old development bypass: the account gate is open and no account exists. `--accounts mock` is for
+recipes that must prove sign-in and per-account behavior in the real app. It starts `just mock-account --auto-approve`
+(the same loopback in-memory server the Android development scripts use, pinned to `127.0.0.1:3008`), stops it at the
+end, points both `BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL` at `http://127.0.0.1:3008`, and leaves `BIR_AUTH_BYPASS`
+out so the app starts signed out. On Android it adds the same `adb reverse tcp:3008 tcp:3008` the Android script uses.
+
+The mode refuses to run when `BIR_AUTH_BYPASS=1` is already in the environment, when either account URL in the
+environment is not loopback (`127.0.0.1`, `[::1]` or `localhost`), or when port 3008 is already taken: the mock has no
+health or version route by which another listener can be identified. The dry-run release and database guards are the
+same as any other run. Recipes can use the runner-supplied `$account_a` and `$account_b` (both invented
+`example.com` addresses) and `$code_1` through `$code_8` (`246810`, then counting up as the mock does). Today a recipe
+still cannot type that code until the sign-in page fix of #608 lands; that fix is not part of the runner change.
+
 ## The rule
 
 - **Never fixed-coordinate taps, never OS keystroke injection, never burst typing for proof.** Every press goes
@@ -36,7 +51,8 @@ them again after its own read of `.env`. An account server that is not on this m
 
 1. Checks the suite (below), and refuses to start if anything already listens on the agent's ports.
 2. Starts the app with `just nsh-run-agent <target> <db>`. That is a debug build in dry-run mode
-   (`EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BIR_AUTH_BYPASS=1 BUWIZ_NO_KEYCHAIN=1`, never `BIR_SFTP_LIVE`).
+   (`EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1`, never `BIR_SFTP_LIVE`); a plain run adds
+   `BIR_AUTH_BYPASS=1`, while `--accounts mock` leaves it out.
    - The database is new, under `~/BuwizNsh/agents/`.
    - On Android, the emulator's guarded test database is removed first, so the run starts at first-run setup.
    - The token is `GPUI_AGENT_TOKEN` if set, else one made for the run. It is never printed, and the run log masks it.
@@ -139,7 +155,8 @@ A suite is `agent-recipes/e2e/<name>.json`:
 - `phone` / `desktop`: one per form factor.
 - `macos` / `linux` / `windows` / `ios` / `android`: one for that target, ahead of the form factor's.
 - Paths are relative to the suite.
-- Params come from the suite's `params`, the entry's `set` and its `resolve`. Only those a file uses are passed.
+- Params come from the suite's `params`, the entry's `set` and its `resolve`; under `--accounts mock` the runner's
+  sign-in fixtures win over same-named suite or entry values. Only those a file uses are passed.
 
 **Resolving generated ids.** A `resolve` spec picks the first node of a snapshot that matches every field given:
 `id`, `id_regex` (with `group`), `role` (one or a list), `name`, `name_regex`, `visible`.
