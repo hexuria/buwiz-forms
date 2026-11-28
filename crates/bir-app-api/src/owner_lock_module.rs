@@ -65,6 +65,10 @@ fn unlock_unless_locked_since(room: RoomId, locks_then: u64) -> bool {
     let mut state = unlock_state();
     if state.locks == locks_then {
         state.room = Some(room);
+        // The room atomic is written under the same lock counter's mutex: a
+        // lock either comes first and this check loses, or comes after and
+        // clears this unlock.
+        crate::account_gate::set_room_unlocked(true);
         return true;
     }
     false
@@ -250,7 +254,6 @@ fn verify_owner_pin(arguments: &HostArguments) -> Result<HostFuture, HostError> 
             owner_lock::verify_owner_pin(&store, &room, &typed, &now).map_err(host_error)?;
         let matched = crate::auth_limiter::answer(attempt)?;
         if matched && unlock_unless_locked_since(room, locks_then) {
-            crate::account_gate::set_room_unlocked(true);
             crate::account_gate::clear_client_scope();
         }
         Ok(HostValue::Bool(matched))
