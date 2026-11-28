@@ -256,6 +256,61 @@ def step_ids(path):
     return [f"s{index}" for index, _ in enumerate(steps, 1)]
 
 
+def param_declaration_name(param):
+    """The name of one JSON recipe `params` entry: a bare string or gpui-agent 0.5.0's typed object."""
+    if isinstance(param, str):
+        return param
+    if isinstance(param, dict) and isinstance(param.get("name"), str):
+        return param["name"]
+    return None
+
+
+def recipe_declared_params(path):
+    """The params a JSON recipe declares (`.wants` recipes declare every placeholder they use)."""
+    if not is_json_recipe(path):
+        return placeholders(path)
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return {name for name in (param_declaration_name(param) for param in data.get("params") or []) if name}
+
+
+# The ops gpui-agent 0.5.0 gates on a `hello.features` string, as `Op::feature()` spells them. Click, type,
+# set_value, key, keybinding, invoke, wait and the first snapshot shape are the original ops and need none.
+FEATURE_OPS = {"press": "press", "scroll": "scroll", "hover": "hover", "drag": "drag", "swipe": "swipe",
+               "long_press": "long_press", "pinch": "pinch", "viewport": "viewport", "paste": "paste"}
+# The window-plane hosts on the desktop proofs list these feature ops. They list no system action: those are
+# device actions outside the app's tree. Mobile hosts differ by platform, so check cannot infer them here.
+DESKTOP_HOST_FEATURES = {"press", "scroll", "hover", "drag", "viewport"}
+DESKTOP_TARGETS = ("macos", "linux", "windows")
+
+
+def step_feature(step):
+    """The `hello.features` string a step's op needs under gpui-agent 0.5.0, or None for an original op."""
+    op = str(step.get("op") or "")
+    if op == "system":
+        action = step.get("action")
+        if action is None:
+            action = next(iter(step.get("words") or []), "")
+        action = str(action).replace("-", "_")
+        return f"system.{action}" if action else "system"
+    if op in ("assert", "wait_until") and (step.get("state") is not None or step.get("states")):
+        return "assert_states"
+    if op == "screenshot" and step.get("inline"):
+        return "screenshot_inline"
+    if op in ("press", "long_press") and step.get("within") is not None:
+        return "press_within"
+    return FEATURE_OPS.get(op)
+
+
+def host_need_covers(entry, feature, context):
+    """Whether the suite's `needs_feature` makes a host without `feature` take the fallback / needs path."""
+    needed = for_host(entry.get("needs_feature"), context)
+    if isinstance(needed, str):
+        return needed == feature
+    if isinstance(needed, (list, tuple)):
+        return feature in needed
+    return False
+
+
 def needs_edges_cut(steps, ids, cut):
     """The `(needed, dependent)` JSON step edges a cut after position `cut` would separate: `needs`, and a
     `$<step>.node` reference, which depends on that step as gpui-agent reads it."""
@@ -464,7 +519,7 @@ def check_suite(suite):
         if not files:
             problems.append(f"{where}: names no recipe file (file, phone, desktop or a target)")
         supplied = set(params) | set(entry.get("set") or {}) | set(entry.get("resolve") or {})
-        for file in files:
+        for file in dict.fromkeys(files):
             path = (base / file).resolve()
             if not path.is_file():
                 problems.append(f"{where}: {file} does not exist")
@@ -477,10 +532,27 @@ def check_suite(suite):
             missing = sorted(placeholders(path) - supplied)
             if missing:
                 problems.append(f"{where}: {file} uses ${', $'.join(missing)}, which the suite does not supply")
+            if is_json_recipe(path):
+                for param in sorted(placeholders(path) - recipe_declared_params(path)):
+                    problems.append(f"{where}: {file}: placeholder ${param} is not declared in recipe.params "
+                                    f"(write $${param} for a literal)")
             bound = {**params, **(entry.get("set") or {})}
             for step in steps:
                 if step.get("key_delay_ms") is not None and step.get("op") != "type":
                     problems.append(f"{where}: {file}: key_delay_ms on {step.get('op')} (only type is paced)")
+            for target in DESKTOP_TARGETS:
+                context = {"target": target, "form_factor": "desktop"}
+                if variant(entry, "desktop", target) != file:
+                    continue
+                for position, step in enumerate(steps, 1):
+                    feature = step_feature(step)
+                    if not feature or feature in DESKTOP_HOST_FEATURES:
+                        continue
+                    if host_need_covers(entry, feature, context):
+                        continue
+                    step_id = step.get("id") or f"s{position}"
+                    problems.append(f"{where}: {file}: step {step_id} needs {feature}, which {target} desktop "
+                                    "hosts do not list in hello.features")
             ids = step_ids(path)
             used_by_step = recipe_step_params(path)
             for param, spec in (entry.get("resolve") or {}).items():
@@ -720,7 +792,7 @@ def write_recipe_slices(path, points, folder):
                 used = set()
                 for step in part_steps:
                     used |= placeholders_in_text(json.dumps(step), ids)
-                part["params"] = [name for name in part["params"] if name in used]
+                part["params"] = [param for param in part["params"] if param_declaration_name(param) in used]
             part_path.write_text(json.dumps(part, indent=1) + "\n", encoding="utf-8")
             local_ids = original_ids
         else:

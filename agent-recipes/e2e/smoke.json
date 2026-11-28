@@ -111,13 +111,13 @@
    "precondition": "Stops before the Queue control after Check reports no problems. The send rehearsal is the following queue-send entry, refused unless --allow-send is explicitly passed.",
    "desktop": "queue-desktop.json",
    "phone": "queue-phone.json",
-   "linux": "queue-phone.json"
+   "linux": "queue-linux.json"
   },
   {
    "name": "queue-send",
    "desktop": "queue-send-desktop.json",
    "windows": "queue-send-windows.wants",
-   "linux": "queue-send-phone.json",
+   "linux": "queue-send-linux.json",
    "phone": "queue-send-phone.json",
    "send": true,
    "precondition": "Explicit dry-run send rehearsal. Without --allow-send the runner reports this entry skipped (needs --allow-send); with it the runner requires EBIR_TEST_ENV=1, BIR_SFTP_DRY_RUN=1, no BIR_SFTP_LIVE and a test database."

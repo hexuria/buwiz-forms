@@ -185,12 +185,16 @@ that part without using `$table`, and only then clicks `$table-add`; the entry's
 
 `just e2e check <suite>` checks a suite with no app:
 - every file exists and parses;
-- every param it uses is supplied;
+- every param it uses is supplied, and every placeholder a JSON recipe uses is declared in that recipe's own
+  `params` (gpui-agent-cli 0.5.0 refuses it otherwise);
 - a param resolved `after` a step is not used at or before that step;
 - in a JSON recipe, the cut after that step does not separate a step from a step it `needs`;
 - send steps are marked;
 - no secret box is typed into;
 - `key_delay_ms` appears only on `type`, and only in entries with `needs_cli`;
+- a step whose op needs a `hello.features` entry is not in the variant a desktop target (`macos`, `linux` or
+  `windows`) would run when that host does not list the feature, unless the entry's own `needs_feature` sends that
+  host to a fallback or `needs` first (mobile hosts differ, so check does not infer them);
 - then `gpui-agent recipe validate` on each file the installed client can read.
 
 ## The smoke suite (`agent-recipes/e2e/smoke.json`)
@@ -208,8 +212,8 @@ a Windows file is named.
 | 5 | `open-2551q` | New return > 2551Q | `open-2551q.wants`; Windows `open-2551q-windows.wants` (also the facts 2551Q validates) | `open-2551q-phone.wants` | `open-2551q-phone.wants` |
 | 6 | `money-boxes` | Amended Yes, Item 16 typed and read back; Item 15 typed, read back, formatted when left, unchanged when focused again; Amended No | `money-boxes-paced.json`, fallback `money-boxes.wants` | `money-boxes-phone.json` | `money-boxes-paced-phone.json` (awaits the software keyboard), fallback `money-boxes-phone.json` |
 | 7 | `delete-row` | in its own fresh Q1 return, a schedule row added, filled and deleted | `delete-row-desktop.json` | `delete-row.json` | `delete-row.json` |
-| 8 | `queue` | a fresh Q2 return validated; Queue visible but not pressed | `queue-desktop.json`; Windows `queue-windows.wants` | `queue-phone.json` | `queue-phone.json` |
-| 9 | `queue-send` | a fresh Q3 return validated, then the explicit dry-run Queue/Continue rehearsal | `queue-send-desktop.json`; Windows `queue-send-windows.wants` | `queue-send-phone.json` | `queue-send-phone.json` |
+| 8 | `queue` | a fresh Q2 return validated; Queue visible but not pressed | `queue-desktop.json`; Windows `queue-windows.wants` | `queue-linux.json` | `queue-phone.json` |
+| 9 | `queue-send` | a fresh Q3 return validated, then the explicit dry-run Queue/Continue rehearsal | `queue-send-desktop.json`; Windows `queue-send-windows.wants` | `queue-send-linux.json` | `queue-send-phone.json` |
 | 10 | `birth-date` | the birth date, typed in the date box / the date sheet, read back, saved | `birth-date.wants` | `birth-date-phone.json` | `birth-date-phone.json` |
 | 11 | `sign-out` | Log out; the lock screen | `sign-out.wants` | `sign-out-phone.wants` | `sign-out-phone.wants` |
 
@@ -230,8 +234,10 @@ Why the recipes look as they do (each from a machine's run on the real app, `pro
   amount, deletes it and checks the row-2 line is gone (`$table-none` never shows).
 - Log out on a phone is `nb-menu-logout` in the header's account menu (`nsh/shell/Narrow.tsx`).
 - On Android every press inside a bottom sheet is refused (gap 1), so Android's sign-up leaves the ZIP and RDO empty
-  (valid) instead of failing the required recipe; iOS and every desktop keep the pickers. Android's JSON recipes hide
-  the software keyboard after `set_value`: the next low control is otherwise keyboard-occluded.
+  (valid) instead of failing the required recipe; iOS and every desktop keep the pickers. The phone-shaped JSON recipes
+  hide the software keyboard after `set_value`: the next low control is otherwise keyboard-occluded. Linux's window is
+  narrow enough to need the same layout, but its desktop host has no system keyboard actions, so the Linux queue recipes
+  are the phone recipes without the hide step.
 
 ## Results on the real apps (2026-11-27, gpui-agent-cli 0.4.1)
 

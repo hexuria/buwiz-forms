@@ -1,6 +1,9 @@
 {
  "v": 1,
  "name": "e2e-delete-row-desktop",
+ "params": [
+  "table"
+ ],
  "steps": [
   {
    "id": "s0a",

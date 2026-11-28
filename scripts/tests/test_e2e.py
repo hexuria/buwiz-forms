@@ -293,6 +293,9 @@ class SuiteTests(unittest.TestCase):
         self.assertEqual(sign_up["android"], "sign-up-android.json")
         self.assertEqual(tax_year["android"], "tax-year-android.json")
         self.assertEqual(delete_row["phone"], "delete-row.json")
+        queue = next(entry for entry in suite["recipes"] if entry["name"] == "queue")
+        queue_send = next(entry for entry in suite["recipes"] if entry["name"] == "queue-send")
+        self.assertEqual((queue["linux"], queue_send["linux"]), ("queue-linux.json", "queue-send-linux.json"))
 
     def test_sign_up_resolves_the_tin_box_after_the_form_is_shown(self):
         for suite_name in ("smoke", "mbprobe", "rdo-row-press"):
@@ -356,7 +359,8 @@ class SuiteTests(unittest.TestCase):
             ], path)
             return steps
 
-        for path, opener in (("queue-desktop.json", "sb-new"), ("queue-phone.json", "nb-new")):
+        for path, opener in (("queue-desktop.json", "sb-new"), ("queue-phone.json", "nb-new"),
+                             ("queue-linux.json", "nb-new")):
             steps = json_open(path, opener, 2)
             check = next(i for i, step in enumerate(steps) if step.get("target") == "fp-check")
             precondition = steps[check + 1]
@@ -364,7 +368,8 @@ class SuiteTests(unittest.TestCase):
                              ("wait_until", "fp-pill-count", False), path)
             self.assertLess(check, next(i for i, step in enumerate(steps) if step.get("target") == "fp-queue"), path)
 
-        for path, opener in (("queue-send-desktop.json", "sb-new"), ("queue-send-phone.json", "nb-new")):
+        for path, opener in (("queue-send-desktop.json", "sb-new"), ("queue-send-phone.json", "nb-new"),
+                             ("queue-send-linux.json", "nb-new")):
             steps = json_open(path, opener, 3)
             self.assertIn(("wait_until", "fp-pill-count"), [(step.get("op"), step.get("target")) for step in steps], path)
 
@@ -382,6 +387,9 @@ class SuiteTests(unittest.TestCase):
         email_type = next(i for i, step in enumerate(steps) if step.get("id") == "s22")
         self.assertEqual((steps[email_type + 1].get("op"), steps[email_type + 1].get("action")),
                          ("system", "keyboard_hide"))
+        for linux_file in ("queue-linux.json", "queue-send-linux.json"):
+            linux_steps = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / linux_file)
+            self.assertNotIn("system", [step.get("op") for step in linux_steps], linux_file)
         money = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / "money-boxes-paced-phone.json")
         self.assertEqual((money[0].get("op"), money[0].get("target"), money[0].get("timeout_ms")),
                          ("wait_until", "fp-frm2551Qv2018:amendedRtn_1", 8000))
@@ -396,6 +404,8 @@ class SuiteTests(unittest.TestCase):
         spec = entry["resolve"]["table"]
         self.assertEqual(spec.get("after"), "s3")
         for file, opener in (("delete-row-desktop.json", "sb-new"), ("delete-row.json", "nb-new")):
+            recipe = json.loads((ROOT / "agent-recipes" / "e2e" / file).read_text(encoding="utf-8"))
+            self.assertIn("table", recipe["params"], file)
             steps = E2E.recipe_steps(ROOT / "agent-recipes" / "e2e" / file)
             self.assertEqual((steps[0].get("op"), steps[0].get("target")), ("click", opener), file)
             self.assertIn(("click", "new-return-period-opt-1"),
@@ -434,6 +444,45 @@ class SuiteTests(unittest.TestCase):
                          "unique name", "does not exist"):
             self.assertIn(expected, problems)
 
+    def test_a_json_recipe_declares_every_placeholder_for_the_pinned_cli(self):
+        recipe = {"v": 1, "name": "late-json", "steps": [
+            {"id": "add", "op": "click", "target": "$table-add"},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "late.json", json.dumps(recipe))
+            suite = suite_of(folder, [{"name": "late", "file": "late.json", "resolve": {
+                "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1}}}])
+            problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn("placeholder $table is not declared in recipe.params", problems)
+
+            for params in (["table"], [{"name": "table"}]):
+                declared = {**recipe, "params": params}
+                write(folder, "late.json", json.dumps(declared))
+                suite = suite_of(folder, [{"name": "late", "file": "late.json", "resolve": {
+                    "table": {"id_regex": "^(fp-table-.+)-add$", "group": 1}}}])
+                self.assertNotIn("not declared in recipe.params", "\n".join(E2E.check_suite(suite)), params)
+
+    def test_a_feature_step_is_not_mapped_to_a_host_that_lacks_it(self):
+        recipe = {"v": 1, "name": "narrow-queue", "steps": [
+            {"id": "s22", "op": "type", "target": "fp-txtEmail#occurrence-1", "text": "e2e@example.com"},
+            {"id": "s22h", "op": "system", "action": "keyboard_hide"},
+        ]}
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, "narrow.json", json.dumps(recipe))
+            suite = suite_of(folder, [{"name": "queue", "linux": "narrow.json", "phone": "narrow.json"}])
+            problems = "\n".join(E2E.check_suite(suite))
+            self.assertIn("narrow.json: step s22h needs system.keyboard_hide", problems)
+            self.assertIn("linux", problems)
+
+            suite = suite_of(folder, [{"name": "queue", "android": "narrow.json", "phone": "narrow.json"}])
+            self.assertNotIn("system.keyboard_hide", "\n".join(E2E.check_suite(suite)))
+
+            gated = {"name": "queue", "linux": "narrow.json", "needs_feature": {"linux": "system.keyboard_hide"},
+                     "fallback": "plain.wants"}
+            write(folder, "plain.wants", "click fp-check\n")
+            suite = suite_of(folder, [gated])
+            self.assertNotIn("system.keyboard_hide", "\n".join(E2E.check_suite(suite)))
+
     def test_a_parameter_used_at_or_before_its_after_step_is_refused_by_check(self):
         cases = [
             ("click $table-add\nclick expose-table\nclick $table-delete\n", "s1"),
@@ -448,7 +497,7 @@ class SuiteTests(unittest.TestCase):
             self.assertIn(f"uses $table at {used_at}, at or before its resolve's after step s2", problems)
 
     def test_a_json_after_that_cuts_a_needs_edge_is_refused_by_check(self):
-        recipe = {"v": 1, "name": "cut", "steps": [
+        recipe = {"v": 1, "name": "cut", "params": ["table"], "steps": [
             {"id": "expose", "op": "click", "target": "expose-table"},
             {"id": "prepare", "op": "click", "target": "prepare-table"},
             {"id": "use", "op": "click", "target": "$table-add", "needs": ["prepare"]},
