@@ -9,47 +9,47 @@
       "id": "s1",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 378
+      "elapsed_ms": 380
     },
     {
       "id": "s2",
       "ok": true,
-      "elapsed_ms": 41
+      "elapsed_ms": 38
     },
     {
       "id": "s3",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 404
+      "elapsed_ms": 384
     },
     {
       "id": "s4",
       "ok": true,
-      "elapsed_ms": 96
+      "elapsed_ms": 41
     },
     {
       "id": "s5",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 403
+      "elapsed_ms": 395
     },
     {
       "id": "s6",
       "ok": true,
-      "elapsed_ms": 90
+      "elapsed_ms": 70
     },
     {
       "id": "s7",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 674
+      "elapsed_ms": 692
     },
     {
       "id": "s8",
       "ok": true,
-      "elapsed_ms": 87,
+      "elapsed_ms": 107,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155654/03-buwiz-sign-in/008-s8.png",
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-184451/03-buwiz-sign-in/008-s8.png",
         "ok": true
       }
     },
@@ -57,37 +57,37 @@
       "id": "s9",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 389
+      "elapsed_ms": 435
     },
     {
       "id": "s10",
       "ok": true,
-      "elapsed_ms": 10
+      "elapsed_ms": 14
     },
     {
       "id": "s11",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 396
+      "elapsed_ms": 501
     },
     {
       "id": "s12",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 366
+      "elapsed_ms": 337
     },
     {
       "id": "s13",
       "ok": true,
       "delivery_status": "delivered_unverified",
-      "elapsed_ms": 954
+      "elapsed_ms": 930
     },
     {
       "id": "s14",
       "ok": true,
-      "elapsed_ms": 108,
+      "elapsed_ms": 103,
       "screenshot": {
-        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155654/03-buwiz-sign-in/014-s14.png",
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-184451/03-buwiz-sign-in/014-s14.png",
         "ok": true
       }
     },
@@ -97,18 +97,18 @@
       "error": "node 2954 cannot receive native focus",
       "error_code": "host_error",
       "delivery_status": "delivery_uncertain",
-      "elapsed_ms": 461
+      "elapsed_ms": 381
     }
   ],
   "screenshots": [
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155654/03-buwiz-sign-in/008-s8.png",
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-184451/03-buwiz-sign-in/008-s8.png",
       "ok": true
     },
     {
-      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155654/03-buwiz-sign-in/014-s14.png",
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-184451/03-buwiz-sign-in/014-s14.png",
       "ok": true
     }
   ],
-  "elapsed_ms": 4864
+  "elapsed_ms": 4817
 }
