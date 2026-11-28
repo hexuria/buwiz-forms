@@ -31,7 +31,7 @@ use std::sync::OnceLock;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use super::form_1601c::Form1601CDraft;
 use super::form_2551q::Form2551QDraft;
@@ -1682,6 +1682,83 @@ fn write_bound_box(
             .map(str::to_string)
     });
     write_bound_box_here(kind, def, draft, key, value)?;
+    // 1701MS's Amended Return No onclick is validateAmendedReturn
+    // (BIR-Form1701MS.hta :9658-9669): unlike the gates that only disable
+    // Item 6, that handler actively zeroes both columns. Do it in the host
+    // write itself so the page and the assistant follow the same transition;
+    // a sibling "false" write is not the No click and skips it.
+    let amended_no = (key == "frm1701MS:txtAmendedNoNo2"
+        && (value.as_bool() == Some(true) || value.as_str() == Some("true")))
+        || (key == "frm1701MS:txtAmended" && value.as_str() == Some("NoNo2"));
+    if kind.form_code() == "1701MS" {
+        let zero_paths = |draft: &mut Value, paths: &[&str]| {
+            for path in paths {
+                if let Some(slot) = draft.pointer_mut(path) {
+                    *slot = json!(0.0);
+                }
+            }
+        };
+        if amended_no {
+            zero_paths(
+                draft,
+                &["/taxpayer/previously_filed", "/spouse/previously_filed"],
+            );
+        }
+        let affirmative = value.as_bool() == Some(true)
+            || value
+                .as_str()
+                .is_some_and(|text| text != "false" && !text.trim().is_empty());
+        if affirmative {
+            const TP_SOURCE_RATE: &[&str] = &[
+                "frm1701MS:txtTaxpayerNo11a",
+                "frm1701MS:txtTaxpayerNo11b",
+                "frm1701MS:txtTaxpayerNo11c",
+                "frm1701MS:txtTaxpayerNo11group",
+                "frm1701MS:txtTaxpayerNo12b",
+                "frm1701MS:txtTaxpayerNo12c",
+                "frm1701MS:txtTaxpayerNo12d",
+                "frm1701MS:txtTaxpayerNo12e",
+                "frm1701MS:txtTaxpayerNo17a",
+                "frm1701MS:txtTaxpayerNo17b",
+            ];
+            const SP_SOURCE_RATE: &[&str] = &[
+                "frm1701MS:txtTaxpayerNo11a1",
+                "frm1701MS:txtTaxpayerNo11b1",
+                "frm1701MS:txtTaxpayerNo11c1",
+                "frm1701MS:txtTaxpayerNo11d1",
+                "frm1701MS:txtTaxpayerNo12b1",
+                "frm1701MS:txtTaxpayerNo12c1",
+                "frm1701MS:txtTaxpayerNo12d1",
+                "frm1701MS:txtTaxpayerNo12e1",
+                "frm1701MS:txtSpouseNo17a",
+                "frm1701MS:txtSpouseNo17b",
+            ];
+            // sourceOfIncomeTP/SP and the Item 12 handlers call
+            // resetFieldsTP/SPPart2ToPart6 (BIR-Form1701MS.hta :8450/:8512,
+            // :8539/:8601), whose lists include Part V Item 6; the Item 17
+            // handlers call the same resets (:10771/:10798, :10824/:10851).
+            if TP_SOURCE_RATE.contains(&key) {
+                zero_paths(draft, &["/taxpayer/previously_filed"]);
+            }
+            if SP_SOURCE_RATE.contains(&key) {
+                zero_paths(draft, &["/spouse/previously_filed"]);
+            }
+            // marriedJointly calls validateAmendedReturn as it leaves
+            // (:9730 -> :9802), so Amended No zeroes Item 6 there too.
+            if key.starts_with("frm1701MS:txtIfMarried") {
+                if draft["is_amended"] != true {
+                    zero_paths(
+                        draft,
+                        &["/taxpayer/previously_filed", "/spouse/previously_filed"],
+                    );
+                } else if draft["filing"] != "jointly" {
+                    // The non-joint branches reset spouse Part II through
+                    // Part VI before validateAmendedReturn runs.
+                    zero_paths(draft, &["/spouse/previously_filed"]);
+                }
+            }
+        }
+    }
     if let Some(index) = employer_row {
         let after_owner = draft
             .pointer(&format!("/employers/{index}/owner"))

@@ -2438,8 +2438,19 @@ fn dst_2000_disabled_item_15a_is_kept_through_reopen_print_and_payload() {
     assert_eq!(closed["rejected"], json!({}));
     assert_eq!(closed["removes"], Value::Null);
     assert_eq!(closed["draft"]["balance_carried_over"], 250.0);
+    assert_eq!(
+        closed["relock_notes"][key],
+        json!("Item 15A is for an amended return."),
+        "the kept value is locked, never announced as cleared"
+    );
 
-    let saved = save("2000", &closed["draft"]);
+    let completed = fill(
+        "2000",
+        &closed["draft"],
+        json!({"frm2000:optParty_3": "true", "frm2000:optMode_1": "true"}),
+    );
+    assert_eq!(completed["rejected"], json!({}));
+    let saved = save("2000", &completed["draft"]);
     let reopened = open("2000", 6);
     assert_eq!(reopened["draft"], saved["draft"], "reopens as stored");
     assert_eq!(reopened["draft"]["balance_carried_over"], 250.0);
@@ -2459,4 +2470,6 @@ fn dst_2000_disabled_item_15a_is_kept_through_reopen_print_and_payload() {
     )
     .unwrap();
     assert!(payload.contains("frm2000:txtTax15A=250.00frm2000:txtTax15A="));
+    let filing = validated("2000", &reopened["draft"]);
+    assert_eq!(filing["errors"], json!([]), "the screen-edited draft files");
 }

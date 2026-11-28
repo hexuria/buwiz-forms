@@ -1,7 +1,8 @@
 use bir_core::forms::form_1604c::Form1604cDraft;
 use bir_core::forms::form_1604e::Form1604eDraft;
 use bir_core::forms::form_1701::{
-    Form1701CivilStatus, Form1701Draft, Form1701EmployerRow, Form1701Party,
+    Form1701Atc, Form1701CivilStatus, Form1701Draft, Form1701EmployerRow,
+    Form1701JointFilingStatus, Form1701Party,
 };
 use bir_core::forms::form_1702mx::{Form1702MXDraft, WholePeso};
 use bir_core::forms::form_1707a::Form1707ADraft;
@@ -165,6 +166,9 @@ fn form_1701_prints_schedule1_employer_names_and_tins() {
     d.spouse.name = "SANTOS, JUANITO".into();
     d.spouse.tin = "00045678900000".into();
     d.spouse_rdo_code = "044".into();
+    d.joint_filing_status = Some(Form1701JointFilingStatus::Joint);
+    d.atc = Some(Form1701Atc::Ii011);
+    d.spouse.atc = Some(Form1701Atc::Ii011);
     d.employers[0] = Form1701EmployerRow {
         owner: Some(Form1701Party::Taxpayer),
         employer_name: "ACME PACIFIC HOLDINGS CORPORATION PHILIPPINES".into(),

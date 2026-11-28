@@ -13,6 +13,8 @@ use serde_json::{Map, Value, json};
 
 use crate::forms::agent::{self, AgentFormKind, Binding};
 use crate::forms::form_1701::{Form1701Atc, Form1701Draft, Form1701Party};
+use crate::forms::form_1701a::Form1701ADraft;
+use crate::forms::form_1701ms::Form1701MsDraft;
 
 #[derive(Clone, Copy)]
 struct Gate {
@@ -317,7 +319,9 @@ fn gate_of(form: &str, key: &str) -> Option<Gate> {
                 "TaxpayerNo13a" | "TaxpayerNo14a" | "TaxpayerNo15a" | "TaxpayerNo16a"
                 | "TaxpayerNo16a1" => Some(G1701MS_RELIEF),
                 "SalesRevenuesFeesANo19a" => Some(G1701MS_EIGHT),
-                "TaxPaidPreviouslyFiledNo6a" => Some(G1701MS_PREVIOUS),
+                "TaxPaidPreviouslyFiledNo6a" | "TaxPaidPreviouslyFiledNo6b" => {
+                    Some(G1701MS_PREVIOUS)
+                }
                 _ => None,
             }
         }
@@ -471,6 +475,31 @@ fn employer_name_lock_reason(draft: &Value, key: &str) -> Option<&'static str> {
     }
 }
 
+/// Gates whose official runtime condition is explicit. Probing the model's
+/// recompute is wrong for these boxes: their values are kept while disabled,
+/// so the probe would call the shut box open.
+fn explicit_closed(gate: Gate, draft: &Value, key: &str) -> Option<bool> {
+    match gate.gate {
+        "2000_balance_carried_over" | "1702mx_schedule3_item27" => {
+            Some(draft["is_amended"] != true)
+        }
+        "1701ms_previous_payment" => serde_json::from_value::<Form1701MsDraft>(draft.clone())
+            .ok()
+            .map(|form| {
+                let period_open = form.is_amended || form.is_short_period;
+                if key.ends_with("No6b") {
+                    !(period_open && form.is_joint())
+                } else {
+                    !period_open
+                }
+            }),
+        "1701a_joint_amended" => serde_json::from_value::<Form1701ADraft>(draft.clone())
+            .ok()
+            .map(|form| !(form.is_amended && form.is_joint())),
+        _ => None,
+    }
+}
+
 /// Whether the form's own recompute clears a valid probe at `key`'s path.
 fn probe_closed(kind: AgentFormKind, draft: &Value, key: &str) -> bool {
     let Some(bound) = kind.definition().bindings.get(key) else {
@@ -501,8 +530,9 @@ pub fn lock_reason(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'st
     if gate.gate == G1701_SPOUSE_NAME.gate {
         return employer_name_lock_reason(draft, key);
     }
-    let open = !probe_closed(kind, draft, key);
-    (!open).then_some(gate.lock)
+    let closed =
+        explicit_closed(gate, draft, key).unwrap_or_else(|| probe_closed(kind, draft, key));
+    closed.then_some(gate.lock)
 }
 
 /// Every gated row key of `form`, for the page's locks.

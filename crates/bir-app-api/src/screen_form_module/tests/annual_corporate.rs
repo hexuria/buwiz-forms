@@ -2356,7 +2356,7 @@ fn pr8_form_1702rt_answers_that_clear_typed_boxes_ask_first() {
 #[test]
 fn mx_disabled_schedule_3_item_27_is_kept_through_reopen_print_and_payload() {
     setup();
-    let opened = open("1702MX", 0);
+    let opened = open_for(TIN, "1702MX", 2024, 0);
     let amended = typed(
         "1702MX",
         &opened["draft"],
@@ -2389,9 +2389,28 @@ fn mx_disabled_schedule_3_item_27_is_kept_through_reopen_print_and_payload() {
         totals_closed, totals_open,
         "totals keep the disabled values"
     );
+    for key in &item_27 {
+        assert_eq!(
+            closed["relock_notes"][key],
+            json!("Schedule 3 item 27 is for an amended return."),
+            "the kept value is locked, never announced as cleared"
+        );
+    }
 
-    let saved = save("1702MX", &closed["draft"]);
-    let reopened = open("1702MX", 0);
+    let completed = typed(
+        "1702MX",
+        &closed["draft"],
+        json!({
+            mx("chkPg1I5ATCR2"): "true",
+            mx("drpPg1I5ATCR2"): "IC010",
+            mx("txtPg1Pt1I8"): "01/02/2015",
+            mx("rdoPg1Pt1I13MethodOfDeduc"): "Itemized",
+            mx("rdoPg1Pt2I21CarriedOver"): "true",
+        }),
+    );
+    assert_eq!(completed["rejected"], json!({}));
+    let saved = save("1702MX", &completed["draft"]);
+    let reopened = open_for(TIN, "1702MX", 2024, 0);
     assert_eq!(reopened["draft"], saved["draft"], "reopens as stored");
     let html = app_print_document("1702MX", &reopened["draft"]);
     for (index, key) in item_27.iter().enumerate() {
@@ -2428,6 +2447,8 @@ fn mx_disabled_schedule_3_item_27_is_kept_through_reopen_print_and_payload() {
             "{key} payload"
         );
     }
+    let filing = validate("1702MX", &reopened["draft"]);
+    assert_eq!(filing["errors"], json!([]), "the screen-edited draft files");
 }
 
 /// PR 8 review H2 (1702MX): the Optional Standard Deduction clears column C

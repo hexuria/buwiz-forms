@@ -1890,24 +1890,6 @@ pub(super) fn fill(
     key: &str,
     value: &Value,
 ) -> Option<Result<(), String>> {
-    // 1701MS has two independent Item 6 gates. The short-period handler only
-    // disables the boxes, but the Amended Return No handler actively zeroes
-    // them. Compute cannot tell which gate closed, so the successful amended
-    // answer applies that handler's writes here.
-    let amended_no = (key == "frm1701MS:txtAmendedNoNo2"
-        && (value.as_bool() == Some(true) || value.as_str() == Some("true")))
-        || (key == "frm1701MS:txtAmended" && value.as_str() == Some("NoNo2"));
-    if kind.form_code() == "1701MS" && amended_no {
-        let done = agent::fill_as_user(kind, draft, key, value);
-        if done.is_ok() {
-            for path in ["/taxpayer/previously_filed", "/spouse/previously_filed"] {
-                if let Some(slot) = draft.pointer_mut(path) {
-                    *slot = json!(0.0);
-                }
-            }
-        }
-        return Some(done);
-    }
     if let Some(item) = whole_peso_item(kind, key) {
         let typed = text(value);
         let fraction = typed

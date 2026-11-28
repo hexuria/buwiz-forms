@@ -1281,8 +1281,10 @@ impl Form1701ADraft {
     ///   ([`whole_peso_comb_text`]): whole pesos right-aligned in the sheet's
     ///   8-slot comb, and any centavos the upload carries kept (the official
     ///   page shows them; such an amount prints as one rectangle over the
-    ///   comb). An overpayment keeps its minus. Zero and column B of a
-    ///   non-joint return stay blank.
+    ///   comb). An overpayment keeps its minus. Zero stays blank. Column B
+    ///   is blank on an ordinary separate return because its figures are zero;
+    ///   a nonzero column-B figure still prints: the official runtime can keep
+    ///   Item 61B, and the sheet's Item 30 includes the spouse result.
     /// - `derived:address_line1/2`: the address over the 40- and 31-slot
     ///   combs, split at a word break.
     /// - `derived:birth_mm/dd/yyyy`, `derived:tin_digits` (page 2, nine
@@ -1301,24 +1303,16 @@ impl Form1701ADraft {
             }
             whole_peso_comb_text(text, AMOUNT_SLOTS)
         };
-        let mut columns = vec!["A"];
-        if self.is_joint() {
-            columns.push("B");
-        }
+        // Print every nonzero submitted column. A separate return normally
+        // has a zero spouse column, but the official runtime keeps Item 61B
+        // there; its subtotals then make Item 30 reconcile on paper.
         for item in (20..=29).chain(36..=65) {
-            for column in &columns {
+            for column in ["A", "B"] {
                 let key = format!("frm1701A:txt{item}{column}");
                 if let Some(printed) = fields.get(&key).and_then(|text| whole(text)) {
                     derived.insert(format!("amount_{item}{column}"), printed);
                 }
             }
-        }
-        // Item 61B is the one spouse-column value the official runtime keeps
-        // after joint filing closes; it still prints in column B on a separate return.
-        if !self.is_joint()
-            && let Some(printed) = fields.get("frm1701A:txt61B").and_then(|text| whole(text))
-        {
-            derived.insert("amount_61B".to_string(), printed);
         }
         if let Some(printed) = fields.get("frm1701A:txt30").and_then(|text| whole(text)) {
             derived.insert("amount_30".to_string(), printed);
@@ -2349,7 +2343,29 @@ mod tests {
         assert_eq!(d.spouse_column.foreign_tax_credits, 0.0);
         assert_eq!(d.spouse_column.total_credits, 666.0);
         assert_eq!(d.to_bir_field_map()["frm1701A:txt61B"], "666.00");
-        assert_eq!(d.to_print_field_map()["derived:amount_61B"].trim(), "666");
+        let print = d.to_print_field_map();
+        assert_eq!(print["derived:amount_61B"].trim(), "666");
+        // computeTxt64('taxspouse') adds txt61B into txt64B
+        // (BIR-Form1701A.hta:3128-3131); computeTxt65 copies the result into
+        // txt65B/txt22B (:3147-3154), then txt24B/txt29B feed txt30
+        // (:2849, :2871-2882). Those spouse subtotals print too, or Item 30
+        // does not reconcile with the columns above it on a separate return.
+        for (writer, amount) in [
+            ("derived:amount_21B", "666"),
+            ("derived:amount_64B", "666"),
+            ("derived:amount_65B", "-666"),
+            ("derived:amount_22B", "-666"),
+            ("derived:amount_24B", "-666"),
+            ("derived:amount_29B", "-666"),
+        ] {
+            assert_eq!(print[writer].trim(), amount, "{writer}");
+        }
+        let submitted = d.to_bir_field_map();
+        let amount = |key: &str| submitted[key].replace(',', "").parse::<f64>().unwrap();
+        assert_eq!(
+            amount("frm1701A:txt29A") + amount("frm1701A:txt29B"),
+            amount("frm1701A:txt30")
+        );
         let payload = d.official_payload().unwrap();
         assert!(payload.contains("frm1701A:txt61B=666.00frm1701A:txt61B="));
         d.is_amended = false;
