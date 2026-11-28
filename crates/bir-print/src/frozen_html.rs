@@ -5646,7 +5646,7 @@ fn rule6_band_lines_cap(line_budget: f64, pitch_pt: f64) -> usize {
     let candidates = ((line_budget - 1.0) / pitch_pt).floor().max(0.0) as usize;
     // One strip consumes max(pitch+1, 14) pt: a budget that admits one line
     // by pitch but not the strip's 14 pt minimum admits no line at all.
-    if candidates == 1 && line_budget < 14.0 {
+    if candidates == 1 && line_budget < 13.0 {
         0
     } else {
         candidates
