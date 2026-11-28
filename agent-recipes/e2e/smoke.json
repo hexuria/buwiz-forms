@@ -35,7 +35,7 @@
       "textfield"
      ],
      "name_regex": "^TIN, 9 digits",
-     "after": "s3"
+     "before_first_use": true
     }
    },
    "phone": "sign-up-phone.json",

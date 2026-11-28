@@ -298,7 +298,38 @@ class SuiteTests(unittest.TestCase):
         for suite_name in ("smoke", "mbprobe", "rdo-row-press"):
             suite = E2E.load_suite(suite_name)
             entry = next(entry for entry in suite["recipes"] if entry["name"] == "sign-up")
-            self.assertEqual(entry["resolve"]["tin_field"].get("after"), "s3", suite_name)
+            spec = entry["resolve"]["tin_field"]
+            self.assertTrue(spec.get("before_first_use"), suite_name)
+            self.assertNotIn("after", spec, suite_name)
+            # Every variant of the flow, whatever its step numbering: the TIN box is looked up right before the
+            # first step that uses it, and by then the start option has been clicked (choosing it can redraw the
+            # form, so an id read before that click may be stale).
+            variants = sorted({value for key, value in entry.items()
+                               if key in ("desktop", "linux", "windows", "macos", "android", "phone", "file")
+                               and isinstance(value, str)})
+            self.assertTrue(variants, suite_name)
+            for file in variants:
+                with self.subTest(suite=suite_name, file=file):
+                    path = suite["_dir"] / file
+                    ids = E2E.step_ids(path)
+                    used = E2E.recipe_step_params(path)
+                    after = E2E.resolve_after("tin_field", spec, ids, used)
+                    first_use = next(index for index, names in enumerate(used) if "tin_field" in names)
+                    self.assertEqual(after, ids[first_use - 1])
+                    option_steps = [index for index, names in enumerate(used) if "start_option" in names]
+                    self.assertTrue(option_steps, "the variant never chooses a start option")
+                    self.assertGreaterEqual(ids.index(after), max(option_steps),
+                                            f"$tin_field would be read at {after}, before the last $start_option step")
+
+    def test_a_resolve_names_after_or_before_first_use_never_both(self):
+        ids, used = ["s1", "s2", "s3"], [set(), {"other"}, {"box"}]
+        self.assertEqual(E2E.resolve_after("box", {"after": "s1"}, ids, used), "s1")
+        self.assertEqual(E2E.resolve_after("box", {"before_first_use": True}, ids, used), "s2")
+        # Used by the very first step: there is nothing to wait for, so it is resolved before the recipe starts.
+        self.assertIsNone(E2E.resolve_after("box", {"before_first_use": True}, ids, [{"box"}, set(), set()]))
+        self.assertIsNone(E2E.resolve_after("box", {"role": ["textbox"]}, ids, used))
+        with self.assertRaises(E2E.SuiteError):
+            E2E.resolve_after("box", {"after": "s1", "before_first_use": True}, ids, used)
 
         ui_steps = E2E.recipe_steps(ROOT / "agent-recipes" / "ui" / "ui-sign-up.wants")
         self.assertEqual([(step.get("op"), step.get("target")) for step in ui_steps[:3]], [

@@ -126,7 +126,7 @@ A suite is `agent-recipes/e2e/<name>.json`:
  "recipes": [
   {"name": "sign-up", "desktop": "sign-up.wants", "linux": "sign-up-linux.wants", "phone": "sign-up-phone.json",
    "android": "sign-up-android.json",
-   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits", "after": "s3"}}, "required": true},
+   "resolve": {"tin_field": {"role": ["textbox", "textfield"], "name_regex": "^TIN, 9 digits", "before_first_use": true}}, "required": true},
   {"name": "money-boxes", "desktop": "money-boxes-paced.json", "phone": "money-boxes-paced-phone.json",
    "needs_cli": "0.4.1", "needs_feature": {"phone": "software_keyboard"},
    "fallback": {"phone": "money-boxes-phone.json", "file": "money-boxes.wants"}, "known_gap": {"macos": "gap 2: ..."}},
@@ -152,6 +152,12 @@ resolves, then runs the rest in the same app session. `.wants` slicing assumes o
 shape gpui-agent parses; that is what maps a slice line number back to the original step id. The report and the merged
 receipt are still one recipe with the original step ids. A node not found there is `setup` at that step, with the
 screenshot and tree kept; the run's summary calls it `setup failure`, and the exit status is nonzero. A parameter used at or before its `after` step is refused by `just e2e check <suite>`.
+
+A spec may say `"before_first_use": true` in place of `after`: the node is then looked up right before the first step
+that uses the parameter, whatever that step's id is in the variant being run. Use it when one suite entry maps
+several variants of a flow whose steps are numbered differently: the `.wants` sign-up first uses `$tin_field` at
+`s4`, the JSON ones at `s6`, after two more steps that choose the start option, so one fixed `after` id is too
+early in some of them. A spec that names both is refused.
 
 The delete-row case: 2551Q's Schedule 1 is the collapsed part 4 (`fp-part-4-toggle`), and its Add row can be culled
 until that part is expanded or scrolled to. `delete-row*.json` first opens its own fresh Q1 return, scrolls to and opens

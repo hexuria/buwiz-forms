@@ -229,6 +229,25 @@ def recipe_step_params(path):
     return [placeholders_in_text(line, ids) for line in lines]
 
 
+def resolve_after(param, spec, ids, used_by_step):
+    """The step id a late `resolve` waits for, or None for one resolved before the recipe starts.
+
+    `"after": "<step id>"` names it. `"before_first_use": true` picks the step right before the first one that
+    uses the parameter, whatever its id is in this variant: variants of one flow number their steps differently
+    (the `.wants` sign-up first uses $tin_field at s4, the JSON ones at s6), and one fixed id is then too early
+    in some of them. Raises SuiteError for a spec that names both.
+    """
+    if not isinstance(spec, dict):
+        return None
+    after = spec.get("after")
+    if spec.get("before_first_use"):
+        if after is not None:
+            raise SuiteError(f"${param}: a resolve names `after` or `before_first_use`, not both")
+        first = next((index for index, used in enumerate(used_by_step) if param in used), None)
+        return ids[first - 1] if first else None
+    return after
+
+
 def step_ids(path):
     """The ids gpui-agent reports for a recipe's steps: JSON steps carry their own; `.wants` steps are s1, s2, ..."""
     steps = recipe_steps(path)
@@ -465,7 +484,11 @@ def check_suite(suite):
             ids = step_ids(path)
             used_by_step = recipe_step_params(path)
             for param, spec in (entry.get("resolve") or {}).items():
-                after = spec.get("after") if isinstance(spec, dict) else None
+                try:
+                    after = resolve_after(param, spec, ids, used_by_step)
+                except SuiteError as error:
+                    problems.append(f"{where}: {file}: {error}")
+                    continue
                 if after is None:
                     continue
                 if after not in ids:
@@ -898,13 +921,14 @@ def run_entry(index, entry, suite, context, agent, log, out):
     names = {}
     steps = recipe_steps(path)
     ids = step_ids(path)
-    used_params = set().union(*recipe_step_params(path))
+    used_by_step = recipe_step_params(path)
+    used_params = set().union(*used_by_step)
     early = []
     late = {}
     for param, spec in (entry.get("resolve") or {}).items():
         if param not in used_params:
             continue
-        after = spec.get("after") if isinstance(spec, dict) else None
+        after = resolve_after(param, spec, ids, used_by_step)
         if after is None:
             early.append((param, spec))
             continue
