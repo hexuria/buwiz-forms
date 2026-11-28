@@ -60,34 +60,15 @@ fn migrate_submission_json(
 /// forms their M{month}, annual forms their A, open-ended forms their O{n},
 /// everything else its quarter.
 fn derive_period_key(form_code: &str, quarter: Option<i64>) -> String {
-    let monthly = [
-        "1601C", "1601E", "1601F", "0619E", "0619F", "1600", "1600WP", "1602", "2550M", "2551M",
-        "2200A", "2200AN", "2200M", "2200P", "2200T",
-    ];
-    let annual = [
-        "1604CF", "1604E", "1700", "1701", "1701A", "1701MS", "1702", "1702RT", "1702EX", "1702MX",
-    ];
-    let open_ended = ["0605", "2000"];
-    match quarter {
-        Some(q) => {
-            if open_ended.contains(&form_code) {
-                format!("O{}", q.max(1))
-            } else if annual.contains(&form_code) {
-                "A".to_string()
-            } else if monthly.contains(&form_code) {
-                format!("M{q:02}")
-            } else {
-                format!("Q{}", q.clamp(1, 4))
-            }
-        }
-        None => {
-            if open_ended.contains(&form_code) {
-                "O1".to_string()
-            } else {
-                "A".to_string()
-            }
-        }
-    }
+    // The registry's own mapping, never a hand list: a monthly form derives
+    // an M key whatever its month, an annual A, an open-ended entry O{n} —
+    // the same key `period_from_row` wins with when it reads the row back.
+    crate::db::drafts::period_from_legacy_slot(
+        form_code,
+        quarter.and_then(|value| u8::try_from(value).ok()),
+        1,
+    )
+    .to_period_key()
 }
 
 /// Monotonic filing status rank. Unknown legacy text is weakest: it may never
@@ -109,13 +90,15 @@ fn filing_status_rank(status: &str) -> u8 {
 /// status.
 fn filing_status_rank_with_data(status: &str, data_json: &str) -> u8 {
     let rank = filing_status_rank(status);
+    // A dry run is not a send, only a rehearsal: it ranks as a Draft, never
+    // one notch under a real send, so it can never outrank real work.
     if rank == 6
         && serde_json::from_str::<serde_json::Value>(data_json)
             .ok()
             .and_then(|value| value.get("submitted_dry_run").and_then(|v| v.as_bool()))
             .unwrap_or(false)
     {
-        5
+        filing_status_rank("Draft")
     } else {
         rank
     }
@@ -148,6 +131,22 @@ fn import_may_replace(
         return false;
     }
     if incoming > existing {
+        // Further along is newer by itself — but never at the price of newer
+        // work: a device row dated strictly newer than the file row stays,
+        // even in front of a filed row. An undated device row cannot be
+        // newer than anything, so the rank decides there as before.
+        if let (Some(existing_stamp), Some(incoming_stamp)) =
+            (existing_updated_at, incoming_updated_at)
+        {
+            if let (Some(existing_time), Some(incoming_time)) = (
+                crate::db::taxpayers::parse_stored_timestamp(existing_stamp),
+                crate::db::taxpayers::parse_stored_timestamp(incoming_stamp),
+            ) {
+                if existing_time > incoming_time {
+                    return false;
+                }
+            }
+        }
         return true;
     }
     match (existing_updated_at, incoming_updated_at) {
@@ -429,6 +428,7 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
             if let Ok(drafts_json) = read_from_zip("drafts.json") {
                 let drafts: Vec<serde_json::Value> = serde_json::from_str(&drafts_json)?;
 
+                let mut inserted_row_ids: Vec<i64> = Vec::new();
                 for draft in drafts {
                     if let (Some(form_code), Some(taxable_year), Some(status), Some(data_json)) = (
                         draft.get("form_code").and_then(|v| v.as_str()),
@@ -536,6 +536,14 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                     )?
                                     .collect::<Result<Vec<_>, _>>()?
                             };
+                        // Rows this import itself inserted are never
+                        // candidates: the file's rows are independent of one
+                        // another, and the second keyless open-ended entry
+                        // must not "match" the row the first just wrote.
+                        let candidates: Vec<Candidate> = candidates
+                            .into_iter()
+                            .filter(|row| !inserted_row_ids.contains(&row.0))
+                            .collect();
                         // Exact keys first; a NULL-keyed row only where no
                         // exact candidate exists. Several of either can never
                         // be told apart: nothing is written, the row counts
@@ -561,6 +569,19 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                 nulls.first().map(|row| (*row).clone())
                             }
                         } else {
+                            // A keyless open-ended row can never be told
+                            // apart from ANY candidate: its periods are
+                            // numbered, and adopting whichever row sits at
+                            // NULL quarter is exactly the collapse that loses
+                            // an entry. Any candidate at all — unmatched.
+                            let open_ended = matches!(
+                                crate::db::drafts::period_from_legacy_slot(form_code, None, 1),
+                                crate::forms::FilingPeriod::OpenEnded(_)
+                            );
+                            if open_ended && !candidates.is_empty() {
+                                counts.unmatched += 1;
+                                continue;
+                            }
                             if candidates.len() > 1 {
                                 counts.unmatched += 1;
                                 continue;
@@ -598,7 +619,10 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                     ],
                                 );
                                 match inserted {
-                                    Ok(_) => counts.restored += 1,
+                                    Ok(_) => {
+                                        inserted_row_ids.push(db.conn.last_insert_rowid());
+                                        counts.restored += 1;
+                                    }
                                     Err(rusqlite::Error::SqliteFailure(error, _))
                                         if error.code
                                             == rusqlite::ErrorCode::ConstraintViolation =>
@@ -646,13 +670,22 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                                     existing_updated_at.as_deref(),
                                     incoming_updated_at,
                                 );
+                                // A higher rank is newer by itself — except
+                                // in front of a device row dated strictly
+                                // newer: an older filed row never eats a
+                                // newer Draft or a real Queued.
+                                let device_dated_strictly_newer =
+                                    import_timestamp_allows_draft(
+                                        incoming_updated_at,
+                                        existing_updated_at.as_deref(),
+                                    );
                                 let may = !mid_send
                                     && if cross_amendment {
                                         incoming_rank >= existing_rank && newer
                                     } else if incoming_rank < existing_rank {
                                         false
                                     } else if incoming_rank > existing_rank {
-                                        true
+                                        !device_dated_strictly_newer
                                     } else {
                                         newer
                                     };
@@ -755,16 +788,24 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<ImportCo
                     // object of `codes` and `updated_at`. The list's timestamp
                     // comes from yearly_forms_meta.json, which older readers
                     // never write.
+                    // An entry whose codes do not parse is SKIPPED, never
+                    // treated as an empty list: an empty list written over a
+                    // year empties it.
                     let codes = match &entry {
                         serde_json::Value::Array(_) => {
-                            serde_json::from_value::<Vec<String>>(entry.clone()).unwrap_or_default()
+                            match serde_json::from_value::<Vec<String>>(entry.clone()) {
+                                Ok(codes) => codes,
+                                Err(_) => continue,
+                            }
                         }
-                        serde_json::Value::Object(_) => entry
+                        serde_json::Value::Object(_) => match entry
                             .get("codes")
                             .and_then(|codes| {
                                 serde_json::from_value::<Vec<String>>(codes.clone()).ok()
-                            })
-                            .unwrap_or_default(),
+                            }) {
+                            Some(codes) => codes,
+                            None => continue,
+                        },
                         _ => continue,
                     };
                     let updated_at = yearly_meta
@@ -3255,12 +3296,15 @@ mod tests {
                 Some(1),
                 "Submitted",
                 serde_json::json!({"status": "Submitted", "submitted_dry_run": false, "mine": false}),
-                Some("2024-01-01T00:00:00Z"),
+                Some("2024-12-01T00:00:00Z"),
                 Some("Q1"),
             )],
         );
         import_profile_data(&db, &archive).unwrap();
         let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        // The file is strictly newer here: rank may displace the rehearsal.
+        // (An OLDER real submission never does — a dry run ranks as Draft,
+        // and a newer device row is never eaten by an older filed one.)
         assert!(
             rows[0].4.contains("\"mine\":false"),
             "the real submission displaces the dry run by rank"
@@ -3564,7 +3608,7 @@ mod tests {
                 (
                     "year_facts.json",
                     serde_json::json!({
-                        "2024": {"updated_at": "2020-03-01T10:00:00Z"}
+                        "2024": {"updated_at": "2020-03-01T10:00:00Z", "income_tax_election": "EightPercent"}
                     })
                     .to_string(),
                 ),
@@ -3583,6 +3627,290 @@ mod tests {
             head_stamp.as_deref(),
             Some("2020-03-01T10:00:00Z"),
             "the head row written by the branch merge keeps the file's stamp"
+        );
+    }
+
+    /// KEEP 2: the branch restore's head merge fills EMPTY fields only and
+    /// never overwrites a newer head election; the head row's stamp never
+    /// moves backward.
+    #[test]
+    fn restore_year_facts_branch_merge_never_overwrites_newer_head() {
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Head Office", TIN_X)).unwrap();
+        let branch_tin = "44455566600001";
+        db.save_profile(branch_profile("Branch One", branch_tin))
+            .unwrap();
+        // The head already made its 8% election, written recently.
+        let head_facts: crate::tax_profile::YearFacts =
+            serde_json::from_value(serde_json::json!({
+                "income_tax_election": "EightPercent",
+                "election_source": "2551Q Q1"
+            }))
+            .unwrap();
+        crate::db::taxpayers::write_year_facts_stamped(
+            &db.conn,
+            TIN_X,
+            2024,
+            &head_facts,
+            Some("2025-06-01T00:00:00Z"),
+        )
+        .unwrap();
+        // An older branch archive carries the graduated election.
+        let file_facts: crate::tax_profile::YearFacts =
+            serde_json::from_value(serde_json::json!({
+                "income_tax_election": "GraduatedOsd",
+                "election_source": "old backup"
+            }))
+            .unwrap();
+        crate::db::taxpayers::restore_year_facts(
+            &db.conn,
+            branch_tin,
+            2024,
+            &file_facts,
+            Some("2024-01-01T00:00:00Z"),
+        )
+        .unwrap();
+        let json: String = db
+            .conn
+            .query_row(
+                "SELECT facts_json FROM year_facts WHERE tin = ?1 AND taxable_year = 2024",
+                [TIN_X],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            json.contains("EightPercent"),
+            "the head's newer election is never overwritten: {json}"
+        );
+        let stamp: String = db
+            .conn
+            .query_row(
+                "SELECT updated_at FROM year_facts WHERE tin = ?1 AND taxable_year = 2024",
+                [TIN_X],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            stamp, "2025-06-01T00:00:00Z",
+            "the stamp never moves backward"
+        );
+    }
+
+    /// KEEP 1: the derived key comes from the registry's frequency, never a
+    /// hand list — a May 1600PT (a monthly form) derives M05, not Q4.
+    #[test]
+    fn derive_period_key_1600pt_may_is_m05() {
+        assert_eq!(derive_period_key("1600PT", Some(5)), "M05");
+        assert_eq!(derive_period_key("1600VT", Some(5)), "M05");
+    }
+
+    /// KEEP 1: annual forms derive A even at the legacy slot 0 they live at.
+    #[test]
+    fn derive_period_key_1604c_is_annual() {
+        assert_eq!(derive_period_key("1604C", Some(0)), "A");
+        assert_eq!(derive_period_key("2316", Some(0)), "A");
+    }
+
+    /// KEEP 1: every form in the registry derives the key its frequency
+    /// means — a monthly form an M key, annual A, quarterly Q, open-ended O.
+    #[test]
+    fn derive_period_key_walks_every_registry_form() {
+        for form in crate::forms::registry::FORM_REGISTRY.iter() {
+            for slot in [Some(0), Some(5), None] {
+                let key = derive_period_key(form.code, slot);
+                let prefix = &key[..1];
+                match form.frequency {
+                    crate::forms::FilingFrequency::Monthly => assert_eq!(
+                        prefix, "M",
+                        "{} slot {:?} derived {} — a monthly form derives an M key",
+                        form.code, slot, key
+                    ),
+                    crate::forms::FilingFrequency::Annual => assert_eq!(
+                        key, "A",
+                        "{} slot {:?} derived {} — an annual form derives A",
+                        form.code, slot, key
+                    ),
+                    crate::forms::FilingFrequency::Quarterly => assert_eq!(
+                        prefix, "Q",
+                        "{} slot {:?} derived {} — a quarterly form derives a Q key",
+                        form.code, slot, key
+                    ),
+                    crate::forms::FilingFrequency::OpenEnded => assert_eq!(
+                        prefix, "O",
+                        "{} slot {:?} derived {} — an open-ended form derives an O key",
+                        form.code, slot, key
+                    ),
+                }
+            }
+        }
+    }
+
+    /// KEEP 3: a higher rank never replaces a device row that is dated
+    /// strictly newer — an older filed row never eats a newer Draft.
+    #[test]
+    fn import_higher_rank_never_replaces_a_dated_newer_device_row() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '2551Q', 2024, 1, 'Q1', 'Draft', '{\"status\":\"Draft\",\"mine\":true}', '2024-06-01T00:00:00Z')",
+                [TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "2551Q",
+                2024,
+                Some(1),
+                "Submitted",
+                serde_json::json!({"status": "Submitted", "mine": false}),
+                Some("2024-01-01T00:00:00Z"),
+                Some("Q1"),
+            )],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "2551Q", 2024);
+        assert_eq!(rows.len(), 1);
+        assert!(
+            rows[0].4.contains("\"mine\":true"),
+            "the newer device Draft stays: {}",
+            rows[0].4
+        );
+    }
+
+    /// KEEP 3: a dry run ranks as a Draft, never one notch under a real send.
+    #[test]
+    fn import_dry_run_ranks_as_draft() {
+        let dry = serde_json::json!({"submitted_dry_run": true}).to_string();
+        assert_eq!(
+            filing_status_rank_with_data("Submitted", &dry),
+            filing_status_rank("Draft"),
+            "a dry-run Submitted ranks as Draft"
+        );
+    }
+
+    /// KEEP 4: two keyless open-ended entries onto an empty device both
+    /// insert — the second never matches the row the first just wrote.
+    #[test]
+    fn import_two_keyless_openended_entries_never_collapse() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[
+                file_draft(
+                    "0605",
+                    2024,
+                    None,
+                    "Draft",
+                    serde_json::json!({"status": "Draft", "which": "one"}),
+                    Some("2024-01-01T00:00:00Z"),
+                    None,
+                ),
+                file_draft(
+                    "0605",
+                    2024,
+                    None,
+                    "Draft",
+                    serde_json::json!({"status": "Draft", "which": "two"}),
+                    Some("2024-01-02T00:00:00Z"),
+                    None,
+                ),
+            ],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "0605", 2024);
+        assert_eq!(rows.len(), 2, "both entries insert: {rows:?}");
+    }
+
+    /// KEEP 4: a keyless open-ended row with ANY candidate is never matched
+    /// — unmatched, nothing written.
+    #[test]
+    fn import_keyless_openended_with_any_candidate_unmatched() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json, updated_at)
+                 VALUES (?1, '0605', 2024, NULL, 'O1', 'Draft', '{\"status\":\"Draft\",\"mine\":true}', '2024-01-01T00:00:00Z')",
+                [TIN_X],
+            )
+            .unwrap();
+        let archive = dir.path().join("a.zip");
+        archive_with_drafts(
+            &archive,
+            TIN_X,
+            &[file_draft(
+                "0605",
+                2024,
+                None,
+                "Draft",
+                serde_json::json!({"status": "Draft", "mine": false}),
+                Some("2024-06-01T00:00:00Z"),
+                None,
+            )],
+        );
+        let counts = import_profile_data(&db, &archive).unwrap();
+        let rows = rows_of(&db, TIN_X, "0605", 2024);
+        assert_eq!(rows.len(), 1, "nothing inserted over a candidate");
+        assert!(rows[0].4.contains("\"mine\":true"), "the candidate untouched");
+        assert_eq!(counts.unmatched, 1);
+    }
+
+    /// KEEP 5: an unparseable code is skipped — good codes of the year still
+    /// apply, and a year with nothing parseable is skipped whole, never
+    /// emptied.
+    #[test]
+    fn import_yearly_forms_unparseable_code_never_empties_a_year() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(branch_profile("Juana", TIN_X)).unwrap();
+        // The device already lists 2551Q for 2024.
+        crate::db::taxpayers::restore_yearly_forms(
+            &db.conn,
+            TIN_X,
+            2024,
+            &["2551Q".to_string()],
+            Some("2024-06-01T00:00:00Z"),
+        )
+        .unwrap();
+        let archive = dir.path().join("a.zip");
+        let profile = serde_json::to_value(branch_profile("Juana", TIN_X)).unwrap();
+        write_archive(
+            &archive,
+            &[
+                ("profile.json", profile.to_string()),
+                (
+                    "yearly_forms.json",
+                    serde_json::json!({"2024": [{"not": "a string"}, 42]}).to_string(),
+                ),
+                (
+                    "yearly_forms_meta.json",
+                    serde_json::json!({"2024": "2025-01-01T00:00:00Z"}).to_string(),
+                ),
+            ],
+        );
+        import_profile_data(&db, &archive).unwrap();
+        let count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM per_year_forms WHERE tin = ?1 AND taxable_year = 2024 AND form_code = '2551Q' AND active = 1",
+                [TIN_X],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            count, 1,
+            "the year's list is never emptied by an unparseable entry"
         );
     }
 

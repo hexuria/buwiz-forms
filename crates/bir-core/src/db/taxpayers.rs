@@ -1201,18 +1201,59 @@ pub(crate) fn restore_year_facts(
         ..facts.clone()
     };
     write_year_facts_if_newer(conn, tin, year, &own, incoming_updated_at)?;
+    // Read the head row as it is: a seed the merge itself would create is
+    // not knowledge, and its fresh stamp must not count as "existing" below.
+    let head_existed = read_year_facts(conn, &head_tin, year)?.is_some();
     let mut head = ensure_year_facts(conn, &head_tin, year)?;
+    let mut filled = false;
     if head.tax_classification.is_none() {
         head.tax_classification = facts.tax_classification.clone();
+        filled |= facts.tax_classification.is_some();
     }
     if head.income_tax_election.is_none() {
         head.income_tax_election = facts.income_tax_election.clone();
         head.election_source = facts.election_source.clone();
+        filled |= facts.income_tax_election.is_some();
     }
     if head.eopt_tier.is_none() {
         head.eopt_tier = facts.eopt_tier.clone();
+        filled |= facts.eopt_tier.is_some();
     }
-    write_year_facts_stamped(conn, &head_tin, year, &head, incoming_updated_at)
+    if !filled {
+        // Nothing the head lacks: the merge writes nothing, so a file can
+        // never overwrite or re-stamp the head office's own facts.
+        return Ok(());
+    }
+    // The write carries the LATER of the row's own stamp and the file's:
+    // filled fields are newer knowledge, but the stamp never moves backward,
+    // so a later head archive can never overwrite a newer election by
+    // carrying an older time.
+    let existing_stamp: Option<String> = if head_existed {
+        conn.query_row(
+            "SELECT updated_at FROM year_facts WHERE tin = ?1 AND taxable_year = ?2",
+            params![head_tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?
+    } else {
+        None
+    };
+    let stamp = match (existing_stamp.as_deref(), incoming_updated_at) {
+        (Some(existing), Some(incoming)) => {
+            let existing_time = parse_stored_timestamp(existing);
+            let incoming_time = parse_stored_timestamp(incoming);
+            match (existing_time, incoming_time) {
+                (Some(existing_time), Some(incoming_time)) if incoming_time > existing_time => {
+                    Some(incoming)
+                }
+                (Some(_), _) => Some(existing),
+                _ => Some(incoming),
+            }
+        }
+        (Some(existing), None) => Some(existing),
+        (None, incoming) => incoming,
+    };
+    write_year_facts_stamped(conn, &head_tin, year, &head, stamp)
 }
 
 pub(crate) fn list_year_facts(

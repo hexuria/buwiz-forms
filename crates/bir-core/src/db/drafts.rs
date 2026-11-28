@@ -320,7 +320,7 @@ fn slot_from_i64(slot: Option<i64>) -> Option<u8> {
     slot.and_then(|value| u8::try_from(value).ok())
 }
 
-pub(super) fn period_from_legacy_slot(
+pub(crate) fn period_from_legacy_slot(
     form_code: &str,
     slot: Option<u8>,
     default_open_ended_key: u32,
