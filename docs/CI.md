@@ -63,11 +63,10 @@ No GitHub macOS job starts by itself. macOS runs only for `ci:suite-macos`, `ci:
 
 A draft pull request runs nothing unless someone adds a `ci:suite*` label to it; that label is an explicit request
 and runs even on the draft. Otherwise every job of `ci.yml` is skipped before it takes a runner, so the pull request's
-checks list shows only skipped jobs, and none is red. A skipped job's name is still evaluated; a non-suite label or
-the empty synchronize run uses names other than `ci-ok` and `tests-ok`, so neither check is reported as a skipped
-success there. A draft's empty quick-check job can still carry the `ci-ok` name, but a draft cannot be merged anyway.
-Marking the pull request ready for review starts the quick checks, and their `ci-ok` is the one that counts. After
-that, every push runs them as before.
+checks list shows only skipped jobs, and none is red. A skipped job's name is still evaluated; a non-suite label,
+the empty synchronize run and a draft's other empty runs use names other than `ci-ok` and `tests-ok`, so neither
+check is reported as a skipped success there. Marking the pull request ready for review starts the quick checks, and
+their `ci-ok` is the one that counts. After that, every push runs them as before.
 
 Open a pull request as a draft while you are still pushing to it, and mark it ready when you want its checks
 (`gh pr create --draft`, then `gh pr ready`). Turning a ready pull request back into a draft does not stop the run
@@ -91,10 +90,12 @@ just ci-suite 471 linux      # or windows, macos, all
 ```
 
 The labels are `ci:suite` (Linux and Windows), `ci:suite-linux`, `ci:suite-windows`, `ci:suite-macos` and
-`ci:suite-all`. The recipe creates the label in the repository when needed, removes it first when it is already
-there, adds it, and prints the pull request's checks link. Removing and adding is what asks again: the `labeled`
-event is the request, so a pull request that still carries the label does not rerun the suites on a later push; a new push needs a new ask. The workflows never remove the label and never need write permission for it, so fork pull
-requests use the same read-only token rule as any other pull request.
+`ci:suite-all`; as in GitHub's workflow expressions, the planner matches those names without regard to letter case
+and logs the spelling the event carried. The recipe creates the label in the repository when needed, removes it
+first when it is already there, adds it, and prints the pull request's checks link. Removing and adding is what asks
+again: the `labeled` event is the request, so a pull request that still carries the label does not rerun the suites
+on a later push; a new push needs a new ask. The workflows never remove the label and never need write permission
+for it, so fork pull requests use the same read-only token rule as any other pull request.
 
 A suite-label run plans the quick checks and the suites for the label's systems, choosing the suites from the changed
 files with the same planner code as a `test/**` push. Its `tests-ok` job in each workflow is the result to read. A
@@ -189,10 +190,11 @@ complete run, on exactly the tree `main` will have once they are all merged, and
 - Its `ci-ok` check is green at its exact head. `--allow-unchecked <pr>` skips this gate only when the conductor
   means it.
 - For every pull request, ci.yml's tests-ok must be green at that exact head, from a pull_request suite run
-  or a test-lane push. The proof is judged per needed system: the newest run covering that system has the system's
-  jobs present and green, and a run whose planner asked for no test job on that system is cheap but still counts when
-  its `tests-ok` is green. If the planner would run the app suite for the changed files, `nsh.yml` must pass the same
-  judgment at the exact head too: the system's app jobs are present, none is skipped, and every shard is green.
+  or a test-lane push. The proof is judged per needed system: the newest run covering that system across both proof
+  sources has the system's jobs present and green, and a run whose planner asked for no test job on that system is
+  cheap but still counts when its `tests-ok` is green. If the planner would run the app suite for the changed files,
+  `nsh.yml` must pass the same judgment at the exact head too: the system's app jobs are present, none is skipped,
+  and every shard is green.
   Different systems may be proved by different runs, but a manual run narrowed by a suite, screen or shard filter is
   partial proof and does not count. When either part is missing or red, the refusal prints `just ci-suite <n>`.
   `just ci-test-pr <n> [system]` remains the branch-push form: it reads the pull request's head from GitHub, fetches

@@ -34,7 +34,8 @@ SUITES = ("rust", "screens", "build", "installer", "validation")
 # A test/** push and a manual run on a branch split the screen tests over this many runners.
 SHARDS = 3
 
-# The exact pull-request labels that ask for the suites, and the systems each asks for. Anything else plans nothing.
+# The pull-request labels that ask for the suites, and the systems each asks for. GitHub's expression equality
+# ignores case, so the planner matches these keys case-insensitively too; anything else plans nothing.
 SUITE_LABEL_SYSTEMS = {
     "ci:suite": ("linux", "windows"),
     "ci:suite-linux": ("linux",),
@@ -152,6 +153,12 @@ def branch_systems(ref: str) -> list[str]:
     return {"linux": ["linux"], "windows": ["windows"], "macos": ["macos"], "all": list(SYSTEMS)}.get(first, ["linux", "windows"])
 
 
+def has_label(labels: tuple[str, ...], wanted: str) -> bool:
+    """Label membership with GitHub's case-insensitive name comparison."""
+    wanted_key = wanted.casefold()
+    return any(label.casefold() == wanted_key for label in labels)
+
+
 def plan_quick_checks(plan: dict, *, event: str, branch: str, labels: tuple[str, ...], seen: dict[str, bool],
                       reasons: list[str]) -> None:
     """The quick lane's part of a plan."""
@@ -169,7 +176,7 @@ def plan_quick_checks(plan: dict, *, event: str, branch: str, labels: tuple[str,
     if seen["validation_paths"]:
         plan["validation_systems"] = ["linux"]
         reasons.append("validation-rules audits: validation-rules paths changed")
-    elif event == "pull_request" and "run-validation" in labels:
+    elif event == "pull_request" and has_label(labels, "run-validation"):
         plan["validation_systems"] = ["linux"]
         reasons.append("validation-rules audits: run-validation label")
     elif branch.startswith("ebirforms-"):
@@ -217,7 +224,7 @@ def decide(
     if sync_lane not in ("quick", "none"):
         raise PlanError(f"unknown pull-request synchronize lane {sync_lane}: use quick or none")
 
-    suite_systems = (SUITE_LABEL_SYSTEMS.get(label)
+    suite_systems = (SUITE_LABEL_SYSTEMS.get(label.casefold())
                      if event == "pull_request" and action == "labeled" else None)
     closed = action == "closed" or state.lower() == "closed"
 
@@ -235,6 +242,7 @@ def decide(
         reasons.append("draft pull request: nothing runs until it is marked ready")
     elif suite_systems is not None:
         lane = "suite"
+        reasons.append(f"suite label: {label}")
     elif event in ("pull_request", "push") and not test_push:
         lane = "quick"
     elif test_push:

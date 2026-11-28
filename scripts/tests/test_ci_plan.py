@@ -59,7 +59,9 @@ SUITE_LABEL = ("github.event_name == 'pull_request' && github.event.action == 'l
                "&& (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' "
                "|| github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' "
                "|| github.event.label.name == 'ci:suite-all')")
-CI_OK_NAME = ("    name: ${{ (" + NON_SUITE_LABEL + ") && 'label-ignored' || "
+DRAFT_NOT_READY = ("github.event_name == 'pull_request' && github.event.pull_request.draft "
+                   "&& github.event.action != 'labeled'")
+CI_OK_NAME = ("    name: ${{ (" + NON_SUITE_LABEL + ") && 'label-ignored' || (" + DRAFT_NOT_READY + ") && 'not-ready' || "
               "((github.event_name == 'pull_request' || (github.event_name == 'push' && "
               "!startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}\n")
 TESTS_OK_NAME = "    name: ${{ (" + SUITE_LABEL + ") && 'tests-ok' || 'tests-not-requested' }}\n"
@@ -140,6 +142,12 @@ class QuickLaneTests(unittest.TestCase):
     def test_validation_label_and_ebirforms_branch_run_them_on_linux(self):
         self.assert_quick(pr("docs/x.md", labels=("run-validation",)), check=False, nsh_check=False, validation=True)
         self.assert_quick(pr("docs/x.md", branch="ebirforms-sync"), check=False, nsh_check=False, validation=True)
+
+    def test_the_validation_label_matches_case_insensitively_like_github_expressions(self):
+        for label in ("Run-Validation", "RUN-VALIDATION"):
+            with self.subTest(label=label):
+                self.assert_quick(pr("docs/x.md", labels=(label,)), check=False, nsh_check=False, validation=True)
+        self.assert_quick(pr("docs/x.md", labels=("run-validation-extra",)), check=False, nsh_check=False)
 
     def test_unknown_range_runs_every_quick_check_but_not_the_audits(self):
         for changed in (None, []):
@@ -263,6 +271,16 @@ class SuiteLabelTests(unittest.TestCase):
     def test_ci_suite_linux_and_macos_pick_their_systems(self):
         self.assertEqual(self.labeled("ci:suite-linux", "crates/bir-core/src/lib.rs")["check_systems"], ["linux"])
         self.assertEqual(self.labeled("ci:suite-macos", "crates/bir-core/src/lib.rs")["check_systems"], ["macos"])
+
+    def test_suite_labels_match_case_insensitively_like_github_expressions_and_log_their_spelling(self):
+        for label, systems in (("CI:Suite", ["linux", "windows"]), ("ci:SUITE-windows", ["windows"])):
+            with self.subTest(label=label):
+                plan = self.labeled(label, "crates/bir-core/src/lib.rs")
+                self.assertEqual(plan["lane"], "suite")
+                self.assertEqual(plan["chosen_systems"], systems)
+                self.assertEqual(plan["check_systems"], systems)
+                self.assertEqual(plan["nsh_systems"], systems)
+                self.assertIn(f"suite label: {label}", plan["reasons"])
 
     def test_any_other_label_plans_nothing_even_when_it_starts_with_ci_suite(self):
         for label in ("bug", "ci:suiteful", ""):
@@ -526,6 +544,24 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn(CI_OK_NAME, job(CI, "ci-ok"))
         self.assertIn(TESTS_OK_NAME, job(CI, "tests-ok"))
         self.assertIn(TESTS_OK_NAME, job(NSH, "tests-ok"))
+
+    def test_a_drafts_empty_run_is_named_not_ready_until_a_suite_label_or_ready_for_review(self):
+        gate = job(CI, "ci-ok")
+        self.assertIn(CI_OK_NAME, gate)
+        self.assertIn("github.event.pull_request.draft", DRAFT_NOT_READY)
+        self.assertLess(gate.index("&& 'not-ready'"), gate.index("&& 'ci-ok'"))
+
+    def test_workflow_label_comparisons_and_the_planner_follow_githubs_case_insensitive_equality(self):
+        for workflow in (CI, NSH):
+            compared = re.findall(r"github\.event\.label\.name\s*[!=]=\s*'([^']+)'", workflow)
+            self.assertEqual({name.casefold() for name in compared}, set(ci_plan.SUITE_LABEL_SYSTEMS))
+            for label in ("CI:Suite", "ci:SUITE-windows"):
+                self.assertTrue(any(label.casefold() == name.casefold() for name in compared), label)
+        for label, systems in (("CI:Suite", ["linux", "windows"]), ("ci:SUITE-windows", ["windows"])):
+            with self.subTest(label=label):
+                plan = pr("crates/bir-core/src/lib.rs", action="labeled", label=label)
+                self.assertEqual(plan["lane"], "suite")
+                self.assertEqual(plan["chosen_systems"], systems)
 
     def test_both_workflows_pass_the_label_event_to_the_planner_only_through_env(self):
         for workflow, job_name in ((CI, "changes"), (NSH, "plan")):

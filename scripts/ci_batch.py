@@ -669,12 +669,11 @@ def ci_tests_states(github, pull: Pull, systems: Sequence[str], changed: Sequenc
 
 
 def combine_proof_sets(systems: Sequence[str], *proof_sets: Dict[str, SuiteProof]) -> Dict[str, SuiteProof]:
-    """Choose a green proof where either source has one; otherwise the newest problem, for the refusal."""
+    """Judge the newest covering run across all proof sources; only its own state may satisfy the system."""
     combined = {}
     for system in systems:
         choices = [proofs[system] for proofs in proof_sets]
-        combined[system] = next((proof for proof in choices if proof.state == "success"),
-                                max(choices, key=lambda proof: proof.run_id or -1))
+        combined[system] = max(choices, key=lambda proof: proof.run_id or -1)
     return combined
 
 

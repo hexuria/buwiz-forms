@@ -327,6 +327,33 @@ class BuildTests(BatchTestCase):
         self.github.job_logs[plan_job_id] = self.labeled_suite_log(systems, changed)
         return run
 
+    def add_ci_test_push_run(self, head: str, run_id: int, *, job_conclusion: str = "success",
+                             systems=("linux", "windows"), changed=None):
+        changed = list(changed if changed is not None else ["scripts/ci_batch.py"])
+        branch = self.branch_for(systems)
+        plan = ci_plan.decide(event="push", ref=f"refs/heads/{branch}", branch=branch, changed=changed)
+        run_conclusion = "success" if job_conclusion == "success" else "failure"
+        run = self.suite_run(head, run_id, event="push", branch=branch, path=".github/workflows/ci.yml",
+                             conclusion=run_conclusion)
+        plan_job_id = run_id * 1000 + 999
+        jobs = [dict(id=plan_job_id, name="changes", status="completed", conclusion="success", steps=[])]
+        os_to_system = {values["os"]: system for system, values in ci_plan.CHECK_OS.items()}
+        matrix = json.loads(ci_plan.outputs(plan)["check_matrix"])["include"]
+        for entry in matrix:
+            jobs.append(self.ci_check_job(run_id, os_to_system[entry["os"]]))
+        if plan["installer"]:
+            jobs.append(dict(id=run_id * 1000 + 90, name="Build and audit unsigned Windows Setup",
+                             status="completed", conclusion="success", steps=[]))
+        jobs.append(dict(id=run_id * 1000 + 1, name="tests-ok", status="completed", conclusion=job_conclusion,
+                         steps=[]))
+        values = ci_plan.outputs(plan)
+        lines = [f"lane: {plan['lane']}", *plan["reasons"]]
+        lines += [f"{name}: {value}" for name, value in values.items()]
+        self.github.workflow_runs_by_sha.setdefault(head, []).append(run)
+        self.github.job_lists[run_id] = jobs
+        self.github.job_logs[plan_job_id] = "\n".join(lines) + "\n"
+        return run
+
     def manual_log(self, systems=("linux", "windows"), suites: str = "all", screens: str = "",
                    shard: str = "all") -> str:
         """The plan job's real log shape: its summary lines, without the workflow's inputs."""
@@ -501,6 +528,34 @@ class BuildTests(BatchTestCase):
 
         self.assertEqual(code, 0)
         self.assertIn(f"#85      {head}  suite 96,97  Change 85", output)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_a_newer_red_label_run_hides_an_older_green_test_push_at_the_same_head(self):
+        head = self.repos.pull_request(89, self.base, {"scripts/ci_batch.py": "# batch\n"})
+        self.add_ci_test_push_run(head, 120)
+        self.add_tests_ok_run(head, 121, "ci.yml", job_conclusion="failure", changed=["scripts/ci_batch.py"])
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(89)
+
+        text = str(caught.exception)
+        self.assertIn("failed", text)
+        self.assertIn("run 121", text)
+        self.assertIn("just ci-suite 89", text)
+        self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
+
+    def test_a_newer_red_test_push_hides_an_older_green_label_run_at_the_same_head(self):
+        head = self.repos.pull_request(90, self.base, {"scripts/ci_batch.py": "# batch\n"})
+        self.add_tests_ok_run(head, 122, "ci.yml", changed=["scripts/ci_batch.py"])
+        self.add_ci_test_push_run(head, 123, job_conclusion="failure")
+
+        with self.assertRaises(ci_batch.BatchError) as caught:
+            self.build(90)
+
+        text = str(caught.exception)
+        self.assertIn("failed", text)
+        self.assertIn("run 123", text)
+        self.assertIn("just ci-suite 90", text)
         self.assertEqual(git(self.repos.origin, "for-each-ref", "refs/heads/test"), "")
 
     def test_suite_missing_refuses_with_the_ci_suite_command(self):

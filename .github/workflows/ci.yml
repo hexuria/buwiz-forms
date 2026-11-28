@@ -840,9 +840,10 @@ jobs:
   # there, as every other job is, so no runner is taken. A skipped job's name
   # is still evaluated, so the expression below also keeps a non-suite label's
   # empty run from adding a skipped check named `ci-ok` (which GitHub would
-  # treat as passing). A draft's empty quick-check job can still carry the
-  # `ci-ok` name, but a draft cannot merge. Marking a draft ready starts the
-  # run whose `ci-ok` counts.
+  # treat as passing). A draft's empty quick-check job is named `not-ready`
+  # for the same reason: after it is marked ready, no skipped `ci-ok` from the
+  # draft can satisfy the required check while the new run starts. A suite
+  # label is a draft's explicit request, so that run's real gate stays `ci-ok`.
   #
   # Named `ci-ok` on a pull request (including a suite-label run, whose quick
   # checks are part of its work) and on a non-test push, but `label-ignored`
@@ -851,7 +852,7 @@ jobs:
   # never adds a second `ci-ok` result to the required check. The separate
   # tests-ok job below is the suite label's proof.
   ci-ok:
-    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all') && 'label-ignored' || ((github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}
+    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all') && 'label-ignored' || (github.event_name == 'pull_request' && github.event.pull_request.draft && github.event.action != 'labeled') && 'not-ready' || ((github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}
     needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
     if: ${{ !cancelled() && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
