@@ -22,10 +22,15 @@ fn f2_derived_columns_say_what_they_are() {
     ] {
         assert_eq!(note("1600WP", 1, key), "Computed by the form.", "{key}");
     }
-    // 1601FQ Schedule 1: Nature of Income Payment is the ATC's text.
+    // 1601FQ Schedule 1 is shut until Item 13 is Yes; that gate explains
+    // even the ATC-derived Nature of Income Payment column while closed.
     for row in 0..5 {
         let key = format!("txtNatIncPayment{row}");
-        assert_eq!(note("1601FQ", 1, &key), "Computed by the form.", "{key}");
+        assert_eq!(
+            note("1601FQ", 1, &key),
+            bir_core::forms::agent::draft_locks::schedule1_1601fq::LOCK,
+            "{key}"
+        );
     }
     // 2000 Schedule 1: Tax Rate is the ATC option's (or the DS106 term's).
     for row in 0..3 {

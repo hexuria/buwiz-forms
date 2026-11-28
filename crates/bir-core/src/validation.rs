@@ -493,8 +493,8 @@ mod tests {
     fn validates_zip_and_phone_patterns() {
         assert!(validate_zip("2200"));
         assert!(!validate_zip("22000"));
-        assert!(validate_ph_phone("09156837000"));
-        assert!(validate_ph_phone("+639156837000"));
+        assert!(validate_ph_phone("09170000000"));
+        assert!(validate_ph_phone("+639170000000"));
         assert!(validate_ph_phone("02 8123 4567"));
         assert!(validate_ph_phone("(032) 123 4567"));
         assert!(!validate_ph_phone("123"));

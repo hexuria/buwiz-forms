@@ -49,7 +49,7 @@ export function IdentityBlock() {
         </View>
         <View class="flex-row flex-wrap gap-2">
           <If when={summary().showAdd}>
-            <AppButton testID="settings-add-account" label="Add account" size="sm" icon="plus" onPress={() => go("new_taxpayer")} />
+            <AppButton testID="settings-add-account" label="New tax profile" size="sm" icon="plus" onPress={() => go("new_taxpayer")} />
           </If>
           <AppButton testID="settings-sign-out" label="Sign out" size="sm" icon="log-out" onPress={app.logOut} />
         </View>

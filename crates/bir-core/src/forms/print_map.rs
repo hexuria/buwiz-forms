@@ -30,11 +30,16 @@ pub fn digits_of(fields: &BTreeMap<String, String>, keys: &[&str]) -> String {
         .collect()
 }
 
-/// A stored TIN (dashed or compact) as the 14 digits a header comb holds:
-/// the nine TIN digits then the branch, zero-filled to five.
+/// A stored TIN (dashed or compact) as the 14 positions a header comb holds:
+/// the nine TIN digits then the branch, zero-filled to five. A partial TIN
+/// keeps its digits left to right and leaves the remaining positions blank.
 pub fn tin_digits(tin: &str) -> String {
     let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
-    format!("{digits:0<14}")
+    if digits.len() < 9 {
+        return format!("{digits:<14}");
+    }
+    let (tin1, tin2, tin3, branch) = super::official_inputs::split_tin(tin);
+    format!("{tin1}{tin2}{tin3}{branch}")
 }
 
 /// Formats a compact 12–14 digit TIN with standard BIR dashes
@@ -283,10 +288,41 @@ mod tests {
 
     #[test]
     fn header_puts_the_name_after_fourteen_tin_digits() {
-        assert_eq!(tin_digits("123-456-788-000"), "12345678800000");
+        let tin = "123-456-788-001";
+        let (tin1, tin2, tin3, branch) = crate::forms::official_inputs::split_tin(tin);
+        assert_eq!(tin_digits(tin), format!("{tin1}{tin2}{tin3}{branch}"));
         assert_eq!(
             tin_name_header("123456788", " Sample Co "),
             "12345678800000  SAMPLE CO"
+        );
+    }
+
+    #[test]
+    fn print_tin_matches_the_upload_split_for_complete_tins() {
+        for tin in [
+            "123456788",
+            "1234567881",
+            "123456788001",
+            "123456788123",
+            "1234567881234",
+            "12345678812345",
+        ] {
+            let (tin1, tin2, tin3, branch) = crate::forms::official_inputs::split_tin(tin);
+            assert_eq!(tin_digits(tin), format!("{tin1}{tin2}{tin3}{branch}"));
+        }
+    }
+
+    #[test]
+    fn partial_tin_prints_existing_digits_then_blank_cells() {
+        assert_eq!(tin_digits("12345678"), format!("12345678{}", " ".repeat(6)));
+    }
+
+    #[test]
+    fn empty_tin_prints_blank_cells_and_keeps_the_name_in_place() {
+        assert_eq!(tin_digits(""), " ".repeat(14));
+        assert_eq!(
+            tin_name_header("", "Sample Co"),
+            format!("{}  SAMPLE CO", " ".repeat(14))
         );
     }
 
