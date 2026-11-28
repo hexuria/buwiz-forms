@@ -3975,6 +3975,15 @@ fn v2018_1601fq_imported_rows_cleared_when_item_4_unanswered_then_no_are_said_on
         closed["relock_notes"]["txtAmtIncomePay0"],
         "Schedule 1 row 1 was cleared: changing item 4 clears all computation fields."
     );
+    assert!(
+        closed["notes_always"]
+            .as_array()
+            .expect("notes_always")
+            .iter()
+            .any(|key| key == "txtNatIncPayment0"),
+        "the clearing is displayable on the still-open row: {}",
+        closed["notes_always"]
+    );
     save("1601FQ", &closed["draft"]);
     let gate = format!("1601fq_schedule1:{row_id}");
     assert_eq!(

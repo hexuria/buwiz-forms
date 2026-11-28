@@ -5420,7 +5420,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         mark
     });
     let penalty_groups = penalties::json(kind, &draft);
-    let noted = notes_always(kind, &draft);
+    let mut noted = notes_always(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
     // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms;
@@ -5501,11 +5501,24 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         if let Some((event_gate, _)) = event.as_ref() {
             inline_clearances.insert(event_gate.clone());
         }
+        let item4_clearing =
+            before["any_tax_withheld"] != json!(false) && draft["any_tax_withheld"] == json!(false);
         let event_text = event.map(|(_, text)| text);
         for clearance in clearances {
             if let (Some(row), Some(text)) =
                 (gate::row_index(&before, &clearance.id), event_text.as_ref())
             {
+                if item4_clearing {
+                    // Item 4 No clears the rows but leaves Item 13 Yes, so the
+                    // row's writable cells open again and cannot carry a lock
+                    // note. Its computed Nature cell stays shut; make that
+                    // one note show even though the cell prints the official
+                    // placeholder.
+                    let key = format!("txtNatIncPayment{row}");
+                    if !noted.contains(&key) {
+                        noted.push(key);
+                    }
+                }
                 for key in gate::keys_for_row(row) {
                     relock_notes.insert(key, json!(text.clone()));
                 }

@@ -10,8 +10,11 @@ const TABLE = "fp-table-drpTreatyCode0";
 const AMOUNT = "id:fp-txtAmtIncomePay0";
 const YES = "id:fp-frm1601FQ:SpecialTax_1";
 const NO = "id:fp-frm1601FQ:SpecialTax_2";
+const ITEM4_YES = "id:fp-frm1601FQ:TaxWithheld_1";
+const ITEM4_NO = "id:fp-frm1601FQ:TaxWithheld_2";
 const SHUT = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
 const CLEARED = "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes.";
+const ITEM4_CLEARED = "Schedule 1 row 1 was cleared: changing item 4 clears all computation fields.";
 
 async function reach(app: App, sel: string): Promise<void> {
   for (let i = 0; i < 60 && !app.shows(sel); i++) await app.scroll("id:form-scroll", 420).catch(() => {});
@@ -86,4 +89,34 @@ test("1601FQ Schedule 1 is shut before Item 13 Yes, opens there, and closes by c
   await openRow(app);
   expect(amountShown(app)).toBe(true);
   expect(app.texts()).not.toContain("42.00");
+}, 70_000);
+
+test("1601FQ Schedule 1 says an Item 4 clearing on the page before its notice is seen", async () => {
+  const app = await open(ENTRY, {
+    width: 1440,
+    height: 900,
+    platform: "macos",
+    host: { params: { formCode: "1601FQ", year: 2025, period: 2, openParts: "all" } },
+  });
+  await app.waitFor("text:BIR Form 1601FQ", { timeout: 20_000 });
+
+  await reachUp(app, ITEM4_YES);
+  await app.press(ITEM4_YES);
+  await app.waitFor("text:✓ Saved", { timeout: 15_000 });
+  await reachUp(app, YES);
+  await app.press(YES);
+  await app.waitFor("text:✓ Saved", { timeout: 15_000 });
+  await openRow(app);
+  await app.clear(AMOUNT);
+  await app.type(AMOUNT, "42");
+  await app.submit(AMOUNT);
+  await app.waitFor("text:✓ Saved", { timeout: 15_000 });
+  await closeRow(app);
+
+  await reachUp(app, ITEM4_NO);
+  await app.press(ITEM4_NO);
+  await app.press("text:Continue").catch(() => {});
+  await app.waitFor("text:✓ Saved", { timeout: 15_000 });
+  await reach(app, `id:${TABLE}`);
+  expect(app.texts()).toContain(ITEM4_CLEARED);
 }, 70_000);
