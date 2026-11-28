@@ -1,5 +1,7 @@
 driver: gpui-agent-cli 0.5.0 + nsh-gpui-agent b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b (app b3bddd4d)
 
+
+> **Environment-suspect (the wrapper pointed at another checkout), not evidence.**
 # pin b0c1a5f2 with #507's whole recipe set
 
 Part 2 evidence. The worktree was clean at `b3bddd4d252d0daac05b322f18ce6e45e6c1fa18`; all of `agent-recipes/e2e`, including `smoke.json`, was overlaid uncommitted from `74e3a8a2246fa8876d0fe86aceda35e4e1b83cdc`. In that overlay only, step `s13p` was deleted from `money-boxes-paced-phone.json` and `"may_scroll": {"phone": ["s14"]}` was added to the money-boxes entry of the overlaid `smoke.json`. `just e2e check smoke` passed: `smoke.json: 12 recipes, 37 files validated by gpui-agent-cli 0.5.0, 0 problem(s)`.

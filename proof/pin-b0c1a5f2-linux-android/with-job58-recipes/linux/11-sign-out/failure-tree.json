@@ -1,0 +1,3650 @@
+{
+ "v": 2,
+ "id": "1",
+ "ok": true,
+ "tree": {
+  "app": "Native Shell",
+  "platform": "desktop",
+  "ready": true,
+  "nodes": [
+   {
+    "id": "n1",
+    "role": "generic",
+    "name": "",
+    "enabled": true,
+    "focused": false,
+    "bounds": {
+     "x": 0.0,
+     "y": 0.0,
+     "w": 420.0,
+     "h": 834.0
+    },
+    "children": [
+     {
+      "id": "n2",
+      "role": "generic",
+      "name": "",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 0.0,
+       "y": 0.0,
+       "w": 420.0,
+       "h": 834.0
+      },
+      "children": [
+       {
+        "id": "shell",
+        "role": "generic",
+        "name": "shell",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 0.0,
+         "y": 0.0,
+         "w": 420.0,
+         "h": 834.0
+        },
+        "children": [
+         {
+          "id": "frame",
+          "role": "generic",
+          "name": "frame",
+          "enabled": true,
+          "focused": false,
+          "bounds": {
+           "x": 0.0,
+           "y": 0.0,
+           "w": 420.0,
+           "h": 834.0
+          },
+          "children": [
+           {
+            "id": "narrow-bar",
+            "role": "generic",
+            "name": "narrow-bar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 0.0,
+             "w": 420.0,
+             "h": 40.0
+            },
+            "children": [
+             {
+              "id": "n1920",
+              "role": "generic",
+              "name": "",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 8.0,
+               "y": 6.0,
+               "w": 28.0,
+               "h": 28.0
+              },
+              "children": [
+               {
+                "id": "nb-menu",
+                "role": "button",
+                "name": "Menu",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 8.0,
+                 "y": 6.0,
+                 "w": 28.0,
+                 "h": 28.0
+                },
+                "children": [
+                 {
+                  "id": "n1930",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 14.0,
+                   "y": 12.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "id": "nb-back",
+              "role": "button",
+              "name": "Back",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 40.0,
+               "y": 6.0,
+               "w": 28.0,
+               "h": 28.0
+              },
+              "children": [
+               {
+                "id": "n6298",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 46.0,
+                 "y": 12.0,
+                 "w": 16.0,
+                 "h": 16.0
+                }
+               }
+              ]
+             },
+             {
+              "id": "nb-title",
+              "role": "note",
+              "name": "Tax profile",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 72.0,
+               "y": 9.0,
+               "w": 95.0,
+               "h": 23.0
+              }
+             },
+             {
+              "id": "nb-new",
+              "role": "button",
+              "name": "New return",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 171.0,
+               "y": 6.0,
+               "w": 28.0,
+               "h": 28.0
+              },
+              "children": [
+               {
+                "id": "n1954",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 177.0,
+                 "y": 12.0,
+                 "w": 16.0,
+                 "h": 16.0
+                }
+               }
+              ]
+             },
+             {
+              "id": "nb-search",
+              "role": "button",
+              "name": "Search",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 203.0,
+               "y": 6.0,
+               "w": 28.0,
+               "h": 28.0
+              },
+              "children": [
+               {
+                "id": "n1964",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 209.0,
+                 "y": 12.0,
+                 "w": 16.0,
+                 "h": 16.0
+                }
+               }
+              ]
+             },
+             {
+              "id": "nb-account-menu",
+              "role": "generic",
+              "name": "nb-account-menu",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 235.0,
+               "y": 4.0,
+               "w": 32.0,
+               "h": 32.0
+              },
+              "children": [
+               {
+                "id": "n1978",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 235.0,
+                 "y": 4.0,
+                 "w": 32.0,
+                 "h": 32.0
+                },
+                "children": [
+                 {
+                  "id": "nb-avatar",
+                  "role": "button",
+                  "name": "Account",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 235.0,
+                   "y": 4.0,
+                   "w": 32.0,
+                   "h": 32.0
+                  },
+                  "states": [
+                   "collapsed"
+                  ],
+                  "children": [
+                   {
+                    "id": "n1968",
+                    "role": "image",
+                    "name": "E2E SMOKE TAXPAYER [grouped]",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 237.0,
+                     "y": 6.0,
+                     "w": 28.0,
+                     "h": 28.0
+                    },
+                    "states": [
+                     "grouped"
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "id": "frame-body",
+            "role": "generic",
+            "name": "frame-body",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 40.0,
+             "w": 420.0,
+             "h": 737.0
+            },
+            "children": [
+             {
+              "id": "main-surface",
+              "role": "generic",
+              "name": "main-surface",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 0.0,
+               "y": 40.0,
+               "w": 420.0,
+               "h": 737.0
+              },
+              "children": [
+               {
+                "id": "n1560",
+                "role": "generic",
+                "name": "",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 0.0,
+                 "y": 41.0,
+                 "w": 420.0,
+                 "h": 735.0
+                },
+                "children": [
+                 {
+                  "id": "main-scroll",
+                  "role": "scroll",
+                  "name": "main-scroll",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 0.0,
+                   "y": 41.0,
+                   "w": 420.0,
+                   "h": 735.0
+                  },
+                  "children": [
+                   {
+                    "id": "n8342",
+                    "role": "generic",
+                    "name": "",
+                    "enabled": true,
+                    "focused": false,
+                    "bounds": {
+                     "x": 0.0,
+                     "y": 41.0,
+                     "w": 420.0,
+                     "h": 2408.0
+                    },
+                    "children": [
+                     {
+                      "id": "content-column",
+                      "role": "generic",
+                      "name": "content-column",
+                      "enabled": true,
+                      "focused": false,
+                      "bounds": {
+                       "x": 16.0,
+                       "y": 61.0,
+                       "w": 388.0,
+                       "h": 2332.0
+                      },
+                      "children": [
+                       {
+                        "id": "tp-page-profile",
+                        "role": "generic",
+                        "name": "tp-page-profile",
+                        "enabled": true,
+                        "focused": false,
+                        "bounds": {
+                         "x": 16.0,
+                         "y": 61.0,
+                         "w": 388.0,
+                         "h": 2332.0
+                        },
+                        "children": [
+                         {
+                          "id": "tp-header",
+                          "role": "generic",
+                          "name": "tp-header",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 16.0,
+                           "y": 61.0,
+                           "w": 388.0,
+                           "h": 178.0
+                          },
+                          "children": [
+                           {
+                            "id": "n8350",
+                            "role": "generic",
+                            "name": "",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 16.0,
+                             "y": 61.0,
+                             "w": 388.0,
+                             "h": 97.0
+                            },
+                            "children": [
+                             {
+                              "id": "n8408",
+                              "role": "image",
+                              "name": "E2E SMOKE TAXPAYER [grouped]",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 16.0,
+                               "y": 69.0,
+                               "w": 40.0,
+                               "h": 40.0
+                              },
+                              "states": [
+                               "grouped"
+                              ]
+                             },
+                             {
+                              "id": "n8352",
+                              "role": "generic",
+                              "name": "",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 70.0,
+                               "y": 61.0,
+                               "w": 334.0,
+                               "h": 55.0
+                              },
+                              "children": [
+                               {
+                                "id": "n8354",
+                                "role": "note",
+                                "name": "E2E SMOKE TAXPAYER",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 70.0,
+                                 "y": 61.0,
+                                 "w": 334.0,
+                                 "h": 33.0
+                                }
+                               },
+                               {
+                                "id": "n8382",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 70.0,
+                                 "y": 96.0,
+                                 "w": 334.0,
+                                 "h": 20.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8384",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 70.0,
+                                   "y": 96.0,
+                                   "w": 334.0,
+                                   "h": 20.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n9938",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 70.0,
+                                     "y": 96.0,
+                                     "w": 133.0,
+                                     "h": 20.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n9934",
+                                      "role": "note",
+                                      "name": "123-456-788-00000",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 70.0,
+                                       "y": 96.0,
+                                       "w": 133.0,
+                                       "h": 20.0
+                                      }
+                                     }
+                                    ]
+                                   },
+                                   {
+                                    "id": "n8392",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 211.0,
+                                     "y": 96.0,
+                                     "w": 77.0,
+                                     "h": 20.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n8394",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 211.0,
+                                       "y": 105.0,
+                                       "w": 3.0,
+                                       "h": 3.0
+                                      }
+                                     },
+                                     {
+                                      "id": "n8396",
+                                      "role": "note",
+                                      "name": "Head office",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 222.0,
+                                       "y": 96.0,
+                                       "w": 66.0,
+                                       "h": 20.0
+                                      }
+                                     }
+                                    ]
+                                   },
+                                   {
+                                    "id": "n8400",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 296.0,
+                                     "y": 96.0,
+                                     "w": 66.0,
+                                     "h": 20.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n8402",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 296.0,
+                                       "y": 105.0,
+                                       "w": 3.0,
+                                       "h": 3.0
+                                      }
+                                     },
+                                     {
+                                      "id": "n8404",
+                                      "role": "note",
+                                      "name": "Individual",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 307.0,
+                                       "y": 96.0,
+                                       "w": 55.0,
+                                       "h": 20.0
+                                      }
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             },
+                             {
+                              "id": "n8432",
+                              "role": "generic",
+                              "name": "",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 16.0,
+                               "y": 130.0,
+                               "w": 224.0,
+                               "h": 28.0
+                              },
+                              "children": [
+                               {
+                                "id": "tp-copy-tin",
+                                "role": "button",
+                                "name": "Copy TIN",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 16.0,
+                                 "y": 130.0,
+                                 "w": 102.0,
+                                 "h": 28.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8440",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 27.0,
+                                   "y": 136.0,
+                                   "w": 16.0,
+                                   "h": 16.0
+                                  }
+                                 },
+                                 {
+                                  "id": "n8436",
+                                  "role": "note",
+                                  "name": "Copy TIN",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 49.0,
+                                   "y": 133.0,
+                                   "w": 58.0,
+                                   "h": 22.0
+                                  }
+                                 }
+                                ]
+                               },
+                               {
+                                "id": "tp-new-return",
+                                "role": "button",
+                                "name": "New return",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 126.0,
+                                 "y": 130.0,
+                                 "w": 114.0,
+                                 "h": 28.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8448",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 137.0,
+                                   "y": 136.0,
+                                   "w": 16.0,
+                                   "h": 16.0
+                                  }
+                                 },
+                                 {
+                                  "id": "n8444",
+                                  "role": "note",
+                                  "name": "New return",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 159.0,
+                                   "y": 133.0,
+                                   "w": 70.0,
+                                   "h": 22.0
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           },
+                           {
+                            "id": "tp-tabs",
+                            "role": "tablist",
+                            "name": "tp-tabs",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 16.0,
+                             "y": 178.0,
+                             "w": 388.0,
+                             "h": 37.0
+                            },
+                            "children": [
+                             {
+                              "id": "tp-tabs-profile",
+                              "role": "tab",
+                              "name": "Profile",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 16.0,
+                               "y": 178.0,
+                               "w": 61.0,
+                               "h": 36.0
+                              },
+                              "states": [
+                               "selected"
+                              ],
+                              "children": [
+                               {
+                                "id": "n8454",
+                                "role": "note",
+                                "name": "Profile",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 26.0,
+                                 "y": 185.0,
+                                 "w": 41.0,
+                                 "h": 22.0
+                                }
+                               }
+                              ]
+                             },
+                             {
+                              "id": "tp-tabs-forms",
+                              "role": "tab",
+                              "name": "Forms",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 81.0,
+                               "y": 178.0,
+                               "w": 85.0,
+                               "h": 36.0
+                              },
+                              "children": [
+                               {
+                                "id": "n8460",
+                                "role": "note",
+                                "name": "Forms",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 91.0,
+                                 "y": 185.0,
+                                 "w": 39.0,
+                                 "h": 22.0
+                                }
+                               },
+                               {
+                                "id": "n8464",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 136.0,
+                                 "y": 187.0,
+                                 "w": 20.0,
+                                 "h": 18.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8466",
+                                  "role": "note",
+                                  "name": "1",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 142.0,
+                                   "y": 187.0,
+                                   "w": 8.0,
+                                   "h": 18.0
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             },
+                             {
+                              "id": "tp-tabs-templates",
+                              "role": "tab",
+                              "name": "Templates",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 170.0,
+                               "y": 178.0,
+                               "w": 111.0,
+                               "h": 36.0
+                              },
+                              "children": [
+                               {
+                                "id": "n8472",
+                                "role": "note",
+                                "name": "Templates",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 180.0,
+                                 "y": 185.0,
+                                 "w": 65.0,
+                                 "h": 22.0
+                                }
+                               },
+                               {
+                                "id": "n8476",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 251.0,
+                                 "y": 187.0,
+                                 "w": 20.0,
+                                 "h": 18.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8478",
+                                  "role": "note",
+                                  "name": "0",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 257.0,
+                                   "y": 187.0,
+                                   "w": 8.0,
+                                   "h": 18.0
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         },
+                         {
+                          "id": "tp-profile-tab",
+                          "role": "generic",
+                          "name": "tp-profile-tab",
+                          "enabled": true,
+                          "focused": false,
+                          "bounds": {
+                           "x": 16.0,
+                           "y": 239.0,
+                           "w": 388.0,
+                           "h": 2154.0
+                          },
+                          "children": [
+                           {
+                            "id": "n8484",
+                            "role": "generic",
+                            "name": "",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 16.0,
+                             "y": 239.0,
+                             "w": 388.0,
+                             "h": 28.0
+                            },
+                            "children": [
+                             {
+                              "id": "tp-profile-years",
+                              "role": "radiogroup",
+                              "name": "Tax year",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 16.0,
+                               "y": 239.0,
+                               "w": 55.0,
+                               "h": 28.0
+                              },
+                              "children": [
+                               {
+                                "id": "tp-profile-years-2026",
+                                "role": "radio",
+                                "name": "2026",
+                                "checked": true,
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 18.0,
+                                 "y": 241.0,
+                                 "w": 51.0,
+                                 "h": 24.0
+                                },
+                                "states": [
+                                 "selected",
+                                 "checked"
+                                ],
+                                "children": [
+                                 {
+                                  "id": "n8490",
+                                  "role": "note",
+                                  "name": "2026",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 28.0,
+                                   "y": 243.0,
+                                   "w": 31.0,
+                                   "h": 20.0
+                                  }
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           },
+                           {
+                            "id": "tp-profile",
+                            "role": "generic",
+                            "name": "tp-profile",
+                            "enabled": true,
+                            "focused": false,
+                            "bounds": {
+                             "x": 16.0,
+                             "y": 283.0,
+                             "w": 388.0,
+                             "h": 2110.0
+                            },
+                            "children": [
+                             {
+                              "id": "tp-sec-taxpayer",
+                              "role": "generic",
+                              "name": "tp-sec-taxpayer",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 17.0,
+                               "y": 284.0,
+                               "w": 386.0,
+                               "h": 300.0
+                              },
+                              "children": [
+                               {
+                                "id": "n8568",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 284.0,
+                                 "w": 386.0,
+                                 "h": 44.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "tp-sec-taxpayer-toggle",
+                                  "role": "button",
+                                  "name": "Taxpayer",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 284.0,
+                                   "w": 298.0,
+                                   "h": 44.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8572",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 29.0,
+                                     "y": 298.0,
+                                     "w": 16.0,
+                                     "h": 16.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8574",
+                                    "role": "note",
+                                    "name": "Taxpayer",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 295.0,
+                                     "w": 59.0,
+                                     "h": 22.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8578",
+                                    "role": "note",
+                                    "name": "Shared by every branch",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 120.0,
+                                     "y": 296.0,
+                                     "w": 187.0,
+                                     "h": 20.0
+                                    }
+                                   }
+                                  ]
+                                 },
+                                 {
+                                  "id": "tp-sec-taxpayer-edit",
+                                  "role": "button",
+                                  "name": "Edit",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 323.0,
+                                   "y": 292.0,
+                                   "w": 68.0,
+                                   "h": 28.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n9946",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 334.0,
+                                     "y": 298.0,
+                                     "w": 16.0,
+                                     "h": 16.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n9942",
+                                    "role": "note",
+                                    "name": "Edit",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 356.0,
+                                     "y": 295.0,
+                                     "w": 24.0,
+                                     "h": 22.0
+                                    }
+                                   }
+                                  ]
+                                 }
+                                ]
+                               },
+                               {
+                                "id": "n8498",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 328.0,
+                                 "w": 386.0,
+                                 "h": 256.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8500",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 328.0,
+                                   "w": 386.0,
+                                   "h": 256.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8502",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 332.0,
+                                     "w": 330.0,
+                                     "h": 232.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n8504",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 332.0,
+                                       "w": 330.0,
+                                       "h": 46.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "tp-taxpayer-name-value",
+                                        "role": "generic",
+                                        "name": "tp-taxpayer-name-value",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 332.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8508",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 332.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8510",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 332.0,
+                                             "w": 330.0,
+                                             "h": 20.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8512",
+                                              "role": "note",
+                                              "name": "Registered name",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 332.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              }
+                                             }
+                                            ]
+                                           },
+                                           {
+                                            "id": "n8516",
+                                            "role": "note",
+                                            "name": "E2E SMOKE TAXPAYER",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 356.0,
+                                             "w": 330.0,
+                                             "h": 22.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     },
+                                     {
+                                      "id": "n8520",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 394.0,
+                                       "w": 330.0,
+                                       "h": 46.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8522",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 394.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8524",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 394.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8526",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 394.0,
+                                             "w": 330.0,
+                                             "h": 20.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8528",
+                                              "role": "note",
+                                              "name": "TIN",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 394.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              }
+                                             }
+                                            ]
+                                           },
+                                           {
+                                            "id": "n8532",
+                                            "role": "note",
+                                            "name": "123-456-788",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 418.0,
+                                             "w": 330.0,
+                                             "h": 22.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     },
+                                     {
+                                      "id": "n8536",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 456.0,
+                                       "w": 330.0,
+                                       "h": 46.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8538",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 456.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8540",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 456.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8542",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 456.0,
+                                             "w": 330.0,
+                                             "h": 20.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8544",
+                                              "role": "note",
+                                              "name": "Taxpayer type",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 456.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              }
+                                             }
+                                            ]
+                                           },
+                                           {
+                                            "id": "n8548",
+                                            "role": "note",
+                                            "name": "Individual",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 480.0,
+                                             "w": 330.0,
+                                             "h": 22.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     },
+                                     {
+                                      "id": "n8552",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 518.0,
+                                       "w": 330.0,
+                                       "h": 46.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8554",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 518.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8556",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 518.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8558",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 518.0,
+                                             "w": 330.0,
+                                             "h": 20.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8560",
+                                              "role": "note",
+                                              "name": "Birth date",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 518.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              }
+                                             }
+                                            ]
+                                           },
+                                           {
+                                            "id": "n8564",
+                                            "role": "note",
+                                            "name": "January 15, 1990",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 542.0,
+                                             "w": 330.0,
+                                             "h": 22.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             },
+                             {
+                              "id": "tp-sec-branch",
+                              "role": "generic",
+                              "name": "tp-sec-branch",
+                              "enabled": true,
+                              "focused": false,
+                              "bounds": {
+                               "x": 17.0,
+                               "y": 584.0,
+                               "w": 386.0,
+                               "h": 387.0
+                              },
+                              "children": [
+                               {
+                                "id": "n8690",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 585.0,
+                                 "w": 386.0,
+                                 "h": 44.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "tp-sec-branch-toggle",
+                                  "role": "button",
+                                  "name": "Registered activity",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 585.0,
+                                   "w": 298.0,
+                                   "h": 44.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8694",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 29.0,
+                                     "y": 599.0,
+                                     "w": 16.0,
+                                     "h": 16.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8696",
+                                    "role": "note",
+                                    "name": "Registered activity",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 596.0,
+                                     "w": 118.0,
+                                     "h": 22.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8700",
+                                    "role": "note",
+                                    "name": "Head office \u00b7 2026",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 179.0,
+                                     "y": 597.0,
+                                     "w": 128.0,
+                                     "h": 20.0
+                                    }
+                                   }
+                                  ]
+                                 },
+                                 {
+                                  "id": "tp-sec-branch-edit",
+                                  "role": "button",
+                                  "name": "Edit",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 323.0,
+                                   "y": 593.0,
+                                   "w": 68.0,
+                                   "h": 28.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8710",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 334.0,
+                                     "y": 599.0,
+                                     "w": 16.0,
+                                     "h": 16.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8706",
+                                    "role": "note",
+                                    "name": "Edit",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 356.0,
+                                     "y": 596.0,
+                                     "w": 24.0,
+                                     "h": 22.0
+                                    }
+                                   }
+                                  ]
+                                 }
+                                ]
+                               },
+                               {
+                                "id": "n8592",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 629.0,
+                                 "w": 386.0,
+                                 "h": 342.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8594",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 629.0,
+                                   "w": 386.0,
+                                   "h": 342.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8596",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 633.0,
+                                     "w": 330.0,
+                                     "h": 318.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "n8598",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 633.0,
+                                       "w": 330.0,
+                                       "h": 318.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8600",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 633.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8602",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 633.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8604",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 633.0,
+                                             "w": 330.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8606",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 633.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8608",
+                                                "role": "note",
+                                                "name": "Branch code",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 633.0,
+                                                 "w": 330.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8612",
+                                              "role": "note",
+                                              "name": "00000",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 657.0,
+                                               "w": 330.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "n8616",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 695.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8618",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 695.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8620",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 695.0,
+                                             "w": 330.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8622",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 695.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8624",
+                                                "role": "note",
+                                                "name": "Branch name",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 695.0,
+                                                 "w": 330.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8628",
+                                              "role": "note",
+                                              "name": "Head office",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 719.0,
+                                               "w": 330.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "n8632",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 757.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8634",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 757.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8636",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 757.0,
+                                             "w": 330.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8638",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 757.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8640",
+                                                "role": "note",
+                                                "name": "RDO",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 757.0,
+                                                 "w": 330.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8644",
+                                              "role": "note",
+                                              "name": "040",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 781.0,
+                                               "w": 330.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "n8648",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 819.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8650",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 819.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8652",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 819.0,
+                                             "w": 330.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8654",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 819.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8656",
+                                                "role": "note",
+                                                "name": "Line of business",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "visible": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 819.0,
+                                                 "w": 330.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8660",
+                                              "role": "note",
+                                              "name": "Not set",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 843.0,
+                                               "w": 330.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "n8664",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 881.0,
+                                         "w": 330.0,
+                                         "h": 70.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8666",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 881.0,
+                                           "w": 330.0,
+                                           "h": 70.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8668",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 881.0,
+                                             "w": 330.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8670",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 881.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8672",
+                                                "role": "note",
+                                                "name": "Business start date",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "visible": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 881.0,
+                                                 "w": 330.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8676",
+                                              "role": "note",
+                                              "name": "Not set",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 905.0,
+                                               "w": 330.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           },
+                                           {
+                                            "id": "n8680",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 931.0,
+                                             "w": 330.0,
+                                             "h": 20.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8682",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 931.0,
+                                               "w": 126.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8684",
+                                                "role": "generic",
+                                                "name": "",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "visible": false,
+                                                "bounds": {
+                                                 "x": 61.0,
+                                                 "y": 935.0,
+                                                 "w": 12.0,
+                                                 "h": 12.0
+                                                }
+                                               },
+                                               {
+                                                "id": "n8686",
+                                                "role": "note",
+                                                "name": "Needed by 2551Q",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "visible": false,
+                                                "bounds": {
+                                                 "x": 77.0,
+                                                 "y": 932.0,
+                                                 "w": 94.0,
+                                                 "h": 18.0
+                                                }
+                                               }
+                                              ]
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             },
+                             {
+                              "id": "tp-sec-taxtypes",
+                              "role": "generic",
+                              "name": "tp-sec-taxtypes",
+                              "enabled": true,
+                              "focused": false,
+                              "visible": false,
+                              "bounds": {
+                               "x": 17.0,
+                               "y": 971.0,
+                               "w": 386.0,
+                               "h": 165.0
+                              },
+                              "children": [
+                               {
+                                "id": "n8766",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "visible": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 972.0,
+                                 "w": 386.0,
+                                 "h": 44.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "tp-sec-taxtypes-toggle",
+                                  "role": "button",
+                                  "name": "Tax types \u00b7 your forms for 2026",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "visible": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 972.0,
+                                   "w": 374.0,
+                                   "h": 44.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8770",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 29.0,
+                                     "y": 986.0,
+                                     "w": 16.0,
+                                     "h": 16.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8772",
+                                    "role": "note",
+                                    "name": "Tax types \u00b7 your forms for 2026",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 983.0,
+                                     "w": 198.0,
+                                     "h": 22.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8776",
+                                    "role": "note",
+                                    "name": "1 form",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 259.0,
+                                     "y": 984.0,
+                                     "w": 124.0,
+                                     "h": 20.0
+                                    }
+                                   }
+                                  ]
+                                 }
+                                ]
+                               },
+                               {
+                                "id": "n8714",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "visible": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 1016.0,
+                                 "w": 386.0,
+                                 "h": 120.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8716",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "visible": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 1016.0,
+                                   "w": 386.0,
+                                   "h": 120.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8718",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 1020.0,
+                                     "w": 330.0,
+                                     "h": 96.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "tp-taxtypes-forms",
+                                      "role": "generic",
+                                      "name": "tp-taxtypes-forms",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "visible": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 1020.0,
+                                       "w": 330.0,
+                                       "h": 24.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "tp-taxtypes-form-2551Q",
+                                        "role": "generic",
+                                        "name": "tp-taxtypes-form-2551Q",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1020.0,
+                                         "w": 330.0,
+                                         "h": 24.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8724",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 1022.0,
+                                           "w": 68.0,
+                                           "h": 20.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8726",
+                                            "role": "note",
+                                            "name": "2551Q",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 1022.0,
+                                             "w": 68.0,
+                                             "h": 20.0
+                                            }
+                                           }
+                                          ]
+                                         },
+                                         {
+                                          "id": "n8730",
+                                          "role": "note",
+                                          "name": "Quarterly Percentage Tax Return",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 133.0,
+                                           "y": 1021.0,
+                                           "w": 172.0,
+                                           "h": 22.0
+                                          }
+                                         },
+                                         {
+                                          "id": "n8734",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 317.0,
+                                           "y": 1022.0,
+                                           "w": 66.0,
+                                           "h": 20.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8736",
+                                            "role": "note",
+                                            "name": "Quarterly",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 325.0,
+                                             "y": 1023.0,
+                                             "w": 50.0,
+                                             "h": 18.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     },
+                                     {
+                                      "id": "tp-taxtypes-chips",
+                                      "role": "generic",
+                                      "name": "tp-taxtypes-chips",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "visible": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 1056.0,
+                                       "w": 330.0,
+                                       "h": 20.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8760",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1056.0,
+                                         "w": 166.0,
+                                         "h": 20.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8762",
+                                          "role": "note",
+                                          "name": "Percentage tax \u00b7 from 2551Q",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 61.0,
+                                           "y": 1057.0,
+                                           "w": 150.0,
+                                           "h": 18.0
+                                          }
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     },
+                                     {
+                                      "id": "n8740",
+                                      "role": "generic",
+                                      "name": "",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "visible": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 1088.0,
+                                       "w": 330.0,
+                                       "h": 28.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "tp-taxtypes-change",
+                                        "role": "button",
+                                        "name": "Change",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1088.0,
+                                         "w": 93.0,
+                                         "h": 28.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8748",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 64.0,
+                                           "y": 1094.0,
+                                           "w": 16.0,
+                                           "h": 16.0
+                                          }
+                                         },
+                                         {
+                                          "id": "n8744",
+                                          "role": "note",
+                                          "name": "Change",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 86.0,
+                                           "y": 1091.0,
+                                           "w": 49.0,
+                                           "h": 22.0
+                                          }
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "tp-save-setup-open",
+                                        "role": "button",
+                                        "name": "Save as a setup",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 154.0,
+                                         "y": 1088.0,
+                                         "w": 142.0,
+                                         "h": 28.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8756",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 165.0,
+                                           "y": 1094.0,
+                                           "w": 16.0,
+                                           "h": 16.0
+                                          }
+                                         },
+                                         {
+                                          "id": "n8752",
+                                          "role": "note",
+                                          "name": "Save as a setup",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 187.0,
+                                           "y": 1091.0,
+                                           "w": 98.0,
+                                           "h": 22.0
+                                          }
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             },
+                             {
+                              "id": "tp-sec-facts",
+                              "role": "generic",
+                              "name": "tp-sec-facts",
+                              "enabled": true,
+                              "focused": false,
+                              "visible": false,
+                              "bounds": {
+                               "x": 17.0,
+                               "y": 1136.0,
+                               "w": 386.0,
+                               "h": 467.0
+                              },
+                              "children": [
+                               {
+                                "id": "n8918",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "visible": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 1137.0,
+                                 "w": 386.0,
+                                 "h": 44.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "tp-sec-facts-toggle",
+                                  "role": "button",
+                                  "name": "Facts your forms use",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "visible": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 1137.0,
+                                   "w": 374.0,
+                                   "h": 44.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8922",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 29.0,
+                                     "y": 1151.0,
+                                     "w": 16.0,
+                                     "h": 16.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8924",
+                                    "role": "note",
+                                    "name": "Facts your forms use",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 1148.0,
+                                     "w": 132.0,
+                                     "h": 22.0
+                                    }
+                                   },
+                                   {
+                                    "id": "n8928",
+                                    "role": "note",
+                                    "name": "2 not set",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 193.0,
+                                     "y": 1149.0,
+                                     "w": 190.0,
+                                     "h": 20.0
+                                    }
+                                   }
+                                  ]
+                                 }
+                                ]
+                               },
+                               {
+                                "id": "n8782",
+                                "role": "generic",
+                                "name": "",
+                                "enabled": true,
+                                "focused": false,
+                                "visible": false,
+                                "bounds": {
+                                 "x": 17.0,
+                                 "y": 1181.0,
+                                 "w": 386.0,
+                                 "h": 422.0
+                                },
+                                "children": [
+                                 {
+                                  "id": "n8784",
+                                  "role": "generic",
+                                  "name": "",
+                                  "enabled": true,
+                                  "focused": false,
+                                  "visible": false,
+                                  "bounds": {
+                                   "x": 17.0,
+                                   "y": 1181.0,
+                                   "w": 386.0,
+                                   "h": 422.0
+                                  },
+                                  "children": [
+                                   {
+                                    "id": "n8786",
+                                    "role": "generic",
+                                    "name": "",
+                                    "enabled": true,
+                                    "focused": false,
+                                    "visible": false,
+                                    "bounds": {
+                                     "x": 53.0,
+                                     "y": 1185.0,
+                                     "w": 330.0,
+                                     "h": 398.0
+                                    },
+                                    "children": [
+                                     {
+                                      "id": "tp-fact-tax_classification",
+                                      "role": "generic",
+                                      "name": "tp-fact-tax_classification",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "visible": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 1185.0,
+                                       "w": 330.0,
+                                       "h": 94.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8790",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1197.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8792",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 1197.0,
+                                           "w": 179.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8794",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 1197.0,
+                                             "w": 179.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8796",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 1197.0,
+                                               "w": 179.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8798",
+                                                "role": "note",
+                                                "name": "Income type",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "visible": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 1197.0,
+                                                 "w": 179.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8802",
+                                              "role": "note",
+                                              "name": "Not set",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 1221.0,
+                                               "w": 179.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         },
+                                         {
+                                          "id": "n8806",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 240.0,
+                                           "y": 1210.0,
+                                           "w": 70.0,
+                                           "h": 20.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8808",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 248.0,
+                                             "y": 1214.0,
+                                             "w": 12.0,
+                                             "h": 12.0
+                                            }
+                                           },
+                                           {
+                                            "id": "n8810",
+                                            "role": "note",
+                                            "name": "Not set",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 264.0,
+                                             "y": 1211.0,
+                                             "w": 38.0,
+                                             "h": 18.0
+                                            }
+                                           }
+                                          ]
+                                         },
+                                         {
+                                          "id": "tp-fact-tax_classification-edit",
+                                          "role": "button",
+                                          "name": "Set",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 318.0,
+                                           "y": 1206.0,
+                                           "w": 65.0,
+                                           "h": 28.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8820",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 329.0,
+                                             "y": 1212.0,
+                                             "w": 16.0,
+                                             "h": 16.0
+                                            }
+                                           },
+                                           {
+                                            "id": "n8816",
+                                            "role": "note",
+                                            "name": "Set",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 351.0,
+                                             "y": 1209.0,
+                                             "w": 21.0,
+                                             "h": 22.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "tp-fact-tax_classification-forms",
+                                        "role": "generic",
+                                        "name": "tp-fact-tax_classification-forms",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1247.0,
+                                         "w": 330.0,
+                                         "h": 20.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8824",
+                                          "role": "note",
+                                          "name": "Read by",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 1248.0,
+                                           "w": 43.0,
+                                           "h": 18.0
+                                          }
+                                         },
+                                         {
+                                          "id": "n8828",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 102.0,
+                                           "y": 1247.0,
+                                           "w": 50.0,
+                                           "h": 20.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8830",
+                                            "role": "note",
+                                            "name": "2551Q",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 110.0,
+                                             "y": 1248.0,
+                                             "w": 34.0,
+                                             "h": 18.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     },
+                                     {
+                                      "id": "tp-fact-income_tax_election",
+                                      "role": "generic",
+                                      "name": "tp-fact-income_tax_election",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "visible": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 1279.0,
+                                       "w": 330.0,
+                                       "h": 158.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8836",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1292.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8838",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 1292.0,
+                                           "w": 330.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8840",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 1292.0,
+                                             "w": 330.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8842",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 1292.0,
+                                               "w": 330.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8844",
+                                                "role": "note",
+                                                "name": "Income-tax rate",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "visible": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 1292.0,
+                                                 "w": 330.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8848",
+                                              "role": "note",
+                                              "name": "Not chosen",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 1316.0,
+                                               "w": 330.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "tp-fact-income_tax_election-forms",
+                                        "role": "generic",
+                                        "name": "tp-fact-income_tax_election-forms",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1342.0,
+                                         "w": 330.0,
+                                         "h": 20.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8854",
+                                          "role": "note",
+                                          "name": "Read by",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 1343.0,
+                                           "w": 43.0,
+                                           "h": 18.0
+                                          }
+                                         },
+                                         {
+                                          "id": "n8858",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 102.0,
+                                           "y": 1342.0,
+                                           "w": 50.0,
+                                           "h": 20.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8860",
+                                            "role": "note",
+                                            "name": "2551Q",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 110.0,
+                                             "y": 1343.0,
+                                             "w": 34.0,
+                                             "h": 18.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "tp-fact-election-why",
+                                        "role": "note",
+                                        "name": "Only a self-employed or mixed-income individual chooses between 8% and graduated rates. Set the income type first.",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1366.0,
+                                         "w": 330.0,
+                                         "h": 59.0
+                                        }
+                                       }
+                                      ]
+                                     },
+                                     {
+                                      "id": "tp-fact-eopt_tier",
+                                      "role": "generic",
+                                      "name": "tp-fact-eopt_tier",
+                                      "enabled": true,
+                                      "focused": false,
+                                      "visible": false,
+                                      "bounds": {
+                                       "x": 53.0,
+                                       "y": 1437.0,
+                                       "w": 330.0,
+                                       "h": 95.0
+                                      },
+                                      "children": [
+                                       {
+                                        "id": "n8870",
+                                        "role": "generic",
+                                        "name": "",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1450.0,
+                                         "w": 330.0,
+                                         "h": 46.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8872",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 1450.0,
+                                           "w": 179.0,
+                                           "h": 46.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8874",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 53.0,
+                                             "y": 1450.0,
+                                             "w": 179.0,
+                                             "h": 46.0
+                                            },
+                                            "children": [
+                                             {
+                                              "id": "n8876",
+                                              "role": "generic",
+                                              "name": "",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 1450.0,
+                                               "w": 179.0,
+                                               "h": 20.0
+                                              },
+                                              "children": [
+                                               {
+                                                "id": "n8878",
+                                                "role": "note",
+                                                "name": "EOPT tier",
+                                                "enabled": true,
+                                                "focused": false,
+                                                "visible": false,
+                                                "bounds": {
+                                                 "x": 53.0,
+                                                 "y": 1450.0,
+                                                 "w": 179.0,
+                                                 "h": 20.0
+                                                }
+                                               }
+                                              ]
+                                             },
+                                             {
+                                              "id": "n8882",
+                                              "role": "note",
+                                              "name": "Not set",
+                                              "enabled": true,
+                                              "focused": false,
+                                              "visible": false,
+                                              "bounds": {
+                                               "x": 53.0,
+                                               "y": 1474.0,
+                                               "w": 179.0,
+                                               "h": 22.0
+                                              }
+                                             }
+                                            ]
+                                           }
+                                          ]
+                                         },
+                                         {
+                                          "id": "n8886",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 240.0,
+                                           "y": 1463.0,
+                                           "w": 70.0,
+                                           "h": 20.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8888",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 248.0,
+                                             "y": 1467.0,
+                                             "w": 12.0,
+                                             "h": 12.0
+                                            }
+                                           },
+                                           {
+                                            "id": "n8890",
+                                            "role": "note",
+                                            "name": "Not set",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 264.0,
+                                             "y": 1464.0,
+                                             "w": 38.0,
+                                             "h": 18.0
+                                            }
+                                           }
+                                          ]
+                                         },
+                                         {
+                                          "id": "tp-fact-eopt_tier-edit",
+                                          "role": "button",
+                                          "name": "Set",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 318.0,
+                                           "y": 1459.0,
+                                           "w": 65.0,
+                                           "h": 28.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8900",
+                                            "role": "generic",
+                                            "name": "",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 329.0,
+                                             "y": 1465.0,
+                                             "w": 16.0,
+                                             "h": 16.0
+                                            }
+                                           },
+                                           {
+                                            "id": "n8896",
+                                            "role": "note",
+                                            "name": "Set",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 351.0,
+                                             "y": 1462.0,
+                                             "w": 21.0,
+                                             "h": 22.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       },
+                                       {
+                                        "id": "tp-fact-eopt_tier-forms",
+                                        "role": "generic",
+                                        "name": "tp-fact-eopt_tier-forms",
+                                        "enabled": true,
+                                        "focused": false,
+                                        "visible": false,
+                                        "bounds": {
+                                         "x": 53.0,
+                                         "y": 1500.0,
+                                         "w": 330.0,
+                                         "h": 20.0
+                                        },
+                                        "children": [
+                                         {
+                                          "id": "n8904",
+                                          "role": "note",
+                                          "name": "Read by",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 53.0,
+                                           "y": 1501.0,
+                                           "w": 43.0,
+                                           "h": 18.0
+                                          }
+                                         },
+                                         {
+                                          "id": "n8908",
+                                          "role": "generic",
+                                          "name": "",
+                                          "enabled": true,
+                                          "focused": false,
+                                          "visible": false,
+                                          "bounds": {
+                                           "x": 102.0,
+                                           "y": 1500.0,
+                                           "w": 50.0,
+                                           "h": 20.0
+                                          },
+                                          "children": [
+                                           {
+                                            "id": "n8910",
+                                            "role": "note",
+                                            "name": "2551Q",
+                                            "enabled": true,
+                                            "focused": false,
+                                            "visible": false,
+                                            "bounds": {
+                                             "x": 110.0,
+                                             "y": 1501.0,
+                                             "w": 34.0,
+                                             "h": 18.0
+                                            }
+                                           }
+                                          ]
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           },
+                           {
+                            "id": "tp-edit-sheet",
+                            "role": "generic",
+                            "name": "tp-edit-sheet",
+                            "enabled": true,
+                            "focused": false,
+                            "visible": false,
+                            "bounds": {
+                             "x": 16.0,
+                             "y": 2393.0,
+                             "w": 388.0,
+                             "h": 0.0
+                            }
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "id": "tab-bar",
+            "role": "generic",
+            "name": "tab-bar",
+            "enabled": true,
+            "focused": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 777.0,
+             "w": 420.0,
+             "h": 57.0
+            },
+            "children": [
+             {
+              "id": "tab-row",
+              "role": "generic",
+              "name": "tab-row",
+              "enabled": true,
+              "focused": false,
+              "bounds": {
+               "x": 0.0,
+               "y": 778.0,
+               "w": 420.0,
+               "h": 56.0
+              },
+              "children": [
+               {
+                "id": "tab-home",
+                "role": "button",
+                "name": "Home",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 0.0,
+                 "y": 778.0,
+                 "w": 105.0,
+                 "h": 56.0
+                },
+                "children": [
+                 {
+                  "id": "n1986",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 45.0,
+                   "y": 788.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 },
+                 {
+                  "id": "n1988",
+                  "role": "note",
+                  "name": "Home",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 37.0,
+                   "y": 806.0,
+                   "w": 32.0,
+                   "h": 18.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "tab-library",
+                "role": "button",
+                "name": "Forms",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 105.0,
+                 "y": 778.0,
+                 "w": 105.0,
+                 "h": 56.0
+                },
+                "children": [
+                 {
+                  "id": "n1994",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 150.0,
+                   "y": 788.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 },
+                 {
+                  "id": "n1996",
+                  "role": "note",
+                  "name": "Forms",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 141.0,
+                   "y": 806.0,
+                   "w": 33.0,
+                   "h": 18.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "tab-filings",
+                "role": "button",
+                "name": "Filings",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 210.0,
+                 "y": 778.0,
+                 "w": 105.0,
+                 "h": 56.0
+                },
+                "children": [
+                 {
+                  "id": "n2002",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 255.0,
+                   "y": 788.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 },
+                 {
+                  "id": "n2004",
+                  "role": "note",
+                  "name": "Filings",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 245.0,
+                   "y": 806.0,
+                   "w": 35.0,
+                   "h": 18.0
+                  }
+                 }
+                ]
+               },
+               {
+                "id": "tab-calendar",
+                "role": "button",
+                "name": "Calendar",
+                "enabled": true,
+                "focused": false,
+                "bounds": {
+                 "x": 315.0,
+                 "y": 778.0,
+                 "w": 105.0,
+                 "h": 56.0
+                },
+                "children": [
+                 {
+                  "id": "n2010",
+                  "role": "generic",
+                  "name": "",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 360.0,
+                   "y": 788.0,
+                   "w": 16.0,
+                   "h": 16.0
+                  }
+                 },
+                 {
+                  "id": "n2012",
+                  "role": "note",
+                  "name": "Calendar",
+                  "enabled": true,
+                  "focused": false,
+                  "bounds": {
+                   "x": 344.0,
+                   "y": 806.0,
+                   "w": 48.0,
+                   "h": 18.0
+                  }
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "id": "sheet-profile",
+            "role": "generic",
+            "name": "sheet-profile",
+            "enabled": true,
+            "focused": false,
+            "visible": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 834.0,
+             "w": 420.0,
+             "h": 0.0
+            }
+           },
+           {
+            "id": "sheet-notifications",
+            "role": "generic",
+            "name": "sheet-notifications",
+            "enabled": true,
+            "focused": false,
+            "visible": false,
+            "bounds": {
+             "x": 0.0,
+             "y": 834.0,
+             "w": 420.0,
+             "h": 0.0
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "toaster",
+      "role": "generic",
+      "name": "toaster",
+      "enabled": true,
+      "focused": false,
+      "bounds": {
+       "x": 0.0,
+       "y": 758.0,
+       "w": 420.0,
+       "h": 76.0
+      },
+      "children": [
+       {
+        "id": "n8",
+        "role": "generic",
+        "name": "",
+        "enabled": true,
+        "focused": false,
+        "bounds": {
+         "x": 16.0,
+         "y": 758.0,
+         "w": 388.0,
+         "h": 0.0
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

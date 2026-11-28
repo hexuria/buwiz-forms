@@ -1,5 +1,7 @@
 driver: gpui-agent-cli 0.5.0 + nsh-gpui-agent b0c1a5f2e0a23d9b37a8c3059fac52c0c9feae0b (app b3bddd4d)
 
+
+> **Environment-suspect (the wrapper pointed at another checkout), not evidence.**
 # pin b0c1a5f2 Linux/Android proof
 
 Evidence only; no source change is committed. The checkout was `b3bddd4d252d0daac05b322f18ce6e45e6c1fa18` with sibling NSH `8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf`. Safety env was `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1`; `--allow-send` was never passed. Text copied here has home prefixes written as `$HOME`.

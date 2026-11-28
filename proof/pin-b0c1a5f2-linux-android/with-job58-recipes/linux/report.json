@@ -1,0 +1,113 @@
+{
+ "suite": "smoke",
+ "target": "linux",
+ "started": "20261128-052946",
+ "out": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-052946",
+ "cli_version": "0.5.0",
+ "app_commit": "b3bddd4d",
+ "platform": "desktop",
+ "os": "linux",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 557,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 10623,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up-linux.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 6299,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year-narrow.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 1977,
+   "note": null,
+   "file": "agent-recipes/e2e/navigate-phone.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1753,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q-phone.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 13621,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-phone.json"
+  },
+  {
+   "name": "sheet-press",
+   "status": "skipped",
+   "ms": 0,
+   "note": "no desktop variant",
+   "file": null
+  },
+  {
+   "name": "delete-row",
+   "status": "pass",
+   "ms": 7518,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.json"
+  },
+  {
+   "name": "queue",
+   "status": "refused",
+   "ms": 0,
+   "note": "presses a send control: run with --allow-send",
+   "file": null
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 8915,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date-phone.json"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 11798,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out-phone.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed but locked-screen never appears",
+   "screenshot": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-052946/11-sign-out/failure.png",
+   "tree": "$HOME/BuwizNsh/evidence/e2e/linux-20261128-052946/11-sign-out/failure-tree.json"
+  }
+ ]
+}
