@@ -5482,6 +5482,192 @@ struct Rule6Insertion {
 /// under the item's row while keeping the amount box level with the item
 /// number and shifting everything below down (shrinking an `elastic_box` band
 /// if trailing space alone is not enough).
+/// How much of `text` fits on one line `room` pt wide at `size` pt, as a byte
+/// length of the consumed prefix, preferring a word boundary: the line is the
+/// prefix trimmed at its end, the rest continues after it. A word wider than
+/// the line breaks at the character; a line that fits nothing consumes 0.
+fn wrap_one_line_at(sheet: &SheetType, letter: Spacing, room: f64, text: &str, size: f64) -> usize {
+    let mut last_fit_char = 0;
+    let mut last_fit_space = None;
+    for (idx, ch) in text.char_indices() {
+        let end = idx + ch.len_utf8();
+        let slice = text[..end].trim_end();
+        if !slice.is_empty() && sheet.width(letter, slice, size) <= room {
+            last_fit_char = end;
+            if ch.is_whitespace() {
+                last_fit_space = Some(idx);
+            }
+        } else if !ch.is_whitespace() {
+            break;
+        }
+    }
+    let split_at = last_fit_space
+        .filter(|&pos| !text[..pos].trim_end().is_empty())
+        .unwrap_or(last_fit_char);
+    if split_at == 0 {
+        return 0;
+    }
+    let mut consumed = split_at.min(text.len());
+    while consumed < text.len() {
+        let Some(ch) = text[consumed..].chars().next() else {
+            break;
+        };
+        if !ch.is_whitespace() {
+            break;
+        }
+        consumed += ch.len_utf8();
+    }
+    consumed
+}
+
+/// Greedy whole-word wrap of `text` at `size` pt over lines of the given widths,
+/// in order (the Rule 6 composition: the cell's own line first, then the band's
+/// wider lines). Every line takes as much as fits before the next begins.
+/// Returns the lines when all of `text` fits inside `widths.len()` lines, or
+/// None when it needs more.
+fn wrap_lines_at(
+    sheet: &SheetType,
+    letter: Spacing,
+    widths: &[f64],
+    text: &str,
+    size: f64,
+) -> Option<Vec<String>> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut rest = text.trim_start();
+    for (i, room) in widths.iter().enumerate() {
+        if rest.is_empty() {
+            return Some(lines);
+        }
+        let consumed = wrap_one_line_at(sheet, letter, *room, rest, size);
+        if consumed == 0 {
+            return None;
+        }
+        lines.push(rest[..consumed].trim_end().to_string());
+        rest = rest[consumed..].trim_start();
+        if i + 1 == widths.len() && !rest.is_empty() {
+            return None;
+        }
+    }
+    if rest.is_empty() {
+        Some(lines)
+    } else {
+        None
+    }
+}
+
+/// The width (pt) of the cell div `cell_id` in the page html, from its style.
+fn cell_div_width(page_html: &str, cell_id: &str) -> Option<f64> {
+    let needle = format!("id=\"{cell_id}\"");
+    let at = page_html.find(&needle)?;
+    let div_start = page_html[..at].rfind("<div")?;
+    let tag_end = page_html[div_start..].find('>')? + div_start + 1;
+    style_pt_prop(&page_html[div_start..tag_end], "width")
+}
+
+/// `tag` without any `font-size` declaration in its inline style.
+fn without_font_size(tag: &str) -> String {
+    let Some(style) = attr(tag, "style") else {
+        return tag.to_string();
+    };
+    if !style.contains("font-size:") {
+        return tag.to_string();
+    }
+    let kept: Vec<&str> = style
+        .split(';')
+        .filter(|decl| !decl.trim_start().starts_with("font-size:"))
+        .collect();
+    replace_attr_value(tag, "style", &kept.join(";"))
+}
+
+/// How a Rule 6 value composes over its own cell and the band below it: the
+/// owner's wrap rule fills the field first, and only what exceeds the field
+/// continues on the inserted band — one type size for the whole composition,
+/// so the cell and its continuation never print in two sizes.
+#[derive(Debug)]
+enum Rule6Composition {
+    /// Everything fits inside the cell itself: no band at all.
+    CellOnly { cell: String, size: f64 },
+    /// The cell takes its first line and the band the rest.
+    Split {
+        cell: String,
+        band: String,
+        band_lines: usize,
+        size: f64,
+        truncated: bool,
+    },
+    /// The cell can take nothing even at the floor size: the legacy band-only path.
+    Legacy,
+}
+
+fn compose_rule6_cell_and_band(
+    sheet: &SheetType,
+    letter: Spacing,
+    cell_room: Option<f64>,
+    band_room: f64,
+    full_val: &str,
+) -> Rule6Composition {
+    let Some(cr) = cell_room else {
+        return Rule6Composition::Legacy;
+    };
+    if cr < 12.0 {
+        return Rule6Composition::Legacy;
+    }
+    // The largest size in [PLAIN_TEXT_MIN_PT, 8.5] at which the whole value wraps
+    // inside the cell's line plus the band's two, at a whole hundredth of a point.
+    let mut hundredths = 850i64;
+    let floor = (PLAIN_TEXT_MIN_PT * 100.0) as i64;
+    while hundredths >= floor {
+        let s = hundredths as f64 / 100.0;
+        if let Some(lines) = wrap_lines_at(sheet, letter, &[cr, band_room, band_room], full_val, s)
+        {
+            if lines.len() <= 1 {
+                return Rule6Composition::CellOnly {
+                    cell: lines.first().cloned().unwrap_or_default(),
+                    size: s,
+                };
+            }
+            return Rule6Composition::Split {
+                cell: lines[0].clone(),
+                band: lines[1..].join("
+"),
+                band_lines: lines.len() - 1,
+                size: s,
+                truncated: false,
+            };
+        }
+        hundredths -= 1;
+    }
+    // Still too long at the floor size: the cell line, one full band line, and
+    // the rest ending with "..." on the last, as the legacy band truncated it.
+    let s = PLAIN_TEXT_MIN_PT;
+    let c1 = wrap_one_line_at(sheet, letter, cr, full_val, s);
+    if c1 == 0 {
+        return Rule6Composition::Legacy;
+    }
+    let cell = full_val[..c1].trim_end().to_string();
+    if cell.is_empty() {
+        return Rule6Composition::Legacy;
+    }
+    let rest1 = full_val[c1..].trim_start();
+    let c2 = wrap_one_line_at(sheet, letter, band_room, rest1, s);
+    let b1 = rest1[..c2.min(rest1.len())].trim_end().to_string();
+    let rest2 = rest1[c2.min(rest1.len())..].trim_start();
+    if b1.is_empty() || rest2.is_empty() {
+        return Rule6Composition::Legacy;
+    }
+    let Some(b2) = truncate_with_ellipsis_mode(sheet, letter, band_room, rest2, s, true) else {
+        return Rule6Composition::Legacy;
+    };
+    Rule6Composition::Split {
+        cell,
+        band: format!("{b1}
+{b2}"),
+        band_lines: 2,
+        size: s,
+        truncated: true,
+    }
+}
+
 fn apply_rule6_specify_bands(
     html: &str,
     fields: &BTreeMap<String, String>,
@@ -5554,6 +5740,43 @@ fn apply_rule6_specify_bands(
 
             let rect_w = rule6_band_width(r6.x0, x1);
             let room = shrunk_room((rect_w - 6.0).max(20.0));
+            let cell_room = cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
+            let composed = compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val);
+            let legacy = matches!(composed, Rule6Composition::Legacy);
+            if !legacy {
+                let (cell_text, cell_size, band) = match composed {
+                    Rule6Composition::CellOnly { cell, size } => (cell, size, None),
+                    Rule6Composition::Split {
+                        cell,
+                        band,
+                        band_lines,
+                        size,
+                        truncated,
+                    } => (cell, size, Some((band, band_lines, truncated))),
+                    Rule6Composition::Legacy => unreachable!(),
+                };
+                let mut rewritten = without_font_size(&clear_rule6_inline_input(&inp_tag));
+                rewritten = set_value(&rewritten, &cell_text, None);
+                rewritten = with_font_size(&rewritten, cell_size);
+                page_html.replace_range(inp_start..inp_end, &rewritten);
+                if let Some((band_display, band_lines, band_truncated)) = band {
+                    insertions.push(Rule6Insertion {
+                        cell_id: r6.cell_id.clone(),
+                        cut_y,
+                        dh: if band_lines >= 2 { 20.0 } else { 14.0 },
+                        x0: r6.x0,
+                        x1,
+                        display: band_display,
+                        full_text: full_val.to_string(),
+                        font_size_pt: cell_size,
+                        two_lines: band_lines >= 2,
+                        truncated: band_truncated,
+                        input_classes,
+                    });
+                }
+                continue;
+            }
+
             let single_size = sheet.fit(letter, room, full_val, 8.5);
             let (dh, display, font_size_pt, two_lines, truncated) =
                 if single_size >= PLAIN_TEXT_MIN_PT {
@@ -11870,6 +12093,114 @@ mod tests {
                 after >= text.len() || text[after..].starts_with(char::is_whitespace)
             });
             assert!(whole, "{word:?} is cut mid-word in {value:?}");
+        }
+    }
+
+    /// The owner's wrap rule: a Rule 6 value fills its own field first, and only
+    /// what exceeds the field continues on the band below — the cell is never
+    /// left empty while the band prints the whole value.
+    #[test]
+    fn a_rule6_value_fills_its_own_cell_before_the_band() {
+        let text = "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG";
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "frm1701:txtPg4IPart7_9Specify".to_string(),
+            text.to_string(),
+        );
+        let html = filled_document("1701-2018", &fields).unwrap();
+        let tags = super::input_tags(&html);
+        let cell = tags
+            .iter()
+            .find(|t| t.tag.contains("name=\"p4c213\"") && !t.tag.contains("data-rule6-of"))
+            .expect("the item 9 cell input")
+            .tag;
+        let cell_value = super::attr(cell, "value").unwrap_or("");
+        assert!(
+            !cell_value.is_empty(),
+            "the field the value belongs to must print its first line: {cell_value:?}"
+        );
+        assert!(
+            text.starts_with(cell_value.trim_end()),
+            "the cell prints the value's own first words: {cell_value:?}"
+        );
+        assert!(
+            !cell_value.trim_end().ends_with(char::is_alphanumeric) || {
+                let end = cell_value.trim_end().len();
+                end >= text.len() || text[end..].starts_with(char::is_whitespace)
+            },
+            "the cell line ends on a whole word: {cell_value:?}"
+        );
+        let band = tags
+            .iter()
+            .find(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
+            .expect("the item 9 band")
+            .tag;
+        let band_value = super::attr(band, "value").unwrap().replace("&#10;", "\n");
+        assert!(
+            !band_value.starts_with("UNIT 1203"),
+            "the band is the continuation, not the whole value again: {band_value:?}"
+        );
+        // Cell and band together hold the value's words in order, without repetition:
+        // every word of the cell comes before every word of the band in the original.
+        let mut flattened = cell_value.trim_end().to_string();
+        for piece in band_value.split('\n') {
+            flattened.push(' ');
+            flattened.push_str(piece.trim_end().trim_end_matches("..."));
+        }
+        let flattened = flattened.split_whitespace().collect::<Vec<_>>().join(" ");
+        let original = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            original.starts_with(&flattened),
+            "cell + band is the value's own text in order:\n{flattened:?}\n{original:?}"
+        );
+    }
+
+    /// A value that fits inside its own field once shrunk never opens a band:
+    /// the owner asks for the new line only when the field is exceeded.
+    #[test]
+    fn a_rule6_value_fitting_its_cell_gets_no_band() {
+        let sheet = SheetType::plain();
+        let letter = sheet.letter;
+        // A short value in a wide cell: fits on the cell line alone.
+        match compose_rule6_cell_and_band(&sheet, letter, Some(200.0), 560.0, "CURVE BUILDING") {
+            Rule6Composition::CellOnly { cell, size } => {
+                assert_eq!(cell, "CURVE BUILDING");
+                assert!(size >= PLAIN_TEXT_MIN_PT);
+            }
+            other => panic!("a value fitting its cell must not open a band: {other:?}"),
+        }
+        // A long value in a narrow cell: the cell takes its first line, the band the rest.
+        let text = "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY";
+        match compose_rule6_cell_and_band(&sheet, letter, Some(80.0), 560.0, text) {
+            Rule6Composition::Split {
+                cell,
+                band,
+                band_lines,
+                truncated,
+                ..
+            } => {
+                assert!(!cell.is_empty(), "the cell takes its first line");
+                assert!(text.starts_with(cell.trim_end()), "{cell:?} is the first words");
+                assert!(!band.contains(cell.trim_end()), "the band is only the rest");
+                assert!(!truncated, "this value fits the composition: {band:?}");
+                assert!(band_lines >= 1);
+            }
+            other => panic!("a long value splits over the cell and the band: {other:?}"),
+        }
+        // A value too long even for cell plus two band lines still ends whole-worded.
+        let long = text.repeat(6);
+        match compose_rule6_cell_and_band(&sheet, letter, Some(80.0), 560.0, &long) {
+            Rule6Composition::Split { band, truncated, .. } => {
+                assert!(truncated, "this much text cannot fit whole");
+                assert!(band.contains("..."), "{band:?}");
+                assert!(!band.contains("GLOB..."), "never a mid-word cut: {band:?}");
+            }
+            other => panic!("the longest values truncate on the last band line: {other:?}"),
+        }
+        // No cell geometry: the legacy band-only path still answers.
+        match compose_rule6_cell_and_band(&sheet, letter, None, 560.0, text) {
+            Rule6Composition::Legacy => {}
+            other => panic!("without the cell width the legacy path composes: {other:?}"),
         }
     }
 
