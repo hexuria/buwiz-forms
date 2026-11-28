@@ -307,6 +307,30 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn("SHA256SUMS-windows-*", files)
         self.assertNotIn("windows-store", files)
 
+    def test_every_platform_audits_its_packages_against_store_gmail(self) -> None:
+        # Every platform's packages are audited against STORE_GMAIL after the detector's positive control. That no
+        # build gets the client without the switch is test_store_gmail.py's
+        # test_no_release_build_gets_the_google_client_without_the_switch, the one place that rule is stated.
+        for name, text, step in (
+            ("release-linux.yml", self.linux_release_workflow, "- name: Check the Linux packages against STORE_GMAIL"),
+            ("release-macos.yml", self.macos_workflow, "- name: Check the macOS archives against STORE_GMAIL"),
+        ):
+            with self.subTest(workflow=name):
+                check = text.split(step, maxsplit=1)[1].split("- name:", maxsplit=1)[0]
+                self.assertIn("expect=--absent", check)
+                self.assertIn("expect=--present", check)
+                self.assertIn('audit_google_client.py "$expect"', check)
+                self.assertLess(check.index("audit_google_client.py --self-test"), check.index('audit_google_client.py "$expect"'))
+        linux = self.linux_release_workflow
+        self.assertLess(
+            linux.index("- name: Build Linux packages"), linux.index("- name: Check the Linux packages against STORE_GMAIL")
+        )
+        macos = self.macos_workflow
+        self.assertLess(
+            macos.index("REQUIRE_NOTARIZATION=1 bash scripts/package_macos_release.sh"),
+            macos.index("- name: Check the macOS archives against STORE_GMAIL"),
+        )
+
     def test_the_store_msix_gets_the_google_client_only_with_store_gmail(self) -> None:
         store = self.job("build-windows-store")
         self.assertIn("uses: ./.github/workflows/release-windows.yml", store)
@@ -315,18 +339,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         # Named secrets, never inherit: no signing certificate, and the client only behind the variable.
         self.assertNotIn("secrets: inherit", store)
         self.assertNotIn("WINDOWS_CERTIFICATE", store)
-        for secret in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
-            self.assertIn(f"{secret}: ${{{{ vars.STORE_GMAIL == '1' && secrets.{secret} || '' }}}}", store)
-        # The direct downloads keep what 0.2.x shipped.
+        # The direct downloads take their secrets whole; their build gates the client on the same switch.
         self.assertIn("secrets: inherit", self.job("build-windows"))
         self.assertNotIn("store:", self.job("build-windows"))
 
         windows = self.windows_job("installers")
-        for secret in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
-            self.assertIn(
-                f"{secret}: ${{{{ inputs.release && (!inputs.store || vars.STORE_GMAIL == '1') && secrets.{secret} || '' }}}}",
-                windows,
-            )
         for secret in ("WINDOWS_CERTIFICATE_PFX", "WINDOWS_CERTIFICATE_PASSWORD"):
             self.assertIn(f"inputs.release && !inputs.store && secrets.{secret}", windows)
         self.assertIn("-MsixOnly:$${{ inputs.store }} -NoMsix:$${{ inputs.release && !inputs.store }}", windows)
@@ -348,10 +365,13 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("name: windows-store", store_upload)
         self.assertIn("SHA256SUMS-windows-store-x64.txt", store_upload)
         self.assertIn("SHA256SUMS-windows-store-x64.txt", self.nsh_windows_package)
-        control = windows.split("- name: Check the audit finds the client in the direct downloads", maxsplit=1)[1]
+        control = windows.split("- name: Check the direct downloads against STORE_GMAIL", maxsplit=1)[1]
         control = control.split("- name:", maxsplit=1)[0]
         self.assertIn("if: ${{ inputs.release && !inputs.store }}", control)
-        self.assertIn("audit_google_client.py --present", control)
+        self.assertIn("GMAIL_BUILT_IN: ${{ inputs.release && vars.STORE_GMAIL == '1' }}", control)
+        self.assertIn("$expect = '--absent'", control)
+        self.assertIn("$expect = '--present'", control)
+        self.assertLess(control.index("audit_google_client.py --self-test"), control.index("audit_google_client.py $expect"))
         self.assertIn("*-windows-x86_64.zip", control)
         has_client = "HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}"
         for step in (control, check):

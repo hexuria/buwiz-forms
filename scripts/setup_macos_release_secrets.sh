@@ -209,7 +209,7 @@ stage "Prerequisites" 2
 say "This wizard configures the five secrets release-macos.yml needs:"
 say "  APPLE_CERTIFICATE_P12, APPLE_CERTIFICATE_PASSWORD,"
 say "  APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER_ID"
-say "plus the optional GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET."
+say "plus GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET, used only when STORE_GMAIL is 1."
 say ""
 
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
@@ -346,15 +346,15 @@ note "keep $APP_STORE_P8_PATH — Apple will not let you download it again"
 stage "Google OAuth (optional)" 4
 
 say "release-macos.yml bakes GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET into the"
-say "binary via option_env!. Missing values only downgrade the build to a"
-say "warning — it still ships."
+say "binary via option_env! only when the repository variable STORE_GMAIL is 1."
+say "1.0.0 ships no Google client: leave these unset unless you turn that on."
 if confirm "Set the Google OAuth secrets now?"; then
   ask GOOGLE_CLIENT_ID "Google client ID:"
   ask_secret GOOGLE_CLIENT_SECRET "Google client secret:"
   set_secret GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
   set_secret GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET"
 else
-  SKIPPED+=("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (build warns without them)")
+  SKIPPED+=("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (needed only with STORE_GMAIL=1)")
 fi
 
 finish

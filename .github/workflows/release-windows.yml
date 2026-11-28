@@ -139,10 +139,10 @@ jobs:
         env:
           # Setup and updater ZIP must run without an installed VC Redistributable.
           CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-feature=+crt-static"
-          # bir-core compiles the Google OAuth client in (option_env!). Direct downloads keep it on release runs, as
-          # 0.2.x shipped; the Store package gets it only when the repository variable STORE_GMAIL is 1.
-          GOOGLE_CLIENT_ID: ${{ inputs.release && (!inputs.store || vars.STORE_GMAIL == '1') && secrets.GOOGLE_CLIENT_ID || '' }}
-          GOOGLE_CLIENT_SECRET: ${{ inputs.release && (!inputs.store || vars.STORE_GMAIL == '1') && secrets.GOOGLE_CLIENT_SECRET || '' }}
+          # bir-core compiles the Google OAuth client in (option_env!). No build gets it unless this is a release and
+          # the repository variable STORE_GMAIL is 1: 1.0.0 ships no Google client (owner, 2026-11-28).
+          GOOGLE_CLIENT_ID: ${{ inputs.release && vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
+          GOOGLE_CLIENT_SECRET: ${{ inputs.release && vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
         run: |
           $env:Path = "$HOME\BuwizNsh\tools\bin;$env:Path"
           nsh package --target windows --out "$env:RUNNER_TEMP/nsh-windows"
@@ -155,22 +155,29 @@ jobs:
         run: |
           ./scripts/package_nsh_windows.ps1 -PackageRoot "$env:RUNNER_TEMP/nsh-windows" -OutDir target/release-artifacts -SmokeMsix:$${{ !inputs.release }} -MsixOnly:$${{ inputs.store }} -NoMsix:$${{ inputs.release && !inputs.store }}
 
-      - name: Check the audit finds the client in the direct downloads
-        # The real-package positive control for the Store check below: on a release the direct build is given the
-        # client, so the audit must find both the id and the secret in the updater ZIP's files. It proves the bytes
-        # the audit reads are where the client lands.
+      - name: Check the direct downloads against STORE_GMAIL
+        # The detector's positive control first (it finds a planted id and secret). Then the updater ZIP, built from
+        # the same binary as Setup.exe and the .msi: with the switch off it holds neither; with STORE_GMAIL=1 (the
+        # build above was given both) it holds both.
         if: ${{ inputs.release && !inputs.store }}
         env:
+          GMAIL_BUILT_IN: ${{ inputs.release && vars.STORE_GMAIL == '1' }}
           HAS_CLIENT: ${{ secrets.GOOGLE_CLIENT_ID != '' && secrets.GOOGLE_CLIENT_SECRET != '' }}
         # pwsh fails a step only on its last native exit code, so each audit's is checked where it runs.
         run: |
-          if ($env:HAS_CLIENT -ne 'true') {
-            Write-Output '::error title=Google OAuth client secrets are empty::GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty, so the direct downloads were built without Gmail Connect and the audit has nothing to find. Set both repository secrets.'
-            exit 1
-          }
+          python scripts/audit_google_client.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $zip = @(Get-ChildItem target/release-artifacts -Filter *-windows-x86_64.zip -File)
           if ($zip.Count -ne 1) { throw "Expected one updater ZIP, found $($zip.Count)" }
-          python scripts/audit_google_client.py --present $zip[0].FullName
+          $expect = '--absent'
+          if ($env:GMAIL_BUILT_IN -eq 'true') {
+            if ($env:HAS_CLIENT -ne 'true') {
+              Write-Output '::error title=Google OAuth client secrets are empty::STORE_GMAIL is 1 but GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty, so the direct downloads were built without Gmail Connect. Set both repository secrets, or unset STORE_GMAIL.'
+              exit 1
+            }
+            $expect = '--present'
+          }
+          python scripts/audit_google_client.py $expect $zip[0].FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check the Store package against STORE_GMAIL

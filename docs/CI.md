@@ -42,9 +42,16 @@ The quick checks are:
 - `NSH app agent compile check (Linux)`: on a pull request that moves `nsh/Cargo.toml`, `nsh/Cargo.lock` or an
   agent-only app file, compiles the app and Linux plug with `--features agent --no-run`; skipped otherwise.
   It compiles the Linux arm only; the other platforms stay covered by the complete suite.
-- `legacy-guard`.
+- `legacy-guard`; for a docs-only change the same two scans run inside `changes`, so the separate job plans nothing.
+  A file moved from code into `docs/` is not a docs-only change: the plan reads both its old and its new path.
+  The files that instruct agents (`AGENTS.md`, `CLAUDE.md`, `nsh/AGENTS.md`) are documentation to the planner and
+  no test reads them: what guards them is review, never CI and never an automatic merge. A change under `crew/`
+  is planned as app code and runs the quick checks.
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.
+
+A pull request whose files are all plain docs costs two small Linux jobs (`changes`, then `ci-ok`) and one dependency wait.
+The legacy scans read Markdown and docs paths too, so `changes` runs them before `ci-ok`; `nsh.yml` starts no job.
 
 Every Linux `apt-get update` goes through `scripts/ci/apt_update.sh`: it sets aside the third-party source lists
 the runner image ships and we do not use, then retries Ubuntu's own sources, so their outage cannot fail the job.
@@ -262,9 +269,15 @@ everything in its lane. For example `assets/linux/` (the desktop-entry test read
 start on a pull request just because the range is unknown. A `test/**` push compares against `main`, so it tests
 the pull request's whole change. A `ci:suite*` label event compares the same range and uses the same choosing code.
 
+Most of `docs/` is read by people only. The exceptions are inputs to Python scripts or their tests:
+`docs/platforms/devin-blueprint.yml`, `docs/CI.md`, `docs/platforms/devin-environment.md`, and the local findings files under
+`docs/form-findings/` (`scripts/check_fix_order_goal.py` reads them). `scripts/ci_plan.py` holds the one list;
+`scripts/tests/test_ci_plan.py` scans the scripts and tests so another docs input cannot be added without joining it.
+
 | Changed files | Pull request | `test/**` push |
 | --- | --- | --- |
-| Docs: `docs/`, top-level `*.md`, `crates/<crate>/docs/`, `.github/*.md`, Markdown under `nsh/`, `assets/brand/`, `assets/badges/`, `assets/readme/` (the README's pictures) | `legacy-guard` only | nothing |
+| Docs, except the script inputs above: `docs/`, top-level `*.md`, `crates/<crate>/docs/`, `.github/*.md`, Markdown under `nsh/`, `assets/brand/`, `assets/badges/`, `assets/readme/` (the README's pictures) | `changes` (including the two legacy scans), then `ci-ok` only | nothing |
+| Script-input docs: `docs/platforms/devin-blueprint.yml`, `docs/CI.md`, `docs/platforms/devin-environment.md`, `docs/form-findings/` | Python script tests | nothing |
 | Screen tests only: `nsh/**/*.test.ts`, `nsh/**/*.test.tsx` | NSH type check | screen tests |
 | Other `nsh/` files, except `nsh/src/` and `nsh/Cargo.*` | NSH type check | app build, app Rust tests, screen tests |
 | `nsh/src/`, `nsh/Cargo.toml`, `nsh/Cargo.lock` | quick checks, NSH type check | workspace tests, app build, app Rust tests, screen tests |

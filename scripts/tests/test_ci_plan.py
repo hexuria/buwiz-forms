@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import os
@@ -28,6 +29,81 @@ def job(workflow: str, name: str) -> str:
     if match is None:
         raise AssertionError(f"missing job {name}")
     return match.group(0)
+
+
+def static_path_strings(node: ast.AST, env: dict[str, set[str]]) -> set[str]:
+    """The literal path pieces in a simple Path expression, with loop variables and constants resolved."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    if isinstance(node, ast.Name):
+        return set(env.get(node.id, set()))
+    if isinstance(node, ast.Attribute):
+        return static_path_strings(node.value, env)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = static_path_strings(node.left, env)
+        right = static_path_strings(node.right, env)
+        if left and right:
+            return {f"{head.rstrip('/')}/{tail.lstrip('/')}" for head in left for tail in right}
+        return left or right
+    if isinstance(node, (ast.Tuple, ast.List)):
+        return {value for item in node.elts for value in static_path_strings(item, env)}
+    return set()
+
+
+class DocsReadVisitor(ast.NodeVisitor):
+    """Find straightforward reads of docs/ paths in a Python source file."""
+
+    def __init__(self) -> None:
+        self.env: dict[str, set[str]] = {}
+        self.reads: set[str] = set()
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        values = static_path_strings(node.value, self.env)
+        if values:
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    self.env[target.id] = values
+        self.generic_visit(node)
+
+    def visit_For(self, node: ast.For) -> None:
+        self.visit(node.iter)
+        values = static_path_strings(node.iter, self.env)
+        saved = dict(self.env)
+        if isinstance(node.target, ast.Name) and values:
+            self.env[node.target.id] = values
+        for child in node.body:
+            self.visit(child)
+        self.env = saved
+        for child in node.orelse:
+            self.visit(child)
+
+    @staticmethod
+    def write_mode(node: ast.Call) -> bool:
+        mode = ""
+        if len(node.args) > 1 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
+            mode = node.args[1].value
+        for keyword in node.keywords:
+            if keyword.arg == "mode" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                mode = keyword.value.value
+        return mode[:1] in {"w", "x", "a"}
+
+    def visit_Call(self, node: ast.Call) -> None:
+        reading = isinstance(node.func, ast.Attribute) and node.func.attr in {"read_text", "read_bytes", "open"}
+        reading = reading or isinstance(node.func, ast.Name) and node.func.id == "open"
+        if reading and not self.write_mode(node):
+            values = set()
+            if isinstance(node.func, ast.Attribute):
+                values |= static_path_strings(node.func.value, self.env)
+            for argument in node.args:
+                values |= static_path_strings(argument, self.env)
+            self.reads.update(value for value in values if value.startswith("docs/"))
+        self.generic_visit(node)
+
+
+def docs_reads(path: Path) -> set[str]:
+    visitor = DocsReadVisitor()
+    visitor.visit(ast.parse(path.read_text(encoding="utf-8")))
+    return visitor.reads
 
 
 def pr(*changed: str, **kw):
@@ -87,6 +163,40 @@ class AgentGatePolicyTests(unittest.TestCase):
         self.assertEqual(missing, [])
 
 
+class ScriptDocsPolicyTests(unittest.TestCase):
+    def test_script_tests_read_exactly_the_docs_files_on_the_planner_list(self):
+        found = set()
+        for path in sorted((ROOT / "scripts/tests").glob("test_*.py")):
+            found.update(docs_reads(path))
+        expected = {path for path in ci_plan.SCRIPT_INPUT_DOCS if not path.endswith("/")}
+        self.assertEqual(found, expected)
+
+    def test_every_docs_path_a_script_reads_is_on_the_same_planner_list(self):
+        uncovered = {}
+        for path in sorted((ROOT / "scripts").rglob("*.py")):
+            if "tests" in path.relative_to(ROOT / "scripts").parts:
+                continue
+            reads = {read for read in docs_reads(path) if not ci_plan.script_input_doc(read)}
+            if reads:
+                uncovered[path.relative_to(ROOT).as_posix()] = sorted(reads)
+        self.assertEqual(uncovered, {})
+
+    def test_docs_files_scripts_read_are_script_inputs_not_plain_docs(self):
+        examples = [item if not item.endswith("/") else item + "1601C/findings.json" for item in ci_plan.SCRIPT_INPUT_DOCS]
+        self.assertGreater(len(examples), 0)
+        for path in examples:
+            with self.subTest(path=path):
+                self.assertEqual(ci_plan.classify(path), "scripts")
+                plan = pr(path)
+                self.assertEqual(plan["lane"], "quick")
+                self.assertEqual(plan["check_systems"], [])
+                self.assertFalse(plan["nsh_check"])
+                self.assertTrue(plan["scripts"])
+                self.assertFalse(plan["docs_only"])
+                self.assertFalse(plan["legacy_in_changes"])
+                self.assertTrue(plan["legacy_guard"])
+
+
 class QuickLaneTests(unittest.TestCase):
     def assert_quick(self, plan, *, check: bool, nsh_check: bool, scripts: bool = False, validation: bool = False,
                      nsh_agent_check: bool = False):
@@ -101,9 +211,22 @@ class QuickLaneTests(unittest.TestCase):
                 self.assertEqual(plan[name], value, name)
 
     def test_docs_only_runs_only_the_cheapest_jobs(self):
-        self.assert_quick(pr("docs/plans/x.md", "README.md", "CONTRIBUTING.md", "docs/agent.md", "nsh/AGENTS.md",
-                             "assets/brand/buwiz-forms.svg", "assets/badges/forms.svg", ".github/PULL_REQUEST.md"),
-                          check=False, nsh_check=False)
+        plan = pr("docs/plans/x.md", "README.md", "CONTRIBUTING.md", "docs/agent.md", "nsh/AGENTS.md",
+                  "assets/brand/buwiz-forms.svg", "assets/badges/forms.svg", ".github/PULL_REQUEST.md")
+        self.assert_quick(plan, check=False, nsh_check=False)
+        self.assertTrue(plan["docs_only"])
+        self.assertTrue(plan["legacy_in_changes"])
+        self.assertFalse(plan["legacy_guard"])
+        out = ci_plan.outputs(plan)
+        self.assertEqual((out["docs_only"], out["legacy_in_changes"], out["legacy_guard"]), ("true", "true", "false"))
+
+    def test_docs_plus_one_non_docs_file_plans_as_today(self):
+        plan = pr("docs/x.md", "crates/bir-core/src/lib.rs")
+        self.assert_quick(plan, check=True, nsh_check=True)
+        self.assertFalse(plan["docs_only"])
+        self.assertFalse(plan["legacy_in_changes"])
+        self.assertTrue(plan["legacy_guard"])
+        self.assertEqual(ci_plan.outputs(plan)["legacy_guard"], "true")
 
     def test_the_readme_and_its_pictures_are_docs(self):
         # #494: README.md with assets/readme/showcase.png ran every quick check as app code.
@@ -199,7 +322,8 @@ class ClosedAndDraftTests(unittest.TestCase):
         self.assertEqual(plan["lane"], "none")
         out = ci_plan.outputs(plan)
         for name in ("check", "nsh_check", "nsh_agent_check", "scripts", "installer", "validation", "nsh_macos", "nsh_linux",
-                     "nsh_windows", "screens", "build", "nsh_rust", "core_plain", "linux_packages"):
+                     "nsh_windows", "screens", "build", "nsh_rust", "core_plain", "linux_packages", "docs_only",
+                     "legacy_in_changes", "legacy_guard"):
             self.assertEqual(out[name], "false", name)
         self.assertEqual(json.loads(out["check_matrix"]), {"include": []})
         self.assertEqual(json.loads(out["validation_matrix"]), [])
@@ -378,6 +502,11 @@ class TestLaneTests(unittest.TestCase):
         self.assertEqual(plan["check_systems"], [])
         self.assertEqual(plan["nsh_systems"], [])
         self.assertFalse(plan["installer"])
+        self.assertFalse(plan["legacy_in_changes"])
+        self.assertFalse(plan["legacy_guard"])
+
+    def test_a_manual_run_on_a_test_branch_keeps_the_legacy_guard_off(self):
+        self.assertFalse(manual(ref="refs/heads/test/linux/x")["legacy_guard"])
 
     def test_unknown_range_runs_every_suite_on_the_chosen_systems(self):
         plan = ci_plan.decide(event="push", ref="refs/heads/test/windows/x", changed=None)
@@ -487,11 +616,34 @@ class OutputTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("::error::unknown suite", result.stdout)
 
+    @unittest.skipIf(shutil.which("git") is None, "needs git")
+    def test_a_code_file_moved_into_docs_is_not_a_docs_only_change(self):
+        # git's rename detection prints only the NEW path, so a script moved to docs/ would look like one docs file
+        # while a code input is deleted. The planner must see both paths.
+        with tempfile.TemporaryDirectory() as temp:
+            def git(*args):
+                subprocess.run(["git", "-C", temp, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                                "-c", "commit.gpgsign=false", *args], check=True, capture_output=True)
+            git("init", "-q", "-b", "main")
+            (Path(temp) / "scripts").mkdir()
+            (Path(temp) / "scripts/foo.py").write_text("print('a tool that a test relies on')\n" * 5)
+            git("add", "."); git("commit", "-q", "-m", "base")
+            (Path(temp) / "docs/old").mkdir(parents=True)
+            git("mv", "scripts/foo.py", "docs/old/foo.py"); git("commit", "-q", "-m", "move")
+            here = os.getcwd()
+            os.chdir(temp)
+            try:
+                changed = ci_plan.changed_files(dict(EVENT="pull_request", PR_BASE="HEAD~1", PR_HEAD="HEAD"))
+            finally:
+                os.chdir(here)
+            self.assertEqual(sorted(changed), ["docs/old/foo.py", "scripts/foo.py"])
+            self.assertFalse(ci_plan.what_changed(changed)["docs_only"])
+
     @unittest.skipIf(os.name == "nt", "the git stub is a shell script; the plan runs on Linux")
     def test_changed_files_reads_the_right_range(self):
         with tempfile.TemporaryDirectory() as temp:
             stub = Path(temp) / "git"
-            stub.write_text('#!/bin/sh\necho "$3" >> "$GIT_LOG"\necho a.rs\n')
+            stub.write_text('#!/bin/sh\nfor last; do :; done\necho "$last" >> "$GIT_LOG"\necho a.rs\n')
             stub.chmod(0o755)
             log = Path(temp) / "log"
             saved = dict(os.environ)
@@ -553,13 +705,27 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('    types: [ labeled, synchronize ]\n', NSH)
         self.assertNotIn("paths:", NSH)
 
-    def test_nsh_synchronize_is_a_cancel_only_run_with_no_jobs(self):
+    def test_nsh_synchronize_and_non_suite_label_runs_have_no_jobs(self):
         plan = job(NSH, "plan")
-        expected_if = f"    if: ${{{{ {NOT_CLOSED_OR_DRAFT} && github.event.action != 'synchronize' }}}}\n"
+        suite_names = " || ".join(f"github.event.label.name == '{name}'" for name in ci_plan.SUITE_LABEL_SYSTEMS)
+        expected_if = (f"    if: ${{{{ {NOT_CLOSED_OR_DRAFT} && github.event.action != 'synchronize' "
+                       f"&& (github.event.action != 'labeled' || {suite_names}) }}}}\n")
         self.assertIn(expected_if, plan)
         self.assertIn("          PR_SYNC_LANE: none\n", plan)
         for name in ("nsh-macos", "nsh-linux", "nsh-windows", "core-plain-test", "linux-packages", "tests-ok"):
             self.assertIn("needs.plan.outputs", job(NSH, name), name)
+
+    def test_docs_only_legacy_scans_run_inside_changes_and_the_legacy_job_plans_nothing(self):
+        changes = job(CI, "changes")
+        for output in ("docs_only", "legacy_in_changes", "legacy_guard"):
+            self.assertIn(f"      {output}: ${{{{ steps.decide.outputs.{output} }}}}\n", changes)
+        for script in ("check_no_legacy_desktop.py", "check_no_bir_shell.py"):
+            self.assertIn(f"      if: steps.decide.outputs.legacy_in_changes == 'true'\n"
+                          f"      run: python3 -I scripts/{script}\n", changes)
+        guard = job(CI, "legacy-guard")
+        self.assertIn("needs.changes.outputs.legacy_guard == 'true'", guard)
+        for gate_name in ("ci-ok", "tests-ok"):
+            self.assertIn("WANT_LEGACY_GUARD: ${{ needs.changes.outputs.legacy_guard }}", job(CI, gate_name))
 
     def test_non_suite_labels_never_create_checks_named_ci_ok_or_tests_ok(self):
         gate = job(CI, "ci-ok")
@@ -746,6 +912,12 @@ class WorkflowTests(unittest.TestCase):
         self.assertRegex(report, r"(?m)^    needs: \[ ci-ok \]\s*$")
         self.assertIn("needs.ci-ok.result == 'failure'", report)
         self.assertIn("github.ref == 'refs/heads/main'", report)
+
+    def test_the_ci_docs_state_the_docs_only_cost_and_the_script_input_docs(self):
+        docs = (ROOT / "docs/CI.md").read_text(encoding="utf-8")
+        self.assertIn("two small Linux jobs (`changes`, then `ci-ok`) and one dependency wait", docs)
+        for path in ci_plan.SCRIPT_INPUT_DOCS:
+            self.assertIn(path.rstrip("/"), docs)
 
 
 @unittest.skipIf(os.name == "nt" or shutil.which("bash") is None, "the shard script runs on macOS and Linux")
