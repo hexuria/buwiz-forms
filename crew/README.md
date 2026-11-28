@@ -20,7 +20,7 @@ Where these files say `python3`, use `python` on Windows.
 
 ## Three tiers
 
-Pick the tier that matches what you have: `crew doctor` reports which tier this checkout can run. Your own settings go in `crew.local.ini` (git-ignored; `crew/local.example.ini` lists the keys). Two environment variables override it for one shell: `CREW_STATE_DIR` (the state folder, over `[crew] state_dir`) and `CREW_ENGINE` (over `[crew] engine`). Whether builds may run on the conductor's computer is not a setting: tell the conductor when you start it.
+Pick the tier that matches what you have: `crew doctor` reports which tier this checkout can run. Your own settings go in `crew.local.ini` (git-ignored; `crew/local.example.ini` lists the keys). The launcher looks for that file in this worktree first, then the MAIN worktree of the repository; a relative `state_dir` or engine config path is resolved beside the file it used. `crew doctor` prints the path it used, or every place it looked when none is found. Two environment variables override it for one shell: `CREW_STATE_DIR` (the state folder, over `[crew] state_dir`) and `CREW_ENGINE` (over `[crew] engine`). Whether builds may run on the conductor's computer is not a setting: tell the conductor when you start it.
 
 | Tier | What you have | What it can prove | What it cannot prove |
 | --- | --- | --- | --- |
