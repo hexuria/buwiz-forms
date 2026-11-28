@@ -252,6 +252,10 @@ if ($NoImpeccable) {
     }
 }
 
+Write-Step "Installing git commit-message hooks"
+python (Join-Path $PSScriptRoot 'install_git_hooks.py') (Split-Path $PSScriptRoot -Parent)
+if ($LASTEXITCODE -ne 0) { Exit-Native "git hook install failed" }
+
 Write-Step @"
 Done. Open a NEW PowerShell window, then:  cd <repo> ; just run
 Agent control plane: build --features agent, set GPUI_AGENT=1, drive with gpui-agent.
