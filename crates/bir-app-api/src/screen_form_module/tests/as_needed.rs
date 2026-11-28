@@ -3906,3 +3906,83 @@ fn v2018_1601fq_legacy_dormant_schedule_1_is_cleared_on_open_and_said_once() {
     );
     assert_eq!(open("1601FQ", 1)["notes"], json!([]));
 }
+
+#[test]
+fn v2018_1601fq_imported_rows_cleared_when_item_4_unanswered_then_no_are_said_once() {
+    setup();
+    let withheld = fill(
+        "1601FQ",
+        &open("1601FQ", 1)["draft"],
+        json!({"frm1601FQ:TaxWithheld_1": "true"}),
+    );
+    let yes = fill(
+        "1601FQ",
+        &withheld["draft"],
+        json!({"frm1601FQ:SpecialTax_1": "true"}),
+    );
+    let typed = fill(
+        "1601FQ",
+        &yes["draft"],
+        json!({"txtAmtIncomePay0": "42", "txtRate0": "10"}),
+    );
+    assert_eq!(typed["rejected"], json!({}));
+    let saved = save("1601FQ", &typed["draft"]);
+    let source_id = stored_id(&saved);
+
+    // An import can bring rows Item 4's unanswered page would not let the
+    // filer type. Make the stored row that shape, then carry it through the
+    // archive path rather than opening the local row in place.
+    let mut imported: Value = serde_json::from_str(&raw_row(source_id).1).unwrap();
+    imported["any_tax_withheld"] = Value::Null;
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[
+            &serde_json::to_string(&imported).unwrap(),
+            &source_id.to_string(),
+        ],
+    );
+    let folder = tempfile::tempdir().unwrap();
+    let archive = folder.path().join("profile.zip");
+    with_database(|db| {
+        bir_core::export::export_profile_data(db, TIN, &archive, None)
+            .map_err(|error| host_error(error.to_string()))
+    })
+    .unwrap();
+    setup();
+    with_database(|db| {
+        bir_core::import::import_profile_data(db, &archive)
+            .map_err(|error| host_error(error.to_string()))
+    })
+    .unwrap();
+
+    let opened = open("1601FQ", 1);
+    assert_eq!(opened["draft"]["any_tax_withheld"], Value::Null);
+    assert_eq!(opened["draft"]["schedule1"][0]["income_payment"], 42.0);
+    assert_eq!(opened["notes"], json!([]), "{}", opened["notes"]);
+    let row_id = opened["draft"]["schedule1"][0]["instance_id"]
+        .as_str()
+        .expect("stable row id")
+        .to_string();
+    let id = opened["draft"]["id"].as_i64().expect("imported draft id");
+
+    let closed = fill(
+        "1601FQ",
+        &opened["draft"],
+        json!({"frm1601FQ:TaxWithheld_2": "true", "frm1601FQ:TaxWithheld_1": "false"}),
+    );
+    assert_eq!(closed["draft"]["any_tax_withheld"], false);
+    assert_eq!(
+        closed["relock_notes"]["txtAmtIncomePay0"],
+        "Schedule 1 row 1 was cleared: changing item 4 clears all computation fields."
+    );
+    save("1601FQ", &closed["draft"]);
+    let gate = format!("1601fq_schedule1:{row_id}");
+    assert_eq!(
+        raw_count(&format!(
+            "SELECT count(*) FROM settings WHERE key LIKE 'notice_seen:{gate}:{id}:%'"
+        )),
+        1,
+        "the imported rows' one clearing notice is recorded"
+    );
+    assert_eq!(open("1601FQ", 1)["notes"], json!([]));
+}

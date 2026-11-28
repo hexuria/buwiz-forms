@@ -1794,11 +1794,12 @@ pub mod schedule1_1601fq {
         pub event_text: String,
     }
 
-    /// Every typed Schedule 1 row a closing Item 13 gate or an Item 4 Yes→No
-    /// recompute cleared, keyed by stable id rather than transient vector index.
+    /// Every typed Schedule 1 row a closing Item 13 gate or an Item 4
+    /// unanswered-or-Yes→No recompute cleared, keyed by stable id rather than
+    /// transient vector index.
     pub fn row_clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<RowClearance> {
         let item4_clearing =
-            before["any_tax_withheld"] == json!(true) && after["any_tax_withheld"] == json!(false);
+            before["any_tax_withheld"] != json!(false) && after["any_tax_withheld"] == json!(false);
         if kind.form_code() != "1601FQ" || (!item4_clearing && lock_reason(after).is_none()) {
             return Vec::new();
         }
