@@ -144,6 +144,13 @@ test("the inbox check never says confirmed without having looked, and a return p
   );
   expect(checkText({ ok: true, still_pending: false, looked: true, error: null })).toBe("Checked. Everything submitted is confirmed.");
   expect(checkText({ ok: true, still_pending: true, looked: true, error: null })).toBe("Checked. A submitted return is still waiting for its confirmation.");
+  // #508 review: an older return the search did not match is not called confirmed.
+  expect(
+    checkText({ ok: true, still_pending: false, looked: true, error: null, state: { past_window: true, window_days: 30 } }),
+  ).toBe("Checked. No BIR email was found for a return sent more than 30 days ago: it stays Submitted.");
+  expect(
+    checkText({ ok: true, still_pending: false, looked: true, error: null, state: { past_window: false, window_days: 30 } }),
+  ).toBe("Checked. Everything submitted is confirmed.");
   expect(checkText({ ok: false, still_pending: true, looked: true, error: "IMAP authentication failed" })).toBe("IMAP authentication failed");
 
   const on = { tracking_enabled: true, window_days: 30 };

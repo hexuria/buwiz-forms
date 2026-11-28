@@ -353,10 +353,21 @@ export function hiddenFactsText(hidden: number): string | null {
 }
 
 /** The result of a "check now", in words. It says "confirmed" only after the inbox was really searched (`looked`). */
-export function checkText(r: { ok: boolean; still_pending: boolean; looked: boolean; error: string | null }): string {
+export function checkText(r: {
+  ok: boolean;
+  still_pending: boolean;
+  looked: boolean;
+  error: string | null;
+  state?: Pick<InboxState, "past_window" | "window_days">;
+}): string {
   if (!r.ok) return r.error || "The check failed.";
   if (!r.looked) return "Every return sent is confirmed or was a test send, so the inbox was not searched.";
-  return r.still_pending ? "Checked. A submitted return is still waiting for its confirmation." : "Checked. Everything submitted is confirmed.";
+  if (r.still_pending) return "Checked. A submitted return is still waiting for its confirmation.";
+  // still_pending counts only the automatic window: a return sent earlier and still unmatched is never called confirmed.
+  if (r.state?.past_window) {
+    return `Checked. No BIR email was found for a return sent more than ${r.state.window_days} days ago: it stays Submitted.`;
+  }
+  return "Checked. Everything submitted is confirmed.";
 }
 
 /** The tracking line at the foot of the inbox section. */
