@@ -373,6 +373,9 @@ impl Form1707Draft {
         if !self.is_amended {
             self.tax_paid_previous = 0.0;
         }
+        if self.transaction_type != Some(Form1707TransactionType::Others) {
+            self.transaction_description.clear();
+        }
         let installment = self.is_installment();
         if installment {
             self.shares.clear();
@@ -1641,6 +1644,12 @@ mod tests {
             .queue(crate::filing_queue::QueueAuthSource::Gui)
             .unwrap();
         assert!(draft.revalidate_queued_before_submission().is_ok());
+        draft.transaction_description = "LEGACY DETAIL".to_string();
+        assert!(
+            draft.revalidate_queued_before_submission().is_ok(),
+            "queue revalidation recomputes legacy gated detail before validating"
+        );
+        assert!(draft.transaction_description.is_empty());
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
