@@ -1209,24 +1209,18 @@ test("note in a row drawer: Queue asks the schedule to open the cell's row drawe
   }
 });
 
-test("number note [L2]: a percent the host answers as another number shows as stored, with a note naming both (1601FQ Schedule 1's rate before the tax-relief answer)", async () => {
-  // The host answers every Schedule 1 row blank while the tax-relief question is unanswered: the box shows the return's 0.00,
-  // and a percent box says so like an amount box does (before: only money boxes had the sentence).
-  const rate = "txtRate0";
+test("1601FQ Schedule 1 percent and amount boxes are shut before the tax-relief answer", async () => {
+  // Schedule 1 applies only when item 13 is Yes: a nonblank write is refused with the gate's sentence instead of being stored as 0.
+  const locked = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
   const s = await opened(at("1601FQ", 2025, 1));
-  s.focus(rate);
-  s.edit(rate, "42");
-  s.blur(rate);
-  await s.idle();
-  expect(s.shownOf(rate)).toBe("0.00");
-  expect(s.boxMessageOf(rate) ?? "").toContain("you typed 42; the return holds 0.00.");
-  // The amount beside it had its sentence already; it still does.
-  const income = "txtAmtIncomePay0";
-  s.focus(income);
-  s.edit(income, "1000");
-  s.blur(income);
-  await s.idle();
-  expect(s.boxMessageOf(income) ?? "").toContain("you typed 1,000.00; the return holds 0.00.");
+  for (const [key, value] of [["txtRate0", "42"], ["txtAmtIncomePay0", "1000"]]) {
+    s.focus(key);
+    s.edit(key, value);
+    s.blur(key);
+    await s.idle();
+    expect(s.shownOf(key)).toBe("0.00");
+    expect(s.boxMessageOf(key)).toBe(locked);
+  }
   s.dispose();
 });
 

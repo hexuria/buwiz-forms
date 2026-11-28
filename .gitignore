@@ -108,16 +108,33 @@ node_modules/
 .impl/
 .formfields/
 
-# Agent configuration and internal research — stowed, not published.
+# Private agent configuration and internal research: stowed, not published.
 # These stay on disk so local tooling keeps working; they are tracked in the
 # stow repository instead. Build-critical files formerly under docs/ and
 # .codex/ now live in schemas/validation-rules/, scripts/reference/ and
-# rules/agent-boundaries/ — see .stow-README.md.
-/.claude/
+# rules/agent-boundaries/ (see .stow-README.md).
+#
+# Published on purpose: the root AGENTS.md and CLAUDE.md, the crew's skill and
+# its generated agent files (.claude/agents, .claude/skills, .devin/agents),
+# and everything under crew/. `crew lint` keeps private details out of them.
+# A person's own additions go in AGENTS.local.md / CLAUDE.local.md (both agent
+# CLIs read those), the crew's live state in .crew/, their settings in
+# crew.local.ini: none of these is ever committed here.
+/.claude/*
+!/.claude/agents/
+/.claude/agents/*
+!/.claude/agents/crew-*.md
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/crew/
+/.devin/agents/*
+!/.devin/agents/crew-*.md
 /.codex/
+/.crew/
+/crew.local.ini
 /AGENT.md
-/AGENTS.md
-/CLAUDE.md
+/AGENTS.local.md
+/CLAUDE.local.md
 /FORM_BUILD_PRIORITY.md
 /HANDOVER_HTML_ONLY_EBIRFORMS_2026-07-19.md
 /api_integration_plan.md

@@ -17,8 +17,9 @@
 
 use super::penalty_items::PenaltyItems;
 use super::penalty_items::PenaltyState;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use bir_rules::StableInstanceId;
 use serde::{Deserialize, Serialize};
 
 use super::official_inputs::has_cent_precision;
@@ -563,6 +564,10 @@ pub const FORM_1601FQ_NOT_APPLICABLE: &str = "NA";
 /// One Schedule 1 row (`drpTreatyCode<i>` … `txtReqWithheld<i>`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Form1601FqScheduleRow {
+    /// Stable identity of this row across a Delete row compaction; never its
+    /// transient vector index. Older drafts receive one on the first load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instance_id: Option<StableInstanceId>,
     /// `"NA"` or a code from [`FORM_1601FQ_TREATIES`].
     pub treaty_code: String,
     /// `"NA"` or an ATC code from the 1601-FQ list.
@@ -579,6 +584,7 @@ pub struct Form1601FqScheduleRow {
 impl Default for Form1601FqScheduleRow {
     fn default() -> Self {
         Self {
+            instance_id: None,
             treaty_code: FORM_1601FQ_NOT_APPLICABLE.to_string(),
             atc_code: FORM_1601FQ_NOT_APPLICABLE.to_string(),
             income_payment: 0.0,
@@ -695,11 +701,19 @@ pub struct Form1601FqDraft {
     // Part IV — Schedule 1
     #[serde(default)]
     pub schedule1: Vec<Form1601FqScheduleRow>,
+    /// Allocation cursor for Schedule 1's stable row ids. Zero means an old
+    /// draft before the first allocation; assigned ids are never reused.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub schedule1_next_row_ordinal: u64,
     #[serde(default)]
     pub schedule1_total: f64,
 
     #[serde(flatten)]
     pub lifecycle: SubmissionLifecycle,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
 }
 
 /// `round(this, 2)` / `formatCurrency`: the value the official field holds.
@@ -760,6 +774,7 @@ impl Form1601FqDraft {
             total_penalties: 0.0,
             total_amount_due: 0.0,
             schedule1: Vec::new(),
+            schedule1_next_row_ordinal: 0,
             schedule1_total: 0.0,
             lifecycle: SubmissionLifecycle::default(),
         };
@@ -775,8 +790,44 @@ impl Form1601FqDraft {
             .atc_options()
     }
 
+    /// Give every Schedule 1 row a stable identity and advance the draft's
+    /// allocation cursor. Existing ids travel with their row when a Delete
+    /// row compacts the vector; legacy rows are seeded once in their stored
+    /// order, after which the vector index is never the identity.
+    pub fn ensure_schedule1_row_ids(&mut self) {
+        let ordinal = |id: &StableInstanceId| id.as_str().strip_prefix("row-")?.parse::<u64>().ok();
+        let mut used = BTreeSet::new();
+        let mut next = self.schedule1_next_row_ordinal.max(1);
+        for row in &mut self.schedule1 {
+            if let Some(id) = row.instance_id.as_ref() {
+                if let Some(ordinal) = ordinal(id) {
+                    next = next.max(ordinal + 1);
+                }
+                if used.insert(id.clone()) {
+                    continue;
+                }
+                // A duplicated imported id cannot name a row: the first row
+                // keeps it and this row receives a fresh one below.
+                row.instance_id = None;
+            }
+            loop {
+                let id =
+                    StableInstanceId::parse(format!("row-{next:020}")).expect("generated row id");
+                next += 1;
+                if used.insert(id.clone()) {
+                    row.instance_id = Some(id);
+                    break;
+                }
+            }
+        }
+        if self.schedule1_next_row_ordinal != next {
+            self.schedule1_next_row_ordinal = next;
+        }
+    }
+
     /// Item 4. "No" clears Part II and Schedule 1 like `cancelAllCompute`.
     pub fn set_any_tax_withheld(&mut self, withheld: bool) {
+        self.ensure_schedule1_row_ids();
         self.any_tax_withheld = Some(withheld);
         if !withheld {
             self.schedule.clear();
@@ -799,6 +850,7 @@ impl Form1601FqDraft {
     /// Items 13/13A. "Yes" opens Schedule 1 with every row at "NA"
     /// (`enableSelTreaty`); "No" clears it (`confirmDisableTreaty`).
     pub fn set_tax_relief(&mut self, relief: Option<Form1601FqTaxRelief>) {
+        self.ensure_schedule1_row_ids();
         match relief {
             Some(_) if self.tax_relief.is_none() => {
                 self.schedule1 = vec![Form1601FqScheduleRow::default(); FORM_1601FQ_SCHEDULE1_ROWS];
@@ -878,6 +930,7 @@ impl Form1601FqDraft {
 
     /// The official compute chain over values held at cents.
     pub fn recompute(&mut self) {
+        self.ensure_schedule1_row_ids();
         self.schedule.sort_by_key(|row| row.popup_index);
         if !self.is_amended {
             self.tax_remitted_previous = 0.0;
@@ -901,6 +954,9 @@ impl Form1601FqDraft {
         self.taxes_withheld_regular = cents(total);
         self.total_other_tax_withheld = cents(other);
 
+        if self.tax_relief.is_none() {
+            self.schedule1.clear();
+        }
         let mut schedule1_total = 0.0;
         for row in &mut self.schedule1 {
             row.income_payment = cents(row.income_payment);
@@ -1670,6 +1726,7 @@ mod tests {
             total_penalties: 0.0,
             total_amount_due: 0.0,
             schedule1: Vec::new(),
+            schedule1_next_row_ordinal: 0,
             schedule1_total: 0.0,
             lifecycle: SubmissionLifecycle::default(),
         };
@@ -1910,13 +1967,6 @@ mod tests {
             "Please enter Amount of Income Payment.",
         );
         check(
-            &|d| {
-                d.tax_relief = None;
-                d.recompute();
-            },
-            "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to\nfill up schedule 1.",
-        );
-        check(
             &|d| d.any_tax_withheld = Some(false),
             "Selecting an ATC is not necessary when item no. 4 is set to ' NO '",
         );
@@ -1998,5 +2048,39 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+    #[test]
+    fn duplicate_schedule_1_instance_ids_are_not_kept() {
+        let mut draft = sample();
+        let duplicate = StableInstanceId::parse("row-00000000000000000001").unwrap();
+        draft.schedule1[0].instance_id = Some(duplicate.clone());
+        draft.schedule1[1].instance_id = Some(duplicate.clone());
+        draft.ensure_schedule1_row_ids();
+        assert_eq!(draft.schedule1[0].instance_id.as_ref(), Some(&duplicate));
+        assert_ne!(draft.schedule1[1].instance_id.as_ref(), Some(&duplicate));
+        let ids: BTreeSet<_> = draft
+            .schedule1
+            .iter()
+            .filter_map(|row| row.instance_id.clone())
+            .collect();
+        assert_eq!(ids.len(), FORM_1601FQ_SCHEDULE1_ROWS);
+    }
+
+    #[test]
+    fn schedule_1_never_keeps_rows_while_item_13_is_not_yes() {
+        let mut draft = sample();
+        draft.set_tax_relief(Some(Form1601FqTaxRelief::InternationalTaxTreaty));
+        draft.schedule1[0].income_payment = 42.0;
+        draft.schedule1[0].tax_rate = 10.0;
+        draft.tax_relief = None;
+        draft.recompute();
+        assert!(draft.schedule1.is_empty());
+        assert_eq!(draft.schedule1_total, 0.0);
+
+        // The first Yes opens five fresh official rows; nothing typed while
+        // the schedule was shut can come back.
+        draft.set_tax_relief(Some(Form1601FqTaxRelief::InternationalTaxTreaty));
+        assert_eq!(draft.schedule1.len(), FORM_1601FQ_SCHEDULE1_ROWS);
+        assert!(draft.schedule1.iter().all(Form1601FqScheduleRow::is_unused));
     }
 }

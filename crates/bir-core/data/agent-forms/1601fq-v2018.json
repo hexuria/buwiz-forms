@@ -434,7 +434,7 @@
 "package": "1601fq-v2018",
 "rows": {
 "/schedule": {"atc_code":"","popup_index":0,"tax_base":0.0,"tax_withheld":0.0},
-"/schedule1": {"atc_code":"","income_payment":0.0,"tax_rate":0.0,"tax_withheld":0.0,"treaty_code":""}
+"/schedule1": {"atc_code":"","income_payment":0.0,"instance_id":null,"tax_rate":0.0,"tax_withheld":0.0,"treaty_code":""}
 },
 "unmapped": {
 "AtcCd1": "the ATC popup's tick box (the category's list): a Part II row's ATC is chosen in the row (txtAtcCode<n>); probe: derived by the app: changes with /schedule/0/popup_index but never shows one field's value",
