@@ -166,7 +166,10 @@ class RecipeTests(unittest.TestCase):
         self.assertNotIn("went-on", out.stdout)
 
     def test_the_direct_downloads_are_untouched(self):
-        # Only the store artifacts follow the switch; the direct downloads keep shipping Gmail Connect.
+        # Only the store artifacts follow the switch; the direct downloads keep shipping Gmail Connect. The Mac and Linux
+        # release paths never mention it. The Windows release (#503) uses the same STORE_GMAIL repository variable for its
+        # Microsoft Store .msix job only, so there the switch may appear, but a build that is not the Store's still gets
+        # the client unconditionally.
         package = (ROOT / "scripts/package_macos_release.sh").read_text(encoding="utf-8")
         self.assertNotIn("store_gmail", package)
         self.assertNotIn("STORE_GMAIL", package)
@@ -174,13 +177,16 @@ class RecipeTests(unittest.TestCase):
         for name in ("release.yml", "release-macos.yml", "release-windows.yml", "release-linux.yml"):
             text = (workflows / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
-                self.assertNotIn("store_gmail", text)
-                self.assertNotIn("STORE_GMAIL", text)
+                self.assertNotIn("store_gmail.py", text)
                 self.assertIn("GOOGLE_CLIENT_ID: ${{", text)
+                if name in ("release-macos.yml", "release-linux.yml"):
+                    self.assertNotIn("STORE_GMAIL", text)
         top = (workflows / "release.yml").read_text(encoding="utf-8").split("\njobs:", 1)[0]
         self.assertIn("  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}", top)
         self.assertIn("  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}", top)
-
+        windows = (workflows / "release-windows.yml").read_text(encoding="utf-8")
+        # A release build that is not the Store's gets the client whatever STORE_GMAIL says.
+        self.assertIn("(!inputs.store || vars.STORE_GMAIL == '1')", windows)
 
 class ArchiveTests(unittest.TestCase):
     def test_a_zip_archive_is_read_member_by_member(self):
