@@ -1668,9 +1668,13 @@ fn account_room_snapshot() -> Result<
     crate::account_gate::ensure_unlocked()?;
     let snap = crate::session::snapshot();
     #[cfg(test)]
-    if snap.room.is_none() {
+    {
+        // A test's thread-local ephemeral database wins over the process-wide session room. The
+        // session machine is shared global test state; without this priority a parallel session
+        // test can make a profile verb read that room instead of this test's own database.
         return crate::bir_module::open_database_slot_for_tests().map(|handle| (snap, handle));
     }
+    #[allow(unreachable_code)]
     let Some((handle, _generation, _room_id, _path)) = snap.room.clone() else {
         return Err(HostError::new(
             "no room is open: the filing UI is behind a migration page or the gate",

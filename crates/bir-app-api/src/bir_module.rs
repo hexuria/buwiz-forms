@@ -3350,8 +3350,8 @@ fn restore_staged_database(
         Ok(()) => {
             // F1: in rooms mode nothing may serve the ephemeral placeholder past the install —
             // the room reopens on the restored file at once, a new Arc and a new generation,
-            // reinstalled into the machine. (§5.8's full boundary — the importing flag, the
-            // epoch CAS, the room-lock re-check — is commit 4's; the reinstall is its step 4.)
+            // reinstalled into the machine. §5.8's wider boundary — the importing flag, the
+            // epoch CAS and the room-lock re-check — remains the send worker's concern.
             let snap = crate::session::snapshot();
             if let Some((_, _, _room_id, room_path)) = snap.room {
                 let path = if matches!(snap.phase_kind, crate::session::PhaseKind::Legacy) {

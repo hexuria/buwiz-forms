@@ -41,8 +41,7 @@ pub fn register(module: HostModule) -> HostModule {
 fn migration_state_value() -> HostResult {
     // §1: the state is computed from the phase — never a state of its own. The offer's binding
     // needs no comparison here: the note IS in the phase, so a close or a replace ends it (X2
-    // by construction). DeviceStore is §7's, wired in commit 5; the page's union has no kind
-    // for it yet, and no path produces it today.
+    // by construction). DeviceStore is §7's store-error page.
     let (kind, copy_saved, detail) = match crate::session::migration_state() {
         None => ("none", false, String::new()),
         Some(crate::session::MigrationState::Moving) => ("moving", false, String::new()),

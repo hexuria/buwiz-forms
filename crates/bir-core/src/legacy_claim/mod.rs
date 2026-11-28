@@ -706,6 +706,7 @@ impl LegacyClaim {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn write_offer_consumption(
         &self,
         room_id: &RoomId,
@@ -799,12 +800,12 @@ impl LegacyClaim {
 
     fn claim_room(&self, who: &Claimant) -> Result<ClaimRoom, Failure> {
         let lookup = crate::rooms::room_for(Some(&self.store), &who.server_url, &who.user_id)
-            .map_err(|error| {
+            .map_err(|_error| {
                 Failure::Transient(Transient {
                     cause: TransientCause::Io,
                     copy_saved: false,
                     record_room: false,
-                    detail: format!("room lookup: {error}"),
+                    detail: "the account's room could not be looked up".into(),
                 })
             })?;
         let (room_id, origin) = match lookup {
@@ -908,7 +909,7 @@ impl LegacyClaim {
                     // Linked, not yet unlinked: finish step 4's unlink, then steps 5–8. Under the legacy lock and with
                     // no -wal or -shm beside the file (C2): an older version or bir-headless may have opened it since
                     // the cut, and its log would be left behind, or read twice into one file.
-                    let lock = hold_legacy_lock(&legacy)?;
+                    let lock = hold_legacy_lock(&legacy).map_err(record_room_failure)?;
                     if files::sidecars_present(&legacy)
                         .map_err(|error| record_room_failure(io_failure(error)))?
                     {
@@ -1188,18 +1189,19 @@ impl LegacyClaim {
 
         // 5. The room row.
         if let Err(error) = self.write_room_row(room) {
+            tracing::warn!("legacy claim room row not written: {error}");
             return self.transient_after_move(
                 &mut record,
                 TransientCause::Io,
-                format!("room row: {error}"),
+                "the room cannot be recorded".into(),
             );
         }
         record.step = record.step.max(Step::RoomRow);
-        if let Err(error) = self.write_record(&record) {
+        if let Err(_error) = self.write_record(&record) {
             return self.transient_after_move(
                 &mut record,
                 TransientCause::Io,
-                format!("record: {error}"),
+                "the claim record cannot be written".into(),
             );
         }
         cut(Cut::AfterRoomRow);
@@ -1209,10 +1211,11 @@ impl LegacyClaim {
             let hash = match files::sha256_file(&room_file) {
                 Ok(hash) => hash,
                 Err(error) => {
+                    tracing::warn!("legacy claim room hash not read: {error}");
                     return self.transient_after_move(
                         &mut record,
                         io_cause(&error),
-                        format!("room hash: {error}"),
+                        "the room copy cannot be checked".into(),
                     );
                 }
             };
@@ -1226,11 +1229,11 @@ impl LegacyClaim {
             }
             record.hash_checked = true;
             record.step = record.step.max(Step::HashChecked);
-            if let Err(error) = self.write_record(&record) {
+            if let Err(_error) = self.write_record(&record) {
                 return self.transient_after_move(
                     &mut record,
                     TransientCause::Io,
-                    format!("record: {error}"),
+                    "the claim record cannot be written".into(),
                 );
             }
         }
@@ -1239,11 +1242,11 @@ impl LegacyClaim {
         // 6. The fixups, then 7's open check.
         let room_lock = match crate::db::hold_owner_lock(&room_file) {
             Ok(lock) => lock,
-            Err(error) => {
+            Err(_error) => {
                 return self.transient_after_move(
                     &mut record,
                     TransientCause::OwnerLockHeld,
-                    error.to_string(),
+                    "the room database is open elsewhere".into(),
                 );
             }
         };
@@ -1260,11 +1263,11 @@ impl LegacyClaim {
                 }
             }
             record.step = record.step.max(Step::Fixed);
-            if let Err(error) = self.write_record(&record) {
+            if let Err(_error) = self.write_record(&record) {
                 return self.transient_after_move(
                     &mut record,
                     TransientCause::Io,
-                    format!("record: {error}"),
+                    "the claim record cannot be written".into(),
                 );
             }
         }
@@ -1281,11 +1284,11 @@ impl LegacyClaim {
         drop(room_lock);
         record.open_checked = true;
         record.step = Step::OpenChecked;
-        if let Err(error) = self.write_record(&record) {
+        if let Err(_error) = self.write_record(&record) {
             return self.transient_after_move(
                 &mut record,
                 TransientCause::Io,
-                format!("record: {error}"),
+                "the claim record cannot be written".into(),
             );
         }
         cut(Cut::AfterOpenChecked);
@@ -1294,11 +1297,11 @@ impl LegacyClaim {
         record.step = Step::Done;
         record.done_at = Some(now_text());
         record.owner_pin_phc = None;
-        if let Err(error) = self.write_record(&record) {
+        if let Err(_error) = self.write_record(&record) {
             return self.transient_after_move(
                 &mut record,
                 TransientCause::Io,
-                format!("record: {error}"),
+                "the claim record cannot be written".into(),
             );
         }
         let _ = self.set_migration_value(NOT_MINE_KEY, "[]");
@@ -1433,7 +1436,7 @@ impl LegacyClaim {
                 }
                 _ => TransientCause::Io,
             };
-            StepFailure::Passing(cause, format!("device store: {error}"))
+            StepFailure::Passing(cause, "the device store cannot be used".into())
         })
     }
 
@@ -1890,12 +1893,12 @@ impl ReadyClaim {
         // shows this room the offer that finishes the rename.
         let content_sha256 = match files::sha256_file(&legacy) {
             Ok(sha256) => sha256,
-            Err(error) => {
+            Err(_error) => {
                 return Outcome::Transient(Transient {
                     cause: TransientCause::Io,
                     copy_saved: false,
                     record_room: false,
-                    detail: format!("the legacy file could not be read: {error}"),
+                    detail: "the legacy file could not be read".into(),
                 });
             }
         };
@@ -2061,8 +2064,9 @@ impl Offer {
     pub const MESSAGE: &'static str =
         "Tax profiles from an older version of eBIRForms were found on this device.";
 
-    /// "Add them to this account": the whole-profile export of the file (from a scratch copy) imported into `room`, the
-    /// open room's database; then the file is renamed `bir_data.offered-<stamp>.db`, never replacing.
+    /// Test-only remnant of the removed Add path: the whole-profile export of the file imported into
+    /// `room`, then the file renamed aside. Production answers Add with refusal instead.
+    #[cfg(test)]
     pub fn add(self, claim: &LegacyClaim, room: &Database) -> Result<Added, Failure> {
         let added = files::add_offered(claim, room, &self.gate.room, self.gate.probe.identity());
         drop(self.gate.lock);
@@ -2147,13 +2151,18 @@ fn hold_legacy_lock(legacy: &Path) -> Result<OwnerLock, Failure> {
     }
     crate::db::hold_owner_lock(legacy).map_err(|error| {
         Failure::Transient(Transient {
-            cause: match error {
+            cause: match &error {
                 crate::db::DbError::LiveDatabaseInUse(_) => TransientCause::OwnerLockHeld,
                 _ => TransientCause::Io,
             },
             copy_saved: false,
             record_room: false,
-            detail: error.to_string(),
+            detail: match &error {
+                crate::db::DbError::LiveDatabaseInUse(_) => {
+                    "the legacy file is open elsewhere".into()
+                }
+                _ => "the legacy file cannot be locked".into(),
+            },
         })
     })
 }
@@ -2171,7 +2180,7 @@ fn io_failure(error: std::io::Error) -> Failure {
         cause: io_cause(&error),
         copy_saved: false,
         record_room: false,
-        detail: error.to_string(),
+        detail: "the device cannot complete the file operation".into(),
     })
 }
 
@@ -2187,7 +2196,7 @@ fn store_transient(error: DeviceStoreError, copy_saved: bool) -> Transient {
             _ => TransientCause::Io,
         },
         copy_saved,
-        detail: format!("device store: {error}"),
+        detail: "the device store cannot be used".into(),
     }
 }
 
@@ -2245,7 +2254,7 @@ fn db_failure(reason: MovedNotOpenedReason, error: crate::db::DbError) -> StepFa
         _ => None,
     };
     match cause {
-        Some(cause) => StepFailure::Passing(cause, error.to_string()),
+        Some(cause) => StepFailure::Passing(cause, "the room database cannot be used".into()),
         None => StepFailure::Moved(reason, error.to_string()),
     }
 }

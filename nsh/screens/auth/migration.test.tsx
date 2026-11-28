@@ -62,6 +62,7 @@ test("the offer: both answers, desktop", async () => {
   const app = await open(DEMO, { width: 1440, height: 900, platform: "macos", host: { params: { page: "offered" } } });
   await app.waitFor("id:migration-offer");
   expect(app.texts()).toContain("Tax profiles from an older version of eBIRForms were found on this device.");
+  expect(app.texts()).toContain("Choose No only if this isn't yours. The older data stays untouched and won't be offered to this account again; there is no undo.");
   expect(app.shows("id:migration-offer-add")).toBe(false);
   await app.waitFor("id:migration-offer-no");
   await app.waitFor("id:migration-offer-not-now");

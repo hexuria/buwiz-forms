@@ -235,6 +235,7 @@ export function OfferPage() {
     <OpenPage testID="migration-offer">
       <View class="items-center gap-3">
         <PageHeading testID="migration-offer-title">Tax profiles from an older version of eBIRForms were found on this device.</PageHeading>
+        <Text variant="body" tone="fg2">Choose No only if this isn't yours. The older data stays untouched and won't be offered to this account again; there is no undo.</Text>
         <If when={error() !== null}>
           <Text variant="meta" tone="danger" testID="migration-offer-error">{error()}</Text>
         </If>

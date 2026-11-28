@@ -2179,3 +2179,49 @@ fn a_transient_finish_after_the_move_does_not_fill_the_started_set() {
         "a transient finish after the move must not fill the set"
     );
 }
+
+/// N11: transient details are the page's words, never the OS-user paths inside the underlying
+/// store/file errors. The raw error assertions are the positive control that the detector has a
+/// path to hide where one exists.
+#[test]
+fn transient_details_never_carry_os_paths() {
+    let path = std::path::PathBuf::from("/Users/os-user/private/device.db");
+    let raw = path.to_string_lossy().to_string();
+    for error in [
+        crate::rooms::DeviceStoreError::Lost(path.clone()),
+        crate::rooms::DeviceStoreError::Unreadable {
+            path: path.clone(),
+            reason: "not sqlite".into(),
+        },
+        crate::rooms::DeviceStoreError::Newer {
+            path: path.clone(),
+            version: 99,
+        },
+    ] {
+        assert!(
+            error.to_string().contains(&raw),
+            "positive control: the raw error has no path"
+        );
+        let transient = store_transient(error, false);
+        assert!(!transient.detail.contains(&raw), "{}", transient.detail);
+        assert!(transient.detail.contains("device store"));
+    }
+
+    let io = std::io::Error::other(format!("cannot open {raw}"));
+    assert!(
+        io.to_string().contains(&raw),
+        "positive control: the raw I/O error has no path"
+    );
+    let failure = io_failure(io);
+    let Failure::Transient(transient) = failure else {
+        panic!("not transient")
+    };
+    assert!(!transient.detail.contains(&raw), "{}", transient.detail);
+
+    let io = std::io::Error::other(format!("cannot open {raw}"));
+    let step = db_failure(MovedNotOpenedReason::Open, crate::db::DbError::Io(io));
+    let StepFailure::Passing(_, detail) = step else {
+        panic!("not passing")
+    };
+    assert!(!detail.contains(&raw), "{detail}");
+}

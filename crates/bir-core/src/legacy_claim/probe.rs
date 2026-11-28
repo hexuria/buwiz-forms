@@ -149,7 +149,13 @@ pub(crate) fn probe(layout: &Layout, legacy: &Path) -> Result<Probe, Failure> {
         }
         Ok(_) => {}
         Err(crate::db::DbError::Io(error)) => return Err(super::io_failure(error)),
-        Err(error) => return Err(transient(TransientCause::Io, error.to_string())),
+        Err(error) => {
+            tracing::warn!("legacy file kind not read: {error}");
+            return Err(transient(
+                TransientCause::Io,
+                "the legacy file could not be read".into(),
+            ));
+        }
     }
     let scratch = Scratch::new(layout).map_err(super::io_failure)?;
     let identity = crate::safe_fs::file_id(legacy).ok();
@@ -170,8 +176,13 @@ pub(crate) fn probe(layout: &Layout, legacy: &Path) -> Result<Probe, Failure> {
 
 /// Check, migrate and read the copy.
 fn read_copy(copy: &Path) -> Result<Probe, Failure> {
-    let supported = crate::db::current_schema_version()
-        .map_err(|error| transient(TransientCause::Io, error.to_string()))?;
+    let supported = crate::db::current_schema_version().map_err(|error| {
+        tracing::warn!("schema version not read: {error}");
+        transient(
+            TransientCause::Io,
+            "the device cannot complete the file operation".into(),
+        )
+    })?;
     // 1. Before this build touches it: its version, its health, and the PINs and authenticators still on profiles
     //    (the v22 heal lifts one per taxpayer and clears the rest).
     let (user_version, branch) = {
@@ -373,9 +384,27 @@ fn sqlite_failure(what: &str, error: rusqlite::Error) -> Failure {
             ErrorCode::DatabaseCorrupt => {
                 permanent(PermanentReason::Damaged, &format!("{what}: {error}"))
             }
-            ErrorCode::DiskFull => transient(TransientCause::DiskFull, format!("{what}: {error}")),
-            _ => transient(TransientCause::Io, format!("{what}: {error}")),
+            ErrorCode::DiskFull => {
+                tracing::warn!(what, "legacy copy not opened: {error}");
+                transient(
+                    TransientCause::DiskFull,
+                    "the device cannot complete the file operation".into(),
+                )
+            }
+            _ => {
+                tracing::warn!(what, "legacy copy not opened: {error}");
+                transient(
+                    TransientCause::Io,
+                    "the legacy file could not be read".into(),
+                )
+            }
         },
-        _ => transient(TransientCause::Io, format!("{what}: {error}")),
+        _ => {
+            tracing::warn!(what, "legacy copy not opened: {error}");
+            transient(
+                TransientCause::Io,
+                "the legacy file could not be read".into(),
+            )
+        }
     }
 }

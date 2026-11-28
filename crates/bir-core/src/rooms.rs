@@ -275,7 +275,16 @@ impl Layout {
         }
         // Before step 5 writes the room row the claim record is the evidence that a real
         // account's room exists. A lookup-created empty practice room writes neither it nor a row.
-        match store.setting(crate::legacy_claim::RECORD_KEY) {
+        match store
+            .conn()
+            .query_row(
+                "SELECT value FROM migration WHERE key = ?1",
+                params![crate::legacy_claim::RECORD_KEY],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(DeviceStoreError::from)
+        {
             Ok(Some(raw)) => serde_json::from_str::<serde_json::Value>(&raw)
                 .ok()
                 .and_then(|record| record.get("room")?.as_str().map(str::to_owned))
