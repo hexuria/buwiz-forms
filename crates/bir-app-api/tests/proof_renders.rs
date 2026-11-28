@@ -45,7 +45,8 @@ fn write_uniform_section_renders() {
         "default_form_type": "1702Q"
     }))
     .unwrap();
-    let mut qdraft = bir_core::forms::form_1702q::Form1702qDraft::new_from_profile(&qprofile, 2025, 2);
+    let mut qdraft =
+        bir_core::forms::form_1702q::Form1702qDraft::new_from_profile(&qprofile, 2025, 2);
     qdraft.prior_year_excess_credits = 100.0;
     qdraft.previous_quarters_payments = 12_345_678_901_234.0;
     qdraft.previous_quarters_mcit_payments = 100.0;
