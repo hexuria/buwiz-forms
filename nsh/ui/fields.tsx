@@ -576,7 +576,8 @@ function MaskedField(props: MaskedProps) {
         props.field.onFocus?.();
       }}
       onBlur={() => {
-        if (untracked(focused)) finishLeave(true);
+        if (!untracked(focused)) return;
+        finishLeave(true);
       }}
     />
   );

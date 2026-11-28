@@ -25,6 +25,21 @@ pub fn google_sign_in_available() -> bool {
     )
 }
 
+/// What a Google connection made in a build that had a client id answers in a build without one: it can no longer renew,
+/// so the person disconnects and uses an app password. The screens say the same (nsh/screens/taxpayer/logic.ts
+/// GOOGLE_UNAVAILABLE_CONNECTED); never the developer's "GOOGLE_CLIENT_ID must be set".
+pub const GOOGLE_NOT_IN_THIS_VERSION: &str =
+    "Google sign-in is not available in this version. Disconnect and use an app password.";
+
+/// `Err` with [`GOOGLE_NOT_IN_THIS_VERSION`] when this build cannot reach Google's sign-in.
+fn require_google(available: bool) -> Result<(), anyhow::Error> {
+    if available {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(GOOGLE_NOT_IN_THIS_VERSION))
+    }
+}
+
 /// A runtime value, else the compiled one, and not blank.
 fn configured(runtime: Option<String>, compiled: Option<&str>) -> bool {
     runtime
@@ -70,11 +85,28 @@ impl GoogleOAuthAuth {
         access_token: &str,
         refresh_token: &str,
     ) -> Result<Self, anyhow::Error> {
+        Self::new_in_build(
+            email,
+            access_token,
+            refresh_token,
+            google_sign_in_available(),
+        )
+    }
+
+    /// [`Self::new`] for a build that can (`available`) or cannot reach Google's sign-in. Without it a stored grant can
+    /// no longer renew: refused at once with [`GOOGLE_NOT_IN_THIS_VERSION`], before any connection.
+    fn new_in_build(
+        email: &str,
+        access_token: &str,
+        refresh_token: &str,
+        available: bool,
+    ) -> Result<Self, anyhow::Error> {
         if access_token.is_empty() && refresh_token.is_empty() {
             return Err(anyhow::anyhow!(
                 "No OAuth tokens provided. Please connect your Google account."
             ));
         }
+        require_google(available)?;
 
         Ok(Self {
             email: email.to_string(),
@@ -172,6 +204,10 @@ impl imap::Authenticator for XOAuth2Sasl {
 pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
     use super::oauth_server;
 
+    // 0. The client id first: without one no listener is opened (its thread would wait on accept for nothing).
+    require_google(google_sign_in_available())?;
+    let client_id = get_google_client_id()?;
+
     // 1. Generate PKCE verifier + challenge
     let verifier = generate_pkce_verifier();
     let challenge = generate_pkce_challenge(&verifier);
@@ -180,8 +216,6 @@ pub fn start_oauth_flow() -> Result<(String, String, String), anyhow::Error> {
     // 2. Start local HTTP listener on a random port
     let (port, rx) = oauth_server::start_callback_server(state.clone())?;
     let redirect_uri = format!("http://127.0.0.1:{}", port);
-
-    let client_id = get_google_client_id()?;
 
     // 3. Build the authorization URL
     let auth_url = format!(
@@ -340,6 +374,7 @@ fn describe_token_endpoint_failure(status: u16, body: &str) -> String {
 }
 
 fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
+    require_google(google_sign_in_available())?;
     if refresh_token.is_empty() {
         return Err(anyhow::anyhow!(
             "No refresh token found. Please re-connect your Google account in Profile settings."
@@ -589,7 +624,25 @@ mod token_endpoint_failure_tests {
 
 #[cfg(test)]
 mod availability_tests {
-    use super::configured;
+    use super::{GOOGLE_NOT_IN_THIS_VERSION, GoogleOAuthAuth, configured};
+
+    /// A Google connection made in a build that had a client id, in a build without one: refused at once in plain words,
+    /// never the developer's "GOOGLE_CLIENT_ID must be set".
+    #[test]
+    fn a_stored_grant_in_a_build_without_google_says_to_disconnect() {
+        let inbox = "juana.inbox@example.com";
+        let error = GoogleOAuthAuth::new_in_build(inbox, "access", "refresh", false)
+            .err()
+            .expect("refused");
+        assert_eq!(error.to_string(), GOOGLE_NOT_IN_THIS_VERSION);
+        assert!(!error.to_string().contains("GOOGLE_CLIENT_ID"));
+        assert!(GoogleOAuthAuth::new_in_build(inbox, "access", "refresh", true).is_ok());
+        // No tokens at all is still "not connected", whatever the build.
+        let none = GoogleOAuthAuth::new_in_build(inbox, "", "", false)
+            .err()
+            .expect("refused");
+        assert!(none.to_string().contains("No OAuth tokens provided"));
+    }
 
     #[test]
     fn a_client_value_counts_from_the_environment_or_the_build_and_never_when_blank() {

@@ -7,11 +7,13 @@
 mod auth_oauth;
 mod auth_password;
 mod fetcher;
+pub mod gmail_api;
 mod inbox;
 pub(crate) mod oauth_server;
 
 pub use auth_oauth::{
-    GoogleOAuthAuth, get_oauth_email, google_sign_in_available, start_oauth_flow,
+    GOOGLE_NOT_IN_THIS_VERSION, GoogleOAuthAuth, get_oauth_email, google_sign_in_available,
+    start_oauth_flow,
 };
 pub use auth_password::AppPasswordAuth;
 pub use fetcher::{

@@ -46,7 +46,9 @@ token)
         data="$(xcrun simctl get_app_container "$device" com.longbridge.nsh.host data 2>/dev/null || true)"
         if [ -n "$data" ]; then
             file="$data/Library/Caches/gpui-agent-token"
-            if [ ! -f "$file" ]; then
+            # Written when absent, and when it holds another token: a run that ended can leave its own behind, and
+            # the host would read that one instead of this run's (#449).
+            if [ ! -f "$file" ] || [ "$(cat "$file" 2>/dev/null)" != "$GPUI_AGENT_TOKEN" ]; then
                 umask 077
                 mkdir -p "$data/Library/Caches"
                 printf %s "$GPUI_AGENT_TOKEN" > "$file.new" && mv "$file.new" "$file"

@@ -16884,7 +16884,19 @@ mod tests {
             )
             .unwrap_or_else(|error| panic!("{code} previews as a sample: {error}"));
             let path = path["path"].as_str().expect("a preview path");
-            assert!(std::path::Path::new(path).exists(), "{code}: {path}");
+            assert!(
+                !std::path::Path::new(path).exists(),
+                "{code}: the filled preview is deleted once read: {path}"
+            );
+            assert_eq!(
+                std::path::Path::new(path).parent(),
+                Some(
+                    bir_core::platform::data_dir()
+                        .join(bir_core::rooms::PREVIEWS_DIR)
+                        .as_path()
+                ),
+                "{code}: the preview is in the app's previews folder: {path}"
+            );
             assert_eq!(
                 stored(),
                 before,
@@ -20424,7 +20436,9 @@ mod tests {
                 // computed current-year row (40).
                 ("1701", 130),
                 ("1701A", 17),
-                ("1701MS", 52),
+                // Plus 1 fewer at this head: Part V Item 6 column A is a
+                // true lock while shut, not merely a faded probe-cleared box.
+                ("1701MS", 51),
                 // 8 for 1706 (PR 9): items 8 and 9, item 11's list,
                 // Schedule 2's specification and item 18's two boxes.
                 ("1706", 8),

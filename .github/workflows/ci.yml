@@ -1,9 +1,10 @@
 name: CI
 
 # The lanes (docs/CI.md):
-# - The quick lane: a pull request, or a push to main or codex/**, runs the quick checks on Linux only (formatting,
-#   clippy, the production-boundary check, the NSH type check, the Python script tests, legacy-guard). About ten
-#   minutes; this is what `ci-ok`, the one required status, reports.
+# - The quick lane: a pull request, or a push to main or codex/**, runs the quick checks on Linux (formatting,
+#   clippy, the production-boundary check, the NSH type check, the Python script tests, legacy-guard); a script-input
+#   pull request also runs those Python tests on Windows. About ten minutes; this is what `ci-ok`, the one required
+#   status, reports.
 # - A draft pull request runs nothing until it is marked ready (`ready_for_review` starts the quick lane), except that
 #   a ci:suite* label is an explicit request and runs even on a draft. A pull request that closes or merges runs
 #   nothing either; its `closed` run only takes the pull request's concurrency group, which cancels the runs still
@@ -142,13 +143,18 @@ jobs:
     # the justfile's recipes for real and are skipped unless pwsh, just and rustc are on the path. While this step
     # ran first, GitHub's Windows runner skipped all ten of them on every run.
     - name: Test Python scripts
-      run: python -m unittest discover -s scripts/tests -v
+      if: ${{ !cancelled() }}
+      shell: bash
+      run: |
+        mkdir -p tmp/ci-test-logs
+        set -o pipefail
+        python -m unittest discover -s scripts/tests -v 2>&1 | tee tmp/ci-test-logs/python-tests.txt
 
     - name: Validate justfile
       run: just --summary
 
     - name: Install Linux Dependencies
-      if: runner.os == 'Linux'
+      if: ${{ runner.os == 'Linux' && !cancelled() && (matrix.tests || success()) }}
       run: |
         sudo bash scripts/ci/apt_update.sh
         sudo apt-get install -y \
@@ -181,7 +187,7 @@ jobs:
     # "Failed to initialize GTK". A virtual framebuffer lets them run for real
     # rather than being skipped.
     - name: Start virtual display
-      if: runner.os == 'Linux' && matrix.tests
+      if: ${{ runner.os == 'Linux' && matrix.tests && !cancelled() }}
       run: |
         Xvfb :99 -screen 0 1280x1024x24 &
         echo "DISPLAY=:99" >> "$GITHUB_ENV"
@@ -198,7 +204,7 @@ jobs:
     # never stores a second 270 MB copy against the 10 GB limit.
     - name: Restore OpenSSL
       id: openssl
-      if: runner.os == 'Windows'
+      if: ${{ runner.os == 'Windows' && !cancelled() && (matrix.tests || success()) }}
       uses: actions/cache/restore@v4
       with:
         path: |
@@ -207,7 +213,7 @@ jobs:
         key: openssl-${{ runner.os }}-choco-v1
 
     - name: Install Windows Dependencies
-      if: runner.os == 'Windows'
+      if: ${{ runner.os == 'Windows' && !cancelled() && (matrix.tests || success()) }}
       shell: pwsh
       run: |
         if ((Test-Path "C:\Program Files\OpenSSL\include") -or
@@ -298,13 +304,21 @@ jobs:
     # account-gate bypass (release builds ignore both), the dry-run sender, and
     # no keychain.
     - name: Test
-      if: matrix.tests
+      if: ${{ matrix.tests && !cancelled() }}
       env:
         EBIR_TEST_ENV: "1"
         BIR_AUTH_BYPASS: "1"
         BIR_SFTP_DRY_RUN: "1"
         BUWIZ_NO_KEYCHAIN: "1"
-      run: cargo test --locked --workspace
+      shell: bash
+      run: |
+        mkdir -p tmp/ci-test-logs
+        set -o pipefail
+        cargo test --locked --workspace --no-fail-fast 2>&1 | tee tmp/ci-test-logs/rust-tests.txt
+
+    - name: Summarize failing tests
+      if: ${{ !cancelled() }}
+      run: python scripts/ci/test_failure_summary.py tmp/ci-test-logs/python-tests.txt tmp/ci-test-logs/rust-tests.txt
 
     # The page-versus-print audit of all 43 forms is ignored in the run above because it writes a report. It runs here
     # in the test lane: a form that does not open, build its print map, come back from a fill, a save and a reopen,
@@ -590,6 +604,7 @@ jobs:
       nsh_check: ${{ steps.decide.outputs.nsh_check }}
       nsh_agent_check: ${{ steps.decide.outputs.nsh_agent_check }}
       scripts: ${{ steps.decide.outputs.scripts }}
+      scripts_windows: ${{ steps.decide.outputs.scripts_windows }}
       installer: ${{ steps.decide.outputs.installer }}
       validation: ${{ steps.decide.outputs.validation }}
       validation_matrix: ${{ steps.decide.outputs.validation_matrix }}
@@ -597,6 +612,13 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - name: Check pull-request commit messages for local paths
+      if: github.event_name == 'pull_request'
+      env:
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+      run: python3 -I scripts/commit_message_paths.py range --public-log "$PR_BASE" "$PR_HEAD"
 
     - name: Decide
       id: decide
@@ -645,6 +667,32 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.13'
+
+    - name: Test Python scripts
+      run: python -m unittest discover -s scripts/tests -v
+
+  scripts-windows:
+    name: Python script tests (Windows)
+    needs: changes
+    if: needs.changes.outputs.scripts_windows == 'true'
+    runs-on: windows-latest
+    # A script test has hung on Windows before; without a limit a hung job holds a runner for six hours.
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
 
     - name: Test Python scripts
       run: python -m unittest discover -s scripts/tests -v
@@ -870,7 +918,7 @@ jobs:
   # tests-ok job below is the suite label's proof.
   ci-ok:
     name: ${{ needs.changes.outputs.lane == 'none' && 'label-ignored' || github.event_name == 'pull_request' && github.event.action == 'closed' && 'closed' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name != 'ci:suite' && github.event.label.name != 'ci:suite-linux' && github.event.label.name != 'ci:suite-windows' && github.event.label.name != 'ci:suite-macos' && github.event.label.name != 'ci:suite-all') && 'label-ignored' || (github.event_name == 'pull_request' && github.event.pull_request.draft && github.event.action != 'labeled') && 'not-ready' || ((github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}
-    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
+    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, scripts-windows, validation-rules-v1, validation-rules-v2, legacy-guard ]
     if: ${{ !cancelled() && needs.changes.outputs.lane != 'none' && (github.event_name != 'pull_request' || (github.event.pull_request.state != 'closed' && github.event.action != 'closed' && (!github.event.pull_request.draft || github.event.action == 'labeled'))) }}
     runs-on: ubuntu-22.04
     steps:
@@ -888,6 +936,8 @@ jobs:
         WANT_WINDOWS_SETUP: ${{ needs.changes.outputs.installer }}
         SCRIPTS: ${{ needs.scripts.result }}
         WANT_SCRIPTS: ${{ needs.changes.outputs.scripts }}
+        SCRIPTS_WINDOWS: ${{ needs.scripts-windows.result }}
+        WANT_SCRIPTS_WINDOWS: ${{ needs.changes.outputs.scripts_windows }}
         V1: ${{ needs.validation-rules-v1.result }}
         V2: ${{ needs.validation-rules-v2.result }}
         WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
@@ -895,7 +945,7 @@ jobs:
         WANT_LEGACY_GUARD: ${{ needs.changes.outputs.legacy_guard }}
       run: |
         set -euo pipefail
-        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
+        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS scripts-windows=$SCRIPTS_WINDOWS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
         fail() { echo "::error::$1"; exit 1; }
         [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
         expect() {
@@ -910,6 +960,7 @@ jobs:
         expect nsh-agent-check "$NSH_AGENT_CHECK" "$WANT_NSH_AGENT_CHECK"
         expect windows-setup "$WINDOWS_SETUP" "$WANT_WINDOWS_SETUP"
         expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
+        expect scripts-windows "$SCRIPTS_WINDOWS" "$WANT_SCRIPTS_WINDOWS"
         expect validation-rules-v1 "$V1" "$WANT_VALIDATION"
         expect validation-rules-v2 "$V2" "$WANT_VALIDATION"
         expect legacy-guard "$LEGACY_GUARD" "$WANT_LEGACY_GUARD"
@@ -919,7 +970,7 @@ jobs:
   # skipped job is still named, so the name first reads the plan: only the suite lane may call it `tests-ok`.
   tests-ok:
     name: ${{ needs.changes.outputs.lane != 'suite' && 'tests-not-requested' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all')) && 'tests-ok' || 'tests-not-requested' }}
-    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, validation-rules-v2, legacy-guard ]
+    needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, scripts-windows, validation-rules-v1, validation-rules-v2, legacy-guard ]
     if: ${{ always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite' }}
     runs-on: ubuntu-22.04
     permissions:
@@ -939,6 +990,8 @@ jobs:
         WANT_WINDOWS_SETUP: ${{ needs.changes.outputs.installer }}
         SCRIPTS: ${{ needs.scripts.result }}
         WANT_SCRIPTS: ${{ needs.changes.outputs.scripts }}
+        SCRIPTS_WINDOWS: ${{ needs.scripts-windows.result }}
+        WANT_SCRIPTS_WINDOWS: ${{ needs.changes.outputs.scripts_windows }}
         V1: ${{ needs.validation-rules-v1.result }}
         V2: ${{ needs.validation-rules-v2.result }}
         WANT_VALIDATION: ${{ needs.changes.outputs.validation }}
@@ -946,7 +999,7 @@ jobs:
         WANT_LEGACY_GUARD: ${{ needs.changes.outputs.legacy_guard }}
       run: |
         set -euo pipefail
-        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
+        echo "changes=$CHANGES check=$CHECK nsh-check=$NSH_CHECK nsh-agent-check=$NSH_AGENT_CHECK windows-setup=$WINDOWS_SETUP scripts=$SCRIPTS scripts-windows=$SCRIPTS_WINDOWS validation-rules-v1=$V1 validation-rules-v2=$V2 legacy-guard=$LEGACY_GUARD"
         fail() { echo "::error::$1"; exit 1; }
         [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
         expect() {
@@ -961,6 +1014,7 @@ jobs:
         expect nsh-agent-check "$NSH_AGENT_CHECK" "$WANT_NSH_AGENT_CHECK"
         expect windows-setup "$WINDOWS_SETUP" "$WANT_WINDOWS_SETUP"
         expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
+        expect scripts-windows "$SCRIPTS_WINDOWS" "$WANT_SCRIPTS_WINDOWS"
         expect validation-rules-v1 "$V1" "$WANT_VALIDATION"
         expect validation-rules-v2 "$V2" "$WANT_VALIDATION"
         expect legacy-guard "$LEGACY_GUARD" "$WANT_LEGACY_GUARD"

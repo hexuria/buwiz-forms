@@ -7,9 +7,9 @@
 //! and a shipped build (no console) kept nothing.
 //!
 //! Lines are scrubbed before they hit the file or the terminal: OAuth tokens,
-//! passwords, and the database key. Taxpayer TINs are left as written.
-//! Painted `bir` already logs them in full (`tin = …` on draft creation) and
-//! does not mask them in the Logs tab.
+//! passwords, the database key and taxpayer TINs. A TIN keeps only its last
+//! three root digits (and a written branch), enough to correlate one return
+//! without exposing the identifier in the Logs tab or a copied log.
 
 use std::io::{self, Write};
 use std::path::Path;
@@ -218,8 +218,15 @@ fn panic_payload(info: &std::panic::PanicHookInfo<'_>) -> String {
     }
 }
 
-/// Replace credential material in a log line. TINs are not touched: painted
-/// `bir` logs them and the Logs tab shows those lines.
+/// Replace credential material and taxpayer identifiers in a log line.
+///
+/// A TIN is nine root digits plus an optional branch, written solid or in
+/// the usual separated three-digit root groups. Solid runs are masked at 9,
+/// 12 (9+3) and 14 (9+5) digits only: a solid 13-digit run can be a
+/// millisecond timestamp, so a four-digit branch must be separated. Three
+/// space-separated root groups are masked only with a branch or an adjacent
+/// word "TIN"; dashed root groups are specific enough on their own. Numbers
+/// with decimals are not TINs, nor are punctuated ISO dates/times.
 pub fn redact_secrets(input: &str) -> String {
     let mut text = input.to_string();
     // Bearer and token shapes first. A labeled `Authorization: Bearer …`
@@ -245,7 +252,219 @@ pub fn redact_secrets(input: &str) -> String {
     text = labeled_hex_key()
         .replace_all(&text, "$1[redacted]")
         .into_owned();
-    text
+    let text = mask_emails(&text);
+    mask_tins(&text)
+}
+
+/// Mask a value the caller has already typed as a TIN. Unlike the generic
+/// text scanner, this does not have to distinguish the value from a timestamp
+/// or count: a compact nine- or twelve-to-fourteen-digit TIN, a compact
+/// thirteen-digit TIN, and dashed or spaced groupings all mask the same way.
+/// Malformed short values are hidden entirely rather than echoed.
+pub fn tin_for_log(tin: &str) -> String {
+    let digits: String = tin.chars().filter(|ch| ch.is_ascii_digit()).collect();
+    if digits.len() < 9 {
+        return "***".to_string();
+    }
+    let root_end = &digits[6..9];
+    let branch = &digits[9..];
+    if branch.is_empty() {
+        format!("***-***-{root_end}")
+    } else {
+        format!("***-***-{root_end}-{branch}")
+    }
+}
+
+/// Mask the leading TIN in a submission filename (`TIN-form-period[#email#].xml`).
+/// Filenames are typed artifacts, so a compact thirteen-digit TIN is a TIN here
+/// even though the generic log scanner leaves that shape alone as a timestamp.
+pub fn submission_filename_for_log(filename: &str) -> String {
+    static LEADING_TIN: OnceLock<Regex> = OnceLock::new();
+    let pattern = LEADING_TIN.get_or_init(|| {
+        Regex::new(r"^([0-9]{9}(?:[0-9]{3,5})?)-").expect("static filename TIN regex")
+    });
+    let Some(captures) = pattern.captures(filename) else {
+        return filename.to_string();
+    };
+    let tin = captures
+        .get(1)
+        .expect("the leading TIN capture exists")
+        .as_str();
+    format!("{}{}", tin_for_log(tin), &filename[tin.len()..])
+}
+
+/// Mask the submission filename at the end of a local or remote path.
+pub fn submission_path_for_log(path: &str) -> String {
+    let filename_start = path.rfind(['/', '\\']).map(|index| index + 1).unwrap_or(0);
+    format!(
+        "{}{}",
+        &path[..filename_start],
+        submission_filename_for_log(&path[filename_start..])
+    )
+}
+
+/// Mask every TIN candidate in `text`. The regex names the official shapes;
+/// the boundary check supplies what Rust's regex crate has no look-around for:
+/// decimal adjacency and larger identifiers. Candidates are exact matches, so
+/// a TIN at the start of a receipt filename is still masked before its `-form`
+/// suffix.
+fn mask_tins(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    for candidate in tin_candidate().find_iter(text) {
+        let start = candidate.start();
+        let mut end = candidate.end();
+        if !tin_boundaries(text.as_bytes(), start, end) || masked_tin(&text[start..end]).is_none() {
+            // A greedy branch-shaped tail can make the real nine-digit TIN look
+            // like part of a longer number (`123456789 2551Q`). Retry the root.
+            let root_end = start + 9;
+            if end <= root_end
+                || !text[start..root_end].chars().all(|c| c.is_ascii_digit())
+                || !tin_boundaries(text.as_bytes(), start, root_end)
+                || masked_tin(&text[start..root_end]).is_none()
+            {
+                continue;
+            }
+            end = root_end;
+        }
+        if space_root_needs_context(&text[start..end]) && !tin_word_near(text, start, end) {
+            continue;
+        }
+        let Some(masked) = masked_tin(&text[start..end]) else {
+            continue;
+        };
+        out.push_str(&text[copied..start]);
+        out.push_str(&masked);
+        copied = end;
+    }
+    out.push_str(&text[copied..]);
+    out
+}
+
+/// Mask the local part of an email address, keeping the domain for
+/// operational diagnosis. The regex is compiled once and the regex crate's
+/// search is linear in the input size.
+fn mask_emails(text: &str) -> String {
+    email_candidate()
+        .replace_all(text, |captures: &regex::Captures<'_>| {
+            let local = &captures[1];
+            let tld = captures[3].to_ascii_lowercase();
+            if matches!(
+                tld.as_str(),
+                "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp"
+            ) {
+                return captures[0].to_owned();
+            }
+            let visible: String = local.chars().take(2).collect();
+            format!("{visible}•••@{}", &captures[2])
+        })
+        .into_owned()
+}
+
+fn email_candidate() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"(?-u:\b)([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.([A-Za-z]{2,}))(?-u:\b)")
+            .expect("static email regex")
+    })
+}
+
+fn tin_candidate() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"[0-9]{3}[- ]?[0-9]{3}[- ]?[0-9]{3}(?:[- ]?[0-9]{3,5})?")
+            .expect("static TIN candidate regex")
+    })
+}
+
+/// A TIN candidate does not touch a word character or a decimal point; what
+/// remains adjacent decides whether it was part of a larger identifier or
+/// number.
+fn tin_boundaries(bytes: &[u8], start: usize, end: usize) -> bool {
+    fn word(byte: u8) -> bool {
+        byte.is_ascii_alphanumeric()
+    }
+    fn hex(byte: u8) -> bool {
+        byte.is_ascii_hexdigit()
+    }
+    // URL percent-escapes end in a hex letter (`%3D123…`), and escaped text in
+    // Debug/JSON ends in the escape letter (`\\n123…`). Those letters are
+    // encoding syntax, not part of a larger identifier.
+    let escaped_before = (start >= 3
+        && bytes[start - 3] == b'%'
+        && hex(bytes[start - 2])
+        && hex(bytes[start - 1]))
+        || (start >= 2 && bytes[start - 2] == b'\\' && bytes[start - 1].is_ascii_alphanumeric());
+    if start > 0 && word(bytes[start - 1]) && !escaped_before {
+        return false;
+    }
+    if end < bytes.len() && word(bytes[end]) {
+        return false;
+    }
+    if end + 1 < bytes.len() && bytes[end] == b'.' && bytes[end + 1].is_ascii_digit() {
+        return false;
+    }
+    if start >= 2 && bytes[start - 1] == b'.' && bytes[start - 2].is_ascii_digit() {
+        return false;
+    }
+    true
+}
+
+/// Whether this token is exactly the ambiguous space-separated root shape.
+fn space_root_needs_context(token: &str) -> bool {
+    token.matches(' ').count() == 2 && !token.contains('-') && token.len() == 11
+}
+
+/// Whether the word TIN is adjacent enough to disambiguate spaced root groups.
+fn tin_word_near(text: &str, start: usize, end: usize) -> bool {
+    fn ascii_word(bytes: &[u8], at: usize, word: &[u8]) -> bool {
+        at + word.len() <= bytes.len()
+            && bytes[at..at + word.len()].eq_ignore_ascii_case(word)
+            && (at == 0 || !bytes[at - 1].is_ascii_alphanumeric())
+            && (at + word.len() == bytes.len() || !bytes[at + word.len()].is_ascii_alphanumeric())
+    }
+    let bytes = text.as_bytes();
+    let before = start.saturating_sub(8);
+    let after = (end + 8).min(bytes.len());
+    (before..start).any(|at| ascii_word(bytes, at, b"tin"))
+        || (end..after).any(|at| ascii_word(bytes, at, b"tin"))
+}
+
+/// The masked spelling of one token, or `None` when it is not a TIN. Dashes
+/// are either absent everywhere or in the official grouping (`3-3-3`, plus a
+/// 3-, 4- or 5-digit branch); partial or differently placed separators are not TINs.
+fn masked_tin(token: &str) -> Option<String> {
+    if token.starts_with('-') || token.ends_with('-') || token.contains("--") {
+        return None;
+    }
+    let digits: String = token.chars().filter(|c| c.is_ascii_digit()).collect();
+    let separator_count = token.matches(['-', ' ']).count();
+    if digits.len() != token.len() - separator_count {
+        return None;
+    }
+    if separator_count == 0 {
+        // A solid 13-digit run is likelier a millisecond timestamp or count
+        // than a TIN; a four-digit branch must be written with a separator.
+        if !matches!(digits.len(), 9 | 12 | 14) {
+            return None;
+        }
+    } else {
+        let parts: Vec<&str> = token.split(['-', ' ']).collect();
+        if parts.len() < 3
+            || parts.len() > 4
+            || !parts[..3].iter().all(|part| part.len() == 3)
+            || parts[3..].iter().any(|part| !(3..=5).contains(&part.len()))
+        {
+            return None;
+        }
+    }
+    let root_end = &digits[6..9];
+    let branch = &digits[9..];
+    if branch.is_empty() {
+        Some(format!("***-***-{root_end}"))
+    } else {
+        Some(format!("***-***-{root_end}-{branch}"))
+    }
 }
 
 /// The `EBIR_TEST_ENV` SQLCipher key. It is not a taxpayer secret, but it is
@@ -370,6 +589,236 @@ where
 mod tests {
     use super::*;
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct RawTinHit {
+        line: usize,
+        excerpt: String,
+    }
+
+    fn strip_string_literals(source: &str) -> String {
+        let mut out = source.as_bytes().to_vec();
+        let mut in_string = false;
+        let mut escaped = false;
+        for byte in &mut out {
+            let ch = *byte;
+            if in_string {
+                if escaped {
+                    escaped = false;
+                } else if ch == 92 {
+                    escaped = true;
+                } else if ch == b'"' {
+                    in_string = false;
+                }
+                *byte = b' ';
+            } else if ch == b'"' {
+                in_string = true;
+                *byte = b' ';
+            }
+        }
+        String::from_utf8(out).expect("masking whole string literals keeps UTF-8 boundaries")
+    }
+
+    fn macro_end(source: &str, mut index: usize) -> usize {
+        let bytes = source.as_bytes();
+        let mut depth = 1usize;
+        let mut in_string = false;
+        let mut escaped = false;
+        let mut in_line_comment = false;
+        let mut block_comments = 0usize;
+        while index < bytes.len() && depth > 0 {
+            let ch = bytes[index];
+            let next = bytes.get(index + 1).copied().unwrap_or_default();
+            if in_line_comment {
+                if ch == b'\n' {
+                    in_line_comment = false;
+                }
+            } else if block_comments > 0 {
+                if ch == b'/' && next == b'*' {
+                    block_comments += 1;
+                    index += 1;
+                } else if ch == b'*' && next == b'/' {
+                    block_comments -= 1;
+                    index += 1;
+                }
+            } else if in_string {
+                if escaped {
+                    escaped = false;
+                } else if ch == 92 {
+                    escaped = true;
+                } else if ch == b'"' {
+                    in_string = false;
+                }
+            } else if ch == b'/' && next == b'/' {
+                in_line_comment = true;
+                index += 1;
+            } else if ch == b'/' && next == b'*' {
+                block_comments = 1;
+                index += 1;
+            } else if ch == b'"' {
+                in_string = true;
+            } else if ch == b'(' {
+                depth += 1;
+            } else if ch == b')' {
+                depth -= 1;
+            }
+            index += 1;
+        }
+        index
+    }
+
+    fn remove_masked_tin_calls(mut text: String) -> String {
+        while let Some(start) = text.find("tin_for_log") {
+            let Some(open_relative) = text[start..].find('(') else {
+                break;
+            };
+            let open = start + open_relative;
+            let bytes = text.as_bytes();
+            let mut depth = 1usize;
+            let mut end = open + 1;
+            while end < bytes.len() && depth > 0 {
+                if bytes[end] == b'(' {
+                    depth += 1;
+                } else if bytes[end] == b')' {
+                    depth -= 1;
+                }
+                end += 1;
+            }
+            text.replace_range(start..end, &" ".repeat(end - start));
+        }
+        text
+    }
+
+    fn raw_tin_interpolations(source: &str) -> Vec<RawTinHit> {
+        let stripped_source = strip_string_literals(source);
+        let macro_start = Regex::new(r"\b(?:info|warn|error|debug|trace)!\s*\(")
+            .expect("static tracing macro regex");
+        let dot_tin = Regex::new(r"\.tin\b|\btin\s*\(").expect("static dot-TIN regex");
+        let tin_word = Regex::new(r"\b[A-Za-z0-9_]*tin\b").expect("static TIN word regex");
+        let mut hits = Vec::new();
+        for macro_match in macro_start.find_iter(&stripped_source) {
+            let end = macro_end(&stripped_source, macro_match.end());
+            let body = &stripped_source[macro_match.end()..end.saturating_sub(1)];
+            let body = remove_masked_tin_calls(body.to_string());
+            let mut found = dot_tin.find(&body).is_some();
+            if !found {
+                for word in tin_word.find_iter(&body) {
+                    let mut after = word.end();
+                    while after < body.len() && body.as_bytes()[after].is_ascii_whitespace() {
+                        after += 1;
+                    }
+                    if word.as_str() == "tin"
+                        && (after < body.len() && body.as_bytes()[after] == b'=')
+                    {
+                        continue;
+                    }
+                    if word.as_str() == "tin_for_log" {
+                        continue;
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            if found {
+                let line = source[..macro_match.start()].matches('\n').count() + 1;
+                hits.push(RawTinHit {
+                    line,
+                    excerpt: source[macro_match.start()..end.min(source.len())]
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                });
+            }
+        }
+        hits
+    }
+
+    #[test]
+    fn tracing_macros_never_interpolate_a_raw_tin() {
+        let planted = concat!(
+            "fn demo(draft: Draft, stored_tin: String) {
+",
+            " in",
+            "fo!(\"{}\", draft.tin);
+",
+            " war",
+            "n!(tin = %stored_tin, \"bad\");
+",
+            " er",
+            "ror!(\"{}\", draft.tin());
+",
+            "}
+"
+        );
+        let positive = raw_tin_interpolations(planted);
+        assert_eq!(
+            positive.iter().map(|hit| hit.line).collect::<Vec<_>>(),
+            vec![2, 3, 4],
+            "the planted raw call sites must be found: {positive:?}"
+        );
+
+        let crates_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("crates/bir-core has the crates directory as its parent");
+        let mut files = Vec::new();
+        let mut stack = vec![crates_dir.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("read crates directory") {
+                let path = entry.expect("read crates entry").path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().is_some_and(|extension| extension == "rs") {
+                    files.push(path);
+                }
+            }
+        }
+        files.sort();
+        let mut failures = Vec::new();
+        for path in files {
+            let source = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            for hit in raw_tin_interpolations(&source) {
+                failures.push(format!("{}:{}: {}", path.display(), hit.line, hit.excerpt));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "raw TIN interpolation in tracing macros:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    #[test]
+    fn typed_tins_mask_compact_and_grouped_spellings() {
+        for (plain, masked) in [
+            ("123456789", "***-***-789"),
+            ("123456789000", "***-***-789-000"),
+            ("1234567890000", "***-***-789-0000"),
+            ("12345678900000", "***-***-789-00000"),
+            ("123-456-789", "***-***-789"),
+            ("123-456-789-0000", "***-***-789-0000"),
+            ("123 456 789 00000", "***-***-789-00000"),
+            ("1234", "***"),
+        ] {
+            assert_eq!(tin_for_log(plain), masked, "{plain}");
+        }
+    }
+
+    #[test]
+    fn submission_filenames_and_paths_mask_their_leading_tin() {
+        assert_eq!(
+            submission_filename_for_log("1234567890000-1601Cv2018-052024#a@example.com#.xml"),
+            "***-***-789-0000-1601Cv2018-052024#a@example.com#.xml"
+        );
+        assert_eq!(
+            submission_path_for_log("/IAF/12345678900000-2551Qv2018-122026Q1#a@example.com#.xml"),
+            "/IAF/***-***-789-00000-2551Qv2018-122026Q1#a@example.com#.xml"
+        );
+        assert_eq!(
+            submission_filename_for_log("not-a-return.xml"),
+            "not-a-return.xml"
+        );
+    }
+
     #[test]
     fn desktop_filter_strings_are_the_painted_directives() {
         assert_eq!(
@@ -419,13 +868,14 @@ mod tests {
     }
 
     #[test]
-    fn redaction_strips_credentials_and_keeps_tins_and_ordinary_text() {
+    fn redaction_strips_credentials_masks_tins_and_keeps_ordinary_text() {
         let tin = "12345678800000";
         let line = format!(
             "draft tin={tin} password=s3cret-token access_token=\"ya29.SUPERSECRET\" Authorization: Bearer abc.def master_key={TEST_MASTER_KEY} refresh 1//0refreshTOKEN recovery key ABCD-EFGH-IJKL-MNOP Failed to access OS keyring"
         );
         let redacted = redact_secrets(&line);
-        assert!(redacted.contains(tin), "{redacted}");
+        assert!(!redacted.contains(tin), "{redacted}");
+        assert!(redacted.contains("***-***-788-00000"), "{redacted}");
         assert!(
             redacted.contains("Failed to access OS keyring"),
             "{redacted}"
@@ -440,6 +890,88 @@ mod tests {
         let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         assert_eq!(redact_secrets(digest), digest);
         assert_eq!(redact_secrets(&line), redact_secrets(&redacted));
+    }
+
+    #[test]
+    fn redaction_masks_every_tin_shape_but_not_amounts_or_timestamps() {
+        let cases = [
+            ("123456789", "***-***-789"),
+            ("123-456-789", "***-***-789"),
+            ("123456789000", "***-***-789-000"),
+            ("123-456-789-000", "***-***-789-000"),
+            ("12345678900000", "***-***-789-00000"),
+            ("123-456-789-00000", "***-***-789-00000"),
+        ];
+        for (tin, masked) in cases {
+            let line = format!("tin={tin} and {tin} end");
+            let redacted = redact_secrets(&line);
+            assert!(!redacted.contains(tin), "{tin} in {redacted}");
+            assert!(redacted.contains(masked), "{tin}: {redacted}");
+        }
+
+        for (plain, masked) in [
+            (
+                "receipt 12345678900000-2551Qv2018-102026.xml",
+                "receipt ***-***-789-00000-2551Qv2018-102026.xml",
+            ),
+            (
+                "receipt 123-456-789-00000-2551Qv2018-102026.xml",
+                "receipt ***-***-789-00000-2551Qv2018-102026.xml",
+            ),
+        ] {
+            assert_eq!(redact_secrets(plain), masked, "{plain}");
+        }
+
+        for ordinary in [
+            "amount 123456789.00",
+            "amount 1,234,567,890.00",
+            "timestamp 2026-11-28T06:07:01Z",
+            "timestamp 1764346821",
+            "timestamp 1764346821000",
+            "duration 1764346821000123456",
+            "id 1234567890000",
+            "123 456 789 without context",
+        ] {
+            assert_eq!(redact_secrets(ordinary), ordinary);
+        }
+    }
+
+    #[test]
+    fn redaction_masks_branch_lengths_and_escaped_or_spaced_tins() {
+        for (plain, masked) in [
+            ("123-456-789-0000", "***-***-789-0000"),
+            ("123 456 789 0000", "***-***-789-0000"),
+            ("123 456 789 000", "***-***-789-000"),
+            ("tin%3D123456789", "tin%3D***-***-789"),
+            ("%2F123456789000-2551Q", "%2F***-***-789-000-2551Q"),
+            ("\\n123456789000", "\\n***-***-789-000"),
+            ("receipt_123456789000", "receipt_***-***-789-000"),
+            ("123456789 2551Q", "***-***-789 2551Q"),
+            ("TIN 123 456 789", "TIN ***-***-789"),
+            ("123-112-150-00000", "***-***-150-00000"),
+        ] {
+            assert_eq!(redact_secrets(plain), masked, "{plain}");
+        }
+    }
+
+    #[test]
+    fn redaction_masks_email_local_parts_and_keeps_domains() {
+        for (plain, masked) in [
+            (
+                "poll failed for payroll.team@example.com",
+                "poll failed for pa•••@example.com",
+            ),
+            (
+                "file 123456789000-1601Cv2018-092026#payroll.team@example.com#.xml",
+                "file ***-***-789-000-1601Cv2018-092026#pa•••@example.com#.xml",
+            ),
+            ("mail a@example.com", "mail a•••@example.com"),
+        ] {
+            assert_eq!(redact_secrets(plain), masked, "{plain}");
+        }
+        for ordinary in ["asset icon@2x.png", "asset icon@2x.jpg"] {
+            assert_eq!(redact_secrets(ordinary), ordinary);
+        }
     }
 
     #[test]
@@ -495,7 +1027,8 @@ mod tests {
                     .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
                 assert!(text.contains("IMAP login failed"), "{text}");
                 assert!(text.contains("screen: render failed"), "{text}");
-                assert!(text.contains("12345678800000"), "{text}");
+                assert!(!text.contains("12345678800000"), "{text}");
+                assert!(text.contains("***-***-788-00000"), "{text}");
                 assert!(text.contains("probe-panic-9f3a"), "{text}");
                 assert!(!text.contains("s3cret-token"), "{text}");
                 assert!(!text.contains("ya29.SUPERSECRET"), "{text}");

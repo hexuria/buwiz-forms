@@ -107,29 +107,22 @@ def version_at_least(have, need):
     return bool(have and need and have >= need)
 
 
-def installed_cli_version(env=None, run=subprocess.run):
-    """The gpui-agent-cli version on this machine: E2E_GPUI_AGENT_CLI_VERSION, else `cargo install --list`, else the
-    version Cargo.lock pins (the setup scripts install exactly that one)."""
+def installed_cli_version(cli="gpui-agent", env=None, run=subprocess.run):
+    """The version of the gpui-agent binary the runner will invoke: E2E_GPUI_AGENT_CLI_VERSION first (tests), then
+    `<cli> --version`. cargo's install list is not evidence: a prebuilt install replaces the binary without it."""
     env = os.environ if env is None else env
-    if parse_version(env.get("E2E_GPUI_AGENT_CLI_VERSION")):
-        return env["E2E_GPUI_AGENT_CLI_VERSION"].lstrip("v")
+    override = env.get("E2E_GPUI_AGENT_CLI_VERSION")
+    if parse_version(override):
+        return override.strip().lstrip("v")
     try:
-        listed = run(["cargo", "install", "--list"], capture_output=True, text=True, timeout=30).stdout
-        match = re.search(r"^gpui-agent-cli v(\d+\.\d+\.\d+)", listed, re.M)
-        if match:
-            return match.group(1)
+        done = run([cli, "--version"], capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
-        pass
-    return pinned_gpui_agent_version()
-
-
-def pinned_gpui_agent_version(lock=ROOT / "Cargo.lock"):
-    try:
-        text = lock.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    match = re.search(r'name = "gpui-agent"\nversion = "(\d+\.\d+\.\d+)"', text)
-    return match.group(1) if match else None
+        return "unknown"
+    if getattr(done, "returncode", 0) != 0:
+        return "unknown"
+    lines = (getattr(done, "stdout", "") or "").strip().splitlines()
+    match = re.fullmatch(r"gpui-agent(?:-cli)?\s+v?(\d+\.\d+\.\d+)", lines[0] if lines else "")
+    return match.group(1) if match else "unknown"
 
 
 # --- Recipes: what their steps do --------------------------------------------------------------------------------
@@ -724,6 +717,22 @@ def check_suite(suite, feature_check="static"):
             if any(step.get("key_delay_ms") is not None for step in steps) and not entry.get("needs_cli"):
                 problems.append(f"{where}: {file} paces typing (key_delay_ms): mark it \"needs_cli\": \"0.4.1\" "
                                 "with a fallback")
+        may_scroll = entry.get("may_scroll")
+        lists = may_scroll.values() if isinstance(may_scroll, dict) else [may_scroll] if may_scroll is not None else []
+        known_ids = set()
+        for file in files:
+            if (base / file).resolve().is_file():
+                try:
+                    known_ids.update(step_ids((base / file).resolve()))
+                except SuiteError:
+                    pass
+        for ids_allowed in lists:
+            if not isinstance(ids_allowed, list) or not all(isinstance(i, str) for i in ids_allowed):
+                problems.append(f"{where}: may_scroll is a list of step ids (or a map of them by target or form factor)")
+                continue
+            for step_id in ids_allowed:
+                if step_id not in known_ids:
+                    problems.append(f"{where}: may_scroll names {step_id!r}, which no recipe file of it has")
     return problems
 
 
@@ -871,6 +880,38 @@ def redact_file(path, log):
     masked = log.redact(text)
     if masked != text:
         Path(path).write_text(masked, encoding="utf-8")
+
+
+AFTER_SCROLLS = re.compile(r"after (\d+) scroll\(s\) towards the middle")
+
+
+def step_scrolled(step):
+    """How many times a step scrolled its target clear of a cover first: the plug's `scrolled` result (#28), or, for a
+    step refused after scrolling, the count its error names ("… after N scroll(s) towards the middle")."""
+    if not isinstance(step, dict):
+        return 0
+    result = step.get("result")
+    count = result.get("scrolled") if isinstance(result, dict) else None
+    if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+        return count
+    match = AFTER_SCROLLS.search(step.get("error") or "")
+    return int(match.group(1)) if match else 0
+
+
+def scroll_check(receipt, entry, context):
+    """({step id: times scrolled}, (step id, error) of the first step that scrolled without the suite allowing it).
+
+    A press that would have been refused as occluded now scrolls its container and retries by default (#28), so a
+    step written to fail when a layout moved its target under something could pass by scrolling. A step may scroll
+    only when the suite entry lists its id in `may_scroll` for this host (a floating cover is expected there)."""
+    steps = receipt.get("steps") if isinstance(receipt, dict) else None
+    scrolled = {step.get("id"): step_scrolled(step) for step in steps or [] if step_scrolled(step)}
+    allowed = for_host(entry.get("may_scroll"), context) or []
+    for step_id, count in scrolled.items():
+        if step_id not in allowed:
+            return scrolled, (step_id, f"this step scrolled {count} time(s) to reach its target; add {step_id!r} to "
+                                       "this suite entry's \"may_scroll\" if that is intended")
+    return scrolled, None
 
 
 def failing_step(receipt):
@@ -1057,7 +1098,16 @@ def finish_recipe(result, entry, path, code, stdout, stderr, receipt, note, star
                   step_hint=None):
     """Fill `result` from a recipe's terminal receipt, exactly as an unsplit run reports it."""
     result["ms"] = round((time.monotonic() - started) * 1000)
+    scrolled, unasked = scroll_check(receipt, entry, context)
+    if scrolled:
+        result["scrolled"] = scrolled
     if code == 0 and isinstance(receipt, dict) and receipt.get("ok"):
+        if unasked:
+            step, error = unasked
+            result.update(status="fail", step=step, error=error, error_code="scrolled",
+                          line=wants_line_of(path, step))
+            log.line("recipe", entry["name"], f"fail at {step}: {error}", result["ms"])
+            return result
         result["status"] = "pass"
         log.line("recipe", entry["name"], "pass" + (f" ({note})" if note else ""), result["ms"])
         return result
@@ -1387,7 +1437,7 @@ def check(suite_name, cli):
     each file the installed client can read. Exit 0 when nothing is wrong."""
     suite = load_suite(suite_name)
     problems = check_suite(suite)
-    cli_version = installed_cli_version()
+    cli_version = installed_cli_version(cli)
     validated = 0
     if shutil.which(cli) or Path(cli).exists():
         for entry in suite["recipes"]:
@@ -1462,7 +1512,7 @@ def run(args):
                                if os.environ.get(name)]
     log = RunLog(out / "run.log", secrets_=secret_values)
     header = {"suite": suite["_path"].stem, "target": args.target, "started": stamp, "out": str(out),
-              "cli_version": installed_cli_version(), "app_commit": git_head()}
+              "cli_version": installed_cli_version(args.cli), "app_commit": git_head()}
     proc = None
     results = []
     made_db = None

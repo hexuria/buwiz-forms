@@ -1,0 +1,61 @@
+{
+ "v": 1,
+ "description": "money probe: an amount typed, Home and back, the amount unchanged. On a decimal pad the input method composes nothing, so this exercises the kit's replay fix (hexuria/nsh#58), not app code.",
+ "params": {
+  "tin": "12345678800000",
+  "name": "E2E SMOKE TAXPAYER",
+  "address": "1 TEST ST",
+  "zip": "1000",
+  "rdo": "040",
+  "start_option": "new-tp-start-opt-none",
+  "prior": "500.25",
+  "amount": "1234.5",
+  "amount_shown": "1,234.56",
+  "tin_root": "123456788",
+  "year": "2026",
+  "credits_before_home": "1734.75"
+ },
+ "recipes": [
+  {
+   "name": "setup-start",
+   "file": "setup-start.wants",
+   "required": true
+  },
+  {
+   "name": "sign-up",
+   "desktop": "sign-up.wants",
+   "phone": "sign-up-phone.json",
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   },
+   "required": true
+  },
+  {
+   "name": "tax-year",
+   "file": "tax-year.wants",
+   "required": true
+  },
+  {
+   "name": "open-2551q",
+   "desktop": "open-2551q.wants",
+   "phone": "open-2551q-phone.wants",
+   "required": true
+  },
+  {
+   "name": "money-home",
+   "phone": "android-420-money-home.json",
+   "required": true,
+   "needs_cli": "0.4.1",
+   "needs_feature": {
+    "android": "system.background"
+   },
+   "needs_host": "a host listing system.background (the app's pin does not)"
+  }
+ ]
+}

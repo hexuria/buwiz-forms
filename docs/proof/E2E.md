@@ -173,6 +173,14 @@ that part without using `$table`, and only then clicks `$table-add`; the entry's
 - `fallback`: the file to run while those are missing, or a map per form factor (`phone`, then `file`). Without one,
   the recipe is reported as `needs`.
 
+**Scrolling to reach a target.**
+- The plug scrolls a press's target clear of a cover that floats over it and retries (hexuria/nsh-gpui-agent#28). The
+  step's result says `scrolled: n`, and the report records it per recipe.
+- A step that scrolled FAILS unless the entry lists its id in `may_scroll`. A recipe written to fail when a layout moves
+  its target under something must not pass by scrolling.
+- `may_scroll`: step ids, or a map of them per target or form factor (`{"phone": ["s14"]}`, the money-boxes press
+  under the form's floating section bar). Set it only where a floating cover is expected.
+
 **Labels.**
 - `known_gap`: a failure there is reported as `known gap` with that text. It can be a map per target or form factor.
 - `precondition`: said alongside a failure.
@@ -283,8 +291,6 @@ In gpui-agent and the plug (nsh-gpui-agent):
   which is not a person's keyed input (labelled `known gap` on phones).
 
 In the app and this repo:
-- **`ios-handoff.sh` keeps a stale agent token** (#449): the token file is written only if absent, so the next launch's
-  token never replaces a leftover one and the runner waits forever. Workaround: delete the container file first.
 - **sign-out under `BIR_AUTH_BYPASS=1`** (#450): no lock screen exists after Log out, and on Windows Log out needs an
   admin PIN the suite may not type. A suite-design question.
 - **queue** (#451): needs a taxpayer whose profile validates for 2551Q (business start date, income-tax election, Part I

@@ -28,9 +28,11 @@ third part to `scripts/package_msix.ps1`, which writes `Major.Minor.Patch.0`; th
 be 0. So for Windows the version itself is the only thing that can go up.
 
 Google Play's `versionCode` is the Apple build number, so that one counter serves every store that has one:
-`just play-bundle` takes App Store Connect's next number, as the Apple recipes do. Google Play does not know App Store
-Connect, so two Google Play uploads with no Apple upload between them would get the same number, and Google Play
-refuses the second. Then pass the number yourself, one higher: `just play-bundle 28`
+`just play-bundle --allow-dotenv` takes App Store Connect's next number, as the Apple recipes do (it reads `.env` for
+that; the bundle bakes nothing from it, and the Google client only with `STORE_GMAIL=1`). Google Play does not know App
+Store Connect, so two Google Play uploads with no Apple upload between them would get the same number, and Google Play
+refuses the second. Then pass the number yourself, one higher: `just play-bundle 28 --allow-dotenv` on the owner's Mac,
+whose checkout has a `.env`
 ([platforms/android.md](platforms/android.md)).
 
 ## Raising the version

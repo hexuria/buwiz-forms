@@ -1,7 +1,8 @@
 # CI
 
-Pull requests run quick checks, on Linux. The test suites run when someone asks for them: with a `ci:suite*`
-label on the pull request, by pushing the commit to a `test/...` branch, by hand, and every night on `main`.
+Pull requests run quick checks, chiefly on Linux; script-input changes also run the Python script tests on Windows.
+The test suites run when someone asks for them: with a `ci:suite*` label on the pull request, by pushing the commit
+to a `test/...` branch, by hand, and every night on `main`.
 The tests themselves are not slow. The GitHub queue is,
 and we were the ones filling it: about 20 jobs for each pull request, with macOS jobs waiting hours for a runner.
 
@@ -49,6 +50,12 @@ The quick checks are:
   is planned as app code and runs the quick checks.
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.
+
+Script changes also have Windows proof before merge: a pull request touching `scripts/`, `.githooks/`, `.github/workflows/` or the `justfile`
+plans `Python script tests (Windows)`, and `ci-ok` counts that job; the job is not itself a required check name. In the workspace test job
+the Python script tests and Rust tests are independent: `cargo test --locked --workspace` runs with `--no-fail-fast`, a failure in either
+does not stop the other from starting, the job stays red if either failed, and `Summarize failing tests` lists every failing test name found
+in the two captured logs.
 
 A pull request whose files are all plain docs costs two small Linux jobs (`changes`, then `ci-ok`) and one dependency wait.
 The legacy scans read Markdown and docs paths too, so `changes` runs them before `ci-ok`; `nsh.yml` starts no job.
@@ -112,6 +119,22 @@ A suite-label run plans the quick checks and the suites for the label's systems,
 files with the same planner code as a `test/**` push. Its `tests-ok` job in each workflow is the result to read. A
 machine's own run at the exact head is also proof and needs no label; keep the machine's result with the pull request
 as before. `just ci-test` and `just ci-test-pr` stay for machines and batch branches.
+
+Two things that surprise people:
+
+- A label run uses GitHub's merge of the pull request's branch with `main`, not the branch alone: the workflow file,
+  and so the label lanes, come from that merge. A branch cut before the label lanes existed still gets them, and needs
+  no update for that. A label starts nothing in two cases: the pull request conflicts with `main` (GitHub has no merge
+  to run, so no `pull_request` run starts at all), or the label does not exist in the repository (it is then never
+  added). A check can also run on an older merge than current `main`; marking the pull request draft and ready again
+  asks GitHub for a fresh run of the quick checks on a current merge without changing the commit. That does not run
+  the suites again: to refresh a suite-label run, remove the label and add it again.
+- A run started by hand (`workflow_dispatch`, or `gh workflow run`) is NOT among a pull request's checks, even at the
+  same commit. Nothing that waits on "the pull request's checks" waits for it. The batch gate reads the two workflows
+  differently: for `ci.yml` it accepts only a suite-label run or a `test/**` push as proof of `tests-ok`; for the NSH
+  app suite it also accepts a complete hand-started run or the nightly run at the pull request's head. So a
+  hand-started run can stand for the app suite and never for the workspace tests. If such a run matters to a merge,
+  name it and read its result by its id.
 
 ## Asking for tests on a branch
 
