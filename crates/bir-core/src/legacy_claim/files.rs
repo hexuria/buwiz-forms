@@ -593,14 +593,26 @@ fn move_safety_files(layout: &Layout, room_dir: &Path) {
     }
 }
 
+#[cfg(any(test, debug_assertions))]
+static FAIL_NEXT_OFFER_RENAME: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Test seam, debug builds only: the next offered-file rename answers as a sharing/AV failure.
+#[cfg(any(test, debug_assertions))]
+#[doc(hidden)]
+pub fn fail_next_offer_rename_for_test() {
+    FAIL_NEXT_OFFER_RENAME.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 /// The offer's "Add" (§A.3.6): the whole-profile export of the legacy file, taken from a scratch copy this build
 /// opened, imported into `room`; then the legacy file is renamed `bir_data.offered-<stamp>.db`, never replacing. The
 /// file's `-wal` is folded in first, so the renamed file alone holds every commit.
 pub(super) fn add_offered(
-    layout: &Layout,
+    claim: &super::LegacyClaim,
     room: &crate::db::Database,
     probed: Option<FileId>,
 ) -> Result<Added, Failure> {
+    let layout = &claim.layout;
     let legacy = layout.legacy_database();
     let fail = |transient: Transient| Failure::Transient(transient);
     if crate::safe_fs::file_id(&legacy).ok() != probed || probed.is_none() {
@@ -641,16 +653,32 @@ pub(super) fn add_offered(
             ))
         })?;
         drop(source);
-        crate::import::import_profile_data(room, &archive).map_err(|error| {
-            fail(transient(
-                TransientCause::Io,
-                false,
-                format!("import: {error}"),
-            ))
-        })?;
+        let probed = probed.expect("the identity was checked above");
+        let already_consumed = claim.offer_consumed(probed).map_err(super::store_failure)?;
+        let mut imported = false;
+        if !already_consumed {
+            claim
+                .record_offer_consumed(probed)
+                .map_err(super::store_failure)?;
+            if let Err(error) = crate::import::import_profile_data(room, &archive) {
+                let _ = claim.clear_offer_consumed(probed);
+                return Err(fail(transient(
+                    TransientCause::Io,
+                    false,
+                    format!("import: {error}"),
+                )));
+            }
+            imported = true;
+        }
         let offered = layout
             .device_dir()
             .join(format!("bir_data.offered-{stamp}.db"));
+        #[cfg(any(test, debug_assertions))]
+        if FAIL_NEXT_OFFER_RENAME.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            return Err(io("rename")(std::io::Error::other(
+                "injected offered-file rename failure",
+            )));
+        }
         crate::safe_fs::rename_no_replace(&legacy, &offered).map_err(io("rename"))?;
         crate::safe_fs::sync_dir(layout.device_dir()).map_err(io("fsync"))?;
         tracing::info!(
@@ -658,7 +686,7 @@ pub(super) fn add_offered(
             "an older version's tax profiles were added to this account"
         );
         Ok(Added {
-            profiles,
+            profiles: if imported { profiles } else { 0 },
             offered_file: offered,
         })
     })();

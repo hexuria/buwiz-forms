@@ -51,6 +51,9 @@ pub use probe::{CredentialKinds, LegacyProbe, probe_legacy};
 pub const RECORD_KEY: &str = "legacy";
 /// The `migration` row listing the rooms whose account said "Not mine" (a JSON array of room ids).
 pub const NOT_MINE_KEY: &str = "legacy.not_mine";
+/// The `migration` row naming the offered file whose import already committed (B2). It is written
+/// before the import, so a crash or a failed rename never imports the same file again.
+pub const OFFER_CONSUMED_KEY: &str = "legacy.offer_consumed";
 /// The `migration` row that says "Use this computer's login" was used once for the claim (PLAN §A.3.1). Once per
 /// claim, never once forever: the row is deleted whenever the claim ends — at Done, at Closed, in
 /// [`LegacyClaim::clear_permanent`], and on any transient or permanent failure before the move (a pre-move resume
@@ -688,6 +691,32 @@ impl LegacyClaim {
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             params![key, value],
         )?;
+        Ok(())
+    }
+
+    /// Whether `file` is the offered file whose import was already committed.
+    fn offer_consumed(&self, file: crate::safe_fs::FileId) -> Result<bool, DeviceStoreError> {
+        Ok(self
+            .migration_value(OFFER_CONSUMED_KEY)?
+            .and_then(|raw| serde_json::from_str::<crate::safe_fs::FileId>(&raw).ok())
+            == Some(file))
+    }
+
+    /// Record the offered file as consumed before its import commits.
+    fn record_offer_consumed(&self, file: crate::safe_fs::FileId) -> Result<(), DeviceStoreError> {
+        let value = serde_json::to_string(&file)
+            .map_err(|error| DeviceStoreError::Io(std::io::Error::other(error)))?;
+        self.set_migration_value(OFFER_CONSUMED_KEY, &value)
+    }
+
+    /// A refused import commits nothing, so its consumption mark goes and the offer can be tried again.
+    fn clear_offer_consumed(&self, file: crate::safe_fs::FileId) -> Result<(), DeviceStoreError> {
+        if self.offer_consumed(file)? {
+            self.store.conn().execute(
+                "DELETE FROM migration WHERE key = ?1",
+                params![OFFER_CONSUMED_KEY],
+            )?;
+        }
         Ok(())
     }
 
@@ -1961,11 +1990,15 @@ impl Offer {
     /// "Add them to this account": the whole-profile export of the file (from a scratch copy) imported into `room`, the
     /// open room's database; then the file is renamed `bir_data.offered-<stamp>.db`, never replacing.
     pub fn add(self, claim: &LegacyClaim, room: &Database) -> Result<Added, Failure> {
-        let added = files::add_offered(&claim.layout, room, self.gate.probe.identity());
+        let added = files::add_offered(claim, room, self.gate.probe.identity());
         drop(self.gate.lock);
         added
     }
 }
+
+#[cfg(any(test, debug_assertions))]
+#[doc(hidden)]
+pub use files::fail_next_offer_rename_for_test;
 
 // ------------------------------------------------------------------------------------------------ helpers
 

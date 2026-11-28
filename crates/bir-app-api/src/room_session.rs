@@ -107,49 +107,55 @@ fn migration_offer_answer(arguments: &HostArguments) -> HostResult {
         crate::session::clear_offer_note();
         return Err(HostError::new("the file that was offered is gone"));
     }
-    // The probe first (N1), on a scratch copy: a credential means the legacy unlock page, which is
-    // A3a-2 — until then the offer cannot run on a locked file.
-    if let Ok(bir_core::legacy_claim::LegacyProbe::Locked(_)) =
-        bir_core::legacy_claim::probe_legacy(&layout)
-    {
+    let stored = bir_core::cloud_account::load_stored_account()
+        .map_err(|error| HostError::new(error.to_string()))?
+        .ok_or_else(|| HostError::new("no one is signed in"))?;
+    let owner = crate::session::Owner::of_stored(&stored)
+        .ok_or_else(|| HostError::new("the sign-in is not a room owner's"))?;
+    if snap.owner.as_ref() != Some(&owner) {
         return Err(HostError::new(
-            "This file is locked with a TIN and PIN. Moving locked files comes in a later version; choose Not now.",
+            "the signed-in account changed; the offer is the account's it was made to",
         ));
     }
+    let claim = LegacyClaim::at(layout).map_err(|error| HostError::new(error.to_string()))?;
+    let claimant = bir_core::legacy_claim::Claimant {
+        server_url: stored.server_url,
+        user_id: stored.user_id,
+        email: stored.email,
+        practice: stored.practice,
+    };
+    let failure_detail = |failure: bir_core::legacy_claim::Failure| match failure {
+        bir_core::legacy_claim::Failure::Transient(transient) => transient.detail,
+        bir_core::legacy_claim::Failure::Permanent(permanent) => permanent.detail,
+    };
+    let offer = match claim.start(&claimant) {
+        bir_core::legacy_claim::Start::Offer(bir_core::legacy_claim::OfferStart::Open(offer)) => {
+            offer
+        }
+        bir_core::legacy_claim::Start::Offer(bir_core::legacy_claim::OfferStart::Locked(_)) => {
+            return Err(HostError::new(
+                "This file is locked with a TIN and PIN. Moving locked files comes in a later version; choose Not now.",
+            ));
+        }
+        bir_core::legacy_claim::Start::Failed(failure) => {
+            return Err(HostError::new(failure_detail(failure)));
+        }
+        _ => {
+            crate::session::clear_offer_note();
+            return Err(HostError::new("the file that was offered is gone"));
+        }
+    };
     let (handle, ..) = snap
         .room
         .ok_or_else(|| HostError::new("no room is open to add them to"))?;
-    let stamp = bir_core::bir_submit::device::now();
-    let scratch_dir = layout.device_dir().join("scratch");
-    std::fs::create_dir_all(&scratch_dir).map_err(|error| HostError::new(error.to_string()))?;
-    let archive = scratch_dir.join(format!("offered-{stamp}.zip"));
-    let result = (|| -> Result<(), String> {
-        let offered = bir_core::db::Database::open(&legacy).map_err(|error| error.to_string())?;
-        bir_core::export::export_all_profiles_data(&offered, &archive)
-            .map_err(|error| error.to_string())?;
-        drop(offered);
-        {
-            let room = bir_core::lock_timing::lock(&handle)
-                .map_err(|_| "database lock poisoned".to_owned())?;
-            bir_core::import::import_profile_data(&room, &archive)
-                .map_err(|error| error.to_string())?;
-        }
-        std::fs::rename(
-            &legacy,
-            layout
-                .device_dir()
-                .join(format!("bir_data.offered-{stamp}.db")),
-        )
-        .map_err(|error| error.to_string())?;
-        Ok(())
-    })();
-    let _ = std::fs::remove_file(&archive);
-    match result {
-        Ok(()) => {
+    let room = bir_core::lock_timing::lock(&handle)
+        .map_err(|_| HostError::new("database lock poisoned"))?;
+    match offer.add(&claim, &room) {
+        Ok(_) => {
             crate::session::clear_offer_note();
             Ok(HostValue::Null)
         }
-        Err(error) => Err(HostError::new(error)),
+        Err(failure) => Err(HostError::new(failure_detail(failure))),
     }
 }
 
@@ -222,5 +228,193 @@ fn safety_copy_status() -> HostResult {
             .field("kind", "kept")
             .field("reason", format!("{reason:?}"))
             .into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use bir_core::db::Database;
+    use bir_core::legacy_claim::{Record, Step};
+    use bir_core::profile::TaxpayerType;
+    use bir_core::rooms::Layout;
+    use bir_core::tax_profile::{BranchFacts, NewTaxpayer};
+    use gpui_shell::{HostArguments, HostModule, HostResult, HostValue};
+
+    use super::register;
+
+    fn add_taxpayer(db: &Database, root: &str, name: &str) {
+        db.create_taxpayer(NewTaxpayer {
+            tin_root: root.into(),
+            name: name.into(),
+            taxpayer_type: TaxpayerType::Corporation,
+            birth_date: None,
+            head_office: BranchFacts {
+                rdo_code: "040".into(),
+                registered_address: "1 Example Street, Pasig".into(),
+                zip_code: "1600".into(),
+                phone: "0280000000".into(),
+                email: "office@example.com".into(),
+            },
+        })
+        .unwrap();
+    }
+
+    struct OfferScratch {
+        _turn: std::sync::MutexGuard<'static, ()>,
+        layout: Layout,
+        room: Arc<Mutex<Database>>,
+        _folder: tempfile::TempDir,
+    }
+
+    fn offer_scratch() -> OfferScratch {
+        let _turn = crate::session::test_turn();
+        crate::session::CLAIM_SPAWN_SUPPRESSED.store(true, std::sync::atomic::Ordering::SeqCst);
+        crate::open_room::reset_for_tests();
+        crate::session::reset_for_tests();
+        bir_core::db::set_open_room_database(None);
+        crate::account_gate::set_unlocked(false);
+        bir_core::account_session::clear_stored();
+        bir_core::account_session::reset_owner_cache_for_tests();
+        let folder = tempfile::tempdir().unwrap();
+        bir_core::platform::set_device_dir_override(Some(folder.path().to_path_buf()));
+        let layout = Layout::at(folder.path().to_path_buf());
+        std::fs::create_dir_all(layout.device_dir()).unwrap();
+        drop(bir_core::rooms::DeviceStore::open(&layout).unwrap());
+
+        let server_url = "https://buwiz.example.test";
+        let stored = bir_core::cloud_account::StoredAccount {
+            server_url: server_url.into(),
+            access_token: "access-a".into(),
+            refresh_token: "refresh-a".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-a".into(),
+            email: Some("user-a@example.test".into()),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        bir_core::account_session::save_stored(&stored).unwrap();
+        bir_core::account_session::cache_owner(bir_core::account_session::OwnerKey::of(&stored));
+        let owner = crate::session::Owner::of_stored(&stored).unwrap();
+        let room_id = bir_core::rooms::room_id_for(&owner.origin, &owner.user_id);
+        std::fs::create_dir_all(layout.room_dir(&room_id)).unwrap();
+        let room_path = layout.room_database(&room_id);
+        let room_db = Database::open(&room_path).unwrap();
+        add_taxpayer(&room_db, "123456788", "Room Owner");
+        let room = Arc::new(Mutex::new(room_db));
+
+        let legacy_db = Database::open(layout.legacy_database()).unwrap();
+        add_taxpayer(&legacy_db, "723456788", "Offered Profile");
+        legacy_db.close().unwrap();
+
+        let record = Record {
+            stamp: "2026-11-28T00:00:00Z".into(),
+            room: Some(room_id.as_str().into()),
+            origin: Some(owner.origin.clone()),
+            user_id: Some(owner.user_id.clone()),
+            email: stored.email.clone(),
+            step: Step::Done,
+            done_at: Some("2026-11-28T00:00:00Z".into()),
+            ..Record::default()
+        };
+        let conn = rusqlite::Connection::open(layout.device_db()).unwrap();
+        conn.execute(
+            "INSERT INTO migration (key, value) VALUES (?1, ?2)",
+            rusqlite::params![
+                bir_core::legacy_claim::RECORD_KEY,
+                serde_json::to_string(&record).unwrap()
+            ],
+        )
+        .unwrap();
+        drop(conn);
+
+        crate::session::begin_open(owner, 1, crate::session::OpenWhy::SignIn);
+        let epoch = crate::session::snapshot().epoch;
+        crate::session::commit(
+            epoch,
+            crate::session::Target::Room {
+                room_id: room_id.clone(),
+                note: crate::session::Note::Offered {
+                    room: room_id.clone(),
+                },
+                count_opened: false,
+            },
+            Some((room.clone(), room_path)),
+        );
+        assert_eq!(
+            crate::session::snapshot().phase_kind,
+            crate::session::PhaseKind::Open
+        );
+        OfferScratch {
+            _turn,
+            layout,
+            room,
+            _folder: folder,
+        }
+    }
+
+    fn offer_answer(add: bool) -> HostResult {
+        let module = register(HostModule::new("bir"));
+        module.call(
+            "migration_offer_answer",
+            &HostArguments::new([HostValue::Bool(add)]),
+        )
+    }
+
+    /// B2 through the real migration verb: the rename fails after the import committed; the file is
+    /// offered again, but the second Add consumes the same offer without importing it again.
+    #[test]
+    fn b2_a_failed_offer_rename_does_not_import_the_file_twice() {
+        let scratch = offer_scratch();
+        bir_core::legacy_claim::fail_next_offer_rename_for_test();
+        let first = offer_answer(true).expect_err("the injected rename failure");
+        assert!(
+            first
+                .message()
+                .contains("injected offered-file rename failure"),
+            "{}",
+            first.message()
+        );
+        assert!(scratch.layout.legacy_database().is_file());
+        {
+            let room = scratch.room.lock().unwrap();
+            assert!(
+                room.get_profile_by_tin("72345678800000").unwrap().is_some(),
+                "positive control: the first import committed"
+            );
+            room.delete_profile("72345678800000").unwrap();
+        }
+
+        offer_answer(true).expect("the repeated offer is consumed idempotently");
+        assert!(!scratch.layout.legacy_database().exists());
+        let room = scratch.room.lock().unwrap();
+        assert!(
+            room.get_profile_by_tin("72345678800000").unwrap().is_none(),
+            "the second Add imported the consumed offer again"
+        );
+        assert!(
+            room.get_profile_by_tin("12345678800000").unwrap().is_some(),
+            "the room's own profile stays"
+        );
+        let offered = std::fs::read_dir(scratch.layout.device_dir())
+            .unwrap()
+            .flatten()
+            .any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("bir_data.offered-")
+            });
+        assert!(offered, "the rename eventually moved the legacy file aside");
+        assert_eq!(
+            crate::session::migration_state(),
+            None,
+            "the offer note cleared: {:?}",
+            crate::session::migration_state()
+        );
+        drop(room);
+        drop(scratch);
     }
 }

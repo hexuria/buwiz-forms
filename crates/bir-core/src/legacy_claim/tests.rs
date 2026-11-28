@@ -387,7 +387,7 @@ fn what_the_offer_carries() {
     // Through the offer's own code path (a client PIN is not an admin lock, so no unlock comes first).
     let lock = crate::db::hold_owner_lock(&install.legacy()).unwrap();
     let added = files::add_offered(
-        &install.layout,
+        &install.claim(),
         &room,
         crate::safe_fs::file_id(&install.legacy()).ok(),
     )
