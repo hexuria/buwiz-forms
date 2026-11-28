@@ -12480,25 +12480,20 @@ mod tests {
             },
             "the cell line ends on a whole word: {cell_value:?}"
         );
-        let band_owned;
-        let band = match tags
-            .iter()
-            .find(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
-            .map(|t| t.tag)
-        {
-            Some(tag) => tag,
-            None => {
-                // The band's inputs carry no name: scan the raw html.
-                band_owned = html
-                    .split("<input")
-                    .skip(1)
-                    .find(|piece| piece.contains("data-overflow-of=\"p4c213\""))
-                    .map(|piece| piece[..piece.find('>').unwrap_or(piece.len())].to_string())
-                    .expect("the item 9 band");
-                &band_owned
-            }
-        };
-        let band_value = super::attr(band, "value").unwrap().replace("&#10;", "\n");
+        // Every continuation input of the band, in line order, named or not:
+        // the joined lines are the whole band text, not only its first line.
+        let band_value = html
+            .split("<input")
+            .skip(1)
+            .filter(|piece| piece.contains("data-overflow-of=\"p4c213\""))
+            .filter_map(|piece| {
+                let end = piece.find('>').unwrap_or(piece.len());
+                super::attr(&piece[..end], "value")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            .replace("&#10;", "\n");
+        assert!(!band_value.is_empty(), "the item 9 band");
         assert!(
             !band_value.starts_with("UNIT 1203"),
             "the band is the continuation, not the whole value again: {band_value:?}"
