@@ -35,7 +35,7 @@ SUITES = ("rust", "screens", "build", "installer", "validation")
 SHARDS = 3
 
 # The pull-request labels that ask for the suites, and the systems each asks for. GitHub's expression equality
-# ignores case, so the planner matches these keys case-insensitively too; anything else plans nothing.
+# is ordinal-ignore-case (it upper-cases), so the planner compares upper-case keys too; anything else plans nothing.
 SUITE_LABEL_SYSTEMS = {
     "ci:suite": ("linux", "windows"),
     "ci:suite-linux": ("linux",),
@@ -43,6 +43,7 @@ SUITE_LABEL_SYSTEMS = {
     "ci:suite-macos": ("macos",),
     "ci:suite-all": SYSTEMS,
 }
+SUITE_LABEL_SYSTEMS_BY_UPPER = {name.upper(): systems for name, systems in SUITE_LABEL_SYSTEMS.items()}
 
 # The `check` job's runner and toolchain target for each system, in the matrix order ci.yml has always used.
 CHECK_OS = {
@@ -154,9 +155,9 @@ def branch_systems(ref: str) -> list[str]:
 
 
 def has_label(labels: tuple[str, ...], wanted: str) -> bool:
-    """Label membership with GitHub's case-insensitive name comparison."""
-    wanted_key = wanted.casefold()
-    return any(label.casefold() == wanted_key for label in labels)
+    """Label membership with GitHub's ordinal-ignore-case name comparison."""
+    wanted_key = wanted.upper()
+    return any(label.upper() == wanted_key for label in labels)
 
 
 def plan_quick_checks(plan: dict, *, event: str, branch: str, labels: tuple[str, ...], seen: dict[str, bool],
@@ -224,7 +225,7 @@ def decide(
     if sync_lane not in ("quick", "none"):
         raise PlanError(f"unknown pull-request synchronize lane {sync_lane}: use quick or none")
 
-    suite_systems = (SUITE_LABEL_SYSTEMS.get(label.casefold())
+    suite_systems = (SUITE_LABEL_SYSTEMS_BY_UPPER.get(label.upper())
                      if event == "pull_request" and action == "labeled" else None)
     closed = action == "closed" or state.lower() == "closed"
 

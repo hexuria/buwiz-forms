@@ -735,9 +735,10 @@ jobs:
       tag: ""
 
   # The suite-label proof the batch gate reads. `always()` is deliberate: tests-ok is not a required status, so a run
-  # whose planned suite job failed or was cancelled reports red rather than vanishing.
+  # whose planned suite job failed or was cancelled reports red rather than vanishing. Its skipped job is still named,
+  # so the name first reads the plan: only the suite lane may call it `tests-ok`.
   tests-ok:
-    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all')) && 'tests-ok' || 'tests-not-requested' }}
+    name: ${{ needs.plan.outputs.lane != 'suite' && 'tests-not-requested' || (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name == 'ci:suite' || github.event.label.name == 'ci:suite-linux' || github.event.label.name == 'ci:suite-windows' || github.event.label.name == 'ci:suite-macos' || github.event.label.name == 'ci:suite-all')) && 'tests-ok' || 'tests-not-requested' }}
     needs: [ plan, nsh-macos, nsh-linux, nsh-windows, core-plain-test, linux-packages ]
     if: ${{ always() && github.event_name == 'pull_request' && needs.plan.outputs.lane == 'suite' }}
     runs-on: ubuntu-24.04

@@ -63,10 +63,12 @@ No GitHub macOS job starts by itself. macOS runs only for `ci:suite-macos`, `ci:
 
 A draft pull request runs nothing unless someone adds a `ci:suite*` label to it; that label is an explicit request
 and runs even on the draft. Otherwise every job of `ci.yml` is skipped before it takes a runner, so the pull request's
-checks list shows only skipped jobs, and none is red. A skipped job's name is still evaluated; a non-suite label,
-the empty synchronize run and a draft's other empty runs use names other than `ci-ok` and `tests-ok`, so neither
-check is reported as a skipped success there. Marking the pull request ready for review starts the quick checks, and
-their `ci-ok` is the one that counts. After that, every push runs them as before.
+checks list shows only skipped jobs, and none is red. A skipped job's name is still evaluated. The planner's lane is
+the first input to those names: a lane-`none` run names its quick gate `label-ignored` whatever spelling its label
+had, a draft's other empty quick gate is `not-ready`, and each workflow's separate suite-proof job is named
+`tests-ok` only in the suite lane. Neither `ci-ok` nor `tests-ok` is reported as a skipped success by an empty run.
+Marking the pull request ready for review starts the quick checks, and their `ci-ok` is the one that counts. After
+that, every push runs them as before.
 
 Open a pull request as a draft while you are still pushing to it, and mark it ready when you want its checks
 (`gh pr create --draft`, then `gh pr ready`). Turning a ready pull request back into a draft does not stop the run
@@ -75,8 +77,9 @@ already going. The next push to it does: that push runs nothing, and it cancels 
 When a pull request closes or merges, its `closed` event cancels the pull request's runs that are still queued or
 running, and runs nothing itself. A pull request's runs share one concurrency group, keyed on its number, and a new
 run in that group cancels the older ones. A label that is not a suite label is the exception: its empty run gets a
-group of its own and cancels nothing. Neither the `closed` run nor a cancelled run reports a check named
-`ci-ok`, so nothing turns red: the pull request keeps the `ci-ok` of its last finished run, if it had one.
+group of its own and cancels nothing. The `closed` run's skipped quick gate is named `closed`, and neither it nor a
+cancelled run reports a check named `ci-ok`, so nothing turns red: the pull request keeps the `ci-ok` of its last
+finished run, if it had one.
 
 This does not reach `test/**` runs. Those are pushes to their own branch, in that branch's group. A newer push to the
 same `test/...` branch replaces its run, and `gh run cancel <run id>` stops one. `just ci-test-clean` deletes the
@@ -90,12 +93,13 @@ just ci-suite 471 linux      # or windows, macos, all
 ```
 
 The labels are `ci:suite` (Linux and Windows), `ci:suite-linux`, `ci:suite-windows`, `ci:suite-macos` and
-`ci:suite-all`; as in GitHub's workflow expressions, the planner matches those names without regard to letter case
-and logs the spelling the event carried. The recipe creates the label in the repository when needed, removes it
-first when it is already there, adds it, and prints the pull request's checks link. Removing and adding is what asks
-again: the `labeled` event is the request, so a pull request that still carries the label does not rerun the suites
-on a later push; a new push needs a new ask. The workflows never remove the label and never need write permission
-for it, so fork pull requests use the same read-only token rule as any other pull request.
+`ci:suite-all`; as in GitHub's workflow expressions, the planner matches those names by ordinal-ignore-case
+comparison (the upper-case form) and logs the spelling the event carried. The recipe creates the label in the
+repository when needed, removes it first when it is already there, adds it, and prints the pull request's checks
+link. Removing and adding is what asks again: the `labeled` event is the request, so a pull request that still
+carries the label does not rerun the suites on a later push; a new push needs a new ask. The workflows never remove
+the label and never need write permission for it, so fork pull requests use the same read-only token rule as any
+other pull request.
 
 A suite-label run plans the quick checks and the suites for the label's systems, choosing the suites from the changed
 files with the same planner code as a `test/**` push. Its `tests-ok` job in each workflow is the result to read. A

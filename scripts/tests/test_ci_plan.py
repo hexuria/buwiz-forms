@@ -61,10 +61,17 @@ SUITE_LABEL = ("github.event_name == 'pull_request' && github.event.action == 'l
                "|| github.event.label.name == 'ci:suite-all')")
 DRAFT_NOT_READY = ("github.event_name == 'pull_request' && github.event.pull_request.draft "
                    "&& github.event.action != 'labeled'")
-CI_OK_NAME = ("    name: ${{ (" + NON_SUITE_LABEL + ") && 'label-ignored' || (" + DRAFT_NOT_READY + ") && 'not-ready' || "
+CLOSED_PULL_REQUEST = "github.event_name == 'pull_request' && github.event.action == 'closed'"
+CI_OK_LANE_NONE = "needs.changes.outputs.lane == 'none' && 'label-ignored' || "
+CI_OK_CLOSED = CLOSED_PULL_REQUEST + " && 'closed' || "
+CI_OK_NAME = ("    name: ${{ " + CI_OK_LANE_NONE + CI_OK_CLOSED + "(" + NON_SUITE_LABEL + ") && 'label-ignored' || ("
+              + DRAFT_NOT_READY + ") && 'not-ready' || "
               "((github.event_name == 'pull_request' || (github.event_name == 'push' && "
               "!startsWith(github.ref, 'refs/heads/test/'))) && 'ci-ok' || 'tests-ok') }}\n")
-TESTS_OK_NAME = "    name: ${{ (" + SUITE_LABEL + ") && 'tests-ok' || 'tests-not-requested' }}\n"
+CI_TESTS_OK_LANE = "needs.changes.outputs.lane != 'suite' && 'tests-not-requested' || "
+NSH_TESTS_OK_LANE = "needs.plan.outputs.lane != 'suite' && 'tests-not-requested' || "
+CI_TESTS_OK_NAME = "    name: ${{ " + CI_TESTS_OK_LANE + "(" + SUITE_LABEL + ") && 'tests-ok' || 'tests-not-requested' }}\n"
+NSH_TESTS_OK_NAME = "    name: ${{ " + NSH_TESTS_OK_LANE + "(" + SUITE_LABEL + ") && 'tests-ok' || 'tests-not-requested' }}\n"
 
 
 class AgentGatePolicyTests(unittest.TestCase):
@@ -144,7 +151,7 @@ class QuickLaneTests(unittest.TestCase):
         self.assert_quick(pr("docs/x.md", branch="ebirforms-sync"), check=False, nsh_check=False, validation=True)
 
     def test_the_validation_label_matches_case_insensitively_like_github_expressions(self):
-        for label in ("Run-Validation", "RUN-VALIDATION"):
+        for label in ("Run-Validation", "RUN-VALIDATION", "run-validatıon"):
             with self.subTest(label=label):
                 self.assert_quick(pr("docs/x.md", labels=(label,)), check=False, nsh_check=False, validation=True)
         self.assert_quick(pr("docs/x.md", labels=("run-validation-extra",)), check=False, nsh_check=False)
@@ -273,7 +280,8 @@ class SuiteLabelTests(unittest.TestCase):
         self.assertEqual(self.labeled("ci:suite-macos", "crates/bir-core/src/lib.rs")["check_systems"], ["macos"])
 
     def test_suite_labels_match_case_insensitively_like_github_expressions_and_log_their_spelling(self):
-        for label, systems in (("CI:Suite", ["linux", "windows"]), ("ci:SUITE-windows", ["windows"])):
+        for label, systems in (("CI:Suite", ["linux", "windows"]), ("ci:SUITE-windows", ["windows"]),
+                               ("cı:suite", ["linux", "windows"])):
             with self.subTest(label=label):
                 plan = self.labeled(label, "crates/bir-core/src/lib.rs")
                 self.assertEqual(plan["lane"], "suite")
@@ -281,6 +289,12 @@ class SuiteLabelTests(unittest.TestCase):
                 self.assertEqual(plan["check_systems"], systems)
                 self.assertEqual(plan["nsh_systems"], systems)
                 self.assertIn(f"suite label: {label}", plan["reasons"])
+
+    def test_the_dotless_i_suite_label_plans_the_suite_lane(self):
+        plan = self.labeled("cı:suite", "crates/bir-core/src/lib.rs")
+
+        self.assertEqual(plan["lane"], "suite")
+        self.assertEqual(plan["chosen_systems"], ["linux", "windows"])
 
     def test_any_other_label_plans_nothing_even_when_it_starts_with_ci_suite(self):
         for label in ("bug", "ci:suiteful", ""):
@@ -541,9 +555,18 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("needs.plan.outputs", job(NSH, name), name)
 
     def test_non_suite_labels_never_create_checks_named_ci_ok_or_tests_ok(self):
-        self.assertIn(CI_OK_NAME, job(CI, "ci-ok"))
-        self.assertIn(TESTS_OK_NAME, job(CI, "tests-ok"))
-        self.assertIn(TESTS_OK_NAME, job(NSH, "tests-ok"))
+        gate = job(CI, "ci-ok")
+        self.assertIn(CI_OK_NAME, gate)
+        self.assertLess(gate.index(CI_OK_LANE_NONE), gate.index(CI_OK_CLOSED))
+        self.assertLess(gate.index(CI_OK_LANE_NONE), gate.index("&& 'not-ready'"))
+        self.assertLess(gate.index(CI_OK_LANE_NONE), gate.index("&& 'ci-ok'"))
+
+        ci_proof = job(CI, "tests-ok")
+        self.assertIn(CI_TESTS_OK_NAME, ci_proof)
+        self.assertLess(ci_proof.index(CI_TESTS_OK_LANE), ci_proof.index("&& 'tests-ok'"))
+        nsh_proof = job(NSH, "tests-ok")
+        self.assertIn(NSH_TESTS_OK_NAME, nsh_proof)
+        self.assertLess(nsh_proof.index(NSH_TESTS_OK_LANE), nsh_proof.index("&& 'tests-ok'"))
 
     def test_a_drafts_empty_run_is_named_not_ready_until_a_suite_label_or_ready_for_review(self):
         gate = job(CI, "ci-ok")
@@ -551,13 +574,24 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("github.event.pull_request.draft", DRAFT_NOT_READY)
         self.assertLess(gate.index("&& 'not-ready'"), gate.index("&& 'ci-ok'"))
 
+    def test_a_closed_pull_requests_empty_run_is_named_closed(self):
+        gate = job(CI, "ci-ok")
+        self.assertIn(CI_OK_CLOSED, gate)
+        self.assertLess(gate.index(CI_OK_CLOSED), gate.index("&& 'not-ready'"))
+        self.assertLess(gate.index(CI_OK_CLOSED), gate.index("&& 'ci-ok'"))
+
     def test_workflow_label_comparisons_and_the_planner_follow_githubs_case_insensitive_equality(self):
         for workflow in (CI, NSH):
             compared = re.findall(r"github\.event\.label\.name\s*[!=]=\s*'([^']+)'", workflow)
-            self.assertEqual({name.casefold() for name in compared}, set(ci_plan.SUITE_LABEL_SYSTEMS))
-            for label in ("CI:Suite", "ci:SUITE-windows"):
-                self.assertTrue(any(label.casefold() == name.casefold() for name in compared), label)
-        for label, systems in (("CI:Suite", ["linux", "windows"]), ("ci:SUITE-windows", ["windows"])):
+            self.assertEqual({name.upper() for name in compared}, {name.upper() for name in ci_plan.SUITE_LABEL_SYSTEMS})
+            for label in ("CI:Suite", "ci:SUITE-windows", "cı:suite"):
+                self.assertTrue(any(label.upper() == name.upper() for name in compared), label)
+        planner_source = (ROOT / "scripts/ci_plan.py").read_text(encoding="utf-8")
+        self.assertNotIn(".casefold()", planner_source)
+        self.assertIn("label.upper()", planner_source)
+        self.assertIn("wanted.upper()", planner_source)
+        for label, systems in (("CI:Suite", ["linux", "windows"]), ("ci:SUITE-windows", ["windows"]),
+                               ("cı:suite", ["linux", "windows"])):
             with self.subTest(label=label):
                 plan = pr("crates/bir-core/src/lib.rs", action="labeled", label=label)
                 self.assertEqual(plan["lane"], "suite")
@@ -616,7 +650,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_tests_ok_gates_suite_label_runs_in_both_workflows(self):
         ci_gate = job(CI, "tests-ok")
-        self.assertIn(TESTS_OK_NAME, ci_gate)
+        self.assertIn(CI_TESTS_OK_NAME, ci_gate)
         self.assertIn("always() && github.event_name == 'pull_request' && needs.changes.outputs.lane == 'suite'", ci_gate)
         self.assertIn("needs: [ changes, check, nsh-check, nsh-agent-check, windows-setup, scripts, validation-rules-v1, "
                       "validation-rules-v2, legacy-guard ]", ci_gate)
@@ -626,7 +660,7 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertIn("lane: ${{ steps.decide.outputs.lane }}", job(NSH, "plan"))
         nsh_gate = job(NSH, "tests-ok")
-        self.assertIn(TESTS_OK_NAME, nsh_gate)
+        self.assertIn(NSH_TESTS_OK_NAME, nsh_gate)
         self.assertIn("always() && github.event_name == 'pull_request' && needs.plan.outputs.lane == 'suite'", nsh_gate)
         self.assertIn("needs: [ plan, nsh-macos, nsh-linux, nsh-windows, core-plain-test, linux-packages ]", nsh_gate)
         for name in ("nsh-macos", "nsh-linux", "nsh-windows", "core-plain-test", "linux-packages"):
