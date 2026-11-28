@@ -121,6 +121,34 @@ fn document(code: &str, slug: &str, draft: &Value) -> String {
     bir_print::frozen_html::filled_document(slug, &printed(code, draft)).unwrap()
 }
 
+/// `document` after the app's own print preparation and static field render.
+fn app_print_document(code: &str, slug: &str, draft: &Value) -> String {
+    let html = document(code, slug, draft);
+    crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true))
+}
+
+fn html_cell(slug: &str, writer_key: &str) -> String {
+    let cells = writer_cells(slug);
+    for list in [
+        "joins",
+        "money_joins",
+        "xbox_joins",
+        "peso_joins",
+        "date_joins",
+    ] {
+        for join in cells[list].as_array().into_iter().flatten() {
+            if join["writer_key"] == writer_key {
+                for field in ["html_id", "decimal_html_id", "peso_html_id"] {
+                    if let Some(cell) = join[field].as_str() {
+                        return cell.to_string();
+                    }
+                }
+            }
+        }
+    }
+    panic!("{slug}: {writer_key} is joined")
+}
+
 /// The page's radio-group answer, the way form_page.js sends it: the
 /// picked box true, the others false.
 fn pick(keys: &[&str], picked: &str) -> Value {
@@ -755,8 +783,8 @@ fn pr4_form_2000_schedule_dates_take_typed_dates_once_item_13_opens_them() {
 /// Lesson 8: an answer that removes what the filer typed asks first
 /// (`removes`), and nothing typed asks nothing: 2000 item 13 and its
 /// schedule rows, item 10 and items 11-12, a cleared Schedule 1 ATC with its
-/// tax base; Amended Return No clearing 2000's 15A, 2553's 20A and 2550M's
-/// 23D; 2553 row 18's cleared ATC.
+/// tax base; Amended Return No keeping 2000's 15A while clearing 2553's 20A
+/// and 2550M's 23D; 2553 row 18's cleared ATC.
 #[test]
 fn pr4_answers_that_remove_typed_entries_ask_first() {
     setup();
@@ -834,7 +862,8 @@ fn pr4_answers_that_remove_typed_entries_ask_first() {
         "Clearing these ATCs removes their rows and amounts of ₱1,000.00 and ₱250.00. Continue?"
     );
     assert_eq!(both["removes"]["done"], "Removed 2 rows");
-    // Amended Return No clears the previous return's payment.
+    // Amended Return No clears the previous return's payment on 2553 and
+    // 2550M; the official 2000 runtime keeps it while disabled.
     for (code, period, yes, no, key, field, item) in [
         (
             "2000",
@@ -870,15 +899,38 @@ fn pr4_answers_that_remove_typed_entries_ask_first() {
         assert_eq!(typed["rejected"], json!({}), "{code}");
         assert_eq!(typed["draft"][field], 250.0, "{code}");
         let original = fill(code, &typed["draft"], pick(&[yes, no], no));
-        assert_eq!(original["draft"][field], 0.0, "{code}");
-        assert_eq!(
-            original["removes"]["message"],
-            format!("Changing Amended Return to No clears item {item} (₱250.00). Continue?"),
-            "{code}"
-        );
+        if code == "2000" {
+            assert_eq!(original["draft"][field], 250.0, "{code}");
+            assert_eq!(original["removes"], Value::Null, "{code}");
+            let saved = save(code, &original["draft"]);
+            let reopened = open(code, period);
+            assert_eq!(
+                reopened["draft"], saved["draft"],
+                "{code}: reopens as stored"
+            );
+            assert_eq!(
+                reopened["draft"][field], 250.0,
+                "{code}: stored disabled value"
+            );
+            let html = app_print_document(code, "2000-dst-2018", &reopened["draft"]);
+            let cell = html_cell("2000-dst-2018", key);
+            assert_eq!(
+                crate::static_html::cell_text(&html, &cell),
+                "25000",
+                "Item 15A prints through the in-app print path"
+            );
+        } else {
+            assert_eq!(original["draft"][field], 0.0, "{code}");
+            assert_eq!(
+                original["removes"]["message"],
+                format!("Changing Amended Return to No clears item {item} (₱250.00). Continue?"),
+                "{code}"
+            );
+        }
         let untyped = fill(code, &amended["draft"], pick(&[yes, no], no));
         assert_eq!(untyped["removes"], Value::Null, "{code}");
     }
+
     // 2550M Schedule 1: "Choose..." on a row removes its sales and output tax.
     let opened = open("2550M", 3);
     let atc = fill(
@@ -2367,4 +2419,57 @@ fn v2018_2551q_an_amendment_save_uses_the_filed_row_as_before_and_marks_the_page
         )),
         1
     );
+}
+
+/// 2000 Item 15A is typed while Amended Return is Yes, shut by Amended
+/// Return No, and kept through the app's save, reopen, print and upload.
+#[test]
+fn dst_2000_disabled_item_15a_is_kept_through_reopen_print_and_payload() {
+    setup();
+    let yes = "frm2000:AmendedRtn_1";
+    let no = "frm2000:AmendedRtn_2";
+    let key = "frm2000:txtTax15A";
+    let opened = open("2000", 6);
+    let amended = fill("2000", &opened["draft"], pick(&[yes, no], yes));
+    assert_eq!(amended["rejected"], json!({}));
+    let typed = fill("2000", &amended["draft"], json!({ key: "250" }));
+    assert_eq!(typed["rejected"], json!({}));
+    let closed = fill("2000", &typed["draft"], pick(&[yes, no], no));
+    assert_eq!(closed["rejected"], json!({}));
+    assert_eq!(closed["removes"], Value::Null);
+    assert_eq!(closed["draft"]["balance_carried_over"], 250.0);
+    assert_eq!(
+        closed["relock_notes"][key],
+        json!("Item 15A is for an amended return."),
+        "the kept value is locked, never announced as cleared"
+    );
+
+    let completed = fill(
+        "2000",
+        &closed["draft"],
+        json!({"frm2000:optParty_3": "true", "frm2000:optMode_1": "true"}),
+    );
+    assert_eq!(completed["rejected"], json!({}));
+    let saved = save("2000", &completed["draft"]);
+    let reopened = open("2000", 6);
+    assert_eq!(reopened["draft"], saved["draft"], "reopens as stored");
+    assert_eq!(reopened["draft"]["balance_carried_over"], 250.0);
+    let html = app_print_document("2000", "2000-dst-2018", &reopened["draft"]);
+    let cell = html_cell("2000-dst-2018", key);
+    assert_eq!(
+        crate::static_html::cell_text(&html, &cell),
+        "25000",
+        "Item 15A's peso and centavo comb prints through the in-app print path"
+    );
+    assert_eq!(printed("2000", &reopened["draft"])[key], "250.00");
+    let stored: bir_core::forms::form_2000::Form2000Draft =
+        serde_json::from_value(reopened["draft"].clone()).unwrap();
+    let payload = bir_core::official_xml::write(
+        bir_core::official_xml::layout(bir_core::forms::form_2000::FORM_2000_FORM_ID).unwrap(),
+        &stored.to_bir_field_map(),
+    )
+    .unwrap();
+    assert!(payload.contains("frm2000:txtTax15A=250.00frm2000:txtTax15A="));
+    let filing = validated("2000", &reopened["draft"]);
+    assert_eq!(filing["errors"], json!([]), "the screen-edited draft files");
 }
