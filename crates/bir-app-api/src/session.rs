@@ -473,8 +473,8 @@ pub fn begin_open(owner: Owner, engine: u64, why: OpenWhy) {
     if same_owner_open(&session, &owner) {
         // Item 5: a same-owner Opening whose claim thread is GONE is stale — nothing will ever
         // commit it. Try again replaces it; any other same-owner phase is still a no-op (X1).
-        let stale_opening = matches!(session.phase, Phase::Opening { .. })
-            && !claim_thread_alive(session.epoch);
+        let stale_opening =
+            matches!(session.phase, Phase::Opening { .. }) && !claim_thread_alive(session.epoch);
         if !stale_opening {
             return;
         }
@@ -562,7 +562,8 @@ pub(crate) static CLAIM_THREAD_SPAWNS: std::sync::atomic::AtomicU64 =
 /// Test seam: the next claim thread panics right after its guard is armed, so the guard's
 /// Blocked commit is exercised. One shot.
 #[cfg(test)]
-pub(crate) static PANIC_CLAIM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub(crate) static PANIC_CLAIM: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// Test seam (item 10): the claim-thread spawn is suppressed, so the tests that drive commit()
 /// by hand — the open_hand idiom — never race the real thread. scratch() suppresses; a test
@@ -590,7 +591,6 @@ static LIVE_CLAIMS: Mutex<Vec<u64>> = Mutex::new(Vec::new());
 fn claim_thread_alive(epoch: u64) -> bool {
     lock(&LIVE_CLAIMS).contains(&epoch)
 }
-
 
 /// The claim thread's drop guard: however the thread ends — a panic in the claim, the open or
 /// the commit itself — the Opening it served does not stand forever. A normal completion
@@ -711,19 +711,34 @@ pub fn close_if_owner(owner: &Owner, reason: Reason) -> bool {
         tracing::info!("close_if_owner after quit ignored: the session is terminal");
         return false;
     }
+    // (a): the disk read is blocking I/O and never runs under SESSION. It is read BEFORE the
+    // lock with the epoch captured alongside; inside, the same epoch must still stand — a bump
+    // in between means the inputs are stale and nothing is decided on them.
+    let epoch_at_read = locked().epoch;
+    let disk = crate::cloud_account::load_stored();
     let outcome = {
         let mut session = locked();
+        if session.epoch != epoch_at_read {
+            tracing::info!("close_if_owner: the epoch moved under the read — nothing closes");
+            return false;
+        }
         let phase_owner = session.phase.owner().cloned();
         if phase_owner.as_ref() != Some(owner) {
             tracing::info!("close_if_owner: the phase is another owner's — nothing closes");
             return false;
         }
-        // The disk re-read inside the lock order SESSION → account_session (I2's order, as
-        // commit does it): a stored sign-in — anybody's — means the disk is not empty and this
-        // is not the empty-disk ending.
-        if crate::cloud_account::load_stored().ok().flatten().is_some() {
-            tracing::info!("close_if_owner: the disk is not empty — nothing closes");
-            return false;
+        // (b): a torn read (write_secret_file is not atomic) is an Err — it is NOT an empty
+        // disk, and nothing closes on evidence nobody read. Only a clean None is empty.
+        match disk {
+            Ok(None) => {}
+            Ok(Some(_)) => {
+                tracing::info!("close_if_owner: the disk is not empty — nothing closes");
+                return false;
+            }
+            Err(error) => {
+                tracing::warn!("close_if_owner: the disk read failed ({error}) — nothing closes");
+                return false;
+            }
         }
         let cache_key = bir_core::account_session::stored_owner();
         bir_core::account_session::cache_owner(None);
@@ -747,10 +762,7 @@ pub fn sync_pause() {
     // The bypass (§9) unlocks with no owner and no phase: it sends, exactly as the gate's truth
     // said before — the sync changes the RACE, not the bypass's meaning.
     let sends = BYPASSED.load(std::sync::atomic::Ordering::SeqCst)
-        || matches!(
-            session.phase.kind(),
-            PhaseKind::Open | PhaseKind::Legacy
-        );
+        || matches!(session.phase.kind(), PhaseKind::Open | PhaseKind::Legacy);
     bir_core::background_cron::set_submission_paused(!sends);
 }
 
@@ -2812,10 +2824,7 @@ mod tests {
         );
         let epoch = snapshot().epoch;
         open_hand(&scratch, &owner_a, epoch, "a-room.db");
-        assert!(
-            gate_unlocked(),
-            "the gate is still locked after the commit"
-        );
+        assert!(gate_unlocked(), "the gate is still locked after the commit");
         assert!(
             migration_state().is_none(),
             "a clean open carries no migration state: {:?}",
@@ -2851,11 +2860,11 @@ mod tests {
         let owner_a = seed_stored("user-a", false);
         begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
         let epoch = snapshot().epoch;
-        let before = crate::bir_module::LOG_MAINTENANCE_RUNS
-            .load(std::sync::atomic::Ordering::SeqCst);
+        let before =
+            crate::bir_module::LOG_MAINTENANCE_RUNS.load(std::sync::atomic::Ordering::SeqCst);
         open_hand(&scratch, &owner_a, epoch, "a-room.db");
-        let after = crate::bir_module::LOG_MAINTENANCE_RUNS
-            .load(std::sync::atomic::Ordering::SeqCst);
+        let after =
+            crate::bir_module::LOG_MAINTENANCE_RUNS.load(std::sync::atomic::Ordering::SeqCst);
         assert!(
             after > before,
             "the commit ran no log maintenance — in rooms mode it never starts (item 9)"
@@ -2881,7 +2890,10 @@ mod tests {
         let epoch_b = snapshot().epoch;
         open_hand(&scratch, &owner_b, epoch_b, "b-room.db");
         assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        assert_eq!(snapshot().owner.as_ref().map(|o| o.user_id.as_str()), Some("user-b"));
+        assert_eq!(
+            snapshot().owner.as_ref().map(|o| o.user_id.as_str()),
+            Some("user-b")
+        );
         // A's stale verb ends: the disk holds B, and the phase is B's — nothing closes.
         let closed = close_if_owner(&owner_a, Reason::SignedInElsewhere);
         assert!(!closed, "the stale close of A ran");
@@ -2898,9 +2910,46 @@ mod tests {
             PhaseKind::Open,
             "B's session was closed by A's stale Ended — the E1 hole"
         );
-        assert_eq!(snapshot().owner.as_ref().map(|o| o.user_id.as_str()), Some("user-b"));
+        assert_eq!(
+            snapshot().owner.as_ref().map(|o| o.user_id.as_str()),
+            Some("user-b")
+        );
         assert!(gate_unlocked(), "B's gate stayed unlocked");
         assert_invariants();
+    }
+
+    /// (b): a torn read — write_secret_file is not atomic — is an Err, never an empty disk:
+    /// nothing closes on evidence nobody read.
+    #[test]
+    fn a_torn_disk_read_closes_nothing() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        // The torn write: valid JSON cut in half — a read errors, never answers empty.
+        // The same resolution the write path uses, never the env var: the device folder the
+        // scratch install points at.
+        let file = bir_core::platform::device_dir().join("buwiz-cloud-account.json");
+        let stored_text = std::fs::read_to_string(&file).expect("the seeded sign-in");
+        std::fs::write(&file, &stored_text[..stored_text.len() / 2]).unwrap();
+        assert!(
+            crate::cloud_account::load_stored().is_err(),
+            "the torn file should not even parse — the premise is wrong"
+        );
+        let closed = close_if_owner(&owner_a, Reason::SignedInElsewhere);
+        assert!(
+            !closed,
+            "a torn read closed the session — Err is not an empty disk"
+        );
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the machine closed on a torn read"
+        );
+        let _ = scratch;
     }
 
     /// E1(b): the cache is None while Open(A) and the disk is empty — nobody stored, the
@@ -2919,7 +2968,10 @@ mod tests {
         bir_core::account_session::cache_owner(None);
         assert!(bir_core::account_session::stored_owner().is_none());
         let closed = close_if_owner(&owner_a, Reason::SignedInElsewhere);
-        assert!(closed, "the close did not run — the machine stayed open for nobody");
+        assert!(
+            closed,
+            "the close did not run — the machine stayed open for nobody"
+        );
         assert_eq!(
             snapshot().phase_kind,
             PhaseKind::SignedOut,
