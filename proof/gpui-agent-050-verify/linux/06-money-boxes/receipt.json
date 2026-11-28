@@ -1,0 +1,167 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "e2e-money-boxes-phone",
+  "fingerprint": "fnv1a64:6d6c1728cccf127c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 848,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 743
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 411
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 27
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 821
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 27
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 376
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2548
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 546,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/009-s9.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 538
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2989
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 381,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 391
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 755,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/014-s14.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 381
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 627,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2316
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 854,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/019-s19.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/009-s9.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/014-s14.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "/home/ubuntu/j60/work/e2e-linux/06-money-boxes/019-s19.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 15603
+}

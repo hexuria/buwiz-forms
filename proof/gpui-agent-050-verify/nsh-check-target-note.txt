@@ -1,0 +1,1 @@
+nsh check has no --target option at f030fbfd

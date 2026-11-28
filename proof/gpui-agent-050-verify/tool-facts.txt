@@ -1,0 +1,10 @@
+gpui-agent CLI install route: prebuilt download
+installer path: scripts/setup-linux.sh install_gpui_agent -> scripts/lib/prebuilt.sh install_pinned_tool gpui-agent-cli 0.5.0
+archive: gpui-agent-cli-x86_64-unknown-linux-gnu-v0.5.0.tgz
+pinned archive sha256: 622400b4236ebc9313c18b3a9c6946aa5aba873b91873ffe240060bcd5730505
+digest check: archive sha256 matched the pin (otherwise install_pinned_tool falls back to a source build)
+installed binary sha256 stamp: 68da5f4024df300aeabb69c7535adf2873ceb982abbd57c1dbf0d3442a3b8fc7
+stamp: /home/ubuntu/.cargo/bin/.gpui-agent-cli.buwiz-installed = 0.5.0 / prebuilt / 68da5f4024df300aeabb69c7535adf2873ceb982abbd57c1dbf0d3442a3b8fc7
+wall time: 0 s (started and finished in the same second)
+gpui-agent --version: gpui-agent-cli 0.5.0
+note: on Ubuntu 22.04 the prebuilt binary prints `/lib/x86_64-linux-gnu/libc.so.6: weak version `GLIBC_2.39' not found (required by gpui-agent)` before answering, but exits 0.

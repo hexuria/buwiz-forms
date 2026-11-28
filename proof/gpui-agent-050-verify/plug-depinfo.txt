@@ -1,0 +1,24 @@
+plug rev in nsh/Cargo.lock: db0e4ac6127078a05751149f0ec6bed68204f911
+build dep-info hits:
+/home/ubuntu/j60/target-nsh/debug/deps/nsh_agent_actions-877b47094f17b058.d
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/failure.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/failure.rs:
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/lib.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/lib.rs:
+/home/ubuntu/j60/target-nsh/debug/deps/nsh_gpui_agent_linux-ec172bb2995c521b.d
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent-linux/src/lib.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent-linux/src/lib.rs:
+/home/ubuntu/j60/target-nsh/debug/deps/nsh_gpui_agent-2715f45ec88f7ffc.d
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent/src/lib.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent/src/lib.rs:
+/home/ubuntu/j60/target-nsh/debug/deps/nsh_agent_actions-b3fd3bf91f46a9cc.d
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/failure.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/failure.rs:
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/lib.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-agent-actions/src/lib.rs:
+/home/ubuntu/j60/target-nsh/debug/deps/nsh_gpui_agent_linux-4996f48933b5e539.d
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent-linux/src/lib.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent-linux/src/lib.rs:
+/home/ubuntu/j60/target-nsh/debug/deps/nsh_gpui_agent-368c703b8fc7daec.d
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent/src/lib.rs
+  /home/ubuntu/.cargo/git/checkouts/nsh-gpui-agent-430c25c17b0dac6b/db0e4ac/crates/nsh-gpui-agent/src/lib.rs:

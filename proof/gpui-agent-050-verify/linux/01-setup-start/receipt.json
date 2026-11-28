@@ -1,0 +1,36 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "setup-start",
+  "fingerprint": "fnv1a64:a5ae325163b8df07",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 122,
+      "screenshot": {
+        "path": "/home/ubuntu/j60/work/e2e-linux/01-setup-start/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 435
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 7
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/home/ubuntu/j60/work/e2e-linux/01-setup-start/001-s1.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 565
+}
