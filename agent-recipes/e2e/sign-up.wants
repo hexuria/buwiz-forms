@@ -4,7 +4,7 @@
 click new-tp-start-trigger
 wait_until $start_option --timeout-ms 5000
 click $start_option
-type $tin_field $tin
+set_value $tin_field $tin
 click new-tp-name
 type new-tp-name $name
 type new-tp-registered_address $address
