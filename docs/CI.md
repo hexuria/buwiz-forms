@@ -108,12 +108,16 @@ as before. `just ci-test` and `just ci-test-pr` stay for machines and batch bran
 
 Two things that surprise people:
 
-- A label only starts a run on a pull request whose own branch already has these workflows. GitHub reads a
-  `pull_request` workflow from the pull request's branch, so on a branch cut before the label lanes existed, adding a
-  label starts nothing: merge `main` into the branch first.
+- A label run uses GitHub's merge of the pull request's branch with `main`, not the branch alone: the workflow file,
+  and so the label lanes, come from that merge. A branch cut before the label lanes existed still gets them, and needs
+  no update for that. A label starts nothing in two cases: the pull request conflicts with `main` (GitHub has no merge
+  to run, so no `pull_request` run starts at all), or the label does not exist in the repository (it is then never
+  added). A check can also run on an older merge than current `main`; marking the pull request draft and ready again
+  asks GitHub for a fresh one without changing the commit.
 - A run started by hand (`workflow_dispatch`, or `gh workflow run`) is NOT among a pull request's checks, even at the
-  same commit. Nothing that waits on "the pull request's checks" waits for it: read such a run by its id before
-  merging on it.
+  same commit, and it is not suite proof for the batch gate, which accepts only a suite-label run or a `test/**` push.
+  Nothing that waits on "the pull request's checks" waits for it. If such a run matters to a merge, name it and read
+  its result by its id; it adds to the suite proof and never replaces it.
 
 ## Asking for tests on a branch
 
