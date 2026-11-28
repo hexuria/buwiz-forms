@@ -152,7 +152,7 @@ def claude_disallowed_tools(tree, gitdir, common_dir):
     return ",".join(parts)
 
 
-GIT_READ_WORDS = ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree")
+GIT_READ_WORDS = ("log", "show", "diff", "status", "ls-remote", "rev-parse")
 LAUNCHER_READ_VERBS = ("doctor", "status", "state path", "lint", "sync --check")
 GH_READ_PREFIXES = (
     "gh pr list", "gh pr view", "gh pr checks", "gh pr diff",
@@ -1180,7 +1180,7 @@ def crew_git_invocation(words):
     for token in rest:
         if dangerous_read_git_option(token):
             raise CrewError("crew git refuses {0}".format(token))
-    argv = [tool_path("git")]
+    argv = [tool_path("git"), "--no-pager"]
     if location is not None:
         argv.extend(["-C", location])
     argv.append(verb)
@@ -1195,8 +1195,11 @@ def cmd_git(args):
     if args.cwd:
         words = ["-C", args.cwd] + words
     argv = crew_git_invocation(words)
+    env = os.environ.copy()
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    env["GIT_PAGER"] = "cat"
     try:
-        return call_process(argv)
+        return call_process(argv, env=env)
     except OSError as exc:
         raise CrewError("could not start git: {0}".format(exc))
 

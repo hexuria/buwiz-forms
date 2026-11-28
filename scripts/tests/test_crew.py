@@ -27,6 +27,11 @@ def run_crew(repo, *args, env=None):
     merged = os.environ.copy()
     if env:
         merged.update(env)
+    merged.update({
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
     return subprocess.run([sys.executable, str(repo / "crew" / "bin" / "crew"), *args],
                           cwd=str(repo), capture_output=True, text=True, env=merged)
 
@@ -853,6 +858,46 @@ class StateTests(unittest.TestCase):
                 state, remote, branch, COMMIT_IDENTITY),
             encoding="utf-8")
 
+    def test_run_crew_isolates_git_configuration_for_state_push(self):
+        state = Path(self.temp.name) / "state-checkout"
+        remote = Path(self.temp.name) / "state-remote.git"
+        subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+        self.write_state_config(state, str(remote), "crew-state")
+        self.assertEqual(run_crew(self.repo, "state", "init").returncode, 0)
+        record = Path(self.temp.name) / "git-isolation.json"
+        real_git = shutil.which("git")
+        git_source = """
+import json
+import os
+import subprocess
+import sys
+argv = sys.argv[1:]
+if argv and argv[0] == 'push':
+    names = ('GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'GIT_TERMINAL_PROMPT')
+    data = dict((name, os.environ.get(name)) for name in names)
+    with open(os.environ['GIT_ISOLATION_RECORD'], 'w', encoding='utf-8') as handle:
+        json.dump(data, handle)
+result = subprocess.run([%r] + argv)
+sys.exit(result.returncode)
+""" % real_git
+        bin_dir = Path(self.temp.name) / "bin-isolated-git"
+        write_path_python(bin_dir, "git", git_source)
+        env = {
+            "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+            "GIT_ISOLATION_RECORD": str(record),
+            "GIT_CONFIG_GLOBAL": str(Path(self.temp.name) / "wrong-global-config"),
+            "GIT_CONFIG_NOSYSTEM": "0",
+            "GIT_TERMINAL_PROMPT": "1",
+        }
+
+        result = run_crew(self.repo, "state", "push", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(record.read_text(encoding="utf-8"))
+        self.assertEqual(data["GIT_CONFIG_GLOBAL"], os.devnull)
+        self.assertEqual(data["GIT_CONFIG_NOSYSTEM"], "1")
+        self.assertEqual(data["GIT_TERMINAL_PROMPT"], "0")
+
     def test_state_branch_outside_the_crew_prefixes_is_refused_at_init_pull_and_push(self):
         state = Path(self.temp.name) / "state-checkout"
         for branch in ("main", "master", "feature/state"):
@@ -1668,6 +1713,29 @@ with open(os.environ["GIT_RECORD"], "a", encoding="utf-8") as handle:
             return []
         return [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
 
+    def fake_git_environment(self):
+        record = Path(self.temp.name) / "git-environment.jsonl"
+        source = r'''
+import json
+import os
+import sys
+with open(os.environ["GIT_ENVIRONMENT_RECORD"], "a", encoding="utf-8") as handle:
+    handle.write(json.dumps({
+        "argv": sys.argv[1:],
+        "GIT_OPTIONAL_LOCKS": os.environ.get("GIT_OPTIONAL_LOCKS"),
+        "GIT_PAGER": os.environ.get("GIT_PAGER"),
+    }) + "\n")
+'''
+        write_path_python(self.bin, "git", source)
+        env = {"PATH": str(self.bin) + os.pathsep + os.environ.get("PATH", ""),
+               "GIT_ENVIRONMENT_RECORD": str(record)}
+        return record, env
+
+    def git_environment_calls(self, record):
+        if not record.exists():
+            return []
+        return [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
+
     def test_log_show_and_diff_are_wrapped_with_safe_diff_flags(self):
         record, env = self.fake_git()
         for verb in ("log", "show", "diff"):
@@ -1678,7 +1746,8 @@ with open(os.environ["GIT_RECORD"], "a", encoding="utf-8") as handle:
                 result = run_crew(self.repo, "git", verb, "-1", env=env)
 
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.git_calls(record), [[verb, "--no-textconv", "--no-ext-diff", "-1"]])
+                self.assertEqual(self.git_calls(record),
+                                 [["--no-pager", verb, "--no-textconv", "--no-ext-diff", "-1"]])
 
     def test_c_is_passed_to_git_before_the_read_verb(self):
         record, env = self.fake_git()
@@ -1687,7 +1756,40 @@ with open(os.environ["GIT_RECORD"], "a", encoding="utf-8") as handle:
         result = run_crew(self.repo, "git", "-C", str(state), "status", "--short", env=env)
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.git_calls(record), [["-C", str(state), "status", "--short"]])
+        self.assertEqual(self.git_calls(record), [["--no-pager", "-C", str(state), "status", "--short"]])
+
+    def test_merge_tree_is_not_a_read_only_verb(self):
+        record, env = self.fake_git()
+        cases = (
+            ("merge-tree", "HEAD", "other"),
+            ("merge-tree", "--trivial-merge", "base", "ours", "theirs"),
+        )
+        for words in cases:
+            with self.subTest(words=words):
+                if record.exists():
+                    record.unlink()
+
+                result = run_crew(self.repo, "git", *words, env=env)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.git_calls(record), [])
+
+    def test_every_wrapped_git_disables_optional_locks_and_the_pager(self):
+        record, env = self.fake_git_environment()
+        for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse"):
+            with self.subTest(verb=verb):
+                if record.exists():
+                    record.unlink()
+
+                result = run_crew(self.repo, "git", verb, env=env)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                calls = self.git_environment_calls(record)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0]["argv"][0], "--no-pager")
+                self.assertEqual(calls[0]["argv"][1], verb)
+                self.assertEqual(calls[0]["GIT_OPTIONAL_LOCKS"], "0")
+                self.assertEqual(calls[0]["GIT_PAGER"], "cat")
 
     def test_dangerous_write_and_diff_arguments_are_refused_before_git_runs(self):
         record, env = self.fake_git()
@@ -1751,14 +1853,16 @@ class ReadOnlyConductorProfileTests(unittest.TestCase):
             for suffix in ("doctor", "status", "state path", "lint", "sync --check"):
                 self.assertIn("Exec({0} crew/bin/crew {1})".format(python, suffix), permissions["allow"])
             self.assertIn("Exec({0} crew/bin/crew api GET)".format(python), permissions["allow"])
-            for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+            for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse"):
                 self.assertIn("Exec({0} crew/bin/crew git {1})".format(python, verb), permissions["allow"])
                 self.assertIn("Exec({0} crew/bin/crew git -C {1} {2})".format(python, tree, verb),
                               permissions["allow"])
                 self.assertIn("Exec({0} crew/bin/crew git -C {1} {2})".format(python, state, verb),
                               permissions["allow"])
-        for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+        for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse"):
             self.assertNotIn("Exec(git {0})".format(verb), permissions["allow"])
+        for python in ("python3", "python"):
+            self.assertNotIn("Exec({0} crew/bin/crew git merge-tree)".format(python), permissions["allow"])
         for entry in ("Exec(gh pr list)", "Exec(gh pr view)", "Exec(gh pr checks)", "Exec(gh pr diff)",
                       "Exec(gh run list)", "Exec(gh run view)", "Exec(gh release view)",
                       "Exec(gh issue view)"):
@@ -1806,12 +1910,14 @@ class ReadOnlyConductorProfileTests(unittest.TestCase):
             for suffix in ("doctor", "status", "state path", "lint", "sync --check"):
                 self.assertIn("Bash({0} crew/bin/crew {1})".format(python, suffix), tools)
             self.assertIn("Bash({0} crew/bin/crew api GET:*)".format(python), tools)
-            for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+            for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse"):
                 self.assertIn("Bash({0} crew/bin/crew git {1}:*)".format(python, verb), tools)
                 self.assertIn("Bash({0} crew/bin/crew git -C {1} {2}:*)".format(python, tree, verb), tools)
                 self.assertIn("Bash({0} crew/bin/crew git -C {1} {2}:*)".format(python, state, verb), tools)
-        for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse", "merge-tree"):
+        for verb in ("log", "show", "diff", "status", "ls-remote", "rev-parse"):
             self.assertNotIn("Bash(git {0}:*)".format(verb), tools)
+        for python in ("python3", "python"):
+            self.assertNotIn("Bash({0} crew/bin/crew git merge-tree:*)".format(python), tools)
         for entry in ("Bash(gh pr list:*)", "Bash(gh pr view:*)", "Bash(gh pr checks:*)",
                       "Bash(gh pr diff:*)", "Bash(gh run list:*)", "Bash(gh run view:*)",
                       "Bash(gh release view:*)", "Bash(gh issue view:*)"):
