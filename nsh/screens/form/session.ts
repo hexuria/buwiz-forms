@@ -888,6 +888,8 @@ export class FormSession {
   private periodWaiting = false;
   /** Money/num keys typed through their own boxes since their fill answer; row clears and host moves are not shown-amount mismatches. */
   private amountEdited = new Set<string>();
+  /** What a number box held when its current focus began: a refused amount typed in one go rolls back to it, not to a shorter prefix of the same typing that a mid-typing flush committed while it still fit. */
+  private typeBase = new Map<string, string>();
 
   /** A control registers how to put the keyboard in its box (a pill step uses it). Radio groups: "radio:<row id>". */
   registerFocus(k: string, focus: () => void) {
@@ -1062,6 +1064,7 @@ export class FormSession {
     this.reopening = keep;
     if (!keep) {
       this.st = freshState(target);
+      this.typeBase.clear();
       this.bumpGuessed();
       if (target.mode === "filed_original") this.st.back = back;
       this.publish();
@@ -1801,6 +1804,7 @@ export class FormSession {
   focus(k: string) {
     const s = this.st;
     s.focusKey = k;
+    if (NUMBER_KINDS.has(this.kindOf.get(k) ?? "")) this.typeBase.set(k, String(s.values[k] ?? ""));
     // A note under the box stays when focus arrives (the filer's or the page's): only an edit of the box, a shut box or a moved row ends it.
     const here = this.keyIndex.get(this.anchorKey(k));
     if (here) this.sFocusedRow.set({ row: here, seq: ++this.revealSeq });
@@ -1841,6 +1845,7 @@ export class FormSession {
     if (Object.keys(s.pending).length) this.flush();
     else this.publish();
     if (kind === "money" || kind === "num") this.noteRefusedAmount(k, raw);
+    this.typeBase.delete(k);
     this.syncHostCase(k);
     // Q1 P1b: leaving a profile-backed box with a new complete value asks "Save to profile?" once.
     this.maybeProfileAskKeys([baseKey]);
@@ -1963,6 +1968,30 @@ export class FormSession {
    * only a refusal asks again. `cleared` lists the boxes that now hold zero: applyFill shows it in them.
    */
   private fill(draft: object, edits: Record<string, string>): Filled {
+    const r = this.fillOnce(draft, edits);
+    if (r.removes) return r;
+    // A refused amount typed in one go (over the official length, unreadable): the flush may already have committed shorter
+    // prefixes of the same typing while they still fit, so the draft holds a number the filer never meant. The typing is one
+    // gesture: it rolls back to what the box held when its focus began, and the note then names that amount. No rollback for an
+    // emptied box: the blank chain in fillOnce owns it.
+    const back = Object.keys(r.rejected || {}).filter(
+      (k) => k in edits && String(edits[k] ?? "").trim() !== "" && this.typeBase.has(k) && NUMBER_KINDS.has(this.kindOf.get(k) ?? "") && !sameNumber(String(this.typeBase.get(k) ?? ""), String((r.values || {})[k] ?? "")),
+    );
+    if (!back.length) return r;
+    // The corrective goes through fillOnce like any edit: a blank base (the box held nothing when focus began) is the
+    // blank chain's own case, cleared to the host's zero where the host holds no blank.
+    const corrective = Object.fromEntries(back.map((k) => [k, this.typeBase.get(k) ?? ""]));
+    const z: Filled = this.fillOnce(r.draft, corrective);
+    if (z.removes || Object.keys(z.rejected || {}).some((k) => k in corrective)) return r;
+    // The rollback undoes the typing: nothing of it is re-applied when a sample's period is set.
+    if (this.st.sample) for (const k of back) delete this.st.typedEdits[k];
+    // The first answer's refusals stay (the typing was refused), over the draft rolled back to the pre-typing amounts;
+    // the rest is the corrective answer's own, its cleared list merged with the first fill's.
+    const cleared = [...(r.cleared || []), ...(z.cleared || [])];
+    return { ...z, rejected: { ...r.rejected }, cleared: cleared.length ? cleared : undefined };
+  }
+
+  private fillOnce(draft: object, edits: Record<string, string>): Filled {
     const code = this.st.target.formCode;
     const forget = this.st.forget;
     const r: Filled = bir.screen_form_fill(code, draft, edits, this.unlockedFor(edits), forget);
