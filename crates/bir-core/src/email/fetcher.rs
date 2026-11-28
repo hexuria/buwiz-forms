@@ -396,8 +396,7 @@ pub fn fetch_and_process_emails_for_address_until(
     if let Some(mut profile) = profile {
         // A Google grant in a build that cannot renew it: said once (one alert, one banner), and the poll stops rather
         // than failing the same way every interval.
-        if profile.email_auth_method == EmailAuthMethod::GoogleOAuth
-            && !google_sign_in_available()
+        if profile.email_auth_method == EmailAuthMethod::GoogleOAuth && !google_sign_in_available()
         {
             return google_unavailable_poll(&db, &profile);
         }
@@ -587,9 +586,8 @@ mod tests {
         assert_eq!(alerts[0].detail, GOOGLE_NOT_IN_THIS_VERSION);
         assert!(!alerts[0].detail.contains("GOOGLE_CLIENT_ID"));
 
-        let shared = std::sync::Arc::new(std::sync::Mutex::new(
-            Database::open_ephemeral().unwrap(),
-        ));
+        let shared =
+            std::sync::Arc::new(std::sync::Mutex::new(Database::open_ephemeral().unwrap()));
         let (ok, still_pending, message) = google_unavailable_poll(&shared, &profile);
         assert!(!ok);
         assert!(!still_pending);

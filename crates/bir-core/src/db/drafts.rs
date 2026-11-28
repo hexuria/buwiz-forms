@@ -3382,6 +3382,23 @@ impl Database {
         )?)
     }
 
+    /// The returns of `tin`, whatever their taxable year, that wait for the BIR's confirmation email: the rows
+    /// [`Self::has_return_awaiting_bir_email`] counts (Submitted or the legacy "Filed", not a dry run).
+    pub fn returns_awaiting_bir_email(&self, tin: &str) -> Result<Vec<FormDraftSummary>, DbError> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at
+             FROM form_drafts
+             WHERE tin = ?1 AND status IN ('Submitted', 'Filed') AND NOT {}",
+            crate::forms::dry_run::STORED_DRY_RUN_SQL
+        ))?;
+        let rows = stmt.query_map(params![tin], draft_summary_from_row)?;
+        let mut summaries = Vec::new();
+        for row in rows {
+            summaries.push(row?);
+        }
+        Ok(summaries)
+    }
+
     /// Every form draft summary for a TIN, whatever its taxable year.
     pub fn list_draft_summaries_all_years(
         &self,

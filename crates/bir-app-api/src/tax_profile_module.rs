@@ -1326,8 +1326,11 @@ fn set_inbox_app_password(arguments: &HostArguments) -> HostResult {
         if let Some(password) = app_password {
             profile.imap_app_password = Some(password);
         }
+        let inbox = profile.inbox_email().to_string();
         db.save_profile(profile)
             .map_err(|error| HostError::new(error.to_string()))?;
+        // A return still waiting for the BIR's email is watched again through the new way in.
+        bir_core::background_cron::reschedule_email_polls_for_inbox(db, &inbox);
         inbox_state_value(db, tin)
     })
 }
@@ -1338,8 +1341,12 @@ fn set_inbox_tracking(arguments: &HostArguments) -> HostResult {
     with_database(|db| {
         let mut profile = load_inbox_profile(db, tin)?;
         profile.email_tracking_enabled = enabled;
+        let inbox = profile.inbox_email().to_string();
         db.save_profile(profile)
             .map_err(|error| HostError::new(error.to_string()))?;
+        if enabled {
+            bir_core::background_cron::reschedule_email_polls_for_inbox(db, &inbox);
+        }
         inbox_state_value(db, tin)
     })
 }
@@ -1432,9 +1439,11 @@ fn apply_connection_result(
             }
             let mut profile = load_inbox_profile(&guard, tin)?;
             profile.email_tracking_enabled = true;
+            let inbox = profile.inbox_email().to_string();
             guard
                 .save_profile(profile)
                 .map_err(|error| HostError::new(error.to_string()))?;
+            bir_core::background_cron::reschedule_email_polls_for_inbox(&guard, &inbox);
             Ok(HostObject::new()
                 .field("ok", true)
                 .field(

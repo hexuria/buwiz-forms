@@ -2464,6 +2464,38 @@ pub fn schedule_email_poll(
     }
 }
 
+/// Queue the confirmation poll again for every return on `inbox` that still waits for the BIR's email. Polls are
+/// scheduled only when a send finishes, so once the inbox's way in changes (an app password saved, tracking switched
+/// on, a connection verified) nothing else would bring back a poll that ended, for example the one a Google grant this
+/// build cannot renew archived. [`schedule_email_poll`] keeps one job per return and skips an inbox whose tracking is
+/// off. Returns how many returns were looked at.
+pub fn reschedule_email_polls_for_inbox(db_guard: &Database, inbox: &str) -> usize {
+    let mut seen = 0;
+    let profiles = db_guard.list_profiles().unwrap_or_default();
+    for profile in profiles
+        .iter()
+        .filter(|profile| crate::profile::inbox_emails_match(profile.inbox_email(), inbox))
+    {
+        let tin = profile.tin.full();
+        for draft in db_guard
+            .returns_awaiting_bir_email(&tin)
+            .unwrap_or_default()
+        {
+            seen += 1;
+            schedule_email_poll(
+                profile,
+                form_code_from_form_type(&draft.form_code),
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                draft.quarter,
+                db_guard,
+            );
+        }
+    }
+    seen
+}
+
 /// The words kept on a return whose send ended with an unknown outcome, before the transport's own reason.
 pub const OUTCOME_UNKNOWN: &str = "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.";
 
@@ -5977,6 +6009,80 @@ mod tests {
                 .iter()
                 .all(|job| !is_email_poll_job(job)),
             "dry-run source must skip IMAP"
+        );
+    }
+
+    /// #504 W1: a return still waiting for the BIR's email gets its poll back when the inbox's way in changes (here
+    /// after the poll a Google grant this build cannot renew had archived); a return never sent gets none, the inbox is
+    /// matched whatever its case, and a second call keeps one job per return.
+    #[test]
+    fn a_waiting_return_is_polled_again_when_the_inbox_changes() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        let mut waiting = crate::filing_queue::mandatory_lab_1601c_draft();
+        waiting.status = FilingStatus::Submitted;
+        db.save_1601c_draft(&waiting)
+            .expect("the sent return is saved");
+        let draft_only = crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10);
+        db.save_1601c_draft(&draft_only)
+            .expect("the draft is saved");
+        let polls = |db: &Database| -> Vec<Job> {
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .into_iter()
+                .filter(|job| is_email_poll_job(job) && job.status != "Archived")
+                .collect()
+        };
+        assert!(polls(&db).is_empty(), "no poll before the inbox changes");
+
+        assert_eq!(
+            reschedule_email_polls_for_inbox(&db, "Filer@Example.com"),
+            1
+        );
+        let queued = polls(&db);
+        assert_eq!(queued.len(), 1, "one poll, for the sent return only");
+        assert_eq!(queued[0].status, "Queued");
+        assert!(
+            queued[0].name.contains("1601C Sep 2026"),
+            "{}",
+            queued[0].name
+        );
+        assert_eq!(
+            queued[0].command.as_deref(),
+            Some("bir_poll_email filer@example.com")
+        );
+
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        assert_eq!(polls(&db).len(), 1, "still one job per return");
+    }
+
+    /// With tracking off the inbox is not watched, so nothing is queued however it changes.
+    #[test]
+    fn an_inbox_with_tracking_off_gets_no_poll_back() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = false;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        let mut waiting = crate::filing_queue::mandatory_lab_1601c_draft();
+        waiting.status = FilingStatus::Submitted;
+        db.save_1601c_draft(&waiting)
+            .expect("the sent return is saved");
+
+        assert_eq!(
+            reschedule_email_polls_for_inbox(&db, "filer@example.com"),
+            1
+        );
+        assert!(
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .iter()
+                .all(|job| !is_email_poll_job(job))
         );
     }
 
