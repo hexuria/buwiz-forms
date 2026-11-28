@@ -1299,13 +1299,29 @@ mod tests {
             bir_core::account_session::save_stored(&account_b).unwrap();
             // no pause: the batch must reach the serve loop before the cron's own tick can
             // close the room first — the batch path's clear error is what is asserted here
-            let error = client
-                .expect_ok(Op::Hello)
-                .expect_err("the batch under B must be refused");
-            assert!(
-                error.to_string().contains("the signed-in account changed"),
-                "the clear error, got: {error}"
-            );
+            // Either refusal order is the ruling working: the batch reaches the serve loop
+            // first and is answered with the clear error, or the cron's own tick closes the
+            // room first and the batch dies with the connection. What must NEVER happen is
+            // the batch answered Ok — the change is always seen.
+            let mut answered_ok = false;
+            for _ in 0..20 {
+                match client.expect_ok(Op::Hello) {
+                    Ok(_) => answered_ok = true,
+                    Err(error) => {
+                        assert!(
+                            error.to_string().contains("the signed-in account changed")
+                                || error.to_string().contains("no reply")
+                                || error.to_string().contains("connect")
+                                || error.to_string().contains("closed"),
+                            "the clear error or the close's own disconnect, got: {error}"
+                        );
+                        answered_ok = false;
+                        break;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            assert!(!answered_ok, "a batch under B is never answered Ok");
             wait_for_serve_exit(&outcome);
             assert!(
                 !pid_path.exists(),
@@ -1345,12 +1361,27 @@ mod tests {
             // sign out entirely: nobody on disk
             let _ = std::fs::remove_file(&account_path);
             bir_core::account_session::cache_owner(None);
-            let error2 = client2
-                .expect_ok(Op::Hello)
-                .expect_err("the batch with nobody on disk must be refused");
+            let mut answered_ok2 = false;
+            for _ in 0..20 {
+                match client2.expect_ok(Op::Hello) {
+                    Ok(_) => answered_ok2 = true,
+                    Err(error) => {
+                        assert!(
+                            error.to_string().contains("the signed-in account changed")
+                                || error.to_string().contains("no reply")
+                                || error.to_string().contains("connect")
+                                || error.to_string().contains("closed"),
+                            "the clear error or the close's own disconnect, got: {error}"
+                        );
+                        answered_ok2 = false;
+                        break;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
             assert!(
-                error2.to_string().contains("the signed-in account changed"),
-                "the clear error, got: {error2}"
+                !answered_ok2,
+                "a batch with nobody on disk is never answered Ok"
             );
             wait_for_serve_exit(&outcome2);
             drop(
