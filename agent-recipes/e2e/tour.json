@@ -24,7 +24,8 @@
   },
   {
    "name": "setup-cards",
-   "phone": "tour-setup-cards.json"
+   "phone": "tour-setup-cards.json",
+   "linux": "tour-setup-cards.json"
   },
   {
    "name": "sign-up",
@@ -40,7 +41,8 @@
      "name_regex": "^TIN, 9 digits"
     }
    },
-   "required": true
+   "required": true,
+   "linux": "sign-up-linux.wants"
   },
   {
    "name": "tax-year",
@@ -52,22 +54,26 @@
   {
    "name": "shell",
    "desktop": "tour-shell.json",
-   "windows": "tour-shell-windows.json"
+   "windows": "tour-shell-windows.json",
+   "linux": "navigate-phone.wants"
   },
   {
    "name": "home",
-   "phone": "tour-home.json"
+   "phone": "tour-home.json",
+   "linux": "tour-home.json"
   },
   {
    "name": "navigation",
-   "phone": "navigate-phone.wants"
+   "phone": "navigate-phone.wants",
+   "linux": "navigate-phone.wants"
   },
   {
    "name": "new-return",
    "desktop": "tour-newreturn.json",
    "windows": "tour-newreturn-windows.json",
    "phone": "tour-new-return.json",
-   "required": true
+   "required": true,
+   "linux": "tour-new-return.json"
   },
   {
    "name": "form-top",
@@ -103,12 +109,14 @@
    "name": "sheet-calendar",
    "desktop": "tour-sheet-calendar-desktop.json",
    "windows": "tour-sheet-calendar-desktop.json",
-   "phone": "tour-sheet-calendar.json"
+   "phone": "tour-sheet-calendar.json",
+   "linux": "tour-sheet-calendar.json"
   },
   {
    "name": "print",
    "desktop": "tour-print.json",
-   "windows": "tour-print-windows.json"
+   "windows": "tour-print-windows.json",
+   "linux": "tour-print.json"
   }
  ]
 }

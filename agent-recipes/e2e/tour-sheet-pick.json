@@ -38,16 +38,16 @@
    "timeout_ms": 3000
   },
   {
-   "id": "s7",
    "op": "scroll",
    "target": "fp-drpATC1-list",
-   "dy": 2000
+   "dy": 1500.0,
+   "id": "s7"
   },
   {
-   "id": "s8",
    "op": "scroll",
    "target": "fp-drpATC1-list",
-   "dy": 2000
+   "dy": 1500.0,
+   "id": "s8"
   },
   {
    "id": "s9",
@@ -57,18 +57,24 @@
    "timeout_ms": 3000
   },
   {
-   "id": "s10",
    "op": "scroll",
    "target": "fp-drpATC1-list",
-   "dy": -4000
+   "dy": -1500.0,
+   "id": "s10"
   },
   {
-   "id": "s11",
+   "op": "scroll",
+   "target": "fp-drpATC1-list",
+   "dy": -1500.0,
+   "id": "s11"
+  },
+  {
+   "id": "s12",
    "op": "click",
    "target": "fp-drpATC1-opt-1"
   },
   {
-   "id": "s12",
+   "id": "s13",
    "op": "click",
    "target": "fp-table-drpATC1-done"
   }

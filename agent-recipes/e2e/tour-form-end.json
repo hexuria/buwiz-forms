@@ -4,25 +4,79 @@
  "app": "bir-shell",
  "steps": [
   {
-   "id": "s1",
    "op": "scroll",
    "target": "form-scroll",
-   "dy": 6000
+   "dy": 1500.0,
+   "id": "s1"
   },
   {
-   "id": "s2",
    "op": "scroll",
    "target": "form-scroll",
-   "dy": 6000
+   "dy": 1500.0,
+   "id": "s2"
   },
   {
-   "id": "s3",
    "op": "scroll",
    "target": "form-scroll",
-   "dy": 6000
+   "dy": 1500.0,
+   "id": "s3"
   },
   {
-   "id": "s4",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s4"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s5"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s6"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s7"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s8"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s9"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s10"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s11"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1500.0,
+   "id": "s12"
+  },
+  {
+   "id": "s13",
    "op": "wait_until",
    "target": "form-scroll",
    "screenshot": true,

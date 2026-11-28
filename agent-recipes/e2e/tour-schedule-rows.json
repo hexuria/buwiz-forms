@@ -73,35 +73,46 @@
    "timeout_ms": 5000
   },
   {
-   "id": "s13",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 500.0,
+   "id": "s13"
+  },
+  {
+   "op": "wait",
+   "timeout_ms": 600,
+   "id": "s14"
+  },
+  {
+   "id": "s15",
    "op": "click",
    "target": "fp-table-drpATC1-add"
   },
   {
-   "id": "s14",
+   "id": "s16",
    "op": "wait_until",
    "target": "fp-txtATCAmt3",
    "timeout_ms": 5000
   },
   {
-   "id": "s15",
+   "id": "s17",
    "op": "click",
    "target": "fp-txtATCAmt3"
   },
   {
-   "id": "s16",
+   "id": "s18",
    "op": "type",
    "target": "fp-txtATCAmt3",
    "text": "2000",
    "key_delay_ms": 60
   },
   {
-   "id": "s17",
+   "id": "s19",
    "op": "click",
    "target": "fp-table-drpATC1-done"
   },
   {
-   "id": "s18",
+   "id": "s20",
    "op": "wait_until",
    "target": "fp-row-drpATC1-2",
    "screenshot": true,

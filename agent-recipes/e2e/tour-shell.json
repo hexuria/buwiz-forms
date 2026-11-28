@@ -94,10 +94,16 @@
    "id": "s16",
    "op": "scroll",
    "target": "settings-scroll",
-   "dy": 3000.0
+   "dy": 1500.0
   },
   {
-   "id": "s17",
+   "op": "scroll",
+   "target": "settings-scroll",
+   "dy": 1500.0,
+   "id": "s17"
+  },
+  {
+   "id": "s18",
    "op": "wait_until",
    "target": "settings-nav-general",
    "timeout_ms": 5000,

@@ -266,18 +266,20 @@ The table has one line per pair the two runs share: the screen, `identical` or `
 number of differing pixels and the bounding box of the difference; `SIZE-DIFF` means the window or
 scale changed between the runs and the pair says nothing. Differing pairs get a side-by-side
 picture in the out folder (before left, after right, red divider) plus a `compare.json`.
-`--mask-top N` drops the topmost N pixel rows first (the status bar carries the clock).
+`--mask-top N` / `--mask-bottom N` drop the topmost or bottommost N pixel rows first (the status bar carries the clock, the bottom strip carries toasts). The tool exits 1 when any pair differs (`--allow-diff` for the old behaviour) and refuses an `--out` inside either input folder.
 
 **Noise, not layout**: toasts fading in or out, the text caret blinking, and paced typing caught
 mid-flight differ between two runs of the *same* state — before blaming the change, compare two
-runs of one state against each other; whatever moves there is noise. The known noise areas are the
-bottom strip (toasts) and any field being typed into. What is never noise: a control's position,
+runs of one state against each other; whatever moves there is noise. The noise actually measured on two same-state macOS runs: a toast in the bottom strip
+(~10k pixels while it fades), the text caret and a virtualised list's edge in a picker sheet
+(~0.5-5k), and the scrollbar's few-pixel strip at the right edge (~2k in an 8-pixel-wide band). What is never noise: a control's position,
 a grid's columns, pinned titles, the empty space after a scroller's last row.
 
 Two platform facts: on macOS the print preview is a **separate native window** the driver cannot
 capture — print shots show the main window with the preview-open toast, so the preview itself is
 compared by hand on that platform. On Linux the window opens 420 px wide, so the app shows the
-narrow layout and the Linux variants are the narrow ones.
+narrow layout: the Linux variants are the narrow (phone-shape) ones where the screen differs,
+as in the smoke suite.
 
 The recipes bake in the lessons of the machines that wrote them: scroll in increments (a big
 scroll times the host out); the schedule drawer stays mounted when closed, so wait on a field
