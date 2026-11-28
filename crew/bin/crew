@@ -7,6 +7,7 @@ contributor can run it before any package or virtual environment exists.
 
 import argparse
 import configparser
+import hashlib
 import json
 import os
 import re
@@ -61,6 +62,7 @@ class Settings:
 
 VERDICT_NOTE = ("a note for people and dashboards, not a gate: GitHub's own permissions and "
                 "branch protection decide who can merge")
+LOCAL_INSTRUCTION_FILENAMES = ("AGENTS.local.md", "CLAUDE.local.md")
 
 
 def python_command_name():
@@ -114,6 +116,8 @@ def claude_disallowed_tools(tree, gitdir, common_dir):
         "Edit(.git/**)", "Write(.git/**)",
         "Edit(**/.git/**)", "Write(**/.git/**)",
     ]
+    for name in LOCAL_INSTRUCTION_FILENAMES:
+        parts.extend(["Edit(**/{0})".format(name), "Write(**/{0})".format(name)])
     for form in permission_path_forms(tree):
         parts.extend([
             "Edit({0}/crew/bin)".format(form), "Write({0}/crew/bin)".format(form),
@@ -123,6 +127,11 @@ def claude_disallowed_tools(tree, gitdir, common_dir):
             "Edit({0}/**/.git)".format(form), "Write({0}/**/.git)".format(form),
             "Edit({0}/**/.git/**)".format(form), "Write({0}/**/.git/**)".format(form),
         ])
+        for name in LOCAL_INSTRUCTION_FILENAMES:
+            parts.extend([
+                "Edit({0}/{1})".format(form, name), "Write({0}/{1})".format(form, name),
+                "Edit({0}/**/{1})".format(form, name), "Write({0}/**/{1})".format(form, name),
+            ])
     for form in permission_path_forms(gitdir):
         parts.extend([
             "Edit({0})".format(form), "Write({0})".format(form),
@@ -147,9 +156,9 @@ GIT_READ_WORDS = ("log", "show", "diff", "status", "ls-remote", "rev-parse", "me
 LAUNCHER_READ_VERBS = ("doctor", "status", "state path", "lint", "sync --check")
 GH_READ_PREFIXES = (
     "gh pr list", "gh pr view", "gh pr checks", "gh pr diff",
-    "gh run list", "gh run view", "gh release view", "gh issue view", "gh api",
+    "gh run list", "gh run view", "gh release view", "gh issue view",
 )
-READONLY_SHELL_COMMANDS = ("grep", "ls", "cat", "head", "tail", "wc", "diff", "sort", "uniq", "date", "printf")
+READONLY_SHELL_COMMANDS = ("grep", "ls", "cat", "head", "tail", "wc", "diff", "date")
 GIT_WRITE_WORDS = (
     "push", "add", "commit", "switch", "checkout", "fetch", "pull", "rebase", "tag", "config",
     "worktree", "restore", "stash", "branch", "apply", "am", "cherry-pick", "reset", "clean",
@@ -166,9 +175,6 @@ GH_WRITE_PREFIXES = (
     "gh release download", "gh release delete-asset",
     "gh secret", "gh auth", "gh repo", "gh gist", "gh workflow",
 )
-GH_API_DENIED_FLAGS = ("-X", "--method", "-f", "--raw-field", "-F", "--typed-field", "--input")
-
-
 def unique_strings(parts):
     result = []
     for part in parts:
@@ -186,16 +192,17 @@ def git_location_forms(path):
     return forms
 
 
-def gh_api_denied_patterns():
-    patterns = []
-    for flag in GH_API_DENIED_FLAGS:
-        patterns.append("gh api {0}*".format(flag))
-        patterns.append("gh api * {0}*".format(flag))
-    return patterns
-
 
 def readonly_scoped_git_paths(tree, state_dir):
     return unique_strings([permission_path(tree), permission_path(state_dir)])
+
+
+def crew_git_readonly_commands(python, verb, scoped):
+    commands = ["{0} crew/bin/crew git {1}".format(python, verb)]
+    for base in scoped:
+        for location in git_location_forms(base):
+            commands.append("{0} crew/bin/crew git -C {1} {2}".format(python, location, verb))
+    return commands
 
 
 def claude_readonly_conductor_allowed_tools(tree, role_dir, state_dir):
@@ -205,15 +212,14 @@ def claude_readonly_conductor_allowed_tools(tree, role_dir, state_dir):
         parts.extend(["Edit({0}/**)".format(form), "Write({0}/**)".format(form)])
     for command in READONLY_SHELL_COMMANDS:
         parts.append("Bash({0}:*)".format(command))
+    scoped = readonly_scoped_git_paths(tree, state_dir)
     for python in ("python3", "python"):
         for verb in LAUNCHER_READ_VERBS:
             parts.append("Bash({0} crew/bin/crew {1})".format(python, verb))
-    scoped = readonly_scoped_git_paths(tree, state_dir)
-    for verb in GIT_READ_WORDS:
-        parts.append("Bash(git {0}:*)".format(verb))
-        for base in scoped:
-            for location in git_location_forms(base):
-                parts.append("Bash(git -C {0} {1}:*)".format(location, verb))
+        parts.append("Bash({0} crew/bin/crew api GET:*)".format(python))
+        for verb in GIT_READ_WORDS:
+            for command in crew_git_readonly_commands(python, verb, scoped):
+                parts.append("Bash({0}:*)".format(command))
     for prefix in GH_READ_PREFIXES:
         parts.append("Bash({0}:*)".format(prefix))
     return ",".join(unique_strings(parts))
@@ -230,9 +236,7 @@ def claude_readonly_conductor_disallowed_tools(tree, state_dir, gitdir, common_d
                 parts.append("Bash(git -C {0} {1}:*)".format(location, verb))
     for prefix in GH_WRITE_PREFIXES:
         parts.append("Bash({0}:*)".format(prefix))
-    for pattern in gh_api_denied_patterns():
-        parts.append("Bash({0})".format(pattern))
-    parts.extend(["Bash(cargo:*)", "Bash(nsh:*)", "Bash(rm:*)"])
+    parts.extend(["Bash(gh api:*)", "Bash(cargo:*)", "Bash(nsh:*)", "Bash(rm:*)"])
     return ",".join(unique_strings(parts))
 
 
@@ -244,15 +248,14 @@ def devin_readonly_conductor_permissions(tree, role_dir, state_dir, gitdir, comm
     common_dir = permission_path(common_dir)
     allow = ["Write({0})".format(outbox), "Write({0}/**)".format(outbox)]
     allow.extend("Exec({0})".format(command) for command in READONLY_SHELL_COMMANDS)
+    scoped = unique_strings([tree_text, state_text])
     for python in ("python3", "python"):
         for verb in LAUNCHER_READ_VERBS:
             allow.append("Exec({0} crew/bin/crew {1})".format(python, verb))
-    scoped = unique_strings([tree_text, state_text])
-    for verb in GIT_READ_WORDS:
-        allow.append("Exec(git {0})".format(verb))
-        for base in scoped:
-            for location in git_location_forms(base):
-                allow.append("Exec(git -C {0} {1})".format(location, verb))
+        allow.append("Exec({0} crew/bin/crew api GET)".format(python))
+        for verb in GIT_READ_WORDS:
+            allow.extend("Exec({0})".format(command)
+                         for command in crew_git_readonly_commands(python, verb, scoped))
     allow.extend("Exec({0})".format(prefix) for prefix in GH_READ_PREFIXES)
 
     deny = [
@@ -261,15 +264,14 @@ def devin_readonly_conductor_permissions(tree, role_dir, state_dir, gitdir, comm
         "Write({0})".format(gitdir), "Write({0}/**)".format(gitdir),
         "Write({0})".format(common_dir), "Write({0}/**)".format(common_dir),
         "Write({0}/crew/bin)".format(tree_text), "Write({0}/crew/bin/**)".format(tree_text),
-    ]
+    ] + devin_local_instruction_denies(tree_text)
     for verb in GIT_WRITE_WORDS:
         deny.append("Exec(git {0})".format(verb))
         for base in scoped:
             for location in git_location_forms(base):
                 deny.append("Exec(git -C {0} {1})".format(location, verb))
     deny.extend("Exec({0})".format(prefix) for prefix in GH_WRITE_PREFIXES)
-    deny.extend("Exec({0})".format(pattern) for pattern in gh_api_denied_patterns())
-    deny.extend(["Exec(cargo)", "Exec(nsh)", "Exec(rm)"])
+    deny.extend(["Exec(gh api)", "Exec(cargo)", "Exec(nsh)", "Exec(rm)"])
     return {"allow": unique_strings(allow), "deny": unique_strings(deny)}
 
 
@@ -595,6 +597,14 @@ def version_line(command):
         return path, "version unavailable"
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(str(path), "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def cmd_doctor(args):
     root = repo_root()
     settings = load_settings(root)
@@ -604,6 +614,8 @@ def cmd_doctor(args):
     else:
         looked = ", ".join(str(path.resolve()) for path in settings_candidates)
         print("crew.local.ini: none found, looked in: {0}".format(looked))
+    for path in local_instruction_files(root):
+        print("local instruction file: {0} sha256 {1}".format(path.resolve(), sha256_file(path)))
     found = {}
     for name, command in (("claude", settings.claude_command), ("devin", settings.devin_command)):
         path, version = version_line(command)
@@ -702,6 +714,46 @@ def same_checkout_path(first, second):
     return first_text == second_text
 
 
+def local_instruction_files(tree):
+    root = Path(tree)
+    found = []
+    errors = []
+
+    def remember_error(error):
+        errors.append(error)
+
+    for dirpath, dirnames, filenames in os.walk(str(root), onerror=remember_error):
+        dirnames[:] = [name for name in dirnames if name.casefold() != ".git"]
+        by_casefold = dict((filename.casefold(), filename) for filename in filenames)
+        for name in LOCAL_INSTRUCTION_FILENAMES:
+            actual = by_casefold.get(name.casefold())
+            if actual is not None:
+                found.append(Path(dirpath) / actual)
+    if errors:
+        raise CrewError("cannot inspect the worktree for local instruction files: {0}".format(errors[0]))
+    return sorted(found, key=lambda path: str(path))
+
+
+def enforce_no_local_instruction_files(tree, command, allow=False):
+    if allow:
+        return
+    root = Path(tree)
+    found = local_instruction_files(root)
+    if not found:
+        return
+    names = []
+    for path in found:
+        try:
+            names.append(path.relative_to(root).as_posix())
+        except ValueError:
+            names.append(str(path))
+    hint = ""
+    if command == "crew start":
+        hint = "; pass --allow-local-instructions only in your own conductor checkout"
+    raise CrewError("{0} refuses a worktree containing {1}: {2}{3}".format(
+        command, " or ".join(LOCAL_INSTRUCTION_FILENAMES), ", ".join(names), hint))
+
+
 def worker_tree(root, args):
     if not args.worktree:
         raise CrewError("crew run refuses the conductor's own checkout; pass --worktree naming a different git worktree")
@@ -714,6 +766,16 @@ def worker_tree(root, args):
     if git_common_dir(tree) != git_common_dir(root):
         raise CrewError("crew run worktree must be a different git worktree of the same repository")
     return tree
+
+
+def devin_local_instruction_denies(tree_text):
+    denies = []
+    for name in LOCAL_INSTRUCTION_FILENAMES:
+        denies.extend([
+            "Write({0}/{1})".format(tree_text, name),
+            "Write({0}/**/{1})".format(tree_text, name),
+        ])
+    return denies
 
 
 def devin_permissions(tree, role_dir, gitdir, common_dir):
@@ -732,7 +794,7 @@ def devin_permissions(tree, role_dir, gitdir, common_dir):
     ]
     crew_file_denies = [
         "Write({0}/crew/bin)".format(tree), "Write({0}/crew/bin/**)".format(tree),
-    ]
+    ] + devin_local_instruction_denies(tree)
     # Python remains narrow here, but no command allow-list is a credential fence: the fence is
     # the restricted token, branch protection or the sandbox.
     python_rules = []
@@ -917,6 +979,7 @@ def cmd_run(args):
     settings = load_settings(root)
     role, engine, model = worker_choices(root, settings, args.role, args)
     tree = worker_tree(root, args)
+    enforce_no_local_instruction_files(tree, "crew run")
     task_path = user_path(args.task_file, os.getcwd())
     task_text = read_required(task_path, "task file")
     name = task_name(task_path)
@@ -1006,6 +1069,7 @@ def engine_command(settings, engine):
 
 def cmd_start(args):
     root = repo_root()
+    enforce_no_local_instruction_files(root, "crew start", allow=args.allow_local_instructions)
     settings = load_settings(root)
     engine = args.engine or settings.engine
     if not engine:
@@ -1026,8 +1090,8 @@ def cmd_start(args):
                 "--allowedTools", claude_readonly_conductor_allowed_tools(root, role_dir, settings.state_dir),
                 "--disallowedTools", claude_readonly_conductor_disallowed_tools(
                     root, settings.state_dir, gitdir, common_dir),
-                "--setting-sources=", "--add-dir", str(role_dir.resolve()),
             ]
+        argv += ["--setting-sources=", "--add-dir", str(role_dir.resolve())]
         argv.append(prompt)
     else:
         handle = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", prefix="crew-prompt-", delete=False)
@@ -1049,6 +1113,92 @@ def cmd_start(args):
     finally:
         remove_quietly(config)
         remove_quietly(prompt_file)
+
+
+def validate_api_path(path):
+    if not path or path != path.strip():
+        raise CrewError("crew api needs a non-empty API path")
+    if path.startswith("-"):
+        raise CrewError("crew api refuses an API path that looks like a flag")
+    if "://" in path:
+        raise CrewError("crew api needs an API path, not a URL")
+    decoded = urllib.parse.unquote(path).split("?", 1)[0]
+    segments = [segment for segment in decoded.split("/") if segment]
+    if any(segment.casefold() == "graphql" for segment in segments):
+        raise CrewError("crew api refuses graphql")
+    return path
+
+
+def cmd_api(args):
+    if args.method != "GET":
+        raise CrewError("crew api is GET-only: {0}".format(args.method))
+    path = validate_api_path(args.path)
+    gh = shutil.which("gh")
+    if not gh:
+        raise CrewError("gh not found on PATH")
+    try:
+        return call_process([gh, "api", "--method", "GET", path])
+    except OSError as exc:
+        raise CrewError("could not start gh: {0}".format(exc))
+
+
+def output_option(token):
+    if token.startswith("--"):
+        name = token.split("=", 1)[0]
+        return len(name) >= 4 and "--output".startswith(name)
+    return token == "-o" or token.startswith("-o")
+
+
+def write_tree_option(token):
+    if not token.startswith("--"):
+        return False
+    name = token.split("=", 1)[0]
+    return len(name) > 2 and "--write-tree".startswith(name)
+
+
+def dangerous_read_git_option(token):
+    return (output_option(token) or write_tree_option(token) or
+            token.startswith("--ext") or token.startswith("--textc"))
+
+
+def crew_git_invocation(words):
+    words = list(words)
+    if not words:
+        raise CrewError("crew git needs a read-only git verb")
+    location = None
+    if words[0] == "-C":
+        if len(words) < 3 or not words[1]:
+            raise CrewError("crew git -C needs a path and a read-only git verb")
+        location = words[1]
+        words = words[2:]
+    if not words:
+        raise CrewError("crew git needs a read-only git verb")
+    verb = words[0]
+    if verb not in GIT_READ_WORDS:
+        raise CrewError("crew git allows only these read-only verbs: {0}".format(", ".join(GIT_READ_WORDS)))
+    rest = words[1:]
+    for token in rest:
+        if dangerous_read_git_option(token):
+            raise CrewError("crew git refuses {0}".format(token))
+    argv = [tool_path("git")]
+    if location is not None:
+        argv.extend(["-C", location])
+    argv.append(verb)
+    if verb in ("log", "show", "diff"):
+        argv.extend(["--no-textconv", "--no-ext-diff"])
+    argv.extend(rest)
+    return argv
+
+
+def cmd_git(args):
+    words = list(args.git_args)
+    if args.cwd:
+        words = ["-C", args.cwd] + words
+    argv = crew_git_invocation(words)
+    try:
+        return call_process(argv)
+    except OSError as exc:
+        raise CrewError("could not start git: {0}".format(exc))
 
 
 def pr_check_rows(gh, number, repo):
@@ -1884,9 +2034,19 @@ def github_remote_owner_repo(value):
     return github_repository_parts(token) if token else None
 
 
-def state_remote_visibility(root, remote):
+def state_origin_push_url(state):
+    result = git_text(state, ["remote", "get-url", "--push", "origin"], check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout.strip().splitlines()[0]
+
+
+def state_remote_visibility(root, remote, state):
     resolved = resolve_state_remote(root, remote)
-    parts = github_remote_owner_repo(resolved)
+    push_url = state_origin_push_url(state)
+    if not push_url or not same_remote_identity(push_url, resolved):
+        return None
+    parts = github_remote_owner_repo(push_url)
     if not parts:
         return None
     gh = shutil.which("gh")
@@ -1894,7 +2054,8 @@ def state_remote_visibility(root, remote):
         return None
     owner, name = parts
     try:
-        result = run_process([gh, "api", "repos/{0}/{1}".format(owner, name), "--jq", ".visibility"],
+        result = run_process([gh, "api", "--method", "GET", "repos/{0}/{1}".format(owner, name),
+                              "--jq", ".visibility"],
                              capture_output=True, text=True, timeout=20, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -1937,7 +2098,7 @@ def state_push(root, settings):
         names = git_text(state, ["diff", "--cached", "--name-only"], check=False)
         if names.returncode != 0:
             raise CrewError("git diff failed in the state checkout")
-    private_remote = state_remote_visibility(root, settings.state_remote) == "private"
+    private_remote = state_remote_visibility(root, settings.state_remote, state) == "private"
     if private_remote:
         print("state remote is private: public-safety check skipped")
     allowed_repos, known_owners = repository_context(root)
@@ -2051,11 +2212,21 @@ def build_parser():
     prompt.set_defaults(func=cmd_prompt)
     sub.add_parser("doctor", help="report what this checkout can do").set_defaults(func=cmd_doctor)
     sub.add_parser("status", help="summarize role inboxes, outboxes and state").set_defaults(func=cmd_status)
+    api = sub.add_parser("api", help="read GitHub through the API with a fixed GET method")
+    api.add_argument("method")
+    api.add_argument("path")
+    api.set_defaults(func=cmd_api)
+    git = sub.add_parser("git", help="run a read-only git verb with unsafe diff features off")
+    git.add_argument("-C", dest="cwd", help="run in this worktree or state checkout")
+    git.add_argument("git_args", nargs=argparse.REMAINDER)
+    git.set_defaults(func=cmd_git)
     start = sub.add_parser("start", help="start an interactive crew session")
     start.add_argument("--engine", choices=["claude", "devin"])
     start.add_argument("--role", default="conductor")
     start.add_argument("--read-only", action="store_true",
                        help="start with the read-only conductor permission profile")
+    start.add_argument("--allow-local-instructions", action="store_true",
+                       help="allow AGENTS.local.md or CLAUDE.local.md in your own conductor checkout")
     start.add_argument("--print", dest="print_command", action="store_true",
                        help="print the command line without starting it")
     start.set_defaults(func=cmd_start)

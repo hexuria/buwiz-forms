@@ -19,7 +19,7 @@ KNOWN-FLAKES.md            each known flaky test, and what to do until it is fix
 
 If the state remote is public, the state follows the same rules as the repository: no e-mail address other than `support@buwiz.com` or the crew's noreply commit identity, no local absolute paths, no session links or ids, no account, organisation or browser profile names, no machine aliases (write `<alias>`), no test or practice account names, nothing about secrets beyond "never print them", no detail of an unfixed security fault (name the pull request or plan row only), no other session's or person's name. `crew lint` checks these.
 
-Before `crew state push` runs the same check, it asks GitHub's API for the state repository's visibility. A remote reported as private skips the check and prints `state remote is private: public-safety check skipped`. A public remote, a non-GitHub remote, or a remote whose visibility cannot be read keeps the check.
+Before `crew state push` runs the same check, it reads the URL the push will really use with `git -C <state> remote get-url --push origin`. Only when that push URL matches the resolved `state_remote` does it ask GitHub's API for the repository's visibility. A matching remote reported as private skips the check and prints `state remote is private: public-safety check skipped`. Any mismatch, a public remote, a non-GitHub remote, or a remote whose visibility cannot be read keeps the check.
 
 ## STATE.md
 

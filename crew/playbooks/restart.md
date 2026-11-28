@@ -15,7 +15,7 @@ python3 crew/bin/crew state pull
 `crew doctor` says which engine and tier this is, where the state folder is, which `crew.local.ini` it used (or where it looked), and what is missing. Two things are not settings. Whether builds may run on this computer is the word of the person who started you. Whether you may run merge commands is the maintainer's word (`crew/RULES.md`, "The maintainer": the person named in the repository's ownership), and GitHub must let you; if the person who started you is not the maintainer, you prepare and pass the merge commands on. Write both answers into your `STATE.md`.
 `crew state pull` brings the live state from its remote, if `crew.local.ini` names one. Without a remote, the state folder on this computer is the state.
 
-A read-only restart drill does not pull: `crew state pull` writes the state checkout. Read the state exactly as it is, and record both heads you can read (`git -C <state> log` and `git ls-remote`).
+A read-only restart drill does not pull: `crew state pull` writes the state checkout. Read the state exactly as it is, and record both heads you can read (`python3 crew/bin/crew git -C <state> log` and `python3 crew/bin/crew git ls-remote`).
 
 ## 2. Read, in this order
 
@@ -50,13 +50,13 @@ python3 crew/bin/crew lint
 python3 crew/bin/crew sync --check
 gh pr list --repo <owner>/<repo> --state open --json number,headRefOid
 gh pr checks <n> --repo <owner>/<repo> --json name,state,bucket,link
-gh api repos/<owner>/<repo>/branches/<branch>
-git ls-remote origin refs/heads/main
-git -C <state> log -1 --format=%cI%x20%H%x20%s
-git -C <state> status --short
+python3 crew/bin/crew api GET repos/<owner>/<repo>/branches/<branch>
+python3 crew/bin/crew git ls-remote origin refs/heads/main
+python3 crew/bin/crew git -C <state> log -1 --format=%cI%x20%H%x20%s
+python3 crew/bin/crew git -C <state> status --short
 ```
 
-Use the same read verbs for the other repositories and branches. `gh api` is GET-only in this sweep: no `-X` or method flag, no `-f` or `-F` field, and no `--input`. `git` stays to `log`, `show`, `diff`, `status`, `ls-remote`, `rev-parse` and `merge-tree` in the worktree or the state folder.
+Use the same read verbs for the other repositories and branches. `crew api GET` is the only GitHub API route in this sweep: it fixes `gh api --method GET`, so no other method, no field or input argument, and no graphql path reaches `gh`. Git reads go through `python3 crew/bin/crew git`, which adds `--no-textconv --no-ext-diff` to `log`, `show` and `diff` and refuses output and write-tree arguments; the verbs stay to `log`, `show`, `diff`, `status`, `ls-remote`, `rev-parse` and `merge-tree` in the worktree or the state folder.
 
 ## 4. Sweep the fleet, if there is one
 
