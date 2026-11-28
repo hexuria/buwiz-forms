@@ -1,0 +1,82 @@
+{
+ "v": 1,
+ "name": "e2e-sheet-pick",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "fp-row-drpATC1-0"
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "fp-table-drpATC1-drawer",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "fp-drpATC1-trigger"
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "fp-drpATC1-search",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "fp-drpATC1-search"
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "fp-drpATC1-search",
+   "screenshot": true,
+   "timeout_ms": 3000
+  },
+  {
+   "op": "scroll",
+   "target": "fp-drpATC1-list",
+   "dy": 1500.0,
+   "id": "s7"
+  },
+  {
+   "op": "scroll",
+   "target": "fp-drpATC1-list",
+   "dy": 1500.0,
+   "id": "s8"
+  },
+  {
+   "id": "s9",
+   "op": "wait_until",
+   "target": "fp-drpATC1-list",
+   "screenshot": true,
+   "timeout_ms": 3000
+  },
+  {
+   "op": "scroll",
+   "target": "fp-drpATC1-list",
+   "dy": -1500.0,
+   "id": "s10"
+  },
+  {
+   "op": "scroll",
+   "target": "fp-drpATC1-list",
+   "dy": -1500.0,
+   "id": "s11"
+  },
+  {
+   "id": "s12",
+   "op": "click",
+   "target": "fp-drpATC1-opt-1"
+  },
+  {
+   "id": "s13",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  }
+ ]
+}

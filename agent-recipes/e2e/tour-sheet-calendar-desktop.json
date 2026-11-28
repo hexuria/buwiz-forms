@@ -1,0 +1,67 @@
+{
+ "v": 1,
+ "name": "e2e-tour-sheet-calendar-desktop",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s1"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s2"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s3"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s4"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s5"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s6"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s7"
+  },
+  {
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": -1500.0,
+   "id": "s8"
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "frm2551Qv2018:rtnMonth#period-calendar"
+  },
+  {
+   "id": "s10",
+   "op": "wait_until",
+   "target": "frm2551Qv2018:rtnMonth#period-calendar-m1",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ]
+}

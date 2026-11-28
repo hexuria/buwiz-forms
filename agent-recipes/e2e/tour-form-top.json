@@ -1,0 +1,14 @@
+{
+ "v": 1,
+ "name": "e2e-form-top",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "form-scroll",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ]
+}

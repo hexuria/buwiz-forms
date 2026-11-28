@@ -1,0 +1,20 @@
+{
+ "v": 1,
+ "name": "e2e-form-middle",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 1200
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "form-scroll",
+   "screenshot": true,
+   "timeout_ms": 5000
+  }
+ ]
+}

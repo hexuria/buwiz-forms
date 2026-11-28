@@ -243,6 +243,50 @@ before #403. The merged suite has not been run as a whole. Evidence: `proof/e2e-
 | birth-date | pass | pass | known gap: s1 (cascade: not on the taxpayer page) | known gap: s14 sheet Done refused offscreen | fail: s14 the same (now marked gap 1 for Linux) |
 | sign-out | known gap: Log out needs an admin PIN | fail: s4 no `locked-screen` | known gap: s2 `nb-menu-profile` (id fixed since) | known gap: s1 occluded by the date sheet | fail: s1 the same (now marked gap 1 for Linux) |
 
+
+## Before and after a change: the tour
+
+The tour suite (`agent-recipes/e2e/tour.json`) walks every main screen once and takes a picture at
+each, so "did any screen move?" is one command on any platform:
+
+```sh
+just e2e check tour     # validates the recipes offline; nothing is built or started
+just e2e macos tour     # or ios / windows / linux / android: builds, runs, screenshots
+```
+
+Pictures land one folder per recipe under the run's evidence directory. Run it at the change's
+base and again at its head (same window size, same display scale), then compare the two run
+folders:
+
+```sh
+uv run -q --no-project --with 'pillow>=11.1' python scripts/e2e/compare_shots.py <before-run> <after-run> --out compare-out
+```
+
+The table has one line per pair the two runs share: the screen, `identical` or `differs`, the
+number of differing pixels and the bounding box of the difference; `SIZE-DIFF` means the window or
+scale changed between the runs and the pair says nothing. Differing pairs get a side-by-side
+picture in the out folder (before left, after right, red divider) plus a `compare.json`.
+`--mask-top N` / `--mask-bottom N` drop the topmost or bottommost N pixel rows first (the status bar carries the clock, the bottom strip carries toasts). The tool exits 1 when any pair differs (`--allow-diff` for the old behaviour) and refuses an `--out` inside either input folder.
+
+**Noise, not layout**: toasts fading in or out, the text caret blinking, and paced typing caught
+mid-flight differ between two runs of the *same* state — before blaming the change, compare two
+runs of one state against each other; whatever moves there is noise. The noise actually measured on two same-state macOS runs: a toast in the bottom strip
+(~10k pixels while it fades), the text caret and a virtualised list's edge in a picker sheet
+(~0.5-5k), and the scrollbar's few-pixel strip at the right edge (~2k in an 8-pixel-wide band). What is never noise: a control's position,
+a grid's columns, pinned titles, the empty space after a scroller's last row.
+
+Two platform facts: on macOS the print preview is a **separate native window** the driver cannot
+capture — print shots show the main window with the preview-open toast, so the preview itself is
+compared by hand on that platform. On Linux the window opens 420 px wide, so the app shows the
+narrow layout: the Linux variants are the narrow (phone-shape) ones where the screen differs,
+as in the smoke suite.
+
+The recipes bake in the lessons of the machines that wrote them: scroll in increments (a big
+scroll times the host out); the schedule drawer stays mounted when closed, so wait on a field
+inside it going away, never on the drawer; the floating pager covers the table's add button after
+a row lands, so scroll before adding the next; a virtualised list unmounts its options after
+scrolling, so never click an option to close a sheet.
+
 ## Gaps to fix in gpui-agent, the plug and the app
 
 In gpui-agent and the plug (nsh-gpui-agent):
