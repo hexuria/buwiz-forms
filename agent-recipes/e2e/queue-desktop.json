@@ -186,6 +186,12 @@
    "exists": false
   },
   {
+   "id": "i15s",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 400
+  },
+  {
    "id": "i15a",
    "op": "click",
    "target": "fp-part-2-toggle"
