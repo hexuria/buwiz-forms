@@ -11,8 +11,8 @@
 //! sits in the page as `<td id="…_ATR" value="…">`, which the official
 //! engine (mshta, IE7 document mode) exposes as `td.value`. Three "Others"
 //! rows take filer-typed ATC digits, description, bracket, rate and tax due.
-//! The page can append more "Others" rows, but those are not part of the
-//! official submit layout, so the model stops at three.
+//! The official runtime appends further "Others" rows without a source cap;
+//! this version accepts up to 12 rows and extends the submit layout for them.
 //!
 //! Profile values (name, address) are submitted as loaded; nothing on the
 //! submit path uppercases them.
@@ -524,8 +524,10 @@ pub const FORM_2200A_FIXED_ROWS: &[(&str, &str, &str, &str, &str, f64)] = &[
 ];
 /// Number of fixed rows (60 on the official page).
 pub const FORM_2200A_FIXED_ROW_COUNT: usize = FORM_2200A_FIXED_ROWS.len();
-/// "Others (specify)" rows at the end of Schedule 1.
-pub const FORM_2200A_OTHER_ROWS: usize = 3;
+/// The printed "Others (specify)" rows at the end of Schedule 1. The official
+/// runtime appends further rows without a source cap (`sched1Fields`,
+/// BIR-Form2200Av2020.hta lines 7582-7589).
+pub const FORM_2200A_PRINTED_OTHER_ROWS: usize = 3;
 
 /// Items 10 and 11: region, province and city codes from the official
 /// dropdowns. Blank means the `(Select …)` placeholder, `00`.
@@ -656,7 +658,7 @@ pub struct Form2200ADraft {
     /// Fixed rows in [`FORM_2200A_FIXED_ROWS`] order; missing rows are zero.
     #[serde(default)]
     pub schedule: Vec<Form2200AAmounts>,
-    /// "Others (specify)" rows, at most three.
+    /// "Others (specify)" rows; the official runtime appends rows without a source cap.
     #[serde(default)]
     pub others: Vec<Form2200AOtherRow>,
     /// `txtSched1_TotalDue`.
@@ -960,9 +962,6 @@ impl Form2200ADraft {
 
     /// "Others" row `index`, growing the list to reach it.
     pub fn other_mut(&mut self, index: usize) -> Option<&mut Form2200AOtherRow> {
-        if index >= FORM_2200A_OTHER_ROWS {
-            return None;
-        }
         if self.others.len() <= index {
             self.others
                 .resize_with(index + 1, Form2200AOtherRow::default);
@@ -1036,6 +1035,12 @@ impl Form2200ADraft {
     /// Item 7 over both its lines.
     pub fn to_print_field_map(&self) -> BTreeMap<String, String> {
         let mut fields = self.to_bir_field_map();
+        for row in FORM_2200A_PRINTED_OTHER_ROWS..self.others.len() {
+            fields.insert(
+                format!("frm2200Av2020:txtSched1_xa_others{}_Check", row + 1),
+                String::new(),
+            );
+        }
         let mut put = |key: &str, value: String| {
             if !value.trim().is_empty() {
                 fields.insert(format!("derived:{key}"), value);
@@ -1210,7 +1215,7 @@ impl Form2200ADraft {
                 official_amount(row.tax_due),
             );
         }
-        for index in 0..FORM_2200A_OTHER_ROWS {
+        for index in 0..self.others.len().max(FORM_2200A_PRINTED_OTHER_ROWS) {
             let row = self.other(index);
             let base = format!("txtSched1_xa_others{}", index + 1);
             put(&format!("{base}_Check"), flag(!row.is_blank()));
@@ -1238,9 +1243,41 @@ impl Form2200ADraft {
         fields
     }
 
+    /// The generated layout with each runtime-added Others row spliced after
+    /// the previous row's Tax Due, in the order `sched1Fields` generates its
+    /// controls (`BIR-Form2200Av2020.hta` lines 7582-7589).
+    pub fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        use super::official_inputs::{RowInsertion, extend_layout};
+        let base = crate::official_xml::layout(FORM_2200A_FORM_ID).map_err(|e| e.to_string())?;
+        const COLUMNS: [&str; 8] = [
+            "Check", "Atc", "Desc", "Bracket", "Rate", "Export", "Taxable", "Due",
+        ];
+        let key =
+            |column: &str, row: usize| format!("frm2200Av2020:txtSched1_xa_others{row}_{column}");
+        let insertions: Vec<RowInsertion> = ((FORM_2200A_PRINTED_OTHER_ROWS + 1)
+            ..=self.others.len())
+            .map(|row| RowInsertion {
+                after: key("Due", row - 1),
+                copies: COLUMNS
+                    .iter()
+                    .map(|column| (key(column, FORM_2200A_PRINTED_OTHER_ROWS), key(column, row)))
+                    .collect(),
+            })
+            .collect();
+        extend_layout(base, &insertions)
+    }
+
     /// The exact official submit plaintext.
     pub fn to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
-        self.official_payload()
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
     }
 
     fn validate_on(&self, today: NaiveDate) -> Vec<(String, String)> {
@@ -1248,6 +1285,9 @@ impl Form2200ADraft {
         let mut err = |field: &str, message: &str| {
             errors.push((field.to_string(), message.to_string()));
         };
+        if self.others.len() > super::DYNAMIC_SCHEDULE_ROW_LIMIT {
+            err("others", crate::forms::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE);
+        }
 
         // validateForm, in order.
         let year = i32::from(self.year);
@@ -1386,9 +1426,6 @@ impl Form2200ADraft {
         }
         if self.schedule.len() > FORM_2200A_FIXED_ROW_COUNT {
             err("schedule", "Schedule 1 has 60 fixed rows.");
-        }
-        if self.others.len() > FORM_2200A_OTHER_ROWS {
-            err("others", "Schedule 1 has 3 \"Others\" rows.");
         }
         for (index, row) in self.schedule.iter().enumerate() {
             if row
@@ -1612,6 +1649,22 @@ impl QueueableForm for Form2200ADraft {
     fn field_map(&self) -> BTreeMap<String, String> {
         self.to_bir_field_map()
     }
+
+    fn official_layout(&self) -> Result<crate::official_xml::OfficialLayout, String> {
+        Form2200ADraft::official_layout(self)
+    }
+
+    fn official_payload(&self) -> Result<String, Vec<(String, String)>> {
+        let errors = <Self as FormValidator>::validate(self);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        let layout = self
+            .official_layout()
+            .map_err(|error| vec![("xml".to_string(), error)])?;
+        crate::official_xml::write(&layout, &self.field_map())
+            .map_err(|error| vec![("xml".to_string(), error.to_string())])
+    }
 }
 
 #[cfg(test)]
@@ -1766,6 +1819,38 @@ mod tests {
     }
 
     #[test]
+    fn fourth_and_fifth_others_rows_are_written_and_totalled() {
+        let mut draft = sample();
+        for (index, atc, due) in [(3, "997", 44.0), (4, "998", 55.0)] {
+            let row = draft.other_mut(index).expect("dynamic Others row");
+            row.atc_digits = atc.to_string();
+            row.description = format!("Added product {atc}");
+            row.bracket = "Per liter".to_string();
+            row.rate = "10".to_string();
+            row.amounts.taxable = due * 10.0;
+            row.amounts.tax_due = due;
+        }
+        // Keep the sample's payment in step with the two added liabilities.
+        draft.tax_deposit += 99.0;
+        draft.recompute();
+
+        let fields = draft.to_bir_field_map();
+        assert_eq!(fields["frm2200Av2020:txtSched1_xa_others4_Check"], "true");
+        assert_eq!(fields["frm2200Av2020:txtSched1_xa_others4_Atc"], "997");
+        assert_eq!(
+            fields["frm2200Av2020:txtSched1_xa_others5_Desc"],
+            "Added product 998"
+        );
+        assert_eq!(fields["frm2200Av2020:txtSched1_xa_others5_Due"], "55.00");
+        assert_eq!(fields["frm2200Av2020:txtSched1_TotalDue"], "66,099.66");
+        let xml = draft
+            .to_bir_xml_payload()
+            .expect("dynamic Others rows validate");
+        assert!(xml.contains("frm2200Av2020:txtSched1_xa_others4_Atc"));
+        assert!(xml.contains("frm2200Av2020:txtSched1_xa_others5_Due"));
+    }
+
+    #[test]
     fn period_codes_round_trip() {
         assert_eq!(sample().period_code(), "03152025");
         assert_eq!(
@@ -1886,6 +1971,17 @@ mod tests {
     }
 
     #[test]
+    fn validation_rejects_a_thirteenth_others_row() {
+        let mut draft = sample();
+        draft.others = vec![Form2200AOtherRow::default(); 13];
+        assert!(
+            messages(&draft)
+                .iter()
+                .any(|message| { message == crate::forms::DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE })
+        );
+    }
+
+    #[test]
     fn queue_and_revalidate_through_the_generic_path() {
         let mut draft = sample();
         draft
@@ -1895,6 +1991,33 @@ mod tests {
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    #[test]
+    fn queue_with_four_others_rows_uses_their_dynamic_layout() {
+        let mut draft = sample();
+        for index in 0..4 {
+            let row = draft.other_mut(index).expect("Others row");
+            row.atc_digits = format!("99{index}");
+            row.description = format!("Added product {index}");
+            row.bracket = "Per liter".to_string();
+            row.rate = "10".to_string();
+            row.amounts.taxable = 100.0;
+            row.amounts.tax_due = 10.0;
+        }
+        draft.tax_deposit += 40.0;
+        draft.recompute();
+
+        draft
+            .queue(crate::filing_queue::QueueAuthSource::Gui)
+            .expect("four Others rows queue in the test sandbox");
+        let payload = draft
+            .lifecycle
+            .submitted_payload
+            .as_deref()
+            .expect("queue freezes the exact payload");
+        assert!(payload.contains("frm2200Av2020:txtSched1_xa_others4_Atc"));
+        assert!(draft.revalidate_queued_before_submission().is_ok());
     }
 
     /// P5-1: the earlier float-tolerance check refused two-decimal

@@ -1,5 +1,13 @@
 //! BIR form data models, ATC tables, form registry, and typed form traits.
 
+/// This app's explicit cap for the runtime-row schedules whose official
+/// sources have no cap. Row 13 is shown only so the filer gets the refusal
+/// instead of a silent no-op.
+pub const DYNAMIC_SCHEDULE_ROW_LIMIT: usize = 12;
+/// The settled sentence the page and the assistant both return at row 13.
+pub const DYNAMIC_SCHEDULE_ROW_LIMIT_MESSAGE: &str =
+    "This schedule takes up to 12 rows in this version.";
+
 pub mod agent;
 pub mod atc;
 pub mod calendar_status;
