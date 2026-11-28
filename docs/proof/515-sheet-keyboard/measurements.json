@@ -1,0 +1,40 @@
+{
+  "threebutton": {
+    "mode": "threebutton",
+    "density": 2.625,
+    "screen_width_px": 1080,
+    "screen_height_px": 2400,
+    "status_bar_bottom_px": 63,
+    "status_bar_bottom_dp": 24.0,
+    "sheet_top_dp": 75.809525,
+    "sheet_bottom_dp": 577.904775,
+    "keyboard_top_dp": 577.9048,
+    "sheet_top_px": 199.00000312499998,
+    "sheet_bottom_px": 1517.0000343749998,
+    "keyboard_top_px": 1517.0001,
+    "sheet_root_node": "n33",
+    "keyboard_id": "system-keyboard",
+    "required_top_min_px": 87,
+    "bottom_minus_keyboard_px": -6.562500016116246e-05,
+    "pass": true
+  },
+  "gesture": {
+    "mode": "gesture",
+    "density": 2.625,
+    "screen_width_px": 1080,
+    "screen_height_px": 2400,
+    "status_bar_bottom_px": 63,
+    "status_bar_bottom_dp": 24.0,
+    "sheet_top_dp": 75.809525,
+    "sheet_bottom_dp": 577.904775,
+    "keyboard_top_dp": 577.9048,
+    "sheet_top_px": 199.00000312499998,
+    "sheet_bottom_px": 1517.0000343749998,
+    "keyboard_top_px": 1517.0001,
+    "sheet_root_node": "n33",
+    "keyboard_id": "system-keyboard",
+    "required_top_min_px": 87,
+    "bottom_minus_keyboard_px": -6.562500016116246e-05,
+    "pass": true
+  }
+}
