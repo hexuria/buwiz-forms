@@ -20,7 +20,12 @@ test("android: Home with a live composition keeps the partial amount unsettled",
   await app.setLifecycle("active");
   expect(app.value("id:m-cb")).toBe("1,2");
   expect(app.texts()).toContain("Cb blurs: 0");
-  expect(app.texts()).toContain("Cb focuses: 2");
+  // Not a second focus: the leave never happened, so the return is no new
+  // edit session (the duplicate-focus early return swallows it). The proof
+  // the box has the keys again: a keypress with no click lands in it.
+  expect(app.texts()).toContain("Cb focuses: 1");
+  await app.keyboard.press("3");
+  expect(app.value("id:m-cb")).toBe("1,23");
 });
 
 test("android: inactive keeps a live composition untouched", async () => {
@@ -45,7 +50,9 @@ test("android: a quick Home and back race keeps the partial amount and restores 
   await app.setLifecycle("active");
   expect(app.value("id:m-cb")).toBe("1,2");
   expect(app.texts()).toContain("Cb blurs: 0");
-  expect(app.texts()).toContain("Cb focuses: 2");
+  expect(app.texts()).toContain("Cb focuses: 1");
+  await app.keyboard.press("3");
+  expect(app.value("id:m-cb")).toBe("1,23");
 });
 
 test("android: Home with a live composition keeps a masked TIN unsettled", async () => {
