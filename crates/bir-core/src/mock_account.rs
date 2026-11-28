@@ -2931,13 +2931,26 @@ mod tests {
             .filter(|claim| claim.account == account)
             .map(|claim| (claim.root.as_str(), claim.branch.as_str(), &claim.state))
             .collect();
-        assert_eq!(rows.len(), 2, "exactly the two test roots, nothing else: {rows:?}");
+        assert_eq!(
+            rows.len(),
+            2,
+            "exactly the two test roots, nothing else: {rows:?}"
+        );
         for root in TEST_ROOTS {
-            let row = rows.iter().find(|(r, _, _)| *r == root).expect("the test root is seeded");
-            assert!(matches!(row.2, TinState::Approved), "the test root is active: {row:?}");
+            let row = rows
+                .iter()
+                .find(|(r, _, _)| *r == root)
+                .expect("the test root is seeded");
+            assert!(
+                matches!(row.2, TinState::Approved),
+                "the test root is active: {row:?}"
+            );
             assert_eq!(row.1, "00000", "the head office");
         }
-        assert!(!rows.iter().any(|(r, _, _)| *r == "123456788"), "a real root is never seeded");
+        assert!(
+            !rows.iter().any(|(r, _, _)| *r == "123456788"),
+            "a real root is never seeded"
+        );
     }
 
     #[test]
@@ -3405,7 +3418,10 @@ mod tests {
                 refused.to_string(),
                 "Too many tries. Try again in 60 minutes."
             );
-            assert!(server.tins_of(EMAIL).len() == 3, "nothing was added past the two seeded test roots and the one add");
+            assert!(
+                server.tins_of(EMAIL).len() == 3,
+                "nothing was added past the two seeded test roots and the one add"
+            );
         }
     }
 }

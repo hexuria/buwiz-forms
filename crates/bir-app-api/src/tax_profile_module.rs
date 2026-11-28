@@ -3394,7 +3394,11 @@ mod tests {
                 assert_eq!(row["stale"], false);
                 assert_eq!(row["fetched_at"].as_f64().unwrap(), fetched_at);
                 assert_eq!(row["action_url"].is_null(), row["state"] != "fix", "{row}");
-                assert_eq!(row["test_only"], row["tin_root"] == "111111114" || row["tin_root"] == "000000000", "{row}");
+                assert_eq!(
+                    row["test_only"],
+                    row["tin_root"] == "111111114" || row["tin_root"] == "000000000",
+                    "{row}"
+                );
             }
             assert!(
                 rows[3]["action_url"]
@@ -3495,7 +3499,10 @@ mod tests {
                 .iter()
                 .map(|row| row["state"].as_str().unwrap())
                 .collect();
-            assert_eq!(states, ["activated", "activated", "fix", "fix", "not_activated"]);
+            assert_eq!(
+                states,
+                ["activated", "activated", "fix", "fix", "not_activated"]
+            );
             // Only a tax profile on this device, by its 14 digits.
             assert_eq!(
                 call_verb("activate_tin", vec![json!("12345678800002")]),
