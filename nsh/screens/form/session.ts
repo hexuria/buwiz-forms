@@ -3906,9 +3906,10 @@ export class FormSession {
     this.publish();
   }
 
-  /** True while the account read on the way to Queue runs: the Queue button shows busy and a second press is not a second queue. */
+  /** True while the account read on the way to Queue runs: the Queue button shows busy and a second press is not a second queue.
+   * A SIGNAL read, so the button re-renders as it changes (a plain field would freeze the header's first answer). */
   queueBusy(): boolean {
-    return this.queueGateBusy;
+    return this.queueGateBusySig();
   }
 
   /** Closes the TIN-status sheet Queue stopped on; nothing was queued. */
@@ -3919,16 +3920,16 @@ export class FormSession {
   }
 
   /** One account read on the way to Queue at a time: a second press inside the round trip is not a second queue. */
-  private queueGateBusy = false;
+  private queueGateBusySig = signal(false);
 
   private queueNow() {
     // D2: Queue asks the account first (max_age 0). A fresh, complete list naming this TIN and branch as not activated
     // stops Queue on a sheet and queues nothing; a stale, incomplete or unreadable list (the read threw included) goes
     // ahead as today. The read is this call's own answer, never a kept one.
-    if (this.queueGateBusy || this.disposed) return;
-    this.queueGateBusy = true;
-    this.publish();
-    const [tinRoot, branch] = tinKeyParts(this.st.target.tin);
+    if (this.queueGateBusySig() || this.disposed) return;
+    this.queueGateBusySig.set(true);
+    const pressed = this.st.target;
+    const [tinRoot, branch] = tinKeyParts(pressed.tin);
     void (async () => {
       let blocked: { state: string; message: string | null; action_url: string | null; test_only: boolean; stale: boolean; fetched_at: number } | null = null;
       try {
@@ -3938,11 +3939,13 @@ export class FormSession {
           if (row && row.state !== "activated") blocked = row;
         }
       } finally {
-        this.queueGateBusy = false;
+        this.queueGateBusySig.set(false);
       }
-      // After the wait the page may be gone, or the filer may have typed on: nothing stale decides. The queue itself
-      // reads the draft as it NOW is (this.st), so what was typed during the wait is checked with the rest.
+      // After the wait the page may be gone, or the filer may have typed on or switched return: nothing stale decides.
+      // The queue itself reads the draft as it NOW is, but only for the SAME target the press checked — a switch to
+      // another return during the wait means the TIN read answered for a target this page no longer shows.
       if (this.disposed) return;
+      if (this.st.target !== pressed) return;
       const now = this.st;
       if (blocked) {
         now.overlay = { kind: "tin-blocked", row: blocked };

@@ -7,7 +7,7 @@ import type { JSX } from "nsh";
 import { View } from "nsh";
 import { isoDate } from "../../lib/dates";
 import { AppButton, Chip, Text } from "../../ui";
-import { activateTin, clearTinRefusal, refreshTins, tinActivating, tinRefusal, tinRow } from "./tins";
+import { activateTin, clearTinRefusal, markAccountSiteOpened, refreshTins, tinActivating, tinRefusal, tinRow } from "./tins";
 
 /** "Checked <date>" for a stale row: the list's read day. */
 function checkedDate(fetchedAt: number): string {
@@ -20,6 +20,7 @@ const LABELS = { activated: "Activated", pending: "Pending", fix: "Fix", not_act
 /** Opens the row's account-site action, already pinned host-side to the account site. The list is asked again when
  * the app becomes active on the filer's return (the shell's listener), never here: nothing has changed yet at open. */
 function openAction(url: string): void {
+  markAccountSiteOpened();
   void openUrl(url);
 }
 

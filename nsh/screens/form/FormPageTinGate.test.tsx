@@ -194,3 +194,30 @@ test("desktop: after the account owner changes a failing read clears the old lis
   await app.waitUntil(() => tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue")), { timeout: 10000 });
   expect(app.shows("id:tin-queue-blocked")).toBe(false);
 }, 40_000);
+
+test("desktop: a switch to another return during the account read queues nothing", async () => {
+  // The press checks the pressed target's TIN; while the slow read is on the wire the page opens another return.
+  // What the read answered was for a target the page no longer shows: nothing is queued, nothing is blocked.
+  const app = await pageAndQueue("not_activated", { tinsDelayMs: 1200, swapTargetAfterMs: 500 });
+  for (let i = 0; i < 10; i++) {
+    if (app.shows("id:tin-queue-blocked") || tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await new Promise((r) => setTimeout(r, 2500));
+  expect(app.shows("id:tin-queue-blocked")).toBe(false);
+  expect(tinsCalls(app).some((c) => c.startsWith("queue_form_draft") || c.startsWith("screen_form_queue"))).toBe(false);
+}, 40_000);
+
+test("desktop: the Queue button is enabled again after a blocked sheet is closed", async () => {
+  const app = await pageAndQueue("not_activated");
+  for (let i = 0; i < 6 && !app.shows("id:tin-queue-blocked"); i++) {
+    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
+    else await app.press("id:fp-queue");
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  await app.waitFor("id:tin-queue-blocked", { timeout: 10000 });
+  await app.press("id:tin-blocked-close");
+  await app.waitFor("id:tin-queue-blocked", { state: "gone" });
+  await app.waitUntil(() => app.enabled("id:fp-queue"), { timeout: 8000 });
+  expect(app.enabled("id:fp-queue")).toBe(true);
+}, 40_000);

@@ -19,7 +19,7 @@ let inFlight: Promise<void> | null = null;
 
 /** The list as last read, or null when there is none yet (never read, signed out, unreadable). */
 export function tinsList(): TinStatusList | null {
-  return list();
+  return listIsCurrentOwners() ? list() : null;
 }
 
 /** Why there is no list (signed out, offline with no list, the server's refusal), or null. */
@@ -34,24 +34,47 @@ export function tinKeyParts(tin: unknown): [string, string] {
   return [digits.slice(0, 9), digits.slice(9).padStart(5, "0")];
 }
 
-/** The row for one TIN root (9 digits) and branch (5 digits), or null. */
+/** The row for one TIN root (9 digits) and branch (5 digits), or null. Answers null when the signed-in owner is not
+ * the owner the list was read for, so a chip mounted after a switch never shows even a moment of the old owner. */
 export function tinRow(tinRoot: string, branch: string): TinStatusRow | null {
+  if (!listIsCurrentOwners()) return null;
   const rows = list()?.rows;
   if (!rows) return null;
   return rows.find((row) => row.tin_root === tinRoot && row.branch === branch) ?? null;
+}
+
+/** Set when a Fix or Verify link to the account site was opened; the next return-to-app focus reads fresh once. */
+let accountSiteOpened = false;
+
+/** The filer opened the account site (a Fix or Verify link): the next time the app becomes active the list is asked fresh. */
+export function markAccountSiteOpened(): void {
+  accountSiteOpened = true;
+}
+
+/** True once after the account site was opened since the last fresh read the return asked for; clears the flag. */
+export function takeAccountSiteOpened(): boolean {
+  const was = accountSiteOpened;
+  accountSiteOpened = false;
+  return was;
 }
 
 /** The signed-in owner the kept list belongs to; undefined until the first read checks. */
 let owner: string | null | undefined = undefined;
 
 /** Who the account list belongs to now (a local read, never the network): the user id, the email, null signed out. */
-async function currentOwner(): Promise<string | null> {
+function currentOwner(): string | null {
   try {
-    const status = await bir.cloud_account_status();
+    const status = bir.cloud_account_status();
     return status.signed_in ? status.user_id || status.email || "signed-in" : null;
   } catch {
     return null;
   }
+}
+
+/** True when the kept list belongs to the owner signed in now. Checked at every render, so a newly mounted chip
+ * never shows even a moment of the previous owner's statuses. */
+function listIsCurrentOwners(): boolean {
+  return owner !== undefined && currentOwner() === owner;
 }
 
 /**
@@ -66,7 +89,7 @@ export async function refreshTins(maxAge: number): Promise<TinStatusList | null>
     return list();
   }
   const run = (async (): Promise<TinStatusList | null> => {
-    const me = await currentOwner();
+    const me = currentOwner();
     if (owner !== undefined && me !== owner) {
       list.set(null);
       refusals.set({});
@@ -84,11 +107,12 @@ export async function refreshTins(maxAge: number): Promise<TinStatusList | null>
       return null;
     }
   })();
-  inFlight = run.then(() => undefined);
+  const marker = run.then(() => undefined);
+  inFlight = marker;
   try {
     return await run;
   } finally {
-    if (inFlight !== null) inFlight = null;
+    if (inFlight === marker) inFlight = null;
   }
 }
 

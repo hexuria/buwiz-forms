@@ -37,6 +37,10 @@ interface Params {
   tinsErrorAfter?: number;
   /** After this many reads the fake's sign-in becomes owner B. */
   tinsOwnerFlipAfter?: number;
+  /** The fake's account_tins answer is delayed this long (a slow read a test can act during). */
+  tinsDelayMs?: number;
+  /** This many ms after mount the fixture opens ANOTHER return in the same session (a switch during a slow Queue read). */
+  swapTargetAfterMs?: number;
   /** The refusal activate_tin throws. */
   activate?: FakeActivateKind;
   /** Year facts set for the demo taxpayer before the page opens (e.g. the EOPT tier a queue needs answered). */
@@ -65,7 +69,7 @@ function Fixture() {
   watchBoxFrames(true);
   createDemoTaxpayer();
   const p = (host.params || {}) as Params;
-  if (p.tins) installFakeTins(bir as unknown as Record<string, unknown>, p.tins, p.activate, (line) => tinsCalls.set([...tinsCalls(), line]), { errorAfter: p.tinsErrorAfter, ownerFlipAfter: p.tinsOwnerFlipAfter });
+  if (p.tins) installFakeTins(bir as unknown as Record<string, unknown>, p.tins, p.activate, (line) => tinsCalls.set([...tinsCalls(), line]), { errorAfter: p.tinsErrorAfter, ownerFlipAfter: p.tinsOwnerFlipAfter, delayMs: p.tinsDelayMs });
   const tin = typeof p.tin === "string" ? p.tin : DEMO.tin;
   if (p.facts) {
     const year = p.year ?? 2025;
@@ -93,7 +97,12 @@ function Fixture() {
             return `fx-${++count}`;
           }}
           dismissToast={(id) => toasts.set([...toasts(), `dismissed ${id}`])}
-          onSession={(s) =>
+          onSession={(s) => {
+            if (p.swapTargetAfterMs) {
+              setTimeout(() => {
+                void s.open({ tin, formCode: "1601C", year: 2026, period: 9 } as never, true);
+              }, p.swapTargetAfterMs);
+            }
             void s.ready().then(async () => {
               sessionFields.set(String(s.fieldCount()));
               const openAll = p.openParts === "all" ? s.schema!.parts.map((_x, i) => i) : p.openParts || [];
@@ -110,7 +119,7 @@ function Fixture() {
               pollBoxFrames();
             }, 100);
             })
-          }
+          }}
         />
       </If>
       <View testID="fx-toasts" class="absolute top-0 left-0" style={{ pointerEvents: "none", opacity: 0 }}>

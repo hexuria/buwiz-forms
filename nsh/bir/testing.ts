@@ -83,7 +83,7 @@ export function installFakeTins(
   kind: FakeTinsKind,
   activateKind: FakeActivateKind | undefined,
   readout: (line: string) => void,
-  opts: { errorAfter?: number; ownerFlipAfter?: number; refusalText?: string } = {},
+  opts: { errorAfter?: number; ownerFlipAfter?: number; refusalText?: string; delayMs?: number } = {},
 ): void {
   const now = Math.floor(Date.now() / 1000);
   const root = DEMO.tinRoot.replaceAll("-", "");
@@ -118,6 +118,7 @@ export function installFakeTins(
   });
   bir.account_tins = async (maxAge: number) => {
     readout(`account_tins(${maxAge})`);
+    if (opts.delayMs) await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
     reads += 1;
     if (kind === "error" || (opts.errorAfter !== undefined && reads > opts.errorAfter)) throw new Error("Sign in to Buwiz to see your TINs.");
     // An incomplete list still carries the rows it has: completeness is its own fact, and the gate must read it.

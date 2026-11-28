@@ -7,7 +7,7 @@ import { cleanup, computed, effect, ErrorBoundary, keymap, platform, safeArea, S
 import { Button } from "nsh/base";
 import { isAvailable as desktopAvailable, currentWindow, focusedWindow, titleBar } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
-import { refreshTins } from "../screens/taxpayer/tins";
+import { refreshTins, takeAccountSiteOpened } from "../screens/taxpayer/tins";
 import { errorText } from "../lib/errors";
 import { LockedScreen } from "../screens/auth/Locked";
 import { SIZE } from "../theme/tokens";
@@ -282,9 +282,12 @@ export function Shell(props: ShellProps) {
     const focused = focusedWindow() !== null;
     // A focus flicker is not a return from the account site: at most one read a minute, or the cache answers.
     if (focused && !tinWasFocused) {
-      const now = Date.now();
-      if (now - lastFocusRead >= 60_000) {
-        lastFocusRead = now;
+      // A return from the account site (the Fix or Verify link was opened) asks fresh once, however close the last read.
+      if (takeAccountSiteOpened()) {
+        lastFocusRead = Date.now();
+        void refreshTins(0);
+      } else if (Date.now() - lastFocusRead >= 60_000) {
+        lastFocusRead = Date.now();
         void refreshTins(0);
       } else void refreshTins(60);
     }

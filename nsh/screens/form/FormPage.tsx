@@ -21,6 +21,7 @@
 // The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
 import { cleanup, computed, effect, keymap, List, openUrl, Scroll, signal, untracked, View, windowSize } from "nsh";
+import { markAccountSiteOpened } from "../taxpayer/tins";
 import { BREAK, SIZE } from "../../theme/tokens";
 import {
   AppButton,
@@ -1019,7 +1020,8 @@ function Dialogs(props: { s: FormSession }) {
                   block
                   label="Fix on your account"
                   onPress={() => {
-                    // The list is asked again when the app becomes active on the filer's return, not at open.
+                    // The list is asked fresh when the app becomes active on the filer's return, not at open.
+                    markAccountSiteOpened();
                     void openUrl(row().action_url!);
                   }}
                 />
