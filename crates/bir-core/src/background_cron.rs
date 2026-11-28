@@ -6012,6 +6012,34 @@ mod tests {
         );
     }
 
+    /// `draft` sent for real by the worker's own path (queued, claimed, Submitted now): only a Draft may use the generic
+    /// save, so a sent return is made the way the worker makes one.
+    fn sent_lab_1601c(db: &Database, mut draft: Form1601CDraft) {
+        draft.transition_to_queued().expect("the lab return queues");
+        db.save_queued_1601c_draft(&draft)
+            .expect("the queued return is saved");
+        let claim = db
+            .claim_queued_1601c_submission(
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                &draft.queued_submission_fingerprint,
+                &draft.next_retry_at,
+                0,
+            )
+            .expect("the queued return is claimed");
+        let crate::db::Claim1601CSubmissionResult::Claimed {
+            draft: mut claimed,
+            token,
+        } = claim
+        else {
+            panic!("expected a claim");
+        };
+        claimed.transition_to_submitted(draft.default_submission_filename(), false);
+        db.finish_claimed_1601c_submission(&claimed, &token)
+            .expect("the send is finished");
+    }
+
     /// #504 W1: a return still waiting for the BIR's email gets its poll back when the inbox's way in changes (here
     /// after the poll a Google grant this build cannot renew had archived); a return never sent gets none, the inbox is
     /// matched whatever its case, and a second call keeps one job per return.
@@ -6023,10 +6051,7 @@ mod tests {
         profile.email_tracking_enabled = true;
         profile.imap_email = Some("filer@example.com".to_string());
         db.save_profile(profile).expect("the profile is saved");
-        let mut waiting = crate::filing_queue::mandatory_lab_1601c_draft();
-        waiting.status = FilingStatus::Submitted;
-        db.save_1601c_draft(&waiting)
-            .expect("the sent return is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
         let draft_only = crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10);
         db.save_1601c_draft(&draft_only)
             .expect("the draft is saved");
@@ -6069,10 +6094,7 @@ mod tests {
         profile.email_tracking_enabled = false;
         profile.imap_email = Some("filer@example.com".to_string());
         db.save_profile(profile).expect("the profile is saved");
-        let mut waiting = crate::filing_queue::mandatory_lab_1601c_draft();
-        waiting.status = FilingStatus::Submitted;
-        db.save_1601c_draft(&waiting)
-            .expect("the sent return is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
 
         assert_eq!(
             reschedule_email_polls_for_inbox(&db, "filer@example.com"),
