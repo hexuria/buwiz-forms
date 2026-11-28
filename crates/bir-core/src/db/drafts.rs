@@ -339,6 +339,17 @@ pub(super) fn period_from_legacy_slot(
     }
 }
 
+/// A stored return's send time as text: its `submitted_at`, at the top level or under `lifecycle` (every real send
+/// writes it: 1601C, 2551Q and the queueable forms); empty counts as missing. No fallback to `updated_at`: a later
+/// write (an amendment link, a migration, an import) must not make an old send look recent.
+const SEND_TIME_TEXT_SQL: &str = "(CASE WHEN json_valid(data_json) THEN COALESCE(\
+    NULLIF(json_extract(data_json, '$.submitted_at'), ''), \
+    NULLIF(json_extract(data_json, '$.lifecycle.submitted_at'), '')) END)";
+/// [`SEND_TIME_TEXT_SQL`] as a Julian day (offsets included); NULL when missing or unreadable.
+const SEND_TIME_SQL: &str = "julianday(CASE WHEN json_valid(data_json) THEN COALESCE(\
+    NULLIF(json_extract(data_json, '$.submitted_at'), ''), \
+    NULLIF(json_extract(data_json, '$.lifecycle.submitted_at'), '')) END)";
+
 fn period_from_row(
     form_code: &str,
     legacy_slot: Option<i64>,
@@ -3364,37 +3375,99 @@ impl Database {
         Ok(summaries)
     }
 
-    /// Whether `tin` holds a return of `year` that waits for the BIR's
-    /// confirmation email: Submitted (or the legacy "Filed") and not a dry
-    /// run, which reached nobody and is sent no email
-    /// ([`crate::forms::dry_run`]).
-    pub fn has_return_awaiting_bir_email(&self, tin: &str, year: u16) -> Result<bool, DbError> {
+    /// Whether `tin` holds a return that waits for the BIR's confirmation email at `now`: Submitted (or the legacy
+    /// "Filed"), not a dry run (which reached nobody and is sent no email, [`crate::forms::dry_run`]), and sent within
+    /// the last [`crate::email::BIR_EMAIL_WINDOW_DAYS`] days, the inbox search's window. It goes by the return's own
+    /// state, whatever its taxable year: a December return sent in January, an annual return sent in April, a return
+    /// sent on 29 December whose email comes on 2 January all wait.
+    pub fn has_return_awaiting_bir_email(
+        &self,
+        tin: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, DbError> {
+        let since = now - chrono::Duration::days(crate::email::BIR_EMAIL_WINDOW_DAYS);
+        self.has_unconfirmed_send(tin, &format!("{SEND_TIME_SQL} >= julianday(?2)"), since)
+    }
+
+    /// Whether `tin` holds an unconfirmed return (as above) sent more than [`crate::email::BIR_EMAIL_WINDOW_DAYS`]
+    /// days before `now`, or whose send time cannot be read: it is no longer checked automatically (an explicit check
+    /// still searches back for it, [`Self::oldest_unconfirmed_send_date`]). Never neither: a return with an empty or
+    /// unreadable `submitted_at`, such as an imported or rewritten one, counts here rather than going untracked.
+    pub fn has_return_past_bir_email_window(
+        &self,
+        tin: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, DbError> {
+        let since = now - chrono::Duration::days(crate::email::BIR_EMAIL_WINDOW_DAYS);
+        self.has_unconfirmed_send(
+            tin,
+            &format!("({SEND_TIME_SQL} IS NULL OR {SEND_TIME_SQL} < julianday(?2))"),
+            since,
+        )
+    }
+
+    /// The day the oldest unconfirmed return of `tin` was sent, no earlier than `floor` (an unreadable send time counts
+    /// as `floor`); `None` when nothing is unconfirmed. An explicit inbox check searches back to it.
+    pub fn oldest_unconfirmed_send_date(
+        &self,
+        tin: &str,
+        floor: chrono::NaiveDate,
+    ) -> Result<Option<chrono::NaiveDate>, DbError> {
+        let oldest: Option<String> = self.conn.query_row(
+            &format!(
+                "SELECT MIN(COALESCE(date({SEND_TIME_TEXT_SQL}), ?2)) FROM form_drafts
+                  WHERE tin = ?1 AND status IN ('Submitted', 'Filed') AND NOT {}",
+                crate::forms::dry_run::STORED_DRY_RUN_SQL
+            ),
+            params![tin, floor.format("%Y-%m-%d").to_string()],
+            |row| row.get(0),
+        )?;
+        Ok(oldest
+            .and_then(|day| chrono::NaiveDate::parse_from_str(&day, "%Y-%m-%d").ok())
+            .map(|day| day.max(floor)))
+    }
+
+    /// A Submitted (or "Filed"), not-dry-run return of `tin` whose send time meets `test` (SQL over ?2, `since`).
+    fn has_unconfirmed_send(
+        &self,
+        tin: &str,
+        test: &str,
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, DbError> {
         Ok(self.conn.query_row(
             &format!(
                 "SELECT EXISTS(SELECT 1 FROM form_drafts
-                  WHERE tin = ?1 AND taxable_year = ?2
+                  WHERE tin = ?1
                     AND status IN ('Submitted', 'Filed')
-                    AND NOT {})",
+                    AND NOT {}
+                    AND {test})",
                 crate::forms::dry_run::STORED_DRY_RUN_SQL
             ),
-            params![tin, i64::from(year)],
+            params![tin, since.to_rfc3339()],
             |row| row.get(0),
         )?)
     }
 
-    /// The returns of `tin`, whatever their taxable year, that wait for the BIR's confirmation email: the rows
-    /// [`Self::has_return_awaiting_bir_email`] counts (Submitted or the legacy "Filed", not a dry run).
-    pub fn returns_awaiting_bir_email(&self, tin: &str) -> Result<Vec<FormDraftSummary>, DbError> {
+    /// The returns of `tin`, whatever their taxable year, that wait for the BIR's confirmation email at `now`: the rows
+    /// [`Self::has_return_awaiting_bir_email`] counts (Submitted or the legacy "Filed", not a dry run, sent within the
+    /// inbox search's window). A return past the window is not listed, so no poll is queued for it.
+    pub fn returns_awaiting_bir_email(
+        &self,
+        tin: &str,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<FormDraftSummary>, DbError> {
+        let since = now - chrono::Duration::days(crate::email::BIR_EMAIL_WINDOW_DAYS);
         let mut stmt = self.conn.prepare(&format!(
             "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at
              FROM form_drafts
              WHERE tin = ?1 AND status IN ('Submitted', 'Filed') AND NOT {}
                AND NOT (json_valid(data_json) AND
                     COALESCE(NULLIF(json_type(data_json, '$.submitted_via_relay'), 'null'),
-                             json_type(data_json, '$.lifecycle.submitted_via_relay'), 'false') = 'true')",
+                             json_type(data_json, '$.lifecycle.submitted_via_relay'), 'false') = 'true')
+               AND {SEND_TIME_SQL} >= julianday(?2)",
             crate::forms::dry_run::STORED_DRY_RUN_SQL
         ))?;
-        let rows = stmt.query_map(params![tin], draft_summary_from_row)?;
+        let rows = stmt.query_map(params![tin, since.to_rfc3339()], draft_summary_from_row)?;
         let mut summaries = Vec::new();
         for row in rows {
             summaries.push(row?);
@@ -7225,5 +7298,22 @@ mod tests {
         assert_eq!(summaries[1].form_code, "2551Q");
         assert_eq!(summaries[1].quarter, Some(4));
         assert_eq!(summaries[1].month, None);
+    }
+}
+
+#[cfg(test)]
+impl Database {
+    /// Tests only: rewrite the stored send time (`submitted_at`) of `tin`'s sent returns; `None` removes it. A sent
+    /// return is made through the worker's own path, which stamps the real time; tests of the inbox window need others.
+    pub(crate) fn set_sent_at_for_tests(&self, tin: &str, sent: Option<&str>) {
+        self.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = CASE WHEN ?2 IS NULL
+                    THEN json_remove(data_json, '$.submitted_at')
+                    ELSE json_set(data_json, '$.submitted_at', ?2) END
+                  WHERE tin = ?1 AND status IN ('Submitted', 'Filed')",
+                params![tin, sent],
+            )
+            .expect("the send time is rewritten");
     }
 }

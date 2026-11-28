@@ -156,7 +156,12 @@ export function InboxBody(props: { s: PageState }) {
         </Text>
       </If>
       <Text testID="tp-inbox-status" variant="meta" tone={st()?.tracking_enabled ? "success" : "fg3"} class="mt-2">
-        {trackingLine({ tracking_enabled: Boolean(st()?.tracking_enabled), still_pending: Boolean(st()?.still_pending) })}
+        {trackingLine({
+          tracking_enabled: Boolean(st()?.tracking_enabled),
+          still_pending: Boolean(st()?.still_pending),
+          past_window: Boolean(st()?.past_window),
+          window_days: st()?.window_days ?? 30,
+        })}
       </Text>
     </View>
   );

@@ -2557,7 +2557,7 @@ pub fn reschedule_email_polls_for_inbox(db_guard: &Database, inbox: &str) -> usi
     {
         let tin = profile.tin.full();
         for draft in db_guard
-            .returns_awaiting_bir_email(&tin)
+            .returns_awaiting_bir_email(&tin, chrono::Utc::now())
             .unwrap_or_default()
         {
             seen += 1;
@@ -6457,6 +6457,41 @@ mod tests {
         assert_eq!(live(&db), 1, "the waiting return is polled again");
     }
 
+    /// #508 review: the re-queue after a change of the inbox's way in follows the send-time window. A return sent 40
+    /// days ago gets no poll back; the same return sent today does.
+    #[test]
+    fn a_return_past_the_window_gets_no_poll_back() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        let draft = crate::filing_queue::mandatory_lab_1601c_draft();
+        let tin = draft.tin.clone();
+        sent_lab_1601c(&db, draft);
+        let queued = |db: &Database| {
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .into_iter()
+                .filter(|job| is_email_poll_job(job) && job.status == "Queued")
+                .count()
+        };
+
+        let long_ago = (chrono::Utc::now() - chrono::Duration::days(40)).to_rfc3339();
+        db.set_sent_at_for_tests(&tin, Some(&long_ago));
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        assert_eq!(
+            queued(&db),
+            0,
+            "a return past the window is not polled again"
+        );
+
+        db.set_sent_at_for_tests(&tin, Some(&chrono::Utc::now().to_rfc3339()));
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        assert_eq!(queued(&db), 1, "the same return sent today is");
+    }
+
     /// #504 review: a send to the local mock relay never had a poll (the worker skips it), so a change of the inbox's
     /// way in queues none for it either; a real send beside it still gets its poll.
     #[test]
@@ -6470,7 +6505,7 @@ mod tests {
         sent_lab_1601c_via(&db, crate::filing_queue::mandatory_lab_1601c_draft(), true);
         let tin = crate::filing_queue::mandatory_lab_1601c_draft().tin;
         assert!(
-            db.returns_awaiting_bir_email(&tin)
+            db.returns_awaiting_bir_email(&tin, chrono::Utc::now())
                 .expect("the waiting returns are listed")
                 .is_empty(),
             "a mock relay send is not waiting for the BIR's email"
@@ -6480,7 +6515,7 @@ mod tests {
             crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10),
         );
         assert_eq!(
-            db.returns_awaiting_bir_email(&tin)
+            db.returns_awaiting_bir_email(&tin, chrono::Utc::now())
                 .expect("the waiting returns are listed")
                 .len(),
             1,

@@ -21,7 +21,6 @@ use bir_core::tax_profile::{
     ResolvedBranch, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches, format_tin_root,
     tax_year_bounds,
 };
-use chrono::Datelike as _;
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
 use serde_json::Value;
 
@@ -239,8 +238,12 @@ export interface InboxState {
     google_available: boolean;
     oauth_inbox_email: string | null;
     oauth_updated_at: string | null;
-    /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */
+    /** A return on this inbox, sent within the last `window_days` days, still waits for its BIR email: the inbox is checked. */
     still_pending: boolean;
+    /** A return on this inbox sent more than `window_days` days ago is still Submitted: no BIR email was found and it is no longer looked for. */
+    past_window: boolean;
+    /** How far back the inbox is searched for the BIR's emails (bir_core::email::BIR_EMAIL_WINDOW_DAYS). */
+    window_days: number;
     matching_tins: string[];
     /** Last run of this inbox's `bir_poll_email` job, when one exists. */
     last_check_at: string | null;
@@ -258,6 +261,8 @@ export interface InboxVerifyResult { ok: boolean; message: string; state: InboxS
 export interface InboxCheckResult {
     ok: boolean;
     still_pending: boolean;
+    /** The inbox was searched: something was waiting for a BIR email. False: nothing was, so nothing was looked at. */
+    looked: boolean;
     error: string | null;
     state: InboxState;
 }
@@ -1198,15 +1203,12 @@ fn inbox_state_value(db: &Database, tin: &str) -> Result<HostValue, HostError> {
     };
     let oauth_connected = profile.has_usable_oauth_refresh()
         || tokens.as_ref().is_some_and(|t| t.has_usable_refresh());
-    let (still_pending, matching_tins) = if inbox.is_empty() {
-        (false, Vec::new())
+    // Waiting goes by each return's own state and send time (the inbox search's window), never the calendar year.
+    let (still_pending, past_window, matching_tins) = if inbox.is_empty() {
+        (false, false, Vec::new())
     } else {
-        let plan = bir_core::email::plan_email_poll_for_address(
-            db,
-            &inbox,
-            chrono::Local::now().year() as u16,
-        );
-        (plan.still_pending, plan.matching_tins)
+        let plan = bir_core::email::plan_email_poll_for_address(db, &inbox, chrono::Utc::now());
+        (plan.still_pending, plan.past_window, plan.matching_tins)
     };
     // "Last check" lives on the cron-side `bir_poll_email <address>` job row.
     let poll_command = format!("bir_poll_email {inbox}");
@@ -1266,6 +1268,8 @@ fn inbox_state_value(db: &Database, tin: &str) -> Result<HostValue, HostError> {
                 .map_or(HostValue::Null, HostValue::Str),
         )
         .field("still_pending", still_pending)
+        .field("past_window", past_window)
+        .field("window_days", bir_core::email::BIR_EMAIL_WINDOW_DAYS)
         .field("matching_tins", strings(matching_tins))
         .field(
             "last_check_at",
@@ -1542,6 +1546,14 @@ fn check_inbox_now_run(tin: &str, db: &std::sync::Arc<std::sync::Mutex<Database>
         }
         email
     };
+    // Whether the check will really search the inbox: an explicit check does whenever a return is unconfirmed, waiting
+    // within the window or past it (bir_core fetch_and_process_emails_for_address), and the answer says so rather than
+    // "everything is confirmed" without having looked.
+    let looked = {
+        let guard = lock_db(db)?;
+        let plan = bir_core::email::plan_email_poll_for_address(&guard, &email, chrono::Utc::now());
+        plan.still_pending || plan.past_window
+    };
     let (poll_success, still_pending, err_msg) = run_inbox_poll(&email, db.clone())?;
 
     let guard = lock_db(db)?;
@@ -1576,6 +1588,7 @@ fn check_inbox_now_run(tin: &str, db: &std::sync::Arc<std::sync::Mutex<Database>
     Ok(HostObject::new()
         .field("ok", poll_success)
         .field("still_pending", still_pending)
+        .field("looked", looked)
         .field("error", err_msg.map_or(HostValue::Null, HostValue::Str))
         .field("state", inbox_state_value(&guard, tin)?)
         .into())

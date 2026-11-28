@@ -352,10 +352,23 @@ export function hiddenFactsText(hidden: number): string | null {
   return hidden === 1 ? "1 fact is not shown: no form on your list uses it." : `${hidden} facts are not shown: no form on your list uses them.`;
 }
 
-/** The result of a "check now", in words. */
-export function checkText(r: { ok: boolean; still_pending: boolean; error: string | null }): string {
+/** The result of a "check now", in words. It says "confirmed" only after the inbox was really searched (`looked`). */
+export function checkText(r: {
+  ok: boolean;
+  still_pending: boolean;
+  looked: boolean;
+  error: string | null;
+  state?: Pick<InboxState, "past_window" | "window_days">;
+}): string {
   if (!r.ok) return r.error || "The check failed.";
-  return r.still_pending ? "Checked. A submitted return is still waiting for its confirmation." : "Checked. Everything submitted is confirmed.";
+  if (!r.looked) return "Every return sent is confirmed or was a test send, so the inbox was not searched.";
+  if (r.still_pending) return "Checked. A submitted return is still waiting for its confirmation.";
+  // still_pending counts only the automatic window: an older return still unmatched is never called confirmed. The search
+  // may have found and saved BIR mail that confirms something else, so it says "not confirmed", never "no email found".
+  if (r.state?.past_window) {
+    return "Checked. An older return is not confirmed by a BIR email yet: it stays Submitted.";
+  }
+  return "Checked. Everything submitted is confirmed.";
 }
 
 /** The tracking line at the foot of the inbox section. */
@@ -366,9 +379,12 @@ export const GOOGLE_UNAVAILABLE = "Google sign-in is not available in this versi
  * (crates/bir-core/src/email/auth_oauth.rs GOOGLE_NOT_IN_THIS_VERSION). */
 export const GOOGLE_UNAVAILABLE_CONNECTED = "Google sign-in is not available in this version. Disconnect and use an app password.";
 
-export function trackingLine(s: Pick<InboxState, "tracking_enabled" | "still_pending">): string {
+export function trackingLine(s: Pick<InboxState, "tracking_enabled" | "still_pending" | "past_window" | "window_days">): string {
   if (!s.tracking_enabled) return "○ Verify your connection to activate email tracking.";
-  return s.still_pending
-    ? "● Automated BIR receipt tracking is active — a submitted return is still waiting for its confirmation."
-    : "● Automated BIR receipt tracking is active.";
+  if (s.still_pending) return "● Automated BIR receipt tracking is active — a submitted return is still waiting for its confirmation.";
+  // A return sent before the inbox search's window, still Submitted: never shown as confirmed, and how to check by hand.
+  if (s.past_window) {
+    return `● Automated BIR receipt tracking is active. A return sent more than ${s.window_days} days ago was not matched to a BIR email within ${s.window_days} days and is no longer checked automatically: it stays Submitted. Press Check now to search further back, or search your inbox for mail from ebirforms-noreply@bir.gov.ph.`;
+  }
+  return "● Automated BIR receipt tracking is active.";
 }

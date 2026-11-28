@@ -77,6 +77,16 @@ impl Database {
             }
             return Ok((existing, false));
         }
+        // An original and its amendment share a filename. An older receipt read again (Check now can search further
+        // back) never replaces the newer one stored for it, which a confirmed amendment points to.
+        if let Some(existing) = self.get_submission_receipt_by_filename(&receipt.filename)?
+            && (
+                existing.received_date.as_str(),
+                existing.received_time.as_str(),
+            ) > (received_date_str.as_str(), received_time_str.as_str())
+        {
+            return Ok((existing, false));
+        }
 
         self.conn.execute(
             "INSERT INTO submission_receipts
@@ -403,6 +413,35 @@ mod tests {
             email_received_at: None,
             created_at: None,
         }
+    }
+
+    /// #508 review: the original's receipt, read again after the amendment's was stored under the same filename, leaves
+    /// the amendment's receipt as it was; a newer receipt still replaces an older one.
+    #[test]
+    fn an_older_receipt_never_replaces_a_newer_one_for_the_same_file() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let at = |day: u32, text: &str| BirReceiptConfirmation {
+            filename: "123456789000-1601Cv2018-092026.xml".to_string(),
+            date_received: chrono::NaiveDate::from_ymd_opt(2026, 10, day).unwrap(),
+            time_received: chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            source_from: Some("ebirforms-noreply@bir.gov.ph".to_string()),
+            raw_text: text.to_string(),
+            raw_html: None,
+        };
+        let (original, _) = db.save_submission_receipt(&at(10, "original")).unwrap();
+        let (amendment, is_new) = db.save_submission_receipt(&at(20, "amendment")).unwrap();
+        assert!(is_new, "the newer receipt replaces the older one");
+        assert_eq!(amendment.id, original.id);
+
+        let (kept, is_new) = db.save_submission_receipt(&at(10, "original")).unwrap();
+        assert!(!is_new);
+        assert_eq!(kept.raw_text, "amendment");
+        let stored = db
+            .get_submission_receipt_by_id(amendment.id.unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.raw_text, "amendment");
+        assert_eq!(stored.received_date, "2026-10-20");
     }
 
     #[test]

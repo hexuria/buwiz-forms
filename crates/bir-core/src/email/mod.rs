@@ -11,6 +11,11 @@ pub mod gmail_api;
 mod inbox;
 pub(crate) mod oauth_server;
 
+/// How far back the inbox is searched for the BIR's confirmation emails (IMAP `SINCE`), and so how long after its send a
+/// return counts as waiting for one: a return sent earlier could not be found by the search anyway. One number for both,
+/// so "waiting" never claims more than the search can look at.
+pub const BIR_EMAIL_WINDOW_DAYS: i64 = 30;
+
 pub use auth_oauth::{
     GOOGLE_NOT_IN_THIS_VERSION, GoogleOAuthAuth, get_oauth_email, google_sign_in_available,
     start_oauth_flow,
