@@ -49,8 +49,9 @@ pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
             .clone()?;
     }
     install_logging();
-    // An unnamed scratch test database is chosen only when its engine boots;
-    // the sweep then runs inside that scratch room, never the installed app's folder.
+    // As on desktop, an unnamed scratch test database is chosen only when its
+    // engine boots; the sweep then runs inside that scratch room, never the
+    // installed app's folder.
     if !scratch_database_wanted() {
         bir_core::platform::prepare_print_previews();
     }
@@ -170,6 +171,8 @@ fn choose_database() -> Result<(), String> {
     }
     if let Some(named) = NAMED.with(|slot| slot.borrow().clone()) {
         bir_core::db::set_database_path_override(Some(named));
+        // Registration cannot know this thread's database name, so its launch
+        // sweep is deferred to here: still before the database opens.
         bir_core::platform::prepare_print_previews();
         return Ok(());
     }
@@ -184,6 +187,8 @@ fn choose_database() -> Result<(), String> {
     let folder = fresh_scratch_folder(&root, std::process::id(), SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst))
         .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
     bir_core::db::set_database_path_override(Some(folder.join("bir_data.db")));
+    // The scratch folder did not exist at registration. Sweep inside it now,
+    // never the installed app's previews folder.
     bir_core::platform::prepare_print_previews();
     Ok(())
 }
@@ -1226,8 +1231,17 @@ mod tests {
                 None,
                 "the named database is given to bir-core in-process, the environment is not changed"
             );
+            let stale = database
+                .parent()
+                .expect("database folder")
+                .join("previews")
+                .join("print")
+                .join("2551Q-stale-sheet.html");
+            std::fs::create_dir_all(stale.parent().expect("preview folder")).expect("make stale preview");
+            std::fs::write(&stale, "filled return").expect("write stale preview");
             let info = call("system_info", vec![]).expect("system_info");
             assert_eq!(info["database_path"], database.display().to_string());
+            assert!(!stale.exists(), "the first boot's launch sweep clears the named test room's print previews");
             let late = use_database(&database.display().to_string()).unwrap_err();
             assert!(late.contains("already open"), "{late}");
         });

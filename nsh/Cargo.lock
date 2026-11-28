@@ -4879,6 +4879,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "tracing",
+ "uuid",
  "webkit6",
  "webview2-com",
  "windows 0.62.2",

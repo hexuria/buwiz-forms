@@ -50,7 +50,8 @@ use nsh_core::prelude::{Callback, JsObject, PropEnum, Stop, blocking, module, pi
 /// The sentence of a device that cannot open a second window.
 pub const UNAVAILABLE: &str = "Print preview is not available on this device.";
 
-/// The name of the sheet inside a preview's folder.
+/// The retired fixed name of the sheet inside a preview's folder; tests still use it for generic files.
+#[cfg(test)]
 const SHEET: &str = "sheet.html";
 
 /// What happened to a preview.
@@ -318,6 +319,40 @@ fn sanitize(key: &str) -> String {
     if name.is_empty() { "preview".to_owned() } else { name }
 }
 
+/// A random id for one print artifact. The id, never taxpayer text, makes the
+/// file name unique without revealing when it was made.
+fn random_id() -> String {
+    uuid::Uuid::new_v4().simple().to_string()
+}
+
+/// The file/folder stem of one print artifact: form code plus random id.
+fn artifact_stem(form: &str) -> String {
+    format!("{}-{}", sanitize(form), random_id())
+}
+
+fn sheet_file_name(stem: &str) -> String {
+    format!("{stem}-sheet.html")
+}
+
+/// The live print workspace inside the app's private previews folder. The
+/// launch sweep empties the parent; a closing preview removes its own artifact
+/// folder.
+fn print_work_dir() -> PathBuf {
+    bir_core::platform::print_previews_dir().join("print")
+}
+
+/// What the OS print queue may call the job: the form number only, never the
+/// window title (which may name its own user).
+fn print_job_name(form: &str) -> String {
+    sanitize(form)
+}
+
+fn artifact_paths(root: &Path, stem: &str) -> (PathBuf, PathBuf) {
+    let dir = root.join(stem);
+    let sheet = dir.join(sheet_file_name(stem));
+    (dir, sheet)
+}
+
 /// A file name for the sheet: `BIR Form 1701Q - Juana Santos` for "BIR Form 1701Q - Juana Santos" with an em dash.
 fn file_stem(title: &str) -> String {
     let stem: String = title
@@ -376,13 +411,14 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     std::fs::rename(&temp, path)
 }
 
-/// Writes the PDF of a preview into its folder (`<title>.pdf`, this user's only) and answers its path.
+/// Writes the print PDF of a preview into its private folder, named by form
+/// plus a random id rather than the taxpayer-bearing window title.
 // Windows and Linux print the sheet themselves (`windows_print::print_document`, `linux_print::print_document`), so
 // only the tests write a PDF there.
 #[cfg_attr(all(any(all(windows, target_env = "msvc"), target_os = "linux"), not(test)), allow(dead_code))]
-fn write_pdf(dir: &Path, title: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
+fn write_pdf(dir: &Path, form: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
     private_dir(dir)?;
-    let path = dir.join(format!("{}.pdf", file_stem(title)));
+    let path = dir.join(format!("{}.pdf", artifact_stem(form)));
     write_private(&path, pdf)?;
     Ok(path)
 }
@@ -393,6 +429,7 @@ fn write_pdf(dir: &Path, title: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
 struct Preview {
     request: PreviewRequest,
     dir: PathBuf,
+    sheet: PathBuf,
     title: String,
     /// The document the window shows now (the file holds the same).
     html: String,
@@ -462,13 +499,26 @@ impl State {
         State { generation: next_generation(), sequence: 0, root, backend: None, previews: HashMap::new() }
     }
 
+    #[cfg(all(test, target_os = "android"))]
     fn sheet_path(&self, key: &str) -> PathBuf {
-        self.root.join(sanitize(key)).join(SHEET)
+        self.previews
+            .get(key)
+            .map(|open| open.sheet.clone())
+            .unwrap_or_else(|| self.root.join(sanitize(key)).join(SHEET))
     }
 
     /// A preview was asked for: the events the host hears. A key already open gets a newer document in place.
     fn request(&mut self, key: &str, title: String, html: String) -> Result<Vec<PrintEvent>, String> {
-        let path = self.sheet_path(key);
+        // Print.listen can run before the door has named this engine's scratch
+        // database. Choose the live previews folder only when the first artifact
+        // is written, never at listener startup.
+        if self.root.as_os_str().is_empty() {
+            self.root = print_work_dir();
+        }
+        let (dir, path) = match self.previews.get(key) {
+            Some(open) => (open.dir.clone(), open.sheet.clone()),
+            None => artifact_paths(&self.root, &artifact_stem(key)),
+        };
         private_dir(&self.root).map_err(|error| format!("Could not write the preview: {error}"))?;
         write_atomic(&path, &html).map_err(|error| format!("Could not write the preview: {error}"))?;
         let url = url_for(&path);
@@ -482,12 +532,12 @@ impl State {
         match self.previews.get_mut(key) {
             None => {
                 events.push(event(PrintEventKind::Open, key, &title, &url, String::new(), 1, &html));
-                let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
                 self.previews.insert(
                     key.to_owned(),
                     Preview {
                         request: request.clone(),
                         dir,
+                        sheet: path,
                         title,
                         html,
                         texts: doc.texts,
@@ -522,8 +572,8 @@ impl State {
     /// The document changed (an edit in the form): the event that brings the window up to it. None when nothing came
     /// (a failed fill is empty), when it is the document already shown, or when no preview of that key is open.
     fn update(&mut self, key: &str, html: String) -> Vec<PrintEvent> {
-        let path = self.sheet_path(key);
         let Some(open) = self.previews.get_mut(key) else { return Vec::new() };
+        let path = open.sheet.clone();
         // A fill that failed answers nothing: what is shown stays.
         if !has_sheets(&html) || html == open.html {
             return Vec::new();
@@ -577,9 +627,7 @@ impl Drop for Preview {
 
 thread_local! {
     /// The previews of this engine (hooks and TSX calls run on its thread).
-    static STATE: RefCell<State> = RefCell::new(State::new(
-        std::env::temp_dir().join(format!("ebirforms-print-{}", std::process::id())),
-    ));
+    static STATE: RefCell<State> = RefCell::new(State::new(PathBuf::new()));
     /// What ends the last `Print.listen` (to tell it from an older one).
     #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static NEXT_BACKEND: Cell<u64> = const { Cell::new(1) };
@@ -719,12 +767,12 @@ pub(crate) fn live_update(key: &str, produce: PreviewProducer, started: Instant)
     events.into_iter().for_each(|event| backend.emit(event));
 }
 
-/// The document and title of `key`'s preview, and the folder its files are in.
+/// The document and title of `key`'s preview, and its sheet file.
 fn snapshot(key: &str) -> Option<(String, String, PathBuf)> {
     STATE.with(|state| {
         let state = state.borrow();
         let open = state.previews.get(key)?;
-        Some((open.html.clone(), open.title.clone(), open.dir.clone()))
+        Some((open.html.clone(), open.title.clone(), open.sheet.clone()))
     })
 }
 
@@ -986,41 +1034,40 @@ fn parse_unicode_map(cmap: &str) -> UnicodeMap {
 
 /// The PDF of `html` (the document of a preview), made by the platform's web engine.
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
+fn platform_pdf(_form: &str, html: &str, _root: PathBuf) -> Result<Vec<u8>, String> {
     mac::make_pdf(html)
 }
 
 #[cfg(all(windows, target_env = "msvc"))]
-fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
-    windows_print::make_pdf(html)
+fn platform_pdf(form: &str, html: &str, root: PathBuf) -> Result<Vec<u8>, String> {
+    windows_print::make_pdf(form, html, root)
 }
 
 #[cfg(target_os = "linux")]
-fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
-    linux_print::make_pdf(html)
+fn platform_pdf(form: &str, html: &str, root: PathBuf) -> Result<Vec<u8>, String> {
+    linux_print::make_pdf(form, html, root)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", all(windows, target_env = "msvc"), target_os = "linux")))]
-fn platform_pdf(_html: &str) -> Result<Vec<u8>, String> {
+fn platform_pdf(_form: &str, _html: &str, _root: PathBuf) -> Result<Vec<u8>, String> {
     Err("Print and Save as PDF are available on macOS, Windows and Linux only for now.".to_owned())
 }
 
 /// The system print panel for the PDF at `path`: up when this returns.
 #[cfg(target_os = "macos")]
-fn platform_print(path: &Path, request: PreviewRequest) -> Result<(), String> {
-    mac::print_pdf(path, request)
+fn platform_print(path: &Path, form: &str, request: PreviewRequest) -> Result<(), String> {
+    mac::print_pdf(path, form, request)
 }
 
 /// The system print sheet (UIPrintInteractionController) for the PDF at `path`, until it is dismissed or finished.
 #[cfg(target_os = "ios")]
-fn platform_print(path: &Path, request: PreviewRequest) -> Result<(), String> {
+fn platform_print(path: &Path, form: &str, request: PreviewRequest) -> Result<(), String> {
     let pdf = std::fs::read(path).map_err(|error| format!("Could not read the PDF: {error}"))?;
-    let title = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
-    ios_print::present(pdf, title, request)
+    ios_print::present(pdf, print_job_name(form), request)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", all(windows, target_env = "msvc"), target_os = "linux")))]
-fn platform_print(_path: &Path, _request: PreviewRequest) -> Result<(), String> {
+fn platform_print(_path: &Path, _form: &str, _request: PreviewRequest) -> Result<(), String> {
     Err("Print and Save as PDF are available on macOS, Windows and Linux only for now.".to_owned())
 }
 
@@ -1042,25 +1089,45 @@ mod engine_print {
     break-inside:avoid;break-after:auto !important;page-break-after:auto !important}\
     .sheet+.sheet{break-before:page;page-break-before:always}.sheet::after{content:none !important}</style>";
 
-    /// The document with the print style last in its head.
-    pub(super) fn for_print(html: &str) -> String {
+    /// The document with the print style and the form-only document title last
+    /// in its head. Browser-based print pipelines use that title as the spooler
+    /// job name, so it must never be the taxpayer-bearing window title.
+    pub(super) fn for_print(form: &str, html: &str) -> String {
+        let html = without_html_titles(html);
+        let injection = format!("{}<title>{}</title>", PRINT_CSS, super::print_job_name(form));
         match html.rfind("</head>") {
-            Some(at) => format!("{}{PRINT_CSS}{}", &html[..at], &html[at..]),
-            None => format!("{PRINT_CSS}{html}"),
+            Some(at) => format!("{}{injection}{}", &html[..at], &html[at..]),
+            None => format!("{injection}{html}"),
         }
     }
 
-    /// A folder of this job's own in the process's print folder (`ebirforms-print-<pid>`, which the app's quit and
-    /// the next start's sweep remove), with the document written into it.
-    pub(super) fn job_folder(html: &str) -> Result<(PathBuf, PathBuf), String> {
-        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let folder = std::env::temp_dir()
-            .join(format!("ebirforms-print-{}", std::process::id()))
-            .join(format!("job-{n}"));
-        std::fs::create_dir_all(&folder).map_err(|error| format!("Could not make the print folder: {error}"))?;
-        let sheet = folder.join("sheet.html");
-        std::fs::write(&sheet, for_print(html)).map_err(|error| format!("Could not write the sheet: {error}"))?;
+    /// Remove any document title already in the sheet. Browsers use the first
+    /// title as the spooler job name; the form-only title added for printing
+    /// must not lose to a taxpayer-bearing one.
+    fn without_html_titles(html: &str) -> String {
+        let lower = html.to_ascii_lowercase();
+        let mut out = String::with_capacity(html.len());
+        let mut at = 0;
+        while let Some(relative) = lower[at..].find("<title") {
+            let start = at + relative;
+            let Some(open_end) = lower[start..].find('>').map(|end| start + end + 1) else { break };
+            let Some(close) = lower[open_end..].find("</title>").map(|end| open_end + end) else { break };
+            out.push_str(&html[at..start]);
+            at = close + "</title>".len();
+        }
+        out.push_str(&html[at..]);
+        out
+    }
+
+    /// A folder of this job's own in the private print workspace chosen on
+    /// the engine thread, with the document written under a form-plus-random-id name.
+    pub(super) fn job_folder_in(root: &std::path::Path, form: &str, html: &str) -> Result<(PathBuf, PathBuf), String> {
+        let stem = super::artifact_stem(form);
+        let folder = root.join(format!("job-{stem}"));
+        super::private_dir(&folder).map_err(|error| format!("Could not make the print folder: {error}"))?;
+        let sheet = folder.join(super::sheet_file_name(&stem));
+        let printed = for_print(form, html);
+        super::write_private(&sheet, printed.as_bytes()).map_err(|error| format!("Could not write the sheet: {error}"))?;
         Ok((folder, sheet))
     }
 
@@ -1101,6 +1168,7 @@ mod engine_print {
 #[cfg(target_os = "linux")]
 mod linux_print {
     use std::cell::RefCell;
+    use std::path::PathBuf;
     use std::rc::Rc;
     use std::sync::{Mutex, mpsc};
     use std::time::Duration;
@@ -1108,7 +1176,7 @@ mod linux_print {
     use gtk4::{self as gtk, glib, prelude::*};
     use webkit6::prelude::*;
 
-    use super::engine_print::{check_a4, job_folder};
+    use super::engine_print::{check_a4, job_folder_in};
     use super::{page_info, url_for};
 
     /// One print job at a time.
@@ -1239,11 +1307,11 @@ mod linux_print {
 
     /// The PDF of `html`: WebKitGTK prints the document to GTK's "Print to File" printer, A4 with no margins, one page
     /// per sheet, checked to be that (as Windows' is).
-    pub(super) fn make_pdf(html: &str) -> Result<Vec<u8>, String> {
+    pub(super) fn make_pdf(form: &str, html: &str, root: PathBuf) -> Result<Vec<u8>, String> {
         let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let expected = page_info(html).pages.max(1);
-        let (folder, sheet) = job_folder(html)?;
-        let out = folder.join("document.pdf");
+        let (folder, sheet) = job_folder_in(&root, form, html)?;
+        let out = folder.join(format!("{}.pdf", super::artifact_stem(form)));
         let (url, out_url) = (url_for(&sheet), url_for(&out));
         let made = on_main(Some(PDF_TIME), move |tx| {
             let answer = once(tx);
@@ -1275,9 +1343,9 @@ mod linux_print {
     /// Prints `html`: GTK's print dialog over the front window (the preview, which asked), then WebKitGTK prints the
     /// document there by the same page rule as the PDF. Resolves once the job is with the printer, or when the person
     /// cancels the dialog; rejects with a sentence.
-    pub(super) fn print_document(html: &str) -> Result<(), String> {
+    pub(super) fn print_document(form: &str, html: &str, root: PathBuf) -> Result<(), String> {
         let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let (folder, sheet) = job_folder(html)?;
+        let (folder, sheet) = job_folder_in(&root, form, html)?;
         let url = url_for(&sheet);
         let printed = on_main(None, move |tx| {
             let answer = once(tx);
@@ -1312,6 +1380,7 @@ mod linux_print {
 #[cfg(all(windows, target_env = "msvc"))]
 mod windows_print {
     use std::ffi::c_void;
+    use std::path::PathBuf;
     use std::sync::{Mutex, mpsc};
 
     use webview2_com::Microsoft::Web::WebView2::Win32::{
@@ -1343,7 +1412,7 @@ mod windows_print {
     use windows::core::{HRESULT, HSTRING, Interface, PCWSTR, w};
 
     pub(super) use super::engine_print::check_a4;
-    use super::engine_print::job_folder;
+    use super::engine_print::job_folder_in;
     use super::{PAPER_HEIGHT_PT, PAPER_WIDTH_PT, page_info, url_for};
 
     // The loader is linked statically, as nsh's Windows backend does (`WebView2LoaderStatic.lib`, which
@@ -1368,11 +1437,11 @@ mod windows_print {
 
     /// The PDF of `html`: WebView2's `PrintToPdf` of the document, A4 with no margins, one page per sheet, checked
     /// to be that (as the macOS capture is).
-    pub(super) fn make_pdf(html: &str) -> Result<Vec<u8>, String> {
+    pub(super) fn make_pdf(form: &str, html: &str, root: PathBuf) -> Result<Vec<u8>, String> {
         let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let expected = page_info(html).pages.max(1);
-        let (folder, sheet) = job_folder(html)?;
-        let out = folder.join("document.pdf");
+        let (folder, sheet) = job_folder_in(&root, form, html)?;
+        let out = folder.join(format!("{}.pdf", super::artifact_stem(form)));
         let target = out.clone();
         let made = on_print_thread(move |page| {
             page.load(&url_for(&sheet))?;
@@ -1397,10 +1466,10 @@ mod windows_print {
     /// Prints `html`: the system print dialog (printer, copies, pages, sides, colour), then WebView2 prints the
     /// document there by the same page rule as the PDF. Resolves once the job is with the printer, or when the
     /// person cancels the dialog; rejects with a sentence.
-    pub(super) fn print_document(html: &str) -> Result<(), String> {
+    pub(super) fn print_document(form: &str, html: &str, root: PathBuf) -> Result<(), String> {
         let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let pages = page_info(html).pages.max(1);
-        let (folder, sheet) = job_folder(html)?;
+        let (folder, sheet) = job_folder_in(&root, form, html)?;
         // The front window owns the dialog (the preview, which asked).
         // SAFETY: plain queries.
         let owner = unsafe { GetForegroundWindow() };
@@ -2018,7 +2087,7 @@ mod mac {
     /// The print operation for the PDF at `path`: PDFKit's, A4 (595.28 x 841.89 pt), no margins, no scaling, with the
     /// print panel. Main-thread work (AppKit objects), so it is built and run in the one block of `print_pdf`.
     #[cfg(target_os = "macos")]
-    pub(super) fn print_operation(path: &str) -> Result<Retained<AnyObject>, String> {
+    pub(super) fn print_operation(path: &str, job_name: &str) -> Result<Retained<AnyObject>, String> {
         // SAFETY: AppKit's and PDFKit's documented API.
         unsafe {
             let document_class = AnyClass::get(c"PDFDocument").ok_or("PDFKit is missing.")?;
@@ -2042,6 +2111,8 @@ mod mac {
                 autoRotate: Bool::NO
             ];
             let operation = operation.ok_or("PDFKit gave no print operation.")?;
+            let job_name = NSString::from_str(job_name);
+            let _: () = msg_send![&operation, setJobTitle: &*job_name];
             let _: () = msg_send![&operation, setShowsPrintPanel: Bool::YES];
             Ok(operation)
         }
@@ -2050,15 +2121,16 @@ mod mac {
     /// The system print panel for the PDF at `path`: A4, no scaling, as a sheet of the key window (a panel of
     /// its own when no window is key). Returns once the panel is up.
     #[cfg(target_os = "macos")]
-    pub(super) fn print_pdf(path: &Path, request: super::PreviewRequest) -> Result<(), String> {
+    pub(super) fn print_pdf(path: &Path, form: &str, request: super::PreviewRequest) -> Result<(), String> {
         let path = path.display().to_string();
+        let job_name = super::print_job_name(form);
         let (tx, rx) = mpsc::channel();
         DispatchQueue::main().exec_async(move || {
             // SAFETY: AppKit's documented API, on the main thread.
             let answer = unsafe {
                 (|| -> Result<(), String> {
                     request.check()?;
-                    let operation = print_operation(&path)?;
+                    let operation = print_operation(&path, &job_name)?;
                     let app_class = AnyClass::get(c"NSApplication").ok_or("AppKit has no NSApplication.")?;
                     let app: Retained<AnyObject> = msg_send![app_class, sharedApplication];
                     let key: Option<Retained<AnyObject>> = msg_send![&app, keyWindow];
@@ -2144,8 +2216,10 @@ async fn pdf_with<F: Future<Output = Result<Vec<u8>, String>>>(
 }
 
 async fn pdf_of(key: &str) -> Result<(Vec<u8>, String, PathBuf, PreviewRequest), String> {
+    let form = key.to_owned();
+    let print_root = print_work_dir();
     pdf_with(key, |html| async move {
-        blocking(move || platform_pdf(&html)).await.map_err(|error| error.to_string())?
+        blocking(move || platform_pdf(&form, &html, print_root)).await.map_err(|error| error.to_string())?
     }).await
 }
 
@@ -2159,19 +2233,11 @@ impl Print {
     /// Hears every preview event until the returned function is called: a sheet to open (or to focus), a newer
     /// document for an open one, a device that has no window for it. One host listens at a time; the latest wins.
     pub fn listen(#[args(event)] listener: Callback<PrintEvent>, _system: nsh_core::prelude::System) -> Stop {
+        // Android's retired preview workspace was data_dir()/tmp/ebirforms-print-<pid>.
         #[cfg(target_os = "android")]
-        STATE.with(|state| {
-            state.borrow_mut().root = _system.data_dir
-                .expect("Android print needs the app's private data directory")
-                .join("tmp").join(format!("ebirforms-print-{}", std::process::id()));
-        });
-        // Where a process cannot be asked (neither unix nor Windows), nothing is swept: see process_alive.
-        #[cfg(target_os = "android")]
-        STATE.with(|state| {
-            if let Some(root) = state.borrow().root.parent() {
-                sweep_stale(root, process_alive);
-            }
-        });
+        if let Some(data_dir) = &_system.data_dir {
+            sweep_stale(&data_dir.join("tmp"), process_alive);
+        }
         #[cfg(all(not(target_os = "android"), any(unix, all(windows, target_env = "msvc"))))]
         sweep_stale(&std::env::temp_dir(), process_alive);
         let id = install(Rc::new(HostBackend { listener }));
@@ -2231,9 +2297,9 @@ impl Print {
         #[cfg(target_os = "android")]
         {
             let generation = crate::print_android::generation();
-            let (_, _, dir) = snapshot(&key).ok_or("The print preview is no longer available.")?;
+            let (_, _, sheet) = snapshot(&key).ok_or("The print preview is no longer available.")?;
             let request = STATE.with(|state| state.borrow().previews[&key].request.clone());
-            crate::print_android::preview(url_for(&dir.join(SHEET)), title, generation, request).await
+            crate::print_android::preview(url_for(&sheet), title, generation, request).await
         }
         #[cfg(not(target_os = "android"))]
         {
@@ -2303,19 +2369,24 @@ impl Print {
 async fn print_now(key: String) -> Result<(), String> {
     #[cfg(all(windows, target_env = "msvc"))]
     {
+        let form = key.clone();
+        let print_root = print_work_dir();
         let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
-        blocking(move || windows_print::print_document(&html)).await.map_err(|error| error.to_string())?
+        blocking(move || windows_print::print_document(&form, &html, print_root)).await.map_err(|error| error.to_string())?
     }
     #[cfg(target_os = "linux")]
     {
+        let form = key.clone();
+        let print_root = print_work_dir();
         let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
-        blocking(move || linux_print::print_document(&html)).await.map_err(|error| error.to_string())?
+        blocking(move || linux_print::print_document(&form, &html, print_root)).await.map_err(|error| error.to_string())?
     }
     #[cfg(not(any(all(windows, target_env = "msvc"), target_os = "linux")))]
     {
-        let (pdf, title, dir, request) = pdf_of(&key).await?;
-        let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
-        blocking(move || platform_print(&path, request)).await.map_err(|error| error.to_string())?
+        let (pdf, _title, dir, request) = pdf_of(&key).await?;
+        let path = write_pdf(&dir, &key, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
+        let form = key.clone();
+        blocking(move || platform_print(&path, &form, request)).await.map_err(|error| error.to_string())?
     }
 }
 
@@ -2423,7 +2494,7 @@ mod tests {
             return;
         }
         let html = sheet_doc(&["Juana Santos", "000-123-453-00000"]);
-        let pdf = platform_pdf(&html).expect("the PDF");
+        let pdf = platform_pdf("2551Q", &html, folder.path().join("print")).expect("the PDF");
         let folder = tempfile::tempdir().expect("temp");
         let path = folder.path().join("preview.pdf");
         std::fs::write(&path, &pdf).expect("write");
@@ -2636,12 +2707,16 @@ mod tests {
         let mut state = State::new(root.clone());
         state.request("2551Q", "BIR Form 2551Q — Juana".to_owned(), sheet_doc(&["Juana"])).unwrap();
         assert_eq!(mode_of(&root), 0o700, "the folder of the run");
-        assert_eq!(mode_of(&root.join("2551Q")), 0o700, "the folder of the preview");
-        assert_eq!(mode_of(&root.join("2551Q").join(SHEET)), 0o600, "the sheet");
+        let preview_dir = state.previews["2551Q"].dir.clone();
+        let sheet = state.previews["2551Q"].sheet.clone();
+        assert_eq!(mode_of(&preview_dir), 0o700, "the folder of the preview");
+        assert_eq!(mode_of(&sheet), 0o600, "the sheet");
         state.update("2551Q", sheet_doc(&["Santos"]));
-        assert_eq!(mode_of(&root.join("2551Q").join(SHEET)), 0o600, "the sheet rewritten by an edit");
-        let pdf = write_pdf(&root.join("2551Q"), "BIR Form 2551Q — Juana", b"%PDF-1.4").unwrap();
-        assert_eq!(pdf, root.join("2551Q").join("BIR Form 2551Q - Juana.pdf"));
+        assert_eq!(mode_of(&sheet), 0o600, "the sheet rewritten by an edit");
+        let pdf = write_pdf(&preview_dir, "2551Q", b"%PDF-1.4").unwrap();
+        let pdf_name = pdf.file_name().unwrap().to_string_lossy();
+        assert!(pdf_name.starts_with("2551Q-") && pdf_name.ends_with(".pdf"), "{pdf_name}");
+        assert!(pdf.parent() == Some(preview_dir.as_path()));
         assert_eq!(mode_of(&pdf), 0o600, "the PDF Print writes");
         // A folder left at the predictable name by someone else's umask is made private; a link there is refused.
         let open = folder.path().join("open");
@@ -2655,6 +2730,77 @@ mod tests {
         assert!(State::new(link.clone()).request("2551Q", "t".to_owned(), sheet_doc(&["a"])).is_err());
     }
 
+    /// A listener that starts before the door names a scratch database must
+    /// still put the first artifact beside that database, never in the real
+    /// installed app's folder.
+    #[test]
+    fn the_live_preview_root_is_chosen_when_the_first_artifact_is_written() {
+        let scratch = tempfile::tempdir().unwrap();
+        let database = scratch.path().join("room").join("bir_data.db");
+        bir_core::db::set_database_path_override(Some(database));
+        let mut state = State::new(PathBuf::new());
+        state.request("2551Q", "t".to_owned(), sheet_doc(&["a"])).unwrap();
+        let sheet = state.previews["2551Q"].sheet.clone();
+        assert!(sheet.starts_with(scratch.path().join("room").join("previews").join("print")), "{sheet:?}");
+        bir_core::db::set_database_path_override(None);
+        state.close_all();
+    }
+
+    #[test]
+    fn preview_and_pdf_file_names_use_the_form_and_a_random_id_never_the_taxpayer() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().join("previews").join("print");
+        let mut state = State::new(root.clone());
+        state
+            .request("2551Q", "BIR Form 2551Q — Juana Santos".to_owned(), sheet_doc(&["Juana Santos"]))
+            .unwrap();
+        let entries: Vec<_> = std::fs::read_dir(&root).unwrap().map(|entry| entry.unwrap().path()).collect();
+        assert_eq!(entries.len(), 1);
+        let preview_dir = &entries[0];
+        let dir_name = preview_dir.file_name().unwrap().to_string_lossy();
+        assert!(dir_name.starts_with("2551Q-"), "{dir_name}");
+        assert_ne!(dir_name, "2551Q");
+        assert!(!dir_name.contains("Juana"), "{dir_name}");
+        let sheets: Vec<_> = std::fs::read_dir(preview_dir).unwrap().map(|entry| entry.unwrap().file_name().into_string().unwrap()).collect();
+        assert_eq!(sheets.len(), 1);
+        assert!(sheets[0].starts_with("2551Q-"), "{}", sheets[0]);
+        assert!(sheets[0].ends_with("-sheet.html"), "{}", sheets[0]);
+        assert!(!sheets[0].contains("Juana"), "{}", sheets[0]);
+
+        let pdf = write_pdf(preview_dir, "2551Q", b"%PDF-1.4").unwrap();
+        let pdf_name = pdf.file_name().unwrap().to_string_lossy();
+        assert!(pdf_name.starts_with("2551Q-"), "{pdf_name}");
+        assert!(pdf_name.ends_with(".pdf"), "{pdf_name}");
+        assert!(!pdf_name.contains("Juana"), "{pdf_name}");
+        assert!(!pdf_name.contains("Santos"), "{pdf_name}");
+    }
+
+    #[cfg(any(all(windows, target_env = "msvc"), target_os = "linux"))]
+    #[test]
+    fn print_job_files_live_under_previews_and_use_the_form_and_a_random_id() {
+        assert_eq!(print_work_dir().parent().and_then(|path| path.file_name()).unwrap(), "previews");
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("previews").join("print");
+        let titled = sheet_doc(&["Juana Santos"]).replace("<head>", "<head><title>BIR Form 2551Q — Juana Santos</title>");
+        let (folder, sheet) = engine_print::job_folder_in(&root, "2551Q", &titled).unwrap();
+        let folder_name = folder.file_name().unwrap().to_string_lossy();
+        assert!(folder_name.starts_with("job-2551Q-"), "{folder_name}");
+        let sheet_name = sheet.file_name().unwrap().to_string_lossy();
+        assert!(sheet_name.starts_with("2551Q-"), "{sheet_name}");
+        assert!(sheet_name.ends_with("-sheet.html"), "{sheet_name}");
+        assert!(!sheet_name.contains("Juana"), "{sheet_name}");
+        let printed = std::fs::read_to_string(&sheet).unwrap();
+        assert!(printed.contains("<title>2551Q</title>"), "browser print job names use the form only");
+        assert!(!printed.contains("<title>BIR Form 2551Q"), "a taxpayer-bearing sheet title does not reach the print document");
+        assert_eq!(printed.matches("<title>").count(), 1);
+        #[cfg(unix)]
+        {
+            assert_eq!(mode_of(&folder), 0o700, "the print-job folder is private");
+            assert_eq!(mode_of(&sheet), 0o600, "the print-job sheet is private");
+        }
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
     #[test]
     fn quitting_deletes_every_preview_folder() {
         let folder = tempfile::tempdir().unwrap();
@@ -2662,7 +2808,8 @@ mod tests {
         let mut state = State::new(root.clone());
         state.request("2551Q", "t".to_owned(), sheet_doc(&["a"])).unwrap();
         state.request("1601C", "t".to_owned(), sheet_doc(&["a"])).unwrap();
-        write_pdf(&root.join("1601C"), "t", b"%PDF").unwrap();
+        let pdf_dir = state.previews["1601C"].dir.clone();
+        write_pdf(&pdf_dir, "1601C", b"%PDF").unwrap();
         state.close_all();
         assert!(!root.exists(), "the run's folder, every preview and PDF in it");
         assert!(state.previews.is_empty());
@@ -2670,7 +2817,7 @@ mod tests {
         let _recorder = host(folder.path());
         let key = key();
         request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
-        assert!(folder.path().join(sanitize(&key)).exists());
+        assert!(std::fs::read_dir(folder.path()).unwrap().next().is_some(), "the preview artifact folder exists");
         remove_all();
         assert!(!has_live(&key));
         assert!(!folder.path().exists(), "the thread's folder is gone");
@@ -2764,7 +2911,7 @@ mod tests {
         let open = &events[0];
         assert_eq!((open.kind, open.key.as_str(), open.revision, open.pages), (PrintEventKind::Open, "2551Q", 1, 2));
         assert_eq!((open.paper.as_str(), open.sheet.as_str()), ("A4", "Folio"));
-        let file = folder.path().join("2551Q").join(SHEET);
+        let file = state.previews["2551Q"].sheet.clone();
         assert_eq!(open.url, url_for(&file));
         assert_eq!(std::fs::read_to_string(&file).unwrap(), html);
         assert!(open.script.is_empty() && open.message.is_none());
@@ -2793,7 +2940,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!((events[0].kind, events[0].revision), (PrintEventKind::Update, 2));
         assert!(events[0].script.contains("\"typed\""), "{}", events[0].script);
-        let on_disk = std::fs::read_to_string(folder.path().join("2551Q").join(SHEET)).unwrap();
+        let on_disk = std::fs::read_to_string(&state.previews["2551Q"].sheet).unwrap();
         assert_eq!(parse_doc(&on_disk).texts, vec!["a", "typed"], "the file holds what the window shows");
     }
 
@@ -2816,8 +2963,10 @@ mod tests {
         let mut state = State::new(root.clone());
         state.request("2551Q", "t".to_owned(), sheet_doc(&["a"])).unwrap();
         state.request("1601C", "t".to_owned(), sheet_doc(&["a"])).unwrap();
+        let first_dir = state.previews["2551Q"].dir.clone();
+        let second_dir = state.previews["1601C"].dir.clone();
         state.close("2551Q");
-        assert!(!root.join("2551Q").exists() && root.join("1601C").exists());
+        assert!(!first_dir.exists() && second_dir.exists());
         state.close("1601C");
         assert!(!root.exists(), "the last one takes the folder");
         state.close("1601C");
