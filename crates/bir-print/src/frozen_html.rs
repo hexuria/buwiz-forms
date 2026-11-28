@@ -12511,6 +12511,12 @@ mod tests {
             original.starts_with(&flattened),
             "cell + band is the value's own text in order:\n{flattened:?}\n{original:?}"
         );
+        // A prefix alone would pass with the last continuation line missing:
+        // either the value reconstructs whole, or the band says it truncated.
+        assert!(
+            flattened == original || band_value.trim_end().ends_with("..."),
+            "the band holds the whole remainder or ends on an ellipsis: {band_value:?}"
+        );
     }
 
     /// A value that fits inside its own field once shrunk never opens a band:
