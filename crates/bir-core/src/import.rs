@@ -2,6 +2,7 @@ use crate::db::{Database, DbError, Submission};
 use crate::integration::providers::ProviderConfig;
 use crate::private_temp::{PrivateTempDir, unique_name};
 use crate::profile::{ProfileCredentials, TaxpayerProfile};
+use rusqlite::OptionalExtension;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
@@ -54,6 +55,60 @@ fn migrate_submission_json(
         // Pre-0.0.1: no changes needed
     }
     Ok(())
+}
+
+/// Monotonic filing status rank. Unknown legacy text is weakest: it may never
+/// displace a known state, while any known state may displace it.
+fn filing_status_rank(status: &str) -> u8 {
+    match status.to_ascii_lowercase().as_str() {
+        "paid" => 5,
+        "confirmed" => 4,
+        "submitted" | "filed" => 3,
+        "queued" => 2,
+        "draft" => 1,
+        _ => 0,
+    }
+}
+
+/// The status an imported row may take. An import is never a send: the file's
+/// Queued — a send nobody pressed here — comes in as a Draft.
+fn import_safe_status(status: &str) -> String {
+    if status.eq_ignore_ascii_case("queued") {
+        "Draft".to_string()
+    } else {
+        status.to_string()
+    }
+}
+
+/// Whether an incoming row may replace an existing row. A lower status never
+/// does. A higher status is newer by itself. At the same status the
+/// timestamps decide — as timestamps, not strings — and a file that cannot be
+/// shown older than the stored row may replace it, so a second import of the
+/// same archive still applies.
+fn import_may_replace(
+    existing_status: &str,
+    existing_updated_at: Option<&str>,
+    incoming_status: &str,
+    incoming_updated_at: Option<&str>,
+) -> bool {
+    let existing = filing_status_rank(existing_status);
+    let incoming = filing_status_rank(incoming_status);
+    if incoming < existing {
+        return false;
+    }
+    if incoming > existing {
+        return true;
+    }
+    match (existing_updated_at, incoming_updated_at) {
+        (Some(existing), Some(incoming)) => match (
+            crate::db::taxpayers::parse_stored_timestamp(existing),
+            crate::db::taxpayers::parse_stored_timestamp(incoming),
+        ) {
+            (Some(existing), Some(incoming)) => incoming >= existing,
+            _ => true,
+        },
+        _ => true,
+    }
 }
 
 pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbError> {
@@ -169,29 +224,47 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                         )
                         .unwrap_or(false);
 
+                    // An import is never a send: the file's Queued is a Draft here.
+                    let status = import_safe_status(&sub.status);
                     if exists {
-                        db.conn.execute(
-                            "UPDATE submissions SET status = ?1, form_data = ?2, filename = ?3,
-                                updated_at = datetime('now')
-                         WHERE tin = ?4 AND form_type = ?5 AND period = ?6
-                           AND COALESCE(submitted_at, '') = ?7",
-                            rusqlite::params![
-                                sub.status,
-                                json_data,
-                                sub.filename,
-                                tin,
-                                sub.form_type,
-                                sub.period,
-                                submitted_at_key
-                            ],
-                        )?;
+                        let (existing_status, existing_updated_at): (String, Option<String>) =
+                            db.conn.query_row(
+                                "SELECT status, updated_at FROM submissions
+                                 WHERE tin = ?1 AND form_type = ?2 AND period = ?3
+                                   AND COALESCE(submitted_at, '') = ?4",
+                                rusqlite::params![tin, sub.form_type, sub.period, submitted_at_key],
+                                |row| Ok((row.get(0)?, row.get(1)?)),
+                            )?;
+                        if import_may_replace(
+                            &existing_status,
+                            existing_updated_at.as_deref(),
+                            &status,
+                            sub.updated_at.as_deref(),
+                        ) {
+                            db.conn.execute(
+                                "UPDATE submissions SET status = ?1, form_data = ?2, filename = ?3,
+                                    updated_at = COALESCE(?4, datetime('now'))
+                             WHERE tin = ?5 AND form_type = ?6 AND period = ?7
+                               AND COALESCE(submitted_at, '') = ?8",
+                                rusqlite::params![
+                                    status,
+                                    json_data,
+                                    sub.filename,
+                                    sub.updated_at,
+                                    tin,
+                                    sub.form_type,
+                                    sub.period,
+                                    submitted_at_key
+                                ],
+                            )?;
+                        }
                     } else {
                         db.conn.execute(
-                        "INSERT INTO submissions (tin, form_type, period, status, form_data, submitted_at, filename)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        "INSERT INTO submissions (tin, form_type, period, status, form_data, submitted_at, filename, updated_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, COALESCE(?8, datetime('now')))",
                         rusqlite::params![
-                            tin, sub.form_type, sub.period, sub.status,
-                            json_data, sub.submitted_at, sub.filename
+                            tin, sub.form_type, sub.period, status,
+                            json_data, sub.submitted_at, sub.filename, sub.updated_at
                         ],
                     )?;
                     }
@@ -210,23 +283,85 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                         draft.get("data_json").and_then(|v| v.as_str()),
                     ) {
                         let quarter = draft.get("quarter").and_then(|v| v.as_i64());
-
-                        db.conn.execute(
-                        "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                         ON CONFLICT(tin, form_code, taxable_year, quarter)
-                         DO UPDATE SET status = excluded.status,
-                                       data_json = excluded.data_json,
-                                       updated_at = datetime('now')",
-                        rusqlite::params![
-                            tin,
-                            form_code,
-                            taxable_year,
-                            quarter,
-                            status,
-                            data_json
-                        ],
-                    )?;
+                        let incoming_updated_at = draft.get("updated_at").and_then(|v| v.as_str());
+                        // An import is never a send: the file's Queued comes
+                        // in as a Draft.
+                        let status = import_safe_status(status);
+                        // The conflict target's NULL quarters never conflict,
+                        // so the row is matched by its period — a NULL quarter
+                        // included — and updated in place by id: never a
+                        // second row for the same return.
+                        let existing = db
+                            .conn
+                            .query_row(
+                                "SELECT id, status, updated_at, data_json
+                                 FROM form_drafts
+                                 WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
+                                   AND COALESCE(quarter, -1) = COALESCE(?4, -1)
+                                 ORDER BY id",
+                                rusqlite::params![tin, form_code, taxable_year, quarter],
+                                |row| {
+                                    Ok((
+                                        row.get::<_, i64>(0)?,
+                                        row.get::<_, String>(1)?,
+                                        row.get::<_, Option<String>>(2)?,
+                                        row.get::<_, String>(3)?,
+                                    ))
+                                },
+                            )
+                            .optional()?;
+                        match existing {
+                            None => {
+                                db.conn.execute(
+                                    "INSERT INTO form_drafts
+                                        (tin, form_code, taxable_year, quarter, status, data_json, updated_at)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, datetime('now')))",
+                                    rusqlite::params![
+                                        tin,
+                                        form_code,
+                                        taxable_year,
+                                        quarter,
+                                        status,
+                                        data_json,
+                                        incoming_updated_at
+                                    ],
+                                )?;
+                            }
+                            Some((id, existing_status, existing_updated_at, existing_data)) => {
+                                // A row in the middle of being sent — its
+                                // draft carries a claim token — is never
+                                // replaced.
+                                let stored: serde_json::Value =
+                                    serde_json::from_str(&existing_data).unwrap_or_default();
+                                let mid_send = stored
+                                    .get("submission_claim_token")
+                                    .is_some_and(|v| !v.is_null())
+                                    || stored
+                                        .get("submission_claimed_at")
+                                        .is_some_and(|v| !v.is_null());
+                                if !mid_send
+                                    && import_may_replace(
+                                        &existing_status,
+                                        existing_updated_at.as_deref(),
+                                        &status,
+                                        incoming_updated_at,
+                                    )
+                                {
+                                    db.conn.execute(
+                                        "UPDATE form_drafts
+                                         SET status = ?1, data_json = ?2,
+                                             updated_at = COALESCE(?3, datetime('now'))
+                                         WHERE id = ?4",
+                                        rusqlite::params![
+                                            status,
+                                            data_json,
+                                            incoming_updated_at,
+                                            id
+                                        ],
+                                    )?;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -284,23 +419,73 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
             // record. An archive without them imports as before, and the
             // forms list is never generated from the profile.
             if let Ok(yearly_json) = read_from_zip("yearly_forms.json") {
-                let yearly: BTreeMap<String, Vec<String>> = serde_json::from_str(&yearly_json)?;
-                for (year, codes) in yearly {
+                let yearly: BTreeMap<String, serde_json::Value> =
+                    serde_json::from_str(&yearly_json)?;
+                for (year, entry) in yearly {
                     let Ok(year) = year.parse::<u16>() else {
                         continue;
                     };
-                    crate::db::taxpayers::restore_yearly_forms(&db.conn, &tin, year, &codes)
-                        .map_err(|error| DbError::Other(error.to_string()))?;
+                    // Both shapes: the legacy bare array of codes, and the
+                    // object of `codes` and `updated_at`.
+                    let (codes, updated_at) = match &entry {
+                        serde_json::Value::Array(_) => (
+                            serde_json::from_value::<Vec<String>>(entry.clone())
+                                .unwrap_or_default(),
+                            None,
+                        ),
+                        serde_json::Value::Object(_) => (
+                            entry
+                                .get("codes")
+                                .and_then(|codes| {
+                                    serde_json::from_value::<Vec<String>>(codes.clone()).ok()
+                                })
+                                .unwrap_or_default(),
+                            entry
+                                .get("updated_at")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
+                        ),
+                        _ => continue,
+                    };
+                    crate::db::taxpayers::restore_yearly_forms(
+                        &db.conn,
+                        &tin,
+                        year,
+                        &codes,
+                        updated_at.as_deref(),
+                    )
+                    .map_err(|error| DbError::Other(error.to_string()))?;
                 }
             }
             if let Ok(facts_json) = read_from_zip("year_facts.json") {
-                let records: BTreeMap<String, crate::tax_profile::YearFacts> =
+                let records: BTreeMap<String, serde_json::Value> =
                     serde_json::from_str(&facts_json)?;
-                for (year, facts) in records {
+                for (year, entry) in records {
                     let Ok(year) = year.parse::<u16>() else {
                         continue;
                     };
-                    crate::db::taxpayers::restore_year_facts(&db.conn, &tin, year, &facts)?;
+                    // The record's `updated_at` travels as a key beside the
+                    // facts; it is not part of YearFacts.
+                    let updated_at = entry
+                        .get("updated_at")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string);
+                    let mut facts_value = entry.clone();
+                    if let Some(object) = facts_value.as_object_mut() {
+                        object.remove("updated_at");
+                    }
+                    let Ok(facts) =
+                        serde_json::from_value::<crate::tax_profile::YearFacts>(facts_value)
+                    else {
+                        continue;
+                    };
+                    crate::db::taxpayers::restore_year_facts(
+                        &db.conn,
+                        &tin,
+                        year,
+                        &facts,
+                        updated_at.as_deref(),
+                    )?;
                 }
             }
 

@@ -153,7 +153,7 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     // 3. Drafts JSON
     let mut drafts_stmt = db
         .conn
-        .prepare("SELECT form_code, taxable_year, quarter, status, data_json FROM form_drafts WHERE tin = ?1")?;
+        .prepare("SELECT form_code, taxable_year, quarter, status, data_json, updated_at FROM form_drafts WHERE tin = ?1")?;
     let drafts_iter = drafts_stmt.query_map([tin], |row| {
         Ok(serde_json::json!({
             "form_code": row.get::<_, String>(0)?,
@@ -161,6 +161,7 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
             "quarter": row.get::<_, Option<i64>>(2)?,
             "status": row.get::<_, String>(3)?,
             "data_json": row.get::<_, String>(4)?,
+            "updated_at": row.get::<_, String>(5)?,
         }))
     })?;
     let mut drafts = Vec::new();
@@ -223,16 +224,54 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     // an empty list for a year with none) and its stored facts record.
     let years = crate::db::taxpayers::query_tax_years(&db.conn, tin)
         .map_err(|error| DbError::Other(error.to_string()))?;
+    // Each year's forms list carries the list's own updated_at (the newest of
+    // its rows), so an import can tell an older file from a newer one. The
+    // entry is an object of `codes` and `updated_at`; readers of the legacy
+    // bare-array shape still read the codes.
     let mut yearly_forms = std::collections::BTreeMap::new();
     for year in years {
-        yearly_forms.insert(year.to_string(), db.active_form_codes_for_year(tin, year)?);
+        let codes = db.active_form_codes_for_year(tin, year)?;
+        let updated_at: Option<String> = db
+            .conn
+            .query_row(
+                "SELECT MAX(updated_at) FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
+                rusqlite::params![tin, i64::from(year)],
+                |row| row.get(0),
+            )
+            .unwrap_or(None);
+        yearly_forms.insert(
+            year.to_string(),
+            serde_json::json!({ "codes": codes, "updated_at": updated_at }),
+        );
     }
     zip.start_file(format!("{}yearly_forms.json", base_dir), options)?;
     zip.write_all(serde_json::to_string_pretty(&yearly_forms)?.as_bytes())?;
-    let year_facts: std::collections::BTreeMap<String, crate::tax_profile::YearFacts> =
+    // Each year's facts record carries the record's own updated_at as a key
+    // beside the facts. It is not part of YearFacts: readers of either shape
+    // parse the facts themselves.
+    let mut facts_stmt = db
+        .conn
+        .prepare("SELECT taxable_year, updated_at FROM year_facts WHERE tin = ?1")?;
+    let facts_timestamps: std::collections::BTreeMap<i64, String> = facts_stmt
+        .query_map([tin], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .filter_map(|row| row.ok())
+        .collect();
+    let year_facts: std::collections::BTreeMap<String, serde_json::Value> =
         crate::db::taxpayers::year_facts_for_export(&db.conn, tin)?
             .into_iter()
-            .map(|(year, facts)| (year.to_string(), facts))
+            .map(|(year, facts)| {
+                let mut value = serde_json::to_value(&facts).unwrap_or_default();
+                if let (Some(object), Some(updated_at)) = (
+                    value.as_object_mut(),
+                    facts_timestamps.get(&i64::from(year)),
+                ) {
+                    object.insert(
+                        "updated_at".to_string(),
+                        serde_json::Value::String(updated_at.clone()),
+                    );
+                }
+                (year.to_string(), value)
+            })
             .collect();
     zip.start_file(format!("{}year_facts.json", base_dir), options)?;
     zip.write_all(serde_json::to_string_pretty(&year_facts)?.as_bytes())?;

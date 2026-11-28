@@ -7416,6 +7416,366 @@ mod tests {
             "the right PIN waits too"
         );
     }
+
+    // ---------- import: never a send, never a duplicate (issue #643) ----------
+
+    /// A copy of `base` with the named entries replaced or added.
+    fn tampered_archive(
+        base: &std::path::Path,
+        scratch: &ScratchDir,
+        name: &str,
+        replacements: &[(&str, String)],
+    ) -> std::path::PathBuf {
+        let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+        {
+            let file = std::fs::File::open(base).unwrap();
+            let mut zip = zip::ZipArchive::new(file).unwrap();
+            for i in 0..zip.len() {
+                let mut entry = zip.by_index(i).unwrap();
+                let entry_name = entry.name().to_string();
+                let mut bytes = Vec::new();
+                std::io::Read::read_to_end(&mut entry, &mut bytes).unwrap();
+                entries.push((entry_name, bytes));
+            }
+        }
+        for (key, value) in replacements {
+            entries.retain(|(entry_name, _)| entry_name != key);
+            entries.push((key.to_string(), value.clone().into_bytes()));
+        }
+        let out = scratch.path().join(name);
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(&out).unwrap());
+        for (entry_name, bytes) in entries {
+            writer
+                .start_file(entry_name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            std::io::Write::write_all(&mut writer, &bytes).unwrap();
+        }
+        writer.finish().unwrap();
+        out
+    }
+
+    /// `drafts.json` content holding one return row.
+    fn drafts_json(
+        form_code: &str,
+        taxable_year: i64,
+        quarter: Option<i64>,
+        status: &str,
+        data_json: &str,
+        updated_at: &str,
+    ) -> String {
+        serde_json::json!([{
+            "form_code": form_code,
+            "taxable_year": taxable_year,
+            "quarter": quarter,
+            "status": status,
+            "data_json": data_json,
+            "updated_at": updated_at,
+        }])
+        .to_string()
+    }
+
+    fn insert_draft(
+        form_code: &str,
+        taxable_year: i64,
+        quarter: Option<i64>,
+        status: &str,
+        data_json: &str,
+        updated_at: &str,
+    ) {
+        with_database(|db| {
+            db.conn_for_tests()
+                .execute(
+                    "INSERT INTO form_drafts
+                        (tin, form_code, taxable_year, quarter, status, data_json, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    (
+                        ARCHIVE_TIN,
+                        form_code,
+                        taxable_year,
+                        quarter,
+                        status,
+                        data_json,
+                        updated_at,
+                    ),
+                )
+                .map_err(|error| db_error(error))?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// Every (id, status, data_json) of the return, in id order.
+    fn draft_rows(form_code: &str, taxable_year: i64) -> Vec<(i64, String, String)> {
+        with_database(|db| {
+            let mut statement = db
+                .conn_for_tests()
+                .prepare(
+                    "SELECT id, status, data_json FROM form_drafts
+                     WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 ORDER BY id",
+                )
+                .map_err(|error| db_error(error))?;
+            let rows = statement
+                .query_map((ARCHIVE_TIN, form_code, taxable_year), |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })
+                .map_err(|error| db_error(error))?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| db_error(error))?;
+            Ok(rows)
+        })
+        .unwrap()
+    }
+
+    /// A profile archive of ARCHIVE_TIN whose `drafts.json` is `drafts`.
+    fn archive_with_drafts(scratch: &ScratchDir, name: &str, drafts: String) -> std::path::PathBuf {
+        let base = profile_archive(scratch);
+        tampered_archive(&base, scratch, name, &[("drafts.json", drafts)])
+    }
+
+    /// Fault 1: a backup holding an older copy of a return already further
+    /// along never puts its status or data back.
+    #[test]
+    fn an_import_never_lowers_a_returns_status() {
+        setup();
+        let scratch = ScratchDir::new("never-lowers");
+        insert_draft(
+            "2551Q",
+            2026,
+            Some(1),
+            "Submitted",
+            "{\"current\":true}",
+            "2026-06-01 00:00:00",
+        );
+        let archive = archive_with_drafts(
+            &scratch,
+            "never-lowers.zip",
+            drafts_json(
+                "2551Q",
+                2026,
+                Some(1),
+                "Queued",
+                "{\"stale\":true}",
+                "2026-01-01 00:00:00",
+            ),
+        );
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("2551Q", 2026);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(
+            (rows[0].1.as_str(), rows[0].2.as_str()),
+            ("Submitted", "{\"current\":true}"),
+            "an import never lowers a status or overwrites its data: {rows:?}"
+        );
+    }
+
+    /// Fault 2: a return Queued in the file is a send nobody pressed; it
+    /// comes in as a Draft.
+    #[test]
+    fn a_queued_return_in_the_file_comes_in_as_a_draft() {
+        setup();
+        let scratch = ScratchDir::new("queued-as-draft");
+        let archive = archive_with_drafts(
+            &scratch,
+            "queued.zip",
+            drafts_json(
+                "2551Q",
+                2026,
+                Some(1),
+                "Queued",
+                "{\"data\":true}",
+                "2026-01-01 00:00:00",
+            ),
+        );
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("2551Q", 2026);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(
+            rows[0].1, "Draft",
+            "an import is never a send: the file's Queued comes in as Draft"
+        );
+    }
+
+    /// Fault 3: an annual return's NULL quarter never conflicts, so the file's
+    /// row must be matched by its period and updated in place, never inserted
+    /// as a second row.
+    #[test]
+    fn an_import_updates_a_null_quarter_return_in_place_never_a_second_row() {
+        setup();
+        let scratch = ScratchDir::new("null-quarter");
+        insert_draft(
+            "1700",
+            2025,
+            None,
+            "Draft",
+            "{\"current\":true}",
+            "2026-06-01 00:00:00",
+        );
+        let before = draft_rows("1700", 2025);
+        assert_eq!(before.len(), 1);
+        let archive = archive_with_drafts(
+            &scratch,
+            "null-quarter.zip",
+            drafts_json(
+                "1700",
+                2025,
+                None,
+                "Draft",
+                "{\"file\":true}",
+                "2026-07-01 00:00:00",
+            ),
+        );
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("1700", 2025);
+        assert_eq!(rows.len(), 1, "a second row for the same return: {rows:?}");
+        assert_eq!(rows[0].0, before[0].0, "updated in place by id");
+    }
+
+    /// Fault 4: an older file never overwrites the year's facts or the year's
+    /// forms list.
+    #[test]
+    fn year_facts_and_the_yearly_forms_list_survive_an_older_file() {
+        setup();
+        let scratch = ScratchDir::new("older-file");
+        with_database(|db| {
+            db.conn_for_tests()
+                .execute(
+                    "INSERT INTO year_facts (tin, taxable_year, facts_json, updated_at)
+                     VALUES (?1, 2025, '{\"line_of_business\":\"NEW\"}', '2026-06-01 00:00:00')",
+                    (ARCHIVE_TIN,),
+                )
+                .map_err(|error| db_error(error))?;
+            Ok(())
+        })
+        .unwrap();
+        let base = profile_archive(&scratch);
+        let archive = tampered_archive(
+            &base,
+            &scratch,
+            "older.zip",
+            &[
+                (
+                    "year_facts.json",
+                    serde_json::json!({
+                        "2025": {
+                            "line_of_business": "OLD",
+                            "updated_at": "2026-01-01 00:00:00"
+                        }
+                    })
+                    .to_string(),
+                ),
+                (
+                    "yearly_forms.json",
+                    serde_json::json!({ "2025": ["2551Q"] }).to_string(),
+                ),
+            ],
+        );
+        // The database's own forms list for the year, written now.
+        with_database(|db| {
+            let set = bir_core::forms::PerYearFormsSet::from_codes(
+                2025,
+                ["2551Q", "1701Q"],
+                bir_core::forms::FormSetSource::Manual,
+            );
+            db.save_per_year_forms(ARCHIVE_TIN, 2025, &set)
+                .map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        import_archive_from(&archive).unwrap();
+        with_database(|db| {
+            let facts: String = db
+                .conn_for_tests()
+                .query_row(
+                    "SELECT facts_json FROM year_facts WHERE tin = ?1 AND taxable_year = 2025",
+                    (ARCHIVE_TIN,),
+                    |row| row.get(0),
+                )
+                .map_err(|error| db_error(error))?;
+            assert!(
+                facts.contains("NEW"),
+                "an older file overwrote the year facts: {facts}"
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// Fault 5: a row in the middle of being sent — it holds a claim token —
+    /// is never replaced.
+    #[test]
+    fn a_row_holding_a_claim_token_is_never_replaced() {
+        setup();
+        let scratch = ScratchDir::new("claim-token");
+        with_database(|db| {
+            db.conn_for_tests()
+                .execute(
+                    "INSERT INTO form_drafts
+                        (tin, form_code, taxable_year, quarter, status, data_json, updated_at)
+                     VALUES (?1, '2551Q', 2026, 1, 'Queued',
+                             '{\"current\":true,\"submission_claim_token\":\"claim-token-1\",\"submission_claimed_at\":\"2026-06-01 00:00:00\"}',
+                             '2026-06-01 00:00:00')",
+                    (ARCHIVE_TIN,),
+                )
+                .map_err(|error| db_error(error))?;
+            Ok(())
+        })
+        .unwrap();
+        let archive = archive_with_drafts(
+            &scratch,
+            "claim.zip",
+            drafts_json(
+                "2551Q",
+                2026,
+                Some(1),
+                "Draft",
+                "{\"file\":true}",
+                "2026-07-01 00:00:00",
+            ),
+        );
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("2551Q", 2026);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(
+            rows[0].2,
+            "{\"current\":true,\"submission_claim_token\":\"claim-token-1\",\"submission_claimed_at\":\"2026-06-01 00:00:00\"}",
+            "a row mid-send was replaced: {rows:?}"
+        );
+    }
+
+    /// The import still imports: a strictly newer file at the same status
+    /// replaces the row's data in place.
+    #[test]
+    fn a_newer_file_at_the_same_status_still_imports() {
+        setup();
+        let scratch = ScratchDir::new("newer-imports");
+        insert_draft(
+            "2551Q",
+            2026,
+            Some(1),
+            "Draft",
+            "{\"old\":true}",
+            "2026-06-01 00:00:00",
+        );
+        let archive = archive_with_drafts(
+            &scratch,
+            "newer.zip",
+            drafts_json(
+                "2551Q",
+                2026,
+                Some(1),
+                "Draft",
+                "{\"new\":true}",
+                "2026-07-01 00:00:00",
+            ),
+        );
+        import_archive_from(&archive).unwrap();
+        let rows = draft_rows("2551Q", 2026);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(
+            rows[0].2, "{\"new\":true}",
+            "a strictly newer file no longer imports: {rows:?}"
+        );
+    }
 }
 
 #[cfg(test)]

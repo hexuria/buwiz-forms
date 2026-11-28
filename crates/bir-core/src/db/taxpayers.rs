@@ -1010,6 +1010,65 @@ fn read_year_facts(
     Ok(json.as_deref().map(serde_json::from_str).transpose()?)
 }
 
+/// Parse a stored `updated_at` — sqlite's `datetime('now')` shape or an
+/// ISO-ish date — into a timestamp. The import compares these as timestamps,
+/// never as strings.
+pub(crate) fn parse_stored_timestamp(ts: &str) -> Option<chrono::NaiveDateTime> {
+    let trimmed = ts.trim();
+    for format in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f"] {
+        if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(trimmed, format) {
+            return Some(parsed);
+        }
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return date.and_hms_opt(0, 0, 0);
+    }
+    None
+}
+
+/// Whether a record timestamped `incoming` may replace one timestamped
+/// `existing` (both optional). No existing record: yes. An existing record
+/// the file cannot date (a legacy archive): no — an older file must never
+/// overwrite what is here. Otherwise the timestamps decide as timestamps.
+pub(crate) fn import_timestamp_allows(existing: Option<&str>, incoming: Option<&str>) -> bool {
+    match (existing, incoming) {
+        (None, _) => true,
+        (Some(_), None) => false,
+        (Some(existing), Some(incoming)) => {
+            match (
+                parse_stored_timestamp(existing),
+                parse_stored_timestamp(incoming),
+            ) {
+                (Some(existing), Some(incoming)) => incoming >= existing,
+                _ => false,
+            }
+        }
+    }
+}
+
+/// `write_year_facts` only where the file's record is not older than the
+/// stored one. Returns whether it wrote.
+pub(crate) fn write_year_facts_if_newer(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+    incoming_updated_at: Option<&str>,
+) -> std::result::Result<bool, DbError> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT updated_at FROM year_facts WHERE tin = ?1 AND taxable_year = ?2",
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if !import_timestamp_allows(existing.as_deref(), incoming_updated_at) {
+        return Ok(false);
+    }
+    write_year_facts(conn, tin, year, facts)?;
+    Ok(true)
+}
+
 pub(crate) fn write_year_facts(
     conn: &Connection,
     tin: &str,
@@ -1034,9 +1093,23 @@ pub(crate) fn restore_yearly_forms(
     tin: &str,
     year: u16,
     codes: &[String],
+    incoming_updated_at: Option<&str>,
 ) -> Result<()> {
     let codes = canonical_codes(codes)?;
-    if !codes.is_empty() || !super::forms_set::query_per_year_forms(conn, tin, year)?.is_empty() {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT MAX(updated_at) FROM per_year_forms WHERE tin = ?1 AND taxable_year = ?2",
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    // An older file never overwrites the year's forms list; a legacy file
+    // with no timestamp writes only into a year that has none.
+    if import_timestamp_allows(existing.as_deref(), incoming_updated_at)
+        && (!codes.is_empty()
+            || !super::forms_set::query_per_year_forms(conn, tin, year)?.is_empty())
+    {
         replace_yearly_forms(conn, tin, year, &codes)?;
     }
     record_tax_year(conn, tin, year)
@@ -1070,10 +1143,12 @@ pub(crate) fn restore_year_facts(
     tin: &str,
     year: u16,
     facts: &YearFacts,
+    incoming_updated_at: Option<&str>,
 ) -> std::result::Result<(), DbError> {
     let head_tin = head_office_tin_of(conn, tin)?;
     if head_tin == tin {
-        return write_year_facts(conn, tin, year, facts);
+        write_year_facts_if_newer(conn, tin, year, facts, incoming_updated_at)?;
+        return Ok(());
     }
     let own = YearFacts {
         tax_classification: None,
@@ -1082,7 +1157,7 @@ pub(crate) fn restore_year_facts(
         eopt_tier: None,
         ..facts.clone()
     };
-    write_year_facts(conn, tin, year, &own)?;
+    write_year_facts_if_newer(conn, tin, year, &own, incoming_updated_at)?;
     let mut head = ensure_year_facts(conn, &head_tin, year)?;
     if head.tax_classification.is_none() {
         head.tax_classification = facts.tax_classification.clone();
