@@ -1,0 +1,6 @@
+# Tour: the print preview window of 2551Q, at the top and scrolled to the end.
+click fp-print
+wait_until print-sheet --timeout-ms 20000 --screenshot
+scroll print-sheet --dy 1600
+scroll print-sheet --dy 1600
+wait_until print-sheet --timeout-ms 5000 --screenshot

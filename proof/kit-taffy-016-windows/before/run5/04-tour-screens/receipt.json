@@ -1,0 +1,195 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tour-screens",
+  "fingerprint": "fnv1a64:8e364b6427a2ac4c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 522
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 188,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 452
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 152,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\004-s4.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 443
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 181,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 541
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 39
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 428
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 172,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\010-s10.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 5378
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 177,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 465
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 38
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 709
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 190,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 663
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 40
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 636
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 190,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\020-s20.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 396
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 559
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "elapsed_ms": 41
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\004-s4.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\010-s10.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124257\\04-tour-screens\\020-s20.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 12609
+}

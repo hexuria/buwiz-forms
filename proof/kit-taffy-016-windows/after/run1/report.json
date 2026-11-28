@@ -1,0 +1,78 @@
+{
+ "suite": "tour",
+ "target": "windows",
+ "started": "20261128-132956",
+ "out": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-132956",
+ "cli_version": "0.5.0",
+ "app_commit": "8f825621",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 765,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 6428,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 3638,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tax-year.wants"
+  },
+  {
+   "name": "tour-screens",
+   "status": "pass",
+   "ms": 12017,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tour-screens.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 8753,
+   "note": null,
+   "file": "agent-recipes\\e2e\\open-2551q-windows.wants"
+  },
+  {
+   "name": "tour-form",
+   "status": "pass",
+   "ms": 16522,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tour-form.wants"
+  },
+  {
+   "name": "tour-preview",
+   "status": "pass",
+   "ms": 7206,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tour-preview.wants"
+  }
+ ]
+}

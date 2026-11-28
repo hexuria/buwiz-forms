@@ -1,0 +1,162 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tour-form",
+  "fingerprint": "fnv1a64:c12738679f2fb04a",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 217,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 203,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 399
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 241,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\004-s4.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 357
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 363
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1720
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 238,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\008-s8.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1824
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 238,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\010-s10.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1662
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1645
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1677
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1676
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1681
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1671
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 363
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 226,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\018-s18.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\004-s4.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\008-s8.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\010-s10.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-133416\\06-tour-form\\018-s18.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 16410
+}

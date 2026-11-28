@@ -1,0 +1,7 @@
+# Tour extras: a picker sheet open on the form, its calendar grid. The form is at its end here; back to the top first.
+scroll form-scroll --dy -30000
+wait_until fp-set-profile-business_start_date --timeout-ms 15000
+click fp-set-profile-business_start_date
+wait_until profile-ask-sheet --timeout-ms 5000 --screenshot
+click fp-ask-business_start_date-input-calendar
+wait_until fp-ask-business_start_date-input-calendar --timeout-ms 3000 --screenshot

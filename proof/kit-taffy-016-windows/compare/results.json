@@ -1,0 +1,148 @@
+[
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "open-2551q-005"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "setup-start-001"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "sign-up-012"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "sign-up-017"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "sign-up-018"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "sign-up-020"
+ },
+ {
+  "same_size": true,
+  "identical": false,
+  "count": 5501,
+  "bbox": [
+   515,
+   810,
+   926,
+   827
+  ],
+  "screen": "tax-year-015",
+  "side_by_side": "C:/job-taffy/evidence/compare\\sxs-tax-year-015.png"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-form-001"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-form-002"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-form-004"
+ },
+ {
+  "same_size": true,
+  "identical": false,
+  "count": 22500,
+  "bbox": [
+   491,
+   762,
+   950,
+   824
+  ],
+  "screen": "tour-form-008",
+  "side_by_side": "C:/job-taffy/evidence/compare\\sxs-tour-form-008.png"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-form-010"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-form-018"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-preview-002"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-preview-005"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-screens-002"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-screens-004"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-screens-006"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-screens-010"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-screens-012"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-screens-016"
+ },
+ {
+  "same_size": true,
+  "identical": true,
+  "count": 0,
+  "screen": "tour-screens-020"
+ }
+]

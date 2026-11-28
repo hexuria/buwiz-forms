@@ -1,0 +1,91 @@
+{
+ "suite": "tour",
+ "target": "windows",
+ "started": "20261128-124150",
+ "out": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124150",
+ "cli_version": "0.5.0",
+ "app_commit": "b983b2a4",
+ "platform": "desktop",
+ "os": "windows",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "press_within",
+  "assert_states",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 655,
+   "note": null,
+   "file": "agent-recipes\\e2e\\setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 6650,
+   "note": null,
+   "file": "agent-recipes\\e2e\\sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 3984,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tax-year.wants"
+  },
+  {
+   "name": "tour-screens",
+   "status": "pass",
+   "ms": 12570,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tour-screens.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 9224,
+   "note": null,
+   "file": "agent-recipes\\e2e\\open-2551q-windows.wants"
+  },
+  {
+   "name": "tour-form",
+   "status": "pass",
+   "ms": 16656,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tour-form.wants"
+  },
+  {
+   "name": "tour-extras",
+   "status": "fail",
+   "ms": 138,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tour-extras.wants",
+   "step": "s1",
+   "error": "target_gone: fp-set-profile-business_start_date",
+   "error_code": "target_gone",
+   "line": "click fp-set-profile-business_start_date",
+   "screenshot": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124150\\07-tour-extras\\failure.png",
+   "tree": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261128-124150\\07-tour-extras\\failure-tree.json"
+  },
+  {
+   "name": "tour-preview",
+   "status": "pass",
+   "ms": 7020,
+   "note": null,
+   "file": "agent-recipes\\e2e\\tour-preview.wants"
+  }
+ ]
+}

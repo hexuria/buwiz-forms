@@ -1,0 +1,19 @@
+# Tour: the 2551Q form at the top, in the middle (a part title pinned), at the end state reached by eight fixed scrolls; the navigation and sections lists.
+wait_until form-page --timeout-ms 20000 --screenshot
+wait_until fp-nav-list --timeout-ms 5000 --screenshot
+click fp-parts-toggle
+wait_until fp-sections-popover --timeout-ms 5000 --screenshot
+click fp-parts-toggle
+click fp-part-1-toggle
+scroll form-scroll --dy 1600
+wait_until form-page --timeout-ms 5000 --screenshot
+scroll form-scroll --dy 1600
+wait_until form-page --timeout-ms 5000 --screenshot
+scroll form-scroll --dy 1600
+scroll form-scroll --dy 1600
+scroll form-scroll --dy 1600
+scroll form-scroll --dy 1600
+scroll form-scroll --dy 1600
+scroll form-scroll --dy 1600
+click fp-part-4-toggle
+wait_until form-page --timeout-ms 5000 --screenshot

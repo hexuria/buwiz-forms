@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "tour-extras",
+  "fingerprint": "fnv1a64:a77666917722020f",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": false,
+      "error": "target_gone: fp-set-profile-business_start_date",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 105
+    }
+  ],
+  "elapsed_ms": 105
+}

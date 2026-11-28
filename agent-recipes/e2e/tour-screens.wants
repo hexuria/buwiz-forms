@@ -1,0 +1,24 @@
+# Tour: Home, the Shell with the sidebar open, the Library card grid, the Calendar, Settings top and end; then the New return sheet and the Palette.
+click nav-home
+wait_until home-tile-drafts --timeout-ms 8000 --screenshot
+click nav-library
+wait_until library-grid --timeout-ms 5000 --screenshot
+click nav-calendar
+wait_until calendar-taxpayers-trigger --timeout-ms 5000 --screenshot
+click account-row
+wait_until menu-account --timeout-ms 5000
+click menu-account
+wait_until settings-nav-general --timeout-ms 5000 --screenshot
+scroll settings-scroll --dy 6000
+wait_until settings-nav-computer --timeout-ms 5000 --screenshot
+click nav-home
+wait_until home-tile-drafts --timeout-ms 5000
+click sb-new
+wait_until new-return-2551Q --timeout-ms 15000 --screenshot
+click new-return-cancel
+wait_until new-return-2551Q --absent --timeout-ms 5000
+click sb-search
+wait_until palette-input --timeout-ms 5000 --screenshot
+click palette-input
+key palette-input Escape
+wait_until palette-input --absent --timeout-ms 5000

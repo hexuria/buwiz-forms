@@ -1,0 +1,68 @@
+{
+  "v": 1,
+  "description": "Layout tour for the Taffy before/after comparison: screenshots of every main screen at a fixed window size.",
+  "params": {
+    "tin": "00012345300000",
+    "name": "JUANA SANTOS",
+    "address": "1 QUEZON AVE",
+    "zip": "1100",
+    "rdo": "039",
+    "start_option": "new-tp-start-opt-none",
+    "year": "2026",
+    "tin_root": "000123453"
+  },
+  "recipes": [
+    {
+      "name": "setup-start",
+      "file": "setup-start.wants",
+      "required": true
+    },
+    {
+      "name": "sign-up",
+      "desktop": "sign-up.wants",
+      "linux": "sign-up-linux.wants",
+      "phone": "sign-up-phone.json",
+      "android": "sign-up-android.wants",
+      "resolve": {
+        "tin_field": {
+          "role": [
+            "textbox",
+            "textfield"
+          ],
+          "name_regex": "^TIN, 9 digits"
+        }
+      },
+      "required": true
+    },
+    {
+      "name": "tax-year",
+      "file": "tax-year.wants",
+      "linux": "tax-year-narrow.wants",
+      "android": "tax-year-narrow.wants",
+      "required": true
+    },
+    {
+      "name": "tour-screens",
+      "file": "tour-screens.wants",
+      "required": true
+    },
+    {
+      "name": "open-2551q",
+      "desktop": "open-2551q.wants",
+      "windows": "open-2551q-windows.wants",
+      "linux": "open-2551q-phone.wants",
+      "phone": "open-2551q-phone.wants",
+      "required": true
+    },
+    {
+      "name": "tour-form",
+      "file": "tour-form.wants",
+      "required": true
+    },
+    {
+      "name": "tour-preview",
+      "file": "tour-preview.wants",
+      "required": true
+    }
+  ]
+}
