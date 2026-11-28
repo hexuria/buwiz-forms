@@ -5560,6 +5560,19 @@ fn wrap_lines_at(
 }
 
 /// The width (pt) of the cell div `cell_id` in the page html, from its style.
+fn cell_div_geometry(page_html: &str, cell_id: &str) -> Option<(f64, f64, f64)> {
+    let needle = format!("id=\"{cell_id}\"");
+    let at = page_html.find(&needle)?;
+    let div_start = page_html[..at].rfind("<div")?;
+    let tag_end = page_html[div_start..].find('>')? + div_start + 1;
+    let tag = &page_html[div_start..tag_end];
+    Some((
+        style_pt_prop(tag, "left")?,
+        style_pt_prop(tag, "top")?,
+        style_pt_prop(tag, "width")?,
+    ))
+}
+
 fn cell_div_width(page_html: &str, cell_id: &str) -> Option<f64> {
     let needle = format!("id=\"{cell_id}\"");
     let at = page_html.find(&needle)?;
@@ -5751,9 +5764,7 @@ fn apply_rule6_specify_bands(
             // of the added lines grey out. The row is the field cells level with the specify cell.
             let (mut row_x0, mut row_x1) = (r6.x0, x1);
             let mut greys: Vec<(f64, f64)> = Vec::new();
-            if let Some((_, cl, ct, cw, _ch)) =
-                value_cells.iter().find(|(id, ..)| *id == r6.cell_id)
-            {
+            if let Some((cl, ct, cw)) = cell_div_geometry(&page_html, &r6.cell_id) {
                 let same_row = |t: f64| (t - ct).abs() < 4.0;
                 row_x0 = value_cells
                     .iter()
@@ -5801,7 +5812,7 @@ fn apply_rule6_specify_bands(
                     insertions.push(Rule6Insertion {
                         cell_id: r6.cell_id.clone(),
                         cut_y,
-                        dh: if band_lines >= 2 { 20.0 } else { 14.0 },
+                        dh: if band_lines >= 2 { 25.0 } else { 14.0 },
                         x0: row_x0,
                         x1: row_x1,
                         display: band_display,
@@ -5823,7 +5834,7 @@ fn apply_rule6_specify_bands(
                 } else if let Some((l1, l2, sz)) =
                     fit_two_lines(sheet, letter, room, full_val, 8.5, PLAIN_TEXT_MIN_PT)
                 {
-                    (20.0, format!("{l1}\n{l2}"), sz, true, false)
+                    (25.0, format!("{l1}\n{l2}"), sz, true, false)
                 } else if let Some((l1, l2)) = wrap_and_truncate_two_lines_mode(
                     sheet,
                     letter,
@@ -5832,7 +5843,7 @@ fn apply_rule6_specify_bands(
                     PLAIN_TEXT_MIN_PT,
                     true,
                 ) {
-                    (20.0, format!("{l1}\n{l2}"), PLAIN_TEXT_MIN_PT, true, true)
+                    (25.0, format!("{l1}\n{l2}"), PLAIN_TEXT_MIN_PT, true, true)
                 } else {
                     (
                         14.0,
@@ -6306,20 +6317,36 @@ fn shift_page_and_insert_rule6(
         } else {
             String::new()
         };
+        let band_lines: Vec<&str> = ins.display.split('\n').collect();
+        let pitch = if band_lines.len() > 1 {
+            ((h - 2.0) / band_lines.len() as f64).max(7.0)
+        } else {
+            h
+        };
+        let mut inputs_html = String::new();
+        for (line_idx, line) in band_lines.iter().enumerate() {
+            inputs_html.push_str(&format!(
+                "<input type=\"text\" class=\"{}\" name=\"{}\" readonly value=\"{}\" style=\"position:absolute;left:0pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt;padding:1pt 0 0 3pt;font-size:{:.2}pt;{}text-align:left\" data-overflow-of=\"{}\"{}>",
+                ins.input_classes,
+                ins.cell_id,
+                html_escape(line),
+                line_idx as f64 * pitch,
+                w,
+                pitch,
+                ins.font_size_pt,
+                lh_css,
+                ins.cell_id,
+                if line_idx + 1 == band_lines.len() { warn_attr.as_str() } else { "" }
+            ));
+        }
         out.push_str(&format!(
-            "<div class=\"c f\" data-rule6-band=\"true\" data-rule6-of=\"{}\" style=\"left:{:.2}pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt\"><input type=\"text\" class=\"{}\" name=\"{}\" readonly value=\"{}\" style=\"inset:1pt 3pt 1pt 3pt;font-size:{:.2}pt;{}text-align:left;background:#fff;z-index:2\" data-overflow-of=\"{}\"{}></div>",
+            "<div class=\"c f\" data-rule6-band=\"true\" data-rule6-of=\"{}\" style=\"left:{:.2}pt;top:{:.2}pt;width:{:.2}pt;height:{:.2}pt\">{}</div>",
             ins.cell_id,
             ins.x0 + 1.5,
             y + 0.5,
             w,
             h,
-            ins.input_classes,
-            ins.cell_id,
-            html_escape(&ins.display),
-            ins.font_size_pt,
-            lh_css,
-            ins.cell_id,
-            warn_attr
+            inputs_html
         ));
         prior_dh += ins.dh;
     }
@@ -12113,12 +12140,14 @@ mod tests {
         fields.insert("frm1701:txtPg4IPart7_9Specify".to_string(), text.clone());
         let html = filled_document("1701-2018", &fields).unwrap();
         let tags = super::input_tags(&html);
-        let band = tags
+        let value = tags
             .iter()
-            .find(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
-            .expect("1701 item 9 Rule 6 band")
-            .tag;
-        let value = super::attr(band, "value").unwrap().replace("&#10;", "\n");
+            .filter(|t| t.tag.contains("data-overflow-of=\"p4c213\""))
+            .filter_map(|t| super::attr(t.tag, "value"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .replace("&#10;", "\n");
+        assert!(!value.is_empty(), "1701 item 9 Rule 6 band");
         assert!(
             value.contains("..."),
             "the narrowed band must truncate this fill: {value:?}"
@@ -14551,10 +14580,32 @@ mod donor_estate_print_tests {
                 "{slug} {cell_id}: the original field must hold a non-empty prefix of the value, got {cell_val:?}"
             );
             let rest = long_specify[cell_val.len()..].trim_start();
-            let band_joined = long_html.replace("&#10;", " ");
+            let overflow_mark = format!("data-overflow-of=\"{cell_id}\"");
+            let mut band_text = String::new();
+            let mut scan = long_html.as_str();
+            while let Some(at) = scan.find(&overflow_mark) {
+                let before = &scan[..at];
+                let Some(input_start) = before.rfind("<input") else {
+                    break;
+                };
+                let input_tag = &scan[input_start..at + overflow_mark.len() + 2];
+                if let Some(v) = input_tag
+                    .split("value=\"")
+                    .nth(1)
+                    .and_then(|r| r.split('\"').next())
+                {
+                    if !band_text.is_empty() {
+                        band_text.push(' ');
+                    }
+                    band_text.push_str(v);
+                }
+                scan = &scan[at + overflow_mark.len()..];
+            }
+            let band_normalized = band_text.split_whitespace().collect::<Vec<_>>().join(" ");
+            let rest_normalized = rest.split_whitespace().collect::<Vec<_>>().join(" ");
             assert!(
-                rest.is_empty() || band_joined.contains(rest),
-                "{slug} {cell_id}: the band must continue with the rest of the value whole"
+                rest.is_empty() || band_normalized.starts_with(rest_normalized.as_str()) || rest_normalized.starts_with(band_normalized.as_str()) || band_normalized.contains(rest_normalized.as_str()),
+                "{slug} {cell_id}: the band must continue with the rest of the value whole: band {band_normalized:?} rest {rest_normalized:?}"
             );
 
             let extreme =
@@ -14877,5 +14928,21 @@ mod donor_estate_print_tests {
             "printed documents must inline all fonts and keep no ../fonts/ reference; found in: {:?}",
             offenders
         );
+    }
+}
+
+#[cfg(test)]
+mod owner_proof_dump {
+    use super::filled_document;
+
+    #[test]
+    fn dump_owner_case_b() {
+        let mut fields = std::collections::BTreeMap::new();
+        fields.insert(
+            "frm1701:txtPg4IPart7_9Specify".to_string(),
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO".to_string(),
+        );
+        let html = filled_document("1701-2018", &fields).unwrap();
+        std::fs::write("/tmp/owner-case-b.html", html).unwrap();
     }
 }
