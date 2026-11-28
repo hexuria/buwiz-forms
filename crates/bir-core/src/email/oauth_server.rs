@@ -94,7 +94,6 @@ fn answer(
     if let Err(error) = stream
         .set_nonblocking(false)
         .and_then(|()| stream.set_read_timeout(Some(CONNECTION_TIMEOUT)))
-        .and_then(|()| stream.set_write_timeout(Some(CONNECTION_TIMEOUT)))
     {
         return Some(Err(format!("OAuth callback server failed: {error}")));
     }
@@ -103,6 +102,7 @@ fn answer(
         Callback::Code(code) => {
             respond(
                 &mut stream,
+                until,
                 "200 OK",
                 "text/html; charset=utf-8",
                 SUCCESS_HTML,
@@ -112,6 +112,7 @@ fn answer(
         Callback::Cancelled => {
             respond(
                 &mut stream,
+                until,
                 "200 OK",
                 "text/plain; charset=utf-8",
                 "Google sign-in was cancelled. You can close this tab and return to eBIRForms.",
@@ -121,6 +122,7 @@ fn answer(
         Callback::Refused(error) => {
             respond(
                 &mut stream,
+                until,
                 "200 OK",
                 "text/plain; charset=utf-8",
                 "Google did not allow the sign-in. You can close this tab and return to eBIRForms.",
@@ -130,6 +132,7 @@ fn answer(
         Callback::WrongState => {
             respond(
                 &mut stream,
+                until,
                 "400 Bad Request",
                 "text/plain; charset=utf-8",
                 "Invalid OAuth callback. Return to eBIRForms and try again.",
@@ -139,6 +142,7 @@ fn answer(
         Callback::Other => {
             respond(
                 &mut stream,
+                until,
                 "404 Not Found",
                 "text/plain; charset=utf-8",
                 "Not found",
@@ -167,7 +171,16 @@ fn read_request(stream: &mut TcpStream, until: Instant) -> String {
     String::from_utf8_lossy(&request).into_owned()
 }
 
-fn respond(stream: &mut TcpStream, status: &str, content_type: &str, body: &str) {
+/// Writes the answer within what is left before `until` (at least 10 ms, since a zero timeout is not allowed); a peer
+/// that does not read cannot hold the connection past it.
+fn respond(stream: &mut TcpStream, until: Instant, status: &str, content_type: &str, body: &str) {
+    let left = until.saturating_duration_since(Instant::now());
+    if stream
+        .set_write_timeout(Some(left.max(Duration::from_millis(10))))
+        .is_err()
+    {
+        return;
+    }
     let response = format!(
         "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
