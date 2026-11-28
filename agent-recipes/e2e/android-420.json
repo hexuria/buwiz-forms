@@ -1,6 +1,6 @@
 {
  "v": 1,
- "description": "money probe",
+ "description": "money probe: an amount typed, Home and back, the amount unchanged. On a decimal pad the input method composes nothing, so this exercises the kit's replay fix (hexuria/nsh#58), not app code.",
  "params": {
   "tin": "12345678800000",
   "name": "E2E SMOKE TAXPAYER",
@@ -51,7 +51,11 @@
    "name": "money-home",
    "phone": "android-420-money-home.json",
    "required": true,
-   "needs_cli": "0.4.1"
+   "needs_cli": "0.4.1",
+   "needs_feature": {
+    "android": "system.background"
+   },
+   "needs_host": "a host listing system.background (the app's pin does not)"
   }
  ]
 }

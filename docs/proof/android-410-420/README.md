@@ -1,4 +1,4 @@
-driver: gpui-agent-cli 0.4.1
+driver: gpui-agent-cli 0.4.1 + nsh-gpui-agent df2ee9791ad019ef6824e798bd6b1be517b48678
 recipes: agent-recipes/e2e/android-410.json, agent-recipes/e2e/android-420.json
 
 # Android #410/#420 proof
@@ -8,12 +8,21 @@ Kit pin: `8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf`; neither kit PR is in that p
 
 ## Current truth
 
-- The app-side #420 change is in `nsh/ui/fields.tsx` and covers every `MaskedField` (money, TIN, percent, integer and date masks), because they all share that component.
-- On Android `background` only, a live IME composition is ended without running the semantic leave: no validation, reformat, rollback or `onBlur`. The typed committed text is kept exactly as it is. `inactive` does nothing.
-- Focus is restored when the app returns to `active`; the keyboard reopens with that focus. A later real leave still settles the field.
-- The TIN is covered by a headless lifecycle test as the non-amount masked field.
-- #410 and the replay half of #420 are kit changes, now in hexuria/nsh draft PRs #57 and #58. They are based on `buwiz-next`, 15 commits past the app pin, so they do not reach the app until the pin moves.
+- **#420: this branch does nothing for it — the fix is hexuria/nsh#58.** On a decimal pad the input method composes
+  nothing (the probe showed zero composition events), so the earlier end-composition machinery was dead code and is
+  removed. #420's real cause is the input method replaying its cached composition into the fresh connection after a
+  background restart, and that is the kit fix. Not reproduced in the real app: the test driver cannot type through the
+  input method (the driver extension is hexuria/buwiz-forms#646).
+- **#410**: the sheet lift is the kit fix hexuria/nsh#57. This branch carries the keyboard-aware sheet maximum height
+  (`sheetCap` in `nsh/ui/layers.tsx`): the Android keyboard inset already includes the navigation bar it covers, and
+  counting the bottom safe area off it again left a tall sheet one navigation-bar too tall — under the status bar with
+  3-button navigation.
+- `android-420`'s Home steps are `system background`/`system foreground`, gated on the host listing `system.background`:
+  a host without the op (every pinned host today) skips the recipe with a plain line instead of failing unsupported_op.
 
 ## Emulator evidence
 
-Not yet run. The Linux proof must run `python3 scripts/e2e check android-410`, `python3 scripts/e2e check android-420`, then `python3 scripts/e2e android android-410 --out <out410>` and `python3 scripts/e2e android android-420 --out <out420>` before/after the kit branches, with gpui-agent screenshots and one mp4. `android-420` currently has a known gap: gpui-agent-cli 0.4.1 has no composition op, so the recipe cannot truly create a live IME composition. It must not fall back to adb or OS input.
+#410 before/after is on branch `try/android-410-proof` (screenshots both navigation modes, one mp4): before, the RDO
+sheet floated a keyboard-height too high; after (this branch's base with the kit built from hexuria/nsh#57), the sheet
+sits on the keyboard in 3-button and gesture navigation. #420 has no end-to-end proof: the driver cannot type through
+the input method, so the replay cannot be reproduced (hexuria/buwiz-forms#646).
