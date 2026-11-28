@@ -578,8 +578,16 @@ impl bir_submit::TokenSource for AccountTokens {
         }
         let for_owner = context.owner.clone();
         let context_epoch = context.epoch;
+        #[cfg(test)]
+        BEFORE_ACCOUNT_BLOCKING_WORK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+            .map(|hook| hook());
         Box::pin(async move {
             let answer = tokio::task::spawn_blocking(move || {
+                #[cfg(test)]
+                ACCOUNT_BLOCKING_ENTRANCES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 device.run(|| {
                     database.run(|| {
                         let mut http = cloud_account::BlockingHttp::new();
@@ -603,7 +611,7 @@ impl bir_submit::TokenSource for AccountTokens {
                 .map_err(|error| match error {
                     TokenError::SignedOut => bir_submit::ClientError::SignedOut,
                     TokenError::Offline(reason) => bir_submit::ClientError::Network(reason),
-                    TokenError::Other(message) => bir_submit::ClientError::Other(message),
+                    TokenError::Other(message) => bir_submit::ClientError::Account(message),
                 })
         })
     }
@@ -619,6 +627,20 @@ impl bir_submit::TokenSource for AccountTokens {
         SEND_CONTEXT
             .try_with(|context| context.epoch == crate::session_epoch::current())
             .unwrap_or(true)
+    }
+
+    fn forget_device_key_if_current(&self, forget: &dyn Fn()) -> bool {
+        // C5: the check AND the forget inside DEVICE_KEY — the epoch is re-checked with the
+        // lock held, so a key the newer session registered while this call waited is never
+        // deleted by the old session's forget.
+        crate::relay::with_device_key_lock(|| {
+            if self.device_key_is_current() {
+                forget();
+                true
+            } else {
+                false
+            }
+        })
     }
 
     fn session_ended(&self) {
@@ -681,6 +703,19 @@ thread_local! {
 #[cfg(test)]
 static BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK_GLOBAL: Mutex<Option<Box<dyn FnOnce() + Send>>> =
     Mutex::new(None);
+
+/// The production wiring's race point between AccountTokens' cheap epoch check and the blocking
+/// account work it starts.
+#[cfg(test)]
+static BEFORE_ACCOUNT_BLOCKING_WORK: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
+#[cfg(test)]
+static ACCOUNT_BLOCKING_ENTRANCES: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(test)]
+fn account_blocking_entrances() -> u64 {
+    ACCOUNT_BLOCKING_ENTRANCES.load(std::sync::atomic::Ordering::SeqCst)
+}
 
 /// [`access_token`] against `store` — the D2 restructure (§4): the lock is held only for the
 /// file reads and writes, NEVER across the network refresh, and never while waiting on another
@@ -1209,6 +1244,7 @@ mod tests {
 
     #[test]
     fn not_signed_in_is_signed_out_with_no_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::default();
         let server = FakeServer::new(&[]);
@@ -1221,6 +1257,7 @@ mod tests {
 
     #[test]
     fn a_fresh_token_is_returned_without_a_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(2_000, 500));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1233,6 +1270,7 @@ mod tests {
 
     #[test]
     fn an_expired_token_refreshes_and_saves_the_rotated_pair() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         // Valid for only 20 s more: inside the 30 s margin.
         let store = MemoryStore::with(account(1_020, 500));
@@ -1255,6 +1293,7 @@ mod tests {
 
     #[test]
     fn force_refreshes_a_token_that_is_still_valid() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(5_000, 500));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1267,6 +1306,7 @@ mod tests {
 
     #[test]
     fn force_right_after_a_refresh_makes_no_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(1_900, 995));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1279,6 +1319,7 @@ mod tests {
 
     #[test]
     fn a_rejected_refresh_with_the_same_saved_token_ends_the_sign_in() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = MemoryStore::with(account(0, 0));
         // The server no longer knows refresh-0.
@@ -1298,6 +1339,7 @@ mod tests {
 
     #[test]
     fn a_rejected_refresh_after_another_process_rotated_uses_the_new_record() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         /// Before the token request, another process rotates the saved token.
         struct RotatedMeanwhile {
@@ -1349,6 +1391,7 @@ mod tests {
 
     #[test]
     fn a_network_failure_is_offline_and_changes_nothing() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let before = account(0, 400);
         let store = MemoryStore::with(before.clone());
@@ -1369,6 +1412,7 @@ mod tests {
 
     #[test]
     fn two_threads_asking_at_once_make_one_refresh_request() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = Arc::new(MemoryStore::with(account(0, 0)));
         let server = FakeServer::new(&["refresh-0"]);
@@ -1467,6 +1511,7 @@ mod tests {
     /// It leads its own, and its network call arrives while T1's is still parked.
     #[test]
     fn a_rotation_starts_a_newer_credential_its_own_flight() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         // The leader's http parks inside the network call until released.
         struct ParkedHttp {
@@ -1589,6 +1634,7 @@ mod tests {
     /// (c): a network error is every waiter's own answer, and signs nobody out.
     #[test]
     fn a_network_error_is_every_waiters_answer_and_signs_nobody_out() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = Arc::new(MemoryStore::with(account(0, 0)));
         let hook = Arc::new(AtomicUsize::new(0));
@@ -1624,6 +1670,7 @@ mod tests {
     /// flight, then panics; the guard's Drop publishes the failure.
     #[test]
     fn a_panicking_leader_wakes_its_waiters_with_an_error() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         struct PanicHttp {
             inside: std::sync::mpsc::Sender<()>,
@@ -1774,6 +1821,71 @@ mod tests {
     /// blocking thread. A same-owner re-sign-in in the load gap moves the process epoch, and the
     /// old context must answer SignedOut rather than the new session's token. The positive control
     /// then shows the real token path answers when the epoch still matches.
+    /// C5, the discriminating proof: the epoch is re-checked INSIDE the device-key lock. The
+    /// test holds the lock, starts the forget on another thread (which blocks on the lock),
+    /// moves the epoch, then releases: the forget must NOT run. With the bare pair — the check
+    /// outside the lock — the worker's check passes before it ever blocks, the epoch move
+    /// lands too late, and the forget runs: the test fails.
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_forget_rechecks_the_epoch_inside_the_device_key_lock() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let _turn = turn();
+        let owner = test_owner();
+        let epoch = crate::session_epoch::current() + 5;
+        crate::session_epoch::set(epoch);
+        use bir_submit::TokenSource;
+        let started = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // hold the device-key lock first: the worker's forget must queue behind it
+        let worker = {
+            let started = started.clone();
+            let ran = ran.clone();
+            let owner = owner.clone();
+            std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    SEND_CONTEXT
+                        .scope(SendContext::new(owner, epoch), async {
+                            started.wait();
+                            AccountTokens.forget_device_key_if_current(&|| {
+                                ran.store(true, std::sync::atomic::Ordering::SeqCst);
+                            });
+                        })
+                        .await;
+                });
+            })
+        };
+        crate::relay::with_device_key_lock(|| {
+            started.wait();
+            // the worker is inside its call now, blocked on this lock. The epoch moves — the
+            // newer session's sign-in — before the lock is released.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            crate::session_epoch::set(epoch + 1);
+        });
+        worker.join().unwrap();
+        assert!(
+            !ran.load(std::sync::atomic::Ordering::SeqCst),
+            "the epoch moved while the forget waited on the lock: it must not run"
+        );
+        // positive control: with the epoch unmoved the same call forgets
+        crate::session_epoch::set(epoch);
+        let control_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let control = control_ran.clone();
+        SEND_CONTEXT
+            .scope(SendContext::new(owner, epoch), async {
+                AccountTokens.forget_device_key_if_current(&move || {
+                    control.store(true, std::sync::atomic::Ordering::SeqCst);
+                });
+            })
+            .await;
+        assert!(
+            control_ran.load(std::sync::atomic::Ordering::SeqCst),
+            "positive control: an unmoved epoch forgets"
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn account_tokens_carries_the_context_epoch_onto_the_blocking_thread() {
         let _epoch_turn = crate::session_epoch::test_turn();
@@ -1792,10 +1904,12 @@ mod tests {
                 let owner = OwnerKey::of(&stored).unwrap();
                 let epoch = crate::session_epoch::current() + 7;
                 crate::session_epoch::set(epoch);
-                BEFORE_ACCOUNT_LOAD_EPOCH_RECHECK_GLOBAL
+                BEFORE_ACCOUNT_BLOCKING_WORK
                     .lock()
                     .unwrap()
                     .replace(Box::new(move || {
+                        // Between the cheap pre-check and the blocking closure: only the fixed
+                        // epoch's re-read under the account lock can catch this same-owner bump.
                         crate::session_epoch::set(epoch + 1);
                     }));
                 let context = SendContext::new(owner.clone(), epoch);
@@ -1825,6 +1939,59 @@ mod tests {
             },
         )
         .await;
+    }
+
+    /// The cheap AccountTokens epoch pre-check itself: a context already stale before the ask
+    /// never starts blocking account work. The fresh control enters it.
+    #[tokio::test(flavor = "current_thread")]
+    async fn account_tokens_stale_context_never_starts_account_work() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let _turn = turn();
+        let owner = test_owner();
+        let epoch = crate::session_epoch::current() + 3;
+        crate::session_epoch::set(epoch + 1);
+        let before = account_blocking_entrances();
+        use bir_submit::TokenSource;
+        let answer = SEND_CONTEXT
+            .scope(SendContext::new(owner.clone(), epoch), async {
+                AccountTokens.access_token(false).await
+            })
+            .await;
+        assert!(matches!(answer, Err(bir_submit::ClientError::SignedOut)));
+        assert_eq!(account_blocking_entrances(), before);
+
+        crate::session_epoch::set(epoch + 2);
+        let _answer = SEND_CONTEXT
+            .scope(SendContext::new(owner, epoch + 2), async {
+                AccountTokens.access_token(false).await
+            })
+            .await;
+        assert_eq!(account_blocking_entrances(), before + 1);
+    }
+
+    /// The real AccountTokens implementation, not a fake: device-key deletion belongs only to
+    /// the send context's epoch.
+    #[tokio::test(flavor = "current_thread")]
+    async fn account_tokens_device_key_is_current_only_in_the_context_epoch() {
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let owner = test_owner();
+        let epoch = crate::session_epoch::current() + 5;
+        crate::session_epoch::set(epoch);
+        use bir_submit::TokenSource;
+        SEND_CONTEXT
+            .scope(SendContext::new(owner.clone(), epoch), async {
+                assert!(AccountTokens.device_key_is_current());
+            })
+            .await;
+        crate::session_epoch::set(epoch + 1);
+        SEND_CONTEXT
+            .scope(SendContext::new(owner, epoch), async {
+                assert!(
+                    !AccountTokens.device_key_is_current(),
+                    "a stale send context still owns the device key"
+                );
+            })
+            .await;
     }
 
     #[test]

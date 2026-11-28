@@ -103,6 +103,19 @@ pub trait TokenSource: Send + Sync {
     fn device_key_is_current(&self) -> bool {
         true
     }
+    /// The check and the forget as ONE step (C5): `forget` runs only when the deletion still
+    /// belongs to the session that asked — in hosts with per-session sends inside the device-key
+    /// lock with the epoch re-checked there, so a key registered after the epoch moved is never
+    /// taken by the old session's forget. Returns whether the forget ran. The default is the
+    /// bare pair, correct for single-session clients: no second session can register meanwhile.
+    fn forget_device_key_if_current(&self, forget: &dyn Fn()) -> bool {
+        if self.device_key_is_current() {
+            forget();
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -189,6 +202,10 @@ pub enum ClientError {
     /// never see it. Not a try, never tried again by itself.
     #[error("Sign out and sign in again on this device.")]
     InstallInUse,
+    /// The account credential or its store failed. This is account evidence,
+    /// never evidence about the submission being settled.
+    #[error("{0}")]
+    Account(String),
     #[error("{0}")]
     Other(String),
     /// The server says this was not a try and nothing reached the BIR: a
@@ -583,6 +600,28 @@ impl Submitter {
         device_key_or_create(self.store.as_ref())
     }
 
+    /// C5: the check-then-delete as one step through the token source — in production the
+    /// forget runs inside the device-key lock with the epoch re-checked there, so a send of a
+    /// session that ended mid-call never deletes the newer session's key.
+    fn forget_device_if_current(&self) -> Result<(), ClientError> {
+        let error = std::sync::Mutex::new(None);
+        self.tokens.forget_device_key_if_current(&|| {
+            if let Err(forget_error) = self.forget_device() {
+                *error
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(forget_error);
+            }
+        });
+        if let Some(forget_error) = error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take()
+        {
+            return Err(forget_error);
+        }
+        Ok(())
+    }
+
     /// Forgets this device's key and id, and the TIN list: a new sign-in
     /// registers a new key. The host calls it on sign-in and sign-out.
     pub fn forget_device(&self) -> Result<(), ClientError> {
@@ -709,15 +748,11 @@ impl Submitter {
                 Err(ClientError::Server {
                     status: 401, code, ..
                 }) if code == "unknown_device" && !registered_again => {
-                    if self.tokens.device_key_is_current() {
-                        self.forget_device()?;
-                    }
+                    self.forget_device_if_current()?;
                     registered_again = true;
                 }
                 Err(ClientError::Server { code, .. }) if code == "device_revoked" => {
-                    if self.tokens.device_key_is_current() {
-                        self.forget_device()?;
-                    }
+                    self.forget_device_if_current()?;
                     self.tokens.session_ended();
                     return Err(ClientError::DeviceRevoked);
                 }
@@ -1142,8 +1177,10 @@ impl Submitter {
             Err(ClientError::Server { status: 404, .. }) => return Settled::Gone,
             Err(ClientError::SignedOut) => return Settled::SignedOut,
             // A token-store failure or a second `invalid_token` is account evidence, never
-            // evidence that the submission is gone: the queue keeps the noted send.
-            Err(ClientError::Other(_)) => return Settled::SignedOut,
+            // evidence that the submission is gone: the queue keeps the noted send. Other local
+            // read failures (an unreadable answer, a failed task join) say nothing about either.
+            Err(ClientError::Account(_)) => return Settled::SignedOut,
+            Err(ClientError::Other(_)) => return Settled::NotYet,
             Err(ClientError::Server {
                 status: 401,
                 ref code,
@@ -3465,6 +3502,48 @@ mod tests {
         assert!(seen.lock().unwrap().is_empty());
     }
 
+    /// Other local read failures — a captive portal answering invalid JSON, or token work that
+    /// cannot be joined — say nothing about the account or the submission, so the queue asks again.
+    #[tokio::test]
+    async fn settle_retries_local_failures_that_are_not_account_evidence() {
+        let unreadable = Answer {
+            status: 200,
+            headers: Vec::new(),
+            body: "<html>captive portal</html>".into(),
+        };
+        assert_eq!(settle_word(unreadable, true).await, "not yet");
+
+        struct JoinFailure;
+        impl TokenSource for JoinFailure {
+            fn access_token(
+                &self,
+                _force_refresh: bool,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
+            > {
+                Box::pin(async { Err(ClientError::Other("join failed".into())) })
+            }
+            fn login(&self) -> Option<String> {
+                Some("user".into())
+            }
+            fn session_ended(&self) {}
+        }
+        let client = Submitter::new(
+            SubmitConfig::new("http://127.0.0.1:9").unwrap(),
+            Box::new(crate::secrets::MemoryStore::default()),
+            std::sync::Arc::new(JoinFailure),
+        );
+        let pending = PendingSend {
+            server: client.config().server_url.clone(),
+            submission_id: "s1".into(),
+            jti: "jti-1".into(),
+            xml_sha256: xml_hash(),
+            opening: true,
+            noted_at: Utc::now(),
+        };
+        assert!(matches!(client.settle(&pending).await, Settled::NotYet));
+    }
+
     /// F3: a token-store failure is account evidence, never evidence that a noted send is gone.
     #[tokio::test]
     async fn settle_keeps_a_send_when_the_token_store_fails() {
@@ -3476,7 +3555,7 @@ mod tests {
             ) -> std::pin::Pin<
                 Box<dyn std::future::Future<Output = Result<String, ClientError>> + Send + '_>,
             > {
-                Box::pin(async { Err(ClientError::Other("the account store failed".into())) })
+                Box::pin(async { Err(ClientError::Account("the account store failed".into())) })
             }
             fn login(&self) -> Option<String> {
                 Some("user".into())

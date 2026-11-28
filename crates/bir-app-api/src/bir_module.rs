@@ -43,7 +43,17 @@ thread_local! {
 /// does not start the submission worker, except to finish a launch that found
 /// the database held ([`open_database_at_launch`]) once the gate is open.
 /// Cloud-account settings use this while the filing UI is still locked.
-fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+pub(crate) fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError>
+{
+    open_database_slot_for(&crate::session::snapshot())
+}
+
+/// P3: the one-snapshot open. The caller's OWN session snapshot decides the room — a verb that
+/// already snapshotted the machine passes it in, so an Opening→Open racing the read can never
+/// pair the old owner and epoch with the new room.
+pub(crate) fn open_database_slot_for(
+    session: &crate::session::Snap,
+) -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
     // A test's ephemeral injection, or this thread's already-open single-room handle, first: rooms
     // mode never populates the thread-local slot, so a filled one is never a room's stale twin.
     if let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) {
@@ -59,7 +69,8 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
     }
     // A3a (§A.4): the open room is the slot, read from the machine. The handle is never replaced
     // inside an old Arc; a new room is a new Arc with a new generation, and the reader follows it.
-    if let Some((handle, generation, _, _)) = crate::session::snapshot().room {
+    if let Some((handle, generation, _, _)) = &session.room {
+        let (handle, generation) = (handle.clone(), *generation);
         if READER_GENERATION.with(std::cell::Cell::get) != generation {
             // F15: a poisoned room mutex must not keep the old reader — recover the guard and
             // reinstall; the database behind a poisoned lock is still the room's one connection.
@@ -338,8 +349,9 @@ pub(crate) fn ensure_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
 }
 
 #[cfg(test)]
-static ROOM_SOURCE_AFTER_SNAPSHOT: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>> =
-    std::sync::Mutex::new(None);
+static ROOM_SOURCE_AFTER_SNAPSHOT: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<u64, Box<dyn FnOnce() + Send>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
 /// The submission worker's rooms-mode source. Every tick's room Arc, owner and epoch are read
 /// from ONE machine snapshot; nothing is re-read from the newer session afterwards.
@@ -350,7 +362,7 @@ fn session_room_source() -> bir_core::background_cron::RoomSource {
         ROOM_SOURCE_AFTER_SNAPSHOT
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
+            .remove(&snap.epoch)
             .map(|hook| hook());
         if !matches!(
             snap.phase_kind,
@@ -4015,12 +4027,12 @@ mod tests {
         .unwrap();
         let before = crate::session::snapshot();
         let source = session_room_source();
-        ROOM_SOURCE_AFTER_SNAPSHOT
-            .lock()
-            .unwrap()
-            .replace(Box::new(|| {
+        ROOM_SOURCE_AFTER_SNAPSHOT.lock().unwrap().insert(
+            before.epoch,
+            Box::new(|| {
                 crate::session::reset_for_tests();
-            }));
+            }),
+        );
         let tick = source().expect("the snapshot's open room makes a tick");
         assert_eq!(tick.epoch, before.epoch, "the epoch was read again");
         assert_eq!(

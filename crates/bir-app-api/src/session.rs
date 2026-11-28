@@ -6037,6 +6037,43 @@ mod tests {
         );
     }
 
+    /// C1: the forget's epoch gate, discriminating — a close whose epoch has MOVED forgets
+    /// nothing. The production primitive is called the way the close calls it: the recorded
+    /// epoch stale versus current. Positive control: the current epoch really forgets.
+    #[test]
+    fn a_forget_whose_epoch_moved_deletes_nothing() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        write_device_key(&scratch, "key-of-a", Some((&owner_a.origin, "user-a")));
+        let epoch = bir_core::session_epoch::current();
+        // the stale close: its epoch moved on before the forget ran — the key is the newer
+        // session's now and survives
+        bir_core::relay::forget_device_key_at_epoch(
+            &bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            epoch.wrapping_sub(1),
+        );
+        assert!(
+            !device_key_files(&scratch).is_empty(),
+            "a forget whose epoch moved must delete nothing"
+        );
+        // positive control: the current epoch really forgets
+        bir_core::relay::forget_device_key_at_epoch(
+            &bir_core::account_session::OwnerKey {
+                origin: owner_a.origin.clone(),
+                user_id: owner_a.user_id.clone(),
+            },
+            bir_core::session_epoch::current(),
+        );
+        assert!(
+            device_key_files(&scratch).is_empty(),
+            "positive control: the current epoch forgets"
+        );
+    }
+
     /// a_replace_by_another_owner_forgets_the_old_key_only_if_no_newer_epoch: B replacing A
     /// forgets A's key (check-and-delete under DEVICE_KEY, epoch-sequenced) — unless a newer
     /// epoch answered first.

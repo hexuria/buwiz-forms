@@ -1,3 +1,22 @@
+/// F9: a notice raised by a job of one session must never show after the session moved —
+/// the banner would tell B about A's filing. The job's captured epoch rides its SEND_CONTEXT
+/// (scoped at the spawn); a mismatch posts NOTHING. The alert row is not here — it is the
+/// filing record the same code writes into the job's own room either way. Outside a job's
+/// context (the interactive paths) there is no gate.
+pub(crate) fn send_notice(title: &str, body: &str) {
+    let stale = crate::account_session::SEND_CONTEXT
+        .try_with(|context| context.epoch != crate::session_epoch::current())
+        .unwrap_or(false);
+    if stale {
+        tracing::info!(
+            title,
+            "a notice of the previous session posts nothing after the switch"
+        );
+        return;
+    }
+    crate::notification::send_notification(title, body);
+}
+
 use crate::db::{Claim1601CSubmissionResult, Claim2551QSubmissionResult, Database};
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::Form2551QDraft;
@@ -1677,7 +1696,7 @@ fn finish_sent_queueable<F: QueueableForm>(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    send_notice(&notice_title, &notice_body);
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
@@ -2192,7 +2211,7 @@ fn finish_sent_2551q(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    send_notice(&notice_title, &notice_body);
     // Keep the exact bytes that were encrypted for PUT.
     if let Some(xml_payload) = xml_payload {
         draft.submitted_payload = Some(xml_payload);
@@ -2419,6 +2438,13 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(test)]
+static BEFORE_JOB_SESSION_CHECK: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
+#[cfg(test)]
+static SEND_EPOCH_REFUSALS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(test)]
+static JOB_SESSION_REFUSALS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 async fn process_submission_queue(
     profile: &TaxpayerProfile,
     db: Arc<Mutex<Database>>,
@@ -2506,6 +2532,8 @@ async fn process_submission_queue(
         #[cfg(test)]
         BEFORE_SEND_EPOCH_CHECK.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
         if crate::session_epoch::current() != epoch_at_spawn {
+            #[cfg(test)]
+            SEND_EPOCH_REFUSALS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             warn!(
                 "Cron: the session changed before this send was queued; the return stays queued for its own account's next tick"
             );
@@ -2525,9 +2553,17 @@ async fn process_submission_queue(
             .map(|owner| crate::account_session::SendContext::new(owner, epoch_at_spawn));
         spawn_job(cleanup, async move {
             let job = async move {
+                #[cfg(test)]
+                BEFORE_JOB_SESSION_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .take()
+                    .map(|hook| hook());
                 let owner_now = crate::account_session::stored_owner();
                 if owner_now != owner_at_spawn || crate::session_epoch::current() != epoch_at_spawn
                 {
+                    #[cfg(test)]
+                    JOB_SESSION_REFUSALS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     warn!(
                         "Cron: the session changed since this send was queued; the return stays queued for its own account's next tick"
                     );
@@ -2781,7 +2817,7 @@ fn finish_sent_1601c(
         &chrono::Local::now(),
         skip_email_poll,
     );
-    crate::notification::send_notification(&notice_title, &notice_body);
+    send_notice(&notice_title, &notice_body);
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
@@ -3369,6 +3405,16 @@ pub fn queue_transport_test_turn_blocking() -> tokio::sync::MutexGuard<'static, 
 }
 
 #[cfg(test)]
+fn send_epoch_refusals() -> u64 {
+    SEND_EPOCH_REFUSALS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+#[cfg(test)]
+fn job_session_refusals() -> u64 {
+    JOB_SESSION_REFUSALS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+#[cfg(test)]
 mod tests {
     use super::{queue_transport_test_turn, queue_transport_test_turn_blocking};
 
@@ -3448,6 +3494,50 @@ mod tests {
     /// F7, the send across a switch through the cron's production spawn wiring and a transport
     /// that really asks AccountTokens: after the machine's sign-in transition the return stays
     /// Queued, the transport is never opened, and neither account's token is fetched.
+    /// F9: a notice raised by a job of A's epoch after the switch to B posts NOTHING; the same
+    /// job before the switch posts (the positive control, so a silent notification layer can't
+    /// pass). The alert row is the filing record the job writes either way — the gate is only
+    /// over what is SHOWN.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_notice_of_the_old_epoch_posts_nothing_after_the_switch() {
+        use crate::account_session::{OwnerKey, SEND_CONTEXT, SendContext};
+        let _turn = crate::session_epoch::test_turn();
+        crate::notification::POSTED_TITLES
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
+        let owner = OwnerKey {
+            origin: "localhost:3008".into(),
+            user_id: "user-a".into(),
+        };
+        let epoch = crate::session_epoch::current() + 1;
+        crate::session_epoch::set(epoch);
+        SEND_CONTEXT
+            .scope(SendContext::new(owner.clone(), epoch), async {
+                // positive control: the same job BEFORE the switch posts
+                crate::background_cron::send_notice("control-title", "body");
+                assert!(
+                    crate::notification::POSTED_TITLES
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .contains(&"control-title".to_owned()),
+                    "positive control: before the switch the notice posts"
+                );
+                // the switch: the epoch moves, the job's context does not
+                crate::session_epoch::set(epoch + 1);
+                crate::background_cron::send_notice("stale-title", "body");
+                assert!(
+                    !crate::notification::POSTED_TITLES
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .contains(&"stale-title".to_owned()),
+                    "the old epoch's notice posts nothing after the switch"
+                );
+            })
+            .await;
+        crate::session_epoch::set(epoch);
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_before_a_switch_is_never_sent_under_the_new_sign_in() {
         let _queue_turn = queue_transport_test_turn().await;
@@ -3808,6 +3898,7 @@ mod tests {
                 crate::account_session::cache_owner(Some(key_a.clone()));
                 let epoch_a = crate::session_epoch::current() + 21;
                 crate::session_epoch::set(epoch_a);
+                let refusals_before = send_epoch_refusals();
                 BEFORE_SEND_EPOCH_CHECK.with(|hook| {
                     *hook.borrow_mut() = Some(Box::new(move || {
                         // Same owner, new session: the owner half cannot catch this one.
@@ -3826,9 +3917,74 @@ mod tests {
                 .await;
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 assert_eq!(
+                    send_epoch_refusals(),
+                    refusals_before + 1,
+                    "the pre-spawn epoch check did not refuse the stale send"
+                );
+                assert_eq!(
                     token_transport_counts(),
                     (0, 0),
                     "the same-owner stale epoch still opened the transport"
+                );
+                let stored = db
+                    .lock()
+                    .unwrap()
+                    .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(stored.status, FilingStatus::Queued);
+            },
+        )
+        .await;
+    }
+
+    /// The job check's epoch half alone: the same owner signs out and back in after the spawn.
+    /// The pre-spawn check has already passed, so only the check inside the job can stop the send.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_same_owner_epoch_bump_after_the_spawn_sends_nothing() {
+        let _transport_turn = queue_transport_test_turn().await;
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let _transport = use_token_transport();
+                let stored_a = cron_stored_for("user-a");
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let key_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(key_a.clone()));
+                let epoch_a = crate::session_epoch::current() + 41;
+                crate::session_epoch::set(epoch_a);
+                let refusals_before = job_session_refusals();
+                *BEFORE_JOB_SESSION_CHECK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(Box::new(move || {
+                    crate::session_epoch::set(epoch_a + 1);
+                }));
+                let db = test_db();
+                let (queued, _summary) = stored_queued_2551q(&db);
+                process_submission_queue(
+                    &reviewed_profile(),
+                    db.clone(),
+                    FIXED_ROOM_KEY,
+                    Some(key_a),
+                    epoch_a,
+                )
+                .await;
+                wait_for_no_active_jobs().await;
+                assert_eq!(
+                    job_session_refusals(),
+                    refusals_before + 1,
+                    "the in-job epoch check did not refuse the stale send"
+                );
+                assert_eq!(
+                    token_transport_counts(),
+                    (0, 0),
+                    "the same-owner post-spawn stale epoch still opened the transport"
                 );
                 let stored = db
                     .lock()
