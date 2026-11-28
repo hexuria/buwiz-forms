@@ -1428,7 +1428,10 @@ fn is_formatted_money_amount(value: &str) -> bool {
     if s.is_empty() || !s.bytes().any(|b| b.is_ascii_digit()) {
         return false;
     }
-    if !s.bytes().all(|b| b.is_ascii_digit() || matches!(b, b',' | b'.')) {
+    if !s
+        .bytes()
+        .all(|b| b.is_ascii_digit() || matches!(b, b',' | b'.'))
+    {
         return false;
     }
     // The centavos are the money signal: exactly two digits after a point
@@ -1436,9 +1439,8 @@ fn is_formatted_money_amount(value: &str) -> bool {
     // whole-peso string instead prints comma-grouped through
     // `official_amount()`, so past three places without a comma it is a
     // reference or an identifier, never money.
-    let digits_or_commas = |whole: &str| {
-        !whole.is_empty() && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
-    };
+    let digits_or_commas =
+        |whole: &str| !whole.is_empty() && whole.bytes().all(|b| b.is_ascii_digit() || b == b',');
     match s.split_once('.') {
         Some((whole, cents)) => {
             digits_or_commas(whole) && cents.len() == 2 && cents.bytes().all(|b| b.is_ascii_digit())
@@ -7379,15 +7381,19 @@ fn is_section_band_heading(text: &str) -> bool {
                 .chars()
                 .next()
                 .is_none_or(|c| !c.is_ascii_alphabetic());
-            let trimmed = after
-                .trim_start_matches(|c: char| c.is_whitespace() || matches!(c, '-' | '\u{2013}' | '(' | ')'));
+            let trimmed = after.trim_start_matches(|c: char| {
+                c.is_whitespace() || matches!(c, '-' | '\u{2013}' | '(' | ')')
+            });
             let carries_numeral = if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) {
                 true
             } else {
                 // A standalone roman numeral: the roman run ends at a
                 // non-letter, so "Item IV" counts but "Schedule of Items"
                 // or "Installment" never do.
-                let run = trimmed.len() - trimmed.trim_start_matches(['i', 'v', 'x', 'l', 'c', 'd', 'm']).len();
+                let run = trimmed.len()
+                    - trimmed
+                        .trim_start_matches(['i', 'v', 'x', 'l', 'c', 'd', 'm'])
+                        .len();
                 run > 0
                     && !trimmed[run..]
                         .chars()

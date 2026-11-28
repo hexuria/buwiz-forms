@@ -24,8 +24,8 @@ fn write_uniform_section_renders() {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        let html = bir_print::frozen_html::filled_document_with_receipt(slug, &map, None)
-            .expect("render");
+        let html =
+            bir_print::frozen_html::filled_document_with_receipt(slug, &map, None).expect("render");
         bir_app_api::static_html::staticize(&bir_app_api::print_sheet::prepare_html_for(
             slug, &html, true,
         ))
@@ -67,7 +67,11 @@ fn write_uniform_section_renders() {
     use bir_core::forms::queueable::QueueableForm;
     let mut draft = Form1701Draft::new_from_profile(&profile, 2025, 12);
     for item in 1u8..=10 {
-        let amount = if item == 2 { 1_234_567_890.0 } else { 1_000_000.0 };
+        let amount = if item == 2 {
+            1_234_567_890.0
+        } else {
+            1_000_000.0
+        };
         draft.set_amount(
             Form1701AmountSection::PartVii,
             item,
@@ -81,7 +85,9 @@ fn write_uniform_section_renders() {
     std::fs::write(
         root.join(format!("{tag}-1701-part4-overflow.html")),
         bir_app_api::static_html::staticize(&bir_app_api::print_sheet::prepare_html_for(
-            "1701-2018", &html, true,
+            "1701-2018",
+            &html,
+            true,
         )),
     )
     .unwrap();
