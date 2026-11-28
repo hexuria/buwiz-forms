@@ -173,7 +173,7 @@ pub(crate) fn sync_taxpayer_rows(conn: &Connection) -> std::result::Result<(), D
             ],
         )?;
         tracing::info!(
-            tin_root = %root,
+            tin_root = %crate::logging::tin_for_log(&root),
             branches = profiles.len(),
             source_profile_id = source.id,
             "Grouped existing profiles under one taxpayer"

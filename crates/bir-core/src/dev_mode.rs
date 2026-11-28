@@ -780,7 +780,7 @@ pub fn maybe_auto_confirm(
     match simulate_bir_confirmation(db, submission_filename) {
         Ok(outcome) => tracing::info!(
             ?outcome,
-            file = submission_filename,
+            file = %crate::logging::submission_filename_for_log(submission_filename),
             "Dev Mode auto-confirm"
         ),
         Err(error) => tracing::warn!(%error, "Dev Mode auto-confirm failed"),

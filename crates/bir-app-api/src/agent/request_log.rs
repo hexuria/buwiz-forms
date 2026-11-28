@@ -14,7 +14,7 @@ pub fn log_requests_enabled() -> bool {
 
 pub fn emit_request_log(req: &Request, resp: &Response) {
     if let Some(line) = request_log_line(req, resp) {
-        eprintln!("{line}");
+        bir_core::logging::redacted_stderr(&line);
     }
 }
 
@@ -70,7 +70,7 @@ pub fn format_request_log_line(
     line.push(' ');
     line.push_str(status);
     if !ok && let Some(error) = error {
-        let short = short_error(error);
+        let short = bir_core::logging::redact_external_text_for_log(&short_error(error));
         if !short.is_empty() {
             line.push_str(" error=");
             line.push_str(&short);
@@ -226,6 +226,21 @@ mod tests {
         assert!(!shot.contains("/Users/uri"), "{shot}");
         assert!(shot.contains("ok=false"), "{shot}");
         assert!(shot.contains("error=screenshot_unavailable"), "{shot}");
+    }
+
+    #[test]
+    fn error_text_is_redacted_before_the_line_is_written() {
+        let line = format_request_log_line(
+            "ts",
+            "id6",
+            &Op::Hello,
+            false,
+            Some("no taxpayer profile for 1234567890000; write payroll.team@example.com"),
+        );
+        assert!(!line.contains("1234567890000"), "{line}");
+        assert!(line.contains("***-***-789-0000"), "{line}");
+        assert!(!line.contains("payroll.team@example.com"), "{line}");
+        assert!(line.contains("pa•••@example.com"), "{line}");
     }
 
     #[test]

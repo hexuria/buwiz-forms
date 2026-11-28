@@ -144,7 +144,7 @@ impl ImapAuthenticator for GoogleOAuthAuth {
         ) {
             Ok(session) => Ok((session, None)),
             Err((err, client)) => {
-                let error_msg = format!("{:?}", err);
+                let error_msg = crate::logging::redact_secrets(&format!("{:?}", err));
                 warn!(
                     "XOAUTH2 authentication failed for {}: {}. Attempting to refresh access token...",
                     self.email, error_msg

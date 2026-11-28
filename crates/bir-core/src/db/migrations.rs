@@ -729,7 +729,10 @@ fn infer_v22_access_mode(conn: &Connection) -> Result<(), DbError> {
     if let Some(root) = owner {
         put("access_mode", "solo")?;
         put("admin_tin_root", &root)?;
-        info!("v22 migration: access mode solo, owner {}", root);
+        info!(
+            "v22 migration: access mode solo, owner {}",
+            crate::logging::tin_for_log(&root)
+        );
     }
     Ok(())
 }
