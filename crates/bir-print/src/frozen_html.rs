@@ -17071,16 +17071,32 @@ mod donor_estate_print_tests {
             // left edge on a divider's left x, the right edge on a divider's
             // right x (vx + vw) — reading only dividers that overlap the
             // strip's own y range (F9).
+            // Divider candidates must be the sheet's own line work: every
+            // rect inside a `<g class="layer-rule6">` group is the strip
+            // layer's redraw (the strip's side edges included) and never
+            // counts — otherwise the test is tautological.
+            let mut layer_spans: Vec<(usize, usize)> = Vec::new();
+            for g in doc.match_indices("<g class=\"layer-rule6\">") {
+                let body = g.0;
+                let end = doc[body..]
+                    .find("</g>")
+                    .map(|e| body + e)
+                    .unwrap_or(doc.len());
+                layer_spans.push((body, end));
+            }
             let mut dividers: Vec<(f64, f64, f64, f64)> = Vec::new();
             for m in doc.match_indices("<rect ") {
                 let start = m.0;
+                if layer_spans
+                    .iter()
+                    .any(|&(lo, hi)| start >= lo && start < hi)
+                {
+                    continue;
+                }
                 let Some(e) = doc[start..].find('>') else {
                     break;
                 };
                 let tag = &doc[start..start + e + 1];
-                if tag.contains("layer-rule6") {
-                    continue;
-                }
                 let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
                 if let (Some(x), Some(y), Some(w), Some(h)) =
                     (num("x"), num("y"), num("width"), num("height"))
