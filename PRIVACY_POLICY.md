@@ -149,7 +149,7 @@ return can move to Confirmed and Paid on its own. You connect the mailbox with a
 Gmail, an app password from your Google account, which needs 2-Step Verification). An app password lets the app sign
 in to your whole mailbox, as a mail program does. The app opens only the inbox and reads only messages from
 `ebirforms-noreply@bir.gov.ph`, and does not change them. Outlook.com, Hotmail, Live and Microsoft 365 mailboxes
-cannot be used: Microsoft does not accept a password for this kind of access.
+cannot be used: Microsoft accepts only its own sign-in for this kind of access, not a password or an app password.
 
 Version 0.2 also offered **Google sign-in**. Version 1.0.0 does not: an inbox connected that way says so, and you can
 switch it to an app password or disconnect it. If Google sign-in returns in a later version, this policy will
