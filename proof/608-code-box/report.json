@@ -1,0 +1,127 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "608-code-box-type",
+  "fingerprint": "fnv1a64:97b66890b0a958a3",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 107,
+      "screenshot": {
+        "path": "final2/shots/001-s1.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 438
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 11
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 541
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 416
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 91,
+      "screenshot": {
+        "path": "final2/shots/006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 576,
+      "screenshot": {
+        "path": "final2/shots/007-s7.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 12
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 409
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 14
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 549
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 465
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 10
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 467
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 115,
+      "screenshot": {
+        "path": "final2/shots/015-s15.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "final2/shots/001-s1.png",
+      "ok": true
+    },
+    {
+      "path": "final2/shots/006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "final2/shots/007-s7.png",
+      "ok": true
+    },
+    {
+      "path": "final2/shots/015-s15.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 4227
+}

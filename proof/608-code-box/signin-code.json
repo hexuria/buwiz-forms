@@ -1,0 +1,96 @@
+{
+ "v": 1,
+ "name": "608-code-box-type",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "wait_until",
+   "target": "gate-start",
+   "timeout_ms": 15000,
+   "screenshot": true
+  },
+  {
+   "id": "s2",
+   "op": "click",
+   "target": "gate-start-continue"
+  },
+  {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "gate-email-page",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s4",
+   "op": "type",
+   "target": "gate-email",
+   "text": "account-a@example.com"
+  },
+  {
+   "id": "s5",
+   "op": "click",
+   "target": "gate-continue"
+  },
+  {
+   "id": "s6",
+   "op": "wait_until",
+   "target": "gate-code-page",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "s7",
+   "op": "type",
+   "target": "gate-code-boxes",
+   "text": "246810",
+   "screenshot": true
+  },
+  {
+   "id": "s8",
+   "op": "wait_until",
+   "target": "setup-card",
+   "timeout_ms": 20000
+  },
+  {
+   "id": "s9",
+   "op": "click",
+   "target": "setup-helpdesk"
+  },
+  {
+   "id": "s10",
+   "op": "wait_until",
+   "target": "setup-pin-card",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s11",
+   "op": "type",
+   "target": "setup-admin-pin",
+   "text": "1234"
+  },
+  {
+   "id": "s12",
+   "op": "click",
+   "target": "setup-pin-submit"
+  },
+  {
+   "id": "s13",
+   "op": "wait_until",
+   "target": "setup-key-card",
+   "timeout_ms": 8000
+  },
+  {
+   "id": "s14",
+   "op": "click",
+   "target": "setup-key-done"
+  },
+  {
+   "id": "s15",
+   "op": "wait_until",
+   "target": "home-welcome",
+   "timeout_ms": 20000,
+   "screenshot": true
+  }
+ ]
+}
