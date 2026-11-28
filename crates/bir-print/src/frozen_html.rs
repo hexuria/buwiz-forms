@@ -1419,16 +1419,33 @@ fn with_font_size(tag: &str, size: f64) -> String {
 /// `formatCurrency()`. Bare integers, TINs, ZIPs, dates, and `%` rates return false.
 fn is_formatted_money_amount(value: &str) -> bool {
     let s = value.trim();
-    let s = s.strip_prefix('-').unwrap_or(s);
-    let Some((whole, cents)) = s.split_once('.') else {
-        return false;
+    // Bracketed negatives are money too: `(1,234.00)` and `(500)`.
+    let s = if let Some(inner) = s.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
+        inner.trim()
+    } else {
+        s.strip_prefix('-').unwrap_or(s)
     };
-    if cents.len() != 2 || !cents.bytes().all(|b| b.is_ascii_digit()) {
+    if s.is_empty() || !s.bytes().any(|b| b.is_ascii_digit()) {
         return false;
     }
-    !whole.is_empty()
-        && whole.bytes().any(|b| b.is_ascii_digit())
-        && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+    if !s.bytes().all(|b| b.is_ascii_digit() || matches!(b, b',' | b'.')) {
+        return false;
+    }
+    // The centavos are the money signal: exactly two digits after a point
+    // is never a reference, whether or not the pesos carry commas. A bare
+    // whole-peso string instead prints comma-grouped through
+    // `official_amount()`, so past three places without a comma it is a
+    // reference or an identifier, never money.
+    let digits_or_commas = |whole: &str| {
+        !whole.is_empty() && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+    };
+    match s.split_once('.') {
+        Some((whole, cents)) => {
+            digits_or_commas(whole) && cents.len() == 2 && cents.bytes().all(|b| b.is_ascii_digit())
+        }
+        // Whole-peso sheets (1701, 1701Q, 1702…) print no point at all.
+        None => digits_or_commas(s) && (s.len() <= 3 || s.contains(',')),
+    }
 }
 
 /// Whether `value` is a formatted whole-peso amount (`0`, `1,234`, `-500`, `(500)`).
@@ -7132,6 +7149,7 @@ struct CombGeom {
     x: f64,
     y: f64,
     cap: u32,
+    width: f64,
 }
 
 /// The sheet page a cell id belongs to: `p4c66` is on page `p4`. Ids of
@@ -7187,6 +7205,7 @@ fn comb_geometries(html: &str) -> Vec<CombGeom> {
             x,
             y,
             cap,
+            width: parse_style_pt(tag, "width").unwrap_or(f64::from(cap) * 5.5),
         });
     }
     out
@@ -7206,6 +7225,10 @@ fn section_headings(html: &str) -> Vec<(String, f64, String)> {
         let tag = &html[open..end];
         let close = html[end..].find("</div>").map(|c| end + c);
         from = end + 1;
+        // A band inside a `<template>` is the cloning master, never printed.
+        if inside_template(html, open) {
+            continue;
+        }
         let (Some(id), Some(y), Some(close)) = (attr(tag, "id"), parse_style_pt(tag, "top"), close)
         else {
             continue;
@@ -7240,6 +7263,9 @@ fn section_headings(html: &str) -> Vec<(String, f64, String)> {
         let tag = &html[open..end];
         let close = html[end..].find("</div>").map(|c| end + c);
         from2 = end + 1;
+        if inside_template(html, open) {
+            continue;
+        }
         let (Some(id), Some(y), Some(x), Some(close)) = (
             attr(tag, "id"),
             parse_style_pt(tag, "top"),
@@ -7338,9 +7364,38 @@ fn is_section_band_heading(text: &str) -> bool {
     // ("Schedule 2 Item 4A and Part VII Item 5A" is a note inside Schedule 1
     // of 1701, not a band).
     let tail = &lower[lower.len() - rest.len()..];
+    // Only a mention that itself carries a numeral is a cross-reference:
+    // "Schedule 3 – Schedule of Cost and Other Allowable Expenses" is the
+    // band of Schedule 3 (its title repeats the bare word), while "(from
+    // Part IV-Schedule 1, Item 4)" points at another section's rows.
     let body_mention = ["item", "part", "schedule"].iter().any(|word| {
-        tail.split(|c: char| !c.is_ascii_alphabetic())
-            .any(|w| w == *word)
+        tail.match_indices(word).any(|(at, _)| {
+            let before_ok = tail[..at]
+                .chars()
+                .last()
+                .is_none_or(|c| !c.is_ascii_alphabetic());
+            let after = &tail[at + word.len()..];
+            let after_boundary = after
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_ascii_alphabetic());
+            let trimmed = after
+                .trim_start_matches(|c: char| c.is_whitespace() || matches!(c, '-' | '\u{2013}' | '(' | ')'));
+            let carries_numeral = if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                true
+            } else {
+                // A standalone roman numeral: the roman run ends at a
+                // non-letter, so "Item IV" counts but "Schedule of Items"
+                // or "Installment" never do.
+                let run = trimmed.len() - trimmed.trim_start_matches(['i', 'v', 'x', 'l', 'c', 'd', 'm']).len();
+                run > 0
+                    && !trimmed[run..]
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_alphabetic())
+            };
+            before_ok && after_boundary && carries_numeral
+        })
     });
     !body_mention
 }
@@ -7384,7 +7439,11 @@ fn text_lines(html: &str) -> Vec<(String, f64, f64, f64)> {
         let inner = &html[end + 1..close];
         let mut len = inner.len() as f64;
         let mut rest = inner;
+        let mut inner_text_has_letter = false;
         while let Some(lt) = rest.find('<') {
+            if rest[..lt].bytes().any(|b| b.is_ascii_alphabetic()) {
+                inner_text_has_letter = true;
+            }
             match rest[lt..].find('>') {
                 Some(gt) => {
                     len -= (gt + 1) as f64;
@@ -7393,12 +7452,22 @@ fn text_lines(html: &str) -> Vec<(String, f64, f64, f64)> {
                 None => break,
             }
         }
+        if rest.bytes().any(|b| b.is_ascii_alphabetic()) {
+            inner_text_has_letter = true;
+        }
         let size = tag
             .split("font-size:")
             .nth(1)
             .and_then(|s| s.split("pt").next())
             .and_then(|s| s.trim().parse::<f64>().ok())
             .unwrap_or(8.0);
+        // Only lettered lines split a column: the pre-printed zeros and
+        // percent signs of rate boxes sit inside the comb's width, and no
+        // column header is a bare digit or punctuation mark (1702EX page 2
+        // split at the rate row's printed `0`s otherwise).
+        if len > 0.0 && !inner_text_has_letter {
+            continue;
+        }
         // Arimo sets about half its point size per character.
         let width = len * size * 0.5;
         out.push((cell_page_key(id), y, x, x + width));
@@ -7435,8 +7504,10 @@ fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
     for (page, _, mut column) in columns {
         column.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
         // A text line overlapping the column's x between two rows breaks the
-        // group: cells are narrow, and a header centred over the column
-        // starts within about a comb width of its left edge.
+        // group. The window is the cell's real printed width (170-182 pt on
+        // the wide combs): a header centred over the column starts inside
+        // it, while a row label's tail ends left of the column and never
+        // splits it.
         let col_x = column[0].x;
         let mut current: Vec<String> = Vec::new();
         let mut prev_y: Option<f64> = None;
@@ -7445,7 +7516,7 @@ fn amount_column_groups(html: &str) -> Vec<Vec<String>> {
                 // A column header sits OVER its column: it starts inside
                 // the comb's own horizontal span. A row label or a marginal
                 // note comes from the left margin and never splits anything.
-                let comb_right = col_x + f64::from(geom.cap) * 5.5;
+                let comb_right = col_x + geom.width;
                 let crossed = lines.iter().any(|(lp, ly, lx0, _lx1)| {
                     *lp == page
                         && *ly > py + 1.0
@@ -8214,6 +8285,14 @@ no bundle
                     joined.insert(c.peso_html_id.as_str(), join.writer_key.as_str());
                 }
             }
+            // Ordinary text joins write amounts too whenever their cell is a
+            // comb (1702q, 1701a, 1700 fill every amount this way): without
+            // them the audit's key column read blank for whole sheets.
+            for (key, ids) in &cells.joins {
+                for id in ids {
+                    joined.entry(id.as_str()).or_insert(key.as_str());
+                }
+            }
             let groups = amount_column_groups(loaded.html);
             let n_amount = groups
                 .iter()
@@ -8300,6 +8379,9 @@ no bundle
             "Schedule 1 – Gross Compensation Income and Tax Withheld",
             "Part-IV",
             "part ii",
+            // 1707: the band's title repeats the bare word — still a band.
+            "Schedule 3 – Schedule of Cost and Other Allowable Expenses",
+            "Schedule 2 – Installment Sale",
         ] {
             assert!(
                 super::is_section_band_heading(yes),

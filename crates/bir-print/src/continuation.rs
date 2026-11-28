@@ -407,6 +407,12 @@ pub fn collect_truncated_entries(
             ) {
                 continue;
             }
+            // A blank row of a converted column is blanked to nothing: its
+            // empty amount-small mark carries no value, and an empty entry
+            // on the additional sheet would read as a missing figure.
+            if warning.value.is_empty() {
+                continue;
+            }
             let cell_id = warning.cell.strip_suffix("-i").unwrap_or(&warning.cell);
             let label = resolve_truncated_label(cell_id, page_slice, &cell_labels, overflow);
             entries.push(TruncatedEntry {

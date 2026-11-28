@@ -678,3 +678,80 @@ fn f1702rt_nolco_columns_split_at_their_headers() {
         "the unapplied-loss column below the headers must keep its combs"
     );
 }
+
+/// Round 4 #1: 1707's Schedule 3 band is "Schedule 3 – Schedule of Cost and
+/// Other Allowable Expenses" — the bare word in its title is no cross-reference.
+/// An overflowing Schedule 2 amount converts Schedule 2's column only.
+#[test]
+fn f1707_schedule3_stays_boxed_when_schedule2_overflows() {
+    let fields = std::collections::BTreeMap::from([
+        (
+            "frm1707:txtPg2P4Sch2TaxBaseSellPrice1".to_string(),
+            "12,345,678,901,234.56".to_string(),
+        ),
+        ("frm1707:txtPg2P4Sch3Amount1".to_string(), "1,000.00".to_string()),
+    ]);
+    let doc = filled_document("1707-2021", &fields).expect("filled");
+    assert!(
+        line_not_comb(&doc, "p2c58"),
+        "the overflowing Schedule 2 amount prints as a line"
+    );
+    assert!(
+        line_not_comb(&doc, "p2c64"),
+        "Schedule 2's column converts uniform"
+    );
+    assert!(
+        !line_not_comb(&doc, "p2c88"),
+        "Schedule 3 is its own section: its amounts keep their combs"
+    );
+    assert!(
+        !line_not_comb(&doc, "p2c107"),
+        "Schedule 3's total keeps its comb"
+    );
+}
+
+/// Round 4 #4: a non-money number — a TIN-shaped, a date-shaped or a bare
+/// reference digit string — never forces a conversion, even oversized.
+#[test]
+fn non_money_numbers_never_force_a_conversion() {
+    // 2551Q item 16's peso comb, fed a bare long digit string (reference-like,
+    // no comma grouping): the group must not convert.
+    let fields = std::collections::BTreeMap::from([(
+        "frm2551Q:txtPg1P3I16".to_string(),
+        "12345678901234".to_string(),
+    )]);
+    if let Ok(doc) = filled_document("2551q-2018", &fields) {
+        assert!(
+            !doc.contains("data-overflow-of="),
+            "a bare reference digit string is not money: nothing converts"
+        );
+    }
+}
+
+/// Round 4 #4 positive: whole-peso and bracketed amounts ARE money.
+#[test]
+fn whole_peso_and_bracketed_amounts_are_money() {
+    // 1701 Part VII is whole-peso: 10 digits in the 9-box item converts the
+    // column even without a decimal point (covered by the owner's-case test);
+    // here a bracketed negative overflow on the same column converts too.
+    let profile = demo_profile();
+    let mut d = Form1701Draft::new_from_profile(&profile, 2025, 12);
+    for item in 1u8..=10 {
+        d.set_amount(
+            Form1701AmountSection::PartVii,
+            item,
+            Form1701Party::Taxpayer,
+            Some(1_000.0),
+        );
+    }
+    d.set_amount(Form1701AmountSection::PartVii, 2, Form1701Party::Taxpayer, Some(-1_234_567_890.0));
+    let doc = filled_document("1701-2018", &d.print_field_map()).expect("filled");
+    assert!(
+        line_not_comb(&doc, "p4c69"),
+        "a bracketed 10-digit negative in the 9-box comb converts"
+    );
+    assert!(
+        line_not_comb(&doc, "p4c66"),
+        "the column converts uniform with it"
+    );
+}
