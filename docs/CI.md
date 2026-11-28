@@ -44,8 +44,9 @@ The quick checks are:
   It compiles the Linux arm only; the other platforms stay covered by the complete suite.
 - `legacy-guard`; for a docs-only change the same two scans run inside `changes`, so the separate job plans nothing.
   A file moved from code into `docs/` is not a docs-only change: the plan reads both its old and its new path.
-  The files that instruct agents (`AGENTS.md`, `CLAUDE.md`, `nsh/AGENTS.md`, `crew/`) are documentation to the
-  planner and no test reads them: what guards them is review, never CI and never an automatic merge.
+  The files that instruct agents (`AGENTS.md`, `CLAUDE.md`, `nsh/AGENTS.md`) are documentation to the planner and
+  no test reads them: what guards them is review, never CI and never an automatic merge. A change under `crew/`
+  is planned as app code and runs the quick checks.
 - The validation-rules audits on Linux, only when their paths change (see the table below).
 - `changes` decides all of this. `ci-ok` sums it up.
 
