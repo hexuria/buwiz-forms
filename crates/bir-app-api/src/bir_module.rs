@@ -3160,6 +3160,10 @@ thread_local! {
     /// copy, with the database lock held: a test's writer tries to commit there.
     static AFTER_RESTORE_CHECKPOINT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
+    /// Runs once on the restoring thread after the first active-jobs check and before the room
+    /// lock: a test registers a send in exactly the race window R1 closes.
+    static AFTER_ACTIVE_JOBS_CHECK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// §A.3.8: the newest 3 import safety copies per room are kept; the older ones go. The copies are
@@ -3219,6 +3223,17 @@ impl Drop for UnpauseOnDrop {
     }
 }
 
+/// Whether the open room has a send in flight, by the worker's room-scoped active-job keys.
+fn open_room_busy(open_prefix: &str) -> bool {
+    bir_core::background_cron::get_active_jobs()
+        .lock()
+        .map(|jobs| {
+            jobs.iter()
+                .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
+        })
+        .unwrap_or(false)
+}
+
 /// Steps 2 and 3 of [`restore_database_archive`] for a database already
 /// staged and checked. The staged file is removed on every path out.
 fn restore_staged_database(
@@ -3234,18 +3249,13 @@ fn restore_staged_database(
     // Narrowed to the open room's jobs once keys carry the room (F6): another account's send in
     // flight writes into its own room's file, never into the one this import replaces.
     let open_prefix = crate::open_room::job_key_prefix();
-    let room_busy = bir_core::background_cron::get_active_jobs()
-        .lock()
-        .map(|jobs| {
-            jobs.iter()
-                .any(|key| bir_core::background_cron::room_of_job_key(key) == open_prefix)
-        })
-        .unwrap_or(false);
-    if room_busy {
+    if open_room_busy(&open_prefix) {
         return Err(HostError::new(
             "A return is being sent. Try the import again when it has finished.",
         ));
     }
+    #[cfg(test)]
+    AFTER_ACTIVE_JOBS_CHECK.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
     if db_path.exists()
         && let Some(parent) = db_path.parent()
     {
@@ -3260,6 +3270,13 @@ fn restore_staged_database(
         // and the connection let go is the one it was copied from.
         let mut db = bir_core::lock_timing::lock(&handle)
             .map_err(|_| HostError::new("database lock poisoned"))?;
+        // R1: re-check under the room lock. A send that registered after the first check cannot
+        // pass this one and then write into the file being swapped out.
+        if open_room_busy(&open_prefix) {
+            return Err(HostError::new(
+                "A return is being sent. Try the import again when it has finished.",
+            ));
+        }
         // Flush the WAL first: a raw copy of bir_data.db alone can miss
         // commits still living in -wal, and this copy is the restore
         // point if the replace goes wrong. A checkpoint a reader keeps from
@@ -6518,6 +6535,53 @@ mod tests {
         run_in_scratch_process(
             "a_database_archive_that_fails_its_checks_changes_nothing",
             &ScratchDir::new("unfit"),
+        );
+    }
+
+    /// R1: a send whose job key lands after the first active-jobs check is still seen before the
+    /// swap. The first import is refused; with the send finished the same archive imports — the
+    /// positive control that the refusal really is the registered send.
+    #[test]
+    fn r1_a_send_registering_before_the_import_swap_is_seen() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = good_database_archive(&scratch);
+            let key = bir_core::background_cron::room_job_key(
+                &crate::open_room::job_key_prefix(),
+                "job:import-race",
+            );
+            {
+                let key = key.clone();
+                AFTER_ACTIVE_JOBS_CHECK.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        bir_core::background_cron::get_active_jobs()
+                            .lock()
+                            .unwrap()
+                            .insert(key);
+                    }));
+                });
+            }
+            match restore_database_archive(&archive, 31) {
+                Ok(_) => panic!("the import swapped under a send that registered after the check"),
+                Err(error) => assert!(
+                    error.message().contains("A return is being sent"),
+                    "{}",
+                    error.message()
+                ),
+            }
+            bir_core::background_cron::get_active_jobs()
+                .lock()
+                .unwrap()
+                .remove(&key);
+            assert_eq!(profile_names(), ["Kept Trading Corp"]);
+            restore_database_archive(&archive, 32).expect("the positive control imports");
+            assert_eq!(profile_names(), ["Restored Holdings Inc"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "r1_a_send_registering_before_the_import_swap_is_seen",
+            &ScratchDir::new("import-race"),
         );
     }
 

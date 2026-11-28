@@ -3719,35 +3719,6 @@ mod tests {
         assert_invariants();
     }
 
-    /// r1: a send inserted after the import's active-jobs check is still seen — the re-check
-    /// runs under the room's lock, which the send needs to load its draft.
-    #[test]
-    #[ignore = "commit 4"]
-    fn r1_a_send_inserted_after_the_check_is_seen_under_the_room_lock() {
-        let _turn = test_turn();
-        let scratch = scratch();
-        let owner_a = seed_stored("user-a", false);
-        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
-        let epoch = snapshot().epoch;
-        commit3_claim_thread_opens(&scratch, &owner_a, epoch, "a-room.db");
-        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
-        // The import pauses after its session check, before the room lock.
-        let import_gate = hooks::pause("import.after_room_lock");
-        let owner = owner_a.clone();
-        let scratch_dir = scratch.layout.device_dir().to_path_buf();
-        let import = std::thread::spawn(move || {
-            bir_core::platform::set_device_dir_override(Some(scratch_dir));
-            hooks::at("import.after_room_lock");
-            commit4_run_import(&owner, epoch);
-        });
-        import_gate.reached();
-        // A send inserts its job key in the gap.
-        commit4_spawn_send(&owner_a, epoch);
-        import_gate.release();
-        import.join().unwrap();
-        assert_invariants();
-    }
-
     /// quit: the release order — worker, holders, checkpoint, registry, guards — and a relaunch
     /// meets no live writer.
     #[test]
