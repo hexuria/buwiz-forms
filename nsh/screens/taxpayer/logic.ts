@@ -363,9 +363,10 @@ export function checkText(r: {
   if (!r.ok) return r.error || "The check failed.";
   if (!r.looked) return "Every return sent is confirmed or was a test send, so the inbox was not searched.";
   if (r.still_pending) return "Checked. A submitted return is still waiting for its confirmation.";
-  // still_pending counts only the automatic window: a return sent earlier and still unmatched is never called confirmed.
+  // still_pending counts only the automatic window: an older return still unmatched is never called confirmed. The search
+  // may have found and saved BIR mail that confirms something else, so it says "not confirmed", never "no email found".
   if (r.state?.past_window) {
-    return `Checked. No BIR email was found for a return sent more than ${r.state.window_days} days ago: it stays Submitted.`;
+    return "Checked. An older return is not confirmed by a BIR email yet: it stays Submitted.";
   }
   return "Checked. Everything submitted is confirmed.";
 }
