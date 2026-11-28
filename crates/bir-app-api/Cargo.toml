@@ -45,6 +45,7 @@ tracing = "0.1"
 zip = { version = "2", default-features = false, features = ["deflate", "time"] }
 
 [dev-dependencies]
+tracing-subscriber = { workspace = true }
 # Tests produce a current authenticator code for a generated secret.
 totp-rs = "5.7.1"
 # A3a's launch-resume test writes a cut claim's migration row into a scratch device.db.
