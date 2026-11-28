@@ -254,30 +254,34 @@ impl Layout {
     }
 
     /// Whether a `rooms/` folder is on disk: then a missing `device.db` was lost, not never made (L2).
+    /// This is ONLY the loss/set-aside question. It is deliberately not evidence that a real
+    /// account's room exists: a practice lookup or noise can create the folder.
     pub fn has_rooms(&self) -> bool {
-        match DeviceStore::open_existing(self) {
-            Ok(Some(store)) => {
-                match store.rooms() {
-                    Ok(rooms) if !rooms.is_empty() => return true,
-                    Err(_) => return true,
-                    _ => {}
-                }
-                // Before step 5 writes the room row the claim record is the evidence that a real
-                // account's room exists. A lookup-created empty room writes neither it nor a row,
-                // so a practice sign-in and noise inside `rooms/` count as no rooms.
-                match store.setting(crate::legacy_claim::RECORD_KEY) {
-                    Ok(Some(raw)) => serde_json::from_str::<serde_json::Value>(&raw)
-                        .ok()
-                        .and_then(|record| record.get("room")?.as_str().map(str::to_owned))
-                        .is_some(),
-                    Ok(None) => false,
-                    Err(_) => true,
-                }
-            }
-            // Directory entries are never room evidence: a practice lookup creates an empty room
-            // folder, and Finder noise creates others. An absent or unreadable store has no rows or
-            // claim record to count, so it is not proof of a non-practice room either.
-            Ok(None) | Err(_) => false,
+        self.rooms_dir().is_dir()
+    }
+
+    /// Whether the device-store rows or the claim record prove a non-practice account's room.
+    /// This is the sign-in/locked-legacy question, never the store-loss or set-aside question:
+    /// directory entries do not count. An absent or unreadable store proves nothing here; the
+    /// store error path handles that case before this answer is used.
+    pub fn non_practice_rooms_exist(&self) -> bool {
+        let Ok(Some(store)) = DeviceStore::open_existing(self) else {
+            return false;
+        };
+        match store.rooms() {
+            Ok(rooms) if !rooms.is_empty() => return true,
+            Err(_) => return true,
+            _ => {}
+        }
+        // Before step 5 writes the room row the claim record is the evidence that a real
+        // account's room exists. A lookup-created empty practice room writes neither it nor a row.
+        match store.setting(crate::legacy_claim::RECORD_KEY) {
+            Ok(Some(raw)) => serde_json::from_str::<serde_json::Value>(&raw)
+                .ok()
+                .and_then(|record| record.get("room")?.as_str().map(str::to_owned))
+                .is_some(),
+            Ok(None) => false,
+            Err(_) => true,
         }
     }
 

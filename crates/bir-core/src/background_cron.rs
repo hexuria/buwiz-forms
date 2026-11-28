@@ -3857,7 +3857,6 @@ mod tests {
             ),
         );
         let (at_insertion, insertion_seen) = std::sync::mpsc::channel();
-        let (after_insertion, inserted_seen) = std::sync::mpsc::channel();
         let (lock_held, wait_until_held) = std::sync::mpsc::channel();
         let (registered, mut registration_seen) = tokio::sync::mpsc::unbounded_channel();
         let worker_profile = profile.clone();
@@ -3870,11 +3869,6 @@ mod tests {
                     wait_until_held
                         .recv_timeout(std::time::Duration::from_secs(2))
                         .expect("the test never held the room lock");
-                }));
-            });
-            AFTER_SUBMISSION_JOB_REGISTER.with(|hook| {
-                *hook.borrow_mut() = Some(Box::new(move || {
-                    let _ = after_insertion.send(());
                 }));
             });
             AFTER_SUBMISSION_JOB_REGISTER.with(|hook| {
@@ -3925,18 +3919,8 @@ mod tests {
         let _turn = crate::db::room_path_test_turn();
         crate::background_cron::set_submission_paused(false);
         let db = test_db();
-        let (queued, _summary) = stored_queued_2551q(&db);
+        let (_queued, _summary) = stored_queued_2551q(&db);
         let profile = reviewed_profile();
-        let job = room_job_key(
-            FIXED_ROOM_KEY,
-            &submission_job_key(
-                "2551Q",
-                &profile.tin.full(),
-                queued.taxable_year,
-                None,
-                Some(queued.quarter),
-            ),
-        );
         let (at_insertion, insertion_seen) = std::sync::mpsc::channel();
         let (after_insertion, inserted_seen) = std::sync::mpsc::channel();
         let (lock_held, wait_until_held) = std::sync::mpsc::channel();

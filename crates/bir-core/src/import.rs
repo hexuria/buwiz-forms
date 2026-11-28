@@ -2,7 +2,6 @@ use crate::db::{Database, DbError, Submission};
 use crate::integration::providers::ProviderConfig;
 use crate::private_temp::{PrivateTempDir, unique_name};
 use crate::profile::{ProfileCredentials, TaxpayerProfile};
-use rusqlite::OptionalExtension;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
@@ -55,42 +54,6 @@ fn migrate_submission_json(
         // Pre-0.0.1: no changes needed
     }
     Ok(())
-}
-
-/// Monotonic filing status rank. Unknown legacy text is weakest: it may never displace a known
-/// state, while any known state may displace it.
-fn filing_status_rank(status: &str) -> u8 {
-    match status.to_ascii_lowercase().as_str() {
-        "paid" => 5,
-        "confirmed" => 4,
-        "submitted" | "filed" => 3,
-        "queued" => 2,
-        "draft" => 1,
-        _ => 0,
-    }
-}
-
-/// Whether an incoming row may replace an existing row. A lower status never does. At the same
-/// status a timestamped incoming row must be strictly newer than the stored row; without both
-/// timestamps the safe answer is no. A higher status is newer by itself.
-fn import_may_replace(
-    existing_status: &str,
-    existing_updated_at: Option<&str>,
-    incoming_status: &str,
-    incoming_updated_at: Option<&str>,
-) -> bool {
-    let existing = filing_status_rank(existing_status);
-    let incoming = filing_status_rank(incoming_status);
-    if incoming < existing {
-        return false;
-    }
-    if incoming > existing {
-        return true;
-    }
-    match (existing_updated_at, incoming_updated_at) {
-        (Some(existing), Some(incoming)) => incoming > existing,
-        _ => false,
-    }
 }
 
 pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbError> {
@@ -163,17 +126,20 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
             let mut profile: TaxpayerProfile = serde_json::from_value(profile_value)?;
             let tin = profile.tin.full();
             // The file's row id and credentials are never used. An id names a
-            // row in the database that wrote the file and means nothing here; credentials stay
-            // with the database they were set in. A profile already here is never replaced.
-            if db.get_profile_by_tin(&tin)?.is_none() {
-                profile.id = None;
-                profile.put_credentials(ProfileCredentials::default());
-                // A restore: versions confirmed where the export was made come in
-                // as recorded when this database does not have the taxpayer yet. B2b: an
-                // existing profile is never replaced by an import, because the row has no
-                // trustworthy "newer" timestamp and an older copy must not overwrite it.
-                db.save_restored_profile(profile)?;
-            }
+            // row in the database that wrote the file; here it can be another
+            // taxpayer's row, which the save would overwrite, re-keying that
+            // taxpayer's records onto this TIN. Credentials stay with the
+            // database they were set in. Both come from this database's row with
+            // the same TIN, or are none when there is no such row.
+            let (id, credentials) = match db.get_profile_by_tin(&tin)? {
+                Some(mut stored) => (stored.id, stored.take_credentials()),
+                None => (None, ProfileCredentials::default()),
+            };
+            profile.id = id;
+            profile.put_credentials(credentials);
+            // A restore: versions confirmed where the export was made come in
+            // as recorded when this database does not have the taxpayer yet.
+            db.save_restored_profile(profile)?;
 
             // 2. Read submissions.json — deduplicate via (tin, form_type, period, submitted_at)
             if let Ok(submissions_json) = read_from_zip("submissions.json") {
@@ -204,36 +170,21 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                         .unwrap_or(false);
 
                     if exists {
-                        let (existing_status, existing_updated_at): (String, Option<String>) =
-                            db.conn.query_row(
-                                "SELECT status, updated_at FROM submissions
-                                 WHERE tin = ?1 AND form_type = ?2 AND period = ?3
-                                   AND COALESCE(submitted_at, '') = ?4",
-                                rusqlite::params![tin, sub.form_type, sub.period, submitted_at_key],
-                                |row| Ok((row.get(0)?, row.get(1)?)),
-                            )?;
-                        if import_may_replace(
-                            &existing_status,
-                            existing_updated_at.as_deref(),
-                            &sub.status,
-                            sub.updated_at.as_deref(),
-                        ) {
-                            db.conn.execute(
-                                "UPDATE submissions SET status = ?1, form_data = ?2, filename = ?3,
-                                    updated_at = datetime('now')
-                             WHERE tin = ?4 AND form_type = ?5 AND period = ?6
-                               AND COALESCE(submitted_at, '') = ?7",
-                                rusqlite::params![
-                                    sub.status,
-                                    json_data,
-                                    sub.filename,
-                                    tin,
-                                    sub.form_type,
-                                    sub.period,
-                                    submitted_at_key
-                                ],
-                            )?;
-                        }
+                        db.conn.execute(
+                            "UPDATE submissions SET status = ?1, form_data = ?2, filename = ?3,
+                                updated_at = datetime('now')
+                         WHERE tin = ?4 AND form_type = ?5 AND period = ?6
+                           AND COALESCE(submitted_at, '') = ?7",
+                            rusqlite::params![
+                                sub.status,
+                                json_data,
+                                sub.filename,
+                                tin,
+                                sub.form_type,
+                                sub.period,
+                                submitted_at_key
+                            ],
+                        )?;
                     } else {
                         db.conn.execute(
                         "INSERT INTO submissions (tin, form_type, period, status, form_data, submitted_at, filename)
@@ -260,45 +211,22 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                     ) {
                         let quarter = draft.get("quarter").and_then(|v| v.as_i64());
 
-                        let incoming_updated_at = draft.get("updated_at").and_then(|v| v.as_str());
-                        let existing = db
-                            .conn
-                            .query_row(
-                                "SELECT status, updated_at FROM form_drafts
-                                 WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
-                                   AND COALESCE(quarter, -1) = COALESCE(?4, -1)",
-                                rusqlite::params![tin, form_code, taxable_year, quarter],
-                                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-                            )
-                            .optional()?;
-                        let replace = existing.as_ref().is_none_or(
-                            |(existing_status, existing_updated_at)| {
-                                import_may_replace(
-                                    existing_status,
-                                    Some(existing_updated_at.as_str()),
-                                    status,
-                                    incoming_updated_at,
-                                )
-                            },
-                        );
-                        if replace {
-                            db.conn.execute(
-                            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                             ON CONFLICT(tin, form_code, taxable_year, quarter)
-                             DO UPDATE SET status = excluded.status,
-                                           data_json = excluded.data_json,
-                                           updated_at = datetime('now')",
-                            rusqlite::params![
-                                tin,
-                                form_code,
-                                taxable_year,
-                                quarter,
-                                status,
-                                data_json
-                            ],
-                        )?;
-                        }
+                        db.conn.execute(
+                        "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                         ON CONFLICT(tin, form_code, taxable_year, quarter)
+                         DO UPDATE SET status = excluded.status,
+                                       data_json = excluded.data_json,
+                                       updated_at = datetime('now')",
+                        rusqlite::params![
+                            tin,
+                            form_code,
+                            taxable_year,
+                            quarter,
+                            status,
+                            data_json
+                        ],
+                    )?;
                     }
                 }
             }
@@ -1354,11 +1282,12 @@ mod tests {
     }
 
     /// An archive for a TIN this database has: the row keeps its own five
-    /// credentials, its own row id, and its own profile facts, whether the file names that row's
-    /// id or one that names no row here. The stored provider keeps its name and credentials, a
-    /// provider id the TIN lacks is added without credentials, and nothing is duplicated.
+    /// credentials and its own row id, whether the file names that row's id
+    /// or one that names no row here, and takes the file's other fields. The
+    /// stored provider keeps its name and credentials, a provider id the TIN
+    /// lacks is added without credentials, and nothing is duplicated.
     #[test]
-    fn an_import_keeps_the_stored_rows_profile_credentials_and_id() {
+    fn an_import_keeps_the_stored_rows_credentials_and_id() {
         let dir = tempdir().unwrap();
         let db = Database::open_ephemeral().unwrap();
         let mut stored = branch_profile("Stored Name", TIN_Y);
@@ -1389,8 +1318,8 @@ mod tests {
             let imported = db.get_profile_by_tin(TIN_Y).unwrap().expect("the row");
             assert_eq!(imported.id, Some(row_id), "the row keeps its id");
             assert_eq!(
-                imported.full_name, "Stored Name",
-                "the file never replaces the stored profile ({name})"
+                imported.full_name, name,
+                "the file's other fields are stored"
             );
             drop(imported);
             for ((key, value), expected) in PROFILE_CREDENTIAL_KEYS
@@ -1752,10 +1681,10 @@ mod tests {
         );
     }
 
-    /// A taxpayer that is already here is neither replaced nor given confirmed versions by a
-    /// file: the import finishes, and the stored taxpayer is as it was.
+    /// A taxpayer that is already here is not given confirmed versions by a
+    /// file: the import is refused and the stored taxpayer is as it was.
     #[test]
-    fn a_restore_does_not_replace_or_confirm_versions_for_a_taxpayer_already_here() {
+    fn a_restore_does_not_confirm_versions_for_a_taxpayer_already_here() {
         let dir = tempdir().unwrap();
         let source = Database::open_ephemeral().unwrap();
         save_with_a_confirmed_cor(&source, "Confirmed Corp", TIN_X);
@@ -1767,7 +1696,11 @@ mod tests {
             .save_profile(branch_profile("Already Here Corp", TIN_X))
             .unwrap();
         let before = target.get_profile_by_tin(TIN_X).unwrap().unwrap();
-        import_profile_data(&target, &archive).expect("the conflicting profile is left in place");
+        let error = import_profile_data(&target, &archive).unwrap_err();
+        assert!(
+            error.to_string().contains("reviewed confirmation plan"),
+            "{error}"
+        );
         let after = target.get_profile_by_tin(TIN_X).unwrap().unwrap();
         assert_eq!(after.full_name, "Already Here Corp");
         assert_eq!(versions_of(&after), versions_of(&before));

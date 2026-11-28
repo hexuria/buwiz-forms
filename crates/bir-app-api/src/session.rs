@@ -1124,6 +1124,7 @@ fn claim_thread_work(owner: Owner, engine: u64, why: OpenWhy, epoch: u64, guard:
     if PANIC_CLAIM.swap(false, std::sync::atomic::Ordering::SeqCst) {
         panic!("the test's injected claim panic");
     }
+    #[allow(unused_mut)] // test-only force-next-open overrides below
     let (mut target, mut spec) = {
         let _claim_run = lock(&CLAIM_RUN);
         hooks::at("claim.before_start");
@@ -1204,10 +1205,39 @@ fn lookup_room_id(layout: &Layout, owner: &Owner) -> Result<bir_core::rooms::Roo
         .as_ref()
         .map(|stored| stored.server_url.clone())
         .unwrap_or_default();
-    match bir_core::rooms::room_for(store.as_ref(), &server_url, &owner.user_id) {
-        Ok(lookup) => Ok(lookup.room_id().clone()),
-        Err(error) => Err(error.to_string()),
+    let lookup = bir_core::rooms::room_for(store.as_ref(), &server_url, &owner.user_id)
+        .map_err(|error| error.to_string())?;
+    // N3: a real account's lookup-created room is a room even before its first write: write its
+    // row at once, so a later locked legacy file and headless serve can never treat the install as
+    // roomless. Practice lookup rooms deliberately write no row; they must not change what a real
+    // account opens.
+    if let bir_core::rooms::RoomLookup::New { room_id, origin } = &lookup
+        && !owner.practice
+        && let Some(store) = store.as_ref()
+    {
+        let record = bir_core::rooms::RoomRecord {
+            room_id: room_id.clone(),
+            origin: origin.clone(),
+            user_id: owner.user_id.clone(),
+            email: stored
+                .as_ref()
+                .filter(|stored| stored.user_id == owner.user_id)
+                .and_then(|stored| stored.email.clone()),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            from_legacy: false,
+        };
+        if let Err(error) = store.add_room(&record) {
+            let already = store
+                .find_room(origin, &owner.user_id)
+                .ok()
+                .flatten()
+                .is_some_and(|existing| existing.room_id == *room_id);
+            if !already {
+                return Err(error.to_string());
+            }
+        }
     }
+    Ok(lookup.room_id().clone())
 }
 
 /// The account's room by the device-store lookup (rooms A1): known, or new and empty.
@@ -1357,8 +1387,8 @@ const LOCKED_LEGACY_LATER: &str = "A locked older database is still on this devi
 
 /// Whether a real account's room exists, by the one rooms-layout rule: store rows or the claim
 /// record when the store can be read, never mere directory entries.
-fn account_rooms_present(layout: &Layout) -> bool {
-    layout.has_rooms()
+fn non_practice_rooms_present(layout: &Layout) -> bool {
+    layout.non_practice_rooms_exist()
 }
 
 /// L3/B1(a): the device store's own unusable cases (lost, unreadable, newer) are the store-error
@@ -1393,7 +1423,7 @@ fn claim_open_error_target(error: &bir_core::rooms::DeviceStoreError) -> Target 
 /// B1(b): legacy mode in place is only for a locked install with no rooms. Once any room exists,
 /// the signed-in account's own room opens and the locked file is only a note for later.
 fn locked_legacy_target(layout: &Layout, owner: &Owner) -> (Target, Option<OpenSpec>) {
-    if account_rooms_present(layout) {
+    if non_practice_rooms_present(layout) {
         lookup_target(
             layout,
             owner,
@@ -1441,7 +1471,7 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
     if let Err(error) = &opened
         && error.is_unusable()
         && layout.legacy_database().is_file()
-        && !account_rooms_present(&layout)
+        && !layout.has_rooms()
     {
         match bir_core::rooms::set_aside_unusable(&layout) {
             Ok(Some(aside)) => {
@@ -3090,6 +3120,7 @@ mod tests {
             .close()
             .unwrap();
         std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        std::fs::create_dir_all(scratch.layout.rooms_dir()).unwrap();
         let owner = seed_stored("user-a", false);
         permit_claim_threads();
         begin_open(owner.clone(), 1, OpenWhy::SignIn);
@@ -3134,8 +3165,19 @@ mod tests {
         let scratch = scratch();
         create_device_store(&scratch);
         locked_legacy_file(&scratch);
-        std::fs::create_dir_all(scratch.layout.rooms_dir().join("another-room")).unwrap();
         let owner = seed_stored("user-a", false);
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        store
+            .add_room(&bir_core::rooms::RoomRecord {
+                room_id: bir_core::rooms::room_id_for(&owner.origin, "another-user"),
+                origin: owner.origin.clone(),
+                user_id: "another-user".to_owned(),
+                email: None,
+                created_at: "2026-11-28T00:00:00+00:00".to_owned(),
+                from_legacy: false,
+            })
+            .unwrap();
+        drop(store);
         permit_claim_threads();
         begin_open(owner.clone(), 1, OpenWhy::SignIn);
         join_claim_threads();
@@ -3230,6 +3272,50 @@ mod tests {
             snapshot().phase_kind,
             PhaseKind::Legacy,
             "a stray rooms/ entry hid the locked legacy install"
+        );
+    }
+
+    /// N3: a real account's lookup-created room writes its store row at once, so later routing
+    /// knows the install has a non-practice room even before the room file has user data.
+    #[test]
+    fn n3_a_lookup_created_non_practice_room_writes_its_store_row() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        let row = store
+            .find_room(&owner.origin, &owner.user_id)
+            .unwrap()
+            .expect("the lookup-created real room wrote no row");
+        assert_eq!(
+            row.room_id,
+            bir_core::rooms::room_id_for(&owner.origin, &owner.user_id)
+        );
+    }
+
+    /// N3's practice half and positive control for LB1's rule: a practice lookup room writes no row.
+    #[test]
+    fn n3_a_lookup_created_practice_room_writes_no_store_row() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        let owner = seed_stored("practice-user", true);
+        permit_claim_threads();
+        begin_open(owner.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        assert!(
+            store
+                .find_room(&owner.origin, &owner.user_id)
+                .unwrap()
+                .is_none(),
+            "the practice lookup wrote a non-practice room row"
         );
     }
 

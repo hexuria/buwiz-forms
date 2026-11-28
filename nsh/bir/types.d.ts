@@ -987,7 +987,7 @@ export function lock_now(): boolean;
 
 /** The migration state the sign-in flow shows a page for after session_opened. */
 export function migration_state(): {
-    kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
+    kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered" | "device_store";
     copy_saved: boolean;
     detail: string;
 };

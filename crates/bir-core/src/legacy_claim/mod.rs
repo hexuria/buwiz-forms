@@ -118,14 +118,6 @@ fn started_insert(device_dir: &std::path::Path) {
         .insert(started_key(device_dir));
 }
 
-/// Whether any room folder exists under the layout (a read error answers true: failing closed).
-fn any_rooms_exist(layout: &crate::rooms::Layout) -> bool {
-    match std::fs::read_dir(layout.rooms_dir()) {
-        Ok(mut entries) => entries.next().is_some(),
-        Err(_) => true,
-    }
-}
-
 /// The evidence half of the room-open rule (G1): the room does not open while the claim's record names
 /// it and the step is in [Copied, HashChecked) — a migration or a checkpoint would change the bytes the
 /// hash check still needs. The record unreadable is a refusal whenever any rooms exist (failing closed:
@@ -144,10 +136,10 @@ pub fn room_move_evidence_clear(
     let record = match LegacyClaim::at(layout.clone()) {
         Ok(claim) => match claim.record() {
             Ok(record) => record,
-            Err(_) if any_rooms_exist(layout) => return Err(unreadable()),
+            Err(_) if layout.has_rooms() => return Err(unreadable()),
             Err(_) => None,
         },
-        Err(_) if any_rooms_exist(layout) => return Err(unreadable()),
+        Err(_) if layout.has_rooms() => return Err(unreadable()),
         Err(_) => None,
     };
     let pending = record.is_some_and(|record| {
