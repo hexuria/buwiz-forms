@@ -4263,6 +4263,51 @@ mod tests {
     }
 
     #[test]
+    fn form_fill_holds_the_three_new_previous_payment_gates() {
+        for (code, key, path, lock) in [
+            (
+                "0619E",
+                "frm0619E:txtTax15",
+                "item_15_amount_remitted_previously",
+                "Item 15 applies only to an amended return.",
+            ),
+            (
+                "0619F",
+                "frm0619F:txtTax16",
+                "item_16_remitted_previously",
+                "Item 16 applies only to an amended return.",
+            ),
+            (
+                "2550M",
+                "frm2550m:txtTax23D",
+                "vat_paid_previous",
+                "Item 23D applies only to an amended return.",
+            ),
+        ] {
+            let mut session = session();
+            save_scratch(&mut session);
+            call(
+                &mut session,
+                "form.open",
+                json!({"code": code, "year": 2026, "period": 1, "tin": TIN}),
+            )
+            .unwrap_or_else(|error| panic!("{code} opens: {error}"));
+
+            let refused = call(&mut session, "form.fill", json!({"fields": {key: "42"}})).unwrap();
+            assert_eq!(refused["refused"][key], lock, "{code}: {refused}");
+            let zero = call(&mut session, "form.fill", json!({"fields": {key: "0"}})).unwrap();
+            assert!(zero.get("refused").is_none(), "{code} zero: {zero}");
+            assert_eq!(
+                session.open.as_ref().unwrap().draft[path]
+                    .as_f64()
+                    .unwrap_or(0.0),
+                0.0,
+                "{code}: zero leaves the model empty"
+            );
+        }
+    }
+
+    #[test]
     fn form_fill_previous_payment_yes_to_no_records_the_pending_notice() {
         let mut session = session();
         open_1600pt(&mut session);

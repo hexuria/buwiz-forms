@@ -1429,7 +1429,10 @@ pub(crate) fn backfill_year_facts(conn: &Connection) -> std::result::Result<usiz
     let mut by_root: BTreeMap<String, Vec<Branch>> = BTreeMap::new();
     for (tin, data_json, branch_json) in rows {
         let Ok(mut profile) = serde_json::from_str::<TaxpayerProfile>(&data_json) else {
-            tracing::warn!(tin = %tin, "v23: skipping a profile this build cannot read");
+            tracing::warn!(
+                tin = %crate::logging::tin_for_log(&tin),
+                "v23: skipping a profile this build cannot read"
+            );
             continue;
         };
         profile.normalize_profile_version_review_statuses();

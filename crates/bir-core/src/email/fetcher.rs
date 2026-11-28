@@ -9,7 +9,7 @@ use crate::profile::{EmailAuthMethod, TaxpayerProfile, inbox_emails_match};
 use crate::receipt::parse_bir_receipt_email;
 use chrono::Datelike;
 
-use super::auth_oauth::GoogleOAuthAuth;
+use super::auth_oauth::{GOOGLE_NOT_IN_THIS_VERSION, GoogleOAuthAuth, google_sign_in_available};
 use super::auth_password::AppPasswordAuth;
 use super::inbox::{plan_email_poll_for_address, resolve_inbox_fetch_profile};
 
@@ -250,7 +250,7 @@ fn fetch_with_auth(
 
                 match parse_bir_receipt_email(&text_content, safe_html) {
                     Ok(receipt) => {
-                        let mut pending_notice: Option<(String, String)> = None;
+                        let mut pending_notice = false;
                         if let Ok(db_guard) = lock_timing::lock(&db)
                             && let Ok((submission_receipt, _is_new)) = db_guard
                                 .save_submission_receipt_with_email_date(
@@ -271,7 +271,9 @@ fn fetch_with_auth(
                                 Err(error) => {
                                     tracing::warn!(
                                         "Receipt {} was saved but could not confirm a submission: {}",
-                                        submission_receipt.filename,
+                                        crate::logging::submission_filename_for_log(
+                                            &submission_receipt.filename
+                                        ),
                                         error
                                     );
                                     false
@@ -312,18 +314,19 @@ fn fetch_with_auth(
                                         .map(|profile| profile.full_name.clone())
                                         .unwrap_or_else(|| tin.clone());
                                     let bir_filename = format!("{tin}-{form_type}-{period}.xml");
-                                    let (title, body) = crate::background_cron::confirmation_notice(
-                                        &taxpayer_name,
-                                        &crate::naming::Tin::dashed_display(&tin),
-                                        &form_code,
-                                        &period_label,
-                                        &bir_filename,
-                                        &crate::background_cron::display_received_at(
-                                            &submission_receipt.received_date,
-                                            &submission_receipt.received_time,
-                                        ),
-                                        profile.inbox_email(),
-                                    );
+                                    let (title, body) =
+                                        crate::background_cron::confirmation_alert_text(
+                                            &taxpayer_name,
+                                            &crate::naming::Tin::dashed_display(&tin),
+                                            &form_code,
+                                            &period_label,
+                                            &bir_filename,
+                                            &crate::background_cron::display_received_at(
+                                                &submission_receipt.received_date,
+                                                &submission_receipt.received_time,
+                                            ),
+                                            profile.inbox_email(),
+                                        );
                                     crate::background_cron::record_confirmation_alert(
                                         &db_guard,
                                         &tin,
@@ -334,22 +337,27 @@ fn fetch_with_auth(
                                         &taxpayer_name,
                                     );
                                     // Sent after the lock below: the banner spawns a process.
-                                    pending_notice = Some((title, body));
+                                    pending_notice = true;
                                 }
                             }
                             processed.push(submission_receipt);
                         }
-                        if let Some((title, body)) = pending_notice {
-                            crate::background_cron::send_notice(&title, &body);
+                        if pending_notice {
+                            crate::background_cron::send_notice(
+                                crate::notification::NotificationKind::ConfirmationArrived,
+                            );
                         }
                     }
                     Err(e) => {
                         // If it's truly an email from BIR but we failed to parse it, log it.
                         if text_content.contains("This confirms receipt of your submission") {
+                            let (body_len, body_sha256) =
+                                receipt_body_log_fingerprint(&text_content);
                             tracing::error!(
-                                "Failed to parse BIR receipt email. Error: {:?}\nRaw Body snippet: {:.200}",
-                                e,
-                                text_content
+                                body_len,
+                                body_sha256 = %body_sha256,
+                                "Failed to parse BIR receipt email. Error: {:?}",
+                                e
                             );
                         }
                     }
@@ -381,7 +389,8 @@ pub fn fetch_and_process_emails_for_address_until(
     let (profile, still_pending) = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
-            Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
+            // Still pending: a lock failure says nothing about the inbox, so the job keeps its place.
+            Err(e) => return (false, true, Some(format!("DB lock failed: {}", e))),
         };
         let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
         let plan = plan_email_poll_for_address(&db_guard, email_address, current_year);
@@ -393,6 +402,12 @@ pub fn fetch_and_process_emails_for_address_until(
     }
 
     if let Some(mut profile) = profile {
+        // A Google grant in a build that cannot renew it: said once (one alert, one banner), and the poll stops rather
+        // than failing the same way every interval. Only a grant that is really stored: after Disconnect the method
+        // may still read GoogleOAuth with no grant, and that is not a connection to warn about.
+        if google_grant_unusable(&profile, google_sign_in_available()) {
+            return google_unavailable_poll(&db, &profile);
+        }
         // Sibling Submitted drafts (Jane) must still be polled even when the
         // grant lives on Juan and Juan's tracking toggle is off.
         profile.email_tracking_enabled = true;
@@ -438,11 +453,7 @@ pub fn fetch_and_process_emails_for_address_until(
                 // After the guard above is dropped: the banner can spawn a
                 // process, and the UI thread waits on this lock.
                 if let Some(outcome) = recorded {
-                    crate::notification::notify_alert_if_newly_active(
-                        outcome,
-                        POLL_FAILURE_TITLE,
-                        &err_msg,
-                    );
+                    crate::notification::notify_alert_if_newly_active(outcome);
                 }
                 (false, still_pending, Some(err_msg))
             }
@@ -459,7 +470,53 @@ pub fn fetch_and_process_emails_for_address_until(
     }
 }
 
+/// What a parse failure may say about a BIR email body without quoting any of
+/// it: its byte length and SHA-256, so two reports can be compared.
+fn receipt_body_log_fingerprint(body: &str) -> (usize, String) {
+    use sha2::{Digest, Sha256};
+    (body.len(), hex::encode(Sha256::digest(body.as_bytes())))
+}
+
 const POLL_FAILURE_TITLE: &str = "Email confirmation checking has stopped";
+
+/// A stored Google grant this build cannot renew (`available`: whether Google's sign-in is in the build).
+fn google_grant_unusable(profile: &TaxpayerProfile, available: bool) -> bool {
+    profile.email_auth_method == EmailAuthMethod::GoogleOAuth
+        && profile.has_usable_oauth_refresh()
+        && !available
+}
+
+/// The poll of an inbox connected to Google in a build that cannot renew the grant: one alert (with nothing to click:
+/// Reconnect cannot work here), its banner only the first time, and nothing left pending, so the job ends instead of
+/// failing every interval. Returns what `fetch_and_process_emails_for_address_until` returns.
+fn google_unavailable_poll(
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    profile: &TaxpayerProfile,
+) -> (bool, bool, Option<String>) {
+    let recorded = lock_timing::lock(db)
+        .ok()
+        .and_then(|db_guard| record_google_unavailable(&db_guard, profile));
+    if let Some(outcome) = recorded {
+        crate::notification::notify_alert_if_newly_active(outcome);
+    }
+    (false, false, Some(GOOGLE_NOT_IN_THIS_VERSION.to_string()))
+}
+
+/// The alert [`google_unavailable_poll`] records: the same kind and title as a failed poll, in plain words.
+fn record_google_unavailable(
+    db: &Database,
+    profile: &TaxpayerProfile,
+) -> Option<crate::db::AlertRecordOutcome> {
+    db.record_alert(
+        Some(&profile.tin.full()),
+        crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+        crate::db::AlertSeverity::Error,
+        POLL_FAILURE_TITLE,
+        GOOGLE_NOT_IN_THIS_VERSION,
+        crate::db::AlertAction::None,
+    )
+    .ok()
+}
 
 /// Record that polling `profile`'s confirmation inbox failed. Returns what
 /// the record did; the caller decides on the banner once it has let go of
@@ -522,6 +579,67 @@ mod tests {
         assert_eq!(alerts[0].title, POLL_FAILURE_TITLE);
         assert_eq!(alerts[0].detail, "invalid_grant");
         assert_eq!(alerts[0].occurrences, 2);
+    }
+
+    #[test]
+    fn a_receipt_body_log_fingerprint_is_length_and_hash_only() {
+        let body = "This confirms receipt of your submission for TIN 00012345300000, taxpayer Juana Santos";
+        let (len, hash) = receipt_body_log_fingerprint(body);
+        assert_eq!(len, body.len());
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "{hash}");
+        assert!(!hash.contains("00012345300000"));
+        assert!(!hash.contains("Juana"));
+    }
+
+    /// #504 review: only a stored grant is "a Google grant this build cannot renew". After Disconnect the method can
+    /// still read GoogleOAuth with no grant; that profile gets no "disconnect" alert, and a build with Google gets none.
+    #[test]
+    fn only_a_stored_grant_is_unusable_without_google() {
+        let mut profile = juana();
+        profile.email_auth_method = EmailAuthMethod::GoogleOAuth;
+        assert!(
+            !google_grant_unusable(&profile, false),
+            "disconnected: no grant"
+        );
+        profile.oauth_refresh_token = Some("refresh".to_string());
+        assert!(google_grant_unusable(&profile, false));
+        assert!(
+            !google_grant_unusable(&profile, true),
+            "a build with Google renews it"
+        );
+        profile.email_auth_method = EmailAuthMethod::AppPassword;
+        assert!(
+            !google_grant_unusable(&profile, false),
+            "an app password is not a grant"
+        );
+    }
+
+    /// A Google grant in a build without Google: one alert in plain words with nothing to click, recorded again only as
+    /// a repeat (no second banner), and the poll reports nothing pending, so its job ends.
+    #[test]
+    fn a_google_grant_without_google_is_said_once_and_the_poll_ends() {
+        let db = Database::open_ephemeral().unwrap();
+        let profile = juana();
+        assert_eq!(
+            record_google_unavailable(&db, &profile),
+            Some(AlertRecordOutcome::Created)
+        );
+        assert_eq!(
+            record_google_unavailable(&db, &profile),
+            Some(AlertRecordOutcome::StillActive)
+        );
+        let alerts = db.list_active_alerts(Some(&profile.tin.full())).unwrap();
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].detail, GOOGLE_NOT_IN_THIS_VERSION);
+        assert!(!alerts[0].detail.contains("GOOGLE_CLIENT_ID"));
+
+        let shared =
+            std::sync::Arc::new(std::sync::Mutex::new(Database::open_ephemeral().unwrap()));
+        let (ok, still_pending, message) = google_unavailable_poll(&shared, &profile);
+        assert!(!ok);
+        assert!(!still_pending);
+        assert_eq!(message.as_deref(), Some(GOOGLE_NOT_IN_THIS_VERSION));
     }
 
     /// The IMAP connection waits at most 30 seconds on a read or a write (a loopback listener stands in for the server;

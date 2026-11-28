@@ -10,18 +10,7 @@
 /// fallback for a bare binary (`cargo run`, a loose `bir-headless`): the
 /// notification center aborts the process when there is no bundle, and the
 /// App Sandbox blocks `osascript`, which only matters for bundled builds.
-/// F9's test seam: every title asked of the banner, delivery or not — the epoch gate's test
-/// proves a notice of the old session never reaches even this point.
-#[cfg(test)]
-pub(crate) static POSTED_TITLES: std::sync::LazyLock<std::sync::Mutex<Vec<String>>> =
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
-
-pub fn send_notification(title: &str, body: &str) {
-    #[cfg(test)]
-    POSTED_TITLES
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .push(title.to_owned());
+fn send_notification(title: &str, body: &str) {
     if !delivery_enabled() {
         tracing::debug!(
             title,
@@ -50,6 +39,59 @@ pub fn send_notification(title: &str, body: &str) {
         body,
         "desktop notifications are not available on Android"
     );
+}
+
+/// The only OS-banner events the app posts. A kind carries no taxpayer data:
+/// the banner can never be built from a name, a TIN, a form period, a mailbox
+/// or server text. The detailed text stays in the app's Notifications page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotificationKind {
+    /// A return's send ended. `dry_run` keeps the test-send mark without
+    /// naming anyone.
+    ReturnSent { dry_run: bool },
+    /// BIR's confirmation email arrived.
+    ConfirmationArrived,
+    /// Anything else that needs the user in the app.
+    Attention,
+    /// The user asked for the background worker's test notification.
+    Heartbeat,
+}
+
+/// The fixed `(title, body)` of an OS banner. The body is one of the plan's
+/// exact sentences; a dry run leads with the app's test-send sentence instead.
+pub(crate) fn banner_text(kind: NotificationKind) -> (&'static str, &'static str) {
+    let body = match kind {
+        NotificationKind::ReturnSent { dry_run: false } => {
+            "A return was sent. Open eBIRForms to see it."
+        }
+        NotificationKind::ReturnSent { dry_run: true } => {
+            "Test send. Nothing reached the BIR. Open eBIRForms to see it."
+        }
+        NotificationKind::ConfirmationArrived => {
+            "BIR's confirmation arrived. Open eBIRForms to see it."
+        }
+        NotificationKind::Attention => "Something needs your attention in eBIRForms.",
+        NotificationKind::Heartbeat => "This is a test notification from eBIRForms.",
+    };
+    ("eBIRForms", body)
+}
+
+/// F9's test seam: every banner kind asked of the OS, delivery or not — the epoch gate's test
+/// proves a notice of the old session never reaches even this point.
+#[cfg(test)]
+pub(crate) static POSTED_KINDS: std::sync::LazyLock<std::sync::Mutex<Vec<NotificationKind>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
+/// Post one OS banner. Every banner call site selects a [`NotificationKind`]
+/// here rather than assembling text of its own.
+pub fn notify(kind: NotificationKind) {
+    #[cfg(test)]
+    POSTED_KINDS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .push(kind);
+    let (title, body) = banner_text(kind);
+    send_notification(title, body);
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -185,63 +227,19 @@ fn applescript_string(text: &str) -> String {
 /// report. The email cron re-reports a broken token every 60 seconds, so
 /// notifying each time would be roughly 1,440 banners a day and would train the
 /// user to dismiss all of them unread. Callers can pass every `record_alert`
-/// result here without gating themselves; the rule lives in one place.
-pub fn notify_alert_if_newly_active(
-    outcome: crate::db::AlertRecordOutcome,
-    title: &str,
-    detail: &str,
-) {
+/// result here without gating themselves; the generic attention banner is the
+/// only text posted, while the detailed alert stays on the Notifications page.
+pub fn notify_alert_if_newly_active(outcome: crate::db::AlertRecordOutcome) {
     if !outcome.is_newly_active() {
         return;
     }
-    send_notification(title, &truncate_for_banner(detail, 140));
-}
-
-/// Trim a detail string to something a notification banner can show.
-///
-/// Banners are narrow, and these strings carry arbitrary server text — a full
-/// OAuth error becomes an unreadable wall. The complete text stays on the
-/// Notifications page.
-///
-/// Truncation is on a character boundary: slicing by byte index panics when the
-/// cut lands mid-character, and a proxy error page or a non-ASCII description is
-/// enough to trigger that.
-fn truncate_for_banner(text: &str, max: usize) -> String {
-    let text = text.trim();
-    if text.len() <= max {
-        return text.to_string();
-    }
-    let end = text
-        .char_indices()
-        .map(|(i, c)| i + c.len_utf8())
-        .take_while(|&i| i <= max)
-        .last()
-        .unwrap_or(0);
-    format!("{}…", &text[..end])
+    notify(NotificationKind::Attention);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::AlertRecordOutcome;
-
-    #[test]
-    fn short_detail_is_unchanged() {
-        assert_eq!(truncate_for_banner("hello", 140), "hello");
-    }
-
-    #[test]
-    fn long_detail_is_bounded_and_marked() {
-        let out = truncate_for_banner(&"x".repeat(500), 140);
-        assert!(out.len() <= 145, "got {}", out.len());
-        assert!(out.ends_with('…'));
-    }
-
-    /// Byte-index slicing panics mid-character; server text can be non-ASCII.
-    #[test]
-    fn multibyte_detail_does_not_panic() {
-        assert!(!truncate_for_banner(&"日本語テキスト".repeat(50), 140).is_empty());
-    }
 
     #[cfg(target_os = "macos")]
     #[test]
@@ -250,6 +248,52 @@ mod tests {
         assert_eq!(applescript_string("say \"hi\""), "\"say \\\"hi\\\"\"");
         assert_eq!(applescript_string("a\\b"), "\"a\\\\b\"");
         assert_eq!(applescript_string("line1\nline2"), "\"line1\nline2\"");
+    }
+
+    #[test]
+    fn banner_texts_are_fixed_and_carry_no_identity() {
+        let cases = [
+            (
+                NotificationKind::ReturnSent { dry_run: false },
+                "A return was sent. Open eBIRForms to see it.",
+            ),
+            (
+                NotificationKind::ConfirmationArrived,
+                "BIR's confirmation arrived. Open eBIRForms to see it.",
+            ),
+            (
+                NotificationKind::Attention,
+                "Something needs your attention in eBIRForms.",
+            ),
+        ];
+        for (kind, body) in cases {
+            assert_eq!(banner_text(kind), ("eBIRForms", body));
+        }
+        assert_eq!(
+            banner_text(NotificationKind::Heartbeat),
+            ("eBIRForms", "This is a test notification from eBIRForms.")
+        );
+        assert_eq!(
+            banner_text(NotificationKind::ReturnSent { dry_run: true }),
+            (
+                "eBIRForms",
+                "Test send. Nothing reached the BIR. Open eBIRForms to see it."
+            )
+        );
+        for kind in [
+            NotificationKind::ReturnSent { dry_run: false },
+            NotificationKind::ReturnSent { dry_run: true },
+            NotificationKind::ConfirmationArrived,
+            NotificationKind::Attention,
+            NotificationKind::Heartbeat,
+        ] {
+            let (title, body) = banner_text(kind);
+            for text in [title, body] {
+                assert!(!text.contains("Juan Dela Cruz"), "{text}");
+                assert!(!text.contains("000-000-000-00000"), "{text}");
+                assert!(!text.contains("00000000000000"), "{text}");
+            }
+        }
     }
 
     /// Nothing links this crate with delivery on except the two binaries.
@@ -262,6 +306,6 @@ mod tests {
     /// The cron re-reports every 60s. This must post nothing.
     #[test]
     fn a_repeat_report_posts_nothing() {
-        notify_alert_if_newly_active(AlertRecordOutcome::StillActive, "must not appear", "detail");
+        notify_alert_if_newly_active(AlertRecordOutcome::StillActive);
     }
 }

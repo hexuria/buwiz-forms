@@ -2973,8 +2973,10 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
     })
 }
 
-/// Fill `slug`'s frozen sheet with `fields`, write it to a temp HTML file and
-/// open it in the system browser. Answers `{ path }`.
+/// Fill `slug`'s frozen sheet with `fields`, write it to the app's own
+/// `data_dir()/previews/` folder and hand it to the preview host. Answers
+/// `{ path }`. The file is transient: the host reads it synchronously and this
+/// function removes anything still left when the host returns.
 pub(crate) fn open_print_preview(
     slug: &str,
     form_code: &str,
@@ -2993,15 +2995,9 @@ pub(crate) fn open_print_preview(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or(0);
-    #[cfg(not(target_os = "android"))]
-    let path =
-        std::env::temp_dir().join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
-    #[cfg(target_os = "android")]
-    let path = {
-        let root = bir_core::platform::temp_dir();
-        std::fs::create_dir_all(&root).map_err(|error| HostError::new(error.to_string()))?;
-        root.join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"))
-    };
+    let root = bir_core::platform::print_previews_dir();
+    std::fs::create_dir_all(&root).map_err(|error| HostError::new(error.to_string()))?;
+    let path = root.join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
     std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
     // In-app preview window (Blitz view + hidden WebKit PDF for Print/Share);
     // one window per form, re-opening refreshes it in place.
@@ -3010,6 +3006,11 @@ pub(crate) fn open_print_preview(
         None => format!("BIR Form {form_code}"),
     };
     crate::hooks::hooks().print_preview_request(path.clone(), title, form_code.to_string());
+    if let Err(error) = std::fs::remove_file(&path)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!(path = %path.display(), %error, "print preview source not removed");
+    }
     Ok(HostObject::new()
         .field("path", path.display().to_string())
         .into())
@@ -4080,6 +4081,32 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn print_preview_file_is_in_data_dir_previews_and_removed_after_read() {
+        let slug = print_slug_for("2551Q").expect("2551Q print sheet");
+        let opened = open_print_preview(
+            slug,
+            "2551Q",
+            2026,
+            &std::collections::BTreeMap::new(),
+            None,
+            None,
+        )
+        .expect("preview");
+        let path = std::path::PathBuf::from(
+            opened
+                .get("path")
+                .and_then(HostValue::as_str)
+                .expect("path"),
+        );
+        assert_eq!(
+            path.parent(),
+            Some(bir_core::platform::print_previews_dir().as_path()),
+            "{path:?}"
+        );
+        assert!(!path.exists(), "the preview is deleted once read: {path:?}");
     }
 
     fn args(values: Vec<HostValue>) -> HostArguments {

@@ -3,18 +3,18 @@
 /// (scoped at the spawn); a mismatch posts NOTHING. The alert row is not here — it is the
 /// filing record the same code writes into the job's own room either way. Outside a job's
 /// context (the interactive paths) there is no gate.
-pub(crate) fn send_notice(title: &str, body: &str) {
+pub(crate) fn send_notice(kind: crate::notification::NotificationKind) {
     let stale = crate::account_session::SEND_CONTEXT
         .try_with(|context| context.epoch != crate::session_epoch::current())
         .unwrap_or(false);
     if stale {
         tracing::info!(
-            title,
+            ?kind,
             "a notice of the previous session posts nothing after the switch"
         );
         return;
     }
-    crate::notification::send_notification(title, body);
+    crate::notification::notify(kind);
 }
 
 use crate::db::{Claim1601CSubmissionResult, Claim2551QSubmissionResult, Database};
@@ -392,7 +392,7 @@ async fn run_queue_tick_until(
                 crate::db::AlertAction::None,
             );
         }
-        crate::notification::send_notification(TITLE, BODY);
+        crate::notification::notify(crate::notification::NotificationKind::Heartbeat);
     }
 
     if global_cron_enabled {
@@ -501,9 +501,16 @@ async fn process_google_calendar_sync(db: Arc<Mutex<Database>>, stop: &CronStop)
         match result {
             Ok(report) => info!(
                 "Google Calendar sync for {}: {} inserted, {} updated, {} deleted",
-                tin, report.inserted, report.updated, report.deleted
+                crate::logging::tin_for_log(tin),
+                report.inserted,
+                report.updated,
+                report.deleted
             ),
-            Err(error) => warn!("Google Calendar sync failed for {}: {}", tin, error),
+            Err(error) => warn!(
+                "Google Calendar sync failed for {}: {}",
+                crate::logging::tin_for_log(tin),
+                error
+            ),
         }
     }
     let all_succeeded = results.iter().all(|(_, result)| result.is_ok());
@@ -1109,7 +1116,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     info!(
         "Cron: Attempting to submit queued 1601C {} for {}",
         draft.period_code(),
-        draft.tin
+        crate::logging::tin_for_log(&draft.tin)
     );
     let filename = draft.default_submission_filename();
     let xml_payload = match draft.try_to_bir_xml_payload() {
@@ -1484,7 +1491,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
         "Cron: Attempting to submit queued {} {} for {}",
         F::FORM_CODE,
         draft.period_code(),
-        draft.tin()
+        crate::logging::tin_for_log(draft.tin())
     );
     let filename = draft.submission_filename();
     let payload = match draft.official_payload() {
@@ -1679,24 +1686,26 @@ fn finish_sent_queueable<F: QueueableForm>(
         info!(
             "Cron: dry run: simulated submission of queued {} {} (nothing sent to BIR)",
             F::FORM_CODE,
-            filename
+            crate::logging::submission_filename_for_log(filename.as_str())
         );
     } else {
         info!(
             "Cron: Successfully submitted queued {} {}",
             F::FORM_CODE,
-            filename
+            crate::logging::submission_filename_for_log(filename.as_str())
         );
     }
     let period_label = queueable_period_label(&draft);
-    let (notice_title, notice_body) = submission_notice(
+    let (notice_title, notice_body) = submission_alert_text(
         profile,
         F::FORM_CODE,
         &period_label,
         &chrono::Local::now(),
         skip_email_poll,
     );
-    send_notice(&notice_title, &notice_body);
+    send_notice(crate::notification::NotificationKind::ReturnSent {
+        dry_run: skip_email_poll,
+    });
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
@@ -1987,7 +1996,7 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
     info!(
         "Cron: Attempting to submit queued form {} for {}",
         draft.period_code(),
-        current_profile.tin.full()
+        crate::logging::tin_for_log(&current_profile.tin.full())
     );
 
     let filename = draft.default_submission_filename();
@@ -2198,20 +2207,25 @@ fn finish_sent_2551q(
     if skip_email_poll {
         info!(
             "Cron: dry run: simulated submission of queued form {} (nothing sent to BIR)",
-            filename
+            crate::logging::submission_filename_for_log(filename.as_str())
         );
     } else {
-        info!("Cron: Successfully submitted queued form {}", filename);
+        info!(
+            "Cron: Successfully submitted queued form {}",
+            crate::logging::submission_filename_for_log(filename.as_str())
+        );
     }
     let period_label = quarterly_period_label(draft.taxable_year, draft.quarter);
-    let (notice_title, notice_body) = submission_notice(
+    let (notice_title, notice_body) = submission_alert_text(
         current_profile,
         "2551Q",
         &period_label,
         &chrono::Local::now(),
         skip_email_poll,
     );
-    send_notice(&notice_title, &notice_body);
+    send_notice(crate::notification::NotificationKind::ReturnSent {
+        dry_run: skip_email_poll,
+    });
     // Keep the exact bytes that were encrypted for PUT.
     if let Some(xml_payload) = xml_payload {
         draft.submitted_payload = Some(xml_payload);
@@ -2610,13 +2624,36 @@ pub const TEST_SENT_LINE: &str = "Test send. Nothing reached the BIR.";
 /// The first words of a test send's notice title.
 const TEST_SEND_TITLE: &str = "Test send";
 
-/// Desktop banner for a successful PUT: who, which return, when — not the
-/// IAF filename, which says none of that at a glance. Returns `(title, body)`.
-/// A `dry_run` send reached nobody: its title leads with "Test send", so a
-/// phone banner that cuts a long registered name off still shows it, and its
-/// body's first line is [`TEST_SENT_LINE`]. It never says the return was
-/// submitted, sent or filed.
+/// The generic desktop banner for a successful PUT. It deliberately knows
+/// nothing about the taxpayer, TIN, form, period or mailbox: those details are
+/// only in the in-app Notifications page. The arguments stay in the signature
+/// of this long-standing helper so every caller is forced to reconsider which
+/// text it needs; production callers use [`submission_alert_text`] for the
+/// detailed page and `notification::notify` for the OS banner.
 pub fn submission_notice<Tz: chrono::TimeZone>(
+    profile: &TaxpayerProfile,
+    form_code: &str,
+    period_label: &str,
+    sent_at: &chrono::DateTime<Tz>,
+    dry_run: bool,
+) -> (String, String)
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let _ = (profile, form_code, period_label, sent_at);
+    let (title, body) =
+        crate::notification::banner_text(crate::notification::NotificationKind::ReturnSent {
+            dry_run,
+        });
+    (title.to_string(), body.to_string())
+}
+
+/// The detailed submission text kept on the in-app Notifications page: who,
+/// which return, when — not the IAF filename, which says none of that at a
+/// glance. Returns `(title, body)`. A `dry_run` send reached nobody: its title
+/// leads with "Test send" and its body's first line is [`TEST_SENT_LINE`]. It
+/// never says the return was submitted, sent or filed.
+pub(crate) fn submission_alert_text<Tz: chrono::TimeZone>(
     profile: &TaxpayerProfile,
     form_code: &str,
     period_label: &str,
@@ -2649,11 +2686,38 @@ where
     )
 }
 
-/// Banner for a BIR receipt confirmation. The date and time are **BIR's**
-/// (from the confirmation email), not when the poll found the mail.
-/// `received_at` is that date and time as one string, e.g.
-/// `12 September 2026, 11:43 AM`.
+/// The generic desktop banner for a BIR receipt confirmation. It carries no
+/// taxpayer detail; [`confirmation_alert_text`] is the detailed text kept on
+/// the in-app Notifications page.
 pub fn confirmation_notice(
+    taxpayer_name: &str,
+    tin_formatted: &str,
+    form_code: &str,
+    period_label: &str,
+    bir_filename: &str,
+    received_at: &str,
+    mailbox: &str,
+) -> (String, String) {
+    let _ = (
+        taxpayer_name,
+        tin_formatted,
+        form_code,
+        period_label,
+        bir_filename,
+        received_at,
+        mailbox,
+    );
+    let (title, body) = crate::notification::banner_text(
+        crate::notification::NotificationKind::ConfirmationArrived,
+    );
+    (title.to_string(), body.to_string())
+}
+
+/// The detailed confirmation text kept on the in-app Notifications page. The
+/// date and time are **BIR's** (from the confirmation email), not when the
+/// poll found the mail. `received_at` is that date and time as one string,
+/// e.g. `12 September 2026, 11:43 AM`.
+pub(crate) fn confirmation_alert_text(
     taxpayer_name: &str,
     tin_formatted: &str,
     form_code: &str,
@@ -2783,6 +2847,53 @@ pub fn schedule_email_poll(
     }
 }
 
+/// Queue the confirmation poll again for every return on `inbox` that still waits for the BIR's email. Polls are
+/// scheduled only when a send finishes, so once the inbox's way in changes (an app password saved, tracking switched
+/// on, a connection verified) nothing else would bring back a poll that ended, for example the one a Google grant this
+/// build cannot renew archived. [`schedule_email_poll`] keeps one job per return and skips an inbox whose tracking is
+/// off. Returns how many returns were looked at.
+/// Reconnect: a new Google grant for `inbox` is saved for the profiles on it, and the returns still waiting for the
+/// BIR's email are polled again through it (as after Verify).
+pub fn persist_google_grant_and_resume_polls(
+    db_guard: &Database,
+    inbox: &str,
+    access_token: &str,
+    refresh_token: &str,
+    source_tin: Option<&str>,
+) -> Result<crate::db::InboxOAuthPersistResult, crate::db::DbError> {
+    let saved =
+        db_guard.persist_google_oauth_for_inbox(inbox, access_token, refresh_token, source_tin)?;
+    reschedule_email_polls_for_inbox(db_guard, inbox);
+    Ok(saved)
+}
+
+pub fn reschedule_email_polls_for_inbox(db_guard: &Database, inbox: &str) -> usize {
+    let mut seen = 0;
+    let profiles = db_guard.list_profiles().unwrap_or_default();
+    for profile in profiles
+        .iter()
+        .filter(|profile| crate::profile::inbox_emails_match(profile.inbox_email(), inbox))
+    {
+        let tin = profile.tin.full();
+        for draft in db_guard
+            .returns_awaiting_bir_email(&tin)
+            .unwrap_or_default()
+        {
+            seen += 1;
+            schedule_email_poll(
+                profile,
+                form_code_from_form_type(&draft.form_code),
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                draft.quarter,
+                db_guard,
+            );
+        }
+    }
+    seen
+}
+
 /// The words kept on a return whose send ended with an unknown outcome, before the transport's own reason.
 pub const OUTCOME_UNKNOWN: &str = "The BIR may have received this return. Check for the BIR's confirmation email before sending it again.";
 
@@ -2804,20 +2915,25 @@ fn finish_sent_1601c(
     if skip_email_poll {
         info!(
             "Cron: dry run: simulated submission of queued 1601C {} (nothing sent to BIR)",
-            filename
+            crate::logging::submission_filename_for_log(filename.as_str())
         );
     } else {
-        info!("Cron: Successfully submitted queued 1601C {}", filename);
+        info!(
+            "Cron: Successfully submitted queued 1601C {}",
+            crate::logging::submission_filename_for_log(filename.as_str())
+        );
     }
     let period_label = monthly_period_label(draft.taxable_year, draft.month);
-    let (notice_title, notice_body) = submission_notice(
+    let (notice_title, notice_body) = submission_alert_text(
         profile,
         "1601C",
         &period_label,
         &chrono::Local::now(),
         skip_email_poll,
     );
-    send_notice(&notice_title, &notice_body);
+    send_notice(crate::notification::NotificationKind::ReturnSent {
+        dry_run: skip_email_poll,
+    });
     let submitted_file = filename.clone();
     // Keep the exact bytes that were encrypted for PUT, so an
     // amendment can later snapshot what BIR received.
@@ -3248,6 +3364,11 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop, r
                         warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
                         success = false;
                         job.output_log = Some(log);
+                        // A failure that leaves nothing pending (a Google grant this build cannot renew, an address
+                        // with no profile) ends the job rather than failing the same way every interval.
+                        if !still_pending {
+                            job.status = "Archived".to_string();
+                        }
                     }
                 } else {
                     // Unreachable in the App Store build (such jobs are
@@ -3502,7 +3623,7 @@ mod tests {
     async fn a_notice_of_the_old_epoch_posts_nothing_after_the_switch() {
         use crate::account_session::{OwnerKey, SEND_CONTEXT, SendContext};
         let _turn = crate::session_epoch::test_turn();
-        crate::notification::POSTED_TITLES
+        crate::notification::POSTED_KINDS
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clear();
@@ -3515,22 +3636,28 @@ mod tests {
         SEND_CONTEXT
             .scope(SendContext::new(owner.clone(), epoch), async {
                 // positive control: the same job BEFORE the switch posts
-                crate::background_cron::send_notice("control-title", "body");
+                crate::background_cron::send_notice(
+                    crate::notification::NotificationKind::ReturnSent { dry_run: true },
+                );
                 assert!(
-                    crate::notification::POSTED_TITLES
+                    crate::notification::POSTED_KINDS
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .contains(&"control-title".to_owned()),
+                        .contains(&crate::notification::NotificationKind::ReturnSent {
+                            dry_run: true,
+                        }),
                     "positive control: before the switch the notice posts"
                 );
                 // the switch: the epoch moves, the job's context does not
                 crate::session_epoch::set(epoch + 1);
-                crate::background_cron::send_notice("stale-title", "body");
+                crate::background_cron::send_notice(
+                    crate::notification::NotificationKind::ConfirmationArrived,
+                );
                 assert!(
-                    !crate::notification::POSTED_TITLES
+                    !crate::notification::POSTED_KINDS
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .contains(&"stale-title".to_owned()),
+                        .contains(&crate::notification::NotificationKind::ConfirmationArrived),
                     "the old epoch's notice posts nothing after the switch"
                 );
             })
@@ -4559,6 +4686,53 @@ mod tests {
     }
 
     #[test]
+    fn submission_alert_text_keeps_taxpayer_tin_form_period_and_time() {
+        let profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        let sent_at = chrono::Local
+            .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
+            .unwrap();
+        let (title, body) = submission_alert_text(&profile, "1601C", "09/26", &sent_at, false);
+        assert_eq!(title, "1601C 09/26 submitted \u{2014} Juan Dela Cruz");
+        assert_eq!(
+            body,
+            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under codeitlikemiley@gmail.com"
+        );
+    }
+
+    #[test]
+    fn submission_alert_text_marks_dry_run_without_claiming_filing() {
+        let profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        let sent_at = chrono::Local
+            .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
+            .unwrap();
+        let (title, body) = submission_alert_text(&profile, "1601C", "09/26", &sent_at, true);
+        assert_eq!(title, "Test send: 1601C 09/26 \u{2014} Juan Dela Cruz");
+        assert_eq!(
+            body,
+            "Test send. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
+        );
+        assert_never_filed_alert(&title, &body);
+    }
+
+    #[test]
+    fn confirmation_alert_text_keeps_the_detailed_in_app_text() {
+        let (title, body) = confirmation_alert_text(
+            "Juan Dela Cruz",
+            "000-000-000-00000",
+            "1601C",
+            "10/26",
+            "00000000000000-1601Cv2018-102026.xml",
+            "12 September 2026, 11:43 AM",
+            "codeitlikemiley@gmail.com",
+        );
+        assert_eq!(title, "BIR received 1601C 10/26 \u{2014} Juan Dela Cruz");
+        assert_eq!(
+            body,
+            "TIN 000-000-000-00000\nFile 00000000000000-1601Cv2018-102026.xml\nReceived by BIR 12 September 2026, 11:43 AM\nConfirmation in codeitlikemiley@gmail.com"
+        );
+    }
+
+    #[test]
     fn submission_notice_marks_dry_run_in_title_and_body() {
         let profile = crate::filing_queue::mandatory_lab_1601c_profile();
         let sent_at = chrono::FixedOffset::east_opt(8 * 3600)
@@ -4566,12 +4740,12 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
             .unwrap();
         let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
-        assert_eq!(title, "Test send: 1601C 09/26 \u{2014} Juan Dela Cruz");
+        assert_eq!(title, "eBIRForms");
         assert_eq!(
             body,
-            "Test send. Nothing reached the BIR.\nTIN 000-000-000-00000\nTested 03:17 PM, 12 Sep 2026"
+            "Test send. Nothing reached the BIR. Open eBIRForms to see it."
         );
-        assert_never_filed_notice(&title, &body);
+        assert_no_identity_in_notice(&title, &body);
     }
 
     /// A phone banner shows the title's first few words and cuts the rest: a test send's title leads with "Test
@@ -4586,16 +4760,30 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
             .unwrap();
         let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, true);
-        let banner: String = title.chars().take(20).collect();
-        assert_eq!(banner, "Test send: 1601C 09/");
-        assert_eq!(body.lines().next(), Some(TEST_SENT_LINE));
-        assert_never_filed_notice(&title, &body);
+        assert_eq!(title, "eBIRForms");
+        assert_eq!(
+            body,
+            "Test send. Nothing reached the BIR. Open eBIRForms to see it."
+        );
+        assert!(!body.contains(&profile.full_name), "{body}");
+        assert_no_identity_in_notice(&title, &body);
     }
 
-    /// A test send's notice leads with "Test send" in the title, carries the app's one sentence for it as a line of
-    /// its own (the OS notice's first; the stored alert names the taxpayer above it), and never says the return was
-    /// submitted, sent or filed.
-    fn assert_never_filed_notice(title: &str, body: &str) {
+    /// The OS banner is a fixed sentence: neither the taxpayer's name nor any
+    /// spelling of the TIN can be in it. The Notifications page keeps the
+    /// detailed alert; the banner only says where to look.
+    fn assert_no_identity_in_notice(title: &str, body: &str) {
+        for text in [title, body] {
+            assert!(!text.contains("Juan Dela Cruz"), "{text}");
+            for tin in ["00000000000000", "000-000-000-00000", "000-000-000"] {
+                assert!(!text.contains(tin), "{tin} in {text}");
+            }
+        }
+    }
+
+    /// The stored test-send alert still leads with its mark and never says
+    /// the return was submitted, sent or filed; only the OS banner is generic.
+    fn assert_never_filed_alert(title: &str, body: &str) {
         assert!(title.starts_with("Test send: "), "{title}");
         assert!(body.lines().any(|line| line == TEST_SENT_LINE), "{body}");
         for text in [title, body] {
@@ -4614,11 +4802,9 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 12, 15, 17, 25)
             .unwrap();
         let (title, body) = submission_notice(&profile, "1601C", "09/26", &sent_at, false);
-        assert_eq!(title, "1601C 09/26 submitted \u{2014} Juan Dela Cruz");
-        assert_eq!(
-            body,
-            "TIN 000-000-000-00000\nSent 03:17 PM, 12 Sep 2026\nFiled under codeitlikemiley@gmail.com"
-        );
+        assert_eq!(title, "eBIRForms");
+        assert_eq!(body, "A return was sent. Open eBIRForms to see it.");
+        assert_no_identity_in_notice(&title, &body);
     }
 
     #[test]
@@ -4632,11 +4818,12 @@ mod tests {
             "12 September 2026, 11:43 AM",
             "codeitlikemiley@gmail.com",
         );
-        assert_eq!(title, "BIR received 1601C 10/26 \u{2014} Juan Dela Cruz");
+        assert_eq!(title, "eBIRForms");
         assert_eq!(
             body,
-            "TIN 000-000-000-00000\nFile 00000000000000-1601Cv2018-102026.xml\nReceived by BIR 12 September 2026, 11:43 AM\nConfirmation in codeitlikemiley@gmail.com"
+            "BIR's confirmation arrived. Open eBIRForms to see it."
         );
+        assert_no_identity_in_notice(&title, &body);
         assert_eq!(
             display_received_at("2026-09-12", "12:11:00"),
             "12 September 2026, 12:11 PM"
@@ -5375,6 +5562,61 @@ mod tests {
             !stored.contains("submitted_dry_run"),
             "a real send stores no dry-run key: {stored}"
         );
+    }
+
+    #[test]
+    fn queued_1601c_attempt_masks_a_compact_13_digit_tin_in_the_log_file() {
+        let profile = test_profile();
+        let mut queued = Form1601CDraft::new_from_profile(&profile, 2024, 5);
+        queued.tin = "1234567890000".to_string();
+        queued.any_taxes_withheld = false;
+        queued
+            .transition_to_queued()
+            .expect("a compact 13-digit submission TIN is accepted today");
+        let db = Arc::new(Mutex::new(
+            Database::open_in_memory_for_tests()
+                .expect("the in-memory cron database should initialize"),
+        ));
+        let id = db
+            .lock()
+            .expect("the cron database should not be poisoned")
+            .save_queued_1601c_draft(&queued)
+            .expect("the reviewed 1601C queue snapshot should persist");
+        let summary = queued_1601c_summary(id, &queued);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        let dir = tempfile::tempdir().unwrap();
+        let options = crate::logging::InstallOptions {
+            developer_mode: false,
+            default_filter: crate::logging::shell_filter(false),
+        };
+
+        temp_env::with_vars(
+            [
+                ("BIR_LOG_DIR", Some(dir.path().as_os_str())),
+                ("RUST_LOG", None),
+            ],
+            || {
+                crate::logging::with_thread_subscriber(options, || {
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("the cron test runtime should build")
+                        .block_on(process_queued_1601c_with_transport(
+                            &summary, &profile, db, &transport,
+                        ));
+                });
+            },
+        );
+
+        let path = crate::log_files::today_log_path(dir.path());
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        assert!(
+            text.contains("Cron: Attempting to submit queued 1601C"),
+            "{text}"
+        );
+        assert!(!text.contains("1234567890000"), "{text}");
+        assert!(text.contains("***-***-789-0000"), "{text}");
     }
 
     #[tokio::test]
@@ -6141,7 +6383,7 @@ mod tests {
             .iter()
             .find(|alert| alert.kind.starts_with("form_submitted:"))
             .unwrap();
-        assert_never_filed_notice(&notice.title, &notice.detail);
+        assert_never_filed_alert(&notice.title, &notice.detail);
     }
 
     /// A 503 from the relay after the claim: it kept nothing, so the claim goes, the return stays Queued with a
@@ -6658,7 +6900,7 @@ mod tests {
             assert_eq!(state.poll_jobs, 0, "{path}: no BIR email is coming");
             assert_eq!(state.sent_again, 0, "{path}");
             let (title, detail) = state.notice.expect("the submission notice");
-            assert_never_filed_notice(&title, &detail);
+            assert_never_filed_alert(&title, &detail);
         }
     }
 
@@ -7421,6 +7663,179 @@ mod tests {
                 .iter()
                 .all(|job| !is_email_poll_job(job)),
             "dry-run source must skip IMAP"
+        );
+    }
+
+    /// `draft` sent for real by the worker's own path (queued, claimed, Submitted now): only a Draft may use the generic
+    /// save, so a sent return is made the way the worker makes one.
+    fn sent_lab_1601c(db: &Database, draft: Form1601CDraft) {
+        sent_lab_1601c_via(db, draft, false);
+    }
+
+    /// As `sent_lab_1601c`; `mock_relay` marks the send as one to the local mock relay, as the worker does.
+    fn sent_lab_1601c_via(db: &Database, mut draft: Form1601CDraft, mock_relay: bool) {
+        draft.transition_to_queued().expect("the lab return queues");
+        db.save_queued_1601c_draft(&draft)
+            .expect("the queued return is saved");
+        let claim = db
+            .claim_queued_1601c_submission(
+                &draft.tin,
+                draft.taxable_year,
+                draft.month,
+                &draft.queued_submission_fingerprint,
+                &draft.next_retry_at,
+                0,
+            )
+            .expect("the queued return is claimed");
+        let crate::db::Claim1601CSubmissionResult::Claimed {
+            draft: mut claimed,
+            token,
+        } = claim
+        else {
+            panic!("expected a claim");
+        };
+        claimed.transition_to_submitted(draft.default_submission_filename(), false);
+        claimed.submitted_via_relay = mock_relay;
+        db.finish_claimed_1601c_submission(&claimed, &token)
+            .expect("the send is finished");
+    }
+
+    /// #504 W1: a return still waiting for the BIR's email gets its poll back when the inbox's way in changes (here
+    /// after the poll a Google grant this build cannot renew had archived); a return never sent gets none, the inbox is
+    /// matched whatever its case, and a second call keeps one job per return.
+    #[test]
+    fn a_waiting_return_is_polled_again_when_the_inbox_changes() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
+        let draft_only = crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10);
+        db.save_1601c_draft(&draft_only)
+            .expect("the draft is saved");
+        let polls = |db: &Database| -> Vec<Job> {
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .into_iter()
+                .filter(|job| is_email_poll_job(job) && job.status != "Archived")
+                .collect()
+        };
+        assert!(polls(&db).is_empty(), "no poll before the inbox changes");
+
+        assert_eq!(
+            reschedule_email_polls_for_inbox(&db, "Filer@Example.com"),
+            1
+        );
+        let queued = polls(&db);
+        assert_eq!(queued.len(), 1, "one poll, for the sent return only");
+        assert_eq!(queued[0].status, "Queued");
+        assert!(
+            queued[0].name.contains("1601C Sep 2026"),
+            "{}",
+            queued[0].name
+        );
+        assert_eq!(
+            queued[0].command.as_deref(),
+            Some("bir_poll_email filer@example.com")
+        );
+
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        assert_eq!(polls(&db).len(), 1, "still one job per return");
+    }
+
+    /// #504 review: Reconnect brings back the poll a Google grant this build could not renew had archived.
+    #[test]
+    fn reconnect_brings_back_an_archived_poll() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        let tin = profile.tin.full();
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
+        reschedule_email_polls_for_inbox(&db, "filer@example.com");
+        let mut job = db
+            .list_jobs()
+            .expect("the jobs are listed")
+            .into_iter()
+            .find(is_email_poll_job)
+            .expect("the waiting return has a poll");
+        job.status = "Archived".to_string();
+        db.save_job(job).expect("the poll is archived");
+        let live = |db: &Database| {
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .into_iter()
+                .filter(|job| is_email_poll_job(job) && job.status == "Queued")
+                .count()
+        };
+        assert_eq!(live(&db), 0);
+
+        persist_google_grant_and_resume_polls(
+            &db,
+            "filer@example.com",
+            "access-new",
+            "refresh-new",
+            Some(&tin),
+        )
+        .expect("the grant is saved");
+        assert_eq!(live(&db), 1, "the waiting return is polled again");
+    }
+
+    /// #504 review: a send to the local mock relay never had a poll (the worker skips it), so a change of the inbox's
+    /// way in queues none for it either; a real send beside it still gets its poll.
+    #[test]
+    fn a_mock_relay_send_gets_no_poll_back() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = true;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c_via(&db, crate::filing_queue::mandatory_lab_1601c_draft(), true);
+        let tin = crate::filing_queue::mandatory_lab_1601c_draft().tin;
+        assert!(
+            db.returns_awaiting_bir_email(&tin)
+                .expect("the waiting returns are listed")
+                .is_empty(),
+            "a mock relay send is not waiting for the BIR's email"
+        );
+        sent_lab_1601c(
+            &db,
+            crate::filing_queue::mandatory_lab_1601c_draft_for(2026, 10),
+        );
+        assert_eq!(
+            db.returns_awaiting_bir_email(&tin)
+                .expect("the waiting returns are listed")
+                .len(),
+            1,
+            "the real send is"
+        );
+    }
+
+    /// With tracking off the inbox is not watched, so nothing is queued however it changes.
+    #[test]
+    fn an_inbox_with_tracking_off_gets_no_poll_back() {
+        let db = Database::open_in_memory_for_tests()
+            .expect("the in-memory cron database should initialize");
+        let mut profile = crate::filing_queue::mandatory_lab_1601c_profile();
+        profile.email_tracking_enabled = false;
+        profile.imap_email = Some("filer@example.com".to_string());
+        db.save_profile(profile).expect("the profile is saved");
+        sent_lab_1601c(&db, crate::filing_queue::mandatory_lab_1601c_draft());
+
+        assert_eq!(
+            reschedule_email_polls_for_inbox(&db, "filer@example.com"),
+            1
+        );
+        assert!(
+            db.list_jobs()
+                .expect("the jobs are listed")
+                .iter()
+                .all(|job| !is_email_poll_job(job))
         );
     }
 
