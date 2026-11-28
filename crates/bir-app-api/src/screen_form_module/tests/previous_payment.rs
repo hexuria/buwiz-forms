@@ -94,10 +94,24 @@ fn gate_flow(spec: &Spec) {
         no["relocks"][spec.key], spec.lock,
         "{code}: closing the gate shuts the box"
     );
-    assert_eq!(
-        no["relock_notes"][spec.key], spec.cleared,
-        "{code}: closing the gate says what was cleared inline"
-    );
+    if code == "2550M" {
+        assert_eq!(
+            no["relock_notes"][spec.key], spec.lock,
+            "{code}: the removal question is the one clearing announcement"
+        );
+        assert!(
+            no["removes"]["message"].as_str().is_some_and(|message| {
+                message.contains("Changing Amended Return to No clears item 23D")
+            }),
+            "{code}: the removal question names the clearing: {:?}",
+            no["removes"]
+        );
+    } else {
+        assert_eq!(
+            no["relock_notes"][spec.key], spec.cleared,
+            "{code}: closing the gate says what was cleared inline, once"
+        );
+    }
     assert_eq!(
         agent::field_map(kind, &no["draft"]).unwrap()[spec.key],
         "0.00",
@@ -144,21 +158,41 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
             &[&serde_json::to_string(&legacy).unwrap(), &id.to_string()],
         );
         let first = open(code, 1);
+        // BIR-Form0619E.hta and BIR-Form0619F.hta disable the box at load but
+        // do not run the No radio's zeroing onclick for a stored file
+        // (optAmend:N :330; load/enableAllControl :1309-1313/:2490-2494 and
+        // :1359-1362/:2565-2568). 2550M's init likewise only disables 23D
+        // (:2186); its Edit path clears it (:6937). A legacy or hand-edited
+        // dormant amount therefore stays in those drafts; the other gated
+        // forms' load path clears it through their runtime handlers.
+        let official_load_keeps_it = matches!(code, "0619E" | "0619F" | "2550M");
         assert_eq!(
             first["draft"][spec.path].as_f64().unwrap_or(0.0),
-            0.0,
-            "{code}: legacy dormant amount is cleared on open"
+            if official_load_keeps_it { 42.0 } else { 0.0 },
+            "{code}: legacy dormant amount on open"
         );
-        assert_eq!(first["values"][spec.key], "0.00");
         assert_eq!(first["locks"][spec.key], spec.lock);
         let kind = kind_of(code).unwrap();
+        let sent = agent::field_map(kind, &first["draft"]).unwrap()[spec.key].clone();
         assert_eq!(
-            agent::field_map(kind, &first["draft"]).unwrap()[spec.key],
-            "0.00",
-            "{code}: opened legacy draft's field map carries the shut box as zero"
+            first["values"][spec.key], sent,
+            "{code}: the page shows exactly what the upload sends"
+        );
+        assert_eq!(
+            sent,
+            if official_load_keeps_it {
+                "42.00"
+            } else {
+                "0.00"
+            },
+            "{code}: dormant legacy amount sent"
         );
         let gate = gate_key(spec);
         let notes = first["notes"].as_array().unwrap();
+        if official_load_keeps_it {
+            assert_eq!(notes.len(), 0, "{code}: no clearing happened on open");
+            continue;
+        }
         assert_eq!(notes.len(), 1, "{code}: one pending clearing notice");
         assert_eq!(notes[0]["text"], spec.cleared, "{code}: pending note text");
         let key = notes[0]["key"].as_str().unwrap().to_string();
@@ -177,6 +211,23 @@ fn amended_return_previous_payment_legacy_dormant_amounts_clear_on_open() {
 }
 
 #[test]
+fn already_no_previous_payment_no_click_zeroes_the_dormant_amount_on_the_page() {
+    setup();
+    for spec in &previous_payment::SPECS {
+        let code = spec.form_code;
+        let mut draft = open(code, 1)["draft"].clone();
+        draft["is_amended"] = json!(false);
+        draft[spec.path] = json!(42.0);
+        let clicked = fill(code, &draft, json!({spec.no_key: "true"}));
+        assert_eq!(
+            clicked["draft"][spec.path].as_f64().unwrap_or(0.0),
+            0.0,
+            "{code}: the official No click zeroes even when the draft was already No"
+        );
+    }
+}
+
+#[test]
 fn amended_return_previous_payment_yes_to_no_save_records_the_clearing() {
     setup();
     for spec in &previous_payment::SPECS {
@@ -186,7 +237,21 @@ fn amended_return_previous_payment_yes_to_no_save_records_the_clearing() {
         let saved = save(code, &typed["draft"]);
         let id = stored_id(&saved);
         let no = fill(code, &saved["draft"], json!({spec.no_key: "true"}));
-        assert_eq!(no["relock_notes"][spec.key], spec.cleared);
+        if code == "2550M" {
+            assert_eq!(
+                no["relock_notes"][spec.key], spec.lock,
+                "2550M: the removal question is the one clearing announcement"
+            );
+            assert!(
+                no["removes"]["message"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("item 23D"),
+                "2550M: removal prompt names item 23D: {no}"
+            );
+        } else {
+            assert_eq!(no["relock_notes"][spec.key], spec.cleared);
+        }
         save(code, &no["draft"]);
 
         // The inline note was shown, so the transactional pending notice is

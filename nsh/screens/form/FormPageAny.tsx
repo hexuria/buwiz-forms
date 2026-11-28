@@ -17,7 +17,7 @@ interface Params {
   /** Typed into the page once it opened (key -> text), as the filer would. */
   edits?: Record<string, string>;
   /** Ordered host edits and radio picks for a page-level regression that needs a populated return. */
-  setup?: ({ pick: string } | { edits: Record<string, string> })[];
+  setup?: ({ pick: string } | { edits: Record<string, string> } | { confirmRemoval: true })[];
   /** A row a step lands on once the page opened ("part:item"), as the sections list's jumpTo does. */
   stepRow?: string;
   /** The parity world first (nsh/verify/parity/seed.test.tsx): tax year 2026 with 1601C and 2551Q, and four saved
@@ -131,6 +131,7 @@ function Fixture() {
               for (const pi of openAll) if (!s.part(pi)().open) s.togglePart(pi);
               for (const step of p.setup || []) {
                 if ("pick" in step) s.pickRadio(step.pick);
+                else if ("confirmRemoval" in step) s.confirmRemoval();
                 else for (const [k, v] of Object.entries(step.edits)) s.edit(k, v);
                 await s.idle();
               }

@@ -403,17 +403,7 @@ pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, S
 
 /// Official control id -> value for `draft` as it stands.
 pub fn field_map(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
-    let mut fields = with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))?;
-    // A previous-payment amount belongs only to an amended return. While the
-    // gate is closed the map writes the box's empty zero even if a corrupt
-    // draft reaches this map without a recompute: the upload never carries
-    // the dormant amount, and the assistant's form card still shows the box
-    // at the zero the return holds.
-    if let Some(spec) = draft_locks::previous_payment::spec(kind)
-        && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
-    {
-        fields.insert(spec.key.to_string(), "0.00".to_string());
-    }
+    let fields = with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))?;
     Ok(fields)
 }
 
@@ -1744,8 +1734,32 @@ fn write_bound_box(
             .and_then(Value::as_str)
             .map(str::to_string)
     });
+    let before_1601fq =
+        (kind == AgentFormKind::Queueable(QueueableKind::Form1601FQ)).then(|| draft.clone());
     let was_ms_amended = kind.form_code() == "1701MS" && draft["is_amended"] == true;
     write_bound_box_here(kind, def, draft, key, value)?;
+    if let Some(before) = before_1601fq {
+        use crate::forms::form_1601fq::Form1601FqDraft;
+
+        // The 1601FQ radios carry runtime consequences the plain binding
+        // cannot express: Item 4 No unticks the Part II ATCs; Item 13 Yes
+        // opens Schedule 1 at NA and No clears it. The page applies the same
+        // typed methods in rows_withholding::write_cell.
+        let before_any_tax_withheld = before["any_tax_withheld"].clone();
+        let before_tax_relief = before["tax_relief"].clone();
+        let mut typed: Form1601FqDraft = serde_json::from_value(draft.clone())
+            .map_err(|error| format!("`{key}` does not fit the 1601FQ draft: {error}"))?;
+        if before_any_tax_withheld != json!(typed.any_tax_withheld)
+            && typed.any_tax_withheld == Some(false)
+        {
+            typed.set_any_tax_withheld(false);
+        }
+        if before_tax_relief != json!(typed.tax_relief) {
+            typed.set_tax_relief(typed.tax_relief);
+        }
+        *draft = serde_json::to_value(typed)
+            .map_err(|error| format!("`{key}` left the 1601FQ draft unwritable: {error}"))?;
+    }
     // In the official page a radio can only leave Yes through the click that
     // answers No; validateAmendedReturn then zeroes both Item 6 columns
     // (BIR-Form1701MS.hta :9658-9669). The host therefore keys the zeroing

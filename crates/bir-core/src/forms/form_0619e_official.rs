@@ -88,9 +88,6 @@ impl Form0619EDraft {
         if !self.any_taxes_withheld {
             self.item_14_amount_of_remittance = 0.0;
         }
-        if !self.is_amended {
-            self.item_15_amount_remitted_previously = 0.0;
-        }
         self.item_14_amount_of_remittance = cents(self.item_14_amount_of_remittance);
         self.item_15_amount_remitted_previously = cents(self.item_15_amount_remitted_previously);
         self.item_16_net_amount_of_remittance =

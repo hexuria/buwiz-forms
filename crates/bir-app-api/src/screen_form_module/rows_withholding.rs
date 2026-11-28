@@ -654,18 +654,34 @@ fn sections_removed(
     after: &Value,
     edits: &Map<String, Value>,
 ) -> Option<Value> {
-    let trigger = edits
-        .iter()
-        .find_map(|(key, value)| match cell(kind, key)? {
-            Cell::FqItem13(false) | Cell::Q2Item13(false) if ticked(value) => {
-                Some("Changing item 13 to No")
-            }
-            Cell::FqWithheld(false) | Cell::EqWithheld(false) if ticked(value) => {
+    let code = kind.form_code();
+    let state_trigger = (code == "1601FQ" && !edits.is_empty())
+        .then(|| {
+            if before["any_tax_withheld"] != false && after["any_tax_withheld"] == false {
                 Some("Changing item 4 to No")
+            } else if !before["tax_relief"].is_null() && after["tax_relief"].is_null() {
+                Some("Changing item 13 to No")
+            } else {
+                None
             }
-            Cell::FqCategory(_) | Cell::EqCategory(_) if ticked(value) => Some("Changing item 11"),
-            _ => None,
-        })?;
+        })
+        .flatten();
+    let trigger = state_trigger.or_else(|| {
+        edits
+            .iter()
+            .find_map(|(key, value)| match cell(kind, key)? {
+                Cell::FqItem13(false) | Cell::Q2Item13(false) if ticked(value) => {
+                    Some("Changing item 13 to No")
+                }
+                Cell::FqWithheld(false) | Cell::EqWithheld(false) if ticked(value) => {
+                    Some("Changing item 4 to No")
+                }
+                Cell::FqCategory(_) | Cell::EqCategory(_) if ticked(value) => {
+                    Some("Changing item 11")
+                }
+                _ => None,
+            })
+    })?;
     let lost = |b: usize, a: usize| b.saturating_sub(a);
     let sections = [
         (
@@ -692,6 +708,20 @@ fn sections_removed(
     let total: usize = sections.iter().map(|(n, _)| n).sum();
     if total == 0 {
         return None;
+    }
+    if trigger == "Changing item 4 to No" && code == "1601FQ" {
+        return Some(json!({
+            "message": "You are about to change the value to 'No'. Doing this will clear the entries in Part II and Schedule II.",
+            "done": "Cleared the entries in Part II and Schedule II",
+            "rows": total,
+        }));
+    }
+    if trigger == "Changing item 13 to No" && code == "1601FQ" {
+        return Some(json!({
+            "message": "Warning: pressing OK will clear all values in Schedule 1.",
+            "done": "Cleared all values in Schedule 1",
+            "rows": total,
+        }));
     }
     Some(json!({
         "message": format!("{trigger} removes the {} you typed. Continue?", parts.join(" and ")),

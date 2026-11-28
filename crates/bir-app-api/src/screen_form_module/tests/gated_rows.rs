@@ -551,6 +551,68 @@ fn form_2552_tax_relief_specification_is_gated_and_said_once() {
 }
 
 #[test]
+fn a_batch_writes_an_opening_date_before_a_gated_mcit_row() {
+    setup();
+    let date = "frm1702RT:txtPg1Pt1I10";
+    let year = "frm1702RT:txtPg4Sc4I1C1";
+    let opened = open("1702RT", 0);
+    let young = fill("1702RT", &opened["draft"], json!({date: "06/30/2024"}));
+    assert_eq!(
+        young["relocks"][year],
+        json!("MCIT applies to this return."),
+        "the row starts shut: {:?}",
+        young["relocks"]
+    );
+
+    let mut batch = serde_json::Map::new();
+    batch.insert(year.to_string(), json!("2023"));
+    batch.insert(date.to_string(), json!("06/30/2019"));
+    let opened_by_batch = fill("1702RT", &young["draft"], Value::Object(batch));
+    assert!(
+        opened_by_batch["rejected"].get(year).is_none(),
+        "the date opens the row before the row write is judged: {:?}",
+        opened_by_batch["rejected"]
+    );
+    assert_eq!(
+        opened_by_batch["draft"]["schedule_4"]["rows"][0]["year"],
+        "2023"
+    );
+}
+
+#[test]
+fn a_batch_writes_the_1701_owner_tick_before_a_gated_spouse_name() {
+    setup();
+    let spouse_name = "frm1701:txtPg2IShed1a_1SName";
+    let spouse_tick = "frm1701:chkPg2IShed1a_1Spouse";
+    let joint = fill(
+        "1701",
+        &open("1701", 0)["draft"],
+        json!({
+            "frm1701:rdoPg1I16CivilStatusM": "true",
+            "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+            "frm1701:rdoPg1I18FilingStatusJ": "true",
+            "frm1701:rdoPg2I4ATC_II011": "true",
+        }),
+    );
+
+    // Insertion order puts the gated write first. The owner tick is the
+    // answer that opens it, so the batch planner must apply that alias first.
+    let mut batch = serde_json::Map::new();
+    batch.insert(spouse_name.to_string(), json!("SPOUSE EMPLOYER"));
+    batch.insert(spouse_tick.to_string(), json!("true"));
+    let filled = fill("1701", &joint["draft"], Value::Object(batch));
+    assert!(
+        filled["rejected"].get(spouse_name).is_none(),
+        "the owner tick opens the name before it is judged: {:?}",
+        filled["rejected"]
+    );
+    assert_eq!(
+        filled["draft"]["employers"][0]["employer_name"],
+        "SPOUSE EMPLOYER"
+    );
+}
+
+#[test]
 fn form_2000_other_party_and_balance_are_gated() {
     setup();
     let name = "frm2000:txtOtherName";
@@ -601,7 +663,8 @@ fn form_2000_other_party_and_balance_are_gated() {
     for key in [name, tin] {
         assert_eq!(
             none["relock_notes"][key],
-            json!("The other-party details were cleared: Item 11 names no other party.")
+            json!("The other-party details need Item 11 Creditor or Debtor."),
+            "the removal question and its Undo toast already say this clearing"
         );
     }
 

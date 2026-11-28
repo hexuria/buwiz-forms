@@ -93,9 +93,6 @@ impl Form0619FDraft {
         if !self.any_taxes_withheld || self.tax_type == Form0619FTaxType::WB {
             self.item_14_other_final_tax_withheld = 0.0;
         }
-        if !self.is_amended {
-            self.item_16_remitted_previously = 0.0;
-        }
         self.item_13_interest_final_tax_withheld = cents(self.item_13_interest_final_tax_withheld);
         self.item_14_other_final_tax_withheld = cents(self.item_14_other_final_tax_withheld);
         self.item_15_total =

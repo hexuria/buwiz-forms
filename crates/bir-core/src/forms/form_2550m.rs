@@ -695,11 +695,6 @@ impl Form2550MDraft {
     /// The official compute chain; every amount is the formatted value of
     /// the items it reads.
     pub fn recompute(&mut self) {
-        // optAmendFunc clears 23D on an original return.
-        if !self.is_amended {
-            self.vat_paid_previous = 0.0;
-        }
-
         // Schedule 1 (getRequiredWithheld, totalAmountandOutputTax) in popup order.
         self.sales_schedule
             .sort_by_key(|row| form_2550m_atc_index(&row.atc_code).unwrap_or(usize::MAX));
@@ -2377,7 +2372,10 @@ mod tests {
         let mut d = sample();
         d.vat_paid_previous = 100.0;
         d.recompute();
-        assert_eq!(d.vat_paid_previous, 0.0);
+        assert_eq!(
+            d.vat_paid_previous, 100.0,
+            "init only disables 23D; recompute is not the No radio's click"
+        );
         d.is_amended = true;
         d.vat_paid_previous = 100.0;
         d.recompute();

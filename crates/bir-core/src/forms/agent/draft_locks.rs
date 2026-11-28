@@ -56,7 +56,7 @@ use super::gated_rows;
 use super::AgentFormKind;
 
 /// Lay the draft-dependent locks over `locks`, the base map
-/// ([`super::locks`]), the way the page's open does: the ten layers of this
+/// ([`super::locks`]), the way the page's open does: the eleven layers of this
 /// module's note, in that order, with their own reasons. A layer may replace
 /// a base reason with an exact one (2000's 15B, which the probe calls
 /// derived, is computed), and the last one takes 1701Q's spouse penalty
@@ -1625,6 +1625,31 @@ pub mod previous_payment {
             && draft[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005
     }
 
+    /// The No radio's own onclick clearing. Compute alone must not do it:
+    /// 0619E/F's load handlers disable the box without running that onclick,
+    /// so a dormant legacy amount survives opening there. Any write path that
+    /// moves Amended from Yes to No is the radio's choice, including a group
+    /// key or an untick of the Yes member; naming the No key itself is the
+    /// official click even when the draft was already No.
+    pub fn clear_on_no_radio(kind: AgentFormKind, draft: &mut Value, no_chosen: bool) {
+        if !no_chosen {
+            return;
+        }
+        let Some(spec) = spec(kind) else {
+            return;
+        };
+        if lock_reason(spec, draft).is_some()
+            && let Value::Object(object) = draft
+        {
+            object.insert(spec.path.to_string(), json!(0.0));
+        }
+    }
+
+    /// Whether this write moved the return out of Amended Yes.
+    pub fn moved_amended_yes_to_no(before: &Value, after: &Value) -> bool {
+        before["is_amended"] == true && after["is_amended"] != true
+    }
+
     pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
         let Some(spec) = spec(kind) else {
             return;
@@ -1753,9 +1778,6 @@ pub mod schedule1_1601fq {
     pub const LOCK: &str = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
     pub const CLEARED_NOTE: &str =
         "Schedule 1's rows were cleared: they apply only when item 13 is Yes.";
-    const ITEM4_CLEARED_NOTE: &str =
-        "Schedule 1's rows were cleared: changing item 4 clears all computation fields.";
-
     fn stem_keys(stems: &[&str]) -> Vec<String> {
         (0..ROWS)
             .flat_map(|row| stems.iter().map(move |stem| format!("{stem}{row}")))
@@ -1838,12 +1860,10 @@ pub mod schedule1_1601fq {
         pub event_text: String,
     }
 
-    /// Every typed Schedule 1 row a closing Item 13 gate or an Item 4 Yes→No
-    /// recompute cleared, keyed by stable id rather than transient vector index.
+    /// Every typed Schedule 1 row a closing Item 13 gate cleared, keyed by
+    /// stable id rather than transient vector index.
     pub fn row_clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<RowClearance> {
-        let item4_clearing =
-            before["any_tax_withheld"] == json!(true) && after["any_tax_withheld"] == json!(false);
-        if kind.form_code() != "1601FQ" || (!item4_clearing && lock_reason(after).is_none()) {
+        if kind.form_code() != "1601FQ" || lock_reason(after).is_none() {
             return Vec::new();
         }
         let empty_after = |id: &str| {
@@ -1868,14 +1888,7 @@ pub mod schedule1_1601fq {
                 }
                 let gate = format!("1601fq_schedule1:{id}");
                 let position = index + 1;
-                let (reason, event_text) = if item4_clearing {
-                    (
-                        "changing item 4 clears all computation fields",
-                        ITEM4_CLEARED_NOTE,
-                    )
-                } else {
-                    ("it applies only when item 13 is Yes", CLEARED_NOTE)
-                };
+                let (reason, event_text) = ("it applies only when item 13 is Yes", CLEARED_NOTE);
                 let text = format!("Schedule 1 row {position} was cleared: {reason}.");
                 Some(RowClearance {
                     id,
@@ -2566,7 +2579,7 @@ mod tests {
     }
 
     #[test]
-    fn item_4_no_clearing_1601fq_schedule_rows_is_noticed() {
+    fn item_4_no_does_not_notice_a_schedule1_clearing() {
         use super::schedule1_1601fq as gate;
         let row = json!({
             "instance_id": "row-00000000000000000001",
@@ -2585,12 +2598,7 @@ mod tests {
             "tax_relief": "special_rate",
             "schedule1": [],
         });
-        let clearances = gate::clearances(kind("1601FQ"), &before, &after);
-        assert_eq!(clearances.len(), 1, "{clearances:?}");
-        assert_eq!(
-            clearances[0].1,
-            "Schedule 1 row 1 was cleared: changing item 4 clears all computation fields."
-        );
+        assert_eq!(gate::clearances(kind("1601FQ"), &before, &after), vec![]);
     }
 
     #[test]
@@ -2855,6 +2863,57 @@ pub mod pending_notices {
         true
     }
 
+    /// Whether the stored before-image already had this gate shut while it
+    /// held the value. In that state the filer cannot have cleared the open
+    /// box first: the save is completing the same migration an open tried,
+    /// so a recomputed incoming draft must not suppress the notice when an
+    /// earlier migration save failed.
+    fn before_shut_and_held(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+        gate: &str,
+    ) -> bool {
+        if gate == "2551q_item16" {
+            return super::item16_2551q::lock_reason(before).is_some()
+                && before["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005;
+        }
+        if gate == "1606_installment" {
+            return super::installment_1606::lock_reason(before).is_some()
+                && super::installment_1606::AMOUNT_FIELDS
+                    .iter()
+                    .any(|field| before[field].as_f64().unwrap_or(0.0).abs() >= 0.005);
+        }
+        if let Some(spec) = super::previous_payment::spec(kind)
+            && gate == super::previous_payment::gate_key(spec)
+        {
+            return super::previous_payment::lock_reason(spec, before).is_some()
+                && before[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005;
+        }
+        if let Some(ids) = gate.strip_prefix("1601fq_schedule1:") {
+            let ids: Vec<&str> = ids.split(',').collect();
+            return super::schedule1_1601fq::lock_reason(before).is_some()
+                && before["schedule1"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                    .any(|(index, row)| {
+                        ids.contains(&super::schedule1_1601fq::row_id(row, index).as_str())
+                            && super::schedule1_1601fq::typed_row(row)
+                    });
+        }
+        super::gated_rows::clearances(kind, before, after)
+            .iter()
+            .any(|clearance| {
+                clearance.gate == gate
+                    && clearance
+                        .keys
+                        .iter()
+                        .any(|key| super::gated_rows::lock_reason(kind, before, key).is_some())
+            })
+    }
+
     /// The settings rows one save writes for its clearings. One event names
     /// this save across every gate it cleared; a later clearing gets a later
     /// event, so an old seen key cannot acknowledge it.
@@ -2868,7 +2927,11 @@ pub mod pending_notices {
     ) -> Vec<(String, String)> {
         let clearances: Vec<(String, String)> = clearance(kind, before, after)
             .into_iter()
-            .filter(|(gate, _)| reported.contains(gate) || incoming_held(kind, incoming, gate))
+            .filter(|(gate, _)| {
+                reported.contains(gate)
+                    || incoming_held(kind, incoming, gate)
+                    || before_shut_and_held(kind, before, after, gate)
+            })
             .collect();
         if clearances.is_empty() {
             return Vec::new();
@@ -2983,6 +3046,36 @@ pub mod pending_notices {
                 super::pending_event_for_seen(&seen),
                 Some((super::pending_key("schedule1:row:7", 9), "E1".to_string()))
             );
+        }
+
+        #[test]
+        fn a_failed_open_migration_still_records_its_notice_on_a_later_save() {
+            use std::collections::BTreeSet;
+
+            let before = json!({
+                "tax_paid_previous": 42.0,
+                "is_amended": false,
+                "item_13_election": "graduated",
+            });
+            // The open's recompute cleared the in-memory draft but its save
+            // failed, so the later save's incoming bytes no longer hold the
+            // amount even though the stored row still does.
+            let incoming = json!({
+                "tax_paid_previous": 0.0,
+                "is_amended": false,
+                "item_13_election": "graduated",
+            });
+            let after = incoming.clone();
+            let writes = super::settings_writes(
+                AgentFormKind::Form2551Q,
+                &before,
+                &incoming,
+                &after,
+                7,
+                &BTreeSet::new(),
+            );
+            assert_eq!(writes.len(), 1);
+            assert!(writes[0].0.starts_with("notice_pending:2551q_item16:7"));
         }
 
         #[test]
