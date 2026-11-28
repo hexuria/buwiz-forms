@@ -344,7 +344,7 @@ fn reads_see_the_main_threads_writes() {
         drop(source);
         assert_eq!(
             to_json(&import_archive_from(&archive).unwrap()),
-            json!({ "kind": "database" })
+            json!({ "kind": "database", "clientPins": false })
         );
         let (forms, took) = while_held(&bir, false, "as_needed_forms", &[json!(YEAR)]);
         let tins: Vec<&Value> = forms

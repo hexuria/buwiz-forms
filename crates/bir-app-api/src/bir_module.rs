@@ -3323,8 +3323,17 @@ fn restore_staged_database(
     } else {
         reset_database()?;
     }
-    let strip = bir_core::import::strip_foreign_archive_keys(&staged, hand_to_clients.as_deref())
-        .map_err(|error| HostError::new(error.to_string()))?;
+    // I5: the foreign archive is stripped of the other device's keys after the restore point
+    // exists and before the swap. A strip failure takes the install failure's own recovery:
+    // the connection is back on the file that is still there at once, not at the next call.
+    let strip =
+        match bir_core::import::strip_foreign_archive_keys(&staged, hand_to_clients.as_deref()) {
+            Ok(strip) => strip,
+            Err(error) => {
+                let _ = open_database_slot();
+                return Err(HostError::new(error.to_string()));
+            }
+        };
     match staged.install() {
         Ok(()) => {
             // F1: in rooms mode nothing may serve the ephemeral placeholder past the install —
@@ -6378,7 +6387,7 @@ mod tests {
 
         assert_eq!(
             to_json(&import_archive_from(&archive).unwrap()),
-            serde_json::json!({ "kind": "database" })
+            serde_json::json!({ "kind": "database", "clientPins": false })
         );
         assert!(
             !crate::legacy_import_module::holds_scan(),
