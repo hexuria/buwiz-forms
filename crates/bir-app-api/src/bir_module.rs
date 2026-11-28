@@ -7656,6 +7656,66 @@ mod tests {
             "the right PIN waits too"
         );
     }
+
+    /// I5 DONE-WHEN: an import is refused while one of THIS room's sends is in flight, and the
+    /// refusal carries the sending sentence; another room's send in flight never refuses this
+    /// room's import — the check passes it (a later step may still fail in a test harness, but
+    /// never with the sending sentence).
+    #[test]
+    fn an_import_is_refused_while_this_rooms_send_is_in_flight_only() {
+        setup();
+        let scratch = ScratchDir::new("inflight");
+        // A database archive: the sending refusal guards the database-restore path, which a
+        // profile archive never reaches.
+        std::fs::create_dir_all(scratch.path().join("inputs")).unwrap();
+        let archive = good_database_archive(scratch.path());
+        let jobs = bir_core::background_cron::get_active_jobs();
+        let own_prefix = crate::open_room::job_key_prefix();
+        let own_key = bir_core::background_cron::room_job_key(
+            &own_prefix,
+            &bir_core::background_cron::submission_job_key(
+                "2551Q",
+                "123456788000",
+                2026,
+                Some(1),
+                None,
+            ),
+        );
+        jobs.lock().unwrap().insert(own_key.clone());
+        let refused = import_archive_from(&archive)
+            .err()
+            .map(|error| error.message().to_string());
+        assert!(
+            refused.as_deref().is_some_and(|message| {
+                message.contains("being sent") || message.contains("is sending this return")
+            }),
+            "this room's send in flight refuses the import: {refused:?}"
+        );
+        jobs.lock().unwrap().remove(&own_key);
+
+        // Positive control: another room's send in flight — the refusal sentence never appears.
+        let foreign = bir_core::background_cron::room_job_key(
+            &format!("{own_prefix}x"),
+            &bir_core::background_cron::submission_job_key(
+                "2551Q",
+                "123456788000",
+                2026,
+                Some(1),
+                None,
+            ),
+        );
+        jobs.lock().unwrap().insert(foreign.clone());
+        let outcome = import_archive_from(&archive);
+        if let Err(error) = &outcome {
+            assert!(
+                !error.message().contains("being sent")
+                    && !error.message().contains("is sending this return"),
+                "another room's send never refuses with the sending sentence: {}",
+                error.message()
+            );
+        }
+        jobs.lock().unwrap().remove(&foreign);
+    }
 }
 
 #[cfg(test)]
