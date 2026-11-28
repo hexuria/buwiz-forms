@@ -1642,6 +1642,7 @@ fn is_amount_typed_key(key: &str) -> bool {
         "unit",
         "count",
         "taxdec",
+        "taxdebit",
         "taxpayer",
         "taxagent",
         "taxableyear",
@@ -5610,6 +5611,19 @@ fn without_font_size(tag: &str) -> String {
 /// whole-word "…" last resort (the owner's accepted cap).
 const RULE6_MAX_BAND_LINES: usize = 6;
 
+/// How many continuation lines a page-room budget (in pt) admits at the
+/// line pitch: one strip consumes max(pitch+1, 14) pt.
+fn rule6_band_lines_cap(line_budget: f64, pitch_pt: f64) -> usize {
+    let candidates = ((line_budget - 1.0) / pitch_pt).floor().max(0.0) as usize;
+    // One strip consumes max(pitch+1, 14) pt: a budget that admits one line
+    // by pitch but not the strip's 14 pt minimum admits no line at all.
+    if candidates == 1 && line_budget < 14.0 {
+        0
+    } else {
+        candidates
+    }
+}
+
 /// How a Rule 6 value composes over its own cell and the band below it: the
 /// owner's wrap rule fills the field first, and only what exceeds the field
 /// continues on the inserted lines — one type size for the whole composition,
@@ -5868,7 +5882,7 @@ fn apply_rule6_specify_bands(
             let room = shrunk_room(((text_right - row_x0) - 6.0).max(20.0));
             let cell_room =
                 cell_div_width(&page_html, &r6.cell_id).map(|w| input_room(w, &inp_tag));
-            let lines_cap = ((line_budget - 1.0) / pitch_pt).floor().max(0.0) as usize;
+            let lines_cap = rule6_band_lines_cap(line_budget, pitch_pt);
             let cap = lines_cap.min(RULE6_MAX_BAND_LINES);
             let composed =
                 compose_rule6_cell_and_band(sheet, letter, cell_room, room, full_val, cap);
@@ -7796,6 +7810,14 @@ pub fn printed_writer_keys(slug: &str) -> BTreeMap<String, bool> {
 
 /// [`printed_cell`] for every comb cell a filled document has, read in one
 /// pass: cell id -> what prints over it and the plain line's type size.
+fn decode_printed_entities(raw: &str) -> String {
+    raw.replace("&#10;", "\n")
+        .replace("&quot;", "\"")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
 pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> {
     let tags = input_tags(document);
     let grouped = grouped_input_indices(&tags);
@@ -7853,7 +7875,7 @@ pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> 
                 };
                 if !more.is_empty() {
                     entry.0.push(char::from(10));
-                    entry.0.push_str(&more);
+                    entry.0.push_str(&decode_printed_entities(&more));
                 }
             }
             continue;
@@ -7881,12 +7903,7 @@ pub fn printed_cells(document: &str) -> BTreeMap<String, (String, Option<f64>)> 
                 }
             }
         }
-        let text = raw_text
-            .replace("&#10;", "\n")
-            .replace("&quot;", "\"")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&");
+        let text = decode_printed_entities(&raw_text);
         let size = tag
             .find("font-size:")
             .and_then(|at| tag[at + "font-size:".len()..].split("pt").next())
@@ -7912,29 +7929,20 @@ pub fn stacked_lines(slug: &str) -> Result<Vec<Vec<String>>, String> {
 /// characters in slot order, or, where every box is empty, the plain line
 /// laid over the cell (`data-overflow-of`) with its type size.
 pub fn printed_cell(document: &str, cell: &str) -> (String, Option<f64>) {
+    // A split or overflowed cell first: the joined text printed_cells builds
+    // (the original field's first part and every continuation line, decoded).
+    // Its inputs share the cell's name, so printed_text would concatenate
+    // their raw values with no separators — never the printed text.
+    if document.contains(&format!(" data-overflow-of=\"{cell}\"")) {
+        if let Some((text, size)) = printed_cells(document).get(cell) {
+            return (text.clone(), *size);
+        }
+    }
     let boxes = printed_text(document, cell);
     if !boxes.trim().is_empty() {
         return (boxes, None);
     }
-    let needle = format!(" data-overflow-of=\"{cell}\"");
-    let Some(at) = document.find(&needle) else {
-        return (boxes, None);
-    };
-    let start = document[..at].rfind("<input").unwrap_or(0);
-    let end = at + document[at..].find('>').unwrap_or(needle.len());
-    let tag = &document[start..=end];
-    let text = attr(tag, "value")
-        .unwrap_or("")
-        .replace("&#10;", "\n")
-        .replace("&quot;", "\"")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&");
-    let size = tag
-        .find("font-size:")
-        .and_then(|at| tag[at + "font-size:".len()..].split("pt").next())
-        .and_then(|size| size.parse().ok());
-    (text, size)
+    (String::new(), None)
 }
 
 /// Email inputs (`txtEmail`, `txtI11Email`, `txtPg1Pt1I12Email`, ...) are
@@ -11937,7 +11945,7 @@ mod tests {
         // drops them cannot pass by checking none. Pages without the room
         // fall back to the sheet's own truncation path instead of inserting
         // a band, so the count is below the field count.
-        assert_eq!(bands, 51, "Rule 6 bands printed by the long fills");
+        assert_eq!(bands, 49, "Rule 6 bands printed by the long fills");
         misplaced.dedup();
         assert!(
             misplaced.is_empty(),
@@ -16195,25 +16203,114 @@ mod donor_estate_print_tests {
             slots.push((slot, attr(&tag, "value").unwrap_or("").to_string(), start));
         }
         slots.sort();
-        assert!(!slots.is_empty(), "p2c132 comb inputs present");
-        let peso_len = slots.len().saturating_sub(2).max(1);
-        let peso_slots: Vec<&(usize, String, usize)> = slots.iter().take(peso_len).collect();
-        let last_digit_at = peso_slots
-            .iter()
-            .rposition(|(_, v, _)| !v.trim().is_empty());
-        let first_digit_at = peso_slots.iter().position(|(_, v, _)| !v.trim().is_empty());
+        // all nine slots of p2c132 are peso boxes (the centavos print in a
+        // separate cell): every one of them is checked — 1000 right-aligned
+        // fills slots 5..=8 and leaves 0..=4 empty.
+        assert_eq!(slots.len(), 9, "fixture: p2c132's comb has nine slots");
+        let digits: Vec<&str> = slots.iter().map(|(_, v, _)| v.trim()).collect();
         assert!(
-            first_digit_at.is_some(),
+            digits.iter().any(|d| !d.is_empty()),
             "fixture vacuous: no digit in p2c132's peso comb — the fill did not stay in the comb"
         );
-        if let (Some(first), Some(last)) = (first_digit_at, last_digit_at) {
-            assert_eq!(
-                last,
-                peso_slots.len() - 1,
-                "the amount's last digit must sit in the right-most peso slot: digits at slots {first}..={last} of {} peso slots",
-                peso_slots.len()
-            );
+        assert_eq!(
+            digits,
+            vec!["", "", "", "", "", "1", "0", "0", "0"],
+            "1000 right-aligned in nine peso slots: slots 5..=8 hold 1,0,0,0 and 0..=4 stay empty"
+        );
+    }
+
+    #[test]
+    fn tax_debit_memo_number_keys_are_not_amount_typed() {
+        // review (b): a Tax Debit Memo number is a document number, never a
+        // peso amount — it must not take the money comb's right alignment.
+        assert!(!super::is_amount_typed_key(
+            "frm1702RT:txtPg1Pt3I25TaxDebitC2"
+        ));
+    }
+
+    #[test]
+    fn rule6_lines_cap_never_admits_a_strip_the_page_cannot_hold() {
+        // review (c): a one-line strip consumes max(11*1+1, 14) = 14 pt; a
+        // page budget of 13.4 pt (1701 page 2) admits zero lines, not one.
+        assert_eq!(super::rule6_band_lines_cap(13.4, 11.0), 0);
+        assert_eq!(super::rule6_band_lines_cap(13.99, 11.0), 0);
+        assert_eq!(super::rule6_band_lines_cap(14.0, 11.0), 1);
+        assert_eq!(super::rule6_band_lines_cap(22.9, 11.0), 1);
+        assert_eq!(super::rule6_band_lines_cap(23.0, 11.0), 2);
+        assert_eq!(super::rule6_band_lines_cap(0.0, 11.0), 0);
+    }
+
+    #[test]
+    fn printed_cells_decode_every_continuation_line() {
+        // review (a): the first continuation line was entity-decoded but
+        // later lines were appended raw — `&` printed as `&amp;`.
+        // review (g): printed_cell must agree with printed_cells.
+        let doc = concat!(
+            "<div data-rule6-of=\"c1\"></div>",
+            "<input id=\"c1-i\" name=\"c1\" value=\"FIRST\">",
+            "<input data-overflow-of=\"c1\" name=\"c1\" value=\"SECOND\">",
+            "<input data-overflow-of=\"c1\" name=\"c1\" value=\"R&amp;D &lt;x&gt;\">"
+        );
+        let cells = super::printed_cells(doc);
+        let (text, _) = cells.get("c1").expect("c1 present");
+        assert_eq!(*text, "FIRST\nSECOND\nR&D <x>");
+        assert_eq!(super::printed_cell(doc, "c1").0, *text);
+    }
+
+    #[test]
+    fn rule6_cell_and_band_reconstruct_the_whole_value() {
+        // lifted from #510's a_rule6_value_fills_its_own_cell_before_the_band,
+        // adapted: the cell's first part plus every continuation input of the
+        // band, joined in document order, reconstructs the whole value — or
+        // the band ends on the whole-word ellipsis. A dropped final line fails.
+        let mut fields = rule6_proof_fill("1701-2018");
+        // a fill that wraps over the cell plus two or three band lines but
+        // fits whole under the cap: the equality branch, not the ellipsis
+        // escape, is what proves reconstruction.
+        let words =
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA";
+        let full = format!("{words} {words} UNIT 1203 TWELFTH");
+        fields.insert("frm1701:txtPg4IPart7_9Specify".to_string(), full.clone());
+        let doc = filled_document("1701-2018", &fields).unwrap();
+        let decode = |s: &str| {
+            s.replace("&#10;", "\n")
+                .replace("&quot;", "\"")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&amp;", "&")
+        };
+        let inp_at = doc.find("id=\"p4c213-i\"").expect("the cell input prints");
+        let inp_end = inp_at + doc[inp_at..].find('>').unwrap();
+        let cell_text = decode(attr(&doc[inp_at..=inp_end], "value").unwrap_or(""));
+        assert!(
+            !cell_text.trim().is_empty(),
+            "the cell keeps its first part"
+        );
+        let mut lines: Vec<String> = Vec::new();
+        let mut cursor = 0usize;
+        while let Some(rel) = doc[cursor..].find("data-overflow-of=\"p4c213\"") {
+            let at = cursor + rel;
+            let start = doc[..at].rfind("<input").unwrap_or(0);
+            let end = at + doc[at..].find('>').unwrap_or(0);
+            lines.push(decode(attr(&doc[start..=end], "value").unwrap_or("")));
+            cursor = end + 1;
         }
+        assert!(
+            lines.len() >= 2,
+            "fixture: the band holds at least two continuation lines"
+        );
+        let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut joined = cell_text.clone();
+        for line in &lines {
+            joined.push(' ');
+            joined.push_str(line);
+        }
+        let joined = norm(&joined);
+        let whole = norm(&full);
+        assert!(
+            joined == whole || lines.last().is_some_and(|l| l.trim_end().ends_with('\u{2026}')),
+            "cell + band must reconstruct the whole value or end on the ellipsis:\njoined: {joined}\nwhole: {whole}"
+        );
     }
 
     /// The plain-rectangle case: an amount too long for its comb prints as
@@ -16297,16 +16394,22 @@ mod donor_estate_print_tests {
             let mut fields = rule6_proof_fill(slug);
             fields.insert(key.to_string(), long.clone());
             let html = filled_document(slug, &fields).unwrap();
+            // the band's inputs (data-overflow-of = the cell) or, where the
+            // page-room cap admits no strip at all, the cell's own input.
             let needle = format!("data-overflow-of=\"{cell}\"");
+            let cell_input = format!("id=\"{cell}-i\"");
             let mut cursor = 0usize;
             let mut truncated: Vec<String> = Vec::new();
-            while let Some(rel) = html[cursor..].find(&needle) {
-                let at = cursor + rel;
-                let s = html[..at].rfind("<input").unwrap_or(at);
-                let e = html[at..].find('>').unwrap() + at;
+            while let Some(rel) = html[cursor..].find("<input") {
+                let s = cursor + rel;
+                let Some(e) = html[s..].find('>').map(|e| e + s) else {
+                    break;
+                };
                 let tag = html[s..e + 1].to_string();
                 cursor = e;
-                if tag.contains("data-overflow-warning") {
+                if tag.contains("data-overflow-warning")
+                    && (tag.contains(&needle) || tag.contains(&cell_input))
+                {
                     truncated.push(tag);
                 }
             }
