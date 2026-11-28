@@ -587,6 +587,21 @@ fn register_with(
 /// out, or signed in elsewhere, the return is held until the person signs in.
 fn signed_in_to(server_url: &str) -> Result<(), TransportError> {
     let saved = crate::cloud_account::load_stored_account().ok().flatten();
+    // §5.4 early check: inside a send's scope the sign-in must still be the SEND'S owner — the
+    // account having changed mid-send holds the return (not a try, it stays Queued).
+    if let Ok(context) = crate::account_session::SEND_CONTEXT.try_with(|context| context.clone()) {
+        let still_the_sends = saved
+            .as_ref()
+            .and_then(crate::account_session::OwnerKey::of)
+            .is_some_and(|owner| owner == context.owner);
+        if !still_the_sends {
+            return Err(TransportError::RelayHeld {
+                reason: "The account changed while this return was being sent. It sends when its account is back."
+                    .into(),
+                wait_until: None,
+            });
+        }
+    }
     held_unless_signed_in_to(
         saved.as_ref().map(|saved| saved.server_url.as_str()),
         server_url,
@@ -1165,5 +1180,60 @@ mod tests {
             assert_eq!(error.no_receipt(), NoReceipt::Unknown);
             assert!(!error.relay_did_not_accept());
         }
+    }
+
+    /// §5.4 early check: inside a send scoped to owner A, `signed_in_to` holds the return once
+    /// the stored sign-in is B — RelayHeld, never a try. Positive control: still A, the check passes.
+    #[test]
+    fn a_send_scope_holds_the_return_when_the_account_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_var(
+            crate::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.to_str().unwrap()),
+            || {
+                let runtime = tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(1)
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    let stored = crate::cloud_account::StoredAccount {
+                        server_url: "http://localhost:3008".into(),
+                        access_token: "access-a".into(),
+                        refresh_token: "refresh-a".into(),
+                        access_expires_at_unix: 4_000_000_000,
+                        user_id: "user-1".into(),
+                        email: None,
+                        offline: false,
+                        last_refresh_unix: 0,
+                        practice: true,
+                    };
+                    crate::cloud_account::save_stored_account(&stored).unwrap();
+                    let owner = crate::account_session::OwnerKey::of(&stored).unwrap();
+                    let context = crate::account_session::SendContext::new(
+                        owner,
+                        crate::session_epoch::current(),
+                    );
+                    crate::account_session::SEND_CONTEXT
+                        .scope(context, async {
+                            assert!(
+                                signed_in_to("http://localhost:3008").is_ok(),
+                                "positive control: still the send's account"
+                            );
+                            let mut other = stored.clone();
+                            other.user_id = "user-2".into();
+                            crate::cloud_account::save_stored_account(&other).unwrap();
+                            match signed_in_to("http://localhost:3008") {
+                                Err(TransportError::RelayHeld { .. }) => {}
+                                other_answer => panic!(
+                                    "the switched account holds the return: {other_answer:?}"
+                                ),
+                            }
+                        })
+                        .await;
+                });
+            },
+        );
     }
 }

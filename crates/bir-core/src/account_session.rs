@@ -529,18 +529,24 @@ impl bir_submit::TokenSource for AccountTokens {
         Box<dyn std::future::Future<Output = Result<String, bir_submit::ClientError>> + Send + '_>,
     > {
         // The account file sits next to the database, whose in-process name is per thread: the blocking
-        // thread runs under the name of the thread that asked. The owner the token is for is read
-        // here, at the call: until §5.4's SEND_OWNER lands with the wiring commit, the owner the
-        // send started under IS the stored owner of that moment.
+        // thread runs under the name of the thread that asked.
+        // §5.4 (SEND_OWNER, landed): the owner the token is for is the SEND'S owner, read from the
+        // send's task-local BEFORE the hop — never the stored owner of "now", which a sign-in of
+        // another account may already have replaced. Outside a send the stored owner of the
+        // moment is the asker's, as before.
         let database = crate::db::capture_database_path_override();
         let device = crate::platform::capture_device_dir_override();
-        let Some(for_owner) = stored_owner() else {
+        let context = SEND_CONTEXT.try_with(|context| context.clone()).ok();
+        let owner = context
+            .as_ref()
+            .map(|context| context.owner.clone())
+            .or_else(stored_owner);
+        let Some(for_owner) = owner else {
             return Box::pin(async move { Err(bir_submit::ClientError::SignedOut) });
         };
         // The send's context, if this fetch is a send's: the credential it produced the token
         // from is recorded HERE, in the task's own async frame — the task-local does not reach
         // the blocking thread, and the record must be the send's, not "now".
-        let context = SEND_CONTEXT.try_with(|context| context.clone()).ok();
         Box::pin(async move {
             let answer = tokio::task::spawn_blocking(move || {
                 device.run(|| {
@@ -1385,7 +1391,9 @@ mod tests {
         for _ in 0..2 {
             let answer = receiver
                 .recv_timeout(std::time::Duration::from_secs(10))
-                .expect("the two credentials' flights ran concurrently — a shared flight would deadlock");
+                .expect(
+                "the two credentials' flights ran concurrently — a shared flight would deadlock",
+            );
             assert_eq!(answer.as_deref(), Ok("access-new"));
         }
         assert_eq!(hook.load(Ordering::SeqCst), 0);
@@ -1649,6 +1657,60 @@ mod tests {
     }
 
     #[test]
+
+    /// §5.4 across the switch: a send scoped to owner A asks for its token after the stored
+    /// sign-in became B — the answer is SignedOut for A, never B's token. Positive control:
+    /// with A throughout, the ask answers A's token.
+    #[test]
+    fn a_sends_token_ask_is_for_the_sends_owner_not_the_signin_of_now() {
+        let _turn = turn();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("account.json");
+        temp_env::with_var(
+            crate::cloud_account::ENV_ACCOUNT_FILE,
+            Some(path.to_str().unwrap()),
+            || {
+                let runtime = tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(2)
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    let owner_a = test_owner();
+                    let owner_b = OwnerKey {
+                        origin: owner_a.origin.clone(),
+                        user_id: "user-2".into(),
+                    };
+                    let mut account_a = account(4_000_000_000, 0);
+                    account_a.access_token = "access-a".into();
+                    crate::cloud_account::save_stored_account(&account_a).unwrap();
+                    cache_owner(Some(owner_a.clone()));
+                    let context = SendContext::new(owner_a.clone(), crate::session_epoch::current());
+                    SEND_CONTEXT
+                        .scope(context, async {
+                            let tokens = AccountTokens;
+                            let positive = bir_submit::TokenSource::access_token(&tokens, false).await;
+                            assert_eq!(positive.as_deref().ok(), Some("access-a"), "positive control: A throughout sends");
+                            // The switch: B signs in while the send is in flight.
+                            let mut account_b = account(4_000_000_000, 0);
+                            account_b.user_id = "user-2".into();
+                            account_b.access_token = "access-b".into();
+                            account_b.refresh_token = "refresh-b".into();
+                            crate::cloud_account::save_stored_account(&account_b).unwrap();
+                            cache_owner(Some(owner_b.clone()));
+                            let after = bir_submit::TokenSource::access_token(&tokens, false).await;
+                            assert!(
+                                matches!(after, Err(bir_submit::ClientError::SignedOut)),
+                                "a send of A asking after the switch to B is SignedOut, never B's token: {after:?}"
+                            );
+                        })
+                        .await;
+                    cache_owner(None);
+                });
+            },
+        );
+    }
+
     fn end_session_for_only_runs_the_hook() {
         let _turn = turn();
         // §4: bir-core no longer clears anything itself — the hook (the machine's server_ended)
