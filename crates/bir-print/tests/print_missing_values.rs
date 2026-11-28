@@ -1,4 +1,3 @@
-use bir_core::TaxpayerProfile;
 use bir_core::forms::form_1604c::Form1604cDraft;
 use bir_core::forms::form_1604e::Form1604eDraft;
 use bir_core::forms::form_1701::{
@@ -18,6 +17,7 @@ use bir_core::forms::form_2200s::{
     Form2200SBeverageRow, Form2200SDraft, Form2200SManner, Form2200SOtherRow,
 };
 use bir_core::forms::queueable::QueueableForm;
+use bir_core::TaxpayerProfile;
 use bir_print::frozen_html::{filled_document, printed_cell};
 use serde_json::json;
 
