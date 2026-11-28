@@ -2929,6 +2929,11 @@ async fn process_generic_jobs_until(db: Arc<Mutex<Database>>, stop: &CronStop) {
                         warn!("Cron: Email polling job '{}' failed: {}", job.name, log);
                         success = false;
                         job.output_log = Some(log);
+                        // A failure that leaves nothing pending (a Google grant this build cannot renew, an address
+                        // with no profile) ends the job rather than failing the same way every interval.
+                        if !still_pending {
+                            job.status = "Archived".to_string();
+                        }
                     }
                 } else {
                     // Unreachable in the App Store build (such jobs are

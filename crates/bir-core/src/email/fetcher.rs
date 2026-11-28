@@ -9,7 +9,7 @@ use crate::profile::{EmailAuthMethod, TaxpayerProfile, inbox_emails_match};
 use crate::receipt::parse_bir_receipt_email;
 use chrono::Datelike;
 
-use super::auth_oauth::GoogleOAuthAuth;
+use super::auth_oauth::{GOOGLE_NOT_IN_THIS_VERSION, GoogleOAuthAuth, google_sign_in_available};
 use super::auth_password::AppPasswordAuth;
 use super::inbox::{plan_email_poll_for_address, resolve_inbox_fetch_profile};
 
@@ -381,7 +381,8 @@ pub fn fetch_and_process_emails_for_address_until(
     let (profile, still_pending) = {
         let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
-            Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
+            // Still pending: a lock failure says nothing about the inbox, so the job keeps its place.
+            Err(e) => return (false, true, Some(format!("DB lock failed: {}", e))),
         };
         let current_year = chrono::Utc::now().naive_utc().date().year() as u16;
         let plan = plan_email_poll_for_address(&db_guard, email_address, current_year);
@@ -393,6 +394,13 @@ pub fn fetch_and_process_emails_for_address_until(
     }
 
     if let Some(mut profile) = profile {
+        // A Google grant in a build that cannot renew it: said once (one alert, one banner), and the poll stops rather
+        // than failing the same way every interval.
+        if profile.email_auth_method == EmailAuthMethod::GoogleOAuth
+            && !google_sign_in_available()
+        {
+            return google_unavailable_poll(&db, &profile);
+        }
         // Sibling Submitted drafts (Jane) must still be polled even when the
         // grant lives on Juan and Juan's tracking toggle is off.
         profile.email_tracking_enabled = true;
@@ -461,6 +469,42 @@ pub fn fetch_and_process_emails_for_address_until(
 
 const POLL_FAILURE_TITLE: &str = "Email confirmation checking has stopped";
 
+/// The poll of an inbox connected to Google in a build that cannot renew the grant: one alert (with nothing to click:
+/// Reconnect cannot work here), its banner only the first time, and nothing left pending, so the job ends instead of
+/// failing every interval. Returns what `fetch_and_process_emails_for_address_until` returns.
+fn google_unavailable_poll(
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    profile: &TaxpayerProfile,
+) -> (bool, bool, Option<String>) {
+    let recorded = lock_timing::lock(db)
+        .ok()
+        .and_then(|db_guard| record_google_unavailable(&db_guard, profile));
+    if let Some(outcome) = recorded {
+        crate::notification::notify_alert_if_newly_active(
+            outcome,
+            POLL_FAILURE_TITLE,
+            GOOGLE_NOT_IN_THIS_VERSION,
+        );
+    }
+    (false, false, Some(GOOGLE_NOT_IN_THIS_VERSION.to_string()))
+}
+
+/// The alert [`google_unavailable_poll`] records: the same kind and title as a failed poll, in plain words.
+fn record_google_unavailable(
+    db: &Database,
+    profile: &TaxpayerProfile,
+) -> Option<crate::db::AlertRecordOutcome> {
+    db.record_alert(
+        Some(&profile.tin.full()),
+        crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+        crate::db::AlertSeverity::Error,
+        POLL_FAILURE_TITLE,
+        GOOGLE_NOT_IN_THIS_VERSION,
+        crate::db::AlertAction::None,
+    )
+    .ok()
+}
+
 /// Record that polling `profile`'s confirmation inbox failed. Returns what
 /// the record did; the caller decides on the banner once it has let go of
 /// `db`'s lock, because posting one can spawn a process.
@@ -522,6 +566,34 @@ mod tests {
         assert_eq!(alerts[0].title, POLL_FAILURE_TITLE);
         assert_eq!(alerts[0].detail, "invalid_grant");
         assert_eq!(alerts[0].occurrences, 2);
+    }
+
+    /// A Google grant in a build without Google: one alert in plain words with nothing to click, recorded again only as
+    /// a repeat (no second banner), and the poll reports nothing pending, so its job ends.
+    #[test]
+    fn a_google_grant_without_google_is_said_once_and_the_poll_ends() {
+        let db = Database::open_ephemeral().unwrap();
+        let profile = juana();
+        assert_eq!(
+            record_google_unavailable(&db, &profile),
+            Some(AlertRecordOutcome::Created)
+        );
+        assert_eq!(
+            record_google_unavailable(&db, &profile),
+            Some(AlertRecordOutcome::StillActive)
+        );
+        let alerts = db.list_active_alerts(Some(&profile.tin.full())).unwrap();
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].detail, GOOGLE_NOT_IN_THIS_VERSION);
+        assert!(!alerts[0].detail.contains("GOOGLE_CLIENT_ID"));
+
+        let shared = std::sync::Arc::new(std::sync::Mutex::new(
+            Database::open_ephemeral().unwrap(),
+        ));
+        let (ok, still_pending, message) = google_unavailable_poll(&shared, &profile);
+        assert!(!ok);
+        assert!(!still_pending);
+        assert_eq!(message.as_deref(), Some(GOOGLE_NOT_IN_THIS_VERSION));
     }
 
     /// The IMAP connection waits at most 30 seconds on a read or a write (a loopback listener stands in for the server;
