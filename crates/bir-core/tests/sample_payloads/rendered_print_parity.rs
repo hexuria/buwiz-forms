@@ -306,6 +306,7 @@ fn amount_sizes(pages: &str) -> Vec<(f64, String, bool)> {
 /// amount prints at its box's own size. A sheet missing here, or an
 /// amount smaller than its entry, fails the parity test.
 const SMALLEST_AMOUNT_PT: &[(&str, f64)] = &[
+    ("1604f-2018", 8.55),
     ("1700-2018", 9.0),
     ("1701-2018", 9.0),
     ("1701a-2018", 9.0),
@@ -313,7 +314,11 @@ const SMALLEST_AMOUNT_PT: &[(&str, f64)] = &[
     ("1701q-2018", 9.0),
     ("1702ex-2018", 9.0),
     ("1702q-2018", 9.0),
+    ("1801-2018", 8.55),
+    ("2200a-2020", 8.55),
     ("2200p-2020", 7.76),
+    ("2550m-2007", 9.2),
+    ("2550q-2024", 9.2),
 ];
 
 /// The TIN and ATC joins (sheet, writer key), pinned in

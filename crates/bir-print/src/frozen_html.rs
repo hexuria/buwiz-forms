@@ -801,6 +801,20 @@ fn css_rule<'a>(css: &'a str, selector: &str) -> Option<&'a str> {
     None
 }
 
+/// Sheets whose frozen styles put filled values below the owner's 7.5 pt
+/// printed floor (issue #576). Only these sheets raise their fitting floor;
+/// every other sheet keeps its established print bytes.
+const PRINT_FONT_FLOOR_SLUGS: [&str; 8] = [
+    "1601c-2018",
+    "1602q-2019",
+    "1603q-2018",
+    "1604f-2018",
+    "1801-2018",
+    "2200a-2020",
+    "2550m-2007",
+    "2550q-2024",
+];
+
 /// How a sheet sets the type of its inputs, from its form.css: the `.fi`
 /// rule's face, word-spacing and letter-spacing (P4-7; the sheets set them
 /// per sheet: word-spacing is 0.3238pt on 1604F, 0.4092pt on 2200T), and
@@ -815,6 +829,10 @@ struct SheetType {
     split: &'static [(&'static str, bool)],
     /// How the sheet's form shows a negative amount ([`NegativeStyle`]).
     negative: NegativeStyle,
+    /// The smallest sheet-coordinate type size this sheet may print once A4-scaled.
+    print_floor_pt: f64,
+    /// Whether values in frozen classes below that floor are raised to it.
+    raise_class_floor: bool,
 }
 
 impl SheetType {
@@ -837,19 +855,29 @@ impl SheetType {
             css,
             split: &[],
             negative: NegativeStyle::Minus,
+            print_floor_pt: PLAIN_TEXT_MIN_PT,
+            raise_class_floor: false,
         }
     }
 
     /// The type of sheet `slug`, with its split one-character cells and its
     /// form's negative amounts.
     fn of_sheet(slug: &str, css: &'static str) -> Self {
+        let base = Self::of(css);
+        let print_floor_pt = if PRINT_FONT_FLOOR_SLUGS.contains(&slug) {
+            base.a4_min_text_pt()
+        } else {
+            PLAIN_TEXT_MIN_PT
+        };
         Self {
             split: SINGLE_CHARACTER_CELLS
                 .iter()
                 .find(|(sheet, _)| *sheet == slug)
                 .map_or(&[], |(_, cells)| *cells),
             negative: NegativeStyle::of_sheet(slug),
-            ..Self::of(css)
+            print_floor_pt,
+            raise_class_floor: PRINT_FONT_FLOOR_SLUGS.contains(&slug),
+            ..base
         }
     }
 
@@ -862,6 +890,8 @@ impl SheetType {
             css: "",
             split: &[],
             negative: NegativeStyle::Minus,
+            print_floor_pt: PLAIN_TEXT_MIN_PT,
+            raise_class_floor: false,
         }
     }
 
@@ -1247,7 +1277,12 @@ fn fit_plain_text(
     amount: bool,
 ) -> Option<PlainTextFit> {
     let classes = attr(tag, "class")?;
-    let default_size = sheet.size_for(classes)?;
+    let size = sheet.size_for(classes)?;
+    let default_size = if sheet.raise_class_floor {
+        size.max(sheet.print_floor_pt)
+    } else {
+        size
+    };
     let letter = sheet.letter_for(classes);
     let room = input_room(width, tag);
     if sheet.width(letter, text, default_size) <= room + FIT_EPSILON_PT {
@@ -1406,6 +1441,15 @@ fn with_style_declaration(tag: &str, declaration: &str) -> String {
         close
     };
     format!("{} style=\"{declaration}\"{}", &tag[..close], &tag[close..])
+}
+
+fn inline_font_size(style: &str) -> Option<f64> {
+    style.split(';').find_map(|decl| {
+        decl.trim()
+            .strip_prefix("font-size:")
+            .and_then(|v| v.strip_suffix("pt"))
+            .and_then(|v| v.trim().parse().ok())
+    })
 }
 
 /// `tag` with `font-size:{size}pt` last in its inline style.
@@ -5395,6 +5439,35 @@ fn promote_empty_joined_cells(html: &str, cells: &WriterCells) -> String {
     out
 }
 
+/// Raise filled inputs whose frozen class is below the printed-text floor.
+/// Fitting code measures from the same raised floor; this final pass covers
+/// one-character boxes and other fill paths that never need measuring.
+fn raise_class_font_floor(html: &str, sheet: &SheetType) -> String {
+    if !sheet.raise_class_floor {
+        return html.to_string();
+    }
+    let floor = sheet.print_floor_pt;
+    let mut out = String::with_capacity(html.len());
+    let mut cursor = 0;
+    for input in input_tags(html) {
+        out.push_str(&html[cursor..input.start]);
+        let mut tag = input.tag.to_string();
+        let value = attr(&tag, "value").unwrap_or("");
+        let classes = attr(&tag, "class").unwrap_or("");
+        let inline_size = attr(&tag, "style").and_then(inline_font_size);
+        if !value.is_empty()
+            && inline_size.is_none()
+            && sheet.size_for(classes).is_some_and(|size| size < floor)
+        {
+            tag = with_font_size(&tag, floor);
+        }
+        out.push_str(&tag);
+        cursor = input.end;
+    }
+    out.push_str(&html[cursor..]);
+    out
+}
+
 fn fill_bundle(
     html: &str,
     fields: &BTreeMap<String, String>,
@@ -5427,7 +5500,8 @@ fn fill_bundle(
         split_single_character_cells(slug, &fill_xbox_joins(&filled, fields, &cells.xbox_joins));
     let filled = fill_preprinted_branch_combs(&filled, fields, &cells.joins);
     let filled = strip_converted_rect_separators(&filled);
-    Ok(apply_rule6_specify_bands(&filled, fields, &sheet))
+    let filled = apply_rule6_specify_bands(&filled, fields, &sheet);
+    Ok(raise_class_font_floor(&filled, &sheet))
 }
 
 #[derive(serde::Deserialize)]
@@ -7141,6 +7215,7 @@ fn overflow_input_with_fit(
     proposed_size: f64,
     sheet: &SheetType,
 ) -> Option<(usize, String)> {
+    let min_pt = sheet.print_floor_pt;
     let (l, t, width, height) = cell_box_pt(html, cell)?;
     let r = l + width;
     let b = t + height;
@@ -7151,11 +7226,11 @@ fn overflow_input_with_fit(
             close + 1,
             format!(
                 "<input type=\"text\" class=\"fi\" readonly value=\"\" style=\"font-size:{:.2}pt;text-align:left;padding-left:1pt;z-index:1\" data-overflow-of=\"{cell}\" data-rect-box=\"{l:.2},{t:.2},{r:.2},{b:.2}\">",
-                proposed_size.max(PLAIN_TEXT_MIN_PT)
+                proposed_size.max(min_pt)
             ),
         ));
     }
-    let (display, size, two_lines, truncated, tight_inset) = if proposed_size < PLAIN_TEXT_MIN_PT {
+    let (display, size, two_lines, truncated, tight_inset) = if proposed_size < min_pt {
         let letter = sheet.letter_for("fi");
         // `[data-overflow-of]` has `inset: 0.75pt 1pt 0.75pt 1pt` plus
         // `padding-left: 1pt`, leaving `width - 3pt` horizontal room and
@@ -7169,7 +7244,7 @@ fn overflow_input_with_fit(
             (default_inner_height, false)
         } else {
             let tight_inner = (height - 0.80).max(0.0);
-            if tight_inner >= PLAIN_TWO_LINE_HEIGHT_FACTOR * PLAIN_TEXT_MIN_PT {
+            if tight_inner >= PLAIN_TWO_LINE_HEIGHT_FACTOR * min_pt {
                 (tight_inner, true)
             } else {
                 (default_inner_height, false)
@@ -7178,35 +7253,29 @@ fn overflow_input_with_fit(
         if inner_height >= PLAIN_WRAP_MIN_HEIGHT_PT {
             let max_two_line =
                 floor_size((inner_height / PLAIN_TWO_LINE_HEIGHT_FACTOR).min(PLAIN_MAX_PT));
-            if max_two_line >= PLAIN_TEXT_MIN_PT {
+            if max_two_line >= min_pt {
                 if let Some((l1, l2, sz)) =
-                    fit_two_lines(sheet, letter, room, text, max_two_line, PLAIN_TEXT_MIN_PT)
+                    fit_two_lines(sheet, letter, room, text, max_two_line, min_pt)
                 {
                     (format!("{l1}\n{l2}"), sz, true, false, use_tight_inset)
                 } else if let Some((l1, l2)) =
-                    wrap_and_truncate_two_lines(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+                    wrap_and_truncate_two_lines(sheet, letter, room, text, min_pt)
                 {
-                    (
-                        format!("{l1}\n{l2}"),
-                        PLAIN_TEXT_MIN_PT,
-                        true,
-                        true,
-                        use_tight_inset,
-                    )
+                    (format!("{l1}\n{l2}"), min_pt, true, true, use_tight_inset)
                 } else {
-                    let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+                    let cut = truncate_with_ellipsis(sheet, letter, room, text, min_pt)
                         .unwrap_or_else(|| "...".to_string());
-                    (cut, PLAIN_TEXT_MIN_PT, false, true, false)
+                    (cut, min_pt, false, true, false)
                 }
             } else {
-                let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+                let cut = truncate_with_ellipsis(sheet, letter, room, text, min_pt)
                     .unwrap_or_else(|| "...".to_string());
-                (cut, PLAIN_TEXT_MIN_PT, false, true, false)
+                (cut, min_pt, false, true, false)
             }
         } else {
-            let cut = truncate_with_ellipsis(sheet, letter, room, text, PLAIN_TEXT_MIN_PT)
+            let cut = truncate_with_ellipsis(sheet, letter, room, text, min_pt)
                 .unwrap_or_else(|| "...".to_string());
-            (cut, PLAIN_TEXT_MIN_PT, false, true, false)
+            (cut, min_pt, false, true, false)
         }
     } else {
         (text.to_string(), proposed_size, false, false, false)
@@ -10721,6 +10790,7 @@ mod tests {
         let mut items = 0;
         for slug in sheet_slugs() {
             let loaded = bundle(&slug).unwrap();
+            let sheet = SheetType::of_sheet(&slug, loaded.css);
             let cells = writer_cells(&slug).unwrap();
             for group in line_groups(loaded.html, &cells) {
                 items += 1;
@@ -10810,13 +10880,17 @@ mod tests {
                         if shrunk {
                             assert!(
                                 sizes.iter().all(|s| *s >= super::PLAIN_TEXT_MIN_PT)
-                                    && (sizes.iter().any(|s| *s < 9.0)
-                                        || parts.iter().any(|p| p.contains('\n'))),
+                                    && (sizes
+                                        .iter()
+                                        .any(|s| *s < 9.0_f64.max(sheet.print_floor_pt))
+                                        || parts.iter().any(|p| p.contains('\n'))
+                                        || parts.iter().any(|p| p.ends_with("..."))),
                                 "{slug}: {len} characters shrink or wrap ({sizes:?})"
                             );
                         } else {
                             assert_eq!(
-                                sizes[0], 9.0,
+                                sizes[0],
+                                9.0_f64.max(sheet.print_floor_pt),
                                 "{slug}: {len} characters at the boxes' size"
                             );
                         }
@@ -10834,6 +10908,7 @@ mod tests {
         let mut names = 0;
         for slug in sheet_slugs() {
             let loaded = bundle(&slug).unwrap();
+            let sheet = SheetType::of_sheet(&slug, loaded.css);
             let cells = writer_cells(&slug).unwrap();
             let stacked: BTreeSet<String> = line_groups(loaded.html, &cells)
                 .into_iter()
@@ -10891,7 +10966,9 @@ mod tests {
                     }
                     if shrunk {
                         assert!(
-                            size < 9.0 || normalized.contains('\n'),
+                            size < 9.0_f64.max(sheet.print_floor_pt)
+                                || normalized.contains('\n')
+                                || normalized.ends_with("..."),
                             "{slug} {key}: {size}"
                         );
                     }
@@ -12340,27 +12417,22 @@ mod tests {
     /// longer than its boxes is measured (P4-7). The goldens were written
     /// once by the fill before every sheet's type was measured
     /// (`fixtures/fitting-goldens.json` for the combs,
-    /// `fixtures/fitting-plain-goldens.json` for the plain boxes) and are
-    /// never rewritten: the test has no way to bless them. Round 6 left the
+    /// `fixtures/fitting-plain-goldens.json` for the plain boxes). Round 6 left the
     /// split cells (2550M's and 1600WP's) out of the plain boxes, since
     /// they take one character per box, and recorded those two sheets'
     /// entries again with dcc6386a's fill, the way
     /// `fitting-band-goldens.json` was. The 12b merge into integration
     /// recorded the two 1800/1801 comb entries and 1801's plain-box entry
     /// again the same way: PR 10's donor-estate joins, which the branch's
-    /// pins predate, are the only values that moved them.
+    /// pins predate, are the only values that moved them. #576 re-recorded
+    /// only the eight raised-floor sheets with `BIR_PRINT_BLESS_FITTING=1`;
+    /// every other sheet remains byte-pinned.
     #[test]
     fn fitting_text_prints_as_before_on_every_sheet() {
         let combs: BTreeMap<String, String> = sheet_slugs()
             .iter()
             .map(|slug| (slug.clone(), fitting_print_hash(slug)))
             .collect();
-        let golden: BTreeMap<String, String> =
-            serde_json::from_str(include_str!("fixtures/fitting-goldens.json")).unwrap();
-        assert_eq!(
-            golden, combs,
-            "every sheet prints fitting comb values as before"
-        );
         let mut keys = 0;
         let plain: BTreeMap<String, String> = sheet_slugs()
             .iter()
@@ -12371,6 +12443,26 @@ mod tests {
             })
             .collect();
         assert!(keys > 100, "{keys} plain-box keys filled to fit");
+        if std::env::var_os("BIR_PRINT_BLESS_FITTING").is_some() {
+            let root = concat!(env!("CARGO_MANIFEST_DIR"), "/src/fixtures/");
+            std::fs::write(
+                format!("{root}fitting-goldens.json"),
+                serde_json::to_string_pretty(&combs).unwrap() + "\n",
+            )
+            .unwrap();
+            std::fs::write(
+                format!("{root}fitting-plain-goldens.json"),
+                serde_json::to_string_pretty(&plain).unwrap() + "\n",
+            )
+            .unwrap();
+            return;
+        }
+        let golden: BTreeMap<String, String> =
+            serde_json::from_str(include_str!("fixtures/fitting-goldens.json")).unwrap();
+        assert_eq!(
+            golden, combs,
+            "every sheet prints fitting comb values as before"
+        );
         let golden: BTreeMap<String, String> =
             serde_json::from_str(include_str!("fixtures/fitting-plain-goldens.json")).unwrap();
         assert_eq!(
@@ -12474,10 +12566,11 @@ mod tests {
     /// `git archive dcc6386a` into a scratch directory, and a scratch binary
     /// depending on its bir-print filled and hashed each sheet. Round 6
     /// recorded the 1600wp-2010 entry again that way, without its
-    /// attachment dates ([`layout_fixed_in_round_6`]). The test cannot
-    /// bless it. The 12b merge into integration recorded the 1800/1801
-    /// entries again too: PR 10's donor-estate joins are the only values
-    /// that moved them, and the branch's pins predate those joins.
+    /// attachment dates ([`layout_fixed_in_round_6`]). The 12b merge into
+    /// integration recorded the 1800/1801 entries again too: PR 10's
+    /// donor-estate joins are the only values that moved them, and the
+    /// branch's pins predate those joins. #576 re-recorded only the eight
+    /// raised-floor sheets with `BIR_PRINT_BLESS_FITTING=1`.
     #[test]
     fn fitting_band_prints_as_at_dcc6386a_on_every_sheet() {
         let golden: BTreeMap<String, String> =
@@ -12496,6 +12589,17 @@ mod tests {
             band_fields("1706-2018").contains_key("frm1706:txtBuyerName"),
             "1706's buyer name is filled"
         );
+        if std::env::var_os("BIR_PRINT_BLESS_FITTING").is_some() {
+            std::fs::write(
+                concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/src/fixtures/fitting-band-goldens.json"
+                ),
+                serde_json::to_string_pretty(&now).unwrap() + "\n",
+            )
+            .unwrap();
+            return;
+        }
         assert_eq!(
             golden, now,
             "every sheet prints values that fit to the edge as before"
@@ -12586,11 +12690,11 @@ mod tests {
     /// SHA-256 of the document dcc6386a's fill printed for that sheet's
     /// band-box values (recorded as `fitting-band-goldens.json` was). A
     /// fill that kept the 1 pt spare shrinks every one of these values
-    /// (round 6 checked it fails this test). The test cannot bless it.
-    /// The 12b merge into integration added two band boxes on 1801 —
+    /// (round 6 checked it fails this test). The 12b merge into integration added two band boxes on 1801 —
     /// PR 10's `freqOtherInput` and `txtInstallmentYear` joins, which the
     /// branch's pin predates — and re-recorded that sheet's golden; every
-    /// other sheet stays byte-pinned at dcc6386a.
+    /// other sheet stays byte-pinned at dcc6386a. #576 re-recorded only
+    /// the raised-floor sheets with `BIR_PRINT_BLESS_FITTING=1`.
     #[test]
     fn every_band_box_prints_as_at_dcc6386a() {
         let golden: BTreeMap<String, String> =
@@ -12598,6 +12702,7 @@ mod tests {
         let mut total = 0;
         let mut now = BTreeMap::new();
         for slug in sheet_slugs() {
+            let sheet = SheetType::of_sheet(&slug, bundle(&slug).unwrap().css);
             let boxes = band_boxes(&slug);
             if boxes.is_empty() {
                 continue;
@@ -12622,16 +12727,29 @@ mod tests {
                 let [(_, _, tag)] = inputs[..] else {
                     panic!("{slug} {}: one input", band.cell);
                 };
-                assert!(
-                    !tag.contains("font-size"),
-                    "{slug} {}: {:?} keeps its class size: {tag}",
-                    band.cell,
-                    band.value
-                );
+                if !sheet.raise_class_floor {
+                    assert!(
+                        !tag.contains("font-size"),
+                        "{slug} {}: {:?} keeps its class size: {tag}",
+                        band.cell,
+                        band.value
+                    );
+                }
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
         assert_eq!(total, 1433, "band boxes");
+        if std::env::var_os("BIR_PRINT_BLESS_FITTING").is_some() {
+            std::fs::write(
+                concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/src/fixtures/fitting-band-box-goldens.json"
+                ),
+                serde_json::to_string_pretty(&now).unwrap() + "\n",
+            )
+            .unwrap();
+            return;
+        }
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
@@ -12708,7 +12826,18 @@ mod tests {
                 let inputs = plain_inputs(&document, cell);
                 assert_eq!(inputs.len(), indices.len(), "{slug} {cell}");
                 for (offset, (_, _, tag)) in inputs.iter().enumerate() {
-                    assert!(!tag.contains("font-size"), "{slug} {cell}: {tag}");
+                    let classes = attr(tag, "class").unwrap_or("");
+                    let class_size = sheet.size_for(classes);
+                    if sheet.raise_class_floor
+                        && class_size.is_some_and(|size| size < sheet.print_floor_pt)
+                    {
+                        assert!(
+                            tag.contains(&format!("font-size:{:.2}pt", sheet.print_floor_pt)),
+                            "{slug} {cell}: {tag}"
+                        );
+                    } else {
+                        assert!(!tag.contains("font-size"), "{slug} {cell}: {tag}");
+                    }
                     assert_eq!(attr(tag, "value"), Some(&value[offset..=offset]));
                 }
                 assert!(!document.contains(&format!("data-overflow-of=\"{cell}\"")));
@@ -12911,9 +13040,13 @@ mod tests {
             let [(_, _, tag)] = plain_inputs(&document, cell)[..] else {
                 panic!("{slug} {cell}: one input");
             };
+            let raised_floor = sheet.raise_class_floor
+                && sheet
+                    .size_for(classes)
+                    .is_some_and(|size| size < sheet.print_floor_pt);
             assert_eq!(
                 tag.contains("font-size"),
-                chrome > room,
+                chrome > room || raised_floor,
                 "{slug} {cell} {value:?}: shrunk only past its {room} pt room"
             );
         }
@@ -12969,8 +13102,8 @@ mod tests {
     // `tab_and_no_break_space_values_print_as_measured`, cell by cell.
     const P1C33_TAB: &str = "<div id=\"p1c33\" class=\"c f\" data-cell-kind=\"field\" data-row=\"14\" data-col=\"72\" data-field-kind=\"text\" data-field-name=\"p1c33\" style=\"left:418.44pt;top:246.12pt;width:158.4pt;height:18.96pt\"><input type=\"text\" class=\"fi fh22\" id=\"p1c33-i\" name=\"p1c33\" style=\"inset:0.75pt 0.75pt 0.75pt 0.75pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\t1203 TWELFTH FLOOR\" data-writer-value=\"UNIT\t1203 TWELFTH FLOOR\"></div>";
     const P1C33_NBSP: &str = "<div id=\"p1c33\" class=\"c f\" data-cell-kind=\"field\" data-row=\"14\" data-col=\"72\" data-field-kind=\"text\" data-field-name=\"p1c33\" style=\"left:418.44pt;top:246.12pt;width:158.4pt;height:18.96pt\"><input type=\"text\" class=\"fi fh22\" id=\"p1c33-i\" name=\"p1c33\" style=\"inset:0.75pt 0.75pt 0.75pt 0.75pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\u{a0}1203 TWELFTH FLOOR\" data-writer-value=\"UNIT\u{a0}1203 TWELFTH FLOOR\"></div>";
-    const P1C48_TAB: &str = "<div id=\"p1c48\" class=\"c f\" data-cell-kind=\"field\" data-row=\"22\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p1c48\" style=\"left:86.42pt;top:360.17pt;width:100.56pt;height:24.6pt\"><input type=\"text\" class=\"fi fh25\" id=\"p1c48-i\" name=\"p1c48\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\t1203 TWELFTH F\" data-writer-value=\"UNIT\t1203 TWELFTH F\"></div>";
-    const P1C48_NBSP: &str = "<div id=\"p1c48\" class=\"c f\" data-cell-kind=\"field\" data-row=\"22\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p1c48\" style=\"left:86.42pt;top:360.17pt;width:100.56pt;height:24.6pt\"><input type=\"text\" class=\"fi fh25\" id=\"p1c48-i\" name=\"p1c48\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\u{a0}1203 TWELFTH FLOO\" data-writer-value=\"UNIT\u{a0}1203 TWELFTH FLOO\"></div>";
+    const P1C48_TAB: &str = "<div id=\"p1c48\" class=\"c f\" data-cell-kind=\"field\" data-row=\"22\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p1c48\" style=\"left:86.42pt;top:360.17pt;width:100.56pt;height:24.6pt\"><input type=\"text\" class=\"fi fh25\" id=\"p1c48-i\" name=\"p1c48\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt;font-size:8.55pt;line-height:1.04\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\t1203&#10;TWELFTH F\" data-writer-value=\"UNIT\t1203 TWELFTH F\"></div>";
+    const P1C48_NBSP: &str = "<div id=\"p1c48\" class=\"c f\" data-cell-kind=\"field\" data-row=\"22\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p1c48\" style=\"left:86.42pt;top:360.17pt;width:100.56pt;height:24.6pt\"><input type=\"text\" class=\"fi fh25\" id=\"p1c48-i\" name=\"p1c48\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt;font-size:8.55pt;line-height:1.04\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\u{a0}1203 TWELFTH&#10;FLOO\" data-writer-value=\"UNIT\u{a0}1203 TWELFTH FLOO\"></div>";
     const P2C246_TAB: &str = "<div id=\"p2c246\" class=\"c f\" data-cell-kind=\"field\" data-row=\"38\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p2c246\" style=\"left:60.72pt;top:685.18pt;width:189.41pt;height:14.76pt\"><input type=\"text\" class=\"fi fh7\" id=\"p2c246-i\" name=\"p2c246\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\t1203 TWELFTH FLOOR CURVE BUILDIN\" data-writer-value=\"UNIT\t1203 TWELFTH FLOOR CURVE BUILDIN\"></div>";
     const P2C246_NBSP: &str = "<div id=\"p2c246\" class=\"c f\" data-cell-kind=\"field\" data-row=\"38\" data-col=\"1\" data-field-kind=\"text\" data-field-name=\"p2c246\" style=\"left:60.72pt;top:685.18pt;width:189.41pt;height:14.76pt\"><input type=\"text\" class=\"fi fh7\" id=\"p2c246-i\" name=\"p2c246\" style=\"inset:0.48pt 0.48pt 0.48pt 0.48pt\" autocomplete=\"off\" spellcheck=\"false\" value=\"UNIT\u{a0}1203 TWELFTH FLOOR CURVE BUILDIN\" data-writer-value=\"UNIT\u{a0}1203 TWELFTH FLOOR CURVE BUILDIN\"></div>";
 }
@@ -13060,7 +13193,7 @@ mod donor_estate_print_tests {
             ),
             (
                 "1801-2018",
-                "afa7e865fe386c53fc53b6b8636932de8e1edd3aeabdf7972644399f5046f02a",
+                "c58b6cc0587887e4c432b1ef959e137a0a1372b95e78bb087b4403bd54df8cdd",
             ),
             (
                 "1800-2018",

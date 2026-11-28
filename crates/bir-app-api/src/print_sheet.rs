@@ -320,6 +320,29 @@ mod tests {
     }
 
     #[test]
+    fn eight_sheets_print_no_filled_value_below_the_floor() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let rows = crate::print_fonts::probe_all(&root).expect("eight sheets render");
+        assert!(rows.len() > 100, "{} filled values measured", rows.len());
+        let below: Vec<String> = rows
+            .iter()
+            .filter(|row| row.effective_pt + 0.005 < crate::print_fonts::MIN_PRINTED_PT)
+            .take(20)
+            .map(|row| {
+                format!(
+                    "{} {} [{}] {:.2}pt effective",
+                    row.slug, row.id, row.key, row.effective_pt
+                )
+            })
+            .collect();
+        assert!(
+            below.is_empty(),
+            "filled values below 7.5pt effective: {}",
+            below.join("; ")
+        );
+    }
+
+    #[test]
     fn packaged_overrides_beside_the_executable_are_used() {
         let tag = format!("bir-shell-overrides-pkg-{}", std::process::id());
         let root = std::env::temp_dir().join(tag);
