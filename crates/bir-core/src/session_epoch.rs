@@ -20,9 +20,21 @@ pub fn set(epoch: u64) {
 }
 
 #[cfg(test)]
+static TEST_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Serializes tests that write this process-global mirror.
+#[cfg(test)]
+pub fn test_turn() -> std::sync::MutexGuard<'static, ()> {
+    TEST_TURN
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
 mod tests {
     #[test]
     fn the_mirror_reads_back_what_was_set() {
+        let _turn = super::test_turn();
         let before = super::current();
         super::set(before + 41);
         assert_eq!(super::current(), before + 41);

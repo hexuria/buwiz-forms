@@ -1664,6 +1664,7 @@ mod tests {
     /// receives the new session's token. The positive control without the race answers the token.
     #[test]
     fn a_same_owner_re_sign_in_before_the_account_load_is_signed_out() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let _turn = turn();
         let store = Arc::new(MemoryStore::with(account(2_000, 500)));
         let epoch = crate::session_epoch::current();

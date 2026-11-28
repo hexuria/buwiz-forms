@@ -3226,8 +3226,9 @@ mod tests {
     /// runs — after a switch the return stays Queued in its own room, never sent under the new
     /// sign-in. The spawn-to-first-poll gap is deterministic here: the spawned task cannot poll
     /// until this test yields, and the switch happens before that.
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread")]
     async fn a_send_spawned_before_a_switch_is_never_sent_under_the_new_sign_in() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
         fn secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
@@ -3248,10 +3249,12 @@ mod tests {
                 Some(account_path.to_str().unwrap().to_owned()),
             )],
             async {
-                crate::account_session::save_stored(
-                    &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-a")),
-                )
-                .unwrap();
+                let stored_a =
+                    crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-a"));
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let owner_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                let epoch_a = crate::session_epoch::current() + 1;
+                crate::session_epoch::set(epoch_a);
                 let db = test_db();
                 let (queued, _summary) = stored_queued_2551q(&db);
                 let profile = reviewed_profile();
@@ -3259,15 +3262,16 @@ mod tests {
                     &profile,
                     db.clone(),
                     FIXED_ROOM_KEY,
-                    crate::account_session::stored_owner(),
-                    crate::session_epoch::current(),
+                    Some(owner_a),
+                    epoch_a,
                 )
                 .await;
-                // The switch happens before the spawned task's first poll.
+                // The machine's sign-in transition happens before the spawned task's first poll.
                 crate::account_session::save_stored(
                     &crate::cloud_account::StoredAccount::from_secrets(&secrets_for("user-b")),
                 )
                 .unwrap();
+                crate::session_epoch::set(epoch_a + 1);
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
                 while !get_active_jobs().lock().unwrap().is_empty() {
                     assert!(
@@ -3298,6 +3302,7 @@ mod tests {
     /// later tick snapshots that account (the positive control).
     #[tokio::test(flavor = "current_thread")]
     async fn a_sign_in_between_the_room_snapshot_and_the_spawn_sends_nothing() {
+        let _epoch_turn = crate::session_epoch::test_turn();
         let dir = tempfile::tempdir().unwrap();
         let account_path = dir.path().join("buwiz-cloud-account.json");
         fn secrets_for(user: &str) -> crate::cloud_account::AccountSecrets {
