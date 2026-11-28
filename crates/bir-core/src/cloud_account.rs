@@ -1029,7 +1029,25 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
     if written.is_err() {
         let _ = std::fs::remove_file(&temp);
     }
-    written?;
+    if let Err(atomic_error) = written {
+        // A read-only folder refuses the temp file and the rename though the file itself is
+        // writable — the overwrite a sign-out falls back on there. In-place is the only write
+        // that can land at all in that folder, so it is the fallback (the daemon's home
+        // folders are never read-only: the atomic rename is the path that matters).
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&path)
+            .map_err(|error| {
+                CloudError::Unexpected(format!(
+                    "could not store the Buwiz account ({atomic_error}; {error})"
+                ))
+            })?;
+        file.write_all(raw.as_bytes()).map_err(|error| {
+            CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
+        })?;
+        let _ = file.sync_all();
+    }
     bir_submit::ios_storage::protect_file(&path);
     Ok(())
 }

@@ -1297,7 +1297,8 @@ mod tests {
             // B on disk: the next batch is refused with the clear error, then the daemon
             // does the one shared close and exits.
             bir_core::account_session::save_stored(&account_b).unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(300));
+            // no pause: the batch must reach the serve loop before the cron's own tick can
+            // close the room first — the batch path's clear error is what is asserted here
             let error = client
                 .expect_ok(Op::Hello)
                 .expect_err("the batch under B must be refused");
@@ -1344,7 +1345,6 @@ mod tests {
             // sign out entirely: nobody on disk
             let _ = std::fs::remove_file(&account_path);
             bir_core::account_session::cache_owner(None);
-            std::thread::sleep(std::time::Duration::from_millis(300));
             let error2 = client2
                 .expect_ok(Op::Hello)
                 .expect_err("the batch with nobody on disk must be refused");
