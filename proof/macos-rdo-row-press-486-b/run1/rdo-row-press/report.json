@@ -1,0 +1,61 @@
+{
+ "suite": "rdo-row-press",
+ "target": "macos",
+ "started": "20261127-154123",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123",
+ "cli_version": "0.4.1",
+ "app_commit": "6417adbc",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 725,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "rdo-row-press",
+   "status": "pass",
+   "ms": 36387,
+   "note": null,
+   "file": "agent-recipes/e2e/rdo-row-press.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 8592,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants"
+  },
+  {
+   "name": "profile-pick-press",
+   "status": "fail",
+   "ms": 37040,
+   "note": null,
+   "file": "agent-recipes/e2e/profile-pick-press.wants",
+   "step": "s67",
+   "error": "occluded_by: 12098",
+   "error_code": "host_error",
+   "line": "click tp-branch-name",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/failure-tree.json"
+  }
+ ]
+}

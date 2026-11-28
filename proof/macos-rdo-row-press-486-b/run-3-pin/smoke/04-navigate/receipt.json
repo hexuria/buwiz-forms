@@ -1,0 +1,238 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "ui-navigate-app",
+  "fingerprint": "fnv1a64:913724ce6bd7ff16",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 624
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 202,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/002-s2.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 371
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 255,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/004-s4.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 410
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 146,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 381
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 115,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/008-s8.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 348
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 56
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 654
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 248,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 392
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 168,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/014-s14.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 380
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "elapsed_ms": 151,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/016-s16.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 393
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 66
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 392
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "elapsed_ms": 170,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/020-s20.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 429
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 379
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 382
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 378
+    },
+    {
+      "id": "s25",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 378
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 387
+    },
+    {
+      "id": "s27",
+      "ok": true,
+      "elapsed_ms": 60
+    },
+    {
+      "id": "s28",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 424
+    },
+    {
+      "id": "s29",
+      "ok": true,
+      "elapsed_ms": 79
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/002-s2.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/004-s4.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/008-s8.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/014-s14.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/016-s16.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/04-navigate/020-s20.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8834
+}

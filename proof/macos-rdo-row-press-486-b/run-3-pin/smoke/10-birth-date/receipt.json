@@ -1,0 +1,100 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "birth-date",
+  "fingerprint": "fnv1a64:0da4bb8692142101",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 401
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 142
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 539
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 159
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 404
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 150
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 369
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 434,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/10-birth-date/008-s8.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 155
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 608
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 230,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/10-birth-date/011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 377
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 137
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/10-birth-date/008-s8.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-155601/10-birth-date/011-s11.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 4111
+}

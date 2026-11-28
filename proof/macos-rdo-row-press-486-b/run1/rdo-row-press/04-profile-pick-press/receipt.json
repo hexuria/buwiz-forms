@@ -1,0 +1,414 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "profile-pick-press",
+  "fingerprint": "fnv1a64:b93fcefe6682fa75",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 417
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 56
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 442
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 123
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 367
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 213,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/006-s6.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "elapsed_ms": 2545
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 404
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 346
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3192
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 145
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 475,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 135
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "elapsed_ms": 120
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 114
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 350
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 354
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3089
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 154
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 385
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 151
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 120
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "elapsed_ms": 118
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 356
+    },
+    {
+      "id": "s25",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 336
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3253
+    },
+    {
+      "id": "s27",
+      "ok": true,
+      "elapsed_ms": 153
+    },
+    {
+      "id": "s28",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 423
+    },
+    {
+      "id": "s29",
+      "ok": true,
+      "elapsed_ms": 161
+    },
+    {
+      "id": "s30",
+      "ok": true,
+      "elapsed_ms": 120
+    },
+    {
+      "id": "s31",
+      "ok": true,
+      "elapsed_ms": 118
+    },
+    {
+      "id": "s32",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 354
+    },
+    {
+      "id": "s33",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 337
+    },
+    {
+      "id": "s34",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3226
+    },
+    {
+      "id": "s35",
+      "ok": true,
+      "elapsed_ms": 143
+    },
+    {
+      "id": "s36",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 389
+    },
+    {
+      "id": "s37",
+      "ok": true,
+      "elapsed_ms": 149
+    },
+    {
+      "id": "s38",
+      "ok": true,
+      "elapsed_ms": 134
+    },
+    {
+      "id": "s39",
+      "ok": true,
+      "elapsed_ms": 130
+    },
+    {
+      "id": "s40",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 341
+    },
+    {
+      "id": "s41",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 359
+    },
+    {
+      "id": "s42",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3276
+    },
+    {
+      "id": "s43",
+      "ok": true,
+      "elapsed_ms": 178
+    },
+    {
+      "id": "s44",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 475,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/044-s44.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s45",
+      "ok": true,
+      "elapsed_ms": 122
+    },
+    {
+      "id": "s46",
+      "ok": true,
+      "elapsed_ms": 121
+    },
+    {
+      "id": "s47",
+      "ok": true,
+      "elapsed_ms": 115
+    },
+    {
+      "id": "s48",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 424
+    },
+    {
+      "id": "s49",
+      "ok": true,
+      "elapsed_ms": 151
+    },
+    {
+      "id": "s50",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 469
+    },
+    {
+      "id": "s51",
+      "ok": true,
+      "elapsed_ms": 121
+    },
+    {
+      "id": "s52",
+      "ok": true,
+      "elapsed_ms": 128
+    },
+    {
+      "id": "s53",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 480
+    },
+    {
+      "id": "s54",
+      "ok": true,
+      "elapsed_ms": 161
+    },
+    {
+      "id": "s55",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 411
+    },
+    {
+      "id": "s56",
+      "ok": true,
+      "elapsed_ms": 136
+    },
+    {
+      "id": "s57",
+      "ok": true,
+      "elapsed_ms": 129
+    },
+    {
+      "id": "s58",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 472
+    },
+    {
+      "id": "s59",
+      "ok": true,
+      "elapsed_ms": 148
+    },
+    {
+      "id": "s60",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 527,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/060-s60.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s61",
+      "ok": true,
+      "elapsed_ms": 129
+    },
+    {
+      "id": "s62",
+      "ok": true,
+      "elapsed_ms": 124
+    },
+    {
+      "id": "s63",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 377
+    },
+    {
+      "id": "s64",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 356
+    },
+    {
+      "id": "s65",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3136
+    },
+    {
+      "id": "s66",
+      "ok": true,
+      "elapsed_ms": 168
+    },
+    {
+      "id": "s67",
+      "ok": false,
+      "error": "occluded_by: 12098",
+      "error_code": "host_error",
+      "delivery_status": "delivery_uncertain",
+      "elapsed_ms": 343
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/006-s6.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/044-s44.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-154123/04-profile-pick-press/060-s60.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 37009
+}

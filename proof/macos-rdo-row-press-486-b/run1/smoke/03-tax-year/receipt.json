@@ -1,0 +1,103 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "tax-year",
+  "fingerprint": "fnv1a64:b5adf073e096fa36",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 401
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 35
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 417
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 70
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 369
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 45
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1343
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 44
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 514
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 144
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1046
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 50
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 377
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1625
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 166,
+      "screenshot": {
+        "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-153748/03-tax-year/015-s15.png",
+        "ok": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-153748/03-tax-year/015-s15.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 6654
+}
