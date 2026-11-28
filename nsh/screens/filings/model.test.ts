@@ -4,7 +4,7 @@ import { expect, test } from "nsh/test";
 import type { ReturnRow, SendState } from "../../bir";
 import {
   cardLabel, columnRows, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
-  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, visibleColumns, whoLine,
+  plural, presetFilters, presetOf, returnTitle, sendChip, shownColumns, effectiveTab, STATUSES, visibleColumns, whoLine,
 } from "./model";
 
 const INDEX = [
@@ -225,4 +225,29 @@ test("a screen reader hears a test send's word and a real send's Submitted", () 
   expect(cardLabel({ ...r, send: send("test_sent") }).endsWith(", Test send: not filed. Open")).toBe(true);
   expect(cardLabel(r).endsWith(", Submitted. Open")).toBe(true);
   expect(cardLabel({ ...r, send: send("sent") }).endsWith(", Submitted. Open")).toBe(true);
+});
+
+test("the test-sends column shows only while a test send exists; a real filer never reads the words", () => {
+  const real = row({ status: "Submitted" });
+  const test1 = row({ status: "Submitted", submitted_dry_run: true });
+  // None: the column is out even though the filter would let it through.
+  expect(shownColumns([real], null).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "confirmed"]);
+  expect(shownColumns([real], new Set(["Test sends"])).map((c) => c.id)).toEqual([]);
+  // One: it is in, in board order.
+  expect(shownColumns([real, test1], null).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "test-sends", "confirmed"]);
+  expect(shownColumns([real, test1], new Set(["Test sends"])).map((c) => c.id)).toEqual(["test-sends"]);
+});
+
+test("a test-sends tab or filter with no test send left falls back to all, never an empty list for ever", () => {
+  const real = row({ status: "Submitted" });
+  const test1 = row({ status: "Submitted", submitted_dry_run: true });
+  expect(effectiveTab([real], "test-sends")).toBe("all");
+  expect(effectiveTab([real, test1], "test-sends")).toBe("test-sends");
+  expect(effectiveTab([real], "submitted")).toBe("submitted");
+  const onlyTests: FilterValues = { query: "", tps: null, forms: null, periods: null, statuses: new Set(["Test sends"]), updatedMonth: null };
+  // The last test send gone: the filter of test sends only keeps everything (all), not an empty list.
+  expect(filterRows([real], INDEX, onlyTests).length).toBe(1);
+  // One exists: the filter keeps it alone.
+  expect(filterRows([real, test1], INDEX, onlyTests).length).toBe(1);
+  expect(filterRows([real, test1], INDEX, onlyTests)[0].submitted_dry_run).toBe(true);
 });

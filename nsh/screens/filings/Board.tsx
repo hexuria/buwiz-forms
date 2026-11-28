@@ -2,13 +2,15 @@
 import { computed, View } from "nsh";
 import type { ReturnRow } from "../../bir";
 import { Chip, Text } from "../../ui";
-import { type Column, columnRows, COLUMNS, type FormIndex } from "./model";
+import { type Column, columnRows, type FormIndex } from "./model";
 import { ReturnCard } from "./ReturnCard";
 
 /** Props of Board. */
 export interface BoardProps {
   /** The returns the filters keep. */
   rows: ReturnRow[];
+  /** The columns to render (`shownColumns`: the test-sends column only while one exists). */
+  columns: readonly Column[];
   index: FormIndex;
   onOpen: (row: ReturnRow) => void;
   onCancel: (row: ReturnRow) => void;
@@ -37,11 +39,11 @@ function BoardColumn(props: BoardProps & { column: Column }) {
   );
 }
 
-/** Four columns side by side, as tall as their cards; the page scrolls. */
+/** The columns side by side, as tall as their cards; the page scrolls. */
 export function Board(props: BoardProps) {
   return (
     <View testID="filings-board" class="mt-4 w-full flex-row items-start gap-3">
-      <Each of={COLUMNS} key={(c) => c.id}>
+      <Each of={props.columns} key={(c) => c.id}>
         {(c) => <BoardColumn column={c()} rows={props.rows} index={props.index} onOpen={props.onOpen} onCancel={props.onCancel} />}
       </Each>
     </View>

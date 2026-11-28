@@ -17,7 +17,7 @@ import { Board } from "./Board";
 import { FilterCombos } from "./FilterCombos";
 import { filters } from "./filters";
 import { LegacyGroup } from "./LegacyGroup";
-import { COLUMNS, columnRows, type FormIndex, filterRows, monthLabel, newestFirst, plural, presetOf, visibleColumns } from "./model";
+import { COLUMNS, columnRows, effectiveTab, type FormIndex, filterRows, monthLabel, newestFirst, plural, presetOf, shownColumns } from "./model";
 import { NarrowList } from "./NarrowList";
 
 /** Page width (the main surface less its padding) from which the board shows; under it, the list with tabs. */
@@ -173,12 +173,15 @@ export function Filings(): JSX.Element {
   // The card's own press opens the return; this button takes its press (only the innermost pressable responds).
   const cancel = (r: ReturnRow) => void cancelQueue(r.tin, r.form_code, r.taxable_year, r.period || null);
 
+  // Columns and tabs render only what exists: a real filer never reads the words "Test sends".
+  const cols = computed(() => shownColumns(all(), filters.statuses()));
+  const tab = () => effectiveTab(all(), filters.tab());
   const tabs = computed(() => [
     { value: "all", label: "All", count: rows().length },
-    ...visibleColumns(filters.statuses()).map((c) => ({ value: c.id, label: c.title, count: columnRows(rows(), c).length })),
+    ...cols().map((c) => ({ value: c.id, label: c.title, count: columnRows(rows(), c).length })),
   ]);
   const shownCount = () => {
-    const c = COLUMNS.find((x) => x.id === filters.tab());
+    const c = COLUMNS.find((x) => x.id === tab());
     return c ? columnRows(rows(), c).length : rows().length;
   };
 
@@ -191,12 +194,12 @@ export function Filings(): JSX.Element {
       <If when={all().length > 0} else={<Empty />}>
         <If when={wide()}>
           <If when={rows().length > 0} else={<NoMatch />}>
-            <Board rows={rows()} index={index()} onOpen={open} onCancel={cancel} />
+            <Board rows={rows()} columns={cols()} index={index()} onOpen={open} onCancel={cancel} />
           </If>
         </If>
         <If when={!wide()}>
           {/* Five tabs with counts side by side are wider than a phone: each count goes under its label, so all five fit. */}
-          <Tabs testID="filings-tabs" fill tabs={tabs()} value={filters.tab()} onChange={filters.setTab} />
+          <Tabs testID="filings-tabs" fill tabs={tabs()} value={tab()} onChange={filters.setTab} />
           <View class="mb-3 w-full flex-row items-center justify-between">
             <View testID="filings-count">
               <Text variant="meta" tone="fg2">{plural(shownCount(), "return")}</Text>
@@ -206,7 +209,7 @@ export function Filings(): JSX.Element {
             </If>
           </View>
           <If when={rows().length > 0} else={<NoMatch />}>
-            <NarrowList rows={rows()} index={index()} onOpen={open} onCancel={cancel} />
+            <NarrowList rows={rows()} tab={tab()} index={index()} onOpen={open} onCancel={cancel} />
           </If>
         </If>
       </If>

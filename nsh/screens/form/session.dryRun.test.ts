@@ -91,7 +91,7 @@ test("the send's words: a held or waiting send says when it goes again, in local
   expect(sendWords(send("queued", "Queued to send.", at(now)), now)).toBe("Queued to send.");
 });
 
-test("a return the dry-run worker sent says Dry run, not sent to BIR", async () => {
+test("a return the dry-run worker sent says Test send: not filed", async () => {
   createDemoTaxpayer();
   if (bir.list_tax_years(DEMO.tin).length === 0) bir.add_tax_year(DEMO.tin, YEAR, false);
   bir.set_yearly_forms(DEMO.tin, YEAR, ["1601C", "2550Q"]);

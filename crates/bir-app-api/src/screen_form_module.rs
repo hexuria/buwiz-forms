@@ -3305,8 +3305,11 @@ fn draft_argument(arguments: &HostArguments, index: usize) -> Result<Value, Host
 }
 
 /// The dry-run fact the host read when the page opened, captured before [`draft_argument`] strips client facts.
-/// Printing trusts that page-open fact and does not look the row up again on every live-preview edit: a historical
-/// filed original keeps its own facts, and a row that cannot be read again never stops its draft from printing.
+/// This is the one deliberate exception to `draft_argument`'s rule that a dry run is never the page's to say: printing
+/// trusts the page-open fact — which the host itself read from the stored row when it built the page's draft — and does
+/// not look the row up again on every live-preview edit. A historical filed original keeps its own facts (no re-keying
+/// by period, the fault this fixes), and a row that cannot be read again never stops its draft from printing. A page
+/// can only ever weaken its own print this way; it can never make a real filing print as a test send for anyone else.
 fn opened_dry_run_argument(arguments: &HostArguments, index: usize) -> Result<bool, HostError> {
     Ok(lifecycle_flag(
         &to_json(arguments.value(index)?),
@@ -15637,10 +15640,30 @@ mod tests {
             &[&serde_json::to_string(&current).unwrap()],
         );
 
-        let print_draft = print_draft_with_opened_dry_run(&original, false);
+        // Able to fail end to end: printing the original as its page holds it (the open fact
+        // false) carries no warning though the CURRENT row for the period is a test send; printing
+        // the current amendment (fact true) carries it. A print path that re-keyed the fact by
+        // period would warn on both.
+        let print_original = print_draft_with_opened_dry_run(&original, false);
         assert_ne!(
-            print_draft["submitted_dry_run"], true,
+            print_original["submitted_dry_run"], true,
             "a historical original keeps its own send facts"
+        );
+        let printed_original = call("screen_form_print", vec!["1601C".into(), original.clone()]).unwrap();
+        let path = std::path::PathBuf::from(printed_original["path"].as_str().unwrap());
+        let html = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(path);
+        assert!(
+            !html.contains("Test send: not filed"),
+            "the original prints as the real filing it is"
+        );
+        let printed_current = call("screen_form_print", vec!["1601C".into(), current.clone()]).unwrap();
+        let path = std::path::PathBuf::from(printed_current["path"].as_str().unwrap());
+        let html = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(path);
+        assert!(
+            html.contains("Test send: not filed"),
+            "the test-sent amendment warns on every page"
         );
     }
 

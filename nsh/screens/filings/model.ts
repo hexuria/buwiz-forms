@@ -24,7 +24,7 @@ export interface Column {
   testSends?: true;
 }
 
-/** The four board columns, in order. */
+/** The board columns, in order; the test-sends column renders only while at least one test send exists (`shownColumns`). */
 export const COLUMNS: readonly Column[] = [
   { id: "draft", title: "Draft", statuses: ["Draft"] },
   { id: "queued", title: "Queued", statuses: ["Queued"] },
@@ -36,6 +36,20 @@ export const COLUMNS: readonly Column[] = [
 /** The columns whose statuses the filter lets through. null means every status; Confirmed's column stays while either Confirmed or Paid is selected. */
 export function visibleColumns(statuses: ReadonlySet<string> | null): Column[] {
   return COLUMNS.filter((c) => statuses === null || (c.testSends ? statuses.has("Test sends") : c.statuses.some((s) => statuses.has(s))));
+}
+
+/**
+ * The columns the board and the tabs render: the filter's columns, but the test-sends column only while at least one
+ * test send exists (a real filer never reads the words "Test sends"). `rows` is every return, unfiltered.
+ */
+export function shownColumns(rows: readonly ReturnRow[], statuses: ReadonlySet<string> | null): Column[] {
+  const tests = rows.some((r) => isDryRun(r));
+  return visibleColumns(statuses).filter((c) => !c.testSends || tests);
+}
+
+/** The narrow list's effective tab: a test-sends tab with no test send left falls back to all, never an empty list for ever. */
+export function effectiveTab(rows: readonly ReturnRow[], tab: string): string {
+  return tab === "test-sends" && !rows.some((r) => isDryRun(r)) ? "all" : tab;
 }
 
 
@@ -131,12 +145,15 @@ export interface FilterValues {
 /** The returns the search and every filter keep. */
 export function filterRows(rows: readonly ReturnRow[], index: FormIndex, f: FilterValues): ReturnRow[] {
   const words = f.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  // A statuses filter of test sends only, with no test send left, falls back to all: never an empty list for ever.
+  const testsOnly = f.statuses !== null && f.statuses.size > 0 && [...f.statuses].every((s) => s === "Test sends");
+  const statuses = testsOnly && !rows.some((r) => isDryRun(r)) ? null : f.statuses;
   return rows.filter((r) => {
     if (f.tps && !f.tps.has(r.tin_root)) return false;
     if (f.forms && !f.forms.has(r.form_code)) return false;
-    if (f.statuses) {
-      const wantsTests = f.statuses.has("Test sends");
-      const realStatuses = new Set([...f.statuses].filter((status) => status !== "Test sends"));
+    if (statuses) {
+      const wantsTests = statuses.has("Test sends");
+      const realStatuses = new Set([...statuses].filter((status) => status !== "Test sends"));
       if (isDryRun(r) ? !wantsTests : !realStatuses.has(r.status)) return false;
     }
     if (f.periods && !f.periods.has(periodKey(index, r))) return false;

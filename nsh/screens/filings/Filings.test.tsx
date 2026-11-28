@@ -29,10 +29,12 @@ async function board(params: Record<string, unknown> = {}, size: { width: number
   return app;
 }
 
-test("desktop: five columns, a card per return, Paid inside Confirmed", async () => {
+test("desktop: four columns, a card per return, Paid inside Confirmed", async () => {
   const app = await board();
   await app.waitFor(count("7 returns"));
-  for (const title of ["Draft", "Queued", "Submitted", "Test sends", "Confirmed"]) expect(app.texts()).toContain(title);
+  for (const title of ["Draft", "Queued", "Submitted", "Confirmed"]) expect(app.texts()).toContain(title);
+  // The seed holds no test send: the column never renders, a real filer never reads the words.
+  expect(app.texts()).not.toContain("Test sends");
   expect(app.shows("id:tab-bar")).toBe(false);
   expect(app.shows("id:filings-tabs")).toBe(false);
 
@@ -530,4 +532,24 @@ test("the layout follows the page width: the board from 720 points of page, the 
   await app.waitFor("id:filings-tabs");
   await app.press("id:filings-filters-open");
   await app.waitFor("id:filings-sheet-done");
+});
+
+test("desktop: with one test send the column appears, titled and counted", async () => {
+  const app = await board({ dry: true });
+  await app.waitFor(count("7 returns"));
+  expect(app.texts()).toContain("Test sends");
+  expect(app.shows("id:filings-col-test-sends")).toBe(true);
+  expect(app.shows(inCol("test-sends", IDS.submitted))).toBe(true);
+  // And the Submitted column no longer holds it.
+  expect(app.shows(inCol("submitted", IDS.submitted))).toBe(false);
+});
+
+test("phone: the Test sends tab renders only with a test send, never for a real filer", async () => {
+  const narrow = { width: 390, height: 844 };
+  const plain = await open(ENTRY, { ...narrow, ...asking() });
+  await plain.waitFor("id:filings-tabs", { timeout: 20000 });
+  expect(plain.texts()).not.toContain("Test sends");
+  const app = await open(ENTRY, { ...narrow, ...asking({ dry: true }) });
+  await app.waitFor("id:filings-tabs", { timeout: 20000 });
+  expect(app.texts()).toContain("Test sends");
 });

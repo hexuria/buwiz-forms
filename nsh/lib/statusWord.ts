@@ -17,7 +17,8 @@ export const DRY_RUN_WORD = "Test send: not filed";
 
 /** A Submitted return whose send was only simulated: nothing reached BIR. */
 export function isDryRun(r: StatusFacts): boolean {
-  return r.status === "Submitted" && (r.submitted_dry_run === true || r.send?.stage === "test_sent");
+  // "Filed" is the legacy stored word for Submitted; the Rust helper (bir-core forms/dry_run.rs) reads it the same.
+  return (r.status === "Submitted" || r.status === "Filed") && (r.submitted_dry_run === true || r.send?.stage === "test_sent");
 }
 
 /**
@@ -26,7 +27,7 @@ export function isDryRun(r: StatusFacts): boolean {
  */
 export function countsAsFiled(r: StatusFacts): boolean {
   if (r.status === "Confirmed" || r.status === "Paid") return true;
-  return r.status === "Submitted" && !isDryRun(r);
+  return (r.status === "Submitted" || r.status === "Filed") && !isDryRun(r);
 }
 
 /**

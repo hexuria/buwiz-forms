@@ -5,11 +5,20 @@ import { countsAsFiled, isDryRun, isOpenDeadline, statusChipName, statusWord } f
 
 const send = (stage: string) => ({ stage });
 
-test("a simulated send says Dry run, from either fact", () => {
+test("a simulated send says Test send: not filed, from either fact", () => {
   expect(statusWord({ status: "Submitted", submitted_dry_run: true })).toBe("Test send: not filed");
   expect(statusWord({ status: "Submitted", send: send("test_sent") })).toBe("Test send: not filed");
   expect(statusChipName({ status: "Submitted", send: send("test_sent") })).toBe("dry_run");
-  expect(isDryRun({ status: "Submitted", submitted_dry_run: true, send: null })).toBe(true);
+  expect(isDryRun({ status: "Submitted", submitted_dry_run: true, send: null })).toBe(true));
+});
+
+test("the legacy stored word Filed reads as Submitted does: a dry run is a test send, a real one is filed", () => {
+  // "Filed" is the legacy stored status; the Rust helper (bir-core forms/dry_run.rs) reads it as Submitted, and so do the screens.
+  expect(isDryRun({ status: "Filed", submitted_dry_run: true })).toBe(true);
+  expect(statusWord({ status: "Filed", submitted_dry_run: true })).toBe("Test send: not filed");
+  expect(isDryRun({ status: "Filed" })).toBe(false);
+  expect(countsAsFiled({ status: "Filed" })).toBe(true);
+  expect(countsAsFiled({ status: "Filed", submitted_dry_run: true })).toBe(false);
 });
 
 test("a real send keeps Submitted, and every other status its own word", () => {
