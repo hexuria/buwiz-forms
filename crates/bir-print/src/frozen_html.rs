@@ -3013,8 +3013,20 @@ fn fill_text_input(
         // An amount in a peso comb without a point column right-aligns: the
         // owner's ruling — the last digit sits in the right-most box, the
         // leading boxes stay empty. Text and identifiers spread from the
-        // first box as before.
-        let lead = if amount_comb {
+        // first box as before. Only money joins right-align: a derived money
+        // key or a money-formatted value. Never the key's name alone — a Tax
+        // Debit Memo number, an Official Receipt number or a count of
+        // installments is numeric and amount-typed by substring, yet it is
+        // an identifier that spreads from the first box (F1).
+        let money_join = is_amount_comb_value(print)
+            && (name.starts_with("derived:amount_")
+                || name.starts_with("derived:tp_p")
+                || name.starts_with("derived:sp_p")
+                || name.starts_with("derived:p2_")
+                || name.starts_with("derived:p3_")
+                || name.starts_with("derived:Sched")
+                || is_formatted_money_amount(print));
+        let lead = if amount_comb && money_join {
             ordered.len().saturating_sub(chars.len())
         } else {
             0
@@ -15941,7 +15953,11 @@ mod donor_estate_print_tests {
     /// 2000-OT row C: no interior comb vertical spans the inserted strip.
     #[test]
     fn rule6_comb_ticks_end_at_the_cell_bottom() {
-        for (slug, cell) in [("1701-2018", "p4c213"), ("2000-ot-2018", "p2c99")] {
+        for (slug, cell) in [
+            ("1701-2018", "p4c213"),
+            ("2000-ot-2018", "p2c99"),
+            ("1701ms-2024", "p2c179"),
+        ] {
             let html = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
             let band_at = html
                 .find(&format!("data-rule6-of=\"{}\"", cell))
@@ -16004,11 +16020,10 @@ mod donor_estate_print_tests {
                 if x <= strip_x.0 + 0.5 || x >= strip_x.1 - 0.5 {
                     continue;
                 }
-                // ticks are one comb row tall; longer lines are frame lines
-                if h >= 20.0 {
-                    continue;
-                }
                 // strictly inside a comb cell's span, overlapping it
+                // vertically: a digit tick — at ANY height: a wrongly
+                // stretched tick outgrows one comb row, so a height filter
+                // here would make this test unable to fail (F2).
                 // vertically: a digit tick
                 let interior = combs.iter().any(|&(left, width, ctop, ch)| {
                     x > left + 3.0
@@ -16024,6 +16039,39 @@ mod donor_estate_print_tests {
                 offenders.is_empty(),
                 "{slug}: ticks in strip {strip:?} x {strip_x:?}: {offenders:?}"
             );
+        }
+    }
+
+    #[test]
+    fn rule6_companion_cells_keep_their_height() {
+        // F3: the row the cut passes through keeps its geometry — the
+        // companion cells of the strip's row print at their sheet height.
+        for (slug, band_cell, companions) in [
+            ("1701-2018", "p4c213", ["p4c90", "p4c91"]),
+            ("2000-ot-2018", "p2c99", ["p2c96", "p2c98"]),
+        ] {
+            let base = super::bundle(slug).expect("bundle").html;
+            let html = filled_document(slug, &rule6_proof_fill(slug)).unwrap();
+            assert!(
+                html.contains(&format!("data-rule6-of=\"{}\"", band_cell)),
+                "{slug}: fixture — the band exists"
+            );
+            for cell in companions {
+                let height = |doc: &str| {
+                    let at = doc
+                        .find(&format!("id=\"{}\"", cell))
+                        .unwrap_or_else(|| panic!("{slug} {cell} div"));
+                    let start = doc[..at].rfind("<div").unwrap();
+                    let end = at + doc[at..].find('>').unwrap();
+                    super::style_pt_prop(&doc[start..=end], "height")
+                };
+                let before = height(base).unwrap_or_else(|| panic!("{slug} {cell} base height"));
+                let after = height(&html).unwrap_or_else(|| panic!("{slug} {cell} printed height"));
+                assert!(
+                    (after - before).abs() < 0.05,
+                    "{slug} {cell}: the companion keeps its sheet height {before}, printed {after}"
+                );
+            }
         }
     }
 
@@ -16217,6 +16265,70 @@ mod donor_estate_print_tests {
             vec!["", "", "", "", "", "1", "0", "0", "0"],
             "1000 right-aligned in nine peso slots: slots 5..=8 hold 1,0,0,0 and 0..=4 stay empty"
         );
+    }
+
+    #[test]
+    fn identifier_combs_spread_left_never_right_align() {
+        // F1: Tax Debit Memo numbers, Official Receipt numbers and No. of
+        // Installments are identifiers or counts, never peso amounts: a
+        // plain numeric fill spreads from the FIRST box.
+        for (slug, key, cell, fill) in [
+            (
+                "1702rt-2018c",
+                "frm1702RT:txtPg1Pt3I25TaxDebitC2",
+                "p1c117",
+                "1234567",
+            ),
+            (
+                "1702mx-2018c",
+                "frm1702MX:txtPg1Pt1I28TaxDebitC2",
+                "p1c116",
+                "1234567",
+            ),
+            (
+                "2000-dst-2018",
+                "frm2000:sched2:txtReceipt0",
+                "p2c48",
+                "1234567",
+            ),
+            ("1606-2018", "frm1606:txtTotalN", "p2c110", "12"),
+            ("1706-2018", "frm1706:txtTotalN", "p2c114", "12"),
+        ] {
+            let mut fields = rule6_proof_fill(slug);
+            fields.insert(key.to_string(), fill.to_string());
+            let doc = filled_document(slug, &fields).unwrap();
+            let mut slots: Vec<(usize, String)> = Vec::new();
+            let mut cursor = 0usize;
+            while let Some(rel) = doc[cursor..].find("<input") {
+                let start = cursor + rel;
+                let Some(e) = doc[start..].find('>') else {
+                    break;
+                };
+                let tag = doc[start..start + e + 1].to_string();
+                cursor = start + e + 1;
+                if attr(&tag, "name") != Some(cell) {
+                    continue;
+                }
+                let Some(slot) =
+                    attr(&tag, "data-slot-index").and_then(|s| s.parse::<usize>().ok())
+                else {
+                    continue;
+                };
+                slots.push((slot, attr(&tag, "value").unwrap_or("").to_string()));
+            }
+            slots.sort();
+            assert!(!slots.is_empty(), "{slug} {cell}: comb inputs present");
+            let digits: Vec<&str> = slots.iter().map(|(_, v)| v.trim()).collect();
+            let mut expect: Vec<String> = vec![String::new(); slots.len()];
+            for (i, ch) in fill.chars().enumerate() {
+                expect[i] = ch.to_string();
+            }
+            let digits_owned: Vec<String> = digits.iter().map(|d| d.to_string()).collect();
+            assert_eq!(
+                digits_owned, expect,
+                "{slug} {cell}: the identifier spreads from the first box"
+            );
+        }
     }
 
     #[test]
