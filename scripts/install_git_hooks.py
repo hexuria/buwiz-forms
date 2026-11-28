@@ -17,6 +17,14 @@ class HookInstallError(RuntimeError):
     pass
 
 
+class HooksPathConfigured(RuntimeError):
+    pass
+
+
+class GitDubiousOwnership(RuntimeError):
+    pass
+
+
 def chain_script(name: str) -> str:
     if name == "commit-msg":
         return f"""#!/bin/sh
@@ -54,13 +62,14 @@ exit "$status"
     raise HookInstallError(f"unknown hook {name}")
 
 
-def install_hook(root: Path, hooks_dir: Path, name: str) -> Path:
+def install_hook(root: Path, hooks_dir: Path, name: str) -> tuple[Path, Path | None]:
     source = root / ".githooks" / name
     if not source.is_file():
         raise HookInstallError(f"missing repository hook .githooks/{name}")
     hooks_dir.mkdir(parents=True, exist_ok=True)
     target = hooks_dir / name
     local = hooks_dir / f"{name}.local"
+    moved = None
     if target.exists() or target.is_symlink():
         installed = ""
         if not target.is_symlink():
@@ -72,9 +81,17 @@ def install_hook(root: Path, hooks_dir: Path, name: str) -> Path:
             if local.exists():
                 raise HookInstallError(f"both {name} and {name}.local already exist")
             os.replace(target, local)
-    target.write_text(chain_script(name), encoding="utf-8")
+            moved = local
+    target.write_bytes(chain_script(name).encode("utf-8"))
     target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return target
+    return target, moved
+
+
+def raise_for_git_failure(result: subprocess.CompletedProcess, fallback: str) -> None:
+    message = result.stderr.strip() or fallback
+    if "dubious ownership" in message.lower():
+        raise GitDubiousOwnership()
+    raise HookInstallError(message)
 
 
 def git_output(root: Path, *args: str) -> str:
@@ -86,12 +103,30 @@ def git_output(root: Path, *args: str) -> str:
         check=False,
     )
     if result.returncode != 0:
-        raise HookInstallError(result.stderr.strip() or "git rev-parse failed")
+        raise_for_git_failure(result, "git rev-parse failed")
     return result.stdout.strip()
 
 
-def install_for_checkout(cwd: Path) -> list[Path]:
+def hooks_path_configured(root: Path) -> bool:
+    result = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1 and not result.stderr.strip():
+        return False
+    raise_for_git_failure(result, "git config could not read core.hooksPath")
+    return False
+
+
+def install_for_checkout(cwd: Path) -> list[tuple[Path, Path | None]]:
     root = Path(git_output(cwd, "rev-parse", "--show-toplevel")).resolve()
+    if hooks_path_configured(root):
+        raise HooksPathConfigured()
     raw_hooks = git_output(root, "rev-parse", "--git-path", "hooks")
     hooks_dir = Path(raw_hooks)
     if not hooks_dir.is_absolute():
@@ -99,12 +134,30 @@ def install_for_checkout(cwd: Path) -> list[Path]:
     return [install_hook(root, hooks_dir, name) for name in HOOKS]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if len(args) > 1:
+        print("usage: install_git_hooks.py [REPOSITORY_ROOT]", file=sys.stderr)
+        return 2
+    checkout = Path(args[0]).expanduser() if args else Path.cwd()
     try:
-        install_for_checkout(Path.cwd())
+        installed = install_for_checkout(checkout)
+    except HooksPathConfigured:
+        print(
+            "core.hooksPath is set; not installing hooks: "
+            "chain 'sh .githooks/commit-msg \"$@\"' and 'sh .githooks/pre-push \"$@\"' by hand"
+        )
+        return 0
+    except GitDubiousOwnership:
+        print("git reports dubious ownership; not installing hooks: mark the checkout safe or add the hooks by hand")
+        return 0
     except HookInstallError as error:
         print(f"could not install the git hooks: {error}", file=sys.stderr)
         return 1
+    for target, moved in installed:
+        if moved is not None:
+            print(f"moved existing hook aside: {moved}")
+        print(f"chained git hook: {target}")
     print("git commit-message hooks installed")
     return 0
 

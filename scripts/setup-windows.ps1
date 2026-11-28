@@ -253,7 +253,7 @@ if ($NoImpeccable) {
 }
 
 Write-Step "Installing git commit-message hooks"
-python (Join-Path $PSScriptRoot 'install_git_hooks.py')
+python (Join-Path $PSScriptRoot 'install_git_hooks.py') (Split-Path $PSScriptRoot -Parent)
 if ($LASTEXITCODE -ne 0) { Exit-Native "git hook install failed" }
 
 Write-Step @"

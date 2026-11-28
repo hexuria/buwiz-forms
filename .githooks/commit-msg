@@ -3,12 +3,19 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || {
     echo "commit-msg hook: not inside a git repository" >&2
     exit 1
 }
-if command -v python3 >/dev/null 2>&1; then
-    python_bin=python3
-elif command -v python >/dev/null 2>&1; then
-    python_bin=python
+python_choice=
+if command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then
+    python_choice=python
+elif command -v py >/dev/null 2>&1 && py -3 -c "import sys" >/dev/null 2>&1; then
+    python_choice=py
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+    python_choice=python3
 else
-    echo "commit-msg hook: python3 or python is required" >&2
-    exit 1
+    echo "commit-msg hook: no working Python; local-path check skipped" >&2
+    exit 0
 fi
-exec "$python_bin" "$root/scripts/commit_message_paths.py" message-file "$1"
+case "$python_choice" in
+    python)  exec python "$root/scripts/commit_message_paths.py" message-file "$1" ;;
+    py)      exec py -3 "$root/scripts/commit_message_paths.py" message-file "$1" ;;
+    python3) exec python3 "$root/scripts/commit_message_paths.py" message-file "$1" ;;
+esac

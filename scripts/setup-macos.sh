@@ -450,7 +450,7 @@ main() {
     fi
 
     log "Installing git commit-message hooks"
-    python3 "$REPO_ROOT/scripts/install_git_hooks.py"
+    python3 "$REPO_ROOT/scripts/install_git_hooks.py" "$REPO_ROOT"
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"

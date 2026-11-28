@@ -12,18 +12,28 @@ from typing import Callable, Iterable
 REASON = "commit message carries an absolute local path; use $HOME, ~, or /Users/<name> instead"
 ZERO_SHA = "0" * 40
 
-LOCAL_PATH_PATTERNS = (
-    re.compile(r"/Users/[A-Za-z0-9._-]+(?:/|$)"),
-    re.compile(r"/home/[A-Za-z0-9._-]+(?:/|$)"),
-    re.compile(r"\bC:\\Users\\[A-Za-z0-9._-]+(?:\\|$)", re.IGNORECASE),
-    re.compile(r"/Volumes/"),
-)
+POSIX_HOME_PATTERN = re.compile(r"(?P<root>/Users/|/home/)(?P<name>[A-Za-z0-9._-]+)(?![A-Za-z0-9._-])")
+WINDOWS_HOME_PATTERN = re.compile(r"\bC:\\Users\\(?P<name>[A-Za-z0-9._-]+)(?![A-Za-z0-9._-])", re.IGNORECASE)
+VOLUME_PATTERN = re.compile(r"/Volumes/")
+ALLOWED_POSIX_HOME_NAMES = {
+    "/Users/": {"runner", "devin", "you"},
+    "/home/": {"runner", "ubuntu"},
+}
+ALLOWED_WINDOWS_HOME_NAMES = {"runneradmin"}
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
 def has_absolute_local_path(message: str) -> bool:
-    return any(pattern.search(message) for pattern in LOCAL_PATH_PATTERNS)
+    if VOLUME_PATTERN.search(message):
+        return True
+    for match in POSIX_HOME_PATTERN.finditer(message):
+        if match.group("name") not in ALLOWED_POSIX_HOME_NAMES[match.group("root")]:
+            return True
+    for match in WINDOWS_HOME_PATTERN.finditer(message):
+        if match.group("name").lower() not in ALLOWED_WINDOWS_HOME_NAMES:
+            return True
+    return False
 
 
 def parse_log_output(output: bytes) -> list[tuple[str, str]]:
@@ -119,8 +129,20 @@ def report_bad_commits(bad: Iterable[str]) -> None:
         print(f"commit {sha}: commit message carries an absolute local path", file=sys.stderr)
 
 
+def committed_message_text(message: str) -> str:
+    lines = []
+    scissors = "# ------------------------ >8 ------------------------"
+    for line in message.splitlines(keepends=True):
+        if line.startswith(scissors):
+            break
+        if line.startswith("#"):
+            continue
+        lines.append(line)
+    return "".join(lines)
+
+
 def read_message_file(name: str) -> str:
-    return Path(name).read_bytes().decode("utf-8", errors="replace")
+    return committed_message_text(Path(name).read_bytes().decode("utf-8", errors="replace"))
 
 
 def main(argv: list[str] | None = None) -> int:

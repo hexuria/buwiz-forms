@@ -62,6 +62,7 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
@@ -347,7 +348,7 @@ main() {
     fi
 
     log "Installing git commit-message hooks"
-    python3 "$SCRIPT_DIR/install_git_hooks.py"
+    python3 "$SCRIPT_DIR/install_git_hooks.py" "$REPO_ROOT"
 
     if [ "$WITH_COMPOSITOR" -eq 1 ]; then
         log "Installing xcompmgr"
