@@ -15,7 +15,7 @@ sqlcipher = ["bir-core/sqlcipher", "bir-print/sqlcipher"]
 # `nsh-app-ebirforms/agent`.
 agent = ["dep:reqwest", "dep:gpui-agent"]
 # The `bir` command (crates/bir-cli): the same session in a daemon with no window (clap CLI, pid file, detach). Needs `agent`.
-headless = ["agent", "dep:clap", "dep:dotenvy", "dep:libc", "dep:socket2"]
+headless = ["agent", "dep:clap", "dep:dotenvy", "dep:socket2"]
 mas_build = ["bir-core/mas_build"]
 # Test helpers (`account_gate::force_locked`) for a host's own tests.
 test-support = []
@@ -33,7 +33,6 @@ futures = "0.3"
 gpui-agent = { workspace = true, optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 dotenvy = { workspace = true, optional = true }
-libc = { version = "0.2", optional = true }
 socket2 = { version = "0.6", optional = true }
 reqwest = { version = "0.12", features = ["rustls-tls", "blocking"], default-features = false, optional = true }
 serde = { version = "1", features = ["derive"] }
@@ -43,6 +42,10 @@ serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 tracing = "0.1"
 zip = { version = "2", default-features = false, features = ["deflate", "time"] }
+
+[target.'cfg(unix)'.dependencies]
+# The print-preview hand-off checks the folder is this user's own (print.rs's pattern).
+libc = "0.2"
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

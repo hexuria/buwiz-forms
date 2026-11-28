@@ -25,6 +25,15 @@ pub(crate) async fn save(archive: Archive, name: String) -> Result<Option<String
     let target = directory.join(&name);
     std::fs::copy(archive.path(), &target).map_err(|error| format!("Could not prepare the export: {error}"))?;
     drop(archive);
+    // Removed on every way out — a sheet that never answers, an error, a panic that unwinds — so the copy in the
+    // temporary folder never outlives the hand-off. (A crash still leaves it; the launch sweep takes those.)
+    struct RemoveOnDrop(std::path::PathBuf);
+    impl Drop for RemoveOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+    let _cleanup = RemoveOnDrop(target.clone());
     let (opened_tx, opened_rx) = mpsc::channel::<Result<(), String>>();
     let (done_tx, done_rx) = mpsc::channel::<bool>();
     let shown = target.clone();

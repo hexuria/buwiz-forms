@@ -52,6 +52,11 @@ fn native(registry: &mut Registry) {
     // the pin; those OS-log lines never enter the app's daily file.
     #[cfg(not(target_os = "android"))]
     door::install_log_facade_bridge();
+    // Install logging here, at registration, not on the first door call: a record made before that call
+    // (the launch storage's own lines included) must reach the daily file too. install_logging is a Once,
+    // so the first door call's install is a no-op after this.
+    #[cfg(not(target_os = "android"))]
+    door::install_logging();
     // The plug's window control plane: `native()` runs before the host opens any surface, so this is
     // where the platform crate's surface hook is installed (see agent.rs, "Agent remote control").
     agent::install_window_plane();

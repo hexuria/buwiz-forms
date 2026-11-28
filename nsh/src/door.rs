@@ -74,10 +74,14 @@ pub(crate) fn install_log_facade_bridge() {
 
 fn logging_options() -> bir_core::logging::InstallOptions {
     let developer_mode = bir_core::logging::developer_mode_enabled();
+    // A global warn first, so other crates' warnings and errors reach the daily file too, and js=warn keeps the
+    // page script's own errors (uncaught exceptions included). The app's own target is scoped exactly:
+    // `nsh_app_ebirforms` prefix-matches nothing but this crate and its modules, where `nsh` matched every
+    // nsh_* kit crate into the file at info.
     let default_filter = if developer_mode {
-        "nsh=debug,bir_app_api=debug,bir_core=info,bir_submit::ios_storage=info,bir_print=debug,panic=error"
+        "warn,nsh_app_ebirforms=debug,bir_app_api=debug,bir_core=info,bir_submit::ios_storage=info,bir_print=debug,panic=error,js=warn"
     } else {
-        "nsh=info,bir_app_api=info,bir_core=info,bir_submit::ios_storage=info,bir_print=error,panic=error"
+        "warn,nsh_app_ebirforms=info,bir_app_api=info,bir_core=info,bir_submit::ios_storage=info,bir_print=error,panic=error,js=warn"
     };
     bir_core::logging::InstallOptions {
         developer_mode,
@@ -684,6 +688,35 @@ mod tests {
         let folder = tempfile::tempdir().expect("temp folder");
         let database = folder.path().join("data").join("bir_data.db");
         (folder, database)
+    }
+
+
+    #[test]
+    fn the_log_bridge_keeps_js_errors_and_other_crates_warnings_but_not_kit_info() {
+        let dir = tempfile::tempdir().unwrap();
+        temp_env::with_vars(
+            [
+                ("BIR_LOG_DIR", Some(dir.path().as_os_str())),
+                ("RUST_LOG", None),
+            ],
+            || {
+                bir_core::logging::with_thread_subscriber(logging_options(), || {
+                    tracing::error!(target: "js", "uncaught page exception tin=12345678800000");
+                    tracing::warn!(target: "quickjs", "kit-warning-marker-7c1d");
+                    tracing::info!(target: "nsh_base", "kit-info-marker-7c1d");
+                    tracing::info!(target: "nsh_app_ebirforms::door", "app-info-marker-7c1d");
+                });
+                let path = bir_core::log_files::today_log_path(dir.path());
+                let text = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+                assert!(text.contains("uncaught page exception"), "{text}");
+                assert!(!text.contains("12345678800000"), "{text}");
+                assert!(text.contains("***-***-788-00000"), "{text}");
+                assert!(text.contains("kit-warning-marker-7c1d"), "{text}");
+                assert!(!text.contains("kit-info-marker-7c1d"), "{text}");
+                assert!(text.contains("app-info-marker-7c1d"), "{text}");
+            },
+        );
     }
 
     #[test]

@@ -3205,7 +3205,7 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("sheet.pdf");
         std::fs::write(&path, pdf).unwrap();
-        let operation = mac::print_operation(&path.display().to_string()).expect("an operation");
+        let operation = mac::print_operation(&path.display().to_string(), "2551Q").expect("an operation");
         // SAFETY: reading the operation's settings; nothing is shown.
         unsafe {
             let info: Retained<AnyObject> = msg_send![&operation, printInfo];
@@ -3217,7 +3217,7 @@ mod tests {
             assert_eq!((top, left), (0.0, 0.0));
             assert!(panel.as_bool());
         }
-        assert!(mac::print_operation("/no/such/file.pdf").is_err());
+        assert!(mac::print_operation("/no/such/file.pdf", "2551Q").is_err());
     }
 
     #[test]

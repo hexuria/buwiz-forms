@@ -241,6 +241,40 @@ fn wait_log_contains(path: &Path, needle: &str, budget: Duration) -> String {
     }
 }
 
+/// L1: the real detached child installs logging before it serves, so a panic carrying a TIN reaches
+/// bir-headless.log only masked. Pre-fix the raw default hook printed the payload straight into the log.
+#[test]
+fn a_panic_in_the_detached_daemon_is_masked_in_its_log() {
+    let harness = Harness::new();
+    let tin = "12345678900005";
+    let mut cmd = harness.cmd(&["serve", "--detach"]);
+    cmd.env(
+        "BIR_TEST_PANIC_ON_START",
+        format!("detached-proof panic tin={tin}"),
+    );
+    let output = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("spawn serve --detach");
+    assert!(
+        output.status.success(),
+        "detach failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    harness.wait_ready();
+    let body = wait_log_contains(&harness.log, "***-***-789-00005", Duration::from_secs(20));
+    assert!(
+        !body.contains(tin),
+        "the raw TIN must never reach the daemon log:\n{body}"
+    );
+    assert!(
+        body.contains("detached-proof panic"),
+        "the panic message survives, masked:\n{body}"
+    );
+    harness.stop_daemon();
+}
+
 #[test]
 fn logs_without_file_is_a_clear_error() {
     let harness = Harness::new();

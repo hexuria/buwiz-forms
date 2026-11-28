@@ -79,6 +79,21 @@ enum Command {
 }
 
 pub fn run() -> ExitCode {
+    // First, before any record: without it a real `serve --detach` panic went raw into bir-headless.log, TINs and all.
+    bir_core::logging::install(bir_core::logging::InstallOptions {
+        developer_mode: bir_core::logging::developer_mode_enabled(),
+        default_filter: "warn,bir_app_api=info,bir_core=info,js=warn",
+    });
+    // Test-only hook, armed only under EBIR_TEST_ENV: the detached-daemon logging proof needs a real panic
+    // carrying a TIN inside the real child after it is serving, and nothing in production sets this variable.
+    if std::env::var_os("EBIR_TEST_ENV").is_some() {
+        if let Ok(message) = std::env::var("BIR_TEST_PANIC_ON_START") {
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                panic!("{message}");
+            });
+        }
+    }
     bir_core::notification::enable_desktop_delivery();
     dotenvy::dotenv().ok();
     match run_cli() {
