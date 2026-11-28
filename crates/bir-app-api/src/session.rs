@@ -546,6 +546,7 @@ fn begin_open_locked(
 fn finish_open(spawn: Option<u64>, outcome: CloseOutcome, owner: Owner, engine: u64, why: OpenWhy) {
     finish_close(&outcome, ForgetMode::Now);
     drop(outcome.dropped);
+    hooks::at("finish_open.before_spawn");
     if let Some(epoch) = spawn {
         spawn_claim_thread(owner, engine, why, epoch);
     }
@@ -2744,47 +2745,58 @@ mod tests {
         panic!("commit 6 wires this")
     }
 
-    /// K1: two engines' signed_in of the same owner race — one epoch bump, one session. The
-    /// push inside begin_open_locked is what the second one's stale check reads.
+    /// K1, deterministic: signed_in paused between SESSION's release and the spawn — a
+    /// same-owner begin_open then must read the epoch LIVE (pushed inside begin_open_locked),
+    /// not stale. Reverted, the replacement happens while paused and the epoch moves — red.
     #[test]
-    fn two_engines_signed_in_boot_one_session() {
+    fn a_begin_open_during_signed_ins_spawn_window_is_not_stale() {
         let _turn = test_turn();
         let scratch = scratch();
         permit_claim_threads();
         let owner_a = seed_stored("user-a", false);
-        let before_epoch = snapshot().epoch;
         let stored = bir_core::cloud_account::load_stored_account()
             .unwrap()
             .expect("a sign-in");
-        let barrier = Arc::new(std::sync::Barrier::new(2));
-        let mut threads = Vec::new();
-        for engine in 1..=2u64 {
-            let stored = stored.clone();
-            let barrier = barrier.clone();
-            let device = bir_core::platform::capture_device_dir_override();
-            let database = bir_core::db::capture_database_path_override();
-            threads.push(std::thread::spawn(move || {
-                database.run(move || {
-                    device.run(move || {
-                        barrier.wait();
-                        signed_in(&stored, engine).unwrap();
-                    });
+        let gate = hooks::pause("finish_open.before_spawn");
+        let device = bir_core::platform::capture_device_dir_override();
+        let database = bir_core::db::capture_database_path_override();
+        let driver = std::thread::spawn(move || {
+            database.run(move || {
+                device.run(move || {
+                    signed_in(&stored, 1).unwrap();
                 });
-            }));
-        }
-        for thread in threads {
-            thread.join().unwrap();
-        }
+            });
+        });
+        gate.reached();
+        // signed_in's phase is set and its SESSION released; the claim is not yet spawned.
+        let epoch = snapshot().epoch;
+        assert_eq!(snapshot().phase_kind, PhaseKind::Opening);
+        assert!(
+            lock(&LIVE_CLAIMS).contains(&epoch),
+            "the opening's epoch is not live in the spawn window — a same-owner begin_open reads it stale"
+        );
+        // The second engine's same-owner begin_open: a no-op, never a replacement.
+        begin_open(owner_a.clone(), 2, OpenWhy::Launch);
         assert_eq!(
             snapshot().epoch,
-            before_epoch + 1,
-            "one epoch bump for the one session, not one per engine"
+            epoch,
+            "the same-owner begin_open replaced the live opening"
         );
+        gate.release();
+        driver.join().unwrap();
         join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        assert_eq!(
+            snapshot()
+                .owner
+                .as_ref()
+                .map(|owner| owner.user_id.as_str()),
+            Some("user-a")
+        );
         let _ = scratch;
     }
 
-    /// n1: a sign-out while the claim runs — the close bumps the epoch, the opener's commit
+    /// n1: a sign-out while the claim runs    /// n1: a sign-out while the claim runs — the close bumps the epoch, the opener's commit
     /// misses its compare-and-swap, and nothing was ever installed (F10's hole, closed).
     /// The REAL claim thread drives it, the pause set before begin_open (F5's rule).
     #[test]
