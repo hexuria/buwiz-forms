@@ -16,6 +16,6 @@ test("kept values are keyed per database path and follow their room", () => {
   // An empty path (no room open) keeps nothing rather than sharing between rooms.
   expect(storageKey("selection", "")).toBeNull();
   // Prefs are the app's, not a room's: one key, no path.
-  expect(storageKey("prefs", roomA)).toBe("prefs");
-  expect(storageKey("prefs", "")).toBe("prefs");
+  expect(storageKey("redesign.prefs", roomA)).toBe("redesign.prefs");
+  expect(storageKey("redesign.prefs", "")).toBe("redesign.prefs");
 });

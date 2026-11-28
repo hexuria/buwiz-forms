@@ -17,7 +17,7 @@ import { batch, computed, effect, platform, setColorScheme, signal, Storage, unt
 import { Application, isAvailable } from "nsh/desktop";
 import { bir, dataChangeToken, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
-import { migrationPage, rereadMigration, migrationPermanent } from "../screens/auth/migration";
+import { migrationPage, rereadMigration, migrationPermanent, type MigrationPage } from "../screens/auth/migration";
 import { loadMigrationNoteShown } from "../screens/auth/migrationNote";
 import { errorText } from "../lib/errors";
 import { DRY_RUN_WORD, isDryRun } from "../lib/statusWord";
@@ -1366,41 +1366,108 @@ function startParams(): Readonly<Record<string, string>> {
  * The route is honoured only where the door reports a test environment (its access steps take PINs and keys); `testEnvironment`
  * is for a test of that rule.
  */
+type AccountOpenOutcome = "unlocked" | "waiting" | "stopped";
+let accountOpenTimer: ReturnType<typeof setInterval> | null = null;
+let accountOpenStepRunning = false;
+let initialAccountOpen = false;
+
+function stopAccountOpenPoll(): void {
+  if (accountOpenTimer !== null) clearInterval(accountOpenTimer);
+  accountOpenTimer = null;
+}
+
+/** The gate first, then the migration state: the two reads together are one account-open poll. */
+function readAccountOpen(): { unlocked: boolean; kind: MigrationPage["kind"] } {
+  let unlocked = false;
+  try {
+    unlocked = bir.cloud_account_gate().unlocked;
+  } catch (error) {
+    gateError.set(errorText(error));
+  }
+  rereadMigration();
+  return { unlocked, kind: migrationPage()?.kind ?? "none" };
+}
+
+/** The host committed the account open: unlock first, then reload what the new room keeps. */
+async function accountOpened(start?: string): Promise<void> {
+  stopAccountOpenPoll();
+  gateError.set(null);
+  const wasLocked = cloudLocked();
+  cloudLocked.set(false);
+  if (!keptLoaded) {
+    await loadKept(start);
+    // At the first synchronous boot unlock the route runs after booted, as before A3a: fixture effects
+    // that sign a session in when booted first fire must not erase it. A later commit is already after boot.
+    if (start && !initialAccountOpen) runStartRoute(start);
+  } else {
+    if (wasLocked) {
+      sessionChanged();
+      // I4 (§A.6): loadKept runs again for every room. It re-reads databasePath after the room opened,
+      // so Recent, the selection and read notifications are read and written under the new room's path.
+      await loadKept();
+    }
+    store.bump();
+  }
+}
+
+async function accountOpenStep(): Promise<AccountOpenOutcome> {
+  if (accountOpenStepRunning) return "waiting";
+  accountOpenStepRunning = true;
+  try {
+    const read = readAccountOpen();
+    if (read.unlocked) {
+      await accountOpened(bootStart);
+      return "unlocked";
+    }
+    cloudLocked.set(true);
+    if (read.kind === "opening" || read.kind === "moving") return "waiting";
+    // Blocked states keep their migration page; none is the ordinary sign-in page. Neither is polled further.
+    stopAccountOpenPoll();
+    return "stopped";
+  } finally {
+    accountOpenStepRunning = false;
+  }
+}
+
+/** Read the account-open state now, then about once a second while the host says opening or moving. */
+async function watchAccountOpen(): Promise<AccountOpenOutcome> {
+  const outcome = await accountOpenStep();
+  if (outcome === "waiting" && accountOpenTimer === null) {
+    accountOpenTimer = setInterval(() => void accountOpenStep(), 1000);
+  }
+  return outcome;
+}
+
 export function boot(requested?: string, opts: { firstRun?: boolean; testEnvironment?: boolean } = {}): Promise<void> {
   bootPromise ??= (async () => {
     const start = allowedStart(requested, opts.testEnvironment ?? doorStatus().testEnvironment);
     FIRST_RUN_GATE.set(opts.firstRun === true);
     bootStart = start;
-    // The dev environment's host bypass (EBIR_TEST_ENV=1 with BIR_AUTH_BYPASS=1) answers unlocked, as in the old app.
-    let unlocked = false;
+    initialAccountOpen = true;
+    let outcome: AccountOpenOutcome;
     try {
-      unlocked = bir.cloud_account_gate().unlocked;
-    } catch (error) {
-      gateError.set(errorText(error));
+      outcome = await watchAccountOpen();
+    } finally {
+      initialAccountOpen = false;
     }
-    if (unlocked) await loadKept(start);
-    else {
+    if (outcome !== "unlocked") {
       // Nothing that names a taxpayer is read until the device flow is approved; the theme follows the route or the system.
       themePref.set(themePreferenceFromStart(start) ?? "system");
       setColorScheme(themePref());
-      cloudLocked.set(true);
     }
     booted.set(true);
-    if (unlocked && start) runStartRoute(start);
+    if (outcome === "unlocked" && start) runStartRoute(start);
   })();
   return bootPromise;
 }
 
 /**
- * The Buwiz account approved this computer (the gate's device flow, or Settings › Account): the host opens the session and
- * the filing UI shows, loading what the app keeps the first time. False, with the host's reason on the gate, when it refused.
+ * The Buwiz account approved this computer (the gate's device flow, or Settings › Account): the host begins the session open
+ * and the page follows its commit. False, with the host's reason on the gate, when opening it refused.
  */
 async function finishUnlock(): Promise<boolean> {
   try {
     bir.cloud_account_session_opened();
-    // A3a: what the claim did with the legacy file decides whether a migration page stands in front
-    // of the frame (screens/auth/migration.tsx reads it).
-    rereadMigration();
   } catch (error) {
     batch(() => {
       gateError.set(errorText(error));
@@ -1409,21 +1476,7 @@ async function finishUnlock(): Promise<boolean> {
     return false;
   }
   gateError.set(null);
-  if (!keptLoaded) {
-    await loadKept(bootStart);
-    cloudLocked.set(false);
-    if (bootStart) runStartRoute(bootStart);
-  } else {
-    // The gate opening again is a new session; a sign-in from Settings while the app is already open is not.
-    if (cloudLocked()) {
-      sessionChanged();
-      // I4 (§A.6): loadKept runs again for every room. It re-reads databasePath after the room opened,
-      // so Recent, the selection and read notifications are read and written under the new room's path.
-      await loadKept();
-    }
-    store.bump();
-    cloudLocked.set(false);
-  }
+  await watchAccountOpen();
   return true;
 }
 
@@ -1440,11 +1493,13 @@ function onCloudLock(hook: () => void): void {
  * back, on its first page, whichever way it was asked for (the menu's Sign Out, Settings).
  */
 function lockCloud(): void {
+  stopAccountOpenPoll();
   try {
     bir.cloud_account_session_closed();
   } catch {
     // The host already locked the process.
   }
+  rereadMigration();
   batch(() => {
     for (const hook of cloudLockHooks) hook();
     gateError.set(null);
@@ -1576,6 +1631,7 @@ export const app = {
   setSetup: (pending: string | null, step: string) => setup.set({ pending, step }),
   setGateError: (message: string | null) => gateError.set(message),
   finishUnlock,
+  watchAccountOpen,
   lockCloud,
   onCloudLock,
   signOutAfterSetupChange,
