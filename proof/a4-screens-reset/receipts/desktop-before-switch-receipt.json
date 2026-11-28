@@ -1,0 +1,161 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "a4-screens-reset-desktop-switch",
+  "fingerprint": "fnv1a64:49cc14fe669d2a16",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 12
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 478
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 15
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 441
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 391
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 249
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1170
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 88
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1057
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 116
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 517
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 62
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 406
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 518
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 60
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 448
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 225,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/desktop-before-switch/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 396
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 13
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 546
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 229,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/desktop-before-switch/021-s21.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 136
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "elapsed_ms": 132
+    },
+    {
+      "id": "s24",
+      "ok": false,
+      "error": "wait_until timed out: node `tp-sec-taxpayer-edit` exists but should be absent",
+      "error_code": "timeout",
+      "elapsed_ms": 1023
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/desktop-before-switch/017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/desktop-before-switch/021-s21.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 8739
+}

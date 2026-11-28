@@ -1,0 +1,1 @@
+ios build stopped because free disk fell below 500MiB; no deletion performed

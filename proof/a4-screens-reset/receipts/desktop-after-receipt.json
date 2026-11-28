@@ -1,0 +1,187 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "a4-screens-reset-desktop-runtime",
+  "fingerprint": "fnv1a64:87a9e1514bad581e",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 14
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 456
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 13
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 436
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 366
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 224
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1194
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 89
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1027
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 125
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 458
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 51
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 385
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 497
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 64
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 452
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 280,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/desktop-after/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 379
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 11
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 438
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 13
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 455
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 352
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "elapsed_ms": 257
+    },
+    {
+      "id": "s25",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1187
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "elapsed_ms": 171,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/desktop-after/026-s26.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s27",
+      "ok": true,
+      "elapsed_ms": 87
+    },
+    {
+      "id": "s28",
+      "ok": true,
+      "elapsed_ms": 83
+    },
+    {
+      "id": "s29",
+      "ok": true,
+      "elapsed_ms": 87
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/desktop-after/017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/desktop-after/026-s26.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 9662
+}

@@ -1,0 +1,11 @@
+file	commit	platform	step/result
+49bf61aa-macos-state-left.png	49bf61aa5b3ea240262d0ef90d2d40736d6cd6b0	macos	BEFORE state left in account A before account switch
+49bf61aa-macos-after-switch-stale.png	49bf61aa5b3ea240262d0ef90d2d40736d6cd6b0	macos	BEFORE account switch leaves profile/panel state visible; absence assertion fails as expected
+af85bd19-macos-state-left.png	af85bd1964564693d1c96417892fab62baca8d89	macos	AFTER positive-control state left in account A before account switch
+af85bd19-macos-after-switch-fresh.png	af85bd1964564693d1c96417892fab62baca8d89	macos	AFTER account switch resets to fresh Home frame and absence assertions pass
+af85bd19-macos-full-recipe-final.png	af85bd1964564693d1c96417892fab62baca8d89	macos	AFTER full-sign-in recipe final frame; 29/29 steps passed
+af85bd19-macos-desktop-after-proof.mp4	af85bd1964564693d1c96417892fab62baca8d89	macos	One desktop AFTER recording of the full-sign-in proof run
+49bf61aa-iphone-state-left.png	49bf61aa5b3ea240262d0ef90d2d40736d6cd6b0	iphone	BEFORE state left in account A before account switch
+49bf61aa-iphone-after-switch-stale.png	49bf61aa5b3ea240262d0ef90d2d40736d6cd6b0	iphone	BEFORE account switch leaves Filings state visible; absence assertion fails as expected
+af85bd19-iphone-state-left.png	af85bd1964564693d1c96417892fab62baca8d89	iphone	AFTER positive-control state left in account A before account switch
+af85bd19-iphone-after-switch-fresh.png	af85bd1964564693d1c96417892fab62baca8d89	iphone	AFTER account switch resets to fresh Home frame and absence assertions pass

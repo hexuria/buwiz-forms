@@ -1,0 +1,30 @@
+# A4 proof: leave state in account A, sign out, sign in as B, then prove the frame is fresh.
+wait_until gate-start --timeout-ms 15000
+click gate-start-continue
+wait_until gate-email --timeout-ms 10000
+set_value gate-email juana@example.com
+click gate-continue
+wait_until gate-code-boxes --timeout-ms 10000
+type n3 246810
+wait_until home-dashboard --timeout-ms 20000
+click home-tp-000123453-next
+wait_until form-page --timeout-ms 30000
+click nav-filings
+wait_until filings-search --timeout-ms 10000
+set_value filings-search juana
+click context-pill
+wait_until panel-open-profile --timeout-ms 5000
+click panel-open-profile
+wait_until tp-sec-taxpayer-edit --timeout-ms 10000 --screenshot
+click demo-sign-out
+wait_until gate-start --timeout-ms 10000
+click gate-start-continue
+wait_until gate-email --timeout-ms 10000
+set_value gate-email pedro@example.com
+click gate-continue
+wait_until gate-code-boxes --timeout-ms 10000
+type n237 246810
+wait_until frame --timeout-ms 20000 --screenshot
+wait_until form-page --absent --timeout-ms 1000
+wait_until filings-search --absent --timeout-ms 1000
+wait_until tp-sec-taxpayer-edit --absent --timeout-ms 1000

@@ -1,0 +1,90 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "a4-screens-reset-phone-switch",
+  "fingerprint": "fnv1a64:15b76be493fe6f7c",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 4
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 444
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 2
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 3305
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 445
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 368
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1825
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 16
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1162
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 13
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 476
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1204
+    },
+    {
+      "id": "s14",
+      "ok": false,
+      "error": "target_gone: context-pill",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 176
+    }
+  ],
+  "elapsed_ms": 9456
+}

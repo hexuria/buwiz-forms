@@ -1,0 +1,132 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "a4-screens-reset-phone-runtime",
+  "fingerprint": "fnv1a64:1fff007ca00cdbd0",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 2
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 432
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 2
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 2986
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 448
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 340
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1803
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 12
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1109
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 424
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 127,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/ios-after-runtime/012-s12.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1199
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 968
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 2
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 494
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 148,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/ios-after-runtime/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "elapsed_ms": 11
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 7
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/ios-after-runtime/012-s12.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/ios-after-runtime/017-s17.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 10531
+}

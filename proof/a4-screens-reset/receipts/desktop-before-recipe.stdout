@@ -1,0 +1,263 @@
+{
+  "v": 1,
+  "ok": false,
+  "recipe": "a4-screens-reset-desktop-before-runtime",
+  "fingerprint": "fnv1a64:05f207a06d449912",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 12
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 421
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 13
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 460
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 358
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 226
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1186
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 92
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1033
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 125
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 418
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 48
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 398
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 511
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 62
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 457
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 227,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/desktop-before/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 444
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 8
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 391
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 19
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 536
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 519
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 483
+    },
+    {
+      "id": "s25",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 491
+    },
+    {
+      "id": "s26",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 494
+    },
+    {
+      "id": "s27",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 463
+    },
+    {
+      "id": "s28",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 475
+    },
+    {
+      "id": "s29",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 493
+    },
+    {
+      "id": "s30",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 495
+    },
+    {
+      "id": "s31",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 509
+    },
+    {
+      "id": "s32",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 481
+    },
+    {
+      "id": "s33",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 462
+    },
+    {
+      "id": "s34",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 454
+    },
+    {
+      "id": "s35",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 478
+    },
+    {
+      "id": "s36",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 485
+    },
+    {
+      "id": "s37",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 471
+    },
+    {
+      "id": "s38",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 465
+    },
+    {
+      "id": "s39",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 398
+    },
+    {
+      "id": "s40",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 363
+    },
+    {
+      "id": "s41",
+      "ok": true,
+      "elapsed_ms": 244
+    },
+    {
+      "id": "s42",
+      "ok": false,
+      "error": "target_gone: n261",
+      "error_code": "target_gone",
+      "delivery_status": "not_delivered",
+      "elapsed_ms": 622
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/desktop-before/017-s17.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 16810
+}

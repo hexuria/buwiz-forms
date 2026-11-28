@@ -1,0 +1,20 @@
+diff --git a/nsh/shell/app.ts b/nsh/shell/app.ts
+index 04c29f90..a7b03dbc 100644
+--- a/nsh/shell/app.ts
++++ b/nsh/shell/app.ts
+@@ -144,8 +144,6 @@ let keptLoaded = false;
+ /** The dev start route's steps for the sign-in and setup screens (screens/auth registers them). */
+ let accessSteps: ((key: string, value: string) => void) | null = null;
+ let databasePath = "";
+-/** Set by finishUnlock: the next account-open poll is a sign-in while a room may already be open, so it is always a new session. */
+-let accountChangePending = false;
+ let shellChromeSent: boolean | null = null;
+ let bootPromise: Promise<void> | null = null;
+ 
+@@ -163,8 +161,6 @@ function readOnly<T>(s: Signal<T>): Accessor<T> {
+  */
+ export function storageKey(key: string, database: string): string | null {
+   if (key === KEYS.prefs) return key;
+-  // A room-scoped key names the room database's exact path. A room removed or forgotten by the host can never be
+-  // opened at that path again, so its keys are unreachable: no later databasePath can name them and nothing reads them.
+   return database ? `${key}@${database}` : null;

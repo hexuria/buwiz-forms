@@ -1,0 +1,1 @@
+/dev/disk4s5   123Gi    88Gi   2.5Gi    98%    2.2M   26M    8%   /System/Volumes/Data

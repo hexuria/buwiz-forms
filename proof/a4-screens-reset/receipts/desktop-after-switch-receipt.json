@@ -1,0 +1,159 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "a4-screens-reset-desktop-switch",
+  "fingerprint": "fnv1a64:49cc14fe669d2a16",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "elapsed_ms": 11
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 465
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "elapsed_ms": 13
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 418
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 368
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 238
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1220
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "elapsed_ms": 92
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 1050
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "elapsed_ms": 124
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 418
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "elapsed_ms": 51
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 424
+    },
+    {
+      "id": "s14",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 470
+    },
+    {
+      "id": "s15",
+      "ok": true,
+      "elapsed_ms": 62
+    },
+    {
+      "id": "s16",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 457
+    },
+    {
+      "id": "s17",
+      "ok": true,
+      "elapsed_ms": 219,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/desktop-after-switch/017-s17.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s18",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 383
+    },
+    {
+      "id": "s19",
+      "ok": true,
+      "elapsed_ms": 12
+    },
+    {
+      "id": "s20",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 548
+    },
+    {
+      "id": "s21",
+      "ok": true,
+      "elapsed_ms": 167,
+      "screenshot": {
+        "path": "/Users/devin/jobs/a4screens/proof/desktop-after-switch/021-s21.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s22",
+      "ok": true,
+      "elapsed_ms": 74
+    },
+    {
+      "id": "s23",
+      "ok": true,
+      "elapsed_ms": 79
+    },
+    {
+      "id": "s24",
+      "ok": true,
+      "elapsed_ms": 76
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/desktop-after-switch/017-s17.png",
+      "ok": true
+    },
+    {
+      "path": "/Users/devin/jobs/a4screens/proof/desktop-after-switch/021-s21.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 7453
+}
