@@ -70,3 +70,13 @@ coordinates are exact; nothing else in the document differs.
   physical printout; font rasterization differs slightly from the app's own preview
   window, but the document bytes are the same ones the preview renders.
 - The A4 `preview-paper` override is not exercised (see the note above).
+
+## Side-by-side with #495's picture B
+
+- `r1d-item19-510-vs-495B.png` — top: this render's `r1a` rows 18 to 20 (PR #510 at
+  b70e42ef). Bottom: rows 18 to 20 of #495's picture B
+  (`docs/proof/n4-band-cap-evidence/n4-B-1701-p2-items19-20.png` at 95f8e0da, the
+  one-strip scratch build). Both at zoom 2.5, unscaled crops of the two PNGs; the
+  two renders place the sheet at different heights on the PDF page (B printed through
+  the preview's A4 `@page`, this one at 612x936 pt), so the rows are cropped where each
+  picture has them, not at equal y.
