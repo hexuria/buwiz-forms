@@ -39,5 +39,5 @@ that before-run.
 - 015-s15.png — Home (`home-welcome`), after first-run setup
   (help-desk choice, admin PIN typed into `setup-admin-pin` — the same
   PinCells — and the recovery key), completing sign-in.
-- proof-run.mp4 — screen recording of the run.
+- proof-run.mp4 — screen recording of the run. An earlier version of this video showed a throwaway recovery key from a scratch database; the seconds showing it are trimmed out (the jump in the setup flow).
 - report.json — the gpui-agent receipt: 15/15 steps pass.
