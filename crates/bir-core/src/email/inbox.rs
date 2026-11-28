@@ -92,43 +92,8 @@ fn resolve_inbox_fetch_profile_from(
     Ok(Some(profile))
 }
 
-/// After `verified` logged in to its inbox with an app password: every other profile on that mailbox that reads it with
-/// an app password takes the same password and host, so the poll (which reads one profile's credential for the mailbox)
-/// uses the one just verified. Only after a successful login, so an unverified typo never spreads. Returns how many
-/// profiles changed.
-pub fn share_verified_app_password(
-    db: &Database,
-    verified: &TaxpayerProfile,
-) -> Result<usize, crate::db::DbError> {
-    if verified.email_auth_method != crate::profile::EmailAuthMethod::AppPassword {
-        return Ok(0);
-    }
-    let Some(password) = verified
-        .imap_app_password
-        .as_deref()
-        .filter(|password| !password.is_empty())
-    else {
-        return Ok(0);
-    };
-    let mut changed = 0;
-    for mut sibling in db.list_profiles()? {
-        if sibling.id == verified.id
-            || sibling.email_auth_method != crate::profile::EmailAuthMethod::AppPassword
-            || !inbox_emails_match(sibling.inbox_email(), verified.inbox_email())
-            || (sibling.imap_app_password.as_deref() == Some(password)
-                && sibling.imap_host == verified.imap_host)
-        {
-            continue;
-        }
-        sibling.imap_app_password = Some(password.to_string());
-        sibling.imap_host = verified.imap_host.clone();
-        db.save_profile(sibling)?;
-        changed += 1;
-    }
-    Ok(changed)
-}
-
-/// The latest profile on `inbox_email` set to read it with an app password, and holding one.
+/// The first profile on `inbox_email` (in the order the list gives, as `select_imap_auth_profile` takes) set to read it
+/// with an app password, and holding one.
 fn select_app_password_profile(
     profiles: &[TaxpayerProfile],
     inbox_email: &str,
@@ -136,14 +101,13 @@ fn select_app_password_profile(
     profiles
         .iter()
         .filter(|profile| inbox_emails_match(profile.inbox_email(), inbox_email))
-        .filter(|profile| profile.email_auth_method == crate::profile::EmailAuthMethod::AppPassword)
-        .filter(|profile| {
-            profile
-                .imap_app_password
-                .as_deref()
-                .is_some_and(|password| !password.is_empty())
+        .find(|profile| {
+            profile.email_auth_method == crate::profile::EmailAuthMethod::AppPassword
+                && profile
+                    .imap_app_password
+                    .as_deref()
+                    .is_some_and(|password| !password.is_empty())
         })
-        .max_by_key(|profile| profile.id)
         .cloned()
 }
 
@@ -241,39 +205,6 @@ mod tests {
     /// #504 review: a mailbox connected to Google in an earlier build, switched to an app password without pressing
     /// Disconnect. In a build without Google's sign-in the grant cannot be renewed, so the app password the person
     /// chose reads the inbox (the same credential Verify used); with Google available the grant still wins.
-    /// #504 review: two profiles read one mailbox with app passwords; the older one verifies a replacement. The poll's
-    /// credential (without Google: the newest app-password profile) is then the replacement, not the newer profile's
-    /// revoked one.
-    #[test]
-    fn a_verified_app_password_is_the_one_the_poll_uses() {
-        let db = Database::open_ephemeral().unwrap();
-        let on_inbox = |seg1: &str, name: &str| {
-            let mut on = profile(seg1, name);
-            on.email_auth_method = EmailAuthMethod::AppPassword;
-            on.imap_app_password = Some("revokedrevoked00".to_string());
-            save(&db, on)
-        };
-        let mut older = on_inbox("111", "Juan");
-        on_inbox("222", "Jane");
-        older.imap_app_password = Some("replacementpass1".to_string());
-        let older = save(&db, older);
-
-        assert_eq!(share_verified_app_password(&db, &older).unwrap(), 1);
-        let profiles = db.list_profiles().unwrap();
-        let polled = resolve_inbox_fetch_profile_from(&db, SHARED_INBOX, &profiles, false)
-            .unwrap()
-            .expect("a profile reads the inbox");
-        assert_eq!(
-            polled.imap_app_password.as_deref(),
-            Some("replacementpass1")
-        );
-        assert_eq!(
-            share_verified_app_password(&db, &older).unwrap(),
-            0,
-            "nothing left to change"
-        );
-    }
-
     #[test]
     fn a_chosen_app_password_wins_over_a_grant_this_build_cannot_renew() {
         let db = Database::open_ephemeral().unwrap();

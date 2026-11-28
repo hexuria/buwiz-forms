@@ -21,5 +21,5 @@ pub use fetcher::{
 };
 pub use inbox::{
     EmailPollPlan, plan_email_poll_for_address, resolve_inbox_fetch_profile,
-    select_imap_auth_profile, share_verified_app_password,
+    select_imap_auth_profile,
 };

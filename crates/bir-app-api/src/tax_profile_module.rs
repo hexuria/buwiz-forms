@@ -1446,11 +1446,8 @@ fn apply_connection_result(
             let mut profile = load_inbox_profile(&guard, tin)?;
             profile.email_tracking_enabled = true;
             let inbox = profile.inbox_email().to_string();
-            let profile = guard
+            guard
                 .save_profile(profile)
-                .map_err(|error| HostError::new(error.to_string()))?;
-            // The mailbox is one credential: the app password just verified is the one every profile on it polls with.
-            bir_core::email::share_verified_app_password(&guard, &profile)
                 .map_err(|error| HostError::new(error.to_string()))?;
             bir_core::background_cron::reschedule_email_polls_for_inbox(&guard, &inbox);
             Ok(HostObject::new()
