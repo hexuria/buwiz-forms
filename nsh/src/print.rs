@@ -2299,7 +2299,10 @@ impl Print {
             let generation = crate::print_android::generation();
             let (_, _, sheet) = snapshot(&key).ok_or("The print preview is no longer available.")?;
             let request = STATE.with(|state| state.borrow().previews[&key].request.clone());
-            crate::print_android::preview(url_for(&sheet), title, generation, request).await
+            // PrintManager.print's job name is this string. It must be the
+            // form number only; the taxpayer-bearing window title is not a print name.
+            let _ = title;
+            crate::print_android::preview(url_for(&sheet), print_job_name(&key), generation, request).await
         }
         #[cfg(not(target_os = "android"))]
         {
@@ -2773,6 +2776,7 @@ mod tests {
         assert!(pdf_name.ends_with(".pdf"), "{pdf_name}");
         assert!(!pdf_name.contains("Juana"), "{pdf_name}");
         assert!(!pdf_name.contains("Santos"), "{pdf_name}");
+        assert_eq!(print_job_name("2551Q"), "2551Q", "the OS print job name carries no taxpayer text");
     }
 
     #[cfg(any(all(windows, target_env = "msvc"), target_os = "linux"))]
