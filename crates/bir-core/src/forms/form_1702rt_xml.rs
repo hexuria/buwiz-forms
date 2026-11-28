@@ -1660,7 +1660,7 @@ mod tests {
         assert_eq!(draft.to_bir_field_map(), fields);
 
         let encrypted = std::fs::read(
-            directory.join("00000000000000-1702RTv2018C-122025#Filer@Example.com#.xml"),
+            directory.join("00000000000000-1702RTv2018C-122025#CODEITLIKEMILEY@GMAIL.COM#.xml"),
         )
         .expect("encrypted source is readable");
         assert_eq!(

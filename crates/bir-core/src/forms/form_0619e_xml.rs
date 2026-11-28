@@ -1168,7 +1168,7 @@ mod tests {
         assert_eq!(replayed_plain.to_bir_field_map(), canonical_plain_fields);
 
         let encrypted =
-            std::fs::read(directory.join("00000000000000-0619E-042026#filer@example.com#.xml"))
+            std::fs::read(directory.join("00000000000000-0619E-042026#codeitlikemiley@gmail.com#.xml"))
                 .expect("reviewed encrypted companion must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),

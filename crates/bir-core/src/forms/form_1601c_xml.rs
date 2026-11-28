@@ -1150,11 +1150,11 @@ frm1601c:txtLineBus
         );
         assert_eq!(
             draft.default_submission_filename(),
-            "00000000000000-1601Cv2018-052026#filer@example.com#.xml"
+            "00000000000000-1601Cv2018-052026#codeitlikemiley@gmail.com#.xml"
         );
 
         let encrypted = std::fs::read(
-            directory.join("00000000000000-1601Cv2018-052026#filer@example.com#.xml"),
+            directory.join("00000000000000-1601Cv2018-052026#codeitlikemiley@gmail.com#.xml"),
         )
         .expect("reviewed encrypted companion must be readable");
         assert_eq!(

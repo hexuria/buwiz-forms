@@ -2895,7 +2895,7 @@ mod tests {
         assert_eq!(plain_replay.to_bir_field_map(), plain_fields);
 
         let encrypted_path = std::path::Path::new(&source_dir)
-            .join("00000000000000-2550Qv2024-122025Q1#Filer@Example.com#.xml");
+            .join("00000000000000-2550Qv2024-122025Q1#CODEITLIKEMILEY@GMAIL.COM#.xml");
         let encrypted = std::fs::read(&encrypted_path).expect("encrypted source must be readable");
         assert_eq!(
             hex::encode(Sha256::digest(&encrypted)),
