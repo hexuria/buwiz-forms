@@ -1,13 +1,9 @@
-# Smoke 8, pre-send: Queue on the open return, in the dry-run test build only (the default suite never presses it). Queue validates first: a 2551Q on a profile without the business start
-# date and the annual income-tax election stops at its prerequisite banners. So this recipe first records both
-# through the banners' own Set buttons (each opens the profile editor and returns to the form on save). The election
-# is 8%: it makes Item 13 Not applicable for a Q4 non-initial quarter, the combination the Windows machine proved
-# end to end. Then the remaining to-dos are answered in the form itself (income type inline to the profile,
-# telephone, email at fp-txtEmail#occurrence-1 - the bare id resolves to nothing where the form holds the same test
-# id more than once - tax relief No, Item 13 Not applicable), jumping back to the top before Queue because deep in
-# the scroll the toolbar is culled from the tree and fp-queue is gone. fp-cancel-queue is not awaited: the dry-run
-# worker sends a queued return within seconds, so the queued state races the wait; fp-send-line exists only once
-# the return is sent.
+# Smoke 8, pre-send: Queue on the open return, in the dry-run test build only (the default suite never presses it).
+# Queue validates first: a 2551Q on a profile without the business start date and the annual income-tax election
+# stops at its prerequisite banners. So this recipe first records both through the banners' own Set buttons (each
+# opens the profile editor and returns to the form on save). The election is 8%: it makes Item 13 Not applicable
+# for a Q4 non-initial quarter. Then the remaining to-dos are answered in the form itself, and Check must report
+# no problems before the recipe stops with Queue visible and its confirm dialog unopened.
 wait_until fp-set-profile-business_start_date --timeout-ms 8000 --screenshot
 click fp-set-profile-business_start_date
 wait_until tp-branch-business_start_date --timeout-ms 5000
@@ -29,4 +25,7 @@ type fp-txtEmail#occurrence-1 e2e@example.com
 click fp-frm2551Qv2018:taxTreaty_2 --screenshot
 click fp-frm2551Qv2018:taxRateNA --screenshot
 click fp-nav-0 --screenshot
+click fp-check
+wait_until 'No problems found.' --timeout-ms 10000 --screenshot
 wait_until fp-queue --timeout-ms 5000 --screenshot
+wait_until queue-confirm --timeout-ms 1000 --absent

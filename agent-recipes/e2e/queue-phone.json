@@ -148,11 +148,30 @@
    "screenshot": true
   },
   {
-   "id": "s30",
+   "id": "s26",
+   "op": "click",
+   "target": "fp-check"
+  },
+  {
+   "id": "s27",
+   "op": "wait_until",
+   "target": "No problems found.",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "s28",
    "op": "wait_until",
    "target": "fp-queue",
    "timeout_ms": 5000,
    "screenshot": true
+  },
+  {
+   "id": "s29",
+   "op": "wait_until",
+   "target": "queue-confirm",
+   "timeout_ms": 1000,
+   "exists": false
   }
  ]
 }

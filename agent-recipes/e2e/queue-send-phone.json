@@ -1,0 +1,33 @@
+{
+ "v": 1,
+ "name": "e2e-queue-send-phone",
+ "app": "bir-shell",
+ "steps": [
+  {
+   "id": "s1",
+   "op": "click",
+   "target": "fp-queue",
+   "screenshot": true
+  },
+  {
+   "id": "s2",
+   "op": "wait_until",
+   "target": "queue-continue",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "s3",
+   "op": "click",
+   "target": "queue-continue",
+   "screenshot": true
+  },
+  {
+   "id": "s4",
+   "op": "wait_until",
+   "target": "fp-send-line",
+   "timeout_ms": 20000,
+   "screenshot": true
+  }
+ ]
+}

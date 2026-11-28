@@ -61,9 +61,8 @@
   },
   {
    "id": "s9",
-   "op": "click",
-   "target": "new-tp-zip_code-trigger",
-   "delivery": "virtual"
+   "op": "press",
+   "target": "new-tp-zip_code-trigger"
   },
   {
    "id": "s9a",
@@ -87,8 +86,7 @@
    "id": "s11",
    "op": "click",
    "target": "new-tp-zip_code-opt-$zip",
-   "screenshot": true,
-   "delivery": "virtual"
+   "screenshot": true
   },
   {
    "id": "s12",
@@ -99,9 +97,8 @@
   },
   {
    "id": "s13",
-   "op": "click",
-   "target": "new-tp-rdo_code-trigger",
-   "delivery": "virtual"
+   "op": "press",
+   "target": "new-tp-rdo_code-trigger"
   },
   {
    "id": "s13a",
@@ -143,8 +140,7 @@
    "id": "s18",
    "op": "click",
    "target": "new-tp-rdo_code-opt-$rdo",
-   "screenshot": true,
-   "delivery": "virtual"
+   "screenshot": true
   },
   {
    "id": "s19",

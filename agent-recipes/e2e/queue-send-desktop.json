@@ -1,10 +1,7 @@
 {
  "v": 1,
- "name": "e2e-queue-desktop",
+ "name": "e2e-queue-send-desktop",
  "app": "bir-shell",
- "params": [
-  "bstart"
- ],
  "steps": [
   {
    "id": "s1",
@@ -15,158 +12,18 @@
   {
    "id": "s2",
    "op": "wait_until",
-   "target": "fp-set-profile-business_start_date",
-   "timeout_ms": 8000
-  },
-  {
-   "id": "s3",
-   "op": "click",
-   "target": "fp-set-profile-business_start_date"
-  },
-  {
-   "id": "s4",
-   "op": "wait_until",
-   "target": "tp-branch-business_start_date",
-   "timeout_ms": 8000
-  },
-  {
-   "id": "s5",
-   "op": "click",
-   "target": "tp-branch-business_start_date"
-  },
-  {
-   "id": "s6",
-   "op": "type",
-   "target": "tp-branch-business_start_date",
-   "text": "$bstart"
-  },
-  {
-   "id": "s7",
-   "op": "assert",
-   "target": "tp-branch-business_start_date",
-   "value": "$bstart"
-  },
-  {
-   "id": "s8",
-   "op": "click",
-   "target": "tp-branch-save"
-  },
-  {
-   "id": "s9",
-   "op": "wait_until",
-   "target": "fp-set-profile-income_tax_election",
-   "timeout_ms": 8000
-  },
-  {
-   "id": "s10",
-   "op": "click",
-   "target": "fp-set-profile-income_tax_election"
-  },
-  {
-   "id": "s11",
-   "op": "wait_until",
-   "target": "tp-fact-income_tax_election-choice-EightPercent",
-   "timeout_ms": 8000
-  },
-  {
-   "id": "s12",
-   "op": "click",
-   "target": "tp-fact-income_tax_election-choice-EightPercent"
-  },
-  {
-   "id": "s13",
-   "op": "click",
-   "target": "tp-fact-income_tax_election-save"
-  },
-  {
-   "id": "s14",
-   "op": "wait_until",
-   "target": "fp-pill-list",
-   "timeout_ms": 8000
-  },
-  {
-   "id": "s15",
-   "op": "click",
-   "target": "fp-pill-list"
-  },
-  {
-   "id": "s16",
-   "op": "click",
-   "target": "fp-nav-attention",
-   "screenshot": true
-  },
-  {
-   "id": "s17",
-   "op": "scroll",
-   "target": "form-scroll",
-   "dy": 500
-  },
-  {
-   "id": "s18",
-   "op": "click",
-   "target": "fp-ask-tax_classification-choices-\"SelfEmployed\""
-  },
-  {
-   "id": "s19",
-   "op": "click",
-   "target": "fp-frm2551Qv2018:telNo"
-  },
-  {
-   "id": "s20",
-   "op": "type",
-   "target": "fp-frm2551Qv2018:telNo",
-   "text": "09170000000"
-  },
-  {
-   "id": "s21",
-   "op": "click",
-   "target": "fp-txtEmail#occurrence-1"
-  },
-  {
-   "id": "s22",
-   "op": "type",
-   "target": "fp-txtEmail#occurrence-1",
-   "text": "e2e@example.com"
-  },
-  {
-   "id": "s23",
-   "op": "click",
-   "target": "fp-frm2551Qv2018:taxTreaty_2",
-   "screenshot": true
-  },
-  {
-   "id": "s24",
-   "op": "click",
-   "target": "fp-frm2551Qv2018:taxRateNA",
-   "screenshot": true
-  },
-  {
-   "id": "s25",
-   "op": "click",
-   "target": "fp-nav-0",
-   "screenshot": true
-  },
-  {
-   "id": "s26",
-   "op": "click",
-   "target": "fp-queue",
-   "screenshot": true
-  },
-  {
-   "id": "s27",
-   "op": "wait_until",
    "target": "queue-continue",
    "timeout_ms": 10000,
    "screenshot": true
   },
   {
-   "id": "s28",
+   "id": "s3",
    "op": "click",
    "target": "queue-continue",
    "screenshot": true
   },
   {
-   "id": "s29",
+   "id": "s4",
    "op": "wait_until",
    "target": "fp-send-line",
    "timeout_ms": 20000,

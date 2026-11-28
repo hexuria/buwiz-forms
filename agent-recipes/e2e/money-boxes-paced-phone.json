@@ -49,10 +49,17 @@
    "target": "fp-frm2551Qv2018:txt16"
   },
   {
+   "id": "s3",
+   "op": "wait_until",
+   "target": "system-keyboard",
+   "timeout_ms": 5000
+  },
+  {
    "id": "s4",
-   "op": "paste",
+   "op": "type",
    "target": "fp-frm2551Qv2018:txt16",
-   "text": "$prior"
+   "text": "$prior",
+   "key_delay_ms": 80
   },
   {
    "id": "s5",
@@ -67,10 +74,17 @@
    "target": "fp-frm2551Qv2018:txt15"
   },
   {
+   "id": "s7",
+   "op": "wait_until",
+   "target": "system-keyboard",
+   "timeout_ms": 5000
+  },
+  {
    "id": "s8",
-   "op": "paste",
+   "op": "type",
    "target": "fp-frm2551Qv2018:txt15",
-   "text": "$amount"
+   "text": "$amount",
+   "key_delay_ms": 80
   },
   {
    "id": "s9",

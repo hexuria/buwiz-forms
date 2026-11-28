@@ -4,9 +4,11 @@
 click new-tp-start-trigger
 wait_until $start_option --timeout-ms 5000
 click $start_option
-set_value $tin_field $tin
+click $tin_field
+type $tin_field $tin
 click new-tp-name
 type new-tp-name $name
+click new-tp-registered_address
 type new-tp-registered_address $address
 click new-tp-zip_code-trigger
 wait_until new-tp-zip_code-search --timeout-ms 5000
