@@ -3318,6 +3318,18 @@ fn print_draft_with_stored_dry_run(
     if !lifecycle_flag(&stored, "submitted_dry_run") {
         return Ok(print_draft);
     }
+    // A filed-original view has the same identity as its current amendment but carries the original's earlier lifecycle.
+    // Only the current stored return takes the current row's send fact; a historical print keeps its own.
+    let same_moment = match (
+        lifecycle_text(&print_draft, "updated_at"),
+        lifecycle_text(&stored, "updated_at"),
+    ) {
+        (Some(shown), Some(stored_at)) => shown == stored_at,
+        _ => false,
+    };
+    if !same_moment {
+        return Ok(print_draft);
+    }
     if print_draft["lifecycle"].is_object() {
         print_draft["lifecycle"]["submitted_dry_run"] = json!(true);
     } else {
@@ -15441,6 +15453,31 @@ mod tests {
         assert!(
             html.contains("Test send: not filed. Nothing reached the BIR."),
             "the preview itself says the test send is not filed"
+        );
+    }
+
+    #[test]
+    fn a_filed_original_does_not_take_the_current_amendments_test_send_fact() {
+        setup_taxpayer_filing(&["1601C"]);
+        let opened = open_for(TIN, "1601C", 2026, 6);
+        let id = store_filed("1601C", &opened["draft"], "Submitted");
+        let (_, original_raw) = raw_row(id);
+        let original: Value = serde_json::from_str(&original_raw).unwrap();
+        let mut current = original.clone();
+        current["submitted_dry_run"] = json!(true);
+        current["updated_at"] = json!("2030-01-01T00:00:00Z");
+        raw_exec(
+            &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+            &[&serde_json::to_string(&current).unwrap()],
+        );
+
+        let print_draft = with_database(|db| {
+            print_draft_with_stored_dry_run(db, kind_of("1601C").unwrap(), &original)
+        })
+        .unwrap();
+        assert_ne!(
+            print_draft["submitted_dry_run"], true,
+            "a historical original keeps its own send facts"
         );
     }
 
