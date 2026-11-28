@@ -9,9 +9,11 @@ every one of those lines broke at the strip; to the right of a narrowed
 band the strip printed as blank white inside the table grid.
 
 The official sheet prints continuous frame lines through that area
-(`official-1701ms-same-area.png`: empty fill — the sheet as it is drawn,
-same crop): the amount columns' dividers and the rows' comb ticks run
-down without interruption. So the gap is a print fault.
+(`official-1701ms-same-area.png`: empty fill — the sheet as it is drawn;
+it shows the same area of the sheet but is a different crop — another
+size, starting at another row — not the before/after pair's crop): the
+amount columns' dividers and the rows' comb ticks run down without
+interruption. So the gap is a print fault.
 
 The fix: a vertical line segment that ends exactly at the insertion cut
 and has a continuation segment starting exactly at the cut at the same x

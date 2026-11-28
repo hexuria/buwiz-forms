@@ -5689,7 +5689,11 @@ fn rule6_place_band(
             if *top >= cut_y - 0.05 || bottom - (cut_y + 0.5) <= 0.05 {
                 continue;
             }
-            let limit = *left - 2.0;
+            // The border sits on the divider: the band narrows exactly to
+            // the value cell's left edge (the column divider line), not a
+            // gutter short of it, so the band's right border and the
+            // divider print as one line, never a double line 2 pt apart.
+            let limit = *left;
             if *left > x0 + 1.0 && rule6_band_width(x0, limit) >= RULE6_BAND_FLOOR_PT {
                 narrow = Some(narrow.map_or(limit, |n: f64| n.min(limit)));
             } else {
@@ -5906,7 +5910,7 @@ fn shift_page_and_insert_rule6(
                     elastic_shrink,
                 );
                 if let (Some(x), Some(w)) = (x_val, w_val) {
-                    if w <= 1.6 && h_val >= 3.0 && d_top.abs() <= 1e-4 {
+                    if w <= 1.6 && h_val >= 3.0 {
                         for ins in insertions {
                             if ((y_val + h_val) - ins.cut_y).abs() <= 0.75
                                 && continues_below(x, ins.cut_y)
@@ -11701,6 +11705,179 @@ mod tests {
         }
     }
 
+    /// (a) A second strip on the same page keeps its frame lines too: on
+    /// 1701q page 2 the strips for p2c148, p2c150 and p2c152 stack, and the
+    /// page's left frame edge (x = 12.72) must run continuously through ALL
+    /// of them — the `d_top.abs() <= 1e-4` guard used to stop the stretch
+    /// once an earlier strip sat above the segment.
+    #[test]
+    fn a_second_rule6_strip_on_a_page_keeps_the_frame_lines() {
+        let slug = "1701q-2018";
+        let cells = writer_cells(slug).unwrap();
+        let mut fields: BTreeMap<String, String> = BTreeMap::new();
+        for key in cells.joins.keys() {
+            if key.contains("description")
+                || key.contains("specify")
+                || key.contains("Specify")
+                || key.contains("Desc")
+            {
+                fields.insert(key.clone(), words_of(200));
+            } else {
+                fields.insert(key.clone(), "1000".to_string());
+            }
+        }
+        let doc = filled_document(slug, &fields).unwrap();
+
+        // collect every band on the page
+        let mut bands: Vec<(f64, f64)> = Vec::new();
+        let mut cursor = 0usize;
+        while let Some(rel) = doc[cursor..].find("data-rule6-band=\"true\" ") {
+            let band_at = cursor + rel;
+            let Some(srel) = doc[band_at..band_at + 200].find("style=\"") else {
+                break;
+            };
+            let at = band_at + srel + "style=\"".len();
+            let style = &doc[at..at + 130];
+            let pt = |name: &str| -> f64 {
+                let key = format!("{name}:");
+                let from = style.find(&key).unwrap() + key.len();
+                style[from..].split("pt").next().unwrap().parse().unwrap()
+            };
+            bands.push((pt("top"), pt("top") + pt("height")));
+            cursor = at + 100;
+        }
+        assert!(
+            bands.len() >= 2,
+            "1701q page 2 stacks several strips, got {bands:?}"
+        );
+
+        // the page's left frame edge at x = 12.72 must bridge every band
+        let rects = |f: &dyn Fn(f64, f64, f64, f64) -> bool| -> Vec<(f64, f64, f64, f64)> {
+            let mut out = Vec::new();
+            let mut cur = 0;
+            while let Some(rel) = doc[cur..].find("<rect ") {
+                let start = cur + rel;
+                let Some(end_rel) = doc[start..].find('>') else {
+                    break;
+                };
+                let tag = &doc[start..start + end_rel + 1];
+                let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+                if let (Some(x), Some(y), Some(w), Some(h)) =
+                    (num("x"), num("y"), num("width"), num("height"))
+                {
+                    if f(x, y, w, h) {
+                        out.push((x, y, w, h));
+                    }
+                }
+                cur = start + end_rel + 1;
+            }
+            out
+        };
+        for (band_top, band_bottom) in &bands {
+            let bridging = rects(&|x, y, w, h| {
+                w <= 1.6
+                    && (x - 12.72).abs() <= 1.0
+                    && y < band_top - 1.0
+                    && y + h >= band_bottom - 0.75
+            });
+            assert!(
+                !bridging.is_empty(),
+                "the left frame edge x=12.72 does not bridge the strip {band_top}..{band_bottom}"
+            );
+        }
+    }
+
+    /// (b) The comb-tick exclusion fixture: on 1701MS page 2 the item-9 row's
+    /// amount combs end exactly at the strip's cut, so a tick's bottom abuts
+    /// the boundary with no continuation below — the "no segment at the same
+    /// x within 1 pt starts at the cut" rule must keep it inside its row.
+    /// This fixture proves the exclusion is hit: at least one tick abuts the
+    /// cut, and no tick crosses into the strip.
+    #[test]
+    fn rule6_comb_ticks_abutting_the_cut_stay_in_their_row() {
+        let slug = "1701ms-2024";
+        let cells = writer_cells(slug).unwrap();
+        let mut fields: BTreeMap<String, String> = BTreeMap::new();
+        for key in cells.joins.keys() {
+            if key.contains("description")
+                || key.contains("specify")
+                || key.contains("Specify")
+                || key.contains("Desc")
+            {
+                fields.insert(key.clone(), words_of(200));
+            } else {
+                fields.insert(key.clone(), "1000".to_string());
+            }
+        }
+        let doc = filled_document(slug, &fields).unwrap();
+
+        let band_marker = "data-rule6-of=\"p2c179\"";
+        let at = doc.find(band_marker).unwrap();
+        let style_at = doc[at..at + 220].find("style=\"").unwrap() + at + "style=\"".len();
+        let style = &doc[style_at..style_at + 120];
+        let pt = |name: &str| -> f64 {
+            let key = format!("{name}:");
+            let from = style.find(&key).unwrap() + key.len();
+            style[from..].split("pt").next().unwrap().parse().unwrap()
+        };
+        let band_top = pt("top");
+        let band_bottom = band_top + pt("height");
+
+        let mut verticals: Vec<(f64, f64, f64)> = Vec::new();
+        let mut cur = 0;
+        while let Some(rel) = doc[cur..].find("<rect ") {
+            let start = cur + rel;
+            let Some(end_rel) = doc[start..].find('>') else {
+                break;
+            };
+            let tag = &doc[start..start + end_rel + 1];
+            let num = |a: &str| attr(tag, a).and_then(|v| v.parse::<f64>().ok());
+            if let (Some(x), Some(y), Some(w), Some(h)) =
+                (num("x"), num("y"), num("width"), num("height"))
+            {
+                if w <= 1.6 && h >= 3.0 {
+                    verticals.push((x, y, h));
+                }
+            }
+            cur = start + end_rel + 1;
+        }
+
+        // the strip sits on item 9's row boundary: the cut is the band's top
+        // less what the insertion shifted; ticks of item 9's row end there.
+        // a tick: a short vertical deep inside a comb column (not x=327.45 /
+        // 461.58 / page edges), ending within 0.75 of the band top as drawn
+        // before the shift — after the shift nothing inside the row may end
+        // exactly at the band top unless stretched, so assert on positions:
+        // (1) the fixture hits the exclusion: at least one short vertical
+        // ends within 6 pt above the band top (the row's own ticks);
+        // (2) no short vertical crosses the band interior.
+        let short = |h: f64| h < 20.0;
+        let ticks_near_cut: Vec<_> = verticals
+            .iter()
+            .filter(|&&(_x, y, h)| {
+                short(h) && (y + h) <= band_top + 0.5 && (y + h) > band_top - 8.0
+            })
+            .cloned()
+            .collect();
+        assert!(
+            !ticks_near_cut.is_empty(),
+            "fixture vacuous: no comb tick ends at item 9's row boundary above the strip"
+        );
+        // the exclusion keeps a tick from being STRETCHED through the strip:
+        // a tick ends inside its own row — none starts above the strip and
+        // reaches past the strip's bottom. (Only the full-height frame
+        // dividers, h >= 20, bridge it.)
+        let stretched: Vec<_> = verticals
+            .iter()
+            .filter(|&&(_x, y, h)| short(h) && y < band_top - 0.75 && y + h >= band_bottom - 0.75)
+            .cloned()
+            .collect();
+        assert!(
+            stretched.is_empty(),
+            "a comb tick is stretched through the strip {band_top}..{band_bottom}: {stretched:?}"
+        );
+    }
+
     /// D1's negative: 1700's band for p2c153 moved sideways under the
     /// next column of its row fails the sideways check (and nothing else
     /// moves, so exactly one failure names it); in place it passes.
@@ -11825,7 +12002,10 @@ mod tests {
             ("c2".to_string(), 200.0, 99.0, 100.0, 30.0),
         ];
         let (x1, cut_y) = super::rule6_place_band(14.0, 590.0, 112.0, "c1", &cells);
-        assert_eq!(x1, 198.0, "the band ends 2 pt before the cell");
+        assert_eq!(
+            x1, 200.0,
+            "the band's right border sits on the cell's divider"
+        );
         assert_eq!(cut_y, 112.0, "the band keeps its line");
     }
 
