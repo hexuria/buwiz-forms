@@ -1,0 +1,27 @@
+PROBE|1801-2018|frm1801v2018:txtDateMonth|PRINTS|date of death month
+PROBE|1801-2018|frm1801v2018:txtDateDay|PRINTS|date of death day
+PROBE|1801-2018|frm1801v2018:txtDateYear|BLANK|date of death year
+PROBE|1801-2018|frm1801v2018:txtInstallmentYear|PRINTS|installment year
+PROBE|1801-2018|frm1801v2018:txtContactNum|BLANK|contact number
+PROBE|1801-2018|frm1801v2018:txtTotalPayable|BLANK|total payable guess
+PROBE|1701ms-2024|frm1701MS:txtCompensationBusinessNo25a|BLANK|item 25A
+PROBE|1701ms-2024|frm1701MS:txtAmountPayableNo27a|BLANK|item 27A
+PROBE|1701ms-2024|frm1701MS:txtTotalAmountPayableNo29a|BLANK|item 29A
+PROBE|1701ms-2024|frm1701MS:txtAggregateAmountPayable30a|BLANK|item 30A
+PROBE|1707a-2021|frm1707Av2021:txtS1I20TotalSellingPrice|BLANK|S1 total selling price
+PROBE|1707a-2021|frm1707Av2021:txtS1I20TotalCost|BLANK|S1 total cost
+PROBE|1707a-2021|frm1707Av2021:txtS1I20TotalCapitalGains|PRINTS|S1 total capital gains
+PROBE|1707a-2021|frm1707Av2021:txtS1I20TotalTaxPaid|PRINTS|S1 total tax paid
+PROBE|1707a-2021|frm1707Av2021:txtS2I21TotalSellingPrice|BLANK|S2 total selling price
+PROBE|1707a-2021|frm1707Av2021:txtS2I21TotalCost|BLANK|S2 total cost
+PROBE|1707a-2021|frm1707Av2021:txtS2I21TotalCapitalLoss|PRINTS|S2 total capital loss
+PROBE|1707a-2021|frm1707Av2021:txtLineOfBusiness|BLANK|line of business
+PROBE|2200m-2018|frm2200M:txtPg1Pt1I10Region|BLANK|item 10 region
+PROBE|2200m-2018|frm2200M:txtPg1Pt1I10Province|BLANK|item 10 province
+PROBE|2200m-2018|frm2200M:txtPg1Pt1I10City|BLANK|item 10 city
+PROBE|2200m-2018|frm2200M:txtPg1Pt1I11Region|BLANK|item 11 region
+PROBE|2200m-2018|frm2200M:txtPg1Pt1I11Province|BLANK|item 11 province
+PROBE|2200m-2018|frm2200M:txtPg1Pt1I11City|BLANK|item 11 city
+PROBE|1707-2021|frm1707:txtPg1I6SellerAddr0|PRINTS|seller address 6A
+PROBE|1707-2021|frm1707:txtPg1I7BuyerAddr0|PRINTS|buyer address 7A
+PROBE|2200p-2020|frm2200P:txtLOB|BLANK|2200P line of business
