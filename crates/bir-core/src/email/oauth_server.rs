@@ -64,7 +64,7 @@ fn wait_for_callback(
     while Instant::now() < deadline {
         match listener.accept() {
             Ok((stream, _addr)) => {
-                if let Some(outcome) = answer(stream, expected_state) {
+                if let Some(outcome) = answer(stream, expected_state, deadline) {
                     return outcome;
                 }
             }
@@ -78,7 +78,13 @@ fn wait_for_callback(
 }
 
 /// Answers one connection. `None` when it did not decide the sign-in, so the wait goes on.
-fn answer(mut stream: TcpStream, expected_state: &str) -> Option<Result<String, String>> {
+fn answer(
+    mut stream: TcpStream,
+    expected_state: &str,
+    deadline: Instant,
+) -> Option<Result<String, String>> {
+    // One connection gets at most CONNECTION_TIMEOUT, and never past the callback's own deadline.
+    let until = (Instant::now() + CONNECTION_TIMEOUT).min(deadline);
     // An accepted socket inherits the listener's non-blocking mode on macOS and Windows (not on Linux): it must block
     // with timeouts, or a read before the request arrives gives nothing and the real callback would be refused.
     if let Err(error) = stream
@@ -88,7 +94,7 @@ fn answer(mut stream: TcpStream, expected_state: &str) -> Option<Result<String, 
     {
         return Some(Err(format!("OAuth callback server failed: {error}")));
     }
-    let request = read_request(&mut stream);
+    let request = read_request(&mut stream, until);
     match classify(&request, expected_state) {
         Callback::Code(code) => {
             respond(
@@ -138,12 +144,17 @@ fn answer(mut stream: TcpStream, expected_state: &str) -> Option<Result<String, 
     }
 }
 
-/// The request's line and headers: reads until the blank line that ends them, the peer closes, the read times out,
-/// or [`REQUEST_LIMIT`] bytes, so a request that arrives in several pieces is read whole.
-fn read_request(stream: &mut TcpStream) -> String {
+/// The request's line and headers: reads until the blank line that ends them, the peer closes, [`REQUEST_LIMIT`]
+/// bytes, or `until`, so a request that arrives in several pieces is read whole and a peer that sends slowly is cut
+/// off on time (each read waits only for what is left before `until`).
+fn read_request(stream: &mut TcpStream, until: Instant) -> String {
     let mut request = Vec::with_capacity(1024);
     let mut chunk = [0u8; 1024];
     while request.len() < REQUEST_LIMIT && !request.windows(4).any(|window| window == b"\r\n\r\n") {
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() || stream.set_read_timeout(Some(left)).is_err() {
+            break;
+        }
         match stream.read(&mut chunk) {
             Ok(0) | Err(_) => break,
             Ok(n) => request.extend_from_slice(&chunk[..n.min(REQUEST_LIMIT - request.len())]),
@@ -462,6 +473,37 @@ mod tests {
             outcome(&rx),
             Err("Google refused the sign-in (org_internal)".into())
         );
+    }
+
+    #[test]
+    fn a_slow_sender_is_cut_off_and_the_callback_behind_it_succeeds() {
+        let (port, rx) = start_callback_server(STATE.into()).unwrap();
+        let started = Instant::now();
+        // One byte a second, for longer than a connection may take.
+        let drip = std::thread::spawn(move || {
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            stream.set_nodelay(true).unwrap();
+            for byte in b"GET /?code=slow&state=expected%20state HTTP/1.1\r\n\r\n" {
+                if stream.write_all(&[*byte]).is_err() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        });
+        std::thread::sleep(Duration::from_millis(500));
+        let answer = get(port, "/?code=the-code&state=expected%20state");
+        assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
+        assert_eq!(outcome(&rx), Ok("the-code".into()));
+        let waited = started.elapsed();
+        assert!(
+            waited >= CONNECTION_TIMEOUT - Duration::from_secs(1),
+            "{waited:?}"
+        );
+        assert!(
+            waited < CONNECTION_TIMEOUT + Duration::from_secs(4),
+            "{waited:?}"
+        );
+        drip.join().unwrap();
     }
 
     #[test]
