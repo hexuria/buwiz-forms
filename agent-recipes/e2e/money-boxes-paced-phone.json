@@ -104,11 +104,6 @@
    "screenshot": true
   },
   {
-   "id": "s13h",
-   "op": "system",
-   "action": "keyboard_hide"
-  },
-  {
    "id": "s13r",
    "op": "scroll",
    "target": "form-scroll",
