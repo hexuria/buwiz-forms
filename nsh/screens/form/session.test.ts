@@ -258,7 +258,7 @@ test("1601FQ item 4 No uses the official warning; Cancel restores Yes and nothin
   s.cancelRemoval();
   await s.idle();
   expect(s.valueOf("frm1601FQ:TaxWithheld_1")).toBe("true");
-  expect(s.valueOf("frm1601FQ:txtAtcCode1")).toBe("catalog:0");
+  expect(s.valueOf("frm1601FQ:txtAtcCode1")).toBe("WI226");
   expect(s.shownOf("frm1601FQ:txtTaxBase1")).toBe("1,000.00");
   s.dispose();
 });
