@@ -25,7 +25,7 @@ there, but nobody has run it on that platform.
 | PIN or authenticator app lock | ✓ | ✓ | ✓ |
 | In-app notifications drawer and toasts | ✓ | ✓ | ✓ |
 | Background refresh when the database changes | ✓ | ✓ | ✓ |
-| Gmail connect for BIR receipt tracking (Settings → Account → Google; host opens the browser) | ✓ | partial | ✓ |
+| Gmail connect for BIR receipt tracking (Settings → Account → Google; host opens the browser; only in a build given a Google client, none in 1.0.0) | ✓ | partial | ✓ |
 | Keyboard shortcuts | ✓ | ✓ | ✓ |
 | Store builds never self-update (Mac App Store, Microsoft Store) | ✓ | ✓ | n/a |
 | Packaging | ✓ | untested | ✓ |

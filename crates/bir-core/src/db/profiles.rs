@@ -622,7 +622,7 @@ impl Database {
                         super::AlertAction::OpenProfileManager,
                     ) {
                         // Listing runs on every sidebar refresh, so gate it.
-                        crate::notification::notify_alert_if_newly_active(outcome, TITLE, &detail);
+                        crate::notification::notify_alert_if_newly_active(outcome);
                     }
                     continue;
                 }
@@ -1075,7 +1075,7 @@ mod tests {
             "line_of_business": "Consulting",
             "registered_address": "Quezon City",
             "zip_code": "1100",
-            "phone": "09156837000",
+            "phone": "09170000000",
             "email": "profile@example.com",
             "default_form_type": "2551Q",
             "taxpayer_type": "Individual",
@@ -1121,7 +1121,7 @@ mod tests {
             "line_of_business": "Car Wash Services",
             "registered_address": "Castillejos",
             "zip_code": "2208",
-            "phone": "09156837000",
+            "phone": "09170000000",
             "email": "election@example.com",
             "default_form_type": "2551Qv2018",
             "taxpayer_type": "Individual",

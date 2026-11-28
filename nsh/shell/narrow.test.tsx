@@ -149,7 +149,7 @@ test("a narrow Windows or Linux window: ☰ before the title lists every menu; t
     await app.press("id:nb-menu");
     await app.waitUntil(() => app.menu() !== null);
     const labels = (app.menu() ?? []).map((e) => e.label);
-    for (const path of ["eBIRForms > About eBIRForms", "File > New Tax Profile…", "File > New Return…", "Edit > " /* roles: the platform names them */, "View > Toggle Sidebar", "Help > Contact Support…", "Profiles > New Tax Profile…"]) {
+    for (const path of ["eBIRForms > About eBIRForms", "File > New tax profile…", "File > New Return…", "Edit > " /* roles: the platform names them */, "View > Toggle Sidebar", "Help > Contact Support…", "Profiles > New tax profile…"]) {
       expect(labels.some((l) => l.startsWith(path))).toBe(true);
     }
     expect((app.menu() ?? []).find((e) => e.label === "Profiles > Juana Santos")?.checked).toBe(true);

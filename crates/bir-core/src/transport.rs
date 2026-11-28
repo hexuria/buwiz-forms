@@ -1110,9 +1110,10 @@ impl IafSftpSession {
                 payload_len: payload.len(),
                 payload_sha256: hex::encode(Sha256::digest(payload)),
             };
+            let remote_path_for_log = crate::logging::submission_path_for_log(&put.remote_path);
             info!(
                 source = "dry-run",
-                remote_path = put.remote_path.as_str(),
+                remote_path = remote_path_for_log.as_str(),
                 payload_len = put.payload_len,
                 payload_sha256 = put.payload_sha256.as_str(),
                 "SFTP dry-run PUT (no network)"
@@ -1128,9 +1129,10 @@ impl IafSftpSession {
             .handle
             .take()
             .ok_or_else(|| TransportError::Sftp("SFTP session was already consumed".into()))?;
+        let path_for_log = crate::logging::submission_path_for_log(&path);
         info!(
             source = self.source.as_str(),
-            "Transmitting payload: {}", path
+            "Transmitting payload: {}", path_for_log
         );
         let channel = handle
             .channel_open_session()
@@ -1154,7 +1156,7 @@ impl IafSftpSession {
         file.shutdown().await?;
         let _ = sftp.close().await;
         let _ = handle.disconnect(Disconnect::ByApplication, "", "en").await;
-        info!("Transmission complete: {}", path);
+        info!("Transmission complete: {}", path_for_log);
         Ok(())
     }
 

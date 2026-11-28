@@ -104,29 +104,22 @@ def version_at_least(have, need):
     return bool(have and need and have >= need)
 
 
-def installed_cli_version(env=None, run=subprocess.run):
-    """The gpui-agent-cli version on this machine: E2E_GPUI_AGENT_CLI_VERSION, else `cargo install --list`, else the
-    version Cargo.lock pins (the setup scripts install exactly that one)."""
+def installed_cli_version(cli="gpui-agent", env=None, run=subprocess.run):
+    """The version of the gpui-agent binary the runner will invoke: E2E_GPUI_AGENT_CLI_VERSION first (tests), then
+    `<cli> --version`. cargo's install list is not evidence: a prebuilt install replaces the binary without it."""
     env = os.environ if env is None else env
-    if parse_version(env.get("E2E_GPUI_AGENT_CLI_VERSION")):
-        return env["E2E_GPUI_AGENT_CLI_VERSION"].lstrip("v")
+    override = env.get("E2E_GPUI_AGENT_CLI_VERSION")
+    if parse_version(override):
+        return override.strip().lstrip("v")
     try:
-        listed = run(["cargo", "install", "--list"], capture_output=True, text=True, timeout=30).stdout
-        match = re.search(r"^gpui-agent-cli v(\d+\.\d+\.\d+)", listed, re.M)
-        if match:
-            return match.group(1)
+        done = run([cli, "--version"], capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
-        pass
-    return pinned_gpui_agent_version()
-
-
-def pinned_gpui_agent_version(lock=ROOT / "Cargo.lock"):
-    try:
-        text = lock.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    match = re.search(r'name = "gpui-agent"\nversion = "(\d+\.\d+\.\d+)"', text)
-    return match.group(1) if match else None
+        return "unknown"
+    if getattr(done, "returncode", 0) != 0:
+        return "unknown"
+    lines = (getattr(done, "stdout", "") or "").strip().splitlines()
+    match = re.fullmatch(r"gpui-agent(?:-cli)?\s+v?(\d+\.\d+\.\d+)", lines[0] if lines else "")
+    return match.group(1) if match else "unknown"
 
 
 # --- Recipes: what their steps do --------------------------------------------------------------------------------
@@ -184,9 +177,22 @@ def recipe_steps(path):
     return steps
 
 
-def placeholders_in_text(text):
-    """The $params in `text` (`$$` is a literal dollar)."""
-    return {a or b for a, b in PARAM.findall(text.replace("$$", ""))}
+def without_step_node_refs(text, ids):
+    """`text` without gpui-agent 0.5.0's `$<step>.node` / `${<step>}.node` references to the recipe's own steps (the
+    node a scroll_until step matched): they are no params, and gpui-agent binds them itself."""
+    for step_id in ids:
+        text = text.replace(f"${step_id}.node", "").replace(f"${{{step_id}}}.node", "")
+    return text
+
+
+def step_node_refs(text, ids):
+    """The recipe's own step ids `text` refers to as `$<step>.node`."""
+    return {step_id for step_id in ids if f"${step_id}.node" in text or f"${{{step_id}}}.node" in text}
+
+
+def placeholders_in_text(text, ids=()):
+    """The $params in `text` (`$$` is a literal dollar; `$<step>.node` of a step in `ids` is no param)."""
+    return {a or b for a, b in PARAM.findall(without_step_node_refs(text.replace("$$", ""), ids))}
 
 
 def placeholders(path):
@@ -194,7 +200,7 @@ def placeholders(path):
     text = Path(path).read_text(encoding="utf-8")
     if not str(path).endswith(".json"):
         text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-    return placeholders_in_text(text)
+    return placeholders_in_text(text, step_ids(path))
 
 
 def is_json_recipe(path):
@@ -204,12 +210,13 @@ def is_json_recipe(path):
 
 def recipe_step_params(path):
     """The $params each step uses, in step order. For `.wants` the whole source line counts, typed text included."""
+    ids = step_ids(path)
     if is_json_recipe(path):
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return [placeholders_in_text(json.dumps(step)) for step in data.get("steps") or []]
+        return [placeholders_in_text(json.dumps(step), ids) for step in data.get("steps") or []]
     lines = [line for line in Path(path).read_text(encoding="utf-8").splitlines()
              if line.strip() and not line.lstrip().startswith("#")]
-    return [placeholders_in_text(line) for line in lines]
+    return [placeholders_in_text(line, ids) for line in lines]
 
 
 def step_ids(path):
@@ -221,13 +228,15 @@ def step_ids(path):
 
 
 def needs_edges_cut(steps, ids, cut):
-    """The `(needed, dependent)` JSON step edges a cut after position `cut` would separate."""
+    """The `(needed, dependent)` JSON step edges a cut after position `cut` would separate: `needs`, and a
+    `$<step>.node` reference, which depends on that step as gpui-agent reads it."""
     positions = {step_id: position for position, step_id in enumerate(ids, 1)}
     edges = []
     for position, step in enumerate(steps, 1):
         needs = step.get("needs") or []
         if isinstance(needs, str):
             needs = [needs]
+        needs = list(needs) + sorted(step_node_refs(json.dumps(step), ids) - {str(need) for need in needs})
         for need in needs:
             need_position = positions.get(str(need))
             if need_position is not None and (need_position <= cut) != (position <= cut):
@@ -677,7 +686,7 @@ def write_recipe_slices(path, points, folder):
             if isinstance(part.get("params"), list):
                 used = set()
                 for step in part_steps:
-                    used |= placeholders_in_text(json.dumps(step))
+                    used |= placeholders_in_text(json.dumps(step), ids)
                 part["params"] = [name for name in part["params"] if name in used]
             part_path.write_text(json.dumps(part, indent=1) + "\n", encoding="utf-8")
             local_ids = original_ids
@@ -1118,7 +1127,7 @@ def check(suite_name, cli):
     each file the installed client can read. Exit 0 when nothing is wrong."""
     suite = load_suite(suite_name)
     problems = check_suite(suite)
-    cli_version = installed_cli_version()
+    cli_version = installed_cli_version(cli)
     validated = 0
     if shutil.which(cli) or Path(cli).exists():
         for entry in suite["recipes"]:
@@ -1193,7 +1202,7 @@ def run(args):
                                if os.environ.get(name)]
     log = RunLog(out / "run.log", secrets_=secret_values)
     header = {"suite": suite["_path"].stem, "target": args.target, "started": stamp, "out": str(out),
-              "cli_version": installed_cli_version(), "app_commit": git_head()}
+              "cli_version": installed_cli_version(args.cli), "app_commit": git_head()}
     proc = None
     results = []
     made_db = None

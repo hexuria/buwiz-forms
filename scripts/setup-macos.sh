@@ -10,9 +10,8 @@
 #     targets — `just app` / `just _package-mac` build aarch64 + x86_64 and
 #     lipo them into a universal binary
 #   - gpui-agent CLI — the control-plane client that drives the app
-#     (the gpui-agent-cli crate), installed at the exact version Cargo.lock
-#     pins so CLI and host speak the same protocol (v1 CLI can't talk to a
-#     v2 host)
+#     (the gpui-agent-cli crate), installed at the exact CLI pin in
+#     scripts/impeccable.pin so recipes and host speak the same protocol
 #   - NSH app (nsh/) on macOS and the iOS Simulator: the Rust iOS targets,
 #     a checkout of hexuria/nsh at the commit CI pins (NSH_PINNED_REF in
 #     .github/workflows/nsh.yml) next to this repo, and the `nsh` command line
@@ -68,6 +67,8 @@ cd "$REPO_ROOT"
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+# shellcheck source=scripts/lib/prebuilt.sh
+. "$REPO_ROOT/scripts/lib/prebuilt.sh"
 # shellcheck source=scripts/setup-impeccable.sh
 . "$REPO_ROOT/scripts/setup-impeccable.sh"
 
@@ -193,36 +194,15 @@ install_rust() {
 # ---------------------------------------------------------------------------
 # gpui-agent CLI — drives the app over the opt-in control plane
 # (GPUI_AGENT=1 + GPUI_AGENT_TOKEN on the host, then `gpui-agent hello`).
-# Protocol version must match the host: read the version Cargo.lock pins for
-# the library dep and install the CLI at that same version.
+# The library pin in the app is the protocol floor, while recipes can need a
+# newer CLI, so the exact CLI version lives in scripts/impeccable.pin.
 # ---------------------------------------------------------------------------
-gpui_agent_version() {
-    # Cargo.lock has, on two lines:
-    #   name = "gpui-agent"
-    #   version = "0.4.0"
-    awk '$0 == "name = \"gpui-agent\"" { getline; gsub(/version = |"/, ""); print; exit }' \
-        Cargo.lock 2>/dev/null
-}
-
 install_gpui_agent() {
     local version
-    version="$(gpui_agent_version)"
-    if [ -z "$version" ]; then
-        warn "could not read the gpui-agent version from Cargo.lock — run from the repo root"
-        return 0
-    fi
-    local installed_version=""
-    if command -v gpui-agent >/dev/null 2>&1; then
-        # A crates.io install lists as `gpui-agent-cli v0.4.0:`; one from git
-        # carries its source after the version and never matches.
-        installed_version="$(cargo install --list 2>/dev/null | sed -n 's/^gpui-agent-cli v\([0-9][0-9.]*\):$/\1/p' | head -1)"
-        if [ "$installed_version" = "$version" ]; then
-            log "gpui-agent already installed at pinned version $version"
-            return 0
-        fi
-    fi
-    log "Installing gpui-agent CLI at pinned version $version"
-    cargo install gpui-agent-cli --version "$version"
+    version="$(prebuilt_pin GPUI_AGENT_CLI_VERSION)"
+    [ -n "$version" ] || die "GPUI_AGENT_CLI_VERSION not found in scripts/impeccable.pin"
+    log "Installing gpui-agent CLI $version (pinned in scripts/impeccable.pin)"
+    install_pinned_tool gpui-agent-cli "$version"
 }
 
 # ---------------------------------------------------------------------------
@@ -382,12 +362,11 @@ check() {
         warn "create-dmg not installed — 'just app' will produce a .zip instead of a .dmg"
     fi
     # gpui-agent CLI — required for agent-driven control unless --no-agent;
-    # its version must match the Cargo.lock pin so protocol versions agree.
+    # its version must match the pin in scripts/impeccable.pin.
     if [ "$WITH_AGENT" -eq 1 ]; then
-        if command -v gpui-agent >/dev/null 2>&1; then
-            printf '  %-14s %s\n' "gpui-agent" "$(command -v gpui-agent)"
-        else
-            printf '  %-14s MISSING (needed to drive the app over the control plane)\n' "gpui-agent"
+        local gpui_pin
+        gpui_pin="$(prebuilt_pin GPUI_AGENT_CLI_VERSION)"
+        if ! prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent "$gpui_pin"; then
             ok=0
         fi
     fi
@@ -470,9 +449,14 @@ main() {
         install_impeccable_skill
     fi
 
+    log "Installing git commit-message hooks"
+    python3 "$REPO_ROOT/scripts/install_git_hooks.py" "$REPO_ROOT"
+
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
-        cargo install cargo-audit cargo-outdated cargo-machete
+        cargo install cargo-audit --version =0.22.1
+        cargo install cargo-outdated --version =0.19.0
+        cargo install cargo-machete --version =0.9.2
     fi
 
     log "Verifying toolchain"
@@ -496,8 +480,8 @@ NSH app (nsh/), with the CLI built at the CI pin:
 Packaging tools already on macOS: lipo, codesign, PlistBuddy, productbuild.
 OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
 
-To drive the app from the CLI (gpui-agent was installed at the Cargo.lock
-rev): build the host with the agent feature and launch with env vars —
+To drive the app from the CLI (gpui-agent was installed at the
+scripts/impeccable.pin version): build the host with the agent feature and launch with env vars —
 
     cargo build --locked -p bir-cli
     export GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret

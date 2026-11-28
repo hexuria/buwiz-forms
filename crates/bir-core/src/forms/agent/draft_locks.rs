@@ -7,7 +7,7 @@
 //! the desktop assistant read one implementation: the page draws them and
 //! [`super::fill`] refuses them.
 //!
-//! [`draft_locks`] applies seven layers, in this order, each named after the
+//! [`draft_locks`] applies eleven layers, in this order, each named after the
 //! page's row module it came from (the last after the rule it carries):
 //!
 //! 1. [`dst_pt_vat`] (PR 4): 2000's 15B and 15C, computed; 2553's
@@ -28,6 +28,14 @@
 //!    app holds, locked to that Q1's answer.
 //! 7. [`item16_2551q`]: 2551Q Item 16 is shut unless Amended Return is Yes
 //!    without the 8% option.
+//! 8. [`installment_1606`]: 1606's installment-sale boxes, shut unless
+//!    Item 20 is an installment sale.
+//! 9. [`previous_payment`]: the previous-payment box of an unamended
+//!    return, shut with its item's amended-return reason.
+//! 10. [`schedule1_1601fq`]: 1601FQ Schedule 1 rows, shut until item 13 is
+//!     Yes and cleared row by stable row id when it closes.
+//! 11. [`gated_rows`]: the schedule and specification boxes whose own
+//!     recompute clears a typed value while the gate is shut.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -43,10 +51,12 @@
 
 use serde_json::{Map, Value};
 
+use super::gated_rows;
+
 use super::AgentFormKind;
 
 /// Lay the draft-dependent locks over `locks`, the base map
-/// ([`super::locks`]), the way the page's open does: the six layers of this
+/// ([`super::locks`]), the way the page's open does: the ten layers of this
 /// module's note, in that order, with their own reasons. A layer may replace
 /// a base reason with an exact one (2000's 15B, which the probe calls
 /// derived, is computed), and the last one takes 1701Q's spouse penalty
@@ -76,7 +86,7 @@ pub fn draft_lock(
     locks.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-/// The six layers; `only` limits the penalty layer to that key's group.
+/// The eleven layers; `only` limits the penalty layer to that key's group.
 fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, only: Option<&str>) {
     dst_pt_vat::relock(kind, draft, locks);
     annual_corporate::relock(kind, draft, locks);
@@ -92,17 +102,28 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     item_13::relock(kind, draft, locks);
     // 2551Q Item 16 follows Amended Return and the 8% option.
     item16_2551q::relock(kind, draft, locks);
+    // 1606's installment-sale boxes follow Item 20.
+    installment_1606::relock(kind, draft, locks);
+    // Previous payment applies only to an amended return.
+    previous_payment::relock(kind, draft, locks);
+    schedule1_1601fq::relock(kind, draft, locks);
+    gated_rows::relock(kind, draft, locks, only);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
 /// the page to apply at once (`screen_form_fill`'s `relocks`): 1702RT's
-/// folded (Add more...) items and items 42, 40 and 57 (PR 8), then an
-/// excise, 1800 or 1801 return's penalty groups (PR 11). Empty for every
-/// other form.
+/// folded (Add more...) items and items 42, 40 and 57 (PR 8), an excise,
+/// 1800 or 1801 return's penalty groups (PR 11), and the amended-return
+/// amount gates whose answers can change in the fill. Empty for every other
+/// form.
 pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut relocks = annual_corporate::live_locks(kind, draft);
     relocks.extend(excise::live_locks(kind, draft));
     relocks.extend(item16_2551q::live_locks(kind, draft));
+    relocks.extend(installment_1606::live_locks(kind, draft));
+    relocks.extend(previous_payment::live_locks(kind, draft));
+    relocks.extend(schedule1_1601fq::live_locks(kind, draft));
+    relocks.extend(gated_rows::live_locks(kind, draft));
     relocks
 }
 
@@ -1337,6 +1358,263 @@ pub mod item16_2551q {
     }
 }
 
+pub mod installment_1606 {
+    //! 1606 Items 21 to 26 are installment-sale entries. The official page
+    //! opens them only for Item 20's installment-sale choice
+    //! (`rules/forms/1606-v2018/fixtures/validation-function-inventory-v796.json`,
+    //! `enableInstallment`: L3230-L3266) and keeps them disabled at load
+    //! (`runtime-control-inventory-v796.json`).
+    //!
+    //! Item 21 is a copy of Item 28A's gross selling price, so its amount is
+    //! never a separate stored installment value; the lock stops writes into
+    //! the copy while it is shut. Items 22 to 26 are installment-only model
+    //! amounts and are cleared by `Form1606Draft::recompute` while shut.
+
+    use serde_json::{Map, Value, json};
+
+    use crate::forms::agent::AgentFormKind;
+
+    pub const KEYS: [&str; 6] = [
+        "frm1606:txtSelling",
+        "frm1606:txtCost",
+        "frm1606:txtMortgage",
+        "frm1606:txtTotalP",
+        "frm1606:txtAmount",
+        "frm1606:txtTotalN",
+    ];
+    pub const LOCK: &str = "Items 21 to 26 apply only to an installment sale.";
+    pub const LOCK_NOTE: &str = "Items 21 to 26 apply only to an installment sale. Leave them blank unless Item 20 is Installment Sale.";
+    pub const CLEARED_NOTE: &str =
+        "Items 21 to 26 were cleared: they apply only to an installment sale.";
+    pub const AMOUNT_FIELDS: [&str; 5] = [
+        "cost_and_expenses",
+        "mortgage_assumed",
+        "initial_year_payments",
+        "installment_this_month",
+        "number_of_installments",
+    ];
+
+    /// Whether installment-only amounts lie dormant on a draft whose gate is shut.
+    pub fn dormant_amounts(draft: &Value) -> bool {
+        lock_reason(draft).is_some()
+            && AMOUNT_FIELDS
+                .iter()
+                .any(|field| draft[field].as_f64().unwrap_or(0.0).abs() >= 0.005)
+    }
+
+    /// The reason the boxes are shut on `draft`, or `None` for an installment sale.
+    pub fn lock_reason(draft: &Value) -> Option<&'static str> {
+        if draft["transaction"] == "installment_sale" {
+            None
+        } else {
+            Some(LOCK)
+        }
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        if kind.form_code() != "1606" {
+            return;
+        }
+        match lock_reason(draft) {
+            Some(reason) => {
+                for key in KEYS {
+                    locks.insert(key.to_string(), json!(reason));
+                }
+            }
+            None => {
+                for key in KEYS {
+                    locks.remove(key);
+                }
+            }
+        }
+    }
+
+    /// The boxes' locks as a fill leaves them (`null` opens them), so the
+    /// page follows Item 20 as soon as its choice changes.
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if kind.form_code() == "1606" {
+            for key in KEYS {
+                locks.insert(
+                    key.to_string(),
+                    lock_reason(draft).map_or(Value::Null, |reason| json!(reason)),
+                );
+            }
+        }
+        locks
+    }
+}
+
+pub mod previous_payment {
+    //! Previous-payment boxes the official pages open only for an amended
+    //! return. One table serves the forms whose in-repository runtime-control
+    //! inventory records the box disabled at load; 0619E, 0619F, 2550M and
+    //! 1602Q are deliberately absent because their captured pages leave the
+    //! surveyed box enabled on a new return.
+
+    use serde_json::{Map, Value, json};
+
+    use crate::forms::agent::AgentFormKind;
+
+    pub struct Spec {
+        pub form_code: &'static str,
+        pub key: &'static str,
+        pub item: &'static str,
+        pub path: &'static str,
+        pub yes_key: &'static str,
+        pub no_key: &'static str,
+        pub lock: &'static str,
+        pub cleared: &'static str,
+    }
+
+    pub const SPECS: [Spec; 6] = [
+        Spec {
+            form_code: "1600PT",
+            key: "frm1600PT:txtPg1P2I19TaxRemittedInRtrn",
+            item: "19",
+            path: "tax_remitted_previous",
+            yes_key: "frm1600PT:rdoPg1I2AmendedYes",
+            no_key: "frm1600PT:rdoPg1I2AmendedNo",
+            lock: "Item 19 applies only to an amended return.",
+            cleared: "Item 19 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1600VT",
+            key: "frm1600VT:txtPg1P2I19TaxRemittedInRtrn",
+            item: "19",
+            path: "tax_remitted_previous",
+            yes_key: "frm1600VT:rdoPg1I2AmendedYes",
+            no_key: "frm1600VT:rdoPg1I2AmendedNo",
+            lock: "Item 19 applies only to an amended return.",
+            cleared: "Item 19 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1600WP",
+            key: "frm1600WP:txtTax13",
+            item: "13",
+            path: "tax_remitted_previous",
+            yes_key: "frm1600WP:AmendedReturn_1",
+            no_key: "frm1600WP:AmendedReturn_2",
+            lock: "Item 13 applies only to an amended return.",
+            cleared: "Item 13 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1603Q",
+            key: "frm1603Q:txtTax15",
+            item: "15",
+            path: "tax_remitted_previous",
+            yes_key: "frm1603Q:AmendedRtn_1",
+            no_key: "frm1603Q:AmendedRtn_2",
+            lock: "Item 15 applies only to an amended return.",
+            cleared: "Item 15 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1606",
+            key: "frm1606:txtLess",
+            item: "33",
+            path: "tax_remitted_previous",
+            yes_key: "frm1606:j_id217:_1",
+            no_key: "frm1606:j_id217:_2",
+            lock: "Item 33 applies only to an amended return.",
+            cleared: "Item 33 was cleared: it applies only to an amended return.",
+        },
+        Spec {
+            form_code: "1706",
+            key: "frm1706:txtLess",
+            item: "33",
+            path: "tax_paid_previous",
+            yes_key: "frm1706:j_id217:_1",
+            no_key: "frm1706:j_id217:_2",
+            lock: "Item 33 applies only to an amended return.",
+            cleared: "Item 33 was cleared: it applies only to an amended return.",
+        },
+    ];
+
+    pub fn spec(kind: AgentFormKind) -> Option<&'static Spec> {
+        SPECS.iter().find(|spec| spec.form_code == kind.form_code())
+    }
+
+    pub fn lock_text(spec: &Spec) -> &'static str {
+        spec.lock
+    }
+
+    pub fn cleared_text(spec: &Spec) -> &'static str {
+        spec.cleared
+    }
+
+    /// The reason the box is shut on `draft`, or `None` for Amended Yes.
+    pub fn lock_reason(spec: &Spec, draft: &Value) -> Option<&'static str> {
+        (draft["is_amended"] != true).then_some(spec.lock)
+    }
+
+    /// A zero write is the box's already-empty state, so it is accepted as a no-op.
+    pub fn zero_write(value: &Value) -> bool {
+        value.as_f64() == Some(0.0)
+            || value
+                .as_str()
+                .is_some_and(|text| crate::forms::agent::parse_amount(text) == Some(0.0))
+    }
+
+    /// The stable key this gate's pending notice uses.
+    pub fn gate_key(spec: &Spec) -> String {
+        format!(
+            "{}_item{}",
+            spec.form_code.to_lowercase(),
+            spec.item.to_lowercase()
+        )
+    }
+
+    /// A filed original whose box was shut must not revive its dormant amount
+    /// when an amendment turns the copy's Amended answer to Yes.
+    pub fn clear_dormant_amendment_copy(
+        kind: AgentFormKind,
+        original: &Value,
+        amended: &mut Value,
+    ) {
+        let Some(spec) = spec(kind) else {
+            return;
+        };
+        if dormant_amount(spec, original)
+            && let Value::Object(object) = amended
+        {
+            object.insert(spec.path.to_string(), json!(0.0));
+        }
+    }
+
+    /// Whether a closed draft still holds a dormant previous-payment amount.
+    pub fn dormant_amount(spec: &Spec, draft: &Value) -> bool {
+        lock_reason(spec, draft).is_some()
+            && draft[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        let Some(spec) = spec(kind) else {
+            return;
+        };
+        match lock_reason(spec, draft) {
+            Some(reason) => {
+                locks.insert(spec.key.to_string(), json!(reason));
+            }
+            None => {
+                locks.remove(spec.key);
+            }
+        }
+    }
+
+    /// The box's lock as a fill leaves it (`null` opens it), so the page
+    /// follows Amended Return as soon as its choice changes.
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if let Some(spec) = spec(kind) {
+            locks.insert(
+                spec.key.to_string(),
+                lock_reason(spec, draft).map_or(Value::Null, |reason| json!(reason)),
+            );
+        }
+        locks
+    }
+}
+
 pub mod item_13 {
     //! 2551Q Item 13, the income-tax-rate election, is answered once a year,
     //! on the initial quarter. A later quarter (Q2-Q4) of a TIN whose Q1 of
@@ -1411,6 +1689,235 @@ pub mod item_13 {
                 locks.insert(key.to_string(), Value::from(reason.clone()));
             }
         }
+    }
+}
+
+/// 1601FQ Schedule 1 while Item 13 is not Yes. The official page clears and
+/// disables the schedule (`disableSelTreaty`) and tells the filer there is no
+/// need to fill it up while they are not availing of tax relief.
+pub mod schedule1_1601fq {
+    use serde_json::{Map, Value, json};
+
+    use super::AgentFormKind;
+
+    pub const ROWS: usize = 5;
+    pub const STEMS: [&str; 6] = [
+        "drpTreatyCode",
+        "drpATCCode",
+        "txtNatIncPayment",
+        "txtAmtIncomePay",
+        "txtRate",
+        "txtReqWithheld",
+    ];
+    const EDITABLE_STEMS: [&str; 4] = ["drpTreatyCode", "drpATCCode", "txtAmtIncomePay", "txtRate"];
+    const COMPUTED_STEMS: [&str; 2] = ["txtNatIncPayment", "txtReqWithheld"];
+    const COMPUTED_LOCK: &str = "computed by BIR's own formulas";
+    pub const LOCK: &str = "You are not availing of tax relief under Special Law or International Tax Treaty. There is no need to fill up schedule 1.";
+    pub const CLEARED_NOTE: &str =
+        "Schedule 1's rows were cleared: they apply only when item 13 is Yes.";
+    const ITEM4_CLEARED_NOTE: &str =
+        "Schedule 1's rows were cleared: changing item 4 clears all computation fields.";
+
+    fn stem_keys(stems: &[&str]) -> Vec<String> {
+        (0..ROWS)
+            .flat_map(|row| stems.iter().map(move |stem| format!("{stem}{row}")))
+            .collect()
+    }
+
+    pub fn keys() -> Vec<String> {
+        stem_keys(&STEMS)
+    }
+
+    pub fn is_key(key: &str) -> bool {
+        STEMS.iter().any(|stem| {
+            key.strip_prefix(stem)
+                .and_then(|row| row.parse::<usize>().ok())
+                .is_some_and(|row| row < ROWS)
+        })
+    }
+
+    pub fn lock_reason(draft: &Value) -> Option<&'static str> {
+        if draft["tax_relief"].is_null() {
+            Some(LOCK)
+        } else {
+            None
+        }
+    }
+
+    fn typed_code(row: &Value, field: &str) -> bool {
+        row[field].as_str().is_some_and(|code| {
+            let code = code.trim();
+            !code.is_empty() && code != "NA" && code != "-"
+        })
+    }
+
+    pub fn typed_row(row: &Value) -> bool {
+        typed_code(row, "treaty_code")
+            || typed_code(row, "atc_code")
+            || row["income_payment"].as_f64().unwrap_or(0.0).abs() >= 0.005
+            || row["tax_rate"].as_f64().unwrap_or(0.0).abs() >= 0.005
+    }
+
+    pub fn typed_rows(draft: &Value) -> bool {
+        draft["schedule1"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().any(typed_row))
+    }
+
+    pub fn dormant_rows(draft: &Value) -> bool {
+        lock_reason(draft).is_some() && typed_rows(draft)
+    }
+
+    /// A row's stable identity. Rows written by this build carry
+    /// `instance_id`; a pre-identity draft is seeded once in its stored
+    /// order, after which the id travels with the row object through a
+    /// Delete row compaction.
+    pub fn row_id(row: &Value, legacy_index: usize) -> String {
+        row["instance_id"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("row-{:020}", legacy_index + 1))
+    }
+
+    /// The current vector position of a stable row id in `draft`.
+    pub fn row_index(draft: &Value, id: &str) -> Option<usize> {
+        draft["schedule1"]
+            .as_array()?
+            .iter()
+            .position(|row| row["instance_id"].as_str() == Some(id))
+    }
+
+    /// The six keys of the row currently at `row`.
+    pub fn keys_for_row(row: usize) -> Vec<String> {
+        STEMS.iter().map(|stem| format!("{stem}{row}")).collect()
+    }
+
+    #[derive(Debug)]
+    pub struct RowClearance {
+        pub id: String,
+        pub gate: String,
+        pub text: String,
+        pub event_text: String,
+    }
+
+    /// Every typed Schedule 1 row a closing Item 13 gate or an Item 4 Yes→No
+    /// recompute cleared, keyed by stable id rather than transient vector index.
+    pub fn row_clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<RowClearance> {
+        let item4_clearing =
+            before["any_tax_withheld"] == json!(true) && after["any_tax_withheld"] == json!(false);
+        if kind.form_code() != "1601FQ" || (!item4_clearing && lock_reason(after).is_none()) {
+            return Vec::new();
+        }
+        let empty_after = |id: &str| {
+            after["schedule1"]
+                .as_array()
+                .and_then(|rows| {
+                    rows.iter()
+                        .find(|row| row["instance_id"].as_str() == Some(id))
+                })
+                .is_none_or(|row| !typed_row(row))
+        };
+        before["schedule1"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .filter(|(_, row)| typed_row(row))
+            .filter_map(|(index, row)| {
+                let id = row_id(row, index);
+                if !empty_after(&id) {
+                    return None;
+                }
+                let gate = format!("1601fq_schedule1:{id}");
+                let position = index + 1;
+                let (reason, event_text) = if item4_clearing {
+                    (
+                        "changing item 4 clears all computation fields",
+                        ITEM4_CLEARED_NOTE,
+                    )
+                } else {
+                    ("it applies only when item 13 is Yes", CLEARED_NOTE)
+                };
+                let text = format!("Schedule 1 row {position} was cleared: {reason}.");
+                Some(RowClearance {
+                    id,
+                    gate,
+                    text,
+                    event_text: event_text.to_string(),
+                })
+            })
+            .collect()
+    }
+
+    /// One clearing event's gate key and sentence. A single row keeps its
+    /// stable id in the unchanged row key; several rows cleared by one edit
+    /// share one event key made of those stable ids, never their positions.
+    pub fn clearance_event(rows: &[RowClearance]) -> Option<(String, String)> {
+        let first = rows.first()?;
+        let (gate, text) = if rows.len() == 1 {
+            (first.gate.clone(), first.text.clone())
+        } else {
+            let ids = rows
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>()
+                .join(",");
+            (format!("1601fq_schedule1:{ids}"), first.event_text.clone())
+        };
+        Some((gate, text))
+    }
+
+    /// The helper interface's owned `(gate, sentence)` pair: one pending
+    /// notice for the whole clearing event.
+    pub fn clearances(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
+        let rows = row_clearances(kind, before, after);
+        clearance_event(&rows).into_iter().collect()
+    }
+
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        if kind.form_code() != "1601FQ" {
+            return;
+        }
+        match lock_reason(draft) {
+            Some(reason) => {
+                for key in keys() {
+                    locks.insert(key, json!(reason));
+                }
+            }
+            None => {
+                // Opening Item 13 lifts this gate only from the cells the
+                // filer may edit. Nature of Income Payment and Required
+                // Withheld keep their base computed locks; removing them here
+                // would draw an already-Yes return editable until a fill's
+                // live-lock layer put them back.
+                for key in stem_keys(&EDITABLE_STEMS) {
+                    locks.remove(&key);
+                }
+            }
+        }
+    }
+
+    pub fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
+        let mut locks = Map::new();
+        if kind.form_code() != "1601FQ" {
+            return locks;
+        }
+        if let Some(reason) = lock_reason(draft) {
+            for key in keys() {
+                locks.insert(key, json!(reason));
+            }
+        } else {
+            // Opening Item 13 unlocks only the row's writable cells. Its two
+            // ATC-derived columns stay computed, as the base lock map draws
+            // them on a return that opens with Item 13 already Yes.
+            for key in stem_keys(&EDITABLE_STEMS) {
+                locks.insert(key, Value::Null);
+            }
+            for key in stem_keys(&COMPUTED_STEMS) {
+                locks.insert(key, json!(COMPUTED_LOCK));
+            }
+        }
+        locks
     }
 }
 
@@ -1960,6 +2467,153 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn deleting_an_earlier_1601fq_schedule_row_keeps_the_notice_on_its_stable_row() {
+        use super::schedule1_1601fq as gate;
+        let row = |id: &str, amount: f64| {
+            json!({
+                "instance_id": id,
+                "treaty_code": "NA",
+                "atc_code": "NA",
+                "income_payment": amount,
+                "tax_rate": 10.0,
+                "tax_withheld": amount,
+            })
+        };
+        let first = row("row-00000000000000000001", 11.0);
+        let second = row("row-00000000000000000002", 22.0);
+        let mut before = json!({
+            "tax_relief": "special_rate",
+            "schedule1": [first, second],
+        });
+        // Delete row removes the first backing object; the second row moves
+        // to index 0 but keeps the stable identity stored on its object.
+        before["schedule1"].as_array_mut().unwrap().remove(0);
+        assert_eq!(
+            before["schedule1"][0]["instance_id"],
+            "row-00000000000000000002"
+        );
+        assert_eq!(
+            gate::row_index(&before, "row-00000000000000000002"),
+            Some(0)
+        );
+
+        let mut after = before.clone();
+        after["tax_relief"] = Value::Null;
+        after["schedule1"] = json!([]);
+        let clearances = gate::row_clearances(kind("1601FQ"), &before, &after);
+        assert_eq!(clearances.len(), 1, "{clearances:?}");
+        assert_eq!(clearances[0].id, "row-00000000000000000002");
+        assert_eq!(
+            clearances[0].gate,
+            "1601fq_schedule1:row-00000000000000000002"
+        );
+        assert_eq!(
+            clearances[0].text,
+            "Schedule 1 row 1 was cleared: it applies only when item 13 is Yes."
+        );
+        assert!(!clearances[0].text.contains("row-00000000000000000002"));
+    }
+
+    #[test]
+    fn a_1601fq_schedule_placeholder_is_not_a_typed_row() {
+        let row = json!({
+            "treaty_code": "-",
+            "atc_code": "-",
+            "income_payment": 0.0,
+            "tax_rate": 0.0,
+        });
+        assert!(!super::schedule1_1601fq::typed_row(&row));
+    }
+
+    #[test]
+    fn item_4_no_clearing_1601fq_schedule_rows_is_noticed() {
+        use super::schedule1_1601fq as gate;
+        let row = json!({
+            "instance_id": "row-00000000000000000001",
+            "treaty_code": "NA",
+            "atc_code": "NA",
+            "income_payment": 42.0,
+            "tax_rate": 10.0,
+        });
+        let before = json!({
+            "any_tax_withheld": true,
+            "tax_relief": "special_rate",
+            "schedule1": [row],
+        });
+        let after = json!({
+            "any_tax_withheld": false,
+            "tax_relief": "special_rate",
+            "schedule1": [],
+        });
+        let clearances = gate::clearances(kind("1601FQ"), &before, &after);
+        assert_eq!(clearances.len(), 1, "{clearances:?}");
+        assert_eq!(
+            clearances[0].1,
+            "Schedule 1 row 1 was cleared: changing item 4 clears all computation fields."
+        );
+    }
+
+    #[test]
+    fn clearing_a_1601fq_schedule_row_by_hand_at_item_4_no_records_no_notice() {
+        use super::schedule1_1601fq as gate;
+        let row = json!({
+            "instance_id": "row-00000000000000000001",
+            "treaty_code": "NA",
+            "atc_code": "NA",
+            "income_payment": 42.0,
+            "tax_rate": 10.0,
+        });
+        let before = json!({
+            "any_tax_withheld": false,
+            "tax_relief": "special_rate",
+            "schedule1": [row],
+        });
+        let after = json!({
+            "any_tax_withheld": false,
+            "tax_relief": "special_rate",
+            "schedule1": [],
+        });
+        assert_eq!(gate::clearances(kind("1601FQ"), &before, &after), vec![]);
+    }
+
+    #[test]
+    fn clearing_five_1601fq_schedule_rows_is_one_positional_notice() {
+        use super::schedule1_1601fq as gate;
+        let row = |index: usize| {
+            json!({
+                "instance_id": format!("row-{:020}", index + 1),
+                "treaty_code": "NA",
+                "atc_code": "NA",
+                "income_payment": 10.0 + index as f64,
+                "tax_rate": 10.0,
+                "tax_withheld": 1.0,
+            })
+        };
+        let before = json!({
+            "tax_relief": "special_rate",
+            "schedule1": (0..5).map(row).collect::<Vec<_>>(),
+        });
+        let after = json!({"tax_relief": null, "schedule1": []});
+        let clearances = gate::clearances(kind("1601FQ"), &before, &after);
+        assert_eq!(clearances.len(), 1, "{clearances:?}");
+        let (gate_key, sentence) = &clearances[0];
+        for index in 0..5 {
+            assert!(
+                gate_key.contains(&format!("row-{:020}", index + 1)),
+                "{gate_key}"
+            );
+            assert!(
+                !sentence.contains(&format!("row-{:020}", index + 1)),
+                "{sentence}"
+            );
+        }
+        assert_eq!(
+            sentence,
+            "Schedule 1's rows were cleared: they apply only when item 13 is Yes."
+        );
+    }
 }
 
 pub mod pending_notices {
@@ -1974,6 +2628,8 @@ pub mod pending_notices {
     //! page's own inline clearing is saved); recording also removes the
     //! pending key, so a later import or edit that newly clears the same gate
     //! creates a fresh event and is said again.
+
+    use std::collections::BTreeSet;
 
     use serde_json::{Value, json};
 
@@ -2009,7 +2665,18 @@ pub mod pending_notices {
     /// path opened or imported the return. Gate and text are owned strings so
     /// a row-keyed gate (1601FQ Schedule 1, for example) can name its row.
     pub fn clearance(kind: AgentFormKind, before: &Value, after: &Value) -> Vec<(String, String)> {
-        collect_clearances(kind, before, after, &[item16_2551q_clearance])
+        collect_clearances(
+            kind,
+            before,
+            after,
+            &[
+                item16_2551q_clearance,
+                installment_1606_clearance,
+                previous_payment_clearance,
+                schedule1_1601fq_clearance,
+                gated_rows_clearance,
+            ],
+        )
     }
 
     type ClearanceCheck = fn(AgentFormKind, &Value, &Value) -> Vec<(String, String)>;
@@ -2024,6 +2691,14 @@ pub mod pending_notices {
             .iter()
             .flat_map(|check| check(kind, before, after))
             .collect()
+    }
+
+    fn schedule1_1601fq_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        super::schedule1_1601fq::clearances(kind, before, after)
     }
 
     fn item16_2551q_clearance(
@@ -2041,11 +2716,105 @@ pub mod pending_notices {
         Vec::new()
     }
 
+    fn gated_rows_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        super::gated_rows::clearances(kind, before, after)
+            .into_iter()
+            .map(|clearance| (clearance.gate, clearance.text))
+            .collect()
+    }
+
+    fn installment_1606_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        if kind.form_code() == "1606"
+            && super::installment_1606::AMOUNT_FIELDS
+                .iter()
+                .any(|field| before[field].as_f64().unwrap_or(0.0).abs() >= 0.005)
+            && super::installment_1606::AMOUNT_FIELDS
+                .iter()
+                .all(|field| after[field].as_f64().unwrap_or(0.0).abs() < 0.005)
+            && super::installment_1606::lock_reason(after).is_some()
+        {
+            return vec![(
+                "1606_installment".to_string(),
+                super::installment_1606::CLEARED_NOTE.to_string(),
+            )];
+        }
+        Vec::new()
+    }
+
+    fn previous_payment_clearance(
+        kind: AgentFormKind,
+        before: &Value,
+        after: &Value,
+    ) -> Vec<(String, String)> {
+        let Some(spec) = super::previous_payment::spec(kind) else {
+            return Vec::new();
+        };
+        if before[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005
+            && after[spec.path].as_f64().unwrap_or(0.0).abs() < 0.005
+            && (super::previous_payment::lock_reason(spec, after).is_some()
+                || super::previous_payment::lock_reason(spec, before).is_some())
+        {
+            let text = if super::previous_payment::lock_reason(spec, after).is_none() {
+                format!(
+                    "The filed return's Item {} was not carried over.",
+                    spec.item
+                )
+            } else {
+                spec.cleared.to_string()
+            };
+            return vec![(super::previous_payment::gate_key(spec), text)];
+        }
+        Vec::new()
+    }
+
     fn event_name() -> String {
         let now = chrono::Utc::now();
         now.timestamp_nanos_opt()
             .unwrap_or_else(|| now.timestamp_millis())
             .to_string()
+    }
+
+    /// Whether the draft handed to the save still held this gate's value.
+    /// When it did, the save's own recompute is what cleared it. When it did
+    /// not, the filer had already cleared the open box before closing the
+    /// gate and the stored-to-zero comparison is not a gate clearing to
+    /// announce. A gate the page already reported inline is the recompute's
+    /// clearing even though that fill's output is zero by the time it saves.
+    fn incoming_held(kind: AgentFormKind, incoming: &Value, gate: &str) -> bool {
+        if gate == "2551q_item16" {
+            return incoming["tax_paid_previous"].as_f64().unwrap_or(0.0).abs() >= 0.005;
+        }
+        if gate == "1606_installment" {
+            return super::installment_1606::AMOUNT_FIELDS
+                .iter()
+                .any(|field| incoming[field].as_f64().unwrap_or(0.0).abs() >= 0.005);
+        }
+        if let Some(spec) = super::previous_payment::spec(kind)
+            && gate == super::previous_payment::gate_key(spec)
+        {
+            return incoming[spec.path].as_f64().unwrap_or(0.0).abs() >= 0.005;
+        }
+        if let Some(ids) = gate.strip_prefix("1601fq_schedule1:") {
+            let ids: Vec<&str> = ids.split(',').collect();
+            return incoming["schedule1"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .enumerate()
+                .any(|(index, row)| {
+                    ids.contains(&super::schedule1_1601fq::row_id(row, index).as_str())
+                        && super::schedule1_1601fq::typed_row(row)
+                });
+        }
+        true
     }
 
     /// The settings rows one save writes for its clearings. One event names
@@ -2054,10 +2823,15 @@ pub mod pending_notices {
     pub(crate) fn settings_writes(
         kind: AgentFormKind,
         before: &Value,
+        incoming: &Value,
         after: &Value,
         draft_id: i64,
+        reported: &BTreeSet<String>,
     ) -> Vec<(String, String)> {
-        let clearances = clearance(kind, before, after);
+        let clearances: Vec<(String, String)> = clearance(kind, before, after)
+            .into_iter()
+            .filter(|(gate, _)| reported.contains(gate) || incoming_held(kind, incoming, gate))
+            .collect();
         if clearances.is_empty() {
             return Vec::new();
         }
@@ -2171,6 +2945,40 @@ pub mod pending_notices {
                 super::pending_event_for_seen(&seen),
                 Some((super::pending_key("schedule1:row:7", 9), "E1".to_string()))
             );
+        }
+
+        #[test]
+        fn previous_payment_clearance_covers_active_close_and_dormant_original() {
+            use crate::forms::agent::draft_locks::previous_payment;
+            use crate::forms::queueable::QueueableKind;
+
+            let kind = AgentFormKind::Queueable(QueueableKind::Form1600PT);
+            let spec = previous_payment::spec(kind).unwrap();
+            let mut yes_with_amount = json!({"is_amended": true});
+            yes_with_amount[spec.path] = json!(42.0);
+            let mut no_without_amount = json!({"is_amended": false});
+            no_without_amount[spec.path] = json!(0.0);
+            let active = clearance(kind, &yes_with_amount, &no_without_amount);
+            assert_eq!(
+                active,
+                vec![("1600pt_item19".to_string(), spec.cleared.to_string())]
+            );
+
+            let mut dormant_original = json!({"is_amended": false});
+            dormant_original[spec.path] = json!(42.0);
+            let mut amended_cleared = json!({"is_amended": true});
+            amended_cleared[spec.path] = json!(0.0);
+            let original = clearance(kind, &dormant_original, &amended_cleared);
+            assert_eq!(
+                original,
+                vec![(
+                    "1600pt_item19".to_string(),
+                    "The filed return's Item 19 was not carried over.".to_string(),
+                )]
+            );
+
+            let manual_clear_while_open = clearance(kind, &yes_with_amount, &amended_cleared);
+            assert_eq!(manual_clear_while_open, Vec::new());
         }
     }
 }

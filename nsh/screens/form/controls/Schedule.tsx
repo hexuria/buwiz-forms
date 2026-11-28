@@ -96,7 +96,7 @@ export function ScheduleControl(props: ScheduleInput) {
   const remove = () => {
     const r = open();
     if (r === null) return;
-    props.onClearRow(r);
+    props.onDeleteRow(r);
     props.onOpenRow(null);
   };
   return (

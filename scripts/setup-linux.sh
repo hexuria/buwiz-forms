@@ -20,8 +20,8 @@
 #   - Rust toolchain via rustup (if cargo is missing)
 #   - `just` command runner (distro package when available, else cargo install)
 #   - gpui-agent CLI — drives the app over 127.0.0.1 when the binary is built
-#     `--features agent` and launched with GPUI_AGENT=1. Installed at the same
-#     version the workspace pins, so protocol versions never drift apart.
+#     `--features agent` and launched with GPUI_AGENT=1. Installed at the exact
+#     CLI pin in scripts/impeccable.pin, so recipes and protocol versions never drift apart.
 #   - impeccable CLI (verification tooling) and the impeccable-rust agent skill
 #     in .agents/skills/impeccable-rust/ (git-ignored, so downloaded), both at
 #     the versions scripts/impeccable.pin holds (see scripts/setup-impeccable.sh)
@@ -62,10 +62,13 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+# shellcheck source=scripts/lib/prebuilt.sh
+. "$SCRIPT_DIR/lib/prebuilt.sh"
 # shellcheck source=scripts/setup-impeccable.sh
 . "$SCRIPT_DIR/setup-impeccable.sh"
 
@@ -221,7 +224,7 @@ install_just() {
     fi
     if ! command -v just >/dev/null 2>&1; then
         log "Installing just via cargo"
-        cargo install just
+        cargo install just --version =1.45.0
     fi
 }
 
@@ -242,33 +245,17 @@ install_rust() {
 }
 
 # ---------------------------------------------------------------------------
-# gpui-agent — the client half of the agent control plane. The app embeds the
-# matching host crate pinned to an exact crates.io version in the
-# repository-root Cargo.toml; the CLI has to speak the same protocol, so
-# install that exact version instead of the newest. A missing manifest or pin
-# is an error.
+# gpui-agent — the client half of the agent control plane. The library pin in
+# Cargo.toml is the protocol floor, while the recipes can need a newer CLI; the
+# exact CLI version therefore lives in scripts/impeccable.pin with the other
+# tool pins. A missing pin is an error.
 # ---------------------------------------------------------------------------
 install_gpui_agent() {
-    local manifest="$SCRIPT_DIR/../Cargo.toml"
-    [ -f "$manifest" ] || die "repository-root Cargo.toml is required for the gpui-agent pin"
-    local declaration version installed_version
-    declaration="$(tr '\n' ' ' < "$manifest" | grep -oE \
-        'gpui-agent[[:space:]]*=[[:space:]]*\{[^}]*version[[:space:]]*=[[:space:]]*"=[0-9]+\.[0-9]+\.[0-9]+"' | head -1 || true)"
-    version="$(printf '%s' "$declaration" | sed -nE 's/.*version[[:space:]]*=[[:space:]]*"=([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p')"
-    [ -n "$version" ] || die "gpui-agent version pin not found in repository-root Cargo.toml"
-    if command -v gpui-agent >/dev/null 2>&1; then
-        # A crates.io install lists as `gpui-agent-cli v0.4.0:`; one from git
-        # carries its source after the version and never matches.
-        installed_version="$(cargo install --list 2>/dev/null | sed -n \
-            's/^gpui-agent-cli v\([0-9][0-9.]*\):$/\1/p' | head -1)"
-        if [ "$installed_version" = "$version" ]; then
-            log "gpui-agent already installed at pinned version $version"
-            return 0
-        fi
-        warn "installed gpui-agent version ${installed_version:-unknown} does not match $version; reinstalling"
-    fi
-    log "Installing gpui-agent CLI $version (matches the app's pinned host crate)"
-    cargo install gpui-agent-cli --version "$version"
+    local version
+    version="$(prebuilt_pin GPUI_AGENT_CLI_VERSION)"
+    [ -n "$version" ] || die "GPUI_AGENT_CLI_VERSION not found in scripts/impeccable.pin"
+    log "Installing gpui-agent CLI $version (pinned in scripts/impeccable.pin)"
+    install_pinned_tool gpui-agent-cli "$version"
 }
 
 # ---------------------------------------------------------------------------
@@ -295,7 +282,6 @@ install_compositor() {
 check() {
     local ok=1
     local tools="cargo rustc just python3 pkg-config perl cc"
-    [ "$WITH_AGENT" -eq 1 ] && tools="$tools gpui-agent"
     for tool in $tools; do
         if command -v "$tool" >/dev/null 2>&1; then
             printf '  %-10s %s\n' "$tool" "$("$tool" --version 2>/dev/null | head -1)"
@@ -304,6 +290,13 @@ check() {
             ok=0
         fi
     done
+    if [ "$WITH_AGENT" -eq 1 ]; then
+        local gpui_pin
+        gpui_pin="$(prebuilt_pin GPUI_AGENT_CLI_VERSION)"
+        if ! prebuilt_report_pinned gpui-agent gpui-agent-cli gpui-agent "$gpui_pin"; then
+            ok=0
+        fi
+    fi
     for mod in "webkit2gtk-4.1" "gtk+-3.0" "xkbcommon" "wayland-client" "alsa" "vulkan"; do
         if pkg-config --exists "$mod" 2>/dev/null; then
             printf '  %-18s %s\n' "pkg:$mod" "$(pkg-config --modversion "$mod")"
@@ -354,6 +347,9 @@ main() {
         install_impeccable_skill
     fi
 
+    log "Installing git commit-message hooks"
+    python3 "$SCRIPT_DIR/install_git_hooks.py" "$REPO_ROOT"
+
     if [ "$WITH_COMPOSITOR" -eq 1 ]; then
         log "Installing xcompmgr"
         install_compositor
@@ -361,7 +357,9 @@ main() {
 
     if [ "$WITH_EXTRAS" -eq 1 ]; then
         log "Installing optional developer tools"
-        cargo install cargo-audit cargo-outdated cargo-machete
+        cargo install cargo-audit --version =0.22.1
+        cargo install cargo-outdated --version =0.19.0
+        cargo install cargo-machete --version =0.9.2
     fi
 
     # Freeze-inventory / stamp CI scripts expect Python 3.13; warn if older.

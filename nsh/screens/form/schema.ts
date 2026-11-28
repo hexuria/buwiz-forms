@@ -248,6 +248,11 @@ const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.tri
 export function sendWords(send: SendState, now: Date): string {
   const at = send.next_try_at ? rfc3339(send.next_try_at) : null;
   if (!at || (send.stage !== "held" && send.stage !== "waiting")) return send.line;
+  // A sign-in hold is not a timed retry: the worker is paused until the person signs in, so its own sentence is
+  // the whole truth whether the stored time is ahead or already past.
+  const signInHold = send.stage === "held" && (send.line.startsWith("Sign in to send returns") || send.line.startsWith("The saved Buwiz sign-in is for another server"));
+  if (signInHold) return stopped(send.line);
+  if (at <= now) return `${stopped(send.line)} Trying again now.`;
   return `${stopped(send.line)} ${send.stage === "held" ? "It goes again" : "Next try"} ${tryTime(at, now)}.`;
 }
 

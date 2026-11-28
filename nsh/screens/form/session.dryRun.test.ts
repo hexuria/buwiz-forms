@@ -81,9 +81,14 @@ test("the send's words: a held or waiting send says when it goes again, in local
   expect(tryTime(new Date(2026, 10, 24, 0, 5), now)).toBe("at 12:05 AM");
   expect(tryTime(new Date(2026, 10, 25, 12, 0), now)).toBe("on Nov 25 at 12:00 PM");
   expect(tryTime(new Date(2027, 0, 2, 9, 5), now)).toBe("on Jan 2, 2027 at 9:05 AM");
-  expect(sendWords(send("held", "Sign in to send returns", at(new Date(2026, 10, 24, 15, 40))), now)).toBe("Sign in to send returns. It goes again at 3:40 PM.");
+  expect(sendWords(send("held", "Sign in to send returns", at(new Date(2026, 10, 24, 15, 40))), now)).toBe("Sign in to send returns.");
+  expect(sendWords(send("held", "Sign in to send returns", at(new Date(2026, 10, 24, 9, 59))), now)).toBe("Sign in to send returns.");
+  expect(sendWords(send("held", "The saved Buwiz sign-in is for another server. Sign in again to send returns", at(new Date(2026, 10, 24, 9, 59))), now)).toBe("The saved Buwiz sign-in is for another server. Sign in again to send returns.");
   expect(sendWords(send("waiting", "Not sent yet: x. It tries again by itself.", at(new Date(2026, 10, 25, 9, 5))), now)).toBe(
     "Not sent yet: x. It tries again by itself. Next try on Nov 25 at 9:05 AM.",
+  );
+  expect(sendWords(send("waiting", "Not sent yet: x. It tries again by itself.", at(new Date(2026, 10, 24, 9, 59))), now)).toBe(
+    "Not sent yet: x. It tries again by itself. Trying again now.",
   );
   // No time, or a stage that has none: the line alone.
   expect(sendWords(send("held", "Held.", null), now)).toBe("Held.");

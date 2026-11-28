@@ -189,7 +189,7 @@ test("desktop: the account menu offers Lock app, Account settings and Log out", 
 test("desktop: Cmd+comma opens Settings; a view that needs a taxpayer falls back to Home without one", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking({ demo: false }) });
   await app.waitFor("id:sidebar");
-  expect(app.texts()).toContain("Add a taxpayer");
+  expect(app.texts()).toContain("New tax profile");
   expect(app.shows("id:dev-door")).toBe(false); // no dev strip on an empty database: the dev pages are in the palette only
   await app.keyboard.press("mod+,");
   await app.waitFor("id:settings");

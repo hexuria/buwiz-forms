@@ -207,7 +207,7 @@ impl Database {
         if !source.may_confirm(draft.submitted_dry_run) {
             tracing::info!(
                 "Ignoring receipt {}: the 2551Q for its period was a dry run",
-                receipt.filename
+                crate::logging::submission_filename_for_log(&receipt.filename)
             );
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }
@@ -249,7 +249,7 @@ impl Database {
         if !receipt_belongs_to_this_generation(receipt_dt, authorized_at, submitted_at) {
             tracing::info!(
                 "Ignoring old receipt {} for 2551Q draft submitted at {}",
-                receipt.filename,
+                crate::logging::submission_filename_for_log(&receipt.filename),
                 submitted_at
             );
             return Ok(ReceiptConfirmationOutcome::Ignored);
@@ -293,7 +293,7 @@ impl Database {
         if !source.may_confirm(draft.submitted_dry_run) {
             tracing::info!(
                 "Ignoring receipt {}: the 1601C for its period was a dry run",
-                receipt.filename
+                crate::logging::submission_filename_for_log(&receipt.filename)
             );
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }
@@ -332,7 +332,7 @@ impl Database {
         if !receipt_belongs_to_this_generation(receipt_dt, authorized_at, submitted_at) {
             tracing::info!(
                 "Ignoring old receipt {} for 1601C draft submitted at {}",
-                receipt.filename,
+                crate::logging::submission_filename_for_log(&receipt.filename),
                 submitted_at
             );
             return Ok(ReceiptConfirmationOutcome::Ignored);

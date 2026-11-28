@@ -54,6 +54,14 @@ fn native(registry: &mut Registry) {
     // One copy per database: a second launch asks the first to come forward and ends here (`desktop.rs`).
     #[cfg(not(target_os = "android"))]
     desktop::prepare_process();
+    // Only after the one-copy guard: a second launch exits above and must not
+    // sweep a preview the first copy is writing. In a test environment whose
+    // database is not named yet, the door sweeps after it names its scratch
+    // database; sweeping here would touch the real installed folder instead.
+    #[cfg(not(target_os = "android"))]
+    if !door::scratch_database_wanted() {
+        bir_core::platform::prepare_print_previews();
+    }
     registry.module::<Bridge>().module::<Door>().module::<agent::Agent>().module::<desktop::Desktop>().module::<print::Print>();
 }
 

@@ -244,7 +244,7 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             Ok(profile) => profile,
             Err(read_error) => {
                 tracing::warn!(
-                    tin = %branch.tin,
+                    tin = %bir_core::logging::tin_for_log(&branch.tin),
                     error = %read_error,
                     "deadline feed: profile unreadable; its own deadline overrides are skipped"
                 );

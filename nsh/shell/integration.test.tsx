@@ -13,7 +13,7 @@ const typed7 = (app: { value(s: string): string | null }) => (app.value(SHEETS) 
 /** The page is drawn (its Expand all button): the header shows while the form is still opening. */
 const PAGE = "id:fp-parts-toggle";
 
-test("desktop: removing a schedule row on a form shows Undo in the frame, and Undo brings the row back", async () => {
+test("desktop: removing a schedule row on a form shows the row-deleted Undo in the frame with no confirmation, and Undo brings the row back exactly", async () => {
   const app = await open("./FrameDemo.tsx", { ...WIDE, ...asking({ removal: true, start: "form=1601EQ/2025/3" }) });
   await app.waitFor(PAGE, { timeout: 30_000 });
   await app.press(PAGE);
@@ -24,17 +24,104 @@ test("desktop: removing a schedule row on a form shows Undo in the frame, and Un
   await app.press(row);
   await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-delete");
   await app.press("id:fp-table-frm1601EQ:txtAtcCd1-delete");
-  // Clearing the ATC asks first.
-  await app.waitFor("id:removal-confirm");
-  await app.press("id:removal-continue");
-  // The toast has its Undo button (the frame used to drop it).
+  // Delete row removes the row at once (session.ts deleteRow: "no confirmation"): the removal
+  // question never shows — the toast offering the exact Undo appears with no Continue step.
   await app.waitFor("id:toast-action");
+  expect(app.shows("id:removal-confirm")).toBe(false);
+  expect(app.texts()).toContain("Row deleted.");
   expect(app.texts()).toContain("Undo");
   expect(atc()).toBe(false);
   await app.press("id:toast-action");
   await app.waitFor("id:toast-action", { state: "gone" });
+  // Undo restores the draft exactly: the row is back, and its drawer holds its own values again.
   await app.waitUntil(atc);
+  await app.press(row);
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-done");
+  expect(app.value("id:fp-frm1601EQ:txtAtcCd1") ?? "").toContain("WI010");
+  expect(app.value("id:fp-frm1601EQ:txtTaxBase1")).toBe("250.50");
 });
+
+test("desktop: a choice clear that removes typed values still asks; Continue removes them and the frame's Undo restores the row", async () => {
+  const app = await open("./FrameDemo.tsx", { ...WIDE, ...asking({ removal: true, start: "form=1601EQ/2025/3" }) });
+  await app.waitFor(PAGE, { timeout: 30_000 });
+  await app.press(PAGE);
+  const row = "id:fp-row-frm1601EQ:txtAtcCd1-0";
+  const atcBox = "id:fp-frm1601EQ:txtAtcCd1";
+  await app.waitFor(row);
+  await app.press(row);
+  await app.waitFor(atcBox);
+  expect(app.value(atcBox) ?? "").toContain("WI010");
+  expect(app.value("id:fp-frm1601EQ:txtTaxBase1")).toBe("250.50");
+
+  await app.press("id:fp-frm1601EQ:txtAtcCd1-trigger");
+  await app.waitFor("id:fp-frm1601EQ:txtAtcCd1-opt-", { timeout: 10_000 });
+  await app.press("id:fp-frm1601EQ:txtAtcCd1-opt-");
+  // Unlike Delete row, this side-effect removal still asks first. While the question is open,
+  // the old choice and its typed base are untouched.
+  await app.waitFor("id:removal-confirm", { timeout: 10_000 });
+  expect(app.texts().some((t) => t.includes("Clearing this ATC removes its row"))).toBe(true);
+  expect(app.value(atcBox) ?? "").toContain("WI010");
+  expect(app.value("id:fp-frm1601EQ:txtTaxBase1")).toBe("250.50");
+
+  await app.press("id:removal-continue");
+  await app.waitFor("id:removal-confirm", { state: "gone" });
+  await app.waitFor("id:toast-action", { timeout: 10_000 });
+  expect(app.texts()).toContain("Removed the row.");
+  expect(app.texts().some((t) => t.startsWith("WI010"))).toBe(false);
+
+  await app.press("id:toast-action");
+  await app.waitFor("id:toast-action", { state: "gone" });
+  await app.waitFor(row, { timeout: 10_000 });
+  // Confirming the choice clear does not close the row editor; close it once, then reopen
+  // the restored row and read the draft exactly as the screen shows it.
+  await app.press("id:fp-table-frm1601EQ:txtAtcCd1-done");
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-drawer", { state: "gone" });
+  await app.press(row);
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-done");
+  expect(app.value(atcBox) ?? "").toContain("WI010");
+  expect(app.value("id:fp-frm1601EQ:txtTaxBase1")).toBe("250.50");
+}, 40_000);
+
+test("phone: Delete row removes the row, the later row moves up, and the frame's Undo brings both rows back with their values", async () => {
+  const app = await open("./FrameDemo.tsx", { width: 390, height: 844, platform: "ios", ...asking({ removal: true, removal2: true, start: "form=1601EQ/2025/3" }) });
+  await app.waitFor("id:fp-pill-open", { timeout: 30_000 });
+  // Narrow has no side list: open Part II through the pill's sections list, then the schedule's rows.
+  await app.press("id:fp-pill-open");
+  await app.waitFor("id:fp-section-2", { timeout: 15_000 });
+  await app.press("id:fp-section-2");
+  const first = "id:fp-row-frm1601EQ:txtAtcCd1-0";
+  const second = "id:fp-row-frm1601EQ:txtAtcCd1-1";
+  for (let i = 0; i < 20 && !app.shows(first); i++) await app.scroll("id:form-scroll", 500).catch(() => {});
+  await app.waitFor(first, { timeout: 10_000 });
+  await app.waitFor(second);
+  expect(app.texts().some((t) => t.startsWith("WI010"))).toBe(true);
+  expect(app.texts().some((t) => t.startsWith("WI011"))).toBe(true);
+
+  await app.press(first);
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-delete", { timeout: 10_000 });
+  await app.press("id:fp-table-frm1601EQ:txtAtcCd1-delete");
+  await app.waitFor("id:toast-action", { timeout: 10_000 });
+  expect(app.shows("id:removal-confirm")).toBe(false);
+  expect(app.texts()).toContain("Row deleted.");
+  expect(app.texts().some((t) => t.startsWith("WI010"))).toBe(false);
+  expect(app.count(second)).toBe(0);
+  expect(app.count(first)).toBe(1);
+  expect(app.texts().some((t) => t.startsWith("WI011"))).toBe(true);
+
+  await app.press("id:toast-action");
+  await app.waitFor("id:toast-action", { state: "gone" });
+  await app.waitFor(second, { timeout: 10_000 });
+  await app.press(first);
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-done", { timeout: 10_000 });
+  expect(app.texts().some((t) => t.startsWith("WI010 —"))).toBe(true);
+  expect(app.value("id:fp-frm1601EQ:txtTaxBase1")).toBe("250.50");
+  await app.press("id:fp-table-frm1601EQ:txtAtcCd1-done");
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-drawer", { state: "gone" });
+  await app.press(second);
+  await app.waitFor("id:fp-table-frm1601EQ:txtAtcCd1-done", { timeout: 10_000 });
+  expect(app.texts().some((t) => t.startsWith("WI011 —"))).toBe(true);
+  expect(app.value("id:fp-frm1601EQ:txtTaxBase2")).toBe("200.00");
+}, 40_000);
 
 test("desktop: what is typed is saved when the person leaves the form within a moment, and the return opens with it", async () => {
   const app = await open("../ShellDemo.tsx", { ...WIDE, ...asking({ start: `form=2551Q/${YEAR}/3` }) });

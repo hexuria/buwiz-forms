@@ -77,6 +77,11 @@ badges *args:
 help:
     @just --list
 
+# The launch crew runner: `just crew doctor`, `just crew run ...`.
+[positional-arguments]
+crew *args:
+    {{PYTHON}} crew/bin/crew "$@"
+
 # `just run` is the NSH app (nsh-run, a macOS dev window); the old gpui-shell host is gone.
 [macos]
 run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (nsh-run db args)
@@ -196,6 +201,26 @@ unused:
 # Run all unit and integration tests
 test:
     cargo test --locked --workspace
+
+# Ask for the test suites on the pull request itself: remove the ci:suite* label if present, then add it again.
+# No system: Linux and Windows. Prints the pull request's checks page.
+# Ask GitHub for the test suites on a pull request: `just ci-suite <pr> [linux|windows|macos|all]`
+[unix]
+ci-suite number system="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    number="{{number}}"
+    case "{{system}}" in
+        "") suffix="" ;;
+        linux|windows|macos|all) suffix="-{{system}}" ;;
+        *) echo "ci-suite: system is linux, windows, macos or all (none: Linux and Windows)" >&2; exit 1 ;;
+    esac
+    [[ "$number" =~ ^[0-9]+$ ]] || { echo "ci-suite: not a pull request number: $number" >&2; exit 1; }
+    label="ci:suite$suffix"
+    gh label create "$label" --repo hexuria/buwiz-forms --force
+    gh pr edit "$number" --repo hexuria/buwiz-forms --remove-label "$label" >/dev/null 2>&1 || true
+    gh pr edit "$number" --repo hexuria/buwiz-forms --add-label "$label"
+    echo "https://github.com/hexuria/buwiz-forms/pull/$number/checks"
 
 # Pull requests run only the quick checks; the test suites run on a push to test/** (docs/CI.md). Pushes HEAD to
 # test/<system>/<branch>, so the results show on the pull request of that commit; a newer push replaces the older run.
@@ -569,15 +594,24 @@ app *args="":
 
 testflight *args="": (app args) testflight-upload
 
-testflight-agent *args="": (testflight "--agent" args)
+# An agent build carries the driver's socket and com.apple.security.network.server: internal TestFlight only, never review.
+# It is the one upload that may carry the agent (testflight-upload refuses one otherwise, scripts/agent_upload_guard.py),
+# and its provenance file (beside the .pkg) says agent=1: that build number must never be the one chosen for review.
+testflight-agent *args="":
+    just app --agent {{args}}
+    just testflight-upload yes
 
-testflight-upload:
+# `allow_agent` is passed only by testflight-agent ("yes"); an agent build is refused otherwise. ALLOW_AGENT_UPLOAD from the
+# shell or .env is dropped: a permission in the environment would switch the guard off for every upload.
+testflight-upload allow_agent="":
     #!/usr/bin/env bash
     set -euo pipefail
+    unset ALLOW_AGENT_UPLOAD
     if [ "{{os()}}" != "macos" ]; then
         echo "⚠️ TestFlight uploads are only supported on macOS." >&2; exit 1
     fi
     set -a && source .env && set +a
+    unset ALLOW_AGENT_UPLOAD
     for var in APP_STORE_KEY_ID APP_STORE_ISSUER_ID APP_STORE_P8_PATH; do
         if [ -z "${!var:-}" ]; then echo "❌ $var is not set in .env" >&2; exit 1; fi
     done
@@ -598,6 +632,11 @@ testflight-upload:
         echo "❌ $PKG_PATH is unsigned. Set INSTALLER_IDENTITY in .env and rebuild with: just app" >&2; exit 1
     fi
     BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "{{RELEASE_DIR}}/mas/{{APP_NAME}}.app/Contents/Info.plist" 2>/dev/null || echo '?')"
+    # The .pkg itself is read (its .app's Info.plist mark, its executable, its signed entitlements) and its provenance: an
+    # agent build is refused unless testflight-agent passed allow_agent (scripts/agent_upload_guard.py).
+    allow_flag=""
+    [ "{{allow_agent}}" = "yes" ] && allow_flag="--allow-agent"
+    {{PYTHON}} scripts/agent_upload_guard.py check mac "$PKG_PATH" --provenance "${PKG_PATH%.pkg}.provenance.txt" $allow_flag
     # iTMSTransporter only reads the key from a fixed set of private_keys
     # directories; stage it in a throwaway one instead of touching $HOME.
     KEY_DIR="$(mktemp -d)"
@@ -615,6 +654,10 @@ _package-mac-appstore args="": build-frozen-html-identity
     set -euo pipefail
     root="$(pwd)"
     CERT="${CODESIGN_IDENTITY:--}"
+    # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
+    # An assignment, not eval "$(...)": a failing script then stops the build (set -e) instead of evaluating nothing.
+    drop="$({{PYTHON}} scripts/store_gmail.py env)"
+    eval "$drop"
     # nsh package has no flag for a feature of the app crate: nsh/mas/cargo-with-mas.sh, set as $CARGO, adds `mas_build`
     # (and `agent` for --agent) to the build of the generated macOS host.
     export NSH_MAS_AGENT=0
@@ -682,6 +725,8 @@ _package-mac-appstore args="": build-frozen-html-identity
     rm -f "$OUT"/*.tar.gz "$OUT"/.nsh-updater.json "$OUT"/*.entitlements "$APP/Contents/Resources/nsh/assets/nsh-updater.json"
     # The print renderer reads the per-form CSS fixes from Contents/Resources/print-overrides (bir-app-api print_sheet.rs).
     cp -R print-overrides "$APP/Contents/Resources/"
+    # The same privacy manifest as the iOS app: the Mac build collects the same data (assets/ios/PrivacyInfo.xcprivacy).
+    cp assets/ios/PrivacyInfo.xcprivacy "$APP/Contents/Resources/"
     PLIST="$APP/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Add :LSApplicationCategoryType string public.app-category.finance" "$PLIST" || true
     # Export compliance exemption, so App Store Connect skips the encryption question.
@@ -690,17 +735,24 @@ _package-mac-appstore args="": build-frozen-html-identity
     if [ "$NSH_MAS_AGENT" != "1" ]; then
         /usr/libexec/PlistBuddy -c "Delete :NSScreenCaptureUsageDescription" "$PLIST" 2>/dev/null || true
     fi
+    # An agent build says so in its Info.plist and its provenance: testflight-upload refuses it unless testflight-agent passed
+    # allow_agent, so a build with the driver's socket is never uploaded, and so never sent to review, by accident.
+    if [ "$NSH_MAS_AGENT" = "1" ]; then
+        /usr/libexec/PlistBuddy -c "Add :NSHAgentBuild bool true" "$PLIST"
+    fi
     if [ "${DEV_MODE:-}" = "true" ] || [ "${DEVELOPER_MODE:-}" = "true" ]; then
         echo "Injecting DEVELOPER_MODE into Info.plist..."
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$PLIST" || true
         /usr/libexec/PlistBuddy -c "Add :LSEnvironment:DEVELOPER_MODE string true" "$PLIST" || true
     fi
-    ENTITLEMENTS="$root/entitlements.plist"
+    # The store's entitlements: network.server only with Gmail Connect or the agent (scripts/store_gmail.py entitlements).
+    ENTITLEMENTS="$OUT/store.entitlements"
+    agent_flag=""
+    [ "$NSH_MAS_AGENT" = "1" ] && agent_flag="--agent"
+    {{PYTHON}} scripts/store_gmail.py entitlements "$root/entitlements.plist" "$ENTITLEMENTS" $agent_flag
     if [ "$CERT" = "-" ]; then
         # An ad hoc signature cannot carry the store's application and team identifiers (macOS refuses to launch an app
         # that claims them without a matching profile), so the local build keeps only the sandbox and its permissions.
-        ENTITLEMENTS="$OUT/sandbox.entitlements"
-        cp "$root/entitlements.plist" "$ENTITLEMENTS"
         /usr/libexec/PlistBuddy -c "Delete :com.apple.application-identifier" "$ENTITLEMENTS"
         /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.team-identifier" "$ENTITLEMENTS"
         echo "⚠️  No CODESIGN_IDENTITY: ad hoc signed with the sandbox entitlements, no provisioning profile (local testing only)."
@@ -709,6 +761,7 @@ _package-mac-appstore args="": build-frozen-html-identity
         cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
     fi
     {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
+    {{PYTHON}} scripts/store_gmail.py check "$APP"
     xattr -cr "$APP"
     # App Store Connect refuses a package whose files only their owner can read, which is what a umask of 077 builds.
     chmod -R u+rwX,go+rX "$APP"
@@ -727,7 +780,9 @@ _package-mac-appstore args="": build-frozen-html-identity
         echo "✅ Unsigned PKG created: $PKG_PATH"
         echo "⚠️  Note: You must also codesign the .pkg with an 'Apple Distribution' certificate before submitting."
     fi
-    echo "$PROVENANCE, build {{BUILD_NUMBER}}" > "${PKG_PATH%.pkg}.provenance.txt"
+    agent_note=""
+    [ "$NSH_MAS_AGENT" = "1" ] && agent_note=" (agent build: internal TestFlight only, never for review)"
+    echo "$PROVENANCE, build {{BUILD_NUMBER}}, agent=$NSH_MAS_AGENT$agent_note" > "${PKG_PATH%.pkg}.provenance.txt"
     echo "   $PROVENANCE"
 
 # Google Play bundle (docs/platforms/android.md): an Android App Bundle for phones and tablets with the Play application
@@ -855,6 +910,8 @@ _play-jdk:
 ios-appstore: build-frozen-html-identity
     #!/usr/bin/env bash
     set -euo pipefail
+    # The store build uses nsh's own cargo: an inherited CARGO (a wrapper that adds the `agent` feature) is dropped.
+    unset CARGO
     # App Store Connect refuses a package whose files only their owner can read (a umask of 077 builds that).
     umask 022
     root="$(pwd)"
@@ -868,6 +925,10 @@ ios-appstore: build-frozen-html-identity
         echo "❌ $PROFILE expired $EXPIRES." >&2; exit 1
     fi
     set -a && source .env && set +a
+    # Gmail Connect (a restricted Google scope) is out of the store build unless STORE_GMAIL=1: scripts/store_gmail.py.
+    # An assignment, not eval "$(...)": a failing script then stops the build (set -e) instead of evaluating nothing.
+    drop="$({{PYTHON}} scripts/store_gmail.py env)"
+    eval "$drop"
     BUILD="$(uv run scripts/bump_build.py --print-next)"
     case "$BUILD" in ''|*[!0-9]*) echo "Invalid App Store build number: $BUILD" >&2; exit 1 ;; esac
     # A store package is built in this checkout's own folder, never the shared ~/BuwizNsh/target-nsh: Cargo cannot tell two
@@ -919,6 +980,9 @@ ios-appstore: build-frozen-html-identity
         echo "❌ $APP/Info.plist has NSScreenCaptureUsageDescription." >&2; exit 1
     fi
     {{PYTHON}} scripts/audit_no_legacy.py --package-root "$APP"
+    {{PYTHON}} scripts/store_gmail.py check "$APP"
+    # iOS has no agent build for the store: refuse one that carries the driver anyway (scripts/agent_upload_guard.py).
+    {{PYTHON}} scripts/agent_upload_guard.py check ios "$APP"
     xattr -cr "$APP"
     chmod -R u+rwX,go+rX "$APP"
     codesign --force --sign "$CERT" --preserve-metadata=entitlements,requirements,flags "$APP"
@@ -940,6 +1004,7 @@ ios-appstore-upload:
     set -a && source .env && set +a
     IPA="{{RELEASE_DIR}}/{{APP_NAME}}-iOS-{{VERSION}}.ipa"
     [ -f "$IPA" ] || { echo "❌ No $IPA: run just ios-appstore first." >&2; exit 1; }
+    {{PYTHON}} scripts/agent_upload_guard.py check ios "$IPA" --provenance "${IPA%.ipa}.provenance.txt"
     "${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin/nsh" publish ios "$IPA" --app-id 6767850225 \
         --issuer-id "$APP_STORE_ISSUER_ID" --key-id "$APP_STORE_KEY_ID" --private-key "$APP_STORE_P8_PATH"
 
@@ -971,6 +1036,16 @@ nsh-build *args="":
     export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
     cd nsh
     exec nsh build {{args}}
+
+# NSH release proof: the lock-pages debug route's Rust entry is absent from the release host artifact cargo itself reports.
+# Too expensive for the PR quick lane: it is a release build, not a type check.
+[unix]
+nsh-release-no-lockdebug:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="${NSH_TOOLS:-$HOME/BuwizNsh/tools}/bin:$PATH" CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/BuwizNsh/target-nsh}"
+    PINNED_CARGO="$(scripts/pinned-cargo-path.sh)"; [ -z "$PINNED_CARGO" ] || export PATH="$PINNED_CARGO:$PATH"
+    bash nsh/scripts/test-release-no-lockdebug.sh
 
 # Windows: the same command in PowerShell.
 [windows]
@@ -1162,8 +1237,14 @@ _nsh-db-guard db:
 _nsh-db-guard $db:
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
+    function Trace-Step($step) {
+        if ($env:NSH_RUN_AGENT_TRACE) {
+            Add-Content -LiteralPath $env:NSH_RUN_AGENT_TRACE -Value ("{0:0.000}`trecipe`t{1}`t{2}" -f ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000), $step, $PID) -ErrorAction SilentlyContinue
+        }
+    }
+    Trace-Step 'guard-start'
     $db = $env:db
-    if (-not $db) { exit 0 }
+    if (-not $db) { Trace-Step 'guard-empty-exit'; exit 0 }
     $script = @'
     import ctypes
     import os
@@ -1237,7 +1318,9 @@ _nsh-db-guard $db:
                     if identity(os.path.join(folder, name)) == (info.st_dev, info.st_ino):
                         refuse("it is a hard link to a file in " + folder)
     '@
+    Trace-Step 'guard-python-start'
     $script | & "{{PYTHON}}" -I - $db "dev.goldcoders.bir"
+    Trace-Step "guard-python-done-$LASTEXITCODE"
     exit $LASTEXITCODE
 
 # The database comes from the caller: just nsh-run ~/BuwizNsh/agents/<track>.db, or BIR_DATABASE_PATH in the environment.
@@ -1357,6 +1440,12 @@ nsh-run-agent target db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_
 nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_nsh-db-guard db)
     #!pwsh -NoProfile
     $ErrorActionPreference = 'Stop'
+    function Trace-Step($step) {
+        if ($env:NSH_RUN_AGENT_TRACE) {
+            Add-Content -LiteralPath $env:NSH_RUN_AGENT_TRACE -Value ("{0:0.000}`trecipe`t{1}`t{2}" -f ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000), $step, $PID) -ErrorAction SilentlyContinue
+        }
+    }
+    Trace-Step 'main-start'
     $tools = if ($env:NSH_TOOLS) { $env:NSH_TOOLS } else { "$HOME\BuwizNsh\tools" }
     $env:PATH = "$tools\bin;$env:PATH"
     if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = "$HOME\BuwizNsh\target-nsh" }
@@ -1365,7 +1454,11 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     $git = Get-Command git -ErrorAction SilentlyContinue
     $app = if ($git) { (git rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
     $kit = if ($git) { (git -C ..\nsh rev-parse --short=8 HEAD) 2>$null } else { 'unknown (git not found)' }
-    $tool = (nsh --version) 2>$null; $cargoVersion = (cargo --version) 2>$null
+    Trace-Step 'before-version-probes'
+    $tool = (nsh --version) 2>$null
+    Trace-Step 'after-nsh-version'
+    $cargoVersion = (cargo --version) 2>$null
+    Trace-Step 'after-cargo-version'
     [Console]::Error.WriteLine("build: app $app, nsh $kit beside it, tool $tool, $cargoVersion, folder $env:CARGO_TARGET_DIR")
     if (-not $env:GPUI_AGENT_TOKEN) { "nsh-run-agent: set GPUI_AGENT_TOKEN first"; exit 1 }
     $root = (Get-Location).ProviderPath
@@ -1383,6 +1476,36 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
     if (-not $env:GPUI_AGENT_ADDR) { $env:GPUI_AGENT_ADDR = '127.0.0.1:17421' }
     $writer = $null
     $plugger = $null
+    function Stop-AgentJob($job, $name) {
+        # Stop-Job returns before the job's runspace has finished closing; receiving it in that state can either
+        # throw or wait while the still-open runspace keeps this shell (and therefore the job's liveness check) alive.
+        Stop-Job $job -ErrorAction SilentlyContinue
+        $stopped = Wait-Job $job -Timeout 10 -ErrorAction SilentlyContinue
+        if ($env:NSH_RUN_AGENT_TEST_JOB_NO_STOP) { $stopped = $null }
+        if ($stopped) {
+            $jobErrors = @()
+            Receive-Job $job -ErrorVariable jobErrors -ErrorAction SilentlyContinue | ForEach-Object {
+                [Console]::Error.WriteLine(([string]$_) -replace [regex]::Escape($env:GPUI_AGENT_TOKEN), '<GPUI_AGENT_TOKEN>')
+            }
+            foreach ($jobError in $jobErrors) {
+                $message = ([string]$jobError) -replace [regex]::Escape($env:GPUI_AGENT_TOKEN), '<GPUI_AGENT_TOKEN>'
+                if ($jobError.Exception -isnot [System.Management.Automation.PipelineStoppedException] -and
+                        $message -notmatch 'The remote pipeline has been stopped') {
+                    [Console]::Error.WriteLine($message)
+                }
+            }
+        }
+        $removeErrors = @()
+        Remove-Job $job -Force -ErrorVariable removeErrors -ErrorAction SilentlyContinue
+        if (-not $stopped) {
+            if ($removeErrors.Count -eq 0) {
+                [Console]::Error.WriteLine("nsh-run-agent: the $name job did not stop within 10 seconds and was removed")
+            } else {
+                $message = ([string]$removeErrors[0]) -replace [regex]::Escape($env:GPUI_AGENT_TOKEN), '<GPUI_AGENT_TOKEN>'
+                [Console]::Error.WriteLine("nsh-run-agent: the $name job did not stop within 10 seconds and could not be removed: $message")
+            }
+        }
+    }
     # The parameter arrives as an environment variable (PowerShell cannot read just's quoting of an apostrophe); a relative
     # path is the one the guard checked, from here, not from nsh/.
     $db = $env:db
@@ -1410,7 +1533,9 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         # nsh launches the first device `adb devices` lists as online and names it to every adb command (`-s`); it does not
         # read ANDROID_SERIAL. The token goes to that same device, by name: with two devices online an unnamed
         # `adb shell` is refused as ambiguous, and one named by ANDROID_SERIAL could be another than the one launched.
+        Trace-Step 'adb-devices-start'
         $listed = & $adb devices
+        Trace-Step "adb-devices-done-$LASTEXITCODE"
         if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("nsh-run-agent: ``$adb devices`` failed"); exit 1 }
         $serial = $listed | Select-Object -Skip 1 | ForEach-Object {
             $serialAndState = $_ -split "`t", 2
@@ -1426,8 +1551,10 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         # writes it to adb's standard input itself, so no file on this machine holds it.
         $agentHost = 'com.longbridge.nsh.host'
         $tokenDir = 'files/nsh/dev.goldcoders.bir'
+        Trace-Step 'writer-job-start'
         $writer = Start-Job -ScriptBlock {
             param($adb, $serial, $token, $pkg, $dir, $launcher, $launcherStarted)
+            if ($env:NSH_RUN_AGENT_TEST_WRITER_ERROR) { Write-Error 'injected adb failure in token writer'; return }
             for ($i = 0; $i -lt 1800; $i++) {
                 $alive = Get-Process -Id $launcher -ErrorAction SilentlyContinue
                 if (-not $alive -or $alive.StartTime.Ticks -ne $launcherStarted) { return }
@@ -1450,6 +1577,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
             }
             "nsh-run-agent: the data plane's token was not stored (is the host installed?)"
         } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN, $agentHost, $tokenDir, $PID, (Get-Process -Id $PID).StartTime.Ticks
+        Trace-Step 'writer-job-created'
         # The window plane reads its switch and address from the launch intent's extras, which only a hook in
         # `nsh run` could add — there is none for a plain run. This job stores files/gpui-agent-token, forwards
         # both plane ports, then relaunches the activity on the same dev-server url once `nsh run`'s own launch
@@ -1460,6 +1588,7 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         $devport = if (' {{args}} ' -match ' --port[= ](\d+) ') { [int]$Matches[1] }
             elseif ($env:NSH_DEV_PORT) { [int]$env:NSH_DEV_PORT }
             else { 8347 }
+        Trace-Step 'plugger-job-start'
         $plugger = Start-Job -ScriptBlock {
             param($adb, $serial, $token, $pkg, $dir, $port, $devport, $launcher, $launcherStarted)
             $seenPid = $null
@@ -1510,8 +1639,10 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
                 Start-Sleep -Milliseconds 500
             }
         } -ArgumentList $adb, $serial, $env:GPUI_AGENT_TOKEN, $agentHost, $tokenDir, $port, $devport, $PID, (Get-Process -Id $PID).StartTime.Ticks
+        Trace-Step 'plugger-job-created'
         "nsh-run-agent: window plane on 127.0.0.1:$port, data plane on 127.0.0.1:$($port + 1) on $serial; run: adb -s $serial forward tcp:$port tcp:$port && adb -s $serial forward tcp:$($port + 1) tcp:$($port + 1)"
     }
+    Trace-Step 'before-nsh-run'
     $env:CARGO = "$root\nsh\agent\cargo-with-agent.cmd"
     Set-Location nsh
     $code = 1
@@ -1519,21 +1650,26 @@ nsh-run-agent target $db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (
         if ('{{target}}' -eq 'android' -and ' {{args}} ' -notmatch ' --port[= ]') { nsh run --target {{target}} --port $devport {{args}} }
         else { nsh run --target {{target}} {{args}} }
         $code = $LASTEXITCODE
+        Trace-Step "after-nsh-run-$code"
     } finally {
+        Trace-Step 'finally-start'
         if ($writer) {
             # The launch is over, however it ended (a failed build, a failed install, Ctrl+C): the writers must not go
             # on polling the device, and a token the app never read must not stay in the host's files.
-            Stop-Job $writer
-            Receive-Job $writer | ForEach-Object { [Console]::Error.WriteLine($_) }
-            Remove-Job $writer -Force
+            Trace-Step 'writer-cleanup-start'
+            Stop-AgentJob $writer 'token writer'
+            Trace-Step 'writer-cleanup-done'
             if ($plugger) {
-                Stop-Job $plugger
-                Receive-Job $plugger | ForEach-Object { [Console]::Error.WriteLine($_) }
-                Remove-Job $plugger -Force
+                Trace-Step 'plugger-cleanup-start'
+                Stop-AgentJob $plugger 'window-plane plugger'
+                Trace-Step 'plugger-cleanup-done'
             }
+            Trace-Step 'adb-cleanup-start'
             & $adb -s $serial shell "run-as $agentHost rm -f $tokenDir/agent-token $tokenDir/agent-token.new files/gpui-agent-token files/gpui-agent-token.new" 2>$null | Out-Null
+            Trace-Step 'adb-cleanup-done'
         }
     }
+    Trace-Step 'before-exit'
     exit $code
 
 # Starts the app with nsh-run-agent on a new scratch database (a debug build, dry run), waits for gpui-agent, runs a
