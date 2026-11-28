@@ -266,11 +266,25 @@ test("desktop: the send line keeps the drop reason until the next press", async 
   await app.waitUntil(() => app.shows("id:fp-queue-drop"), { timeout: 15000 });
   expect(app.texts().some((t) => t.includes("Not queued: the return changed. Press Queue again."))).toBe(true);
   // The next press clears the line (and reads the account again, the note gone whether it ends queued or blocked):
-  // press past the page's own confirm until it goes.
+  // press past the page's own confirm until it goes, each press after a seen transition, never a fixed sleep.
   for (let i = 0; i < 8 && app.shows("id:fp-queue-drop"); i++) {
-    if (app.shows("id:queue-continue")) await app.press("id:queue-continue");
-    else await app.press("id:fp-queue");
-    await new Promise((r) => setTimeout(r, 300));
+    const confirm = app.shows("id:queue-continue");
+    await app.press(confirm ? "id:queue-continue" : "id:fp-queue");
+    await app.waitUntil(() => !app.shows("id:fp-queue-drop") || app.shows("id:queue-continue") !== confirm || tinsCalls(app).filter((c) => c === "account_tins(0)").length > 1, { timeout: 8000 }).catch(() => undefined);
   }
+  expect(app.shows("id:fp-queue-drop")).toBe(false);
+}, 40_000);
+
+test("desktop: a press that stops before the account read still clears the old drop reason", async () => {
+  // PRRT_kwDOTl0gjM69BCMd: the note names the LAST stop. A press stopped by the page's own validation confirm —
+  // before any account read — must not leave "Press Queue again" showing for a stop that was not the edit one.
+  const app = await pageAndQueue("activated", { tinsDelayMs: 2500, typeOnTinsRead: { "frm2551Qv2018:txt15": "100" } });
+  await pressToRead(app);
+  await app.waitUntil(() => app.shows("id:fp-queue-drop"), { timeout: 15000 });
+  const readsBefore = tinsCalls(app).filter((c) => c === "account_tins(0)").length;
+  // One press, no Continue answered: it stops on the page's own validation confirm, before the account is read again.
+  await app.press("id:fp-queue");
+  await app.waitUntil(() => app.shows("id:queue-continue"), { timeout: 8000 });
+  expect(tinsCalls(app).filter((c) => c === "account_tins(0)").length).toBe(readsBefore);
   expect(app.shows("id:fp-queue-drop")).toBe(false);
 }, 40_000);

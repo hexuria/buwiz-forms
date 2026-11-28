@@ -1662,16 +1662,18 @@ export class FormSession {
     this.unquiet(Object.keys(edits));
     this.cancelAutosave();
     this.markUnsaved();
-    const seq = s.editSeq;
     const token = this.token;
     if (this.flushTimer) clearTimeout(this.flushTimer);
     this.flushTimer = this.later(VALIDATE_DELAY, () => {
       this.flushTimer = null;
-      if (token !== this.token || seq !== this.st.editSeq) return;
+      // No editSeq guard: a mutation that is not itself a stage (a range order lifting, a row delete) moves the generation
+      // without arming a timer, and the flush drains whatever is pending when it fires, so a newer edit never loses anything —
+      // but a dropped guard loses the save. The token still bars a page that was switched or closed.
+      if (token !== this.token) return;
       this.flush();
     });
     this.later(LIVE_PREVIEW_DELAY, () => {
-      if (token !== this.token || seq !== this.st.editSeq) return;
+      if (token !== this.token) return;
       this.livePreview();
     });
   }
@@ -3907,6 +3909,12 @@ export class FormSession {
    */
   queue(accepted: string[] | null = null) {
     const s = this.st;
+    // The drop note names the LAST stop: every press clears it, wherever this one ends — a press stopped by the page's own
+    // validation before the account read must not keep "Press Queue again" showing for a stop that was not the edit one.
+    if (s.queueDropNote) {
+      s.queueDropNote = null;
+      this.publish();
+    }
     // `accepted`: the warnings the filer just accepted with Continue, when Queue runs again after a settle (B8-2): the same warnings
     // again are not asked a second time.
     // Queue cannot be taken back: an amount box that still has the keys is left first, so the amount it puts back and the note it
