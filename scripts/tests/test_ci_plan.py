@@ -894,7 +894,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("gh release", linux)
 
     def test_nsh_check_reads_the_pin_from_nsh_yml(self):
-        self.assertEqual(CI.count("8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf"), 0)
+        self.assertEqual(CI.count("cd50664185852c9bc21b3860e0b0e66efbf285a1"), 0)
         self.assertIn("NSH_PINNED_REF", job(CI, "nsh-check"))
         self.assertIn("run: just nsh-check -v", job(CI, "nsh-check"))
 
