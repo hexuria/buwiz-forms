@@ -2443,15 +2443,20 @@ async fn process_submission_queue(
         BEFORE_SUBMISSION_JOB_REGISTER.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
         let active_jobs = get_active_jobs();
         {
-            // A6: registration itself is under the room lock. The import holds the same lock
-            // across its active-jobs re-check and the placeholder swap, so a send cannot slip
-            // its key in between the re-check and the swap and meet the old Arc.
+            // A6: registration itself is under the room lock, after a fresh pause check. The
+            // import holds the same lock across its active-jobs re-check and the placeholder swap,
+            // so neither a new send nor one that waited here can register on the retired Arc.
             let Ok(_room) = lock_timing::lock(&db) else {
                 warn!(
                     "Cron: the room lock is poisoned; this return stays queued for the next tick"
                 );
                 continue;
             };
+            // A tick that waited here while an import held the lock must not register on the
+            // retired placeholder after the release: re-read the pause under the same lock.
+            if submission_paused() {
+                continue;
+            }
             let mut jobs = active_jobs
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -3521,6 +3526,135 @@ mod tests {
         .await;
     }
 
+    /// LB5: the real `OfferStart::Locked` case. The reappeared PIN-locked file still has A's
+    /// Queued return, but it is never opened in place or imported; the one send is the copy already
+    /// in A's room. TokenFetchingTransport is the positive control that the room send really fires.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_locked_reappeared_file_never_sends_a_second_copy_of_as_return() {
+        let _turn = crate::db::room_path_test_turn();
+        let _epoch_turn = crate::session_epoch::test_turn();
+        let dir = tempfile::tempdir().unwrap();
+        let account_path = dir.path().join("buwiz-cloud-account.json");
+        temp_env::async_with_vars(
+            [(
+                crate::cloud_account::ENV_ACCOUNT_FILE,
+                Some(account_path.to_str().unwrap().to_owned()),
+            )],
+            async {
+                let layout = crate::rooms::Layout::at(dir.path().join("device"));
+                std::fs::create_dir_all(layout.device_dir()).unwrap();
+                drop(crate::rooms::DeviceStore::open(&layout).unwrap());
+                let legacy_db = Database::open(layout.legacy_database()).unwrap();
+                let legacy_profile = reviewed_profile();
+                legacy_db.save_profile(legacy_profile.clone()).unwrap();
+                legacy_db
+                    .set_setting("access_mode", "helpdesk")
+                    .unwrap();
+                legacy_db
+                    .set_setting("app_lock_pin_hash", &crate::crypto::hash_pin("1357"))
+                    .unwrap();
+                legacy_db.close().unwrap();
+                let tin = legacy_profile.tin.full();
+                let direct = rusqlite::Connection::open(layout.legacy_database()).unwrap();
+                direct
+                    .execute(
+                        "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+                         VALUES (?1, '2551Q', 2024, 1, 'Queued', '{}')",
+                        [tin.as_str()],
+                    )
+                    .unwrap();
+                drop(direct);
+
+                let origin = crate::rooms::room_origin("http://localhost:3008").unwrap();
+                let room_id = crate::rooms::room_id_for(&origin, "user-a");
+                let record = crate::legacy_claim::Record {
+                    room: Some(room_id.as_str().to_owned()),
+                    origin: Some(origin.clone()),
+                    user_id: Some("user-a".into()),
+                    email: Some("user-a@example.test".into()),
+                    step: crate::legacy_claim::Step::Done,
+                    done_at: Some("2026-11-28T00:00:00Z".into()),
+                    ..crate::legacy_claim::Record::default()
+                };
+                let store_conn = rusqlite::Connection::open(layout.device_db()).unwrap();
+                store_conn
+                    .execute(
+                        "INSERT INTO migration (key, value) VALUES ('legacy', ?1)",
+                        [serde_json::to_string(&record).unwrap()],
+                    )
+                    .unwrap();
+                drop(store_conn);
+
+                let before = std::fs::read(layout.legacy_database()).unwrap();
+                let claim = crate::legacy_claim::LegacyClaim::at(layout.clone()).unwrap();
+                let claimant = crate::legacy_claim::Claimant {
+                    server_url: "http://localhost:3008".into(),
+                    user_id: "user-a".into(),
+                    email: Some("user-a@example.test".into()),
+                    practice: false,
+                };
+                assert!(
+                    matches!(
+                        claim.start(&claimant),
+                        crate::legacy_claim::Start::Offer(
+                            crate::legacy_claim::OfferStart::Locked(_)
+                        )
+                    ),
+                    "the Done record plus PIN-locked file is not OfferStart::Locked"
+                );
+                assert_eq!(
+                    std::fs::read(layout.legacy_database()).unwrap(),
+                    before,
+                    "the locked file was opened or migrated in place"
+                );
+
+                let _transport = use_token_transport();
+                let stored_a = cron_stored_for("user-a");
+                crate::account_session::save_stored(&stored_a).unwrap();
+                let owner_a = crate::account_session::OwnerKey::of(&stored_a).unwrap();
+                crate::account_session::cache_owner(Some(owner_a.clone()));
+                let epoch_a = crate::session_epoch::current() + 1;
+                crate::session_epoch::set(epoch_a);
+                let room = test_db();
+                let (queued, _summary) = stored_queued_2551q(&room);
+                let profile = reviewed_profile();
+                process_submission_queue(
+                    &profile,
+                    room.clone(),
+                    FIXED_ROOM_KEY,
+                    Some(owner_a),
+                    epoch_a,
+                )
+                .await;
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                loop {
+                    let stored = room
+                        .lock()
+                        .unwrap()
+                        .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                        .unwrap()
+                        .unwrap();
+                    if stored.status == FilingStatus::Submitted {
+                        break;
+                    }
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "the room copy was not sent: {:?}",
+                        stored.status
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                }
+                wait_for_no_active_jobs().await;
+                assert_eq!(
+                    token_transport_counts(),
+                    (1, 1),
+                    "the room copy did not send exactly once"
+                );
+            },
+        )
+        .await;
+    }
+
     /// AL1 through the cron's production spawn wiring: the owner and epoch are fixed with the
     /// room Arc at the tick's source snapshot. A sign-in landing after that snapshot but before
     /// the spawn opens no transport, fetches no token and leaves A's return Queued.
@@ -3708,6 +3842,7 @@ mod tests {
     /// go, registration proceeds (the positive control).
     #[tokio::test(flavor = "current_thread")]
     async fn submission_job_registration_waits_for_the_room_lock() {
+        let _turn = crate::db::room_path_test_turn();
         let db = test_db();
         let (queued, _summary) = stored_queued_2551q(&db);
         let profile = reviewed_profile();
@@ -3722,6 +3857,7 @@ mod tests {
             ),
         );
         let (at_insertion, insertion_seen) = std::sync::mpsc::channel();
+        let (after_insertion, inserted_seen) = std::sync::mpsc::channel();
         let (lock_held, wait_until_held) = std::sync::mpsc::channel();
         let (registered, mut registration_seen) = tokio::sync::mpsc::unbounded_channel();
         let worker_profile = profile.clone();
@@ -3734,6 +3870,11 @@ mod tests {
                     wait_until_held
                         .recv_timeout(std::time::Duration::from_secs(2))
                         .expect("the test never held the room lock");
+                }));
+            });
+            AFTER_SUBMISSION_JOB_REGISTER.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    let _ = after_insertion.send(());
                 }));
             });
             AFTER_SUBMISSION_JOB_REGISTER.with(|hook| {
@@ -3773,6 +3914,76 @@ mod tests {
             .expect("registration did not proceed once the room lock was free");
         worker.join().unwrap();
         get_active_jobs().lock().unwrap().remove(&job);
+    }
+
+    /// P-F6: the exact blocked-tick interleaving. The tick reached registration while the pause
+    /// was clear, waited for the room lock through the import's span, and must register nothing
+    /// when the lock is released because the pause is now set. The lock-wait test above is the
+    /// positive control that the same path registers when the pause stays clear.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_tick_blocked_through_an_import_registers_nothing_on_the_retired_room() {
+        let _turn = crate::db::room_path_test_turn();
+        crate::background_cron::set_submission_paused(false);
+        let db = test_db();
+        let (queued, _summary) = stored_queued_2551q(&db);
+        let profile = reviewed_profile();
+        let job = room_job_key(
+            FIXED_ROOM_KEY,
+            &submission_job_key(
+                "2551Q",
+                &profile.tin.full(),
+                queued.taxable_year,
+                None,
+                Some(queued.quarter),
+            ),
+        );
+        let (at_insertion, insertion_seen) = std::sync::mpsc::channel();
+        let (after_insertion, inserted_seen) = std::sync::mpsc::channel();
+        let (lock_held, wait_until_held) = std::sync::mpsc::channel();
+        let worker_profile = profile.clone();
+        let worker_db = db.clone();
+        let epoch = crate::session_epoch::current();
+        let worker = std::thread::spawn(move || {
+            BEFORE_SUBMISSION_JOB_REGISTER.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    let _ = at_insertion.send(());
+                    wait_until_held
+                        .recv_timeout(std::time::Duration::from_secs(2))
+                        .expect("the test never held the room lock");
+                }));
+            });
+            AFTER_SUBMISSION_JOB_REGISTER.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    let _ = after_insertion.send(());
+                }));
+            });
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(process_submission_queue(
+                &worker_profile,
+                worker_db,
+                FIXED_ROOM_KEY,
+                None,
+                epoch,
+            ));
+        });
+        insertion_seen
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("the send never reached registration");
+        let guard = db.lock().unwrap();
+        crate::background_cron::set_submission_paused(true);
+        lock_held.send(()).unwrap();
+        drop(guard);
+        worker.join().unwrap();
+        assert!(
+            inserted_seen
+                .recv_timeout(std::time::Duration::from_millis(100))
+                .is_err(),
+            "the blocked tick registered on the retired room after the pause"
+        );
+        crate::background_cron::set_submission_paused(false);
     }
 
     /// F6, the behavioral half: a key held for one room never blocks the same inner key's job in

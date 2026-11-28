@@ -1175,15 +1175,9 @@ fn open_spec(
             path,
             room_id,
             copy_saved,
-        }) => {
-            let layout = Layout::here();
-            if let Err(error) = layout.create_room_dir(room_id) {
-                return Err((*copy_saved, error.to_string()));
-            }
-            crate::open_room::open_path(path, Some(room_id))
-                .map(|handle| Some((handle, path.clone())))
-                .map_err(|error| (*copy_saved, error))
-        }
+        }) => crate::open_room::open_path(path, Some(room_id))
+            .map(|handle| Some((handle, path.clone())))
+            .map_err(|error| (*copy_saved, error)),
         Some(OpenSpec::LegacyInPlace { path }) => crate::open_room::open_path(path, None)
             .map(|handle| Some((handle, path.clone())))
             .map_err(|error| (false, error)),
@@ -1361,14 +1355,10 @@ fn legacy_in_place(layout: &Layout) -> (Target, Option<OpenSpec>) {
 /// A locked legacy file that cannot be claimed in this version, said without any account's data.
 const LOCKED_LEGACY_LATER: &str = "A locked older database is still on this device. Moving locked files comes in a later version.";
 
-/// Whether any room folder exists under `layout`. A read error answers true: failing closed never
-/// opens the legacy file beside rooms that may be there.
-fn any_room_dirs(layout: &Layout) -> bool {
-    match std::fs::read_dir(layout.rooms_dir()) {
-        Ok(mut entries) => entries.next().is_some(),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
-        Err(_) => true,
-    }
+/// Whether a real account's room exists, by the one rooms-layout rule: store rows or the claim
+/// record when the store can be read, never mere directory entries.
+fn account_rooms_present(layout: &Layout) -> bool {
+    layout.has_rooms()
 }
 
 /// L3/B1(a): the device store's own unusable cases (lost, unreadable, newer) are the store-error
@@ -1376,7 +1366,20 @@ fn any_room_dirs(layout: &Layout) -> bool {
 /// legacy file in place, and neither marks the claim impossible: the room-open evidence rule
 /// survives for the process.
 fn claim_open_error_target(error: &bir_core::rooms::DeviceStoreError) -> Target {
-    let detail = error.to_string();
+    // The log receives the full error, path included; the page never does — the path contains the
+    // OS user's folder. SQLite and I/O errors carry no path of their own.
+    let detail = match error {
+        bir_core::rooms::DeviceStoreError::Lost(_) => "the device store is missing".to_owned(),
+        bir_core::rooms::DeviceStoreError::Unreadable { .. } => {
+            "the device store cannot be read".to_owned()
+        }
+        bir_core::rooms::DeviceStoreError::Newer { .. } => {
+            "the device store was written by a newer version".to_owned()
+        }
+        bir_core::rooms::DeviceStoreError::Sqlite(_) | bir_core::rooms::DeviceStoreError::Io(_) => {
+            error.to_string()
+        }
+    };
     if error.is_unusable() {
         Target::Blocked(Blocked::DeviceStore { detail })
     } else {
@@ -1390,7 +1393,7 @@ fn claim_open_error_target(error: &bir_core::rooms::DeviceStoreError) -> Target 
 /// B1(b): legacy mode in place is only for a locked install with no rooms. Once any room exists,
 /// the signed-in account's own room opens and the locked file is only a note for later.
 fn locked_legacy_target(layout: &Layout, owner: &Owner) -> (Target, Option<OpenSpec>) {
-    if any_room_dirs(layout) {
+    if account_rooms_present(layout) {
         lookup_target(
             layout,
             owner,
@@ -1434,16 +1437,33 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
         );
     }
     let who = claimant_of(&stored);
-    let claim = match LegacyClaim::here() {
+    let mut opened = LegacyClaim::here();
+    if let Err(error) = &opened
+        && error.is_unusable()
+        && layout.legacy_database().is_file()
+        && !account_rooms_present(&layout)
+    {
+        match bir_core::rooms::set_aside_unusable(&layout) {
+            Ok(Some(aside)) => {
+                tracing::warn!(aside = %aside.display(), "unusable device store set aside");
+                opened = LegacyClaim::here();
+                if opened.is_err() {
+                    tracing::warn!("legacy claim still not opened after the store was set aside");
+                    return legacy_in_place(&layout);
+                }
+            }
+            Ok(None) => {}
+            Err(set_aside) => {
+                tracing::warn!("unusable device store not set aside: {set_aside}");
+                return legacy_in_place(&layout);
+            }
+        }
+    }
+    let claim = match opened {
         Ok(claim) => claim,
         Err(error) => {
-            // L3/B1(a): a store error is never evidence that the legacy file may open in place,
-            // and a transient one never switches the move-evidence rule off for the process.
             tracing::warn!("legacy claim not opened ({error})");
-            if layout.legacy_database().is_file() {
-                return (claim_open_error_target(&error), None);
-            }
-            return lookup_target(&layout, owner, LookupNote::None);
+            return (claim_open_error_target(&error), None);
         }
     };
     // F8: the registry is checked before start(); the refusal applies only when the probe says
@@ -1544,7 +1564,7 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
                     bir_core::legacy_claim::Step::Done | bir_core::legacy_claim::Step::Closed
                 ) && !finished_record_is_owner(&layout, owner, Some(record), None)
             });
-            if foreign_unfinished {
+            if foreign_unfinished && transient.record_room {
                 tracing::warn!(
                     "finishing another account's move failed transiently; opening the sign-in's own room"
                 );
@@ -2852,14 +2872,43 @@ mod tests {
         room_a
     }
 
-    /// A legacy install locked by its old help-desk PIN, written with the app's own schema.
+    fn add_legacy_taxpayer(db: &Database, root: &str, name: &str) {
+        db.create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+            tin_root: root.into(),
+            name: name.into(),
+            taxpayer_type: bir_core::profile::TaxpayerType::Corporation,
+            birth_date: None,
+            head_office: bir_core::tax_profile::BranchFacts {
+                rdo_code: "040".into(),
+                registered_address: "1 Example Street, Pasig".into(),
+                zip_code: "1600".into(),
+                phone: "0280000000".into(),
+                email: "office@example.com".into(),
+            },
+        })
+        .unwrap();
+    }
+
+    /// A legacy install locked by its old help-desk PIN, written with the app's own schema and
+    /// carrying one taxpayer with one Queued return.
     fn locked_legacy_file(scratch: &Scratch) {
         std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
         let db = Database::open(scratch.layout.legacy_database()).unwrap();
+        add_legacy_taxpayer(&db, "123456788", "Owner Trading");
         db.set_setting("access_mode", "helpdesk").unwrap();
         db.set_setting("app_lock_pin_hash", &bir_core::crypto::hash_pin("1357"))
             .unwrap();
         db.close().unwrap();
+        let conn = rusqlite::Connection::open(scratch.layout.legacy_database()).unwrap();
+        conn.execute(
+            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+             VALUES ('12345678800000', '2551Q', 2026, 1, 'Queued', ?1)",
+            [
+                serde_json::to_string(&serde_json::json!({ "note": "queued in the legacy file" }))
+                    .unwrap(),
+            ],
+        )
+        .unwrap();
     }
 
     fn create_device_store(scratch: &Scratch) {
@@ -3125,6 +3174,167 @@ mod tests {
         begin_open(owner, 1, OpenWhy::SignIn);
         join_claim_threads();
         assert_eq!(snapshot().phase_kind, PhaseKind::Legacy);
+    }
+
+    /// LB1: a practice account's lookup-created empty room is not a real account's room. The next
+    /// real sign-in on the same locked install still opens the legacy file, Queued return and all.
+    #[test]
+    fn lb1_a_practice_lookup_room_does_not_hide_the_locked_legacy_file() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        let practice = seed_stored("practice-user", true);
+        permit_claim_threads();
+        begin_open(practice, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Open);
+        assert!(
+            scratch.layout.rooms_dir().is_dir(),
+            "positive control: the practice lookup made a room directory"
+        );
+        sign_out();
+        join_claim_threads();
+
+        let owner = seed_stored("user-a", false);
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Legacy,
+            "the practice room hid the locked legacy install"
+        );
+        let (handle, _, _, path) = snapshot().room.expect("legacy mode's handle");
+        assert_eq!(path, scratch.layout.legacy_database());
+        assert_eq!(
+            handle.lock().unwrap().count_queued_drafts().unwrap(),
+            1,
+            "the legacy file's Queued return is the file that opened"
+        );
+    }
+
+    /// LB1's noise half: a stray entry inside rooms/ is not a room either.
+    #[test]
+    fn lb1_a_stray_entry_in_rooms_does_not_hide_the_locked_legacy_file() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        create_device_store(&scratch);
+        locked_legacy_file(&scratch);
+        std::fs::create_dir_all(scratch.layout.rooms_dir()).unwrap();
+        std::fs::write(scratch.layout.rooms_dir().join(".DS_Store"), b"noise").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Legacy,
+            "a stray rooms/ entry hid the locked legacy install"
+        );
+    }
+
+    /// LB2: with no legacy file, the same store error is classified at once; no room directory is
+    /// made before the claim has started, so the unusable-store set-aside remains possible later.
+    #[test]
+    fn lb2_a_store_error_without_legacy_is_device_store_and_creates_no_room_dir() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        assert!(
+            matches!(migration_state(), Some(MigrationState::DeviceStore { .. })),
+            "not a device-store block: {:?}",
+            migration_state()
+        );
+        assert!(
+            !scratch.layout.rooms_dir().exists(),
+            "the refused open created rooms/ before the claim started"
+        );
+    }
+
+    /// LB3: on a pre-rooms install with no rooms, an unreadable device.db is set aside, the claim
+    /// store is retried, and the locked legacy file still opens in place.
+    #[test]
+    fn lb3_an_unusable_store_with_no_rooms_is_set_aside_and_legacy_opens() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        locked_legacy_file(&scratch);
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Legacy,
+            "the unusable pre-rooms store became a permanent Try again"
+        );
+        assert!(
+            std::fs::read_dir(scratch.layout.device_dir())
+                .unwrap()
+                .flatten()
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("device.db.unusable-")),
+            "the unreadable store was not set aside"
+        );
+        assert!(
+            bir_core::rooms::DeviceStore::open(&scratch.layout).is_ok(),
+            "the retry did not leave a usable fresh store"
+        );
+    }
+
+    /// LB4: the device-store page's detail carries no OS-user path.
+    #[test]
+    fn lb4_the_device_store_detail_never_shows_the_store_path() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        std::fs::write(scratch.layout.device_db(), b"not sqlite").unwrap();
+        let owner = seed_stored("user-a", false);
+        permit_claim_threads();
+        begin_open(owner, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        let Some(MigrationState::DeviceStore { detail }) = migration_state() else {
+            panic!("not a device-store block: {:?}", migration_state())
+        };
+        assert!(!detail.contains(scratch.layout.device_db().to_string_lossy().as_ref()));
+        assert!(!detail.contains(scratch.layout.device_dir().to_string_lossy().as_ref()));
+        assert!(detail.contains("device store"), "{detail}");
+    }
+
+    /// P-F1: a foreign unfinished record makes only the record-room finish definitive. B's own
+    /// pre-move transient error still blocks B with Try again; it never opens an empty room.
+    #[test]
+    fn pf1_bs_own_pre_move_transient_error_still_blocks_with_try_again() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        write_moved_claim_image(&scratch, &owner_a, bir_core::legacy_claim::Step::Moved);
+        let legacy = Database::open(scratch.layout.legacy_database()).unwrap();
+        legacy.set_setting("different", "content").unwrap();
+        legacy.close().unwrap();
+        bir_core::legacy_claim::fail_next_legacy_lock_for_test();
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Blocked,
+            "B's own pre-move transient opened a room"
+        );
+        assert!(
+            matches!(migration_state(), Some(MigrationState::Transient { .. })),
+            "not the Try again page: {:?}",
+            migration_state()
+        );
     }
 
     /// The every-build invariant at the open path: even if a decision-layer regression forces A's

@@ -87,6 +87,11 @@ pub(crate) fn open_path(
             return Err("that room belongs to another account; try again".to_string());
         }
     }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
     static OPEN_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _opening = lock(&OPEN_SERIAL);
     let reuse = {

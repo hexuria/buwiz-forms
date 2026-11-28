@@ -105,6 +105,7 @@ fn transient(cause: TransientCause, copy_saved: bool, detail: impl Into<String>)
     Transient {
         cause,
         copy_saved,
+        record_room: false,
         detail: detail.into(),
     }
 }

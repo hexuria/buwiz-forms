@@ -255,7 +255,30 @@ impl Layout {
 
     /// Whether a `rooms/` folder is on disk: then a missing `device.db` was lost, not never made (L2).
     pub fn has_rooms(&self) -> bool {
-        self.rooms_dir().is_dir()
+        match DeviceStore::open_existing(self) {
+            Ok(Some(store)) => {
+                match store.rooms() {
+                    Ok(rooms) if !rooms.is_empty() => return true,
+                    Err(_) => return true,
+                    _ => {}
+                }
+                // Before step 5 writes the room row the claim record is the evidence that a real
+                // account's room exists. A lookup-created empty room writes neither it nor a row,
+                // so a practice sign-in and noise inside `rooms/` count as no rooms.
+                match store.setting(crate::legacy_claim::RECORD_KEY) {
+                    Ok(Some(raw)) => serde_json::from_str::<serde_json::Value>(&raw)
+                        .ok()
+                        .and_then(|record| record.get("room")?.as_str().map(str::to_owned))
+                        .is_some(),
+                    Ok(None) => false,
+                    Err(_) => true,
+                }
+            }
+            // Directory entries are never room evidence: a practice lookup creates an empty room
+            // folder, and Finder noise creates others. An absent or unreadable store has no rows or
+            // claim record to count, so it is not proof of a non-practice room either.
+            Ok(None) | Err(_) => false,
+        }
     }
 
     /// Make the room's folder (and `rooms/`) inside the device folder, and answer it.

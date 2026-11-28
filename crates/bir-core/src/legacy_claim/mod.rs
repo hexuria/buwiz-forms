@@ -141,11 +141,6 @@ pub fn room_move_evidence_clear(
             room_id
         )
     };
-    // F11: a session whose claim store cannot open at all has no completable move to protect —
-    // the evidence rule is moot there, and enforcing it would refuse every sign-in permanently.
-    if claim_impossible_this_session(layout.device_dir()) {
-        return Ok(());
-    }
     let record = match LegacyClaim::at(layout.clone()) {
         Ok(claim) => match claim.record() {
             Ok(record) => record,
@@ -183,39 +178,6 @@ pub fn room_open_allowed(
         );
     }
     room_move_evidence_clear(layout, room_id)
-}
-
-/// Whether the claim's `start()` ran to a definitive answer for `device_dir` in this session (R1): the point
-/// is that the claim looked at the disk — and finished looking — before anything opened a room's database.
-/// F11: the claim store itself cannot open (device.db lost or written by a newer version). No
-/// claim can ever run in this process — nothing can resume and no move can start — so the
-/// started-rule's purpose is discharged for the session. The evidence half of the open rule
-/// still stands on its own. Chosen over a permanent refusal of every sign-in (the review's F11).
-pub fn note_claim_impossible(device_dir: &std::path::Path) {
-    let key = started_key(device_dir);
-    STARTED_THIS_SESSION
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .insert(key.clone());
-    IMPOSSIBLE_THIS_SESSION
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .insert(key);
-}
-
-/// The device folders whose claim store cannot open at all in this session (F11). There the
-/// evidence rule is moot: no move can resume, complete or be verified without the store, so
-/// protecting its evidence forever would only refuse the person their rooms permanently. What
-/// the rule protects — a move that can still finish — cannot exist there.
-static IMPOSSIBLE_THIS_SESSION: std::sync::Mutex<std::collections::BTreeSet<std::path::PathBuf>> =
-    std::sync::Mutex::new(std::collections::BTreeSet::new());
-
-fn claim_impossible_this_session(device_dir: &std::path::Path) -> bool {
-    let key = started_key(device_dir);
-    IMPOSSIBLE_THIS_SESSION
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .contains(&key)
 }
 
 pub fn claim_started_this_session(device_dir: &std::path::Path) -> bool {
@@ -476,6 +438,8 @@ pub struct Transient {
     pub cause: TransientCause,
     /// Step 3 passed its check in this claim: only then may a page say a copy is saved (M3, ruling 6).
     pub copy_saved: bool,
+    /// The error came from finishing the record's own room path, not from this claimant's pre-move probe.
+    pub record_room: bool,
     /// The log's detail, with no row data.
     pub detail: String,
 }
@@ -849,6 +813,7 @@ impl LegacyClaim {
                 Failure::Transient(Transient {
                     cause: TransientCause::Io,
                     copy_saved: false,
+                    record_room: false,
                     detail: format!("room lookup: {error}"),
                 })
             })?;
@@ -868,13 +833,14 @@ impl LegacyClaim {
     /// was cut after the move. Before the unlock no record names a room, and nothing is written beside the legacy file
     /// but its `.owner.lock` (made by any earlier version too, and by the holder here).
     pub fn start(&self, who: &Claimant) -> Start {
+        let record_before = self.record().ok().flatten();
         let inner = self.start_inner(who);
         // R1(a): the folder goes into the process-wide set only when start() has a definitive answer. Never on
         // a transient — in M1's own case (the record at Copied, the legacy file gone, the room read failing) an
         // open room would migrate its bytes, and the next start() would close the move unfinished. A permanent
         // failure is definitive: the claim is over, and the account opens its empty room.
-        let foreign_unfinished = self.record().ok().flatten().is_some_and(|record| {
-            !matches!(record.step, Step::Done | Step::Closed) && !record_is_claimant(&record, who)
+        let foreign_unfinished = record_before.as_ref().is_some_and(|record| {
+            !matches!(record.step, Step::Done | Step::Closed) && !record_is_claimant(record, who)
         });
         let definitive = match &inner {
             // The ruling's item 6: a finish that lands on a transient after the move (the record at
@@ -884,9 +850,10 @@ impl LegacyClaim {
             // now: nothing of theirs is unfinished, and the evidence rule still guards the claimer's
             // own room by name. The same holds when finishing that record failed transiently:
             // a non-claimant never loops on another account's move.
-            Ok(Start::Finished(Outcome::Transient(_))) | Err(Failure::Transient(_)) => {
-                foreign_unfinished
+            Ok(Start::Finished(Outcome::Transient(transient))) => {
+                foreign_unfinished && transient.record_room
             }
+            Err(Failure::Transient(transient)) => foreign_unfinished && transient.record_room,
             Ok(_) | Err(Failure::Permanent(_)) => true,
         };
         if definitive {
@@ -895,12 +862,14 @@ impl LegacyClaim {
         match inner {
             Ok(start) => start,
             Err(failure) => Start::Failed(match failure {
-                Failure::Transient(mut transient) if foreign_unfinished => {
-                    // N4: the non-claimant is told nothing about the other account's data. The
-                    // session normally opens its own room instead of showing even this; the
-                    // sanitising is the belt under that.
-                    transient.copy_saved = false;
-                    transient.detail = "the account could not be opened just now".to_owned();
+                Failure::Transient(mut transient) => {
+                    if foreign_unfinished {
+                        // N4: the non-claimant is told nothing about the other account's data. The
+                        // session normally opens its own room instead of showing even this; the
+                        // sanitising is the belt under that.
+                        transient.copy_saved = false;
+                        transient.detail = "the account could not be opened just now".to_owned();
+                    }
                     Failure::Transient(transient)
                 }
                 failure => failure,
@@ -914,6 +883,7 @@ impl LegacyClaim {
             Failure::Transient(Transient {
                 cause: TransientCause::ClaimInProgress,
                 copy_saved: false,
+                record_room: false,
                 detail: "another claim of this device folder is running in this process".into(),
             })
         })?;
@@ -939,31 +909,37 @@ impl LegacyClaim {
             && let Some(room) = record.claim_room()
         {
             let room_file = self.layout.room_database(&room.room_id);
-            if files::exists(&room_file).map_err(io_failure)? {
+            if files::exists(&room_file).map_err(|error| record_room_failure(io_failure(error)))? {
                 if legacy_present
                     && self
                         .same_file(&legacy, &room_file, record)
-                        .map_err(io_failure)?
+                        .map_err(|error| record_room_failure(io_failure(error)))?
                 {
                     // Linked, not yet unlinked: finish step 4's unlink, then steps 5–8. Under the legacy lock and with
                     // no -wal or -shm beside the file (C2): an older version or bir-headless may have opened it since
                     // the cut, and its log would be left behind, or read twice into one file.
                     let lock = hold_legacy_lock(&legacy)?;
-                    if files::sidecars_present(&legacy).map_err(io_failure)? {
+                    if files::sidecars_present(&legacy)
+                        .map_err(|error| record_room_failure(io_failure(error)))?
+                    {
                         return Err(Failure::Transient(Transient {
                             cause: TransientCause::WalReturned,
                             copy_saved: true,
+                            record_room: true,
                             detail: "a -wal or -shm is beside the legacy file in the link window"
                                 .into(),
                         }));
                     }
                     files::remove_and_sync(&legacy, self.layout.device_dir())
-                        .map_err(io_failure)?;
+                        .map_err(|error| record_room_failure(io_failure(error)))?;
                     drop(lock);
                     let mut record = record.clone();
                     record.step = record.step.max(Step::Moved);
-                    self.write_record(&record).map_err(store_failure)?;
-                    return Ok(Start::Finished(self.finish_after_move(&room, record)));
+                    self.write_record(&record)
+                        .map_err(|error| record_room_failure(store_failure(error)))?;
+                    return Ok(Start::Finished(record_room_outcome(
+                        self.finish_after_move(&room, record),
+                    )));
                 }
                 let moved_here = record.moved()
                     || (!legacy_present
@@ -975,11 +951,12 @@ impl LegacyClaim {
                                     %error,
                                     "legacy claim: the room file could not be read; transient, never a close"
                                 );
-                                return Err(io_failure(error));
+                                return Err(record_room_failure(io_failure(error)));
                             }
                         });
                 if moved_here {
-                    let outcome = self.finish_after_move(&room, record.clone());
+                    let outcome =
+                        record_room_outcome(self.finish_after_move(&room, record.clone()));
                     if !legacy_present || !matches!(outcome, Outcome::Done { .. }) {
                         return Ok(Start::Finished(outcome));
                     }
@@ -1493,6 +1470,7 @@ impl LegacyClaim {
         let transient = Transient {
             cause,
             copy_saved: true,
+            record_room: false,
             detail,
         };
         self.record_transient(&transient, record.step);
@@ -1899,6 +1877,7 @@ impl ReadyClaim {
                     Transient {
                         cause: TransientCause::FileChanged,
                         copy_saved: false,
+                        record_room: false,
                         detail: "the legacy file is not the one probed".into(),
                     },
                     Step::Started,
@@ -1915,6 +1894,7 @@ impl ReadyClaim {
                 return Outcome::Transient(Transient {
                     cause: TransientCause::Io,
                     copy_saved: false,
+                    record_room: false,
                     detail: format!("the legacy file could not be read: {error}"),
                 });
             }
@@ -1925,6 +1905,7 @@ impl ReadyClaim {
                 return Outcome::Transient(Transient {
                     cause: TransientCause::FileChanged,
                     copy_saved: false,
+                    record_room: false,
                     detail: "the legacy file was already added to a room; start again".into(),
                 });
             }
@@ -1939,6 +1920,7 @@ impl ReadyClaim {
                 return Outcome::Transient(Transient {
                     cause: TransientCause::FileChanged,
                     copy_saved: false,
+                    record_room: false,
                     detail: "a finished claim's record is in place; start again".into(),
                 });
             }
@@ -2117,7 +2099,46 @@ fn now_text() -> String {
 }
 
 /// The legacy owner lock through the process holder (X1); held elsewhere is transient.
+fn record_room_failure(failure: Failure) -> Failure {
+    match failure {
+        Failure::Transient(mut transient) => {
+            transient.record_room = true;
+            Failure::Transient(transient)
+        }
+        permanent => permanent,
+    }
+}
+
+fn record_room_outcome(outcome: Outcome) -> Outcome {
+    match outcome {
+        Outcome::Transient(mut transient) => {
+            transient.record_room = true;
+            Outcome::Transient(transient)
+        }
+        outcome => outcome,
+    }
+}
+
+#[cfg(any(test, debug_assertions))]
+static FAIL_NEXT_LEGACY_LOCK: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(any(test, debug_assertions))]
+#[doc(hidden)]
+pub fn fail_next_legacy_lock_for_test() {
+    FAIL_NEXT_LEGACY_LOCK.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn hold_legacy_lock(legacy: &Path) -> Result<OwnerLock, Failure> {
+    #[cfg(any(test, debug_assertions))]
+    if FAIL_NEXT_LEGACY_LOCK.swap(false, std::sync::atomic::Ordering::SeqCst) {
+        return Err(Failure::Transient(Transient {
+            cause: TransientCause::OwnerLockHeld,
+            copy_saved: false,
+            record_room: false,
+            detail: "injected legacy owner-lock hold".into(),
+        }));
+    }
     crate::db::hold_owner_lock(legacy).map_err(|error| {
         Failure::Transient(Transient {
             cause: match error {
@@ -2125,6 +2146,7 @@ fn hold_legacy_lock(legacy: &Path) -> Result<OwnerLock, Failure> {
                 _ => TransientCause::Io,
             },
             copy_saved: false,
+            record_room: false,
             detail: error.to_string(),
         })
     })
@@ -2142,6 +2164,7 @@ fn io_failure(error: std::io::Error) -> Failure {
     Failure::Transient(Transient {
         cause: io_cause(&error),
         copy_saved: false,
+        record_room: false,
         detail: error.to_string(),
     })
 }
@@ -2152,6 +2175,7 @@ fn store_failure(error: DeviceStoreError) -> Failure {
 
 fn store_transient(error: DeviceStoreError, copy_saved: bool) -> Transient {
     Transient {
+        record_room: false,
         cause: match &error {
             DeviceStoreError::Io(io) if files::is_disk_full(io) => TransientCause::DiskFull,
             _ => TransientCause::Io,

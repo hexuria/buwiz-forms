@@ -330,6 +330,7 @@ fn transient(cause: TransientCause, detail: String) -> Failure {
     Failure::Transient(Transient {
         cause,
         copy_saved: false,
+        record_room: false,
         detail,
     })
 }

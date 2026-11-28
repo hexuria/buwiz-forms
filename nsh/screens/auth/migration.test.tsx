@@ -49,6 +49,15 @@ test("moved, not opened: support and sign out, phone", async () => {
   await app.waitFor("id:migration-moved-sign-out");
 });
 
+test("device store: plain support page without a path, phone", async () => {
+  const app = await open(DEMO, { host: { params: { page: "device-store" } } });
+  await app.waitFor("id:migration-device-store");
+  expect(app.texts()).toContain("This device's account store cannot be read.");
+  expect(app.texts()).toContain("Write to support@buwiz.com.");
+  expect(app.texts()).not.toContain("/Users/");
+  await app.waitFor("id:migration-try-again");
+});
+
 test("the offer: both answers, desktop", async () => {
   const app = await open(DEMO, { width: 1440, height: 900, platform: "macos", host: { params: { page: "offered" } } });
   await app.waitFor("id:migration-offer");

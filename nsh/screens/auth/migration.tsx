@@ -13,7 +13,7 @@ import { OpenPage, PageButton, PageHeading, SoftLine, TextLink } from "./parts";
 
 /** The migration state the host answered after the last session open or answer (migration_state()). `kind` "none" is no page. */
 export interface MigrationPage {
-  kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered";
+  kind: "none" | "opening" | "moving" | "transient" | "permanent" | "moved_not_opened" | "offered" | "device_store";
   copySaved: boolean;
   detail: string;
 }
@@ -22,7 +22,7 @@ const state = signal<MigrationPage>({ kind: "none", copySaved: false, detail: ""
 /** The migration page now up, if one is: the frame waits behind it. Permanent is not a page — the empty room opens. */
 export const migrationPage = () => {
   const kind = state().kind;
-  return kind === "opening" || kind === "moving" || kind === "transient" || kind === "moved_not_opened" || kind === "offered" ? state() : null;
+  return kind === "opening" || kind === "moving" || kind === "transient" || kind === "moved_not_opened" || kind === "offered" || kind === "device_store" ? state() : null;
 };
 
 /** The permanent failure's detail for the Home note and the Settings › Account row, or null. */
@@ -152,6 +152,47 @@ export function TransientPage(props: { copySaved: boolean; detail: string }) {
   );
 }
 
+
+/** The device store cannot be read: its own plain page, support plus Try again. */
+export function DeviceStorePage(props: { detail: string }) {
+  const busy = signal(false);
+  const error = signal<string | null>(null);
+  const tryAgain = async () => {
+    busy.set(true);
+    error.set(null);
+    try {
+      await bir.migration_try_again();
+      rereadMigration();
+      await app.watchAccountOpen();
+    } catch (e) {
+      error.set(errorText(e));
+    } finally {
+      busy.set(false);
+    }
+  };
+  return (
+    <OpenPage testID="migration-device-store">
+      <View class="items-center gap-3">
+        <PageHeading testID="migration-device-store-title">This device's account store cannot be read.</PageHeading>
+        <SoftLine testID="migration-device-store-line">Your tax profiles are still on this device, unchanged. Write to support@buwiz.com.</SoftLine>
+        <If when={props.detail.length > 0}>
+          <SoftLine testID="migration-device-store-detail" size={12}>{props.detail}</SoftLine>
+        </If>
+        <If when={error() !== null}>
+          <Text variant="meta" tone="danger" testID="migration-device-store-error">{error()}</Text>
+        </If>
+        <SignOutErrorLine />
+      </View>
+      <View class="w-full gap-2.5">
+        <PageButton testID="migration-device-store-try-again" label="Try again" busy={busy()} onPress={() => void tryAgain()} />
+        <View class="items-center">
+          <TextLink testID="migration-device-store-sign-out" label="Sign out" onPress={signOut} />
+        </View>
+      </View>
+    </OpenPage>
+  );
+}
+
 /** "Moved, not opened" (a step-6 failure): support, Sign out. */
 export function MovedNotOpenedPage(props: { detail: string }) {
   return (
@@ -215,5 +256,6 @@ export function MigrationPages() {
   if (page.kind === "opening" || page.kind === "moving") return <MovingPage />;
   if (page.kind === "transient") return <TransientPage copySaved={page.copySaved} detail={page.detail} />;
   if (page.kind === "moved_not_opened") return <MovedNotOpenedPage detail={page.detail} />;
+  if (page.kind === "device_store") return <DeviceStorePage detail={page.detail} />;
   return <OfferPage />;
 }
