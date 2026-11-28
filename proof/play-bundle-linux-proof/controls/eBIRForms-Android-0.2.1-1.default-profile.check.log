@@ -1,0 +1,2 @@
+android_bundle: arm64-v8a libnsh.so is 122,876,080 bytes, over 100,000,000: the release profile did not reach the build
+android_bundle: armeabi-v7a libnsh.so is 99,077,356 bytes, over 88,000,000: the release profile did not reach the build

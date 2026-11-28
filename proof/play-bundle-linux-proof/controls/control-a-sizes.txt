@@ -1,0 +1,2 @@
+arm64-v8a libnsh.so 88411952 bytes
+armeabi-v7a libnsh.so 76156504 bytes

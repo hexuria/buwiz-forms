@@ -1,0 +1,2 @@
+❌ play-bundle: $HOME/BuwizNsh/nsh2404.sh is for $HOME/j62/app/nsh, not this checkout's $HOME/j61/app/nsh: run scripts/setup-linux-nsh.sh from this checkout
+error: recipe `play-bundle` failed with exit code 1

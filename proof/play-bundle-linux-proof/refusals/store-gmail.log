@@ -1,0 +1,2 @@
+❌ STORE_GMAIL=1 builds only on the owner's Mac: the Linux container gets no Google client.
+error: recipe `play-bundle` failed with exit code 1

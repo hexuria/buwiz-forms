@@ -1,0 +1,11 @@
+  docker                 Docker version 29.9.2, build a82e528
+  image:buwiz-nsh-2404   present
+  ../nsh                 8c78cfd
+  nsh CLI                8c78cfd
+  nsh2404.sh wrapper     present
+  android ndk            27.2.12479018
+  android platform       android-36
+  avd:buwiz              present
+  nsh android dev runtime 8c78cfd
+  nsh android release runtime 8c78cfd
+[1;34m==>[0m NSH toolchain ready

@@ -1,0 +1,23 @@
+export BUWIZ_ANDROID_DEV=1 CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_PROFILE_RELEASE_OPT_LEVEL=s CARGO_TARGET_DIR=$HOME/j61/app/target/play-bundle NSH_TOOLS=$HOME/store-tools-61
+(cd nsh && $HOME/nsh2404-store-tools-61.sh nsh package --target android --format aab --abi arm64-v8a,armeabi-v7a --id com.buwiz.ebirforms --build 1 --app-version 0.2.1 -o $HOME/j61/work/devswitch-android)
+✓ built the Rust crate nsh-app-ebirforms (4.7s, 1 warning: -v shows it)
+✓ built App.tsx (614.8 KB js, 847.4 KB bytecode, 295ms)
+→ keep `js`: the app has a JS bundle
+→ keep `net`: `fetch` and remote images depend on data, not imports
+→ keep `svg`: an image's format depends on data, not imports
+→ leave out `shader`: nothing reachable uses it
+→ leave out `editor`: nothing reachable uses it
+→ leave out `rich-editor`: nothing reachable uses it
+→ leave out `plot`: nothing reachable uses it
+→ leave out `term`: nothing reachable uses it
+→ leave out `emoji-picker`: nothing reachable uses it
+→ leave out `highlight`: nothing reachable uses it
+→ leave out `math`: nothing reachable uses it
+→ leave out `zlib`: nothing reachable uses it
+→ leave out `crypto`: nothing reachable uses it
+→ leave out `websocket`: nothing imports `websocket`
+→ keep `updater`: the app may import `nsh/updater`
+✓ built libnsh.so of nsh-app-ebirforms for armeabi-v7a (4m 32s, 1 warning: -v shows it)
+✓ built libnsh.so of nsh-app-ebirforms for arm64-v8a (4m 55s, 1 warning: -v shows it)
+warn signing with the debug key: pass --keystore for store releases
+✓ packaged $HOME/j61/work/devswitch-android/eBIRForms.aab (arm64-v8a, armeabi-v7a) (1.5s)

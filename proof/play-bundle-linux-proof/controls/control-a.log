@@ -1,0 +1,26 @@
+build: app 3ac4d5e0, nsh 8c78cfd6 beside it, tool nsh 0.6.1 (8c78cfd), cargo 1.99.0 (5f94df478 2026-08-27) ($HOME/.rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo), folder $HOME/j61/app/target/play-bundle
+nsh: nsh 0.6.1 (8c78cfd); Android release runtime at 8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf, classes.dex sha256 a53652883f334dbb2844bd2844fa5246097d2f49acddf068341c43702c46943c
+✓ built the Rust crate nsh-app-ebirforms (2m 22s, 1 warning: -v shows it)
+✓ built App.tsx (614.8 KB js, 847.4 KB bytecode, 443ms)
+→ keep `js`: the app has a JS bundle
+→ keep `net`: `fetch` and remote images depend on data, not imports
+→ keep `svg`: an image's format depends on data, not imports
+→ leave out `shader`: nothing reachable uses it
+→ leave out `editor`: nothing reachable uses it
+→ leave out `rich-editor`: nothing reachable uses it
+→ leave out `plot`: nothing reachable uses it
+→ leave out `term`: nothing reachable uses it
+→ leave out `emoji-picker`: nothing reachable uses it
+→ leave out `highlight`: nothing reachable uses it
+→ leave out `math`: nothing reachable uses it
+→ leave out `zlib`: nothing reachable uses it
+→ leave out `crypto`: nothing reachable uses it
+→ leave out `websocket`: nothing imports `websocket`
+→ keep `updater`: the app may import `nsh/updater`
+✓ built libnsh.so of nsh-app-ebirforms for armeabi-v7a (8m 44s, 1 warning: -v shows it)
+✓ built libnsh.so of nsh-app-ebirforms for arm64-v8a (7m 30s, 1 warning: -v shows it)
+warn signing with the debug key: pass --keystore for store releases
+✓ packaged $HOME/j61/app/target/release-artifacts/android/eBIRForms.aab (arm64-v8a, armeabi-v7a) (1.6s)
+android_bundle: $HOME/j61/app/target/release-artifacts/eBIRForms-Android-0.2.1-1.aab (left out 4 entries: the signature and the updater's source)
+android_bundle: $HOME/j61/app/target/release-artifacts/eBIRForms-Android-0.2.1-1.aab is com.buwiz.ebirforms, versionCode 1, target API 36, backup off, release library, Gmail Connect off
+✅ $HOME/j61/app/target/release-artifacts/eBIRForms-Android-0.2.1-1.aab (0.2.1, versionCode 1, unsigned): the owner signs it with just play-sign

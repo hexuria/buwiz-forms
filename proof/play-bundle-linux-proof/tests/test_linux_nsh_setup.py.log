@@ -1,0 +1,41 @@
+..........
+======================================================================
+FAIL: test_sdk_selects_java_home_then_path_then_install (__main__.LinuxNshSetupTests) (case='home')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "$HOME/j61/app/scripts/tests/test_linux_nsh_setup.py", line 388, in test_sdk_selects_java_home_then_path_then_install
+    self.assertEqual(result.returncode, 0, result.stderr)
+AssertionError: 127 != 0 : environment: line 41: android_api: command not found
+
+
+======================================================================
+FAIL: test_sdk_selects_java_home_then_path_then_install (__main__.LinuxNshSetupTests) (case='path')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "$HOME/j61/app/scripts/tests/test_linux_nsh_setup.py", line 388, in test_sdk_selects_java_home_then_path_then_install
+    self.assertEqual(result.returncode, 0, result.stderr)
+AssertionError: 127 != 0 : environment: line 41: android_api: command not found
+
+
+======================================================================
+FAIL: test_sdk_selects_java_home_then_path_then_install (__main__.LinuxNshSetupTests) (case='old')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "$HOME/j61/app/scripts/tests/test_linux_nsh_setup.py", line 388, in test_sdk_selects_java_home_then_path_then_install
+    self.assertEqual(result.returncode, 0, result.stderr)
+AssertionError: 127 != 0 : environment: line 41: android_api: command not found
+
+
+======================================================================
+FAIL: test_sdk_selects_java_home_then_path_then_install (__main__.LinuxNshSetupTests) (case='missing')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "$HOME/j61/app/scripts/tests/test_linux_nsh_setup.py", line 388, in test_sdk_selects_java_home_then_path_then_install
+    self.assertEqual(result.returncode, 0, result.stderr)
+AssertionError: 127 != 0 : environment: line 41: android_api: command not found
+
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.667s
+
+FAILED (failures=4)

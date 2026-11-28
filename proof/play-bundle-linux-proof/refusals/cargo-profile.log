@@ -1,0 +1,5 @@
+build: app 3ac4d5e0, nsh 8c78cfd6 beside it, tool nsh 0.6.1 (8c78cfd), cargo 1.99.0 (5f94df478 2026-08-27) ($HOME/.rustup/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo), folder $HOME/j61/app/target/play-bundle
+nsh: nsh 0.6.1 (8c78cfd); Android release runtime at 8c78cfd6d8ffcef260728ad2503d43c3bc9e86bf, classes.dex sha256 a53652883f334dbb2844bd2844fa5246097d2f49acddf068341c43702c46943c
+❌ play-bundle: $HOME/.cargo/config.toml:1: [profile.release] changes the release profile
+❌ play-bundle: $HOME/.cargo/config.toml:2: profile.release.opt-level changes the release profile
+error: recipe `play-bundle` failed with exit code 1

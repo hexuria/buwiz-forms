@@ -1,0 +1,3 @@
+android_bundle: x86_64 libnsh.so contains 'http://localhost:3008': a debug or development build
+android_bundle: x86_64 libnsh.so contains 'nsh-dev-env:development-list-compiled-in': a debug or development build
+android_bundle: x86_64 libnsh.so contains 'unsafe precondition(s) violated': a debug or development build

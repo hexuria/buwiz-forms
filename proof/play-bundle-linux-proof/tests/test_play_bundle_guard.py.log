@@ -1,0 +1,7 @@
+...............❌ play-bundle: /tmp/tmp0ckoc6vx/.env would be loaded into the build (`set dotenv-load`). With --allow-dotenv the bundle bakes in nothing from it (only GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET with STORE_GMAIL=1, for Gmail Connect); pass it when the file is meant (App Store Connect's next build number reads it), or move the file away
+play-bundle: --allow-dotenv: from /tmp/tmp0ckoc6vx/.env the bundle bakes in: nothing
+.........
+----------------------------------------------------------------------
+Ran 24 tests in 0.051s
+
+OK

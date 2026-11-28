@@ -1,0 +1,8 @@
+✓ built the Rust crate nsh-app-ebirforms (3m 10s, 1 warning: -v shows it)
+✓ built App.tsx (1.5 MB js, 5.5 MB bytecode, 287ms)
+✓ built libnsh.so of nsh-app-ebirforms for x86_64 (50.4s, 1 warning: -v shows it)
+✓ built libnsh.so of nsh-app-ebirforms for armeabi-v7a (51.3s, 1 warning: -v shows it)
+✓ built libnsh.so of nsh-app-ebirforms for arm64-v8a (47.4s, 1 warning: -v shows it)
+✓ built the Android development host (9.2s)
+✓ installed the Android development host on emulator-5554 (7.7s)
+• Android Emulator (sdk_gphone64_x86_64) connected, build 1

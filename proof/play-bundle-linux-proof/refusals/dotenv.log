@@ -1,0 +1,2 @@
+❌ play-bundle: $HOME/j61/app/.env would be loaded into the build (`set dotenv-load`). With --allow-dotenv the bundle bakes in nothing from it (only GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET with STORE_GMAIL=1, for Gmail Connect); pass it when the file is meant (App Store Connect's next build number reads it), or move the file away
+error: recipe `play-bundle` failed with exit code 1
