@@ -6,7 +6,8 @@ Six lanes:
   none     a pull request that closed (or merged), one that is a draft (except an explicit suite-label request), or a
            labeled event whose label is not a suite label: nothing. ci.yml's jobs carry the closed/draft rule in their
            `if`, so those events take no runner at all; marking a draft ready starts the quick lane.
-  quick    a pull request, or a push to main or codex/**: the quick checks on Linux only (ci.yml).
+  quick    a pull request, or a push to main or codex/**: the quick checks on Linux, plus the Python script tests on
+           Windows when the pull request changes a script input (ci.yml).
   tests    a push to test/**: the test suites; the branch name picks the systems.
   suite    a pull_request labeled event whose label is ci:suite*: the quick checks and the test suites; the label
            picks the systems. Only the labeled event asks for this lane, so a later push plans quick alone.
@@ -86,6 +87,7 @@ SCRIPTS_ONLY = re.compile(
     r"^(scripts/tests/|scripts/setup-(linux|linux-nsh|macos|impeccable)\.sh$|scripts/setup-windows\.ps1$"
     r"|scripts/impeccable\.pin$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)"
 )
+SCRIPTS_WINDOWS_INPUTS = re.compile(r"^(scripts/|\.githooks/|\.github/workflows/|justfile$)")
 # The NSH (TSX) app is a workspace of its own; nothing the workspace tests read is under nsh/. nsh/src/ and the
 # app's Cargo files stay app code: the production-boundary check scans nsh/src (bir-rules-codegen status.rs,
 # SHELL_SOURCE_ROOTS).
@@ -138,7 +140,8 @@ def what_changed(changed: list[str] | None) -> dict[str, bool]:
     """What the change can affect. None (unknown range) and an empty list mean everything."""
     if not changed:
         return dict(app=True, windows_pkg=True, other=True, nsh=True, nsh_check=True, nsh_agent_check=True,
-                    nsh_beyond_tests=True, core_inputs=True, validation_paths=False, known=False, docs_only=False)
+                    nsh_beyond_tests=True, core_inputs=True, validation_paths=False, known=False, docs_only=False,
+                    scripts_windows=True)
     classes = [classify(path) for path in changed]
     nsh_paths = [path for path in changed if NSH_INPUTS.match(path) and not DOCS.match(path)]
     return dict(
@@ -152,6 +155,7 @@ def what_changed(changed: list[str] | None) -> dict[str, bool]:
         # The plain-SQLite core tests: the crates, forms and workspace files, not the app in nsh/.
         core_inputs=any(not path.startswith("nsh/") for path in nsh_paths),
         validation_paths=any(VALIDATION.match(path) for path in changed),
+        scripts_windows=any(SCRIPTS_WINDOWS_INPUTS.match(path) for path in changed),
         known=True,
         docs_only=all(class_name == "docs" for class_name in classes),
     )
@@ -191,6 +195,7 @@ def plan_quick_checks(plan: dict, *, event: str, branch: str, labels: tuple[str,
     plan["nsh_agent_check"] = event == "pull_request" and seen["nsh_agent_check"]
     # `check` runs the Python script tests itself.
     plan["scripts"] = not seen["app"] and (seen["other"] or seen["windows_pkg"])
+    plan["scripts_windows"] = event == "pull_request" and seen["scripts_windows"]
     # The validation-rules audits: Linux only, and only when asked for by a path, the label or the branch. An
     # unknown range does not start them (a new branch or a force push must not start six jobs).
     if seen["validation_paths"]:
@@ -275,8 +280,8 @@ def decide(
         raise PlanError(f"no lane for event {event}")
 
     plan = dict(lane=lane, chosen_systems=[], check_systems=[], check_tests=False, nsh_check=False,
-                nsh_agent_check=False, scripts=False, installer=False, validation_systems=[], nsh_systems=[],
-                screens=False, build=False, nsh_rust=False, core_plain=False, shards=[0], shard_count=1,
+                nsh_agent_check=False, scripts=False, scripts_windows=False, installer=False, validation_systems=[],
+                nsh_systems=[], screens=False, build=False, nsh_rust=False, core_plain=False, shards=[0], shard_count=1,
                 screens_filter="", docs_only=False, legacy_in_changes=False, legacy_guard=False)
 
     if lane in ("quick", "suite"):
@@ -358,6 +363,7 @@ def outputs(plan: dict) -> dict[str, str]:
         "nsh_check": flag(plan["nsh_check"]),
         "nsh_agent_check": flag(plan["nsh_agent_check"]),
         "scripts": flag(plan["scripts"]),
+        "scripts_windows": flag(plan["scripts_windows"]),
         "installer": flag(plan["installer"]),
         "validation": flag(bool(validation)),
         "validation_matrix": json.dumps(validation, separators=(",", ":")),
