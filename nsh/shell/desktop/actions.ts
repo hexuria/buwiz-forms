@@ -226,7 +226,7 @@ export function perform(action: MenuAction, os: Os, root?: string): void {
       if (filing) app.startNewReturn();
       return;
     case "new-tax-profile":
-      // The profile panel's "New taxpayer": the first taxpayer, or the admin in helpdesk mode.
+      // The profile panel's "New tax profile": always the owner and the help desk admin, a client only the first.
       if (filing && app.canAddTaxpayer()) app.go("new_taxpayer");
       return;
     case "switch-taxpayer":

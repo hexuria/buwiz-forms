@@ -19,6 +19,7 @@
 
 pub mod carry;
 pub mod draft_locks;
+pub mod gated_rows;
 pub mod probe;
 pub mod recipe;
 
@@ -402,7 +403,18 @@ pub fn validate(kind: AgentFormKind, draft: &mut Value) -> Result<Vec<(String, S
 
 /// Official control id -> value for `draft` as it stands.
 pub fn field_map(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
-    with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))
+    let mut fields = with_agent_kind!(kind, F => field_map_as::<F>(kind, draft))?;
+    // A previous-payment amount belongs only to an amended return. While the
+    // gate is closed the map writes the box's empty zero even if a corrupt
+    // draft reaches this map without a recompute: the upload never carries
+    // the dormant amount, and the assistant's form card still shows the box
+    // at the zero the return holds.
+    if let Some(spec) = draft_locks::previous_payment::spec(kind)
+        && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+    {
+        fields.insert(spec.key.to_string(), "0.00".to_string());
+    }
+    Ok(fields)
 }
 
 /// TIN, year, period and filing status of `draft`.
@@ -483,17 +495,41 @@ pub fn save_draft(
     db: &crate::db::Database,
     draft: &mut Value,
 ) -> Result<i64, String> {
+    let incoming = draft.clone();
+    save_draft_with_clearance_context(kind, db, draft, incoming, BTreeSet::new())
+}
+
+/// [`save_draft`] with the draft as it was before the fill being saved and
+/// the gate keys that fill already showed inline. Hidden test/host plumbing:
+/// callers normally use [`save_draft`].
+#[doc(hidden)]
+pub fn save_draft_with_clearance_context(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &mut Value,
+    incoming: Value,
+    reported: BTreeSet<String>,
+) -> Result<i64, String> {
+    // The caller's bytes are only the fallback before-image. When the row
+    // already exists, the transactional save reads its stored bytes and those
+    // decide whether this recompute clears a dormant gated value: an assistant
+    // or page fill may already have recomputed its in-memory draft.
     compute(kind, draft)?;
+    let after = draft.clone();
     if identity(kind, draft)?.status != FilingStatus::Draft {
         return Err("this return is no longer a draft".to_string());
     }
+    let writer =
+        move || pending_settings_writer(kind, incoming.clone(), after.clone(), reported.clone());
     let id = match kind {
-        AgentFormKind::Form1601C => save_1601c(kind, db, draft)?,
-        AgentFormKind::Form2551Q => save_2551q(kind, db, draft)?,
+        AgentFormKind::Form1601C => save_1601c(kind, db, draft, writer())?,
+        AgentFormKind::Form2551Q => save_2551q(kind, db, draft, writer())?,
         // The 2550Q page keeps its own row format (`save_form_draft_v2`).
-        AgentFormKind::Queueable(QueueableKind::Form2550Q) => save_2550q(kind, db, draft)?,
+        AgentFormKind::Queueable(QueueableKind::Form2550Q) => {
+            save_2550q(kind, db, draft, writer())?
+        }
         AgentFormKind::Queueable(queueable) => crate::with_queueable_kind!(queueable, F => {
-            save_queueable::<F>(kind, db, draft)?
+            save_queueable::<F>(kind, db, draft, writer())?
         }),
     };
     if let Value::Object(object) = draft {
@@ -502,17 +538,44 @@ pub fn save_draft(
     Ok(id)
 }
 
+#[doc(hidden)]
+pub fn pending_settings_writer(
+    kind: AgentFormKind,
+    incoming: Value,
+    after: Value,
+    reported: BTreeSet<String>,
+) -> crate::db::SettingsWriter<'static> {
+    Some(Box::new(move |draft_id, stored_json| {
+        let before = stored_json
+            .and_then(|stored| serde_json::from_str::<Value>(stored).ok())
+            .unwrap_or_else(|| incoming.clone());
+        Ok(draft_locks::pending_notices::settings_writes(
+            kind, &before, &incoming, &after, draft_id, &reported,
+        ))
+    }))
+}
+
 #[inline(never)]
-fn save_1601c(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+fn save_1601c(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
+) -> Result<i64, String> {
     let typed: Form1601CDraft = parse(kind, draft)?;
-    db.save_1601c_draft(&typed)
+    db.save_1601c_draft_with_settings(&typed, settings_writer)
         .map_err(|error| error.to_string())
 }
 
 #[inline(never)]
-fn save_2551q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+fn save_2551q(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
+) -> Result<i64, String> {
     let typed: Form2551QDraft = parse(kind, draft)?;
-    db.save_2551q_draft(&typed)
+    db.save_2551q_draft_with_settings(&typed, settings_writer)
         .map_err(|error| error.to_string())
 }
 
@@ -521,14 +584,20 @@ fn save_queueable<F: QueueableForm + Serialize + DeserializeOwned>(
     kind: AgentFormKind,
     db: &crate::db::Database,
     draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
 ) -> Result<i64, String> {
     let typed: F = parse(kind, draft)?;
-    db.save_queueable_draft(&typed)
+    db.save_queueable_draft_with_settings(&typed, settings_writer)
         .map_err(|error| error.to_string())
 }
 
 #[inline(never)]
-fn save_2550q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> Result<i64, String> {
+fn save_2550q(
+    kind: AgentFormKind,
+    db: &crate::db::Database,
+    draft: &Value,
+    settings_writer: crate::db::SettingsWriter<'static>,
+) -> Result<i64, String> {
     Ok({
         let typed: super::form_2550q::Form2550QDraft = parse(kind, draft)?;
         let quarter = typed.quarter_number().unwrap_or(0);
@@ -548,13 +617,13 @@ fn save_2550q(kind: AgentFormKind, db: &crate::db::Database, draft: &Value) -> R
                 stored.lifecycle.status
             ));
         }
-        db.save_form_draft_v2(
+        db.save_form_draft_v2_with_settings(
             &typed.tin,
             "2550Q",
             typed.taxable_year,
             &FilingPeriod::Quarterly(quarter),
             &typed.lifecycle.status,
-            &typed,
+            (&typed, settings_writer),
         )
         .map_err(|error| error.to_string())?
     })
@@ -1463,6 +1532,22 @@ fn fill_box(
     // draft-dependent layer locks on the draft as it stands. A page writer
     // (as_host = true) never consults it: the page's own UX governs those
     // boxes (its Edit penalties opens a group).
+    if !as_host
+        && kind == AgentFormKind::Form2551Q
+        && key == draft_locks::item16_2551q::KEY
+        && draft_locks::item16_2551q::lock_reason(draft).is_some()
+        && draft_locks::item16_2551q::zero_noop(value)
+    {
+        return Ok(());
+    }
+    if !as_host
+        && let Some(spec) = draft_locks::previous_payment::spec(kind)
+        && key == spec.key
+        && draft_locks::previous_payment::lock_reason(spec, draft).is_some()
+        && draft_locks::previous_payment::zero_write(value)
+    {
+        return Ok(());
+    }
     if !as_host && let Some(lock) = draft_refusal(kind, def, draft, key, verdict.as_ref()) {
         return Err(format!("`{key}` {lock}"));
     }
@@ -1573,6 +1658,58 @@ pub fn fill_host_owned(
 }
 
 fn write_bound_box(
+    kind: AgentFormKind,
+    def: &AgentFormDef,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    let employer_row = (kind.form_code() == "1701")
+        .then(|| {
+            if key.contains("chkPg2IShed1a_1") {
+                Some(0)
+            } else if key.contains("chkPg2IShed2a_2") {
+                Some(1)
+            } else {
+                None
+            }
+        })
+        .flatten();
+    let before_owner = employer_row.and_then(|index| {
+        draft
+            .pointer(&format!("/employers/{index}/owner"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    });
+    write_bound_box_here(kind, def, draft, key, value)?;
+    if let Some(index) = employer_row {
+        let after_owner = draft
+            .pointer(&format!("/employers/{index}/owner"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let switched = matches!(before_owner.as_deref(), Some("Taxpayer" | "Spouse"))
+            && matches!(after_owner.as_deref(), Some("Taxpayer" | "Spouse"))
+            && before_owner != after_owner;
+        if switched {
+            // The owner radios' only onclick is emplyrDetails(row, 'TP'/'SPS')
+            // (BIR-Form1701v2018.hta :1347/:1358/:1396/:1407 -> :11135-11177):
+            // that runtime handler blanks the losing NAME box, enables the
+            // TIN boxes without clearing them, and leaves the row's own CI/TW
+            // amounts untouched. TPName and SName bind the same stored name,
+            // so clearing that one draft field is exactly the losing name box;
+            // the TIN, compensation income and tax withheld stay with the row.
+            if let Some(row) = draft
+                .pointer_mut(&format!("/employers/{index}"))
+                .and_then(Value::as_object_mut)
+            {
+                row.insert("employer_name".to_string(), Value::String(String::new()));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_bound_box_here(
     kind: AgentFormKind,
     def: &AgentFormDef,
     draft: &mut Value,

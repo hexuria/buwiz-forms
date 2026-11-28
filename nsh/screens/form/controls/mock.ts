@@ -2,7 +2,7 @@
 // gallery and the tests only (nothing in the page uses this file). They follow the session's own rules where a control relies
 // on them: typing keeps the text as typed, leaving an amount groups it, leaving a date writes it long, a pick commits at once.
 import type { Accessor, Signal } from "nsh";
-import { signal, windowSize } from "nsh";
+import { signal, untracked, windowSize } from "nsh";
 import { formatLongDate, formatMoney, parseTypedDate, TOUCH } from "../../../ui";
 import { BREAK } from "../../../theme/tokens";
 import type { BoxState, ChoiceOption, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "../contract";
@@ -180,8 +180,11 @@ export function mockSchedule(log: Reports, item: SchemaItem, init: Record<string
     },
     openRow,
     onOpenRow: (r) => openRow.set(r),
-    onClearRow: (r) => {
-      for (const k of keys[r]) boxes[k].value.set("");
+    onDeleteRow: (r) => {
+      for (let row = r; row < keys.length - 1; row++) {
+        keys[row].forEach((k, c) => boxes[k]?.value.set(untracked(() => boxes[keys[row + 1][c]]?.value() ?? "")));
+      }
+      for (const k of keys[keys.length - 1] ?? []) boxes[k]?.value.set("");
       cleared.set([...cleared(), r]);
     },
     locked: () => false,

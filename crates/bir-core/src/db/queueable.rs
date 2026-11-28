@@ -14,7 +14,7 @@ use super::drafts::{
     filing_status_to_db, require_abandoned_release_reason,
 };
 use super::receipts::{ReceiptConfirmationOutcome, ReceiptSource};
-use super::{Database, DbError, SubmissionReceipt};
+use super::{Database, DbError, SettingsWriter, SubmissionReceipt, write_settings_in_transaction};
 use crate::forms::FilingStatus;
 use crate::forms::dry_run::is_dry_run;
 use crate::forms::queueable::QueueableForm;
@@ -143,7 +143,7 @@ fn move_rekeyed_draft<F: QueueableForm>(
     period: i64,
     period_key: &str,
     status: &str,
-) -> Result<Option<i64>, DbError> {
+) -> Result<Option<(i64, String)>, DbError> {
     let Some(previous_id) = draft.draft_id() else {
         return Ok(None);
     };
@@ -197,7 +197,7 @@ fn move_rekeyed_draft<F: QueueableForm>(
             F::FORM_CODE
         )));
     }
-    Ok(Some(previous_id))
+    Ok(Some((previous_id, previous_json.to_string())))
 }
 
 impl Database {
@@ -256,13 +256,22 @@ impl Database {
 
     /// Save an editable Draft. A queued or filed snapshot is never replaced.
     pub fn save_queueable_draft<F: QueueableForm>(&self, draft: &F) -> Result<i64, DbError> {
+        self.save_queueable_draft_with_settings(draft, None)
+    }
+
+    /// Save an editable Draft and transactional settings rows in one commit.
+    pub(crate) fn save_queueable_draft_with_settings<F: QueueableForm>(
+        &self,
+        draft: &F,
+        settings_writer: SettingsWriter<'_>,
+    ) -> Result<i64, DbError> {
         if !draft.lifecycle().is_editable() {
             return Err(DbError::Other(format!(
                 "Only an editable Draft {} return may use the draft save path",
                 F::FORM_CODE
             )));
         }
-        self.upsert_from_draft(draft, "Draft")
+        self.upsert_from_draft(draft, "Draft", settings_writer)
     }
 
     /// save-009: true when the form runs the official guard, its Amended
@@ -302,11 +311,16 @@ impl Database {
                     errors_summary(&errors)
                 ))
             })?;
-        self.upsert_from_draft(&verified, "Queued")
+        self.upsert_from_draft(&verified, "Queued", None)
     }
 
     /// Write `draft` with `status` over an existing Draft row, or insert it.
-    fn upsert_from_draft<F: QueueableForm>(&self, draft: &F, status: &str) -> Result<i64, DbError> {
+    fn upsert_from_draft<F: QueueableForm>(
+        &self,
+        draft: &F,
+        status: &str,
+        settings_writer: SettingsWriter<'_>,
+    ) -> Result<i64, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let json = serde_json::to_string(draft)?;
         let period = draft.period_column();
@@ -320,15 +334,22 @@ impl Database {
             &period_key,
         )?;
         let target = select_row(&tx, F::FORM_CODE, draft.tin(), draft.taxable_year(), period)?;
-        if let Some(moved) =
+        if let Some((moved, stored_json)) =
             move_rekeyed_draft(&tx, draft, target.as_ref(), period, &period_key, status)?
         {
+            if let Some(write_settings) = settings_writer {
+                let writes =
+                    write_settings(moved, Some(stored_json.as_str())).map_err(DbError::Other)?;
+                write_settings_in_transaction(&tx, writes)?;
+            }
             tx.commit()?;
             let _ = self.request_google_calendar_sync();
             return Ok(moved);
         }
+        let mut stored_json = None;
         let id = match target {
             Some((id, raw_json, db_status)) => {
+                stored_json = Some(raw_json.clone());
                 let stored: F = serde_json::from_str(&raw_json)?;
                 if db_status != "Draft" || !stored.lifecycle().is_editable() {
                     return Err(DbError::Other(format!(
@@ -377,6 +398,10 @@ impl Database {
                 "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
                 params![serde_json::to_string(&stamped)?, id],
             )?;
+        }
+        if let Some(write_settings) = settings_writer {
+            let writes = write_settings(id, stored_json.as_deref()).map_err(DbError::Other)?;
+            write_settings_in_transaction(&tx, writes)?;
         }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
@@ -518,7 +543,7 @@ impl Database {
         taxable_year: u16,
         period: i64,
     ) -> Result<RevertedForAmendment<F>, DbError> {
-        self.revert_queueable_inner(tin, taxable_year, period, None, None)
+        self.revert_queueable_inner(tin, taxable_year, period, None, None, None)
     }
 
     /// An amendment's first save, in ONE transaction: the user's revert of
@@ -530,12 +555,24 @@ impl Database {
         amended: &F,
         base: &AmendmentBase,
     ) -> Result<i64, DbError> {
+        self.save_queueable_amendment_with_settings(amended, base, None)
+    }
+
+    /// An amendment's first save plus transactional settings rows.
+    #[doc(hidden)]
+    pub fn save_queueable_amendment_with_settings<F: QueueableForm>(
+        &self,
+        amended: &F,
+        base: &AmendmentBase,
+        settings_writer: SettingsWriter<'_>,
+    ) -> Result<i64, DbError> {
         let reverted = self.revert_queueable_inner(
             amended.tin(),
             amended.taxable_year(),
             amended.period_column(),
             Some(base),
             Some(amended),
+            settings_writer,
         )?;
         reverted
             .draft
@@ -550,6 +587,7 @@ impl Database {
         period: i64,
         base: Option<&AmendmentBase>,
         replacement: Option<&F>,
+        settings_writer: SettingsWriter<'_>,
     ) -> Result<RevertedForAmendment<F>, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let Some((id, raw_json, db_status)) =
@@ -666,6 +704,10 @@ impl Database {
                 params![serde_json::to_string(&amended)?, id],
             )?;
             draft = amended;
+        }
+        if let Some(write_settings) = settings_writer {
+            let writes = write_settings(id, Some(raw_json.as_str())).map_err(DbError::Other)?;
+            write_settings_in_transaction(&tx, writes)?;
         }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();

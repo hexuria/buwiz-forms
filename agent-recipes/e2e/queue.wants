@@ -1,6 +1,26 @@
 # Smoke 8, SEND: Queue on the open return, in the dry-run test build only (the runner refuses it without --allow-send,
-# EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1). Queue validates first: a return that does not pass Check stops at its to-do.
-click fp-queue --screenshot
+# EBIR_TEST_ENV=1 and BIR_SFTP_DRY_RUN=1). Queue validates first: a 2551Q on a profile without the business start
+# date and the annual income-tax election stops at its prerequisite banners. So this recipe first records both
+# prerequisites through the banners' own Set buttons (each opens the profile editor and returns to the form on
+# save), then queues for real.
+click fp-queue
+wait_until fp-set-profile-business_start_date --timeout-ms 8000 --screenshot
+click fp-set-profile-business_start_date
+wait_until tp-branch-business_start_date --timeout-ms 5000
+click tp-branch-business_start_date
+type tp-branch-business_start_date $bstart
+assert tp-branch-business_start_date value=$bstart
+click tp-branch-save
+wait_until fp-set-profile-income_tax_election --timeout-ms 8000 --screenshot
+click fp-set-profile-income_tax_election
+wait_until tp-fact-income_tax_election-choice-GraduatedUnspecified --timeout-ms 5000
+click tp-fact-income_tax_election-choice-GraduatedUnspecified
+click tp-fact-income_tax_election-save
+wait_until fp-queue --timeout-ms 8000 --screenshot
+click fp-queue
 wait_until queue-continue --timeout-ms 10000 --screenshot
 click queue-continue
-wait_until fp-cancel-queue --timeout-ms 20000 --screenshot
+# fp-cancel-queue is not awaited: the dry-run worker sends a queued return within seconds, so the queued state
+# races the wait (seen on Windows, where the same wait timed out until it was changed; on macOS this wait timed out
+# too after queue-continue was pressed). fp-send-line exists only once the return is sent.
+wait_until fp-send-line --timeout-ms 20000 --screenshot

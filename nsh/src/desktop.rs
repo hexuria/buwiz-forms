@@ -748,6 +748,13 @@ pub struct Desktop;
 
 #[module]
 impl Desktop {
+    /// Present only in a debug build: its existence is the debug lock-page route's compile-time gate. Release builds do not
+    /// contain the method, so the route has no backing entry point there.
+    #[cfg(debug_assertions)]
+    pub fn lock_pages_debug() -> bool {
+        true
+    }
+
     /// Whether this is a Mac App Store build, without a global hotkey or an updater.
     pub fn mas_build() -> bool {
         cfg!(feature = "mas_build")

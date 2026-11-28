@@ -1,0 +1,100 @@
+{
+  "v": 1,
+  "ok": true,
+  "recipe": "birth-date",
+  "fingerprint": "fnv1a64:0da4bb8692142101",
+  "session_reused": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 439
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "elapsed_ms": 89
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 499
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "elapsed_ms": 82
+    },
+    {
+      "id": "s5",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 433
+    },
+    {
+      "id": "s6",
+      "ok": true,
+      "elapsed_ms": 101
+    },
+    {
+      "id": "s7",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 422
+    },
+    {
+      "id": "s8",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 572,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\09-birth-date\\008-s8.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s9",
+      "ok": true,
+      "elapsed_ms": 94
+    },
+    {
+      "id": "s10",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 472
+    },
+    {
+      "id": "s11",
+      "ok": true,
+      "elapsed_ms": 342,
+      "screenshot": {
+        "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\09-birth-date\\011-s11.png",
+        "ok": true
+      }
+    },
+    {
+      "id": "s12",
+      "ok": true,
+      "delivery_status": "delivered_unverified",
+      "elapsed_ms": 496
+    },
+    {
+      "id": "s13",
+      "ok": true,
+      "elapsed_ms": 64
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\09-birth-date\\008-s8.png",
+      "ok": true
+    },
+    {
+      "path": "C:\\Users\\Administrator\\BuwizNsh\\evidence\\e2e\\windows-20261127-105813\\09-birth-date\\011-s11.png",
+      "ok": true
+    }
+  ],
+  "elapsed_ms": 4110
+}

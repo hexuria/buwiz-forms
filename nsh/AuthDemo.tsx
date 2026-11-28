@@ -176,6 +176,7 @@ function Readout() {
   return (
     <View class="absolute top-0 right-0 items-end" style={{ pointerEvents: "none" }}>
       <Text testID="demo-session">{`session: ${app.session().kind}${app.session().kind === "taxpayer" ? ` ${(app.session() as { root: string }).root}` : ""}`}</Text>
+      <Text testID="demo-canadd">{`canAdd: ${app.canAddTaxpayer()}`}</Text>
       <Text testID="demo-visible">{`returns: ${roots(store.savedReturns())} | deadlines: ${roots(store.deadlines(`${year}-01-01`, `${year + 1}-12-31`))} | taxpayers: ${roots(store.taxpayers())}`}</Text>
       <Text testID="demo-calls">{`calls: ${calls().join(",") || "none"}`}</Text>
       <Text testID="demo-pending-reads">{`pending reads: ${pendingReads()}`}</Text>

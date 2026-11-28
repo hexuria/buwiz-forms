@@ -30,5 +30,6 @@ resolve_unknown_send
 returns_waiting_count
 safety_copy_status
 save_form_draft
+screen_form_remove_row
 screen_form_profile_asked
 welcome_first_time

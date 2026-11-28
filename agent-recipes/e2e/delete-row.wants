@@ -1,6 +1,5 @@
 # Smoke 7: a schedule row added, its drawer opened, the row deleted. $table is the schedule's id (fp-table-<first key>),
-# read from a snapshot first. The drawer is a sheet on a phone and in the narrow layout, and on Windows its nodes report
-# zero-height geometry: the presses in it are gpui-agent gap 1 there.
+# read from a snapshot first. The drawer is a sheet on a phone and in the narrow layout.
 click $table-add
 wait_until $table-drawer --timeout-ms 5000 --screenshot
 # Delete row is disabled while the row holds nothing (Schedule.tsx), and 2551Q's Schedule 1 pre-holds row 1 (PT010),
@@ -10,5 +9,5 @@ wait_until fp-txtATCAmt2 visible=true --timeout-ms 5000
 click fp-txtATCAmt2
 type fp-txtATCAmt2 1000
 click $table-delete
-wait_until $table-drawer --absent --timeout-ms 5000
+wait_until fp-txtATCAmt2 --absent --timeout-ms 5000
 wait_until fp-row-drpATC1-1 --absent --timeout-ms 5000 --screenshot

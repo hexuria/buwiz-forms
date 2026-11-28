@@ -1263,7 +1263,7 @@
 "/computations/schedule_5_taxpayer": {"amount":0.0,"description":"","legal_basis":""},
 "/computations/schedule_6_spouse_nolco": {"amount":0.0,"applied_current_year":0.0,"applied_previous_years":0.0,"expired":0.0,"unapplied":0.0,"year_incurred":""},
 "/computations/schedule_6_taxpayer_nolco": {"amount":0.0,"applied_current_year":0.0,"applied_previous_years":0.0,"expired":0.0,"unapplied":0.0,"year_incurred":""},
-"/employers": {"compensation_income":0.0,"employer_name":"","employer_tin":"","owner":null,"tax_withheld":0.0}
+"/employers": {"compensation_income":null,"employer_name":"","employer_tin":"","owner":null,"tax_withheld":null}
 },
 "unmapped": {
 "ebirOnlineConfirmUsername": "not written by this app's field map for any sample draft",
@@ -1490,10 +1490,10 @@
 "frm1701:txtPg2IShed1c_3BTW": "derived by the app: shows /employers/1/tax_withheld combined with /employers/0/tax_withheld",
 "frm1701:txtPg2IShed2_4A": "derived by the app: shows /employers/0/compensation_income combined with /employers/1/compensation_income",
 "frm1701:txtPg2IShed2_4B": "derived by the app: shows /employers/1/compensation_income combined with /employers/0/compensation_income",
-"frm1701:txtPg2IShed2a_BranchCode": "derived by the app: changes with /atc, /civil_status, /employers/1/employer_tin, ... but never shows one field's value",
-"frm1701:txtPg2IShed2a_TIN1": "derived by the app: changes with /atc, /civil_status, /employers/1/employer_tin, ... but never shows one field's value",
-"frm1701:txtPg2IShed2a_TIN2": "derived by the app: changes with /atc, /civil_status, /employers/1/employer_tin, ... but never shows one field's value",
-"frm1701:txtPg2IShed2a_TIN3": "derived by the app: changes with /atc, /civil_status, /employers/1/employer_tin, ... but never shows one field's value",
+"frm1701:txtPg2IShed2a_BranchCode": "derived by the app: changes with /civil_status, /employers/1/employer_tin, /employers/1/owner, ... but never shows one field's value",
+"frm1701:txtPg2IShed2a_TIN1": "derived by the app: changes with /civil_status, /employers/1/employer_tin, /employers/1/owner, ... but never shows one field's value",
+"frm1701:txtPg2IShed2a_TIN2": "derived by the app: changes with /civil_status, /employers/1/employer_tin, /employers/1/owner, ... but never shows one field's value",
+"frm1701:txtPg2IShed2a_TIN3": "derived by the app: changes with /civil_status, /employers/1/employer_tin, /employers/1/owner, ... but never shows one field's value",
 "frm1701:txtPg2IShed3_14B": "derived by the app: shows /computations/schedule_5_spouse/0/amount combined with /computations/schedule_5_spouse/1/amount",
 "frm1701:txtPg2IShed3_15B": "derived by the app: shows /computations/schedule_6_spouse_nolco/0/applied_current_year combined with /computations/schedule_6_spouse_nolco/1/applied_current_year",
 "frm1701:txtPg2IShed3_16B": "derived by the app: changes with /civil_status, /computations/schedule_4/1/spouse, /computations/schedule_4/10/spouse, ... but never shows one field's value",

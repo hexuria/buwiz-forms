@@ -205,7 +205,7 @@ function SheetPanel(props: { p: SearchPickProps; choose: (value: string) => void
             </ChoiceRow>
           </If>
         )}
-        empty={() => <Text variant="meta" tone="fg3" class="px-1 py-3">{NOTHING}</Text>}
+        empty={() => <Text testID={`${p.testID}-nothing`} variant="meta" tone="fg3" class="px-1 py-3">{NOTHING}</Text>}
       >
         {(item) => (
           // A recycled cell draws its new item anew (keyed by value), so a row's testID and check follow the item.
@@ -290,21 +290,6 @@ function SheetPick(props: { p: SearchPickProps }) {
 
 // ---------------------------------------------------------------- wide: a combobox
 
-/**
- * The longest a press on a row or the chevron holds off the settling of the box's leaving: a backstop only. A lost press-up is
- * ended by close(), the box's onFocus and onChange and the box going away; a deliberate slow press (a finger resting on a row) is
- * never cut short by it.
- */
-const PRESS_HOLDS_MS = 30_000;
-
-/**
- * How long a leaving with the list open waits for the press that may have caused it. On Windows the box's blur, and a timer of
- * 0 ms after it, come BEFORE the press-down on the row or the chevron the pointer went down on (real clicks: a next-turn settle
- * closed the list under the click, so no row could be picked), so the press is given this long to arrive. A leaving with no press
- * (the form's focus(), Queue's jump) settles this much later: not seen.
- */
-const LEAVE_GRACE_MS = 250;
-
 /** A press-outside this soon after the refusal line appeared is the press that made it (Windows delivers it to the new overlay too). */
 const NOTE_PRESS_GRACE_MS = 400;
 
@@ -320,9 +305,6 @@ function FieldList(props: {
   showClear: Accessor<boolean>;
   setLit: (value: string) => void;
   choose: (value: string) => void;
-  /** A press went down on a row, and ended: the focus that press takes from the box is not the box's leaving. */
-  pressDown: () => void;
-  pressUp: () => void;
   list: (ref: ListRef) => void;
   seen: (first: number, last: number) => void;
 }) {
@@ -352,8 +334,7 @@ function FieldList(props: {
             testID={`${p.testID}-opt-`}
             label="Clear the choice"
             onPress={() => props.choose("")}
-            onPressDown={props.pressDown}
-            onPressUp={props.pressUp}
+            keepsFocus
           >
             <Text tone="fg3">Clear the choice</Text>
           </ChoiceRow>
@@ -372,8 +353,7 @@ function FieldList(props: {
               tooltip={pickLabel(o())}
               onHover={o().disabled ? undefined : () => props.setLit(o().value)}
               onPress={o().disabled ? undefined : () => props.choose(o().value)}
-              onPressDown={props.pressDown}
-              onPressUp={props.pressUp}
+              keepsFocus
             >
               <RowWords o={o} oneLine />
             </ChoiceRow>
@@ -400,25 +380,12 @@ function FieldPick(props: { p: SearchPickProps }) {
   let list: ListRef | null = null;
   let seen = { first: 0, last: -1 };
   let selectOnCaret = false;
-  /** The focus left the box with the list open, not yet settled (settleLeaving). */
-  let leaving = false;
-  /**
-   * A press is down on a row or the chevron, since `pressAt`. Only onPressUp ends it normally, so a press whose view goes away
-   * under it (the list closing, a lock or a sheet unmounting the overlay) is ended by close() and onFocus as well, and counts for
-   * PRESS_HOLDS_MS at most: a lost press-up never keeps a later leaving from settling.
-   */
-  let pressing = false;
-  let pressAt = 0;
   /** When the refusal line last appeared (NOTE_PRESS_GRACE_MS). */
   let noteAt = 0;
-  /** The box went away (its page, the overlay, the lock): nothing deferred may pick or settle after that. */
+  /** The box went away (its page, the overlay, the lock): its last blur picks and settles nothing. */
   let gone = false;
-  let settleTimer: ReturnType<typeof setTimeout> | undefined;
   cleanup(() => {
     gone = true;
-    pressing = false;
-    leaving = false;
-    clearTimeout(settleTimer);
   });
 
   const current = () => currentOf(p);
@@ -434,7 +401,6 @@ function FieldPick(props: { p: SearchPickProps }) {
       typed.set("");
     });
   const close = () => {
-    pressing = false;
     batch(() => {
       open.set(false);
       lit.set(null);
@@ -452,7 +418,6 @@ function FieldPick(props: { p: SearchPickProps }) {
   };
   /** A row chosen (a press, Enter): it is the value, the list closes, the keys stay in the box. */
   const choose = (value: string) => {
-    leaving = false;
     batch(() => {
       close();
       restore();
@@ -463,7 +428,6 @@ function FieldPick(props: { p: SearchPickProps }) {
   };
   /** The keys leave (Tab, a press elsewhere, the focus going): the typed text is taken only when it names a choice. */
   const commit = () => {
-    leaving = false;
     if (!dirty()) return close();
     const r = resolveTyped(p.options, typed(), p.value, p.clearable !== false);
     batch(() => {
@@ -499,33 +463,6 @@ function FieldPick(props: { p: SearchPickProps }) {
     if (dirty()) return commit();
     showList();
   };
-  // The focus left the box while the list was open. A press in the list (a row, the clear row) or on the chevron takes the focus
-  // as it goes down and settles the box itself (choose, or the chevron's commit). Any other leaving comes with no press the list
-  // hears (the form's focus() into another box, Queue's jump to a note, the lock, a window switch): the typed text is settled on
-  // the next turn, as Tab settles it, so the box never shows typed words over a value they are not.
-  const settleLeaving = (delay = LEAVE_GRACE_MS) => {
-    if (gone) return;
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => {
-      if (gone || !leaving || focused()) return;
-      // A press still down holds it off, up to the PRESS_HOLDS_MS backstop: then it is tried again.
-      if (pressHeld()) return settleLeaving(PRESS_HOLDS_MS - (Date.now() - pressAt) + 10);
-      commit();
-    }, delay);
-  };
-  const pressHeld = () => pressing && Date.now() - pressAt < PRESS_HOLDS_MS;
-  const pressDown = () => {
-    pressing = true;
-    pressAt = Date.now();
-  };
-  // A turn after the release, so the press it makes (a row's pick) comes first; a press that picked nothing (moved off,
-  // cancelled) lets the leaving settle.
-  const pressUp = () =>
-    setTimeout(() => {
-      pressing = false;
-      if (leaving) settleLeaving(0);
-    }, 0);
-
   // The keys a combobox takes while its box has the focus; Escape only while there is something to close or restore, so a dialog
   // around a quiet box still closes on it. Tab moves on as it always does (passThrough) after the text is settled.
   effect(() => {
@@ -568,8 +505,6 @@ function FieldPick(props: { p: SearchPickProps }) {
         }}
         onFocus={() => {
           focused.set(true);
-          leaving = false;
-          pressing = false;
           note.set("");
           // A click leaves its caret after the focus (AppKit selects all, then puts the caret): select the whole choice again, so
           // typing replaces it rather than adding to "050 — South Makati".
@@ -583,15 +518,12 @@ function FieldPick(props: { p: SearchPickProps }) {
         }}
         onBlur={() => {
           focused.set(false);
-          if (!open()) return commit();
-          // With the list open the press that took the focus may be a row's: settled a turn later, unless it was (settleLeaving).
-          leaving = true;
-          settleLeaving();
+          // The keys left for real: the rows and the chevron take no focus (keepsFocus), so no press on them blurs the box. What is
+          // left is Tab, a press on another box, the form's focus() (a pill step, Queue's jump) or the lock: settled now, as Tab.
+          if (!gone) commit();
         }}
         onChange={(v) => {
           selectOnCaret = false;
-          // Keys in the box: no press on a row is going on any more, whatever became of its press-up.
-          pressing = false;
           batch(() => {
             typed.set(v);
             dirty.set(true);
@@ -612,8 +544,7 @@ function FieldPick(props: { p: SearchPickProps }) {
             tooltip={`Show every ${p.label}`}
             testID={`${p.testID}-trigger`}
             disabled={p.disabled}
-            onPressDown={pressDown}
-            onPressUp={pressUp}
+            keepsFocus
             onPress={() => {
               if (open()) return commit();
               batch(() => {
@@ -640,7 +571,7 @@ function FieldPick(props: { p: SearchPickProps }) {
           <View class="rounded-(--radius-card) border border-border bg-raised p-1 shadow-lg" style={{ width: Math.max(width(), 380) }}>
             <If
               when={rows().length > 0 || showClear()}
-              else={<Text variant="meta" tone="fg3" class="px-2 py-1.5">{NOTHING}</Text>}
+              else={<Text testID={`${p.testID}-nothing`} variant="meta" tone="fg3" class="px-2 py-1.5">{NOTHING}</Text>}
             >
               <FieldList
                 p={p}
@@ -649,8 +580,6 @@ function FieldPick(props: { p: SearchPickProps }) {
                 showClear={showClear}
                 setLit={(v) => lit.set(v)}
                 choose={choose}
-                pressDown={pressDown}
-                pressUp={pressUp}
                 list={(r) => (list = r)}
                 seen={(first, last) => (seen = { first, last })}
               />

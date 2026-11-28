@@ -2,7 +2,7 @@
 
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 
-use super::{Database, DbError};
+use super::{Database, DbError, SettingsWriter, write_settings_in_transaction};
 use crate::forms::form_1601c::Form1601CDraft;
 use crate::forms::form_2551q::{
     AnnualIncomeTaxElection, Form2551QDraft, Item13Election, annual_income_tax_election,
@@ -516,6 +516,15 @@ impl Database {
     /// Generic saves may never create or replace Queued and later snapshots.
     /// Queue, cancellation, claim, and completion each use a dedicated CAS path.
     pub fn save_2551q_draft(&self, draft: &Form2551QDraft) -> Result<i64, DbError> {
+        self.save_2551q_draft_with_settings(draft, None)
+    }
+
+    /// Save a 2551Q draft and transactional settings rows in one commit.
+    pub(crate) fn save_2551q_draft_with_settings(
+        &self,
+        draft: &Form2551QDraft,
+        settings_writer: SettingsWriter<'_>,
+    ) -> Result<i64, DbError> {
         if !matches!(draft.status, FilingStatus::Draft)
             || draft.submission_claim_token.is_some()
             || draft.submission_claimed_at.is_some()
@@ -545,7 +554,9 @@ impl Database {
             )
             .optional()?;
 
+        let mut stored_json = None;
         let id = if let Some((id, db_status, raw_json)) = existing {
+            stored_json = Some(raw_json.clone());
             if db_status != "Draft" {
                 return Err(DbError::Other(
                     "An immutable queued or filed 2551Q snapshot cannot be replaced by an editable draft save"
@@ -590,6 +601,10 @@ impl Database {
             tx.last_insert_rowid()
         };
 
+        if let Some(write_settings) = settings_writer {
+            let writes = write_settings(id, stored_json.as_deref()).map_err(DbError::Other)?;
+            write_settings_in_transaction(&tx, writes)?;
+        }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
@@ -2021,6 +2036,15 @@ impl Database {
     /// Generic saves may never create or replace Queued and later snapshots.
     /// Queue, cancellation, claim, and completion each use a dedicated CAS path.
     pub fn save_1601c_draft(&self, draft: &Form1601CDraft) -> Result<i64, DbError> {
+        self.save_1601c_draft_with_settings(draft, None)
+    }
+
+    /// Save a 1601C draft and transactional settings rows in one commit.
+    pub(crate) fn save_1601c_draft_with_settings(
+        &self,
+        draft: &Form1601CDraft,
+        settings_writer: SettingsWriter<'_>,
+    ) -> Result<i64, DbError> {
         if !matches!(draft.status, FilingStatus::Draft) {
             return Err(DbError::Other(
                 "Only an editable Draft 1601C return may use the generic save path".to_string(),
@@ -2047,7 +2071,9 @@ impl Database {
             )
             .optional()?;
 
+        let mut stored_json = None;
         let id = if let Some((id, db_status, raw_json)) = existing {
+            stored_json = Some(raw_json.clone());
             if db_status != "Draft" {
                 return Err(DbError::Other(
                     "An immutable queued or filed 1601C snapshot cannot be replaced by a generic draft save"
@@ -2089,6 +2115,10 @@ impl Database {
             tx.last_insert_rowid()
         };
 
+        if let Some(write_settings) = settings_writer {
+            let writes = write_settings(id, stored_json.as_deref()).map_err(DbError::Other)?;
+            write_settings_in_transaction(&tx, writes)?;
+        }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
@@ -3595,6 +3625,20 @@ impl Database {
         status: &FilingStatus,
         draft: &T,
     ) -> Result<i64, DbError> {
+        self.save_form_draft_v2_with_settings(tin, form_code, year, period, status, (draft, None))
+    }
+
+    /// Save a v2 form draft and transactional settings rows in one commit.
+    pub(crate) fn save_form_draft_v2_with_settings<T: serde::Serialize>(
+        &self,
+        tin: &str,
+        form_code: &str,
+        year: u16,
+        period: &crate::forms::FilingPeriod,
+        status: &FilingStatus,
+        draft_and_settings: (&T, SettingsWriter<'_>),
+    ) -> Result<i64, DbError> {
+        let (draft, settings_writer) = draft_and_settings;
         if matches!(form_code, "1601C" | "2551Q") {
             return Err(DbError::Other(format!(
                 "{form_code} must use its dedicated immutable draft or queue persistence path"
@@ -3607,37 +3651,43 @@ impl Database {
             )));
         }
 
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let json = serde_json::to_string(draft)?;
         let status_str = filing_status_to_db(status);
         let period_key = period.to_period_key();
-
-        // Also set the legacy quarter column for backward compatibility
         let quarter_val = legacy_slot_for_period(period);
 
         // Only a row still in Draft is ever replaced: a queued, submitted,
         // confirmed or paid return is the filed record, and saving over it
         // would lose what reached BIR. A save then fails instead of writing.
-        let mut stored = self.conn.prepare(
-            "SELECT status FROM form_drafts
-             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 AND period_key = ?4",
+        let mut stored = tx.prepare(
+            "SELECT id, status, data_json FROM form_drafts
+             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 AND period_key = ?4
+             ORDER BY updated_at DESC, id DESC",
         )?;
-        let left_draft = stored
+        let stored_rows = stored
             .query_map(params![tin, form_code, year as i64, &period_key], |row| {
-                row.get::<_, String>(0)
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
             })?
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .map(|status| filing_status_from_db(&status))
-            .find(|status| *status != FilingStatus::Draft);
+            .collect::<Result<Vec<_>, _>>()?;
         drop(stored);
+        let left_draft = stored_rows
+            .iter()
+            .map(|(_, status, _)| filing_status_from_db(status))
+            .find(|status| *status != FilingStatus::Draft);
         if let Some(status) = left_draft {
             return Err(DbError::Other(format!(
                 "The stored {form_code} return for this period is {}, no longer a draft; it cannot be saved over. Amend it instead.",
                 filing_status_to_db(&status).to_lowercase()
             )));
         }
+        let stored_json = stored_rows.first().map(|(_, _, json)| json.clone());
 
-        let rows_updated = self.conn.execute(
+        let rows_updated = tx.execute(
             "UPDATE form_drafts
              SET quarter = ?4,
                  status = ?5,
@@ -3659,7 +3709,7 @@ impl Database {
         )?;
 
         if rows_updated == 0 {
-            self.conn.execute(
+            tx.execute(
                 "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
@@ -3674,7 +3724,7 @@ impl Database {
             )?;
         }
 
-        let id = self.conn.query_row(
+        let id = tx.query_row(
             "SELECT id FROM form_drafts
              WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3 AND period_key = ?4
              ORDER BY updated_at DESC, id DESC
@@ -3682,6 +3732,11 @@ impl Database {
             params![tin, form_code, year as i64, &period_key],
             |row| row.get::<_, i64>(0),
         )?;
+        if let Some(write_settings) = settings_writer {
+            let writes = write_settings(id, stored_json.as_deref()).map_err(DbError::Other)?;
+            write_settings_in_transaction(&tx, writes)?;
+        }
+        tx.commit()?;
         Ok(id)
     }
 

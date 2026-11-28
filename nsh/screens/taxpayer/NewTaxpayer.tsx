@@ -152,7 +152,7 @@ export function NewTaxpayerPage() {
   return (
     <View testID="new-tp" class="w-full">
       <PageHeader
-        title="New taxpayer"
+        title="New tax profile"
         lede="The 9-digit TIN, the registered name and the head office's address. Branches inherit the address unless you change it."
       />
       <FormCard

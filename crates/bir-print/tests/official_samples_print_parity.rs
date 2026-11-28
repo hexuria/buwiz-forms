@@ -3,9 +3,12 @@
 //!
 //! For each official 1702MX sample (`1702MX-1225`, `1702MX-0625-fiscal`,
 //! `1702MX-1225-sched6`), every key joined in
-//! `html-frozen/1702mx-2018c/writer-cells.json` must print the exact official
-//! XML value (case included; normalized only for comb/peso/centavo split and
-//! commas).
+//! `html-frozen/1702mx-2018c/writer-cells.json` must print the official XML
+//! value. An amount compares as the number it is, sign included: the sheet
+//! groups thousands and shows a negative the way the official printout does
+//! (`(200,000)` on 1702MX), so `5,000` matches `5000` and `(200000)` matches
+//! `-200000`, while a lost sign or digit fails. A TIN compares by its digits
+//! (the sheet may dash it). Every other value compares exactly, case included.
 
 use bir_core::forms::form_1702mx::{
     Form1702MXDeductionMethod, Form1702MXDraft, Form1702MXFilingBasis,
@@ -272,57 +275,115 @@ fn all_printed_cells(doc: &str) -> BTreeMap<String, String> {
     out
 }
 
-fn normalize_number_for_compare(s: &str) -> Option<String> {
+/// The signed number an amount text holds: commas and spaces dropped,
+/// `(123)` and `-123` both negative. `None` for anything that is not a number.
+fn amount_value(s: &str) -> Option<f64> {
     let trimmed = s.trim();
     if trimmed.is_empty() {
         return None;
     }
-    // Convert accounting parens `(123)` to `-123`, strip commas & spaces.
-    let neg_parens = trimmed.starts_with('(') && trimmed.ends_with(')');
-    let inner = if neg_parens {
-        &trimmed[1..trimmed.len() - 1]
-    } else {
-        trimmed
+    let (negative, inner) = match trimmed.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
+        Some(inner) => (true, inner.trim()),
+        None => match trimmed.strip_prefix('-') {
+            Some(rest) => (true, rest.trim()),
+            None => (false, trimmed),
+        },
     };
     let cleaned: String = inner
         .chars()
         .filter(|&c| c != ',' && !c.is_whitespace())
         .collect();
-    let signed = if neg_parens && !cleaned.starts_with('-') {
-        format!("-{cleaned}")
-    } else {
-        cleaned
-    };
-    let parsed: f64 = signed.parse().ok()?;
-    if parsed == 0.0 {
-        return Some("0".to_string());
+    if cleaned.is_empty() || !cleaned.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return None;
     }
-    if (parsed.fract()).abs() < 1e-9 {
-        Some(format!("{:.0}", parsed))
+    let magnitude: f64 = cleaned.parse().ok()?;
+    Some(if negative { -magnitude } else { magnitude })
+}
+
+/// What a joined key holds, which decides how its print is compared.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Kind {
+    /// Compared as a signed number.
+    Amount,
+    /// Compared by its digits.
+    Tin,
+    /// Compared exactly.
+    Text,
+}
+
+/// The 1702MX amount keys, from the official layout
+/// (`crates/bir-core/data/official-xml/1702mx-v2018c.json`): its `numbertext`
+/// entries (`"number"`) and the controls the official page starts at `0`
+/// (`"default": "0"`, the schedule tables' amount columns).
+fn official_amount_keys() -> BTreeSet<String> {
+    let path = repo_root().join("crates/bir-core/data/official-xml/1702mx-v2018c.json");
+    let layout: Value =
+        serde_json::from_str(&std::fs::read_to_string(path).expect("1702mx layout"))
+            .expect("parse 1702mx layout");
+    layout["entries"]
+        .as_array()
+        .expect("layout entries")
+        .iter()
+        .filter(|entry| {
+            entry.get("number").is_some() || matches!(entry["default"].as_str(), Some("0" | "0.00"))
+        })
+        .filter_map(|entry| entry["key"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// An official value written the way `formatCurrency()` writes an amount
+/// (`300,000.00`, `-5.00`): grouped digits with two decimals.
+fn is_currency_text(s: &str) -> bool {
+    let body = s.trim();
+    let body = body.strip_prefix('-').unwrap_or(body);
+    let Some((whole, cents)) = body.split_once('.') else {
+        return false;
+    };
+    cents.len() == 2
+        && cents.bytes().all(|b| b.is_ascii_digit())
+        && !whole.is_empty()
+        && whole.bytes().all(|b| b.is_ascii_digit() || b == b',')
+}
+
+fn kind_of(key: &str, official: &str, amounts: &BTreeSet<String>) -> Kind {
+    if amounts.contains(key) || is_currency_text(official) {
+        Kind::Amount
+    } else if key.to_ascii_uppercase().contains("TIN") {
+        Kind::Tin
     } else {
-        Some(format!("{:.2}", parsed))
+        Kind::Text
     }
 }
 
-fn values_match_exact(official: &str, printed: &str, is_numeric: bool) -> bool {
+fn values_match(official: &str, printed: &str, kind: Kind) -> bool {
     let off = official.trim();
     let prt = printed.trim();
     if off == prt {
         return true;
     }
-    // form-review/RULES.md section 7: official "0" / "0.00" for an
-    // untouched amount box prints blank; typed or computed zero may print as zero.
-    if normalize_number_for_compare(off).as_deref() == Some("0") && prt.is_empty() {
-        return true;
-    }
-    if is_numeric {
-        let off_n = normalize_number_for_compare(off);
-        let prt_n = normalize_number_for_compare(prt);
-        if off_n.is_some() && off_n == prt_n {
-            return true;
+    match kind {
+        Kind::Amount => {
+            // form-review/RULES.md section 7: official "0" / "0.00" for an
+            // untouched amount box prints blank; typed or computed zero may
+            // print as zero.
+            if amount_value(off) == Some(0.0) && prt.is_empty() {
+                return true;
+            }
+            match (amount_value(off), amount_value(prt)) {
+                (Some(a), Some(b)) => (a - b).abs() < 1e-6,
+                _ => false,
+            }
         }
+        Kind::Tin => {
+            let digits = |s: &str| s.chars().filter(char::is_ascii_digit).collect::<String>();
+            off.chars().all(|c| c.is_ascii_digit())
+                && prt
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '-' || c == ' ')
+                && digits(off) == digits(prt)
+        }
+        Kind::Text => false,
     }
-    false
 }
 
 /// Official keys in `1702MX` that are NOT joined in `html-frozen/1702mx-2018c/writer-cells.json`
@@ -358,6 +419,7 @@ fn verify_1702mx_sample(stem: &str, draft: &Form1702MXDraft) -> Vec<String> {
     let wc: Value = serde_json::from_str(&wc_text).expect("parse writer-cells");
 
     let allowed_unjoined: BTreeSet<&str> = MX_ALLOWED_UNJOINED_BLANK.iter().copied().collect();
+    let amounts = official_amount_keys();
     let mut failures = Vec::new();
 
     // 1. Plain & comb text joins
@@ -371,7 +433,7 @@ fn verify_1702mx_sample(stem: &str, draft: &Form1702MXDraft) -> Vec<String> {
         if key.starts_with("derived:") {
             let expected = map.get(key).map(String::as_str).unwrap_or("");
             let prt = cells.get(cell).map(String::as_str).unwrap_or("");
-            if !values_match_exact(expected, prt, false) {
+            if !values_match(expected, prt, kind_of(key, expected, &amounts)) {
                 failures.push(format!(
                     "{stem} derived {key} -> {cell}: map={expected:?} printed={prt:?}"
                 ));
@@ -403,8 +465,12 @@ fn verify_1702mx_sample(stem: &str, draft: &Form1702MXDraft) -> Vec<String> {
         let off = official.get(key).map(String::as_str).unwrap_or("");
         let prt = cells.get(cell).map(String::as_str).unwrap_or("");
         // Attachment count is zero-padded to the comb's 3 digit boxes ("00" -> "000").
-        let is_num = key == "frm1702MX:txtPg1P2I23NumOfAttachments";
-        if !values_match_exact(off, prt, is_num) {
+        let kind = if key == "frm1702MX:txtPg1P2I23NumOfAttachments" {
+            Kind::Amount
+        } else {
+            kind_of(key, off, &amounts)
+        };
+        if !values_match(off, prt, kind) {
             failures.push(format!(
                 "{stem} join {key} -> {cell}: official={off:?} printed={prt:?}"
             ));
@@ -437,7 +503,7 @@ fn verify_1702mx_sample(stem: &str, draft: &Form1702MXDraft) -> Vec<String> {
                     format!("{}.{}", p.trim(), c.trim())
                 }
             };
-            if !values_match_exact(off, &prt, true) {
+            if !values_match(off, &prt, Kind::Amount) {
                 failures.push(format!(
                     "{stem} {list} {key}: official={off:?} printed={prt:?}"
                 ));

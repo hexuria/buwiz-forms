@@ -47,6 +47,7 @@ pub(crate) mod form_2551q;
 pub(crate) mod form_2552;
 pub(crate) mod form_2553;
 pub mod penalty_items;
+mod rendered_print_parity;
 // every other form keeps its penalty due dates and amounts.
 mod penalty_golden;
 

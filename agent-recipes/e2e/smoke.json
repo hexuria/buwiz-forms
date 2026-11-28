@@ -13,7 +13,8 @@
   "amount": "1234.56",
   "amount_shown": "1,234.56",
   "tin_root": "123456788",
-  "year": "2026"
+  "year": "2026",
+  "bstart": "01/01/2020"
  },
  "recipes": [
   {
@@ -74,16 +75,13 @@
     "file": "money-boxes.wants"
    },
    "known_gap": {
-    "macos": "gap 2: paced agent text lands wrong in the money box on the macOS strict adapter too (500.25 held 0.25, gpui-agent-cli 0.4.1, before #403)",
-    "phone": "gap 3: injected text cannot type into an auto-formatting money box (digits land scrambled at any pacing, before #403); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have"
+    "phone": "gap 3: injected paced digits still land as permutations in the money box on iOS even after #403 and even clicking the box first (500.25 read back as .52500 / .52005 / 520.05, gpui-agent-cli 0.4.1); a person's keyed input needs the software keyboard host feature (nsh-gpui-agent#11), which this build does not have"
    }
   },
   {
-   "name": "queue",
-   "file": "queue.wants",
-   "windows": "queue-windows.wants",
-   "send": true,
-   "precondition": "Queue validates first: a 2551Q holding only Items 15 and 16, on a profile without the business start date and the income-tax election, stops at its to-do list instead of the confirm dialog"
+   "name": "sheet-press",
+   "windows": "sheet-press.json",
+   "needs_cli": "0.4.1"
   },
   {
    "name": "delete-row",
@@ -96,9 +94,15 @@
    },
    "known_gap": {
     "phone": "gap 1: the row drawer is a sheet on a phone",
-    "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)",
-    "windows": "gpui-agent on Windows cannot press inside the row drawer: the host reports every node in the Sheet visible=false with zero-height geometry though it is painted and clickable, so each press is refused offscreen"
+    "linux": "gap 1: in the narrow layout of the Linux window, presses inside a sheet are refused as offscreen too (linux-final birth-date s14)"
    }
+  },
+  {
+   "name": "queue",
+   "file": "queue.wants",
+   "windows": "queue-windows.wants",
+   "send": true,
+   "precondition": "Queue validates first. The recipe records the profile's business start date and income-tax election through the form's own banners, and the money-box recipe leaves Items 15 and 16 at zero, so the return validates; a return that does not stops at its to-do list instead of the confirm dialog"
   },
   {
    "name": "birth-date",
@@ -118,7 +122,8 @@
    "known_gap": {
     "phone": "gap 1: a sheet an earlier recipe left open (birth-date's Done press is refused) occludes the account menu; and under BIR_AUTH_BYPASS=1 no lock screen follows Log out (the macOS run of e2e-fixes-apple)",
     "linux": "gap 1 in the Linux window's narrow layout: the date sheet birth-date left open (its Done press is refused offscreen) occludes the account menu",
-    "windows": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out"
+    "windows": "Log out is refused on a fresh database: endSession requires an admin PIN (or TOTP) for an admin session, and the suite safety rules forbid typing into a PIN box, so no run of this suite can sign out",
+    "macos": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed (nb-menu-logout) but no locked-screen ever appears, so the wait can never pass in this environment"
    }
   }
  ]

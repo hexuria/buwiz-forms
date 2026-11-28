@@ -562,23 +562,22 @@ fn print_lines(text: &str, width: usize) -> (String, String) {
     (first.trim_end().to_string(), second)
 }
 
-/// An official amount right-aligned in a `slots`-wide comb. Commas go first
-/// when it does not fit; `None` (blank on print) when it still does not.
+/// An official amount in a `slots`-wide whole-peso comb
+/// ([`super::print_map::whole_peso_comb_text`]): Form 1702Q's combs take
+/// whole pesos and draw preprinted commas between digit groups, so an amount
+/// without centavos emits bare digits right-aligned to `slots`. An amount
+/// wider than `slots`, or with centavos the upload carries (the official
+/// page shows them; the print never rounds them away), is returned
+/// unpadded, and the shared print engine renders it as one plain
+/// right-aligned comma-formatted rectangle under RULES 2. A negative keeps
+/// its minus, as the official page shows it (formatCurrency,
+/// js/string-util.js l. 354; no bracketing formatter on its amount boxes).
 fn print_amount(text: &str, slots: usize) -> Option<String> {
     let text = text.trim();
     if text.is_empty() {
         return None;
     }
-    let fitted = if text.chars().count() <= slots {
-        text.to_string()
-    } else {
-        let bare: String = text.chars().filter(|ch| *ch != ',').collect();
-        if bare.chars().count() > slots {
-            return None;
-        }
-        bare
-    };
-    Some(format!("{fitted:>slots$}"))
+    super::print_map::whole_peso_comb_text(text, slots)
 }
 
 /// A whole-number rate right-aligned in a 2-slot box; `None` when the rate
@@ -1946,9 +1945,9 @@ mod tests {
         );
         assert_eq!(get("address_line2"), "UEZON CITY");
         assert_eq!(get("tin_digits"), "123456788");
-        assert_eq!(get("txtTax25"), "  739,265.00");
-        assert_eq!(get("Sched2:txtTax1"), "5,000,001.00");
-        assert_eq!(get("Sched1:txtTax1B"), "  800,001.00");
+        assert_eq!(get("txtTax25"), "      739265");
+        assert_eq!(get("Sched2:txtTax1"), "     5000001");
+        assert_eq!(get("Sched1:txtTax1B"), "      800001");
         assert_eq!(get("sched1_rate_a"), " 0");
         assert_eq!(get("sched1_rate_b_whole"), "10");
         assert_eq!(get("sched1_rate_b_tenths"), "0");
@@ -1957,16 +1956,24 @@ mod tests {
     }
 
     #[test]
-    fn print_amounts_fit_the_comb_or_stay_blank() {
+    fn print_amounts_fit_the_comb_or_overflow_with_their_centavos() {
         assert_eq!(
             print_amount("1,234.00", 12).as_deref(),
-            Some("    1,234.00")
+            Some("        1234")
         );
+        // Centavos the upload carries print as they are, never rounded.
+        assert_eq!(print_amount("875,000.49", 12).as_deref(), Some("875000.49"));
+        assert_eq!(print_amount("875,000.50", 12).as_deref(), Some("875000.50"));
+        assert_eq!(print_amount("-50,000.50", 12).as_deref(), Some("-50000.50"));
         assert_eq!(
             print_amount("12,345,678.90", 12).as_deref(),
-            Some(" 12345678.90")
+            Some("12345678.90")
         );
-        assert_eq!(print_amount("1,234,567,890,123.00", 12), None);
+        assert_eq!(print_amount("-0.00", 12).as_deref(), Some("           0"));
+        assert_eq!(
+            print_amount("1,234,567,890,123.00", 12).as_deref(),
+            Some("1234567890123")
+        );
         assert_eq!(print_amount("", 12), None);
         assert_eq!(print_whole_rate("2.5"), None);
         assert_eq!(print_tenths_rate("2.5"), Some((" 2".into(), "5".into())));

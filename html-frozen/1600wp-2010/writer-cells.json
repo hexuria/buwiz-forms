@@ -488,6 +488,54 @@
    "html_id": "p1c141",
    "printed": "Schedule 1.1 row 6 Tax Required to be Withheld",
    "reason": "geometry: the only fillable cell for this printed item on the 1600-WP (January 2010) sheet"
+  },
+  {
+   "writer_key": "derived:sched_seq1",
+   "html_id": "p1c94",
+   "printed": "Schedule 1.1 row 1 Seq. No.",
+   "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
+  },
+  {
+   "writer_key": "derived:sched_seq2",
+   "html_id": "p1c102",
+   "printed": "Schedule 1.1 row 2 Seq. No.",
+   "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
+  },
+  {
+   "writer_key": "derived:sched_seq3",
+   "html_id": "p1c110",
+   "printed": "Schedule 1.1 row 3 Seq. No.",
+   "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
+  },
+  {
+   "writer_key": "derived:sched_seq4",
+   "html_id": "p1c118",
+   "printed": "Schedule 1.1 row 4 Seq. No.",
+   "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
+  },
+  {
+   "writer_key": "derived:sched_seq5",
+   "html_id": "p1c126",
+   "printed": "Schedule 1.1 row 5 Seq. No.",
+   "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
+  },
+  {
+   "writer_key": "derived:sched_seq6",
+   "html_id": "p1c134",
+   "printed": "Schedule 1.1 row 6 Seq. No.",
+   "reason": "print-only value derived by the model (to_print_field_map); not part of the submitted XML"
+  },
+  {
+   "writer_key": "derived:sched_total_amount",
+   "html_id": "p1c241",
+   "printed": "Schedule 1.1 Total Amount of Income Payment",
+   "reason": "Schedule 1.1 total income payment; prints 0.00 when zero, matching Part II items 14-16"
+  },
+  {
+   "writer_key": "frm1600WP:dtSched:TotaltaxWithheld",
+   "html_id": "p1c243",
+   "printed": "Schedule 1.1 Total Tax Required to be Withheld",
+   "reason": "Schedule 1.1 total tax withheld; prints 0.00 when zero, matching Part II items 14-16"
   }
  ],
  "money_joins": [],
@@ -582,10 +630,6 @@
     "frm1600WP:dtSched:taxWithheld10"
    ],
    "reason": "Schedule 1.1 prints six rows; rows 7-10 of the page belong on an attached sheet"
-  },
-  {
-   "writer_key": "frm1600WP:dtSched:TotaltaxWithheld",
-   "reason": "the 2010 sheet has no Schedule 1.1 total box; Part II items 14-16 carry the totals"
   },
   {
    "writer_key": "hPartIITableSize",

@@ -562,6 +562,17 @@ impl Form1606Draft {
         if !self.is_amended {
             self.tax_remitted_previous = 0.0;
         }
+        // `enableInstallment`: Items 22 to 26 are installment-sale entries.
+        // Closing Item 20's gate clears them in the model too, so a typed
+        // amount cannot lie dormant in a draft. Item 21 is only a copy of
+        // Item 28A's gross selling price and has no separate amount to clear.
+        if self.transaction != Some(Form1606Transaction::InstallmentSale) {
+            self.cost_and_expenses = 0.0;
+            self.mortgage_assumed = 0.0;
+            self.initial_year_payments = 0.0;
+            self.installment_this_month = 0.0;
+            self.number_of_installments = 0.0;
+        }
         for value in [
             &mut self.cost_and_expenses,
             &mut self.mortgage_assumed,
@@ -911,11 +922,29 @@ impl Form1606Draft {
             self.fmv_improvements_tax_declaration,
             self.fmv_improvements_bir,
         );
+        let sched1_class = match self.property_class {
+            Some(Form1606PropertyClass::Residential) => "RR".to_string(),
+            Some(Form1606PropertyClass::Commercial) => "CR".to_string(),
+            Some(Form1606PropertyClass::CondominiumResidential) => "RC".to_string(),
+            Some(Form1606PropertyClass::CondominiumCommercial) => "CC".to_string(),
+            Some(Form1606PropertyClass::Agricultural) => "A".to_string(),
+            Some(Form1606PropertyClass::Industrial) => "I".to_string(),
+            Some(Form1606PropertyClass::Others) => self.property_class_other.trim().to_uppercase(),
+            None => String::new(),
+        };
         for (row, kind, (a, b)) in [(1, "LOT", land), (2, "IMPROVEMENT", improvement)] {
             let shown = a.is_some() || b.is_some();
             put(
                 &format!("sched1_kind{row}"),
                 if shown { kind } else { "" }.to_string(),
+            );
+            put(
+                &format!("sched1_class{row}"),
+                if shown {
+                    sched1_class.clone()
+                } else {
+                    String::new()
+                },
             );
             put(&format!("sched1_fmv{row}"), higher(a, b));
         }
@@ -931,6 +960,22 @@ impl Form1606Draft {
                 Form1606TaxRelief::No | Form1606TaxRelief::YesUnspecified => "",
             }
             .to_string(),
+        );
+        // Official upload XML keeps two decimals (`48.00`), matching eBIRForms,
+        // while print displays the installment count as a plain number (`48`).
+        if !fields.get("frm1606:txtTotalN").is_none_or(String::is_empty) {
+            fields.insert(
+                "frm1606:txtTotalN".to_string(),
+                super::print_map::format_count(Some(self.number_of_installments)),
+            );
+        }
+        super::print_map::blank_unset_date_parts(
+            &mut fields,
+            &[
+                "frm1606:txtDateMonth",
+                "frm1606:txtDateDay",
+                "frm1606:txtDateYear",
+            ],
         );
         fields
     }
@@ -1522,6 +1567,44 @@ mod tests {
     }
 
     #[test]
+    fn installment_amounts_clear_when_item_20_is_not_an_installment_sale() {
+        let mut unanswered = sample();
+        unanswered.transaction = None;
+        unanswered.cost_and_expenses = 42.0;
+        unanswered.mortgage_assumed = 43.0;
+        unanswered.initial_year_payments = 44.0;
+        unanswered.installment_this_month = 45.0;
+        unanswered.number_of_installments = 4.0;
+        unanswered.recompute();
+        assert_eq!(unanswered.cost_and_expenses, 0.0);
+        assert_eq!(unanswered.mortgage_assumed, 0.0);
+        assert_eq!(unanswered.initial_year_payments, 0.0);
+        assert_eq!(unanswered.installment_this_month, 0.0);
+        assert_eq!(unanswered.number_of_installments, 0.0);
+
+        let mut installment = sample();
+        installment.set_transaction(Form1606Transaction::InstallmentSale);
+        installment.cost_and_expenses = 42.0;
+        installment.mortgage_assumed = 43.0;
+        installment.initial_year_payments = 44.0;
+        installment.installment_this_month = 45.0;
+        installment.number_of_installments = 4.0;
+        installment.recompute();
+        assert_eq!(installment.cost_and_expenses, 42.0);
+        assert_eq!(installment.mortgage_assumed, 43.0);
+        assert_eq!(installment.initial_year_payments, 44.0);
+        assert_eq!(installment.installment_this_month, 45.0);
+        assert_eq!(installment.number_of_installments, 4.0);
+
+        installment.set_transaction(Form1606Transaction::CashSale);
+        assert_eq!(installment.cost_and_expenses, 0.0);
+        assert_eq!(installment.mortgage_assumed, 0.0);
+        assert_eq!(installment.initial_year_payments, 0.0);
+        assert_eq!(installment.installment_this_month, 0.0);
+        assert_eq!(installment.number_of_installments, 0.0);
+    }
+
+    #[test]
     fn field_map_uses_official_formats() {
         let fields = sample().to_bir_field_map();
         assert_eq!(fields["frm1606:txtDateMonth"], "06");
@@ -1729,5 +1812,37 @@ mod tests {
                 .any(|(field, _)| field == "surcharge"),
             "a three-decimal amount must still be refused"
         );
+    }
+
+    #[test]
+    fn print_map_derives_schedule_1_classification_codes_from_property_class() {
+        let mut draft = sample();
+        draft.fmv_land_tax_declaration = Some(1_000_000.0);
+        draft.fmv_improvements_tax_declaration = None;
+        draft.fmv_improvements_bir = None;
+        for (class, code) in [
+            (Form1606PropertyClass::Residential, "RR"),
+            (Form1606PropertyClass::Commercial, "CR"),
+            (Form1606PropertyClass::CondominiumResidential, "RC"),
+            (Form1606PropertyClass::CondominiumCommercial, "CC"),
+            (Form1606PropertyClass::Agricultural, "A"),
+            (Form1606PropertyClass::Industrial, "I"),
+        ] {
+            draft.property_class = Some(class);
+            let p = draft.to_print_field_map();
+            assert_eq!(p["derived:sched1_class1"], code);
+            assert_eq!(p["derived:sched1_class2"], "");
+            assert!(
+                !draft
+                    .to_bir_field_map()
+                    .contains_key("derived:sched1_class1")
+            );
+        }
+        draft.property_class = Some(Form1606PropertyClass::Others);
+        draft.property_class_other = " cl ".into();
+        draft.fmv_improvements_bir = Some(500_000.0);
+        let p = draft.to_print_field_map();
+        assert_eq!(p["derived:sched1_class1"], "CL");
+        assert_eq!(p["derived:sched1_class2"], "CL");
     }
 }

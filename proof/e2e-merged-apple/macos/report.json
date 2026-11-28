@@ -1,0 +1,112 @@
+{
+ "suite": "smoke",
+ "target": "macos",
+ "started": "20261127-022732",
+ "out": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-022732",
+ "cli_version": "0.4.1",
+ "app_commit": "7d3b77fe",
+ "platform": "desktop",
+ "os": "macos",
+ "features": [
+  "press",
+  "scroll",
+  "hover",
+  "drag",
+  "viewport",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "desktop",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "setup-start",
+   "status": "pass",
+   "ms": 665,
+   "note": null,
+   "file": "agent-recipes/e2e/setup-start.wants"
+  },
+  {
+   "name": "sign-up",
+   "status": "pass",
+   "ms": 7240,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-up.wants"
+  },
+  {
+   "name": "tax-year",
+   "status": "pass",
+   "ms": 5885,
+   "note": null,
+   "file": "agent-recipes/e2e/tax-year.wants"
+  },
+  {
+   "name": "navigate",
+   "status": "pass",
+   "ms": 9051,
+   "note": null,
+   "file": "agent-recipes/ui/ui-navigate-app.wants"
+  },
+  {
+   "name": "open-2551q",
+   "status": "pass",
+   "ms": 1882,
+   "note": null,
+   "file": "agent-recipes/e2e/open-2551q.wants"
+  },
+  {
+   "name": "money-boxes",
+   "status": "pass",
+   "ms": 16064,
+   "note": null,
+   "file": "agent-recipes/e2e/money-boxes-paced.json"
+  },
+  {
+   "name": "queue",
+   "status": "fail",
+   "ms": 36930,
+   "note": "precondition: Queue validates first: a 2551Q holding only Items 15 and 16, on a profile without the business start date and the income-tax election, stops at its to-do list instead of the confirm dialog",
+   "file": "agent-recipes/e2e/queue.wants",
+   "step": "s18",
+   "error": "wait_until timed out: node `fp-cancel-queue` not found",
+   "error_code": "timeout",
+   "line": "wait_until fp-cancel-queue --timeout-ms 20000 --screenshot",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-022732/07-queue/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-022732/07-queue/failure-tree.json"
+  },
+  {
+   "name": "delete-row",
+   "status": "setup",
+   "ms": 126,
+   "note": null,
+   "file": "agent-recipes/e2e/delete-row.wants",
+   "step": null,
+   "error": "$table: no node matches {\"id_regex\": \"^(fp-table-.+)-add$\", \"group\": 1}"
+  },
+  {
+   "name": "birth-date",
+   "status": "pass",
+   "ms": 4321,
+   "note": null,
+   "file": "agent-recipes/e2e/birth-date.wants"
+  },
+  {
+   "name": "sign-out",
+   "status": "known gap",
+   "ms": 11982,
+   "note": null,
+   "file": "agent-recipes/e2e/sign-out.wants",
+   "step": "s4",
+   "error": "wait_until timed out: node `locked-screen` not found",
+   "error_code": "timeout",
+   "line": "wait_until locked-screen --timeout-ms 10000 --screenshot",
+   "known_gap": "under the mandatory BIR_AUTH_BYPASS=1 there is no lock gate: Log out is pressed (nb-menu-logout) but no locked-screen ever appears, so the wait can never pass in this environment",
+   "screenshot": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-022732/10-sign-out/failure.png",
+   "tree": "/Users/devin/BuwizNsh/evidence/e2e/macos-20261127-022732/10-sign-out/failure-tree.json"
+  }
+ ]
+}

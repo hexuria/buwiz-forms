@@ -20,8 +20,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   APP_NAME: eBIRForms
-  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+  # bir-core compiles Google's OAuth client in (option_env!). No build carries it unless the repository variable
+  # STORE_GMAIL is exactly 1 (owner, 2026-11-28: 1.0.0 ships no Google client; the name predates it governing every
+  # build). Gmail sign-in returns after 1.0.0 with native clients that hold no secret, and this switch's
+  # secret-passing "on" branch is removed then.
+  GOOGLE_CLIENT_ID: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
+  GOOGLE_CLIENT_SECRET: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
 
 jobs:
   # The public release jobs may consume only this exact, tested tag commit.
@@ -62,7 +66,7 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update
+          sudo bash scripts/ci/apt_update.sh
           sudo apt-get install -y \
             pkg-config \
             libx11-dev \
@@ -136,6 +140,22 @@ jobs:
       release: ${{ github.event_name == 'push' }}
     secrets: inherit
 
+  # The Microsoft Store's .msix, built apart from the direct downloads above. Like every build it is given the Google
+  # OAuth client only when the repository variable STORE_GMAIL is 1, and its job checks the package against that. It
+  # is given no signing certificate: the Store signs it.
+  # Its `windows-store` artifact is what Partner Center takes; the public release below never lists the unsigned .msix
+  # (it cannot be sideloaded) or its sums.
+  build-windows-store:
+    needs: preflight
+    uses: ./.github/workflows/release-windows.yml
+    with:
+      release: ${{ github.event_name == 'push' }}
+      store: true
+    secrets:
+      NSH_REPO_TOKEN: ${{ secrets.NSH_REPO_TOKEN }}
+      GOOGLE_CLIENT_ID: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_ID || '' }}
+      GOOGLE_CLIENT_SECRET: ${{ vars.STORE_GMAIL == '1' && secrets.GOOGLE_CLIENT_SECRET || '' }}
+
   build-linux:
     needs: preflight
     uses: ./.github/workflows/release-linux.yml
@@ -143,7 +163,7 @@ jobs:
       tag: ${{ needs.preflight.outputs.version }}
     # A called workflow does not see this file's env, so the Google OAuth
     # client the shell compiles in (option_env! in bir-core) has to reach it
-    # as secrets, the same way build-windows gets them.
+    # as secrets; release-linux.yml passes them on only when STORE_GMAIL is 1.
     secrets: inherit
 
   # ── Create GitHub Release ───────────────────────────────────────────────
@@ -154,7 +174,7 @@ jobs:
     concurrency:
       group: release-feed-${{ github.ref }}
       cancel-in-progress: false
-    needs: [preflight, build-windows, build-linux]
+    needs: [preflight, build-windows, build-windows-store, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts
@@ -175,11 +195,10 @@ jobs:
             artifacts/**/*.pkg.tar.zst
             artifacts/**/*.PKGBUILD
             artifacts/**/SHA256SUMS-linux-*.txt
-            artifacts/**/SHA256SUMS-windows-*.txt
+            artifacts/**/SHA256SUMS-windows-x64.txt
             artifacts/**/install-linux.sh
             artifacts/**/*-Setup.exe
             artifacts/**/*.msi
-            artifacts/**/*.msix
             artifacts/**/*-windows-x86_64.zip
 
       - name: Check out the manifest script

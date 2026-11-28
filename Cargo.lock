@@ -457,6 +457,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "bir-core",
+ "bir-print",
  "bir-rules",
  "bir-submit",
  "block2",
@@ -1916,9 +1917,9 @@ dependencies = [
 
 [[package]]
 name = "gpui-agent"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d048392444cd3ae4a0d4d941d4f7c21c2717ded12f753d90a62177e5c58bf00d"
+checksum = "89667d0a8b270fbfc5047dcdec7f142e6adc758155e9d308ce580b142ad19c7c"
 dependencies = [
  "base64 0.22.1",
  "hmac 0.12.1",
@@ -1932,9 +1933,9 @@ dependencies = [
 
 [[package]]
 name = "gpui-agent-recipe"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaebe2318da158a3275551d7db270c2af878cba9b49ee4c7f3422a7453079dcd"
+checksum = "53844962d049fd56432886eac07681286c9fe6edd2435186a721ba35e186d444"
 dependencies = [
  "gpui-agent",
  "regex-lite",

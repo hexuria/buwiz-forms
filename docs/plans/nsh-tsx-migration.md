@@ -196,8 +196,10 @@ builds (cargo feature `agent`) started by that recipe.
   launcher is still the same live process (Unix: the PID; Windows: the PID and its
   start time, so a reused PID does not count) and ends without writing when it is
   not. Windows also stops the job in the recipe's `finally`, which runs for a
-  failed build, a failed install and Ctrl+C, and removes `agent-token` and
-  `agent-token.new` from the host's files. On Unix a token already written when
+  failed build, a failed install and Ctrl+C. That cleanup waits bounded for the
+  stop to reach a terminal job state before it collects output and removes the
+  job, then removes `agent-token` and `agent-token.new` from the host's files.
+  On Unix a token already written when
   the launch fails stays in the host's private files until the next start of the
   app reads and deletes it; it is the token of that developer's own launch.
 - **Reader:** the app reads the file once and deletes it (`take_token`); the
