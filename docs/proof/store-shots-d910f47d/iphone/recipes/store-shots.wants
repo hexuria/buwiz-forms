@@ -1,0 +1,44 @@
+# App Store pictures in their required order. 01 is the first page a fresh install shows; it is also the sign-in/setup entry.
+type $tin_field $tin
+type new-tp-name $name
+type new-tp-registered_address $address
+click new-tp-zip_code-trigger
+wait_until new-tp-zip_code-list --timeout-ms 5000
+type new-tp-zip_code-search $zip
+click new-tp-zip_code-opt-$zip --screenshot
+click new-tp-rdo_code-trigger
+wait_until new-tp-rdo_code-list --timeout-ms 5000
+type new-tp-rdo_code-search $rdo
+click new-tp-rdo_code-opt-$rdo --screenshot
+click new-tp-save
+wait_until tp-page-forms --timeout-ms 10000
+# Give the branch a tax year and allow 2551Q.
+click tp-tabs-forms
+wait_until tp-add-year-select-trigger --timeout-ms 5000
+click tp-add-year-select-trigger
+wait_until tp-add-year-select-opt-$year --timeout-ms 5000
+click tp-add-year-select-opt-$year
+wait_until tp-add-year-add --timeout-ms 5000
+click tp-add-year-add
+wait_until tp-years-$year --timeout-ms 5000
+click tp-forms-edit
+wait_until tp-forms-search --timeout-ms 5000
+set_value tp-forms-search 2551
+wait_until tp-form-2551Q --timeout-ms 5000
+click tp-form-2551Q
+click tp-forms-save
+wait_until tp-forms-save --absent --timeout-ms 5000
+# 02 Home.
+click tab-home
+wait_until home-tp-$tin_root --timeout-ms 10000
+# 03 Form library.
+click tab-library
+wait_until library-search --timeout-ms 5000
+# Open 2551Q and fill sales amounts.
+click tab-home
+wait_until nb-new --timeout-ms 5000
+click nb-new
+wait_until new-return-2551Q --timeout-ms 5000
+click new-return-2551Q
+click new-return-open
+wait_until form-page --timeout-ms 20000

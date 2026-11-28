@@ -1,0 +1,45 @@
+{
+ "v": 1,
+ "description": "App Store screenshot pass on one booted iOS Simulator. Fictional taxpayer; never presses Queue.",
+ "params": {
+  "tin": "000123456000",
+  "tin_root": "000123456",
+  "name": "Juan Dela Cruz Trading",
+  "address": "123 Market Street, Manila",
+  "zip": "1000",
+  "rdo": "050",
+  "year": "2026",
+  "sales1": "12345",
+  "sales2": "890"
+ },
+ "recipes": [
+  {
+   "name": "store-start",
+   "file": "store-start.wants",
+   "required": true,
+   "timeout_s": 120
+  },
+  {
+   "name": "store-shots",
+   "file": "store-shots.wants",
+   "required": true,
+   "timeout_s": 1800,
+   "resolve": {
+    "tin_field": {
+     "role": [
+      "textbox",
+      "textfield"
+     ],
+     "name_regex": "^TIN, 9 digits"
+    }
+   }
+  },
+  {
+   "name": "store-form",
+   "file": "store-shots-form.json",
+   "required": true,
+   "timeout_s": 900,
+   "needs_cli": "0.4.1"
+  }
+ ]
+}

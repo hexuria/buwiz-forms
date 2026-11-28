@@ -1,0 +1,11 @@
+{
+ "v": 1,
+ "name": "store-shots-landscape",
+ "app": "bir-shell",
+ "steps": [
+  {"id":"landscape","op":"system","action":"rotate","value":"landscape"},
+  {"id":"home","op":"click","target":"tab-home"},
+  {"id":"shot09","op":"wait_until","target":"tab-home","timeout_ms":5000,"screenshot":true},
+  {"id":"portrait","op":"system","action":"rotate","value":"portrait"}
+ ]
+}

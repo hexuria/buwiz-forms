@@ -1,0 +1,51 @@
+{
+ "suite": "store-shots",
+ "target": "ios",
+ "started": "20261127-171146",
+ "out": "/Users/devin/storea2/out-iphone",
+ "cli_version": "0.4.1",
+ "app_commit": "d910f47d",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "store-start",
+   "status": "pass",
+   "ms": 573,
+   "note": null,
+   "file": "agent-recipes/store-shots/store-start.wants"
+  },
+  {
+   "name": "store-shots",
+   "status": "pass",
+   "ms": 29857,
+   "note": null,
+   "file": "agent-recipes/store-shots/store-shots.wants"
+  },
+  {
+   "name": "store-form",
+   "status": "pass",
+   "ms": 22976,
+   "note": null,
+   "file": "agent-recipes/store-shots/store-shots-form.json"
+  }
+ ]
+}

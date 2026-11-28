@@ -1,0 +1,63 @@
+{
+ "suite": "store-shots-ipad",
+ "target": "ios",
+ "started": "20261127-173710",
+ "out": "/Users/devin/storea2/out-ipad",
+ "cli_version": "0.4.1",
+ "app_commit": "d910f47d",
+ "platform": "mobile",
+ "os": "ios",
+ "features": [
+  "press",
+  "scroll",
+  "drag",
+  "swipe",
+  "long_press",
+  "system.back",
+  "software_keyboard",
+  "paste",
+  "snapshot_since",
+  "snapshot_compact",
+  "expect_fingerprint",
+  "secret_redaction",
+  "screenshot_inline"
+ ],
+ "form_factor": "phone",
+ "data_plane": true,
+ "database": "test",
+ "recipes": [
+  {
+   "name": "store-start",
+   "status": "pass",
+   "ms": 604,
+   "note": null,
+   "file": "agent-recipes/store-shots/store-start.wants"
+  },
+  {
+   "name": "store-shots",
+   "status": "pass",
+   "ms": 30555,
+   "note": null,
+   "file": "agent-recipes/store-shots/store-shots.wants"
+  },
+  {
+   "name": "store-form",
+   "status": "fail",
+   "ms": 18737,
+   "note": null,
+   "file": "agent-recipes/store-shots/store-shots-form.json",
+   "step": "back-tab-home",
+   "error": "`node 2024` is offscreen or has no native hit",
+   "error_code": "host_error",
+   "line": null,
+   "screenshot": "/Users/devin/storea2/out-ipad/03-store-form/failure.png",
+   "tree": "/Users/devin/storea2/out-ipad/03-store-form/failure-tree.json"
+  },
+  {
+   "name": "store-shots-landscape",
+   "status": "not run",
+   "ms": 0,
+   "note": "store-form failed and the suite needs it"
+  }
+ ]
+}

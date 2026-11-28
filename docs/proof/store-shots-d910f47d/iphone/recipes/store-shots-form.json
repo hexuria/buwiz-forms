@@ -1,0 +1,276 @@
+{
+ "v": 1,
+ "name": "store-shots-form",
+ "app": "bir-shell",
+ "params": [
+  "sales1",
+  "sales2"
+ ],
+ "steps": [
+  {
+   "id": "scroll-schedule",
+   "op": "scroll",
+   "target": "form-scroll",
+   "dy": 900
+  },
+  {
+   "id": "open-schedule",
+   "op": "click",
+   "target": "fp-part-4-toggle"
+  },
+  {
+   "id": "wait-row1",
+   "op": "wait_until",
+   "target": "fp-row-drpATC1-0",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "open-row1",
+   "op": "click",
+   "target": "fp-row-drpATC1-0"
+  },
+  {
+   "id": "row1-drawer",
+   "op": "wait_until",
+   "target": "fp-table-drpATC1-drawer",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "wait-amt1",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "timeout_ms": 5000,
+   "visible": true
+  },
+  {
+   "id": "focus-amt1",
+   "op": "click",
+   "target": "fp-txtATCAmt1"
+  },
+  {
+   "id": "type-amt1",
+   "op": "type",
+   "target": "fp-txtATCAmt1",
+   "text": "$sales1"
+  },
+  {
+   "id": "shot04",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "timeout_ms": 5000,
+   "visible": true,
+   "screenshot": true
+  },
+  {
+   "id": "done-row1",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "row1-closed",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt1",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "add-row2",
+   "op": "click",
+   "target": "fp-table-drpATC1-add"
+  },
+  {
+   "id": "wait-amt2",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt2",
+   "timeout_ms": 5000,
+   "visible": true
+  },
+  {
+   "id": "open-atc2",
+   "op": "click",
+   "target": "fp-drpATC2-trigger"
+  },
+  {
+   "id": "wait-atc2",
+   "op": "wait_until",
+   "target": "fp-drpATC2-opt-4",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "pick-atc2",
+   "op": "click",
+   "target": "fp-drpATC2-opt-4"
+  },
+  {
+   "id": "focus-amt2",
+   "op": "click",
+   "target": "fp-txtATCAmt2"
+  },
+  {
+   "id": "type-amt2",
+   "op": "type",
+   "target": "fp-txtATCAmt2",
+   "text": "$sales2"
+  },
+  {
+   "id": "done-row2",
+   "op": "click",
+   "target": "fp-table-drpATC1-done"
+  },
+  {
+   "id": "row2-closed",
+   "op": "wait_until",
+   "target": "fp-txtATCAmt2",
+   "timeout_ms": 5000,
+   "exists": false
+  },
+  {
+   "id": "open-part2",
+   "op": "click",
+   "target": "fp-part-2-toggle"
+  },
+  {
+   "id": "wait-total",
+   "op": "wait_until",
+   "target": "fp-frm2551Qv2018:txt14",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "shot05",
+   "op": "wait_until",
+   "target": "fp-frm2551Qv2018:txt14",
+   "timeout_ms": 5000,
+   "visible": true,
+   "screenshot": true
+  },
+  {
+   "id": "print",
+   "op": "click",
+   "target": "fp-print"
+  },
+  {
+   "id": "shot06",
+   "op": "wait",
+   "timeout_ms": 18000,
+   "screenshot": true
+  },
+  {
+   "id": "print-settled",
+   "op": "wait",
+   "timeout_ms": 1500
+  },
+  {
+   "id": "close-print",
+   "op": "system",
+   "action": "back"
+  },
+  {
+   "id": "print-closed",
+   "op": "wait",
+   "timeout_ms": 1200
+  },
+  {
+   "id": "back-tab-home",
+   "op": "click",
+   "target": "tab-home"
+  },
+  {
+   "id": "print-toast-gone",
+   "op": "wait",
+   "timeout_ms": 6000
+  },
+  {
+   "id": "shot02",
+   "op": "wait_until",
+   "target": "home-dashboard",
+   "timeout_ms": 5000,
+   "visible": true,
+   "screenshot": true
+  },
+  {
+   "id": "open-library",
+   "op": "click",
+   "target": "tab-library"
+  },
+  {
+   "id": "shot03",
+   "op": "wait_until",
+   "target": "library-search",
+   "timeout_ms": 5000,
+   "visible": true,
+   "screenshot": true
+  },
+  {
+   "id": "open-search",
+   "op": "click",
+   "target": "nb-search"
+  },
+  {
+   "id": "palette",
+   "op": "wait_until",
+   "target": "palette-input",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "pick-profile",
+   "op": "key",
+   "target": "palette-input",
+   "key": "enter"
+  },
+  {
+   "id": "shot07",
+   "op": "wait_until",
+   "target": "tp-profile-tab",
+   "timeout_ms": 10000,
+   "visible": true,
+   "screenshot": true
+  },
+  {
+   "id": "account",
+   "op": "click",
+   "target": "nb-avatar"
+  },
+  {
+   "id": "settings-menu",
+   "op": "wait_until",
+   "target": "nb-menu-settings",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "settings",
+   "op": "click",
+   "target": "nb-menu-settings"
+  },
+  {
+   "id": "shot08",
+   "op": "wait_until",
+   "target": "settings-nav-general",
+   "timeout_ms": 10000,
+   "screenshot": true
+  },
+  {
+   "id": "settings-account",
+   "op": "click",
+   "target": "settings-nav-account"
+  },
+  {
+   "id": "wait-signin",
+   "op": "wait_until",
+   "target": "settings-account-sign-in",
+   "timeout_ms": 5000
+  },
+  {
+   "id": "open-signin",
+   "op": "click",
+   "target": "settings-account-sign-in"
+  },
+  {
+   "id": "shot01",
+   "op": "wait_until",
+   "target": "gate-start",
+   "timeout_ms": 10000,
+   "visible": true,
+   "screenshot": true
+  }
+ ]
+}

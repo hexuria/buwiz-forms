@@ -1,0 +1,4 @@
+# Fresh install first page (store shot 01), then enter New taxpayer.
+wait_until setup-solo --timeout-ms 30000
+click setup-solo
+wait_until new-tp-name --timeout-ms 10000
