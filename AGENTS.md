@@ -2,6 +2,8 @@
 
 For any agent that opens this repository. Read it first.
 
+If a file named `AGENTS.local.md` sits next to this one, read it too, right after this file: it holds this checkout's own notes, is ignored by git, and is never committed here.
+
 ## The project
 
 eBIRForms (E-BIRForms) is an offline-first app to prepare, validate, print and file Philippine BIR returns. It covers the 43 forms of the official eBIRForms package. A Rust back end runs under screens built on NSH (Native Shell, our fork hexuria/nsh). It ships on macOS, Windows, Linux, iPhone, iPad and Android. Filing goes through the Buwiz relay; sign-in goes to the Buwiz account server (buwiz-com/buwiz-com). `README.md` is the user's view; `docs/DEVELOPMENT.md` the developer's.
