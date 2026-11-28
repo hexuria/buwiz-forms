@@ -399,8 +399,7 @@ impl Form1701Draft {
                 self.put(Schedule4, item, party, value);
                 sched4 += value;
             }
-            for index in 0..4 {
-                let pair = &mut self.computations.schedule_4_item_17[index];
+            for pair in &mut self.computations.schedule_4_item_17 {
                 let value = if itemized && active {
                     cents(amt(pair.value(party)))
                 } else {
