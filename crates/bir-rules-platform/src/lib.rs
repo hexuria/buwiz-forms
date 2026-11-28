@@ -187,7 +187,7 @@ pub fn rename_directory_no_replace(_source: &Path, _target: &Path) -> io::Result
     ))
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};

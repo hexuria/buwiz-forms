@@ -3325,6 +3325,32 @@ fn draft_argument(arguments: &HostArguments, index: usize) -> Result<Value, Host
     Ok(draft)
 }
 
+/// The dry-run fact the host read when the page opened, captured before [`draft_argument`] strips client facts.
+/// This is the one deliberate exception to `draft_argument`'s rule that a dry run is never the page's to say: printing
+/// trusts the page-open fact — which the host itself read from the stored row when it built the page's draft — and does
+/// not look the row up again on every live-preview edit. A historical filed original keeps its own facts (no re-keying
+/// by period, the fault this fixes), and a row that cannot be read again never stops its draft from printing. A page
+/// can only ever weaken its own print this way; it can never make a real filing print as a test send for anyone else.
+fn opened_dry_run_argument(arguments: &HostArguments, index: usize) -> Result<bool, HostError> {
+    Ok(lifecycle_flag(
+        &to_json(arguments.value(index)?),
+        "submitted_dry_run",
+    ))
+}
+
+fn print_draft_with_opened_dry_run(draft: &Value, opened_dry_run: bool) -> Value {
+    let mut print_draft = draft.clone();
+    if !opened_dry_run {
+        return print_draft;
+    }
+    if print_draft["lifecycle"].is_object() {
+        print_draft["lifecycle"]["submitted_dry_run"] = json!(true);
+    } else {
+        print_draft["submitted_dry_run"] = json!(true);
+    }
+    print_draft
+}
+
 /// The optional list of profile boxes the page has open (see `apply_screen_edits`).
 fn unlocked_argument(arguments: &HostArguments, index: usize) -> BTreeSet<String> {
     match arguments.get(index).map(to_json) {
@@ -7598,37 +7624,56 @@ fn screen_form_filed_original(
     })
 }
 
+/// A generic lifecycle may be nested under `lifecycle`; serde's flattened form structs read those facts at the
+/// top level. Copy the nested keys there for printing without dropping the shape the page handed us.
+fn flattened_lifecycle_for_print(draft: &Value) -> Value {
+    let mut normalized = draft.clone();
+    let Some(lifecycle) = draft["lifecycle"].as_object() else {
+        return normalized;
+    };
+    let Some(out) = normalized.as_object_mut() else {
+        return normalized;
+    };
+    for (key, value) in lifecycle {
+        out.entry(key.clone()).or_insert_with(|| value.clone());
+    }
+    normalized
+}
+
 /// The print sheet's field map and receipt page for a draft as saved.
-pub(crate) fn print_map(
-    db: &Database,
-    kind: AgentFormKind,
-    draft: &Value,
-) -> Result<
+type PrintMapResult = Result<
     (
         BTreeMap<String, String>,
         Option<bir_print::frozen_html::ReceiptPage>,
+        bool,
     ),
     HostError,
-> {
+>;
+
+pub(crate) fn print_map(db: &Database, kind: AgentFormKind, draft: &Value) -> PrintMapResult {
     fn typed<F: serde::de::DeserializeOwned>(draft: &Value) -> Result<F, HostError> {
         serde_json::from_value(draft.clone()).map_err(|error| host_error(error.to_string()))
     }
-    let res: Result<
-        (
-            BTreeMap<String, String>,
-            Option<bir_print::frozen_html::ReceiptPage>,
-        ),
-        HostError,
-    > = match kind {
+    use bir_core::forms::dry_run::is_dry_run;
+    let draft = &flattened_lifecycle_for_print(draft);
+    let res: PrintMapResult = match kind {
         AgentFormKind::Form1601C => out_of_line(|| {
             let d: bir_core::forms::Form1601CDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email_address);
-            Ok((d.to_print_field_map(), page))
+            Ok((
+                d.to_print_field_map(),
+                page,
+                is_dry_run(&d.status, d.submitted_dry_run),
+            ))
         }),
         AgentFormKind::Form2551Q => out_of_line(|| {
             let d: bir_core::forms::Form2551QDraft = typed(draft)?;
             let page = crate::bir_module::receipt_page(db, d.receipt_id, &d.email);
-            Ok((d.to_print_field_map(), page))
+            Ok((
+                d.to_print_field_map(),
+                page,
+                is_dry_run(&d.status, d.submitted_dry_run),
+            ))
         }),
         AgentFormKind::Queueable(queueable) => {
             bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
@@ -7638,11 +7683,11 @@ pub(crate) fn print_map(
                     d.lifecycle().receipt_id,
                     d.submission_email(),
                 );
-                Ok((d.print_field_map(), page))
+                Ok((d.print_field_map(), page, is_dry_run(&d.lifecycle().status, d.lifecycle().submitted_dry_run)))
             }))
         }
     };
-    let (mut fields, page) = res?;
+    let (mut fields, page, test_send) = res?;
     if let Some(slug) = crate::bir_module::print_slug_for(kind.form_code()) {
         let printed_keys = bir_print::frozen_html::printed_writer_keys(slug);
         bir_core::official_xml::apply_print_zero_defaults(
@@ -7651,7 +7696,7 @@ pub(crate) fn print_map(
             &mut fields,
         );
     }
-    Ok((fields, page))
+    Ok((fields, page, test_send))
 }
 
 /// Print preview of the draft the page holds (save it first). Works from the
@@ -7659,7 +7704,8 @@ pub(crate) fn print_map(
 fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let code = arguments.string(0)?.to_owned();
     let kind = kind_of(&code)?;
-    let mut draft = draft_argument(arguments, 1)?;
+    let opened_dry_run = opened_dry_run_argument(arguments, 1)?;
+    let mut draft = flattened_lifecycle_for_print(&draft_argument(arguments, 1)?);
     refuse_sample(&mut draft, "printed")?;
     take_amendment_mark(&mut draft);
     let slug = crate::bir_module::print_slug_for(kind.form_code())
@@ -7667,7 +7713,8 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     let identity = agent::identity(kind, &draft).map_err(host_error)?;
     let year = identity.taxable_year;
     with_database(|db| {
-        let (fields, receipt) = print_map(db, kind, &draft)?;
+        let print_draft = print_draft_with_opened_dry_run(&draft, opened_dry_run);
+        let (fields, receipt, test_send) = print_map(db, kind, &print_draft)?;
         let profile = db
             .get_profile_by_tin(&identity.tin)
             .ok()
@@ -7679,6 +7726,7 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
             year,
             &fields,
             receipt.as_ref(),
+            test_send,
             profile,
         )
     })
@@ -7691,7 +7739,8 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
 fn draft_with_staged_edits(
     kind: AgentFormKind,
     arguments: &HostArguments,
-) -> Result<(Value, Option<SampleMark>), HostError> {
+) -> Result<(Value, Option<SampleMark>, bool), HostError> {
+    let opened_dry_run = opened_dry_run_argument(arguments, 1)?;
     let mut draft = draft_argument(arguments, 1)?;
     let mut sample = take_sample_mark(&mut draft);
     take_amendment_mark(&mut draft);
@@ -7709,7 +7758,7 @@ fn draft_with_staged_edits(
             }
         }
     }
-    Ok((draft, sample))
+    Ok((draft, sample, opened_dry_run))
 }
 
 /// The print sheet's fields for `draft`; a sample's held boxes print blank.
@@ -7718,14 +7767,16 @@ fn page_print_map(
     kind: AgentFormKind,
     draft: &Value,
     sample: Option<&SampleMark>,
-) -> Result<
-    (
-        BTreeMap<String, String>,
-        Option<bir_print::frozen_html::ReceiptPage>,
-    ),
-    HostError,
-> {
-    let (mut fields, receipt) = print_map(db, kind, draft)?;
+    opened_dry_run: bool,
+) -> PrintMapResult {
+    // A Form library sample is unsaved and cannot be a worker's test send. A return uses the fact its page read
+    // when it opened; a filed original keeps its own earlier facts.
+    let print_draft = if sample.is_some() {
+        draft.clone()
+    } else {
+        print_draft_with_opened_dry_run(draft, opened_dry_run)
+    };
+    let (mut fields, receipt, test_send) = print_map(db, kind, &print_draft)?;
     if let Some(mark) = sample {
         for key in &mark.blank {
             if let Some(value) = fields.get_mut(key) {
@@ -7733,7 +7784,7 @@ fn page_print_map(
             }
         }
     }
-    Ok((fields, receipt))
+    Ok((fields, receipt, test_send))
 }
 
 /// Print preview of a Form library sample as the page holds it (decided
@@ -7743,7 +7794,7 @@ fn page_print_map(
 fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
     let code = arguments.string(0)?.to_owned();
     let kind = kind_of(&code)?;
-    let (draft, sample) = draft_with_staged_edits(kind, arguments)?;
+    let (draft, sample, opened_dry_run) = draft_with_staged_edits(kind, arguments)?;
     if sample.is_none() {
         return Err(host_error(format!(
             "Form {code}: only a Form library sample previews unsaved; print a return with screen_form_print"
@@ -7753,7 +7804,8 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
     let identity = agent::identity(kind, &draft).map_err(host_error)?;
     with_database(|db| {
-        let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
+        let (fields, receipt, test_send) =
+            page_print_map(db, kind, &draft, sample.as_ref(), opened_dry_run)?;
         let profile = db
             .get_profile_by_tin(&identity.tin)
             .ok()
@@ -7765,6 +7817,7 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
             identity.taxable_year,
             &fields,
             receipt.as_ref(),
+            test_send,
             profile,
         )
     })
@@ -7781,21 +7834,17 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     if !crate::hooks::hooks().print_preview_has_live(kind.form_code()) {
         return Ok(HostValue::Bool(false));
     }
-    let (draft, sample) = draft_with_staged_edits(kind, arguments)?;
+    let (draft, sample, opened_dry_run) = draft_with_staged_edits(kind, arguments)?;
     let slug = crate::bir_module::print_slug_for(kind.form_code())
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
     with_database(|db| {
-        let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
+        let (fields, receipt, test_send) =
+            page_print_map(db, kind, &draft, sample.as_ref(), opened_dry_run)?;
         let slug = slug.to_string();
         // Template fill + prepare + staticize run off the UI thread.
         let produce = Box::new(move || {
-            let html = bir_print::frozen_html::filled_document_with_receipt(
-                &slug,
-                &fields,
-                receipt.as_ref(),
-            )
-            .unwrap_or_default();
-            crate::static_html::staticize(&crate::print_sheet::prepare_html_for(&slug, &html, true))
+            crate::bir_module::preview_document(&slug, &fields, receipt.as_ref(), test_send)
+                .unwrap_or_default()
         });
         crate::hooks::hooks().print_preview_live_update(kind.form_code(), produce, started);
         Ok(HostValue::Bool(true))
@@ -15200,7 +15249,7 @@ mod tests {
                         ),
                     };
                     let slug = crate::bir_module::print_slug_for(code).expect("a print sheet");
-                    let (fields, _) =
+                    let (fields, _, _) =
                         with_database(|db| print_map(db, kind, &saved["draft"])).unwrap();
                     bir_print::frozen_html::filled_document(slug, &fields).expect("prints");
                     done.push(code);
@@ -16318,7 +16367,7 @@ mod tests {
     /// `submitted_dry_run`, which the screens read as not filed).
     #[test]
     fn a_relay_dry_run_result_never_reads_as_filed() {
-        use crate::send_state::{SENT_LINE, TEST_SENT_LINE};
+        use crate::send_state::TEST_SENT_LINE;
         let report = bir_core::relay::dry_run_result_fixture_report();
         let codes = [("1601C", 6i64), ("2551Q", 2), ("0619E", 5)];
         setup_taxpayer_filing(&codes.map(|(code, _)| code));
@@ -16345,6 +16394,13 @@ mod tests {
             assert_eq!(open["submitted_dry_run"], true, "{code}");
             assert_eq!(open["send"]["stage"], "test_sent", "{code}");
             assert_eq!(open["send"]["line"], TEST_SENT_LINE, "{code}");
+
+            let (_, _, print_test_send) =
+                with_database(|db| print_map(db, kind_of(code).unwrap(), &sent)).unwrap();
+            assert!(
+                print_test_send,
+                "{code}: the print path knows it is a test send"
+            );
 
             let rows = call("list_returns", vec!["all".into()]).unwrap();
             let row = rows
@@ -16377,13 +16433,238 @@ mod tests {
 
             for send in [&open["send"], &row["send"]] {
                 assert_ne!(send["stage"], "sent", "{code}");
-                assert_ne!(send["line"], SENT_LINE, "{code}");
-                let line = send["line"].as_str().unwrap().to_lowercase();
-                for word in ["sent", "filed", "submitted"] {
-                    assert!(!line.contains(word), "{code}: {word:?} in {line:?}");
-                }
+                assert_eq!(send["line"], TEST_SENT_LINE, "{code}");
             }
         }
+    }
+
+    /// The document the real `open_print_preview` path just wrote, captured under `cfg(test)` before the transient
+    /// source file is removed. The test never re-derives the print pipeline.
+    fn captured_preview_html() -> String {
+        crate::bir_module::take_print_preview_captures()
+            .pop()
+            .expect("screen_form_print wrote a print-preview document")
+    }
+
+    #[test]
+    fn a_test_send_print_preview_is_marked_from_the_opened_fact() {
+        setup_taxpayer_filing(&["1601C"]);
+        let opened = open_for(TIN, "1601C", 2026, 6);
+        let id = store_filed("1601C", &opened["draft"], "Submitted");
+        let (_, raw) = raw_row(id);
+        let mut sent: Value = serde_json::from_str(&raw).unwrap();
+        sent["submitted_dry_run"] = json!(true);
+        raw_exec(
+            &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+            &[&serde_json::to_string(&sent).unwrap()],
+        );
+
+        let open = open_for(TIN, "1601C", 2026, 6);
+        let printed = call(
+            "screen_form_print",
+            vec!["1601C".into(), json(open["draft"].clone())],
+        )
+        .unwrap();
+        assert!(
+            !std::path::PathBuf::from(printed["path"].as_str().unwrap()).exists(),
+            "the preview source is deleted once read"
+        );
+        let html = captured_preview_html();
+        assert!(
+            html.contains("Test send: not filed. Nothing reached the BIR."),
+            "the preview itself says the test send is not filed"
+        );
+    }
+
+    /// A real Submitted return is exactly a filed print: no test-send warning and the unchanged paper CSS.
+    #[test]
+    fn a_real_submitted_filing_prints_without_the_test_send_warning() {
+        setup_taxpayer_filing(&["1601C"]);
+        let opened = open_for(TIN, "1601C", 2026, 6);
+        store_filed("1601C", &opened["draft"], "Submitted");
+        let open = open_for(TIN, "1601C", 2026, 6);
+        assert_eq!(open["draft"]["status"], "Submitted");
+        assert_ne!(open["draft"]["submitted_dry_run"], true);
+
+        call(
+            "screen_form_print",
+            vec!["1601C".into(), json(open["draft"].clone())],
+        )
+        .unwrap();
+        let html = captured_preview_html();
+        assert!(!html.contains("Test send: not filed"));
+        assert!(!html.contains("test-send-warning"));
+        assert!(html.contains("body>:not(.sheet){display:none !important}"));
+        assert!(!html.contains("body>:not(.sheet):not"));
+    }
+
+    /// A test send later Confirmed is a real filing on paper: the status decides together with the mark, so the
+    /// warning goes away and the receipt page stays. Dev Mode's confirmation intentionally reaches this state.
+    #[test]
+    fn a_confirmed_return_with_the_test_send_mark_prints_as_filed_with_its_receipt() {
+        setup_taxpayer_filing(&["1601C"]);
+        let opened = open_for(TIN, "1601C", 2026, 6);
+        let id = store_filed("1601C", &opened["draft"], "Submitted");
+        let (_, raw) = raw_row(id);
+        let mut sent: Value = serde_json::from_str(&raw).unwrap();
+        sent["submitted_dry_run"] = json!(true);
+        sent["submission_filename"] = json!("12345678800000-1601Cv2018-062026.xml");
+        raw_exec(
+            &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+            &[&serde_json::to_string(&sent).unwrap()],
+        );
+
+        let outcome = with_database(|db| {
+            bir_core::dev_mode::simulate_bir_confirmation(
+                db,
+                "12345678800000-1601Cv2018-062026.xml",
+            )
+            .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap();
+        assert_eq!(outcome, bir_core::db::ReceiptConfirmationOutcome::Confirmed);
+
+        let (_, confirmed_raw) = raw_row(id);
+        let confirmed: Value = serde_json::from_str(&confirmed_raw).unwrap();
+        assert_eq!(confirmed["status"], "Confirmed");
+        assert_eq!(
+            confirmed["submitted_dry_run"], true,
+            "the historical mark is not rewritten"
+        );
+        let (_, receipt, test_send) =
+            with_database(|db| print_map(db, kind_of("1601C").unwrap(), &confirmed)).unwrap();
+        assert!(
+            !test_send,
+            "Confirmed plus the old mark is not a test-send print"
+        );
+        assert!(receipt.is_some(), "the proof of filing stays on the print");
+
+        call(
+            "screen_form_print",
+            vec!["1601C".into(), json(confirmed.clone())],
+        )
+        .unwrap();
+        let html = captured_preview_html();
+        assert!(!html.contains("Test send: not filed"));
+        assert!(
+            html.contains("page-receipt"),
+            "the printed filing keeps its receipt page"
+        );
+    }
+
+    /// A live preview does not look the row up again: the fact read when the page opened is enough, and a row
+    /// that cannot be read again never stops that opened draft from printing.
+    #[test]
+    fn a_return_whose_row_cannot_be_read_again_still_prints_from_the_opened_facts() {
+        setup_taxpayer_filing(&["1601C"]);
+        let opened = open_for(TIN, "1601C", 2026, 6);
+        let id = store_filed("1601C", &opened["draft"], "Submitted");
+        let (_, raw) = raw_row(id);
+        let mut sent: Value = serde_json::from_str(&raw).unwrap();
+        sent["submitted_dry_run"] = json!(true);
+        raw_exec(
+            &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+            &[&serde_json::to_string(&sent).unwrap()],
+        );
+        let open = open_for(TIN, "1601C", 2026, 6);
+        assert_eq!(open["draft"]["submitted_dry_run"], true);
+        raw_exec(&format!("DELETE FROM form_drafts WHERE id = {id}"), &[]);
+
+        call(
+            "screen_form_print",
+            vec!["1601C".into(), json(open["draft"].clone())],
+        )
+        .unwrap();
+        let html = captured_preview_html();
+        assert!(html.contains("Test send: not filed. Nothing reached the BIR."));
+    }
+
+    /// The generic lifecycle shape (`lifecycle.submitted_dry_run`) reaches the same print decision through the
+    /// page's print call, not only through the typed helper.
+    #[test]
+    fn a_generic_lifecycle_test_send_print_carries_the_warning() {
+        setup_taxpayer_filing(&["0619E"]);
+        let opened = open_for(TIN, "0619E", 2026, 5);
+        let mut sent = opened["draft"].clone();
+        sent["status"] = json!("Submitted");
+        let mut lifecycle = serde_json::Map::new();
+        for key in [
+            "status",
+            "created_at",
+            "updated_at",
+            "queued_at",
+            "submitted_at",
+            "submission_attempts",
+            "submission_error",
+            "next_retry_at",
+            "submitted_dry_run",
+            "submitted_via_relay",
+            "receipt_id",
+        ] {
+            if let Some(value) = sent.as_object_mut().unwrap().remove(key) {
+                lifecycle.insert(key.to_string(), value);
+            }
+        }
+        lifecycle.insert("submitted_dry_run".to_string(), json!(true));
+        sent["lifecycle"] = Value::Object(lifecycle);
+        assert!(
+            sent["lifecycle"].is_object(),
+            "the synthetic draft has the generic lifecycle shape"
+        );
+        assert_eq!(sent["lifecycle"]["submitted_dry_run"], true);
+        call(
+            "screen_form_print",
+            vec!["0619E".into(), json(sent.clone())],
+        )
+        .unwrap();
+        let html = captured_preview_html();
+        assert!(html.contains("Test send: not filed. Nothing reached the BIR."));
+    }
+
+    #[test]
+    fn a_filed_original_does_not_take_the_current_amendments_test_send_fact() {
+        setup_taxpayer_filing(&["1601C"]);
+        let opened = open_for(TIN, "1601C", 2026, 6);
+        let id = store_filed("1601C", &opened["draft"], "Submitted");
+        let (_, original_raw) = raw_row(id);
+        let original: Value = serde_json::from_str(&original_raw).unwrap();
+        let mut current = original.clone();
+        current["submitted_dry_run"] = json!(true);
+        current["updated_at"] = json!("2030-01-01T00:00:00Z");
+        raw_exec(
+            &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+            &[&serde_json::to_string(&current).unwrap()],
+        );
+
+        // Able to fail end to end: printing the original as its page holds it (the open fact
+        // false) carries no warning though the CURRENT row for the period is a test send; printing
+        // the current amendment (fact true) carries it. A print path that re-keyed the fact by
+        // period would warn on both.
+        let print_original = print_draft_with_opened_dry_run(&original, false);
+        assert_ne!(
+            print_original["submitted_dry_run"], true,
+            "a historical original keeps its own send facts"
+        );
+        call(
+            "screen_form_print",
+            vec!["1601C".into(), json(original.clone())],
+        )
+        .unwrap();
+        let html = captured_preview_html();
+        assert!(
+            !html.contains("Test send: not filed"),
+            "the original prints as the real filing it is"
+        );
+        call(
+            "screen_form_print",
+            vec!["1601C".into(), json(current.clone())],
+        )
+        .unwrap();
+        let html = captured_preview_html();
+        assert!(
+            html.contains("Test send: not filed"),
+            "the test-sent amendment warns on every page"
+        );
     }
 
     /// `send` in the open's answer is the stored return's send state
@@ -16648,6 +16929,27 @@ mod tests {
                 numbers_as_f64(&original_value),
                 "{code}: the filed version as filed"
             );
+
+            if code == "1601C" {
+                // The current amendment can be a test send; the original being printed still keeps its own facts.
+                let (_, current_raw) = raw_row(id);
+                let mut current: Value = serde_json::from_str(&current_raw).unwrap();
+                current["submitted_dry_run"] = json!(true);
+                raw_exec(
+                    &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                    &[&serde_json::to_string(&current).unwrap()],
+                );
+                call(
+                    "screen_form_print",
+                    vec![code.into(), json(view["draft"].clone())],
+                )
+                .unwrap();
+                let html = captured_preview_html();
+                assert!(
+                    !html.contains("Test send: not filed"),
+                    "a real filed original never takes the amendment's test-send mark"
+                );
+            }
         }
     }
 
@@ -16947,9 +17249,9 @@ mod tests {
                 json(shown["draft"].clone()),
                 json(edits),
             ]);
-            let (draft, mark) = draft_with_staged_edits(kind, &arguments).unwrap();
+            let (draft, mark, opened_dry_run) = draft_with_staged_edits(kind, &arguments).unwrap();
             assert!(mark.is_some(), "the sample's mark");
-            with_database(|db| page_print_map(db, kind, &draft, mark.as_ref()))
+            with_database(|db| page_print_map(db, kind, &draft, mark.as_ref(), opened_dry_run))
                 .unwrap()
                 .0
         };
@@ -19129,7 +19431,7 @@ mod tests {
                 draft["registered_address"] = json!(text);
                 draft
             };
-            let (fields, _) = with_database(|db| print_map(db, kind, &draft)).unwrap();
+            let (fields, _, _) = with_database(|db| print_map(db, kind, &draft)).unwrap();
             let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
             let printed = bir_print::frozen_html::printed_cells(&document);
             let parts: Vec<&(String, Option<f64>)> =
@@ -19776,7 +20078,7 @@ mod tests {
                     continue;
                 }
                 assert_eq!(filled["rejected"], json!({}), "{code} {key}");
-                let (fields, _) =
+                let (fields, _, _) =
                     with_database(|db| print_map(db, kind, &filled["draft"])).unwrap();
                 let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
                 let printed = squeezed(&printed_cells_in_order(slug, &document));
@@ -19852,7 +20154,7 @@ mod tests {
                     assert_eq!(filled["rejected"], json!({}), "{code} {len}");
                     let draft = &filled["draft"];
                     let kept = squeezed(&xml_pool(kind, draft, &pool.keys));
-                    let (fields, _) = with_database(|db| print_map(db, kind, draft)).unwrap();
+                    let (fields, _, _) = with_database(|db| print_map(db, kind, draft)).unwrap();
                     let document = bir_print::frozen_html::filled_document(slug, &fields).unwrap();
                     let printed: Vec<(String, Option<f64>)> = cells
                         .iter()

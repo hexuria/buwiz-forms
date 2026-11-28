@@ -117,7 +117,7 @@ test("desktop: a real send says Sent to BIR, a dry-run send says it was not sent
   await app.press("id:fx-send");
   await look(app);
   await app.waitFor("text:Sent to BIR Apr 10, 2025. Nothing here can be changed.", { timeout: 10_000 });
-  expect(app.texts().some((t) => t.includes("Dry run"))).toBe(false);
+  expect(app.texts().some((t) => t.includes("Test send: not filed"))).toBe(false);
   expect(app.texts()).toContain("Submitted · read-only");
 
   const dry = await open(ENTRY, DESKTOP);
@@ -125,10 +125,10 @@ test("desktop: a real send says Sent to BIR, a dry-run send says it was not sent
   await dry.press("id:fx-dry");
   await dry.press("id:fx-send");
   await look(dry);
-  await dry.waitFor("text:Dry run Apr 10, 2025, not sent to BIR. Nothing here can be changed.", { timeout: 10_000 });
+  await dry.waitFor("text:Test send: not filed. Nothing reached the BIR. Nothing here can be changed.", { timeout: 10_000 });
   expect(dry.texts().some((t) => t.includes("Sent to BIR"))).toBe(false);
   // The status chip says the banner's word: a simulated send was no submission.
-  expect(dry.texts()).toContain("Dry run · read-only");
+  expect(dry.texts()).toContain("Test send: not filed");
   expect(dry.texts()).not.toContain("Submitted · read-only");
 });
 
@@ -139,9 +139,9 @@ test("phone: a dry-run send says it was not sent to BIR", async () => {
   await app.press("id:fx-send");
   await app.press("id:fx-look");
   // On a phone the line sits under the header, out of the first screen: read the texts, not what is in view.
-  await app.waitUntil(() => app.texts().includes("Dry run Apr 10, 2025, not sent to BIR. Nothing here can be changed."), { timeout: 10_000 });
+  await app.waitUntil(() => app.texts().includes("Test send: not filed. Nothing reached the BIR. Nothing here can be changed."), { timeout: 10_000 });
   expect(app.texts().some((t) => t.includes("Sent to BIR"))).toBe(false);
-  expect(app.texts()).toContain("Dry run · read-only");
+  expect(app.texts()).toContain("Test send: not filed");
   expect(app.texts()).not.toContain("Submitted · read-only");
 });
 
@@ -152,7 +152,7 @@ test("phone: a real send's chip says Submitted", async () => {
   await app.press("id:fx-look");
   await app.waitUntil(() => app.texts().includes("Sent to BIR Apr 10, 2025. Nothing here can be changed."), { timeout: 10_000 });
   expect(app.texts()).toContain("Submitted · read-only");
-  expect(app.texts()).not.toContain("Dry run · read-only");
+  expect(app.texts()).not.toContain("Test send: not filed");
 });
 
 test("desktop: a page the lists keep disagreeing with reads once, not on every look", async () => {
@@ -228,10 +228,10 @@ test("desktop: a sent return keeps its own dated words, whatever the host's send
   for (const stage of ["sent", "test_sent"] as const) {
     const app = await open(ENTRY, DESK({ send: stage }));
     // A test send (the host's "test_sent") is a dry run: its chip says the banner's word.
-    await app.waitFor(stage === "test_sent" ? "text:Dry run · read-only" : "text:Submitted · read-only", { timeout: 15_000 });
+    await app.waitFor(stage === "test_sent" ? "text:Test send: not filed" : "text:Submitted · read-only", { timeout: 15_000 });
     // The page's words for a sent return carry its date (F21); the host's line is for a return still in the queue.
     await app.waitUntil(() => app.texts().some((text) => text.endsWith("Nothing here can be changed.")));
-    expect(app.texts().some((text) => text.includes("through Buwiz") || text.includes("Test send"))).toBe(false);
+    expect(app.texts().some((text) => text.includes("through Buwiz"))).toBe(false);
   }
 });
 

@@ -33,6 +33,8 @@ test("desktop: four columns, a card per return, Paid inside Confirmed", async ()
   const app = await board();
   await app.waitFor(count("7 returns"));
   for (const title of ["Draft", "Queued", "Submitted", "Confirmed"]) expect(app.texts()).toContain(title);
+  // The seed holds no test send: the column never renders, a real filer never reads the words.
+  expect(app.texts()).not.toContain("Test sends");
   expect(app.shows("id:tab-bar")).toBe(false);
   expect(app.shows("id:filings-tabs")).toBe(false);
 
@@ -91,19 +93,35 @@ test("desktop: a card whose send needs a word says it: Held, Retrying, Needs att
   for (const n of [IDS.submitted, IDS.confirmed, IDS.paid]) expect(app.shows(`id:return-${n}-send`)).toBe(false);
 });
 
-test("desktop: a dry-run send's card says Dry run in the Submitted column; a real send's card says nothing more", async () => {
+test("desktop: a test send's card says Test send: not filed in its own column; a real send's card says nothing more", async () => {
   const real = await board();
   await real.waitFor(count("7 returns"));
   expect(real.shows(`id:return-${IDS.submitted}-status`)).toBe(false);
-  expect(real.count("text:Dry run")).toBe(0);
+  expect(real.count("text:Test send: not filed")).toBe(0);
 
   const app = await board({ dry: true });
   await app.waitFor(`id:return-${IDS.submitted}-status`, { timeout: 20000 });
-  // Same column as a real send (the stored status is Submitted); the card says the banner's word.
-  expect(app.shows(inCol("submitted", IDS.submitted))).toBe(true);
-  expect(app.shows(`id:return-${IDS.submitted}-status >> text:Dry run`)).toBe(true);
+  // Not Submitted: the test send has its own column and its one chip.
+  expect(app.shows(inCol("test-sends", IDS.submitted))).toBe(true);
+  expect(app.shows(`id:return-${IDS.submitted}-status >> text:Test send: not filed`)).toBe(true);
   expect(app.texts()).toContain("Submitted"); // the column's title stays
   for (const n of [IDS.draft, IDS.queued, IDS.confirmed, IDS.cebu, IDS.second]) expect(app.shows(`id:return-${n}-status`)).toBe(false);
+});
+
+test("desktop: the statuses filter shows Test sends only when one exists and selects exactly those", async () => {
+  const plain = await board();
+  await plain.press("id:filings-statuses-trigger");
+  await plain.waitFor("id:filings-statuses-opt-Paid");
+  expect(plain.shows("id:filings-statuses-opt-Test sends")).toBe(false);
+
+  const app = await board({ dry: true });
+  await app.press("id:filings-statuses-trigger");
+  await app.waitFor("id:filings-statuses-opt-Test sends");
+  await app.press("id:filings-statuses-clear");
+  await app.press("id:filings-statuses-opt-Test sends");
+  await app.waitFor(count("1 return"));
+  expect(app.shows(card(IDS.submitted))).toBe(true);
+  expect(unseen(app, IDS.draft, IDS.queued, IDS.confirmed)).toBe(true);
 });
 
 test("desktop: a card opens its return, selects its branch, and Back finds the filters as they were", async () => {
@@ -328,14 +346,17 @@ test("phone: a row whose send needs a word has its chip and line", async () => {
   expect(app.texts()).toContain("This TIN is not on your Buwiz account.");
 });
 
-test("phone: a dry-run send's row says Dry run, on All and under Submitted; a real send's says Submitted on All", async () => {
+test("phone: a test send's row says Test send: not filed, on All and under Test sends; Submitted stays empty", async () => {
   const app = await list({ dry: true });
   await app.waitFor(count("7 returns"));
-  expect(app.shows(`id:return-${IDS.submitted}-status >> text:Dry run`)).toBe(true);
+  expect(app.shows(`id:return-${IDS.submitted}-status >> text:Test send: not filed`)).toBe(true);
   expect(app.shows(`id:return-${IDS.submitted}-status >> text:Submitted`)).toBe(false);
   await app.press(tab("Submitted"));
+  await app.waitFor(count("0 returns"));
+  expect(app.shows(`id:return-${IDS.submitted}-status`)).toBe(false);
+  await app.press(tab("Test sends"));
   await app.waitFor(count("1 return"));
-  expect(app.shows(`id:return-${IDS.submitted}-status >> text:Dry run`)).toBe(true);
+  expect(app.shows(`id:return-${IDS.submitted}-status >> text:Test send: not filed`)).toBe(true);
 });
 
 test("phone: a tab keeps the returns of its status; Confirmed holds Paid", async () => {
@@ -511,4 +532,24 @@ test("the layout follows the page width: the board from 720 points of page, the 
   await app.waitFor("id:filings-tabs");
   await app.press("id:filings-filters-open");
   await app.waitFor("id:filings-sheet-done");
+});
+
+test("desktop: with one test send the column appears, titled and counted", async () => {
+  const app = await board({ dry: true });
+  await app.waitFor(count("7 returns"));
+  expect(app.texts()).toContain("Test sends");
+  expect(app.shows("id:filings-col-test-sends")).toBe(true);
+  expect(app.shows(inCol("test-sends", IDS.submitted))).toBe(true);
+  // And the Submitted column no longer holds it.
+  expect(app.shows(inCol("submitted", IDS.submitted))).toBe(false);
+});
+
+test("phone: the Test sends tab renders only with a test send, never for a real filer", async () => {
+  const narrow = { width: 390, height: 844 };
+  const plain = await open(ENTRY, { ...narrow, ...asking() });
+  await plain.waitFor("id:filings-tabs", { timeout: 20000 });
+  expect(plain.texts()).not.toContain("Test sends");
+  const app = await open(ENTRY, { ...narrow, ...asking({ dry: true }) });
+  await app.waitFor("id:filings-tabs", { timeout: 20000 });
+  expect(app.texts()).toContain("Test sends");
 });

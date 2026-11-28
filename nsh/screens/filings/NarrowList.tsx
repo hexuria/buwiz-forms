@@ -2,14 +2,15 @@
 import { computed, View } from "nsh";
 import type { ReturnRow } from "../../bir";
 import { EmptyRow, ListGroup } from "../../ui";
-import { filters } from "./filters";
-import { COLUMNS, type FormIndex } from "./model";
+import { COLUMNS, columnRows, type FormIndex } from "./model";
 import { ReturnCard } from "./ReturnCard";
 
 /** Props of NarrowList. */
 export interface NarrowListProps {
   /** The returns the filters keep, all tabs. */
   rows: ReturnRow[];
+  /** The effective tab (`effectiveTab`: a test-sends tab with nothing left falls back to all). */
+  tab: string;
   index: FormIndex;
   onOpen: (row: ReturnRow) => void;
   onCancel: (row: ReturnRow) => void;
@@ -17,10 +18,10 @@ export interface NarrowListProps {
 
 /** The returns of the chosen tab, newest change first. */
 export function NarrowList(props: NarrowListProps) {
-  const column = () => COLUMNS.find((c) => c.id === filters.tab());
+  const column = () => COLUMNS.find((c) => c.id === props.tab);
   const shown = computed(() => {
     const c = column();
-    return c ? props.rows.filter((r) => c.statuses.includes(r.status)) : props.rows;
+    return c ? columnRows(props.rows, c) : props.rows;
   });
   return (
     <View testID="filings-rows" class="w-full gap-2">

@@ -442,7 +442,7 @@ pub fn amended_copy(kind: AgentFormKind, draft: &Value) -> Result<Value, String>
     if crate::forms::dry_run::is_dry_run(&status, crate::forms::dry_run::json_marks_dry_run(draft))
     {
         return Err(format!(
-            "this {} return was a dry run: nothing reached the BIR, so it is sent again as the original, not amended",
+            "Test send: not filed. Nothing reached the BIR. This {} return is sent again as the original, not amended",
             kind.form_code()
         ));
     }
@@ -2971,7 +2971,10 @@ mod tests {
         let mut dry = sent.clone();
         dry.lifecycle.submitted_dry_run = true;
         let error = amended_copy(kind, &json(&dry)).unwrap_err();
-        assert!(error.contains("dry run"), "{error}");
+        assert!(
+            error.contains("Test send: not filed. Nothing reached the BIR."),
+            "{error}"
+        );
         // The mark under `lifecycle` (another build's shape) reads the same.
         let mut nested = json(&sent);
         nested.as_object_mut().unwrap().remove("submitted_dry_run");

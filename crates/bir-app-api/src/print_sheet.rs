@@ -236,6 +236,38 @@ mod tests {
     }
 
     #[test]
+    fn every_staticized_sheet_of_a_test_send_print_carries_the_warning() {
+        let fields = std::collections::BTreeMap::new();
+        let html = bir_print::frozen_html::filled_document_test_send("2552-2018", &fields).unwrap();
+        let out = crate::static_html::staticize(&super::prepare_html(&html));
+        let sheets = out.matches("<div class=\"sheet").count();
+        assert!(sheets > 1, "2552 is a multi-page form");
+        assert_eq!(out.matches("class=\"test-send-warning\"").count(), sheets);
+        let first_sheet = out.find("<div class=\"sheet").unwrap();
+        let warning = out[first_sheet..]
+            .find("class=\"test-send-warning\"")
+            .unwrap();
+        let page = out[first_sheet..].find("<div class=\"page").unwrap();
+        assert!(
+            warning < page,
+            "the warning sits in the sheet margin, before the form page"
+        );
+    }
+
+    #[test]
+    fn paper_css_is_exactly_the_real_filings_css() {
+        let fields = std::collections::BTreeMap::new();
+        let html = bir_print::frozen_html::filled_document("1601c-2018", &fields).unwrap();
+        let out = super::prepare_html(&html);
+        assert!(!out.contains("test-send-warning"));
+        assert!(
+            out.contains("body>:not(.sheet){display:none !important}"),
+            "{out}"
+        );
+        assert!(!out.contains("body>:not(.sheet):not"), "{out}");
+    }
+
+    #[test]
     fn reads_the_native_page_size_and_injects_paper_css() {
         let html =
             "<html><head><style>@page { size: 612pt 936pt; }</style></head><body></body></html>";

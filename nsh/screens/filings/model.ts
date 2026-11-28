@@ -4,7 +4,7 @@
 // localMonth, returnTitle, namedBranch, whoLine, dateLine, FilingsFilters.rows and applyPreset).
 import type { ReturnRow } from "../../bir";
 import { MONTHS, shortDate } from "../../lib/dates";
-import { countsAsFiled, statusWord } from "../../lib/statusWord";
+import { countsAsFiled, isDryRun, statusWord } from "../../lib/statusWord";
 import { type FormIndexEntry, frequencyOf, periodLabel } from "../../lib/periods";
 
 /** The real statuses, in board order. */
@@ -21,19 +21,41 @@ export interface Column {
   id: string;
   title: string;
   statuses: readonly string[];
+  testSends?: true;
 }
 
-/** The four board columns, in order. */
+/** The board columns, in order; the test-sends column renders only while at least one test send exists (`shownColumns`). */
 export const COLUMNS: readonly Column[] = [
   { id: "draft", title: "Draft", statuses: ["Draft"] },
   { id: "queued", title: "Queued", statuses: ["Queued"] },
   { id: "submitted", title: "Submitted", statuses: ["Submitted"] },
+  { id: "test-sends", title: "Test sends", statuses: [], testSends: true },
   { id: "confirmed", title: "Confirmed", statuses: ["Confirmed", "Paid"] },
 ];
 
 /** The columns whose statuses the filter lets through. null means every status; Confirmed's column stays while either Confirmed or Paid is selected. */
 export function visibleColumns(statuses: ReadonlySet<string> | null): Column[] {
-  return COLUMNS.filter((c) => statuses === null || c.statuses.some((s) => statuses.has(s)));
+  return COLUMNS.filter((c) => statuses === null || (c.testSends ? statuses.has("Test sends") : c.statuses.some((s) => statuses.has(s))));
+}
+
+/**
+ * The columns the board and the tabs render: the filter's columns, but the test-sends column only while at least one
+ * test send exists (a real filer never reads the words "Test sends"). `rows` is every return, unfiltered.
+ */
+export function shownColumns(rows: readonly ReturnRow[], statuses: ReadonlySet<string> | null): Column[] {
+  const tests = rows.some((r) => isDryRun(r));
+  return visibleColumns(effectiveStatuses(rows, statuses)).filter((c) => !c.testSends || tests);
+}
+
+/** The narrow list's effective tab: a test-sends tab with no test send left falls back to all, never an empty list for ever. */
+export function effectiveTab(rows: readonly ReturnRow[], tab: string): string {
+  return tab === "test-sends" && !rows.some((r) => isDryRun(r)) ? "all" : tab;
+}
+
+
+/** The rows in one board column or narrow-list tab. A test send is never a submitted return. */
+export function columnRows(rows: readonly ReturnRow[], column: Column): ReturnRow[] {
+  return rows.filter((r) => column.testSends ? isDryRun(r) : !isDryRun(r) && column.statuses.includes(r.status));
 }
 
 /** "1 return", "3 returns". */
@@ -94,10 +116,12 @@ export const SEND_CHIPS: Readonly<Record<string, { label: string; tone: "neutral
   waiting: { label: "Retrying", tone: "warning" },
   needs_attention: { label: "Needs attention", tone: "warning" },
   refused: { label: "Not sent", tone: "danger" },
+  test_sent: { label: "Test send: not filed", tone: "neutral" },
 };
 
 /** A card's send chip and its line (the host's `send.line`), or null where the card says only its status. */
 export function sendChip(r: ReturnRow): { label: string; tone: "neutral" | "warning" | "danger"; line: string } | null {
+  if (isDryRun(r)) return null;
   const chip = r.send ? SEND_CHIPS[r.send.stage] : undefined;
   return chip && r.send ? { ...chip, line: r.send.line } : null;
 }
@@ -118,13 +142,25 @@ export interface FilterValues {
   filedOnly?: boolean;
 }
 
+/** The statuses that actually filter the rows: a test-sends-only selection falls back to all once no test send is left. */
+export function effectiveStatuses(rows: readonly ReturnRow[], statuses: ReadonlySet<string> | null): ReadonlySet<string> | null {
+  const testsOnly = statuses !== null && statuses.size > 0 && [...statuses].every((s) => s === "Test sends");
+  return testsOnly && !rows.some((r) => isDryRun(r)) ? null : statuses;
+}
+
 /** The returns the search and every filter keep. */
 export function filterRows(rows: readonly ReturnRow[], index: FormIndex, f: FilterValues): ReturnRow[] {
   const words = f.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  // A statuses filter of test sends only, with no test send left, falls back to all: never an empty list for ever.
+  const statuses = effectiveStatuses(rows, f.statuses);
   return rows.filter((r) => {
     if (f.tps && !f.tps.has(r.tin_root)) return false;
     if (f.forms && !f.forms.has(r.form_code)) return false;
-    if (f.statuses && !f.statuses.has(r.status)) return false;
+    if (statuses) {
+      const wantsTests = statuses.has("Test sends");
+      const realStatuses = new Set([...statuses].filter((status) => status !== "Test sends"));
+      if (isDryRun(r) ? !wantsTests : !realStatuses.has(r.status)) return false;
+    }
     if (f.periods && !f.periods.has(periodKey(index, r))) return false;
     if (f.updatedMonth && localMonth(r.updated_at) !== f.updatedMonth) return false;
     if (f.filedOnly && !countsAsFiled(r)) return false;
@@ -161,8 +197,8 @@ export function presetOf(params: Readonly<Record<string, unknown>>): FilingsPres
 export function presetFilters(preset: FilingsPreset): Pick<FilterValues, "statuses" | "updatedMonth" | "filedOnly"> {
   let statuses: ReadonlySet<string> | null = null;
   if (preset.statuses) {
-    const on = new Set(preset.statuses.filter((s) => (STATUSES as readonly string[]).includes(s)));
-    statuses = on.size === STATUSES.length ? null : on;
+    const on = new Set(preset.statuses.filter((s) => (STATUSES as readonly string[]).includes(s) || s === "Test sends"));
+    statuses = on.size === STATUSES.length + 1 ? null : on;
   }
   const updatedMonth = typeof preset.updatedMonth === "string" && /^\d{4}-\d{2}$/.test(preset.updatedMonth) ? preset.updatedMonth : null;
   return preset.filedOnly === true ? { statuses, updatedMonth, filedOnly: true } : { statuses, updatedMonth };

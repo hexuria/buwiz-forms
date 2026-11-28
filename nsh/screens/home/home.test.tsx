@@ -181,10 +181,10 @@ for (const { name, size } of SIZES) {
     await dry.waitUntil(() => dry.texts().includes("Recently filed"), { timeout: 20000 });
     const dryOverdue = tileCount(dry, "Overdue");
     const dryProgress = dry.texts().find((t) => /^\d+ of \d+ filed this year$/.test(t));
-    // The Overdue tile's list holds the dry runs: still due, each with its "Dry run" chip.
+    // The Overdue tile's list holds the dry runs: still due, each with its "Test send: not filed" chip.
     await dry.press("id:home-tile-overdue");
     await dry.waitFor(january, { timeout: 20000 });
-    expect(dry.shows(`${january} >> text:Dry run`)).toBe(true);
+    expect(dry.shows(`${january} >> text:Test send: not filed`)).toBe(true);
     const real = await open(ENTRY, { ...size, ...asking({ drafts: 2, dueSent: "real", filed: 1, sent: "real" }) });
     await real.waitFor("id:home-dashboard", { timeout: 60000 });
     // Three saved returns' deadlines read as sent: January and February, and the filed December of last year (due in January).
@@ -255,12 +255,13 @@ for (const { name, size } of SIZES) {
     // A filed return with its template (so its row shows its chip) and an undated as-needed return, both sent.
     const dry = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "dry" }) });
     await dry.waitFor("id:home-dashboard", { timeout: 60000 });
-    await dry.waitUntil(() => shown(dry.texts(), "Dry run") === 2, { timeout: 20000 });
+    await dry.waitUntil(() => shown(dry.texts(), "Test send: not filed") === 1, { timeout: 20000 });
     expect(shown(dry.texts(), "Filed")).toBe(0);
+    expect(dry.texts()).toContain("Filed returns show here.");
     const real = await open(ENTRY, { ...size, ...asking({ filed: 1, template: true, undated: true, sent: "real" }) });
     await real.waitFor("id:home-dashboard", { timeout: 60000 });
     await real.waitUntil(() => shown(real.texts(), "Filed") === 2, { timeout: 20000 });
-    expect(shown(real.texts(), "Dry run")).toBe(0);
+    expect(shown(real.texts(), "Test send: not filed")).toBe(0);
   }, 120_000);
 
   test(`${name}: each taxpayer's button opens the next deadline's return`, async () => {

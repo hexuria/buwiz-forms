@@ -116,7 +116,7 @@ export function groupRows(f: Pick<Filters, "freq">, rows: readonly DeadlineRow[]
 /** The status a row's chip says. */
 export type RowKind = "draft" | "queued" | "dry_run" | "filed" | "not_started";
 
-/** A deadline's status as the chips name it. A chip passes the shown word (`statusWord`): a simulated send's "Dry run" is its own chip. */
+/** A deadline's status as the chips name it. A chip passes the shown word (`statusWord`): a simulated send's "Test send: not filed" is its own chip. */
 export function kindOf(status: string): RowKind {
   if (status === DRY_RUN_WORD) return "dry_run";
   if (status === "Draft") return "draft";

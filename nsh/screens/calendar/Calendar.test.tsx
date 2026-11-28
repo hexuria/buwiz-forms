@@ -50,14 +50,14 @@ test("a dry-run send's row says Dry run and stays due (a late or soon chip); a r
   const id = `id:calendar-row-${rowKey(row)}`;
   const dry = await open(ENTRY, asking({ branch: true, second: true, sent: "dry" }));
   await dry.waitFor(id);
-  expect(dry.shows(`${id} >> text:Dry run`)).toBe(true);
+  expect(dry.shows(`${id} >> text:Test send: not filed`)).toBe(true);
   expect(dry.shows(`${id} >> text:Filed`)).toBe(false);
   // This month's deadline is past or within 14 days: a dry run sent nothing, so it says how late or soon it is.
   expect(dry.shows(`${id} >> text:/^(\\d+ days? overdue|Due today|In \\d+ days?)$/`)).toBe(true);
   const real = await open(ENTRY, asking({ branch: true, second: true, sent: "real" }));
   await real.waitFor(id);
   expect(real.shows(`${id} >> text:Filed`)).toBe(true);
-  expect(real.shows(`${id} >> text:Dry run`)).toBe(false);
+  expect(real.shows(`${id} >> text:Test send: not filed`)).toBe(false);
   // Done: no chip of lateness (a later day's plain "In N days" is its date, not a chip, so only a past one is checked).
   if (row.due_date < isoDate(new Date())) expect(real.shows(`${id} >> text:/overdue$/`)).toBe(false);
 }, 90_000);

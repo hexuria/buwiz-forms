@@ -1,6 +1,6 @@
 // A test fixture of the form page, not a screen: shots/f21.test.tsx opens it. The demo taxpayer's 1601C (Sep 2025) is queued in the
 // scratch database and the app's own dry-run submission worker sends it (nothing reaches BIR); once the stored return says Submitted the
-// page opens on it and says "Dry run <date>, not sent to BIR". At the nsh root: a real-window run serves assets only from the entry's folder.
+// page opens on it and says "Test send: not filed. Nothing reached the BIR.". At the nsh root: a real-window run serves assets only from the entry's folder.
 import { mount, signal, Text, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";

@@ -208,12 +208,12 @@ export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, availab
 }
 
 /**
- * How a read-only return says it was sent: the worker's dry run ("Dry run Nov 18, 2026, not sent to BIR"), the local mock relay
+ * How a read-only return says it was sent: the worker's dry run ("Test send: not filed. Nothing reached the BIR."), the local mock relay
  * (`viaRelay`: the door sends through it, docs/relay.md) or a real send ("Sent to BIR Nov 18, 2026").
  */
 export function sentWords(submittedAt: string, dryRun: boolean, viaRelay = false): string {
   const when = shortIsoDate(submittedAt);
-  if (dryRun) return `Dry run ${when}, not sent to BIR`;
+  if (dryRun) return "Test send: not filed. Nothing reached the BIR.";
   return viaRelay ? `Sent to the mock relay ${when}, not to BIR` : `Sent to BIR ${when}`;
 }
 
@@ -280,7 +280,7 @@ export const FILED_KEPT = "The filed version is kept in this return's history.";
 /** A filed return whose tax profile changed after it. */
 export const PROFILE_CHANGED_NOTE = "The tax profile changed after this return was filed. This return keeps what was filed.";
 /** The same note on a dry run, which was never filed (only simulated). */
-export const PROFILE_CHANGED_DRY_RUN_NOTE = "The tax profile changed after this dry run. This return keeps what the dry run held.";
+export const PROFILE_CHANGED_DRY_RUN_NOTE = "The tax profile changed after this test send. This return keeps what the test send held.";
 
 /** The note above a read-only return's profile changes: a filed return's, or a dry run's (`dryRun`). */
 export function profileChangedNote(dryRun: boolean): string {
@@ -340,11 +340,11 @@ export function existingOfferFor(existing: ScreenFormExisting): { title: string;
   // A send the worker only simulated is no submission: it says "dry run", the form page's word (`statusWord`).
   const dry = isDryRun(existing);
   const filed = existing.status === "Submitted" ? "submitted" : "filed";
-  const hint = dry ? "See exactly what was in the dry run." : `See exactly what was ${filed}.`;
+  const hint = dry ? "See exactly what was in the test send." : `See exactly what was ${filed}.`;
   const choices: OfferChoice[] = [{ id: "view", label: "View read-only", hint, variant: "primary" }];
   if (has("amend")) choices.push({ id: "amend", label: "Amend this return", hint: `New amended return. ${FILED_KEPT}`, variant: "danger" });
   choices.push(keep);
-  return { title: dry ? `${label} was a dry run, not sent to BIR` : `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
+  return { title: dry ? `Test send: not filed. Nothing reached the BIR.` : `${label} was ${filed}`, subtitle: "", choices, fastLane: false };
 }
 
 /** A host refusal in plain words: bir-core's "Other error: " prefix is not for the filer. */

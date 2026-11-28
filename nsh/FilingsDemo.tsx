@@ -14,7 +14,7 @@
 //          refused, the queued 1601C with an unknown outcome, the Cebu 2551Q held and the second taxpayer's 1601C waiting for its next
 //          try (those two as Queued). A worker that leaves them cannot run here (nothing is sent from a test), so a test stands in for it.
 //   dry    true: bir.list_returns answers the seeded Submitted 2550Q as the dry-run worker leaves it (send "test_sent": only simulated,
-//          nothing reached BIR); the cards show "Dry run". The page's save never stores a dry-run fact, so a test stands in for the worker.
+//          nothing reached BIR); the cards show "Test send: not filed". The page's save never stores a dry-run fact, so a test stands in for the worker.
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
 import { batch, effect, host, mount, untracked, View } from "nsh";
 import "./theme/fonts";
@@ -57,7 +57,7 @@ function answerSends(): void {
 function answerDryRun(): void {
   const real = bir.list_returns;
   const table = bir as unknown as Record<string, typeof bir.list_returns>;
-  const dry = sendOf("test_sent", "Test send. Nothing reached the BIR.");
+  const dry = sendOf("test_sent", "Test send: not filed. Nothing reached the BIR.");
   table.list_returns = (which) => real(which).map((r) => (r.id === IDS.submitted ? { ...r, send: dry } : r));
 }
 

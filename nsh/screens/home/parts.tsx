@@ -181,7 +181,7 @@ export function DueRow(props: { d: DeadlineRow; compact: boolean }) {
 
 /** What a filed return offers: Cancel queue while queued, its status or Use as template, then Open. */
 function FiledActions(props: { r: ReturnRow }) {
-  // A dry run is not filed: it shows its "Dry run" chip, as a Draft shows its own, and no Use as template.
+  // A dry run is not filed: it shows its "Test send: not filed" chip, as a Draft shows its own, and no Use as template.
   const filed = () => countsAsFiled(props.r);
   const hasTemplate = () => store.templates(props.r.tin).some((t) => t.form_code === props.r.form_code);
   return (

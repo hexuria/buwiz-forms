@@ -10,6 +10,7 @@ use std::cell::RefCell;
 
 use bir_core::db::{self, Database};
 use bir_core::forms::FORM_REGISTRY;
+use bir_core::forms::dry_run::is_dry_run;
 use bir_core::forms::queueable::QueueableForm as _;
 use gpui_shell::{HostError, HostModule, HostObject, HostResult, HostValue};
 
@@ -2734,19 +2735,22 @@ pub(crate) fn receipt_page(
 /// The stored draft's print field map (writer key -> value) and, for a
 /// confirmed return, its receipt page: what `form_print_html` fills the
 /// frozen sheet with.
+type PrintFieldsResult = Result<
+    (
+        std::collections::BTreeMap<String, String>,
+        Option<bir_print::frozen_html::ReceiptPage>,
+        bool,
+    ),
+    HostError,
+>;
+
 pub(crate) fn print_fields(
     db: &Database,
     tin: &str,
     form_code: &str,
     year: u16,
     quarter: Option<u8>,
-) -> Result<
-    (
-        std::collections::BTreeMap<String, String>,
-        Option<bir_print::frozen_html::ReceiptPage>,
-    ),
-    HostError,
-> {
+) -> PrintFieldsResult {
     match form_code {
         "2551Q" => crate::screen_form_module::out_of_line(|| {
             let q = quarter.ok_or_else(|| HostError::new("2551Q drafts are quarterly"))?;
@@ -2755,7 +2759,11 @@ pub(crate) fn print_fields(
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email);
-            Ok((draft.to_print_field_map(), page))
+            Ok((
+                draft.to_print_field_map(),
+                page,
+                is_dry_run(&draft.status, draft.submitted_dry_run),
+            ))
         }),
         "1601C" => crate::screen_form_module::out_of_line(|| {
             let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
@@ -2764,7 +2772,11 @@ pub(crate) fn print_fields(
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email_address);
-            Ok((draft.to_print_field_map(), page))
+            Ok((
+                draft.to_print_field_map(),
+                page,
+                is_dry_run(&draft.status, draft.submitted_dry_run),
+            ))
         }),
         _ => {
             use bir_core::forms::queueable::QueueableKind;
@@ -2782,7 +2794,7 @@ pub(crate) fn print_fields(
                     draft.lifecycle().receipt_id,
                     draft.submission_email(),
                 );
-                Ok((draft.print_field_map(), page))
+                Ok((draft.print_field_map(), page, is_dry_run(&draft.lifecycle().status, draft.lifecycle().submitted_dry_run)))
             }))
         }
     }
@@ -2800,14 +2812,55 @@ fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
     let slug = print_slug_for(&form_code)
         .ok_or_else(|| HostError::new(format!("Form {form_code} has no print sheet")))?;
     with_database(|db| {
-        let (fields, receipt) = print_fields(db, &tin, &form_code, year, quarter)?;
+        let (fields, receipt, test_send) = print_fields(db, &tin, &form_code, year, quarter)?;
         let profile = db
             .get_profile_by_tin(&tin)
             .ok()
             .flatten()
             .map(|p| p.full_name.clone());
-        open_print_preview(slug, &form_code, year, &fields, receipt.as_ref(), profile)
+        open_print_preview(
+            slug,
+            &form_code,
+            year,
+            &fields,
+            receipt.as_ref(),
+            test_send,
+            profile,
+        )
     })
+}
+
+/// The static print-preview document for `slug`'s filled sheet. A test send is never confirmed and never carries a
+/// receipt; the sheet itself says nothing reached the BIR.
+pub(crate) fn preview_document(
+    slug: &str,
+    fields: &std::collections::BTreeMap<String, String>,
+    receipt: Option<&bir_print::frozen_html::ReceiptPage>,
+    test_send: bool,
+) -> Result<String, String> {
+    let html = if test_send {
+        bir_print::frozen_html::filled_document_test_send(slug, fields)
+    } else {
+        bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
+    }?;
+    Ok(crate::static_html::staticize(
+        &crate::print_sheet::prepare_html_for(slug, &html, true),
+    ))
+}
+
+#[cfg(test)]
+thread_local! {
+    static PRINT_PREVIEW_CAPTURES: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+fn capture_print_preview_document(html: &str) {
+    PRINT_PREVIEW_CAPTURES.with(|captures| captures.borrow_mut().push(html.to_owned()));
+}
+
+#[cfg(test)]
+pub(crate) fn take_print_preview_captures() -> Vec<String> {
+    PRINT_PREVIEW_CAPTURES.with(|captures| std::mem::take(&mut *captures.borrow_mut()))
 }
 
 /// Fill `slug`'s frozen sheet with `fields`, write it to the app's own
@@ -2820,14 +2873,14 @@ pub(crate) fn open_print_preview(
     year: u16,
     fields: &std::collections::BTreeMap<String, String>,
     receipt: Option<&bir_print::frozen_html::ReceiptPage>,
+    test_send: bool,
     profile_name: Option<String>,
 ) -> HostResult {
-    let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
-        .map_err(HostError::new)?;
     // A4 layout + static markup (no scripts, values as text): prints one A4
     // page per form page from any engine; `print-overrides/<slug>.css` on top.
-    let html =
-        crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
+    let html = preview_document(slug, fields, receipt, test_send).map_err(HostError::new)?;
+    #[cfg(test)]
+    capture_print_preview_document(&html);
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
@@ -3766,6 +3819,7 @@ mod tests {
             2026,
             &std::collections::BTreeMap::new(),
             None,
+            false,
             None,
         )
         .expect("preview");

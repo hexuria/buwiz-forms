@@ -3,8 +3,8 @@
 import { expect, test } from "nsh/test";
 import type { ReturnRow, SendState } from "../../bir";
 import {
-  cardLabel, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
-  plural, presetFilters, presetOf, returnTitle, sendChip, STATUSES, visibleColumns, whoLine,
+  cardLabel, columnRows, COLUMNS, dateLine, type FilterValues, filterRows, localMonth, monthLabel, namedBranch, newestFirst, periodKey, periodRank,
+  plural, presetFilters, presetOf, returnTitle, sendChip, shownColumns, effectiveTab, STATUSES, visibleColumns, whoLine,
 } from "./model";
 
 const INDEX = [
@@ -20,6 +20,8 @@ function row(over: Partial<ReturnRow>): ReturnRow {
     form_code: "2551Q", taxable_year: 2026, period: 3, period_label: "Q3 2026", status: "Draft", updated_at: "2026-11-14 09:30:00", return_key: 3, submitted_via_relay: false, send: null, ...over,
   };
 }
+
+const sendState = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
 
 const ALL: FilterValues = { query: "", tps: null, forms: null, periods: null, statuses: null, updatedMonth: null };
 const R = [
@@ -147,14 +149,27 @@ test("Filed only keeps what counts as filed: a real send, a relay send, Confirme
 });
 
 test("the board's columns hold every status once, with Paid in Confirmed", () => {
-  expect(COLUMNS.map((c) => c.title)).toEqual(["Draft", "Queued", "Submitted", "Confirmed"]);
+  expect(COLUMNS.map((c) => c.title)).toEqual(["Draft", "Queued", "Submitted", "Test sends", "Confirmed"]);
   expect(COLUMNS.flatMap((c) => [...c.statuses])).toEqual([...STATUSES]);
-  expect(COLUMNS[3].statuses).toEqual(["Confirmed", "Paid"]);
+  expect(COLUMNS[4].statuses).toEqual(["Confirmed", "Paid"]);
+});
+
+test("test sends have their own column and filter entry and are not submitted", () => {
+  const send = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
+  const testSend = row({ id: 21, status: "Submitted", send: send("test_sent") });
+  const real = row({ id: 22, status: "Submitted" });
+  const rows = [testSend, real];
+  const submitted = COLUMNS.find((c) => c.id === "submitted")!;
+  const tests = COLUMNS.find((c) => c.id === "test-sends")!;
+  expect(columnRows(rows, submitted).map((r) => r.id)).toEqual([22]);
+  expect(columnRows(rows, tests).map((r) => r.id)).toEqual([21]);
+  expect(ids(filterRows(rows, INDEX, { ...ALL, statuses: new Set(["Submitted"]) }))).toEqual([22]);
+  expect(ids(filterRows(rows, INDEX, { ...ALL, statuses: new Set(["Test sends"]) }))).toEqual([21]);
 });
 
 test("the statuses filter names the visible columns: null is all, empty is none, and Paid keeps Confirmed visible", () => {
   const ids = (statuses: ReadonlySet<string> | null) => visibleColumns(statuses).map((c) => c.id);
-  expect(ids(null)).toEqual(["draft", "queued", "submitted", "confirmed"]);
+  expect(ids(null)).toEqual(["draft", "queued", "submitted", "test-sends", "confirmed"]);
   expect(ids(new Set())).toEqual([]);
   expect(ids(new Set(["Draft"]))).toEqual(["draft"]);
   expect(ids(new Set(["Queued", "Submitted"]))).toEqual(["queued", "submitted"]);
@@ -187,7 +202,7 @@ test("a navigation preset: the old names, flat or inside preset", () => {
 test("a preset keeps the real statuses it names, every status is no filter, and a month must be YYYY-MM", () => {
   expect(presetFilters({ statuses: ["Draft"] })).toEqual({ statuses: new Set(["Draft"]), updatedMonth: null });
   expect(presetFilters({ statuses: ["Draft", "Nonsense"] })).toEqual({ statuses: new Set(["Draft"]), updatedMonth: null });
-  expect(presetFilters({ statuses: [...STATUSES] })).toEqual({ statuses: null, updatedMonth: null });
+  expect(presetFilters({ statuses: [...STATUSES, "Test sends"] })).toEqual({ statuses: null, updatedMonth: null });
   expect(presetFilters({ statuses: ["Nonsense"] })).toEqual({ statuses: new Set(), updatedMonth: null });
   expect(presetFilters({ updatedMonth: "2026-11" })).toEqual({ statuses: null, updatedMonth: "2026-11" });
   expect(presetFilters({ updatedMonth: "Nov 2026" })).toEqual({ statuses: null, updatedMonth: null });
@@ -201,14 +216,40 @@ test("a card's send chip: Checking, Held, Retrying, Needs attention and Not sent
   expect(sendChip(row({ status: "Queued", send: send("needs_attention") }))).toEqual({ label: "Needs attention", tone: "warning", line: "line of needs_attention" });
   expect(sendChip(row({ status: "Queued", send: send("checking") }))).toEqual({ label: "Checking", tone: "neutral", line: "line of checking" });
   expect(sendChip(row({ status: "Draft", send: send("refused") }))).toEqual({ label: "Not sent", tone: "danger", line: "line of refused" });
-  for (const stage of ["queued", "sending", "sent", "test_sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
+  for (const stage of ["queued", "sending", "sent"] as const) expect(sendChip(row({ send: send(stage) }))).toBe(null);
+  expect(sendChip(row({ status: "Submitted", send: sendState("test_sent") }))).toBe(null);
   expect(sendChip(row({}))).toBe(null);
 });
 
-test("a screen reader hears a dry-run send's word, Dry run, and a real send's Submitted", () => {
+test("a screen reader hears a test send's word and a real send's Submitted", () => {
   const send = (stage: SendState["stage"]): SendState => ({ stage, line: "", code: null, next_try_at: null, can_resolve: false });
   const r = row({ form_code: "2550Q", period_label: "Q2 2026", status: "Submitted" });
-  expect(cardLabel({ ...r, send: send("test_sent") }).endsWith(", Dry run. Open")).toBe(true);
+  expect(cardLabel({ ...r, send: send("test_sent") }).endsWith(", Test send: not filed. Open")).toBe(true);
   expect(cardLabel(r).endsWith(", Submitted. Open")).toBe(true);
   expect(cardLabel({ ...r, send: send("sent") }).endsWith(", Submitted. Open")).toBe(true);
+});
+
+test("the test-sends column shows only while a test send exists; a real filer never reads the words", () => {
+  const real = row({ status: "Submitted" });
+  const test1 = row({ status: "Submitted", send: sendState("test_sent") });
+  // None: the column is out even though the filter would let it through.
+  expect(shownColumns([real], null).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "confirmed"]);
+  expect(shownColumns([real], new Set(["Test sends"])).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "confirmed"]);
+  // One: it is in, in board order.
+  expect(shownColumns([real, test1], null).map((c) => c.id)).toEqual(["draft", "queued", "submitted", "test-sends", "confirmed"]);
+  expect(shownColumns([real, test1], new Set(["Test sends"])).map((c) => c.id)).toEqual(["test-sends"]);
+});
+
+test("a test-sends tab or filter with no test send left falls back to all, never an empty list for ever", () => {
+  const real = row({ status: "Submitted" });
+  const test1 = row({ status: "Submitted", send: sendState("test_sent") });
+  expect(effectiveTab([real], "test-sends")).toBe("all");
+  expect(effectiveTab([real, test1], "test-sends")).toBe("test-sends");
+  expect(effectiveTab([real], "submitted")).toBe("submitted");
+  const onlyTests: FilterValues = { query: "", tps: null, forms: null, periods: null, statuses: new Set(["Test sends"]), updatedMonth: null };
+  // The last test send gone: the filter of test sends only keeps everything (all), not an empty list.
+  expect(filterRows([real], INDEX, onlyTests).length).toBe(1);
+  // One exists: the filter keeps it alone.
+  expect(filterRows([real, test1], INDEX, onlyTests).length).toBe(1);
+  expect(filterRows([real, test1], INDEX, onlyTests)[0]).toBe(test1);
 });

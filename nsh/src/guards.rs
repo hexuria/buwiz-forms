@@ -396,7 +396,7 @@ pub(crate) fn verdict(
 ) -> SendMode {
     if panel == Some(SubmissionMode::TestServer) {
         return SendMode::Refused(
-            "The Dev Mode panel points submissions at the test server; the NSH app only sends to a dry run or the local mock."
+            "The Dev Mode panel points submissions at the test server; the NSH app only simulates sends or uses the local mock."
                 .into(),
         );
     }
@@ -406,7 +406,7 @@ pub(crate) fn verdict(
     match mock {
         Some((host, port)) => SendMode::Mock { host, port },
         None => SendMode::Refused(
-            "Sending is not a dry run, so the submission worker was not started.".into(),
+            "Sending is not simulated, so the submission worker was not started.".into(),
         ),
     }
 }

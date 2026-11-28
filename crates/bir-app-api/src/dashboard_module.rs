@@ -1534,12 +1534,15 @@ mod tests {
             "test_sent",
             "a test send, receipt and all"
         );
-        assert_eq!(send(7)["line"], "Test send. Nothing reached the BIR.");
+        assert_eq!(
+            send(7)["line"],
+            "Test send: not filed. Nothing reached the BIR."
+        );
     }
 
     /// A deadline row says whether its Submitted send was only simulated
-    /// (the screens show "Dry run"); a real send, a Draft and a deadline
-    /// with no return say no.
+    /// (the screens keep it out of what counts as filed); a real send, a Draft
+    /// and a deadline with no return say no.
     #[test]
     fn deadline_rows_say_which_submitted_send_was_a_dry_run() {
         setup();

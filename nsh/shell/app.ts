@@ -987,7 +987,7 @@ function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
 /**
  * Submissions sent and confirmation emails received, newest first: the return's own status is the record. A send the worker only
  * simulated (`isDryRun`: a dry run, a practice account, a Buwiz test TIN) is a test send, not a submission: it says the host's one
- * sentence for it (`send.line`, send_state.rs `TEST_SENT_LINE`: "Test send. Nothing reached the BIR.").
+ * sentence for it (`send.line`, send_state.rs `TEST_SENT_LINE`: "Test send: not filed. Nothing reached the BIR.").
  */
 const notifications = computed<Notification[]>(() => {
   const seen = readIds();

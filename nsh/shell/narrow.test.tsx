@@ -90,7 +90,7 @@ test("phone: a dry-run send's notification says it was a test send; a real send'
   await app.waitFor("id:nb-menu-notifications");
   await app.press("id:nb-menu-notifications");
   await app.waitFor("id:notifications-list");
-  await app.waitFor("text:2551Q for Q2 2025: Test send. Nothing reached the BIR.");
+  await app.waitFor("text:2551Q for Q2 2025: Test send: not filed. Nothing reached the BIR.");
   expect(app.texts()).not.toContain("2551Q for Q2 2025: dry run finished");
   expect(app.texts()).not.toContain("2551Q for Q2 2025 was submitted");
   expect(app.texts()).toContain("2551Q for Q1 2025 was submitted");

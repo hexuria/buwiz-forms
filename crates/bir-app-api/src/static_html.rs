@@ -117,7 +117,14 @@ fn wrap_sheets(html: &str) -> String {
     let mut out = String::with_capacity(html.len() + n * 96);
     let mut cur = 0;
     for (i, (at, receipt)) in starts.iter().enumerate() {
-        out.push_str(&html[cur..*at]);
+        let mut before = &html[cur..*at];
+        // A test-send warning is written before its page by bir-print. Move it inside the sheet: the wrapper's
+        // ten-point top strip is reserved paper margin, so the warning never covers the form itself.
+        let warning = before.ends_with(bir_print::frozen_html::TEST_SEND_WARNING_HTML);
+        if warning {
+            before = &before[..before.len() - bir_print::frozen_html::TEST_SEND_WARNING_HTML.len()];
+        }
+        out.push_str(before);
         if i > 0 {
             // close the previous sheet right before this page
             let trimmed = out.trim_end().len();
@@ -130,6 +137,9 @@ fn wrap_sheets(html: &str) -> String {
             i + 1,
             n
         ));
+        if warning {
+            out.push_str(bir_print::frozen_html::TEST_SEND_WARNING_HTML);
+        }
         cur = *at;
     }
     out.push_str(&html[cur..body_end]);
