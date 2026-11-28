@@ -21,6 +21,9 @@ export function LogsSection() {
         <View class="flex-1" />
         <AppButton testID="logs-refresh" label="Refresh" size="sm" onPress={refreshLog} />
       </View>
+      <Text testID="logs-privacy-note" variant="meta" tone="fg2">
+        {"A whole number of exactly 9, 12 or 14 digits is masked in logs even when it's a reference number."}
+      </Text>
       <If when={log().error}>
         <Text testID="logs-error" variant="meta" tone="danger">{log().error ?? ""}</Text>
       </If>

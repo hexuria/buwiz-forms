@@ -170,16 +170,23 @@ thread_local! {
 fn install_panic_hook() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
+        std::panic::set_hook(Box::new(|info| {
             report_panic(info);
-            previous(info);
+            // Detached serves point stderr at the daemon log. The standard
+            // hook would print the raw payload there, bypassing the log
+            // writer, so this hook writes the same fact through the masker
+            // instead of chaining it.
+            redacted_stderr(&format!(
+                "panic at {}: {}",
+                panic_location(info),
+                panic_payload(info)
+            ));
         }));
     });
 }
 
-/// Record a panic on the `panic` target. The hook calls this before the
-/// previous hook. Re-entry (a subscriber that panics while logging) is ignored.
+/// Record a panic on the `panic` target. Re-entry (a subscriber that panics
+/// while logging) is ignored.
 pub fn report_panic(info: &std::panic::PanicHookInfo<'_>) {
     let entered = PANIC_HOOK_GUARD.with(|guard| {
         if guard.get() {
@@ -193,7 +200,13 @@ pub fn report_panic(info: &std::panic::PanicHookInfo<'_>) {
         return;
     }
     let payload = redact_secrets(&panic_payload(info));
-    let location = match info.location() {
+    let location = panic_location(info);
+    tracing::error!(target: "panic", "panic at {location}: {payload}");
+    PANIC_HOOK_GUARD.with(|guard| guard.set(false));
+}
+
+fn panic_location(info: &std::panic::PanicHookInfo<'_>) -> String {
+    match info.location() {
         Some(location) => {
             format!(
                 "{}:{}:{}",
@@ -203,9 +216,7 @@ pub fn report_panic(info: &std::panic::PanicHookInfo<'_>) {
             )
         }
         None => "unknown location".to_string(),
-    };
-    tracing::error!(target: "panic", "panic at {location}: {payload}");
-    PANIC_HOOK_GUARD.with(|guard| guard.set(false));
+    }
 }
 
 fn panic_payload(info: &std::panic::PanicHookInfo<'_>) -> String {
@@ -221,7 +232,10 @@ fn panic_payload(info: &std::panic::PanicHookInfo<'_>) -> String {
 /// Replace credential material and taxpayer identifiers in a log line.
 ///
 /// A TIN is nine root digits plus an optional branch, written solid or in
-/// the usual separated three-digit root groups. Solid runs are masked at 9,
+/// the usual separated three-digit root groups. Dashes, spaces, dots,
+/// slashes and underscores are accepted as exact group separators; no-break
+/// and thin spaces are normalized for matching, as are full-width digits.
+/// Solid runs are masked at 9,
 /// 12 (9+3) and 14 (9+5) digits only: a solid 13-digit run can be a
 /// millisecond timestamp, so a four-digit branch must be separated. Three
 /// space-separated root groups are masked only with a branch or an adjacent
@@ -303,42 +317,95 @@ pub fn submission_path_for_log(path: &str) -> String {
     )
 }
 
+/// Write one stderr line through the same masker as the log writers. Detached
+/// serves connect stderr directly to their log file, so a plain `eprintln!`
+/// would bypass every redaction.
+pub fn redacted_stderr(line: &str) {
+    eprintln!("{}", redact_secrets(line));
+}
+
 /// Mask every TIN candidate in `text`. The regex names the official shapes;
 /// the boundary check supplies what Rust's regex crate has no look-around for:
 /// decimal adjacency and larger identifiers. Candidates are exact matches, so
 /// a TIN at the start of a receipt filename is still masked before its `-form`
 /// suffix.
 fn mask_tins(text: &str) -> String {
+    let normalized = TinNormalized::new(text);
+    let haystack = normalized.text.as_str();
     let mut out = String::with_capacity(text.len());
     let mut copied = 0;
-    for candidate in tin_candidate().find_iter(text) {
+    for candidate in tin_candidate().find_iter(haystack) {
         let start = candidate.start();
         let mut end = candidate.end();
-        if !tin_boundaries(text.as_bytes(), start, end) || masked_tin(&text[start..end]).is_none() {
+        if !tin_boundaries(haystack.as_bytes(), start, end)
+            || masked_tin(&haystack[start..end]).is_none()
+        {
             // A greedy branch-shaped tail can make the real nine-digit TIN look
             // like part of a longer number (`123456789 2551Q`). Retry the root.
             let root_end = start + 9;
             if end <= root_end
-                || !text[start..root_end].chars().all(|c| c.is_ascii_digit())
-                || !tin_boundaries(text.as_bytes(), start, root_end)
-                || masked_tin(&text[start..root_end]).is_none()
+                || !haystack[start..root_end]
+                    .chars()
+                    .all(|c| c.is_ascii_digit())
+                || !tin_boundaries(haystack.as_bytes(), start, root_end)
+                || masked_tin(&haystack[start..root_end]).is_none()
             {
                 continue;
             }
             end = root_end;
         }
-        if space_root_needs_context(&text[start..end]) && !tin_word_near(text, start, end) {
+        if space_root_needs_context(&haystack[start..end]) && !tin_word_near(haystack, start, end) {
             continue;
         }
-        let Some(masked) = masked_tin(&text[start..end]) else {
+        let Some(masked) = masked_tin(&haystack[start..end]) else {
             continue;
         };
-        out.push_str(&text[copied..start]);
+        let original_start = normalized.original_pos(start);
+        let original_end = normalized.original_pos(end);
+        out.push_str(&text[copied..original_start]);
         out.push_str(&masked);
-        copied = end;
+        copied = original_end;
     }
     out.push_str(&text[copied..]);
     out
+}
+
+/// TIN matching sees no-break spaces as ordinary spaces and full-width digits
+/// as ASCII digits. The output still uses the original spelling outside the
+/// masked token; these positions map one normalized byte offset back to the
+/// original string.
+struct TinNormalized {
+    text: String,
+    positions: Vec<(usize, usize)>,
+}
+
+impl TinNormalized {
+    fn new(input: &str) -> Self {
+        let mut text = String::with_capacity(input.len());
+        let mut positions = vec![(0, 0)];
+        for (original_at, original) in input.char_indices() {
+            let normalized = match original {
+                '\u{00a0}' | '\u{2009}' | '\u{202f}' => ' ',
+                '\u{ff10}'..='\u{ff19}' => {
+                    char::from_u32(u32::from('0') + u32::from(original) - u32::from('\u{ff10}'))
+                        .expect("full-width digit")
+                }
+                _ => original,
+            };
+            text.push(normalized);
+            positions.push((text.len(), original_at + original.len_utf8()));
+        }
+        Self { text, positions }
+    }
+
+    fn original_pos(&self, normalized_at: usize) -> usize {
+        let index = self
+            .positions
+            .partition_point(|(position, _)| *position <= normalized_at)
+            .saturating_sub(1);
+        let (normalized_base, original_base) = self.positions[index];
+        original_base + normalized_at.saturating_sub(normalized_base)
+    }
 }
 
 /// Mask the local part of an email address, keeping the domain for
@@ -372,7 +439,7 @@ fn email_candidate() -> &'static Regex {
 fn tin_candidate() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
-        Regex::new(r"[0-9]{3}[- ]?[0-9]{3}[- ]?[0-9]{3}(?:[- ]?[0-9]{3,5})?")
+        Regex::new(r"[0-9]{3}[- ./_]?[0-9]{3}[- ./_]?[0-9]{3}(?:[- ./_]?[0-9]{3,5})?")
             .expect("static TIN candidate regex")
     })
 }
@@ -430,15 +497,28 @@ fn tin_word_near(text: &str, start: usize, end: usize) -> bool {
         || (end..after).any(|at| ascii_word(bytes, at, b"tin"))
 }
 
+fn is_ipv4_token(token: &str) -> bool {
+    let parts: Vec<&str> = token.split('.').collect();
+    parts.len() == 4
+        && parts.iter().all(|part| {
+            (1..=3).contains(&part.len())
+                && part.bytes().all(|byte| byte.is_ascii_digit())
+                && part.parse::<u8>().is_ok()
+        })
+}
+
 /// The masked spelling of one token, or `None` when it is not a TIN. Dashes
 /// are either absent everywhere or in the official grouping (`3-3-3`, plus a
 /// 3-, 4- or 5-digit branch); partial or differently placed separators are not TINs.
 fn masked_tin(token: &str) -> Option<String> {
+    if is_ipv4_token(token) {
+        return None;
+    }
     if token.starts_with('-') || token.ends_with('-') || token.contains("--") {
         return None;
     }
     let digits: String = token.chars().filter(|c| c.is_ascii_digit()).collect();
-    let separator_count = token.matches(['-', ' ']).count();
+    let separator_count = token.matches(['-', ' ', '.', '/', '_']).count();
     if digits.len() != token.len() - separator_count {
         return None;
     }
@@ -449,7 +529,7 @@ fn masked_tin(token: &str) -> Option<String> {
             return None;
         }
     } else {
-        let parts: Vec<&str> = token.split(['-', ' ']).collect();
+        let parts: Vec<&str> = token.split(['-', ' ', '.', '/', '_']).collect();
         if parts.len() < 3
             || parts.len() > 4
             || !parts[..3].iter().all(|part| part.len() == 3)
@@ -932,6 +1012,36 @@ mod tests {
             "id 1234567890000",
             "123 456 789 without context",
         ] {
+            assert_eq!(redact_secrets(ordinary), ordinary);
+        }
+    }
+
+    #[test]
+    fn redaction_masks_unicode_and_punctuation_tin_spellings_but_not_ipv4() {
+        for (plain, masked) in [
+            ("123.456.789", "***-***-789"),
+            ("123/456/789/00000", "***-***-789-00000"),
+            ("123_456_789", "***-***-789"),
+            (
+                "123\u{00a0}456\u{00a0}789\u{00a0}00000",
+                "***-***-789-00000",
+            ),
+            (
+                "123\u{2009}456\u{2009}789\u{2009}00000",
+                "***-***-789-00000",
+            ),
+            (
+                "\u{ff11}\u{ff12}\u{ff13}\u{ff14}\u{ff15}\u{ff16}\u{ff17}\u{ff18}\u{ff19}",
+                "***-***-789",
+            ),
+        ] {
+            assert_eq!(redact_secrets(plain), masked, "{plain:?}");
+        }
+        assert_eq!(
+            redact_secrets("log é １２３４５６７８９ end"),
+            "log é ***-***-789 end"
+        );
+        for ordinary in ["192.168.1.1", "192.168.100.200"] {
             assert_eq!(redact_secrets(ordinary), ordinary);
         }
     }
