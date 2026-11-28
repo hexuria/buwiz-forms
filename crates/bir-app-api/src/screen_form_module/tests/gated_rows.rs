@@ -245,6 +245,39 @@ fn a_batch_writes_an_opening_date_before_a_gated_mcit_row() {
 }
 
 #[test]
+fn a_batch_writes_the_1701_owner_tick_before_a_gated_spouse_name() {
+    setup();
+    let spouse_name = "frm1701:txtPg2IShed1a_1SName";
+    let spouse_tick = "frm1701:chkPg2IShed1a_1Spouse";
+    let joint = fill(
+        "1701",
+        &open("1701", 0)["draft"],
+        json!({
+            "frm1701:rdoPg1I16CivilStatusM": "true",
+            "frm1701:rdoPg1I17SpouseIncomeYes": "true",
+            "frm1701:rdoPg1I18FilingStatusJ": "true",
+            "frm1701:rdoPg2I4ATC_II011": "true",
+        }),
+    );
+
+    // Insertion order puts the gated write first. The owner tick is the
+    // answer that opens it, so the batch planner must apply that alias first.
+    let mut batch = serde_json::Map::new();
+    batch.insert(spouse_name.to_string(), json!("SPOUSE EMPLOYER"));
+    batch.insert(spouse_tick.to_string(), json!("true"));
+    let filled = fill("1701", &joint["draft"], Value::Object(batch));
+    assert!(
+        filled["rejected"].get(spouse_name).is_none(),
+        "the owner tick opens the name before it is judged: {:?}",
+        filled["rejected"]
+    );
+    assert_eq!(
+        filled["draft"]["employers"][0]["employer_name"],
+        "SPOUSE EMPLOYER"
+    );
+}
+
+#[test]
 fn form_2000_other_party_and_balance_are_gated() {
     setup();
     let name = "frm2000:txtOtherName";
