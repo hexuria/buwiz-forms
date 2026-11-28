@@ -1079,7 +1079,7 @@ pub fn signed_in(
 }
 
 use bir_core::cloud_account::StoredAccount;
-use bir_core::legacy_claim::{Claimant, LegacyClaim, NotHere, Outcome, Start};
+use bir_core::legacy_claim::{Claimant, Failure, LegacyClaim, NotHere, Outcome, Start};
 use bir_core::rooms::Layout;
 
 /// What the claim decided to open, opened outside SESSION after CLAIM_RUN lets go.
@@ -1483,6 +1483,34 @@ fn decide_claim(owner: &Owner) -> (Target, Option<OpenSpec>) {
                 lookup_target(&layout, owner, note)
             }
         },
+        Start::Failed(Failure::Transient(transient)) => {
+            let record = match claim.record() {
+                Ok(record) => record,
+                Err(error) => {
+                    return (
+                        Target::Blocked(Blocked::Transient {
+                            copy_saved: false,
+                            detail: format!("the migration record cannot be read: {error}"),
+                        }),
+                        None,
+                    );
+                }
+            };
+            let foreign_unfinished = record.as_ref().is_some_and(|record| {
+                !matches!(
+                    record.step,
+                    bir_core::legacy_claim::Step::Done | bir_core::legacy_claim::Step::Closed
+                ) && !finished_record_is_owner(&layout, owner, Some(record), None)
+            });
+            if foreign_unfinished {
+                tracing::warn!(
+                    "finishing another account's move failed transiently; opening the sign-in's own room"
+                );
+                lookup_target(&layout, owner, LookupNote::None)
+            } else {
+                outcome_target(&layout, owner, Outcome::Transient(transient))
+            }
+        }
         Start::Failed(failure) => outcome_target(&layout, owner, Outcome::from(failure)),
     }
 }
@@ -2768,6 +2796,20 @@ mod tests {
         (room_id, room_file)
     }
 
+    /// Put A's moved claim into the link window with a returned WAL: the room file and the
+    /// legacy path are one file, and finishing A's unlink fails transiently.
+    fn a_move_stuck_in_the_link_window(
+        scratch: &Scratch,
+        owner_a: &Owner,
+    ) -> bir_core::rooms::RoomId {
+        let (room_a, room_file) =
+            write_moved_claim_image(scratch, owner_a, bir_core::legacy_claim::Step::Moved);
+        let legacy = scratch.layout.legacy_database();
+        std::fs::hard_link(&room_file, &legacy).unwrap();
+        std::fs::write(legacy.with_extension("db-wal"), b"wal").unwrap();
+        room_a
+    }
+
     fn claim_record(scratch: &Scratch) -> bir_core::legacy_claim::Record {
         bir_core::legacy_claim::LegacyClaim::at(scratch.layout.clone())
             .unwrap()
@@ -2828,6 +2870,104 @@ mod tests {
                 Some(bir_core::legacy_claim::RecordedFailure::Transient { .. })
             ),
             "A's unfinished transient was not recorded"
+        );
+    }
+
+    /// N1/N4: when finishing A's move keeps failing as an Err(Failure::Transient), B is not
+    /// blocked in a loop and is told nothing about A's copy: B opens B's own room with no migration
+    /// state at all.
+    #[test]
+    fn n1_a_transient_error_finishing_as_move_still_lets_b_open_bs_room() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = owner("user-a");
+        a_move_stuck_in_the_link_window(&scratch, &owner_a);
+        let owner_b = seed_stored("user-b", false);
+        permit_claim_threads();
+        begin_open(owner_b.clone(), 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "B stayed blocked on A's failing move"
+        );
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for(&owner_b.origin, &owner_b.user_id),
+            "B did not open B's own room"
+        );
+        assert!(
+            migration_state().is_none(),
+            "B was shown another account's move: {:?}",
+            migration_state()
+        );
+    }
+
+    /// L1 through the literal public sequence: A is signed in and opens, A signs out, then B's
+    /// signed_in meets A's moved record. B still opens only B's room.
+    #[test]
+    fn l1_literal_sign_out_then_signed_in_never_opens_as_room_for_b() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        let owner_a = seed_stored("user-a", false);
+        begin_open(owner_a.clone(), 1, OpenWhy::SignIn);
+        let epoch = snapshot().epoch;
+        open_hand(&scratch, &owner_a, epoch, "a-room.db");
+        sign_out();
+        a_move_stuck_in_the_link_window(&scratch, &owner_a);
+        let stored_b = bir_core::cloud_account::StoredAccount {
+            server_url: "https://buwiz.example.test".into(),
+            access_token: "access-b".into(),
+            refresh_token: "refresh-b".into(),
+            access_expires_at_unix: bir_core::cloud_account::unix_now() + 3600,
+            user_id: "user-b".into(),
+            email: Some("user-b@example.test".into()),
+            offline: false,
+            last_refresh_unix: 0,
+            practice: false,
+        };
+        permit_claim_threads();
+        signed_in(&stored_b, 1).expect("B's sign-in");
+        join_claim_threads();
+        assert_eq!(
+            snapshot().phase_kind,
+            PhaseKind::Open,
+            "the literal sign_out → signed_in sequence left B blocked"
+        );
+        let (_, _, room_id, _) = snapshot().room.expect("B's room open");
+        assert_eq!(
+            room_id.expect("a room id"),
+            bir_core::rooms::room_id_for("https://buwiz.example.test", "user-b"),
+            "B opened A's room through the literal sequence"
+        );
+    }
+
+    /// N3: the open path does not trust a device-store row. Even when the row says B's room is
+    /// A's id, opening that id for B is refused and no room is installed.
+    #[test]
+    fn n3_a_store_row_naming_another_room_for_the_owner_is_refused() {
+        let _turn = test_turn();
+        let scratch = scratch();
+        std::fs::create_dir_all(scratch.layout.device_dir()).unwrap();
+        let store = bir_core::rooms::DeviceStore::open(&scratch.layout).unwrap();
+        drop(store);
+        let owner_b = seed_stored("user-b", false);
+        let room_a = bir_core::rooms::room_id_for(&owner_b.origin, "user-a");
+        let conn = rusqlite::Connection::open(scratch.layout.device_db()).unwrap();
+        conn.execute(
+            "INSERT INTO rooms (room_id, origin, user_id, email, created_at, from_legacy) VALUES (?1, ?2, ?3, NULL, 'now', 0)",
+            rusqlite::params![room_a.as_str(), owner_b.origin, owner_b.user_id],
+        )
+        .unwrap();
+        drop(conn);
+        permit_claim_threads();
+        begin_open(owner_b, 1, OpenWhy::SignIn);
+        join_claim_threads();
+        assert_eq!(snapshot().phase_kind, PhaseKind::Blocked);
+        assert!(
+            snapshot().room.is_none(),
+            "the store row's foreign room opened"
         );
     }
 

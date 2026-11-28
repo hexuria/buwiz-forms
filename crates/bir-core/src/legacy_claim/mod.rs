@@ -797,19 +797,20 @@ impl LegacyClaim {
         // a transient — in M1's own case (the record at Copied, the legacy file gone, the room read failing) an
         // open room would migrate its bytes, and the next start() would close the move unfinished. A permanent
         // failure is definitive: the claim is over, and the account opens its empty room.
+        let foreign_unfinished = self.record().ok().flatten().is_some_and(|record| {
+            !matches!(record.step, Step::Done | Step::Closed) && !record_is_claimant(&record, who)
+        });
         let definitive = match &inner {
             // The ruling's item 6: a finish that lands on a transient after the move (the record at
             // Moved or RoomRow) is no definitive answer for the claimer — the move is still
             // unfinished, and the guards' step check is what stands between it and that room open.
             // When the record names somebody else, though, it is definitive for the account asking
             // now: nothing of theirs is unfinished, and the evidence rule still guards the claimer's
-            // own room by name.
-            Ok(Start::Finished(Outcome::Transient(_))) => self
-                .record()
-                .ok()
-                .flatten()
-                .is_some_and(|record| !record_is_claimant(&record, who)),
-            Err(Failure::Transient(_)) => false,
+            // own room by name. The same holds when finishing that record failed transiently:
+            // a non-claimant never loops on another account's move.
+            Ok(Start::Finished(Outcome::Transient(_))) | Err(Failure::Transient(_)) => {
+                foreign_unfinished
+            }
             Ok(_) | Err(Failure::Permanent(_)) => true,
         };
         if definitive {
@@ -817,7 +818,17 @@ impl LegacyClaim {
         }
         match inner {
             Ok(start) => start,
-            Err(failure) => Start::Failed(failure),
+            Err(failure) => Start::Failed(match failure {
+                Failure::Transient(mut transient) if foreign_unfinished => {
+                    // N4: the non-claimant is told nothing about the other account's data. The
+                    // session normally opens its own room instead of showing even this; the
+                    // sanitising is the belt under that.
+                    transient.copy_saved = false;
+                    transient.detail = "the account could not be opened just now".to_owned();
+                    Failure::Transient(transient)
+                }
+                failure => failure,
+            }),
         }
     }
 

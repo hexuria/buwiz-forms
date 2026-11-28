@@ -2388,6 +2388,10 @@ fn give_back_queueable<F: QueueableForm>(
 thread_local! {
     static BEFORE_SEND_EPOCH_CHECK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
         const { std::cell::RefCell::new(None) };
+    static BEFORE_SUBMISSION_JOB_REGISTER: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+    static AFTER_SUBMISSION_JOB_REGISTER: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 async fn process_submission_queue(
@@ -2435,8 +2439,19 @@ async fn process_submission_queue(
             ),
         );
 
+        #[cfg(test)]
+        BEFORE_SUBMISSION_JOB_REGISTER.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
         let active_jobs = get_active_jobs();
         {
+            // A6: registration itself is under the room lock. The import holds the same lock
+            // across its active-jobs re-check and the placeholder swap, so a send cannot slip
+            // its key in between the re-check and the swap and meet the old Arc.
+            let Ok(_room) = lock_timing::lock(&db) else {
+                warn!(
+                    "Cron: the room lock is poisoned; this return stays queued for the next tick"
+                );
+                continue;
+            };
             let mut jobs = active_jobs
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -2444,6 +2459,8 @@ async fn process_submission_queue(
                 continue; // Already running
             }
         }
+        #[cfg(test)]
+        AFTER_SUBMISSION_JOB_REGISTER.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
 
         let profile_clone = profile.clone();
         let db_clone = db.clone();
@@ -3684,6 +3701,78 @@ mod tests {
             },
         )
         .await;
+    }
+
+    /// A6: job registration is itself under the room lock. While another holder has that lock —
+    /// the import's check-to-placeholder-swap span — the key cannot appear; once the holder lets
+    /// go, registration proceeds (the positive control).
+    #[tokio::test(flavor = "current_thread")]
+    async fn submission_job_registration_waits_for_the_room_lock() {
+        let db = test_db();
+        let (queued, _summary) = stored_queued_2551q(&db);
+        let profile = reviewed_profile();
+        let job = room_job_key(
+            FIXED_ROOM_KEY,
+            &submission_job_key(
+                "2551Q",
+                &profile.tin.full(),
+                queued.taxable_year,
+                None,
+                Some(queued.quarter),
+            ),
+        );
+        let (at_insertion, insertion_seen) = std::sync::mpsc::channel();
+        let (lock_held, wait_until_held) = std::sync::mpsc::channel();
+        let (registered, mut registration_seen) = tokio::sync::mpsc::unbounded_channel();
+        let worker_profile = profile.clone();
+        let worker_db = db.clone();
+        let epoch = crate::session_epoch::current();
+        let worker = std::thread::spawn(move || {
+            BEFORE_SUBMISSION_JOB_REGISTER.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    let _ = at_insertion.send(());
+                    wait_until_held
+                        .recv_timeout(std::time::Duration::from_secs(2))
+                        .expect("the test never held the room lock");
+                }));
+            });
+            AFTER_SUBMISSION_JOB_REGISTER.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    let _ = registered.send(());
+                }));
+            });
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(process_submission_queue(
+                &worker_profile,
+                worker_db,
+                FIXED_ROOM_KEY,
+                None,
+                epoch,
+            ));
+        });
+        insertion_seen
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("the send never reached registration");
+        let guard = db.lock().unwrap();
+        lock_held.send(()).unwrap();
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(250),
+                registration_seen.recv()
+            )
+            .await
+            .is_err(),
+            "the send registered its job key while the room lock was held"
+        );
+        drop(guard);
+        tokio::time::timeout(std::time::Duration::from_secs(5), registration_seen.recv())
+            .await
+            .expect("registration did not proceed once the room lock was free");
+        worker.join().unwrap();
+        get_active_jobs().lock().unwrap().remove(&job);
     }
 
     /// F6, the behavioral half: a key held for one room never blocks the same inner key's job in

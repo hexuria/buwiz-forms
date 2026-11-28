@@ -1763,6 +1763,42 @@ fn a_reused_inode_never_finishes_on_the_accounts_own_room() {
     assert_eq!(record.failure, None);
 }
 
+/// N1/N4: a foreign claimant's transient error in the link window is still definitive for the
+/// account asking now, and the error it can carry leaks nothing about the other account's copy.
+#[test]
+fn a_foreign_transient_in_the_link_window_is_definitive_and_neutral() {
+    let install = Install::new();
+    close(unlocked(&install));
+    let a = account("a");
+    claim_cut_at(&install, &a, Cut::AfterLink);
+    // B's sign-in is another process after the cut: the process-local definitive set starts empty.
+    clear_started_for_test(install.layout.device_dir());
+    std::fs::write(install.legacy().with_extension("db-wal"), b"wal").unwrap();
+    let claim = install.claim();
+    let b = account("b");
+    assert!(
+        !claim_started_this_session(install.layout.device_dir()),
+        "the folder began this test already definitive"
+    );
+    match claim.start(&b) {
+        Start::Failed(Failure::Transient(transient)) => {
+            assert!(
+                !transient.copy_saved,
+                "B was told a copy of A's data was saved"
+            );
+            assert_eq!(
+                transient.detail, "the account could not be opened just now",
+                "the non-claimant detail is not neutral"
+            );
+        }
+        other => panic!("not transient: {other:?}"),
+    }
+    assert!(
+        claim_started_this_session(install.layout.device_dir()),
+        "A's unfinished move kept the folder non-definitive for B"
+    );
+}
+
 /// PLAN §A.8 reviewer pass, M1: a read error in the Copied window (an EIO, a sharing violation) is transient,
 /// never a permanent close: the record stays at Copied, and a later run with the error gone finishes the move.
 #[test]
